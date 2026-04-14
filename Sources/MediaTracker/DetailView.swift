@@ -218,6 +218,7 @@ struct DetailView: View {
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
             item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details.runtime, genres: details.genres, voteAverage: details.voteAverage)
             item.lastUpdated = Date()
+            SpotlightManager.shared.indexItem(item)
             NotificationManager.shared.scheduleMovieNotification(item: item)
         }
     }
@@ -279,6 +280,7 @@ struct DetailView: View {
                 }
             }
             item.tvShowDetails = tvDetails
+            SpotlightManager.shared.indexItem(item)
             NotificationManager.shared.scheduleTVNotification(item: item)
         }
         

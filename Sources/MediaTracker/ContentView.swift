@@ -5,6 +5,7 @@ import SwiftData
 class MediaViewModel {
     var selectedCategory: String? = "Upcoming"
     var searchText: String = ""
+    var navigationPath = NavigationPath()
     
     func navigationTitle(for category: String?) -> String {
         if let cat = category, let type = MediaType(rawValue: cat) {
@@ -73,7 +74,7 @@ struct ContentView: View {
             }
             .navigationTitle("Library")
         } detail: {
-            NavigationStack {
+            NavigationStack(path: $viewModel.navigationPath) {
                 MediaGridView(
                     items: filteredItems, 
                     selectedCategory: viewModel.selectedCategory, 
@@ -81,6 +82,9 @@ struct ContentView: View {
                     searchText: viewModel.searchText
                 )
                 .navigationTitle(viewModel.navigationTitle(for: viewModel.selectedCategory))
+                .navigationDestination(for: MediaItem.self) { item in
+                    DetailView(item: item)
+                }
                 .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search library...")
                 .toolbar {
                     ToolbarItem {
@@ -93,6 +97,13 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingSearch) {
             SearchView(initialType: currentMediaType)
+        }
+        .onContinueUserActivity(CSSearchableItem.actionType) { userActivity in
+            if let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                if let item = allItems.first(where: { $0.id == identifier }) {
+                    viewModel.navigationPath = NavigationPath([item])
+                }
+            }
         }
     }
     
@@ -128,7 +139,7 @@ struct MediaGridView: View {
                     // Search Mode: Simple Grid of filtered items
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(destination: DetailView(item: item)) {
+                            NavigationLink(value: item) {
                                 MediaCard(item: item)
                             }
                             .buttonStyle(.plain)
@@ -140,7 +151,7 @@ struct MediaGridView: View {
                     // Simple grid for 'Library' only
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(destination: DetailView(item: item)) {
+                            NavigationLink(value: item) {
                                 MediaCard(item: item)
                             }
                             .buttonStyle(.plain)
@@ -213,7 +224,7 @@ struct MediaGridView: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(destination: DetailView(item: item)) {
+                            NavigationLink(value: item) {
                                 MediaCard(item: item)
                                     .onDrag {
                                         NSItemProvider(object: item.id as NSString)
@@ -335,6 +346,7 @@ struct MediaCard: View {
             Divider()
             Button(role: .destructive) {
                 NotificationManager.shared.cancelNotification(for: item)
+                SpotlightManager.shared.removeItem(item)
                 modelContext.delete(item)
             } label: {
                 Label("Remove", systemImage: "trash")

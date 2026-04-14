@@ -216,6 +216,7 @@ struct SearchView: View {
                 item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details?.runtime, genres: details?.genres ?? [], voteAverage: details?.voteAverage)
             }
             modelContext.insert(item)
+            SpotlightManager.shared.indexItem(item)
             dismiss()
         }
     }
@@ -243,6 +244,7 @@ struct SearchView: View {
                 }
             }
             modelContext.insert(item)
+            SpotlightManager.shared.indexItem(item)
             dismiss()
         }
     }
@@ -252,6 +254,7 @@ struct SearchView: View {
         let item = MediaItem(id: book.id, title: book.title, overview: book.overview, posterURL: book.coverURL, type: .book)
         item.bookDetails = BookDetails(googleBooksID: book.id, authors: book.authors, pageCount: book.pageCount)
         modelContext.insert(item)
+        SpotlightManager.shared.indexItem(item)
         dismiss()
     }
 }
