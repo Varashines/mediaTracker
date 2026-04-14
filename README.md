@@ -1,19 +1,38 @@
 # MediaTracker 🍿📺📚
 
-MediaTracker is a powerful, native macOS application designed to help you organize and track your movies, TV shows, and books in one beautiful, unified interface. Built with **SwiftUI** and **SwiftData**, it offers a seamless experience for managing your personal library and staying on top of upcoming releases.
+MediaTracker is a premium, native macOS application designed to help you organize and track your movies, TV shows, and books in one beautiful, unified interface. Built with **SwiftUI** and **SwiftData**, it offers a professional-grade experience for managing your library and staying on top of global releases with 100% accuracy.
+
+## v2.0.0 Highlights
+
+### 🌍 Unified Timing Architecture
+Stay synchronized with global releases regardless of where you are.
+- **Aggressive Network Rules:** Hardcoded release logic for **Apple TV+**, **Netflix**, **Disney+**, **Amazon Prime**, and **Hulu** to override inconsistent API data.
+- **IST & DST Optimized:** Automatically handles Indian Standard Time offsets, including +1 day US-to-India shifts and Daylight Saving Time resilience.
+- **Smart Status Headers:** Dynamically displays "Available Now" or "Releases on [Date]" with precision down to the minute.
+
+### 🎭 Cast & Crew
+Go behind the scenes with a rich, horizontal-scrolling cast section.
+- **Circular Avatars:** Beautifully rendered profile photos for the people behind your favorite media.
+- **Character Metadata:** View actor names and their roles at a single glance.
+- **Smart Placeholders:** Sleek category icons appear while high-resolution photos are loading.
+
+### 🎨 Modern UI & Experience
+Completely redesigned for a faster, more fluid experience.
+- **Season & Episode Overhaul:** Navigate long-running shows effortlessly with a horizontal season selector and a modern "square cube" episode grid.
+- **Native Inline Search:** A seamless transition from your library to search. Features staggered entrance animations and unified card dimensions.
+- **Tabbed Settings:** A professional macOS preference pane with secure API key fields and grouped diagnostic tools.
+- **Dynamic Theming:** The entire details page automatically tints itself based on the dominant color of the movie or show's poster.
 
 ## Features
 
-- **Multi-Media Support:** Track Movies, TV Shows, and Books with specialized detail views for each.
+- **Multi-Media Support:** Specialized detail views for Movies, TV Shows, and Books.
 - **Automated Syncing:** 
-    - Fetches movie runtimes, genres, and release dates via **TMDB**.
-    - Tracks TV show statuses, next episode dates, and season progress via **TVMaze** and **TMDB**.
+    - Fetches metadata, genres, and high-res posters via **TMDB**.
+    - Tracks global TV schedules and episode titles via **TVMaze**.
     - Pulls book details and page counts using the **Google Books API**.
-- **Smart Upcoming View:** Automatically categorizes items that are "Available Now" or "Releasing Soon" based on precise airing times.
-- **Dual Notifications:** Never miss a premiere with automatic 1:30 PM release day alerts and 9:30 AM "In case you missed it" reminders the following day.
-- **TV Tracking:** Manage season progress with an interactive episode-by-episode checklist.
-- **Beautiful Grid Interface:** View your library with high-quality posters, status badges, and drag-and-drop category management.
-- **Secure Configuration:** Keep your API keys safe with integrated AppStorage and a dedicated Settings view.
+- **Interactive Progress:** Manage your watch history with a per-episode checklist and "Full Season" drop detection.
+- **Dual Notifications:** Precise release alerts at the exact moment of availability in India, with follow-up reminders.
+- **Universal Search:** Search your local library and the web simultaneously in one unified grid.
 
 ## Getting Started
 
@@ -24,7 +43,7 @@ MediaTracker is a powerful, native macOS application designed to help you organi
 
 ### Installation
 
-To install MediaTracker as a proper macOS application with full notification support, use the provided installation script:
+To install MediaTracker as a proper macOS application with full notification and Spotlight support:
 
 1. Clone the repository:
    ```bash
@@ -37,26 +56,18 @@ To install MediaTracker as a proper macOS application with full notification sup
    bash install.sh
    ```
 
-The script will build the application in Release mode, package it into `MediaTracker.app`, and move it to your `/Applications` folder.
+The script will build the application in Release mode and move it to your `/Applications` folder.
 
 ## Configuration
 
-To enable data fetching, you will need to provide your own API keys in the **Settings** view:
+Provide your own API keys in the **Settings** view to enable live data:
 
 1. **TMDB API Key:** [Get one here](https://www.themoviedb.org/settings/api).
 2. **Google Books API Key (Optional):** [Get one from Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-3. **TVMaze:** No API key required for public lookups.
 
-## Development Notes
-
-### Xcode Debugging
-When running directly from Xcode (SPM mode), the application is not running in a signed `.app` bundle. To prevent crashes, the `NotificationManager` will automatically disable notification requests and log a warning to the console. 
-
-**Note:** To test notifications, you must use the `install.sh` script to build and sign the app properly.
-
-### Technology Stack
+## Technology Stack
 - **Language:** Swift 5.9+
-- **Frameworks:** SwiftUI, SwiftData, UserNotifications
+- **Frameworks:** SwiftUI, SwiftData, UserNotifications, CoreSpotlight
 - **Persistence:** SQLite (via SwiftData)
 - **APIs:** TMDB (Movies/TV), TVMaze (TV Schedules), Google Books (Books)
 
