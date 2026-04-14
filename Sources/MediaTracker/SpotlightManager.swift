@@ -25,7 +25,7 @@ class SpotlightManager {
                 }
             case .book:
                 if let book = item.bookDetails {
-                    attributeSet.authors = book.authors
+                    attributeSet.authorNames = book.authors
                 }
             }
         }

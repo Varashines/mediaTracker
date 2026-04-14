@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CoreSpotlight
 
 @Observable
 class MediaViewModel {
@@ -98,7 +99,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingSearch) {
             SearchView(initialType: currentMediaType)
         }
-        .onContinueUserActivity(CSSearchableItem.actionType) { userActivity in
+        .onContinueUserActivity(CSSearchableItemActionType) { userActivity in
             if let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
                 if let item = allItems.first(where: { $0.id == identifier }) {
                     viewModel.navigationPath = NavigationPath([item])
