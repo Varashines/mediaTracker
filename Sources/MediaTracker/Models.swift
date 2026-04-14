@@ -1,0 +1,263 @@
+import Foundation
+import SwiftData
+
+enum MediaState: String, Codable, CaseIterable {
+    case wishlist = "Wishlist"
+    case active = "Active"
+    case completed = "Completed"
+    
+    var displayName: String {
+        switch self {
+        case .wishlist: return "Waitlist"
+        case .active: return "In Progress"
+        case .completed: return "Completed"
+        }
+    }
+}
+
+enum MediaType: String, Codable, CaseIterable {
+    case movie = "Movie"
+    case tvShow = "TV Show"
+    case book = "Book"
+    
+    var pluralName: String {
+        switch self {
+        case .movie: return "Movies"
+        case .tvShow: return "TV Shows"
+        case .book: return "Books"
+        }
+    }
+}
+
+@Model
+final class MediaItem {
+    var id: String
+    var title: String
+    var overview: String
+    var posterURL: String?
+    var releaseDate: Date?
+    var lastUpdated: Date?
+    var isLiked: Bool?
+    var state: MediaState? = MediaState.wishlist
+    var type: MediaType? = MediaType.movie
+    
+    // Type-specific data
+    var movieDetails: MovieDetails?
+    var tvShowDetails: TVShowDetails?
+    var bookDetails: BookDetails?
+    
+    var nextAiringDate: Date? {
+        let currentType = type ?? .movie
+        if currentType == .movie {
+            return releaseDate
+        } else if currentType == .tvShow {
+            return tvShowDetails?.nextEpisodeDate
+        }
+        return nil
+    }
+    
+    var isRecentlyReleased: Bool {
+        let currentType = type ?? .movie
+        
+        // Use releaseDate for movies or nextEpisodeDate for TV as the source of truth for "Recently"
+        let dateToCheck: Date?
+        if currentType == .tvShow {
+            // Check if there's a confirmed episode that aired within the last 5 days
+            // We use the oldestUnwatchedEpisodeAirDate here because it's the best indicator 
+            // that the user has something new to watch right now.
+            dateToCheck = tvShowDetails?.oldestUnwatchedEpisodeAirDate
+        } else {
+            dateToCheck = releaseDate
+        }
+
+        guard let date = dateToCheck else { return false }
+        let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
+        return date <= Date() && date >= fiveDaysAgo
+    }
+    
+    var isUpcoming: Bool {
+        // 1. Check if there's a confirmed future release date
+        if let nextDate = nextAiringDate, nextDate > Date() {
+            return true
+        }
+        
+        // 2. Check if it was released within the last 5 days (Available Now buffer)
+        return isRecentlyReleased
+    }
+    
+    var isActive: Bool {
+        let currentType = type ?? .movie
+        let currentState = state ?? .wishlist
+        
+        if currentType == .tvShow, let tv = tvShowDetails {
+            let allEpisodes = tv.seasons.flatMap { $0.episodes }
+            let watchedCount = allEpisodes.filter { $0.isWatched }.count
+            let totalCount = tv.numberOfEpisodes ?? 0
+            
+            // It's active if you've seen at least one, but not all
+            return watchedCount > 0 && watchedCount < totalCount
+        } else if currentType == .book {
+            // For now, books are 'active' if their state is set to active
+            return currentState == .active
+        } else if currentType == .movie {
+            return currentState == .active
+        }
+        return false
+    }
+    
+    init(id: String, title: String, overview: String, posterURL: String? = nil, releaseDate: Date? = nil, isLiked: Bool? = nil, state: MediaState? = .wishlist, type: MediaType? = .movie) {
+        self.id = id
+        self.title = title
+        self.overview = overview
+        self.posterURL = posterURL
+        self.releaseDate = releaseDate
+        self.isLiked = isLiked
+        self.state = state
+        self.type = type
+    }
+}
+
+@Model
+final class MovieDetails {
+    var tmdbID: Int
+    var runtime: Int?
+    var genres: [String]
+    var voteAverage: Double?
+    
+    init(tmdbID: Int, runtime: Int? = nil, genres: [String] = [], voteAverage: Double? = nil) {
+        self.tmdbID = tmdbID
+        self.runtime = runtime
+        self.genres = genres
+        self.voteAverage = voteAverage
+    }
+}
+
+@Model
+final class TVShowDetails {
+    var tmdbID: Int
+    var tvMazeID: Int?
+    var nextEpisodeDate: Date?
+    var nextEpisodeTime: String?
+    var nextEpisodeName: String?
+    var nextEpisodeNumber: Int?
+    var nextSeasonNumber: Int?
+    var status: String?
+    var network: String?
+    var timezone: String?
+    var numberOfSeasons: Int?
+    var numberOfEpisodes: Int?
+    var voteAverage: Double?
+    
+    @Relationship(deleteRule: .cascade) var seasons: [TVSeason] = []
+    
+    var oldestUnwatchedEpisodeAirDate: Date? {
+        let allEpisodes = seasons.flatMap { $0.episodes }
+        let unwatched = allEpisodes.filter { !$0.isWatched }
+        
+        let dates = unwatched.compactMap { $0.airDateAsDate }
+        return dates.min()
+    }
+    
+    init(tmdbID: Int, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil) {
+        self.tmdbID = tmdbID
+        self.tvMazeID = tvMazeID
+        self.nextEpisodeDate = nextEpisodeDate
+        self.nextEpisodeTime = nextEpisodeTime
+        self.nextEpisodeName = nextEpisodeName
+        self.nextEpisodeNumber = nextEpisodeNumber
+        self.nextSeasonNumber = nextSeasonNumber
+        self.status = status
+        self.network = network
+        self.timezone = timezone
+        self.numberOfSeasons = numberOfSeasons
+        self.numberOfEpisodes = numberOfEpisodes
+        self.voteAverage = voteAverage
+    }
+}
+
+@Model
+final class TVSeason {
+    var seasonNumber: Int
+    var name: String
+    var episodeCount: Int
+    var airDate: String?
+    var tvShowDetails: TVShowDetails?
+    @Relationship(deleteRule: .cascade) var episodes: [TVEpisode] = []
+    
+    init(seasonNumber: Int, name: String, episodeCount: Int, airDate: String? = nil) {
+        self.seasonNumber = seasonNumber
+        self.name = name
+        self.episodeCount = episodeCount
+        self.airDate = airDate
+    }
+}
+
+@Model
+final class TVEpisode {
+    var episodeNumber: Int
+    var seasonNumber: Int
+    var name: String
+    var overview: String
+    var airDate: String?
+    var runtime: Int?
+    var isWatched: Bool = false
+    var season: TVSeason?
+    
+    var airDateAsDate: Date? {
+        guard let airDate = airDate else { return nil }
+        
+        if let show = season?.tvShowDetails {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            
+            let service = (show.network ?? "").lowercased()
+            let isNetflix = service.contains("netflix")
+            let isDisney = service.contains("disney+") || service.contains("hulu")
+            let isApple = service.contains("apple tv+")
+            
+            // Apply the same "Smart Default" logic as DateUtils
+            if isNetflix {
+                formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
+                return formatter.date(from: "\(airDate) 00:00")
+            } else if isDisney || isApple {
+                formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
+                // Assume 6PM PT for these major services if we don't have a specific time
+                // (Most reliable for Action/Marvel/StarWars)
+                return formatter.date(from: "\(airDate) 18:00")
+            } else if let tzName = show.timezone, let tz = TimeZone(identifier: tzName) {
+                formatter.timeZone = tz
+                let time = show.nextEpisodeTime ?? "20:00"
+                return formatter.date(from: "\(airDate) \(time)")
+            }
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: airDate)
+    }
+    
+    init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, runtime: Int? = nil, isWatched: Bool = false) {
+        self.episodeNumber = episodeNumber
+        self.seasonNumber = seasonNumber
+        self.name = name
+        self.overview = overview
+        self.airDate = airDate
+        self.runtime = runtime
+        self.isWatched = isWatched
+    }
+}
+
+@Model
+final class BookDetails {
+    var googleBooksID: String
+    var authors: [String]
+    var pageCount: Int?
+    var isbn: String?
+    
+    init(googleBooksID: String, authors: [String] = [], pageCount: Int? = nil, isbn: String? = nil) {
+        self.googleBooksID = googleBooksID
+        self.authors = authors
+        self.pageCount = pageCount
+        self.isbn = isbn
+    }
+}

@@ -1,0 +1,97 @@
+name: Build and Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.3'
+
+      - name: Build App Bundle
+        run: |
+          chmod +x install.sh
+          # We need to modify install.sh slightly or simulate its steps
+          # because install.sh moves to /Applications, which might require sudo
+          # and isn't what we want for a DMG.
+          
+          APP_NAME="MediaTracker"
+          BUNDLE_ID="com.vara.mediatracker"
+          EXECUTABLE_NAME="MediaTracker"
+          BUILD_DIR=".build/apple/Products/Release"
+          
+          echo "🚀 Building $APP_NAME in Release mode..."
+          swift build -c release --arch arm64 --arch x86_64
+          
+          echo "🎨 Generating App Icon..."
+          swift generate_icon.swift
+          iconutil -c icns AppIcon.iconset -o AppIcon.icns
+          
+          echo "📦 Packaging into $APP_NAME.app..."
+          APP_BUNDLE="$APP_NAME.app"
+          CONTENTS_DIR="$APP_BUNDLE/Contents"
+          MACOS_DIR="$CONTENTS_DIR/MacOS"
+          RESOURCES_DIR="$CONTENTS_DIR/Resources"
+          
+          mkdir -p "$MACOS_DIR"
+          mkdir -p "$RESOURCES_DIR"
+          
+          cp "$BUILD_DIR/$EXECUTABLE_NAME" "$MACOS_DIR/"
+          cp AppIcon.icns "$RESOURCES_DIR/"
+          
+          cat > "$CONTENTS_DIR/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>$EXECUTABLE_NAME</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon.icns</string>
+              <key>CFBundleIdentifier</key>
+              <string>$BUNDLE_ID</string>
+              <key>CFBundleName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${GITHUB_REF_NAME#v}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>14.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          
+          # Ad-hoc sign (mandatory)
+          codesign --force --deep --sign - "$APP_BUNDLE"
+
+      - name: Create DMG
+        run: |
+          mkdir -p dmg_folder
+          cp -R "MediaTracker.app" dmg_folder/
+          ln -s /Applications dmg_folder/Applications
+          hdiutil create -volname "MediaTracker" -srcfolder dmg_folder -ov -format UDZO "MediaTracker.dmg"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MediaTracker.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

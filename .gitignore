@@ -1,0 +1,11 @@
+# .gitignore for Swift/macOS
+.build/
+.DS_Store
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+AppIcon.iconset/
+AppIcon.icns
+MediaTracker.app
+MediaTracker.dmg
+crash_report.txt
