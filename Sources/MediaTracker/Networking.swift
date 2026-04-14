@@ -23,6 +23,9 @@ actor APIClient {
     private var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
     private var googleBooksApiKey: String { UserDefaults.standard.string(forKey: "google_books_api_key") ?? "" }
     
+    var isTMDBConfigured: Bool { !tmdbApiKey.isEmpty }
+    var isGoogleBooksConfigured: Bool { !googleBooksApiKey.isEmpty }
+    
     private func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
         let key = tmdbApiKey
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }

@@ -92,7 +92,7 @@ struct DetailView: View {
                         }
                         
                         if (item.type == .movie && item.movieDetails?.genres.isEmpty != false) || (item.type == .tvShow && item.tvShowDetails?.status == nil) {
-                            if APIClient.shared.tmdbApiKey.isEmpty {
+                            if !APIClient.shared.isTMDBConfigured {
                                 Text("Please add your TMDB API Key in Settings to see more details.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)

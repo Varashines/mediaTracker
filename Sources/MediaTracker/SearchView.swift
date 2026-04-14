@@ -55,7 +55,7 @@ struct SearchView: View {
                         Section("Trending & Suggestions") {
                             if selectedType == .all || selectedType == .movie {
                                 ForEach(trendingMovies) { movie in
-                                    let isAdded = existingItems.contains { $0.id == movie.id && $0.type == .movie }
+                                    let isAdded = existingItems.contains { item in item.id == movie.id && item.type == .movie }
                                     SearchResultRow(title: movie.title, subtitle: "Trending Movie", posterURL: movie.posterURL, isAdded: isAdded) {
                                         addMovie(movie)
                                     }
@@ -63,7 +63,7 @@ struct SearchView: View {
                             }
                             if selectedType == .all || selectedType == .tvShow {
                                 ForEach(trendingTV) { tv in
-                                    let isAdded = existingItems.contains { $0.id == tv.id && $0.type == .tvShow }
+                                    let isAdded = existingItems.contains { item in item.id == tv.id && item.type == .tvShow }
                                     SearchResultRow(title: tv.title, subtitle: "Trending TV Show", posterURL: tv.posterURL, isAdded: isAdded) {
                                         addTVShow(tv)
                                     }
@@ -74,7 +74,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .movie {
                             Section("Movies") {
                                 ForEach(movieResults) { movie in
-                                    let isAdded = existingItems.contains { $0.id == movie.id && $0.type == .movie }
+                                    let isAdded = existingItems.contains { item in item.id == movie.id && item.type == .movie }
                                     SearchResultRow(title: movie.title, subtitle: "Movie", posterURL: movie.posterURL, isAdded: isAdded) {
                                         addMovie(movie)
                                     }
@@ -84,7 +84,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .tvShow {
                             Section("TV Shows") {
                                 ForEach(tvResults) { tv in
-                                    let isAdded = existingItems.contains { $0.id == tv.id && $0.type == .tvShow }
+                                    let isAdded = existingItems.contains { item in item.id == tv.id && item.type == .tvShow }
                                     SearchResultRow(title: tv.title, subtitle: "TV Show", posterURL: tv.posterURL, isAdded: isAdded) {
                                         addTVShow(tv)
                                     }
@@ -94,7 +94,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .book {
                             Section("Books") {
                                 ForEach(bookResults) { book in
-                                    let isAdded = existingItems.contains { $0.id == book.id && $0.type == .book }
+                                    let isAdded = existingItems.contains { item in item.id == book.id && item.type == .book }
                                     SearchResultRow(title: book.title, subtitle: book.authors.joined(separator: ", "), posterURL: book.coverURL, isAdded: isAdded) {
                                         addBook(book)
                                     }

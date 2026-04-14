@@ -43,15 +43,5 @@ struct SettingsView: View {
         }
         .padding()
         .frame(width: 450, height: 350)
-        .onChange(of: tmdbApiKey) { oldValue, newValue in
-            APIClient.shared.tmdbApiKey = newValue
-        }
-        .onChange(of: googleBooksApiKey) { oldValue, newValue in
-            APIClient.shared.googleBooksApiKey = newValue
-        }
-        .onAppear {
-            APIClient.shared.tmdbApiKey = tmdbApiKey
-            APIClient.shared.googleBooksApiKey = googleBooksApiKey
-        }
     }
 }
