@@ -90,6 +90,9 @@ struct DetailView: View {
                                         .foregroundStyle(Color.accentColor)
                                 }
                                 Text("Status: \(tv.status ?? "Unknown")")
+                                if let network = tv.network {
+                                    Text("Network: \(network)")
+                                }
                                 if let seasons = tv.numberOfSeasons {
                                     Text("Seasons: \(seasons)")
                                 }
