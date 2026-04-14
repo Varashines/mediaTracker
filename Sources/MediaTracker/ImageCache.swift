@@ -58,6 +58,32 @@ class ImageCache {
     }
 }
 
+struct ShimmerView: View {
+    @State private var phase: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.secondary.opacity(0.1)
+                
+                LinearGradient(
+                    gradient: Gradient(colors: [.clear, .white.opacity(0.2), .clear]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: geometry.size.width * 2)
+                .offset(x: -geometry.size.width + (geometry.size.width * 2 * phase))
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+        }
+        .clipped()
+    }
+}
+
 struct CachedImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder let placeholder: Placeholder
@@ -71,10 +97,13 @@ struct CachedImage<Placeholder: View>: View {
                 Image(nsImage: image)
                     .resizable()
             } else {
-                placeholder
-                    .onAppear {
-                        loadImage()
-                    }
+                ZStack {
+                    placeholder
+                    ShimmerView()
+                }
+                .onAppear {
+                    loadImage()
+                }
             }
         }
     }

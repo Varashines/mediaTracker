@@ -123,6 +123,11 @@ struct SearchView: View {
             .onChange(of: selectedType) { oldValue, newValue in
                 performSearch()
             }
+            .alert("Search Error", isPresented: $showError, presenting: errorMessage) { _ in
+                Button("OK") { errorMessage = nil }
+            } message: { message in
+                Text(message)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }

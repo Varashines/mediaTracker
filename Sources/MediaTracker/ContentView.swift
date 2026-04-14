@@ -1,51 +1,57 @@
 import SwiftUI
 import SwiftData
 
+@Observable
+class MediaViewModel {
+    var selectedCategory: String? = "Upcoming"
+    var searchText: String = ""
+    
+    func navigationTitle(for category: String?) -> String {
+        if let cat = category, let type = MediaType(rawValue: cat) {
+            return type.pluralName
+        }
+        if category == "InProgress" { return "In Progress" }
+        return category ?? "Library"
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [MediaItem]
-    
-    @State private var selectedCategory: String? = "Upcoming"
+    @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
+    @State private var viewModel = MediaViewModel()
     @State private var showingSearch = false
-    @State private var searchText = ""
     
     var filteredItems: [MediaItem] {
         let baseItems: [MediaItem]
-        if selectedCategory == "Upcoming" || selectedCategory == nil {
-            baseItems = items.filter { $0.isUpcoming }
+        let category = viewModel.selectedCategory
+        
+        if category == "Upcoming" || category == nil {
+            baseItems = allItems.filter { $0.isUpcoming }
                 .sorted { item1, item2 in
                     guard let date1 = item1.nextAiringDate else { return false }
                     guard let date2 = item2.nextAiringDate else { return true }
                     return date1 < date2
                 }
-        } else if selectedCategory == "InProgress" {
-            baseItems = items.filter { $0.isActive && !$0.isUpcoming }
-        } else if selectedCategory == "Waitlist" {
-            baseItems = items.filter { $0.state == .wishlist && !$0.isUpcoming }
-        } else if selectedCategory == "All" {
-            baseItems = items.sorted { $0.title < $1.title }
+        } else if category == "InProgress" {
+            baseItems = allItems.filter { $0.isActive && !$0.isUpcoming }
+        } else if category == "Waitlist" {
+            baseItems = allItems.filter { $0.state == .wishlist && !$0.isUpcoming }
+        } else if category == "All" {
+            baseItems = allItems
         } else {
-            baseItems = items.filter { $0.type?.rawValue == selectedCategory }.sorted { $0.title < $1.title }
+            baseItems = allItems.filter { $0.type?.rawValue == category }
         }
         
-        if searchText.isEmpty {
+        if viewModel.searchText.isEmpty {
             return baseItems
         } else {
-            return baseItems.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+            return baseItems.filter { $0.title.localizedCaseInsensitiveContains(viewModel.searchText) }
         }
     }
 
-    private var navigationTitleText: String {
-        if let cat = selectedCategory, let type = MediaType(rawValue: cat) {
-            return type.pluralName
-        }
-        if selectedCategory == "InProgress" { return "In Progress" }
-        return selectedCategory ?? "Library"
-    }
-    
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedCategory) {
+            List(selection: $viewModel.selectedCategory) {
                 Label("Upcoming", systemImage: "calendar")
                     .tag("Upcoming")
                 
@@ -70,12 +76,12 @@ struct ContentView: View {
             NavigationStack {
                 MediaGridView(
                     items: filteredItems, 
-                    selectedCategory: selectedCategory, 
-                    showingUpcomingOnly: selectedCategory == "Upcoming",
-                    searchText: searchText
+                    selectedCategory: viewModel.selectedCategory, 
+                    showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
+                    searchText: viewModel.searchText
                 )
-                .navigationTitle(navigationTitleText)
-                .searchable(text: $searchText, placement: .toolbar, prompt: "Search library...")
+                .navigationTitle(viewModel.navigationTitle(for: viewModel.selectedCategory))
+                .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search library...")
                 .toolbar {
                     ToolbarItem {
                         Button(action: { showingSearch = true }) {
@@ -91,7 +97,7 @@ struct ContentView: View {
     }
     
     private var currentMediaType: MediaType? {
-        MediaType(rawValue: selectedCategory ?? "")
+        MediaType(rawValue: viewModel.selectedCategory ?? "")
     }
     
     private func icon(for type: MediaType) -> String {
