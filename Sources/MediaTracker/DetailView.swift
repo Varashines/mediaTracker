@@ -4,6 +4,7 @@ import SwiftData
 struct DetailView: View {
     @Bindable var item: MediaItem
     @State private var isRefreshing = false
+    @State private var themeColor: Color = Color.secondary.opacity(0.1)
     
     private var needsUpdate: Bool {
         guard let lastUpdated = item.lastUpdated else { return true }
@@ -12,178 +13,192 @@ struct DetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .center, spacing: 30) {
-                    if let urlString = item.posterURL, let url = URL(string: urlString) {
-                        CachedImage(url: url) {
-                            Rectangle().fill(Color.secondary.opacity(0.1))
-                        }
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 240)
-                        .cornerRadius(12)
-                        .shadow(radius: 10)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(item.title)
-                            .font(.system(size: 34, weight: .bold))
-                        
-                        HStack {
-                            Text(item.type?.rawValue ?? "")
-                                .padding(6)
-                                .background(Color.accentColor.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                            
-                            Picker("Status", selection: $item.state) {
-                                ForEach(MediaState.allCases, id: \.self) { state in
-                                    Text(state.displayName).tag(state as MediaState?)
+        ZStack {
+            // Dynamic Background Gradient
+            LinearGradient(
+                gradient: Gradient(colors: [themeColor.opacity(0.15), Color(NSColor.windowBackgroundColor)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .center, spacing: 30) {
+                        if let urlString = item.posterURL, let url = URL(string: urlString) {
+                            CachedImage(url: url, targetSize: nil) { image in
+                                withAnimation(.easeInOut(duration: 0.8)) {
+                                    themeColor = ColorExtractor.dominantColor(from: image)
                                 }
+                            } placeholder: {
+                                Rectangle().fill(Color.secondary.opacity(0.1))
                             }
-                            .pickerStyle(.menu)
-                            .onChange(of: item.state) { oldValue, newValue in
-                                if newValue == .completed {
-                                    NotificationManager.shared.cancelNotification(for: item)
-                                    markAllAsWatched()
-                                }
-                            }
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 240)
+                            .cornerRadius(12)
+                            .shadow(color: themeColor.opacity(0.2), radius: 20, x: 0, y: 10)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(item.title)
+                                .font(.system(size: 34, weight: .bold))
                             
-                            if item.isUpcoming {
-                                Text("Upcoming")
-                                    .font(.caption2.bold())
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.orange.opacity(0.2))
-                                    .foregroundStyle(.orange)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        
-                        if let movie = item.movieDetails {
-                            if let releaseDate = item.releaseDate {
-                                Text("Release Date: \(releaseDate.formatted(date: .long, time: .omitted))")
-                            }
-                            
-                            if let runtime = movie.runtime {
-                                Text("Runtime: \(DateUtils.formatRuntime(runtime))")
-                            }
-                            Text("Genres: \(movie.genres.joined(separator: ", "))")
-                        }
-                        
-                        if let tv = item.tvShowDetails {
-                            if let next = tv.nextEpisodeDate {
-                                Text("Next Episode: \(next.formatted(date: .abbreviated, time: .shortened))")
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                            Text("Status: \(tv.status ?? "Unknown")")
-                            if let seasons = tv.numberOfSeasons {
-                                Text("Seasons: \(seasons)")
-                            }
-                            if let episodes = tv.numberOfEpisodes {
-                                Text("Episodes: \(episodes)")
-                            }
-                        }
-                        
-                        if let book = item.bookDetails {
-                            Text("Author(s): \(book.authors.joined(separator: ", "))")
-                            if let pages = book.pageCount {
-                                Text("Pages: \(pages)")
-                            }
-                        }
-                        
-                        if (item.type == .movie && item.movieDetails?.genres.isEmpty != false) || (item.type == .tvShow && item.tvShowDetails?.status == nil) {
-                            if !APIClient.shared.isTMDBConfigured {
-                                Text("Please add your TMDB API Key in Settings to see more details.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        
-                        Divider().padding(.vertical, 5)
-                        
-                        Text("Overview")
-                            .font(.headline)
-                        
-                        Text(item.overview)
-                            .font(.body)
-                            .lineSpacing(4)
-                            .fixedSize(horizontal: false, vertical: true)
-                        
-                        Spacer()
-                    }
-                }
-                
-                Divider()
-                
-                if let tv = item.tvShowDetails {
-                    Divider()
-                    TVTrackingView(tvDetails: tv, onWatchedToggle: {
-                        checkOverallCompletion()
-                    })
-                }
-                
-                Divider()
-                
-                HStack(spacing: 40) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("My Rating")
-                            .font(.headline)
-                        
-                        HStack(spacing: 20) {
-                            Button {
-                                item.isLiked = true
-                            } label: {
-                                Image(systemName: item.isLiked == true ? "hand.thumbsup.fill" : "hand.thumbsup")
-                                    .foregroundStyle(item.isLiked == true ? .green : .primary)
-                                Text("Like")
-                            }
-                            .buttonStyle(.bordered)
-                            
-                            Button {
-                                item.isLiked = false
-                            } label: {
-                                Image(systemName: item.isLiked == false ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                                    .foregroundStyle(item.isLiked == false ? .red : .primary)
-                                Text("Dislike")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                    
-                    let voteAverage: Double? = item.movieDetails?.voteAverage ?? item.tvShowDetails?.voteAverage
-                    if let rating = voteAverage {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Community Rating")
-                                .font(.headline)
                             HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                Text(String(format: "%.1f / 10", rating))
-                                    .font(.title3.bold())
+                                Text(item.type?.rawValue ?? "")
+                                    .padding(6)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                
+                                Picker("Status", selection: $item.state) {
+                                    ForEach(MediaState.allCases, id: \.self) { state in
+                                        Text(state.displayName).tag(state as MediaState?)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .onChange(of: item.state) { oldValue, newValue in
+                                    if newValue == .completed {
+                                        NotificationManager.shared.cancelNotification(for: item)
+                                        markAllAsWatched()
+                                    }
+                                }
+                                
+                                if item.isUpcoming {
+                                    Text("Upcoming")
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.orange.opacity(0.2))
+                                        .foregroundStyle(.orange)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            
+                            if let movie = item.movieDetails {
+                                if let releaseDate = item.releaseDate {
+                                    Text("Release Date: \(releaseDate.formatted(date: .long, time: .omitted))")
+                                }
+                                
+                                if let runtime = movie.runtime {
+                                    Text("Runtime: \(DateUtils.formatRuntime(runtime))")
+                                }
+                                Text("Genres: \(movie.genres.joined(separator: ", "))")
+                            }
+                            
+                            if let tv = item.tvShowDetails {
+                                if let next = tv.nextEpisodeDate {
+                                    Text("Next Episode: \(next.formatted(date: .abbreviated, time: .shortened))")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                                Text("Status: \(tv.status ?? "Unknown")")
+                                if let seasons = tv.numberOfSeasons {
+                                    Text("Seasons: \(seasons)")
+                                }
+                                if let episodes = tv.numberOfEpisodes {
+                                    Text("Episodes: \(episodes)")
+                                }
+                            }
+                            
+                            if let book = item.bookDetails {
+                                Text("Author(s): \(book.authors.joined(separator: ", "))")
+                                if let pages = book.pageCount {
+                                    Text("Pages: \(pages)")
+                                }
+                            }
+                            
+                            if (item.type == .movie && item.movieDetails?.genres.isEmpty != false) || (item.type == .tvShow && item.tvShowDetails?.status == nil) {
+                                if !APIClient.shared.isTMDBConfigured {
+                                    Text("Please add your TMDB API Key in Settings to see more details.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            
+                            Divider().padding(.vertical, 5)
+                            
+                            Text("Overview")
+                                .font(.headline)
+                            
+                            Text(item.overview)
+                                .font(.body)
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                            
+                            Spacer()
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    if let tv = item.tvShowDetails {
+                        Divider()
+                        TVTrackingView(tvDetails: tv, onWatchedToggle: {
+                            checkOverallCompletion()
+                        })
+                    }
+                    
+                    Divider()
+                    
+                    HStack(spacing: 40) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("My Rating")
+                                .font(.headline)
+                            
+                            HStack(spacing: 20) {
+                                Button {
+                                    item.isLiked = true
+                                } label: {
+                                    Image(systemName: item.isLiked == true ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                        .foregroundStyle(item.isLiked == true ? .green : .primary)
+                                    Text("Like")
+                                }
+                                .buttonStyle(.bordered)
+                                
+                                Button {
+                                    item.isLiked = false
+                                } label: {
+                                    Image(systemName: item.isLiked == false ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                        .foregroundStyle(item.isLiked == false ? .red : .primary)
+                                    Text("Dislike")
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        
+                        let voteAverage: Double? = item.movieDetails?.voteAverage ?? item.tvShowDetails?.voteAverage
+                        if let rating = voteAverage {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Community Rating")
+                                    .font(.headline)
+                                HStack {
+                                    Image(systemName: "star.fill")
+                                        .foregroundStyle(.yellow)
+                                    Text(String(format: "%.1f / 10", rating))
+                                        .font(.title3.bold())
+                                }
                             }
                         }
                     }
                 }
+                .padding(30)
             }
-            .padding(30)
-        }
-        .navigationTitle("Details")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    refreshData(force: true)
-                } label: {
-                    if isRefreshing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+            .navigationTitle("Details")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        refreshData(force: true)
+                    } label: {
+                        if isRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
                     }
+                    .disabled(isRefreshing)
                 }
-                .disabled(isRefreshing)
             }
-        }
-        .onAppear {
-            refreshData()
+            .onAppear {
+                refreshData()
+            }
         }
     }
     

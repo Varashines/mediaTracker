@@ -51,7 +51,7 @@ actor APIClient {
         
         let decodedResponse = try decoder.decode(TMDBResponse.self, from: data)
         return decodedResponse.results.map { 
-            MovieSearchResult(id: String($0.id), title: $0.title, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w500\($0.poster_path ?? "")", releaseDate: $0.release_date)
+            MovieSearchResult(id: String($0.id), title: $0.title, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w780\($0.poster_path ?? "")", releaseDate: $0.release_date)
         }
     }
     
@@ -63,7 +63,7 @@ actor APIClient {
         
         let decodedResponse = try decoder.decode(TMDBTVResponse.self, from: data)
         return decodedResponse.results.map { 
-            TVSearchResult(id: String($0.id), title: $0.name, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w500\($0.poster_path ?? "")", releaseDate: $0.first_air_date)
+            TVSearchResult(id: String($0.id), title: $0.name, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w780\($0.poster_path ?? "")", releaseDate: $0.first_air_date)
         }
     }
     
@@ -109,7 +109,7 @@ actor APIClient {
         
         let decodedResponse = try decoder.decode(TMDBResponse.self, from: data)
         return decodedResponse.results.prefix(10).map { 
-            MovieSearchResult(id: String($0.id), title: $0.title, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w500\($0.poster_path ?? "")", releaseDate: $0.release_date)
+            MovieSearchResult(id: String($0.id), title: $0.title, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w780\($0.poster_path ?? "")", releaseDate: $0.release_date)
         }
     }
     
@@ -120,7 +120,7 @@ actor APIClient {
         
         let decodedResponse = try decoder.decode(TMDBTVResponse.self, from: data)
         return decodedResponse.results.prefix(10).map { 
-            TVSearchResult(id: String($0.id), title: $0.name, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w500\($0.poster_path ?? "")", releaseDate: $0.first_air_date)
+            TVSearchResult(id: String($0.id), title: $0.name, overview: $0.overview, posterURL: "https://image.tmdb.org/t/p/w780\($0.poster_path ?? "")", releaseDate: $0.first_air_date)
         }
     }
     

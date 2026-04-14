@@ -67,7 +67,7 @@ class ImageCache {
             let fileURL = self.cacheDirectory.appendingPathComponent(self.fileName(for: key, size: targetSize))
             if let data = finalImage.tiffRepresentation {
                 let bitmap = NSBitmapImageRep(data: data)
-                let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+                let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
                 try? jpegData?.write(to: fileURL)
             }
         }
@@ -141,14 +141,16 @@ struct ShimmerView: View {
 struct CachedImage<Placeholder: View>: View {
     let url: URL?
     let targetSize: CGSize?
+    var onImageLoaded: ((NSImage) -> Void)? = nil
     @ViewBuilder let placeholder: Placeholder
     
     @State private var image: NSImage?
     @State private var isLoading = false
     
-    init(url: URL?, targetSize: CGSize? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+    init(url: URL?, targetSize: CGSize? = nil, onImageLoaded: ((NSImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
         self.targetSize = targetSize
+        self.onImageLoaded = onImageLoaded
         self.placeholder = placeholder()
     }
     
@@ -176,6 +178,7 @@ struct CachedImage<Placeholder: View>: View {
         // 1. Check Memory/Disk
         if let cached = ImageCache.shared.get(forKey: key, targetSize: targetSize) {
             self.image = cached
+            onImageLoaded?(cached)
             return
         }
         
@@ -188,7 +191,10 @@ struct CachedImage<Placeholder: View>: View {
             ImageCache.shared.save(image: downloadedImage, forKey: key, targetSize: targetSize)
             
             DispatchQueue.main.async {
-                self.image = ImageCache.shared.get(forKey: key, targetSize: targetSize)
+                if let finalImage = ImageCache.shared.get(forKey: key, targetSize: targetSize) {
+                    self.image = finalImage
+                    onImageLoaded?(finalImage)
+                }
             }
         }.resume()
     }
