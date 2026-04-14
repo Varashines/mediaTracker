@@ -24,6 +24,8 @@ struct SearchView: View {
     @State private var trendingTV: [TVSearchResult] = []
     
     @State private var isSearching = false
+    @State private var errorMessage: String?
+    @State private var showError = false
     
     init(initialType: MediaType? = nil) {
         if let type = initialType {
@@ -37,6 +39,10 @@ struct SearchView: View {
         } else {
             _selectedType = State(initialValue: .all)
         }
+    }
+    
+    private func isAdded(id: String, type: MediaType) -> Bool {
+        return existingItems.contains { $0.id == id && $0.type == type }
     }
     
     var body: some View {
@@ -55,16 +61,14 @@ struct SearchView: View {
                         Section("Trending & Suggestions") {
                             if selectedType == .all || selectedType == .movie {
                                 ForEach(trendingMovies) { movie in
-                                    let isAdded = existingItems.contains { item in item.id == movie.id && item.type == .movie }
-                                    SearchResultRow(title: movie.title, subtitle: "Trending Movie", posterURL: movie.posterURL, isAdded: isAdded) {
+                                    SearchResultRow(title: movie.title, subtitle: "Trending Movie", posterURL: movie.posterURL, isAdded: isAdded(id: movie.id, type: .movie)) {
                                         addMovie(movie)
                                     }
                                 }
                             }
                             if selectedType == .all || selectedType == .tvShow {
                                 ForEach(trendingTV) { tv in
-                                    let isAdded = existingItems.contains { item in item.id == tv.id && item.type == .tvShow }
-                                    SearchResultRow(title: tv.title, subtitle: "Trending TV Show", posterURL: tv.posterURL, isAdded: isAdded) {
+                                    SearchResultRow(title: tv.title, subtitle: "Trending TV Show", posterURL: tv.posterURL, isAdded: isAdded(id: tv.id, type: .tvShow)) {
                                         addTVShow(tv)
                                     }
                                 }
@@ -74,8 +78,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .movie {
                             Section("Movies") {
                                 ForEach(movieResults) { movie in
-                                    let isAdded = existingItems.contains { item in item.id == movie.id && item.type == .movie }
-                                    SearchResultRow(title: movie.title, subtitle: "Movie", posterURL: movie.posterURL, isAdded: isAdded) {
+                                    SearchResultRow(title: movie.title, subtitle: "Movie", posterURL: movie.posterURL, isAdded: isAdded(id: movie.id, type: .movie)) {
                                         addMovie(movie)
                                     }
                                 }
@@ -84,8 +87,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .tvShow {
                             Section("TV Shows") {
                                 ForEach(tvResults) { tv in
-                                    let isAdded = existingItems.contains { item in item.id == tv.id && item.type == .tvShow }
-                                    SearchResultRow(title: tv.title, subtitle: "TV Show", posterURL: tv.posterURL, isAdded: isAdded) {
+                                    SearchResultRow(title: tv.title, subtitle: "TV Show", posterURL: tv.posterURL, isAdded: isAdded(id: tv.id, type: .tvShow)) {
                                         addTVShow(tv)
                                     }
                                 }
@@ -94,8 +96,7 @@ struct SearchView: View {
                         if selectedType == .all || selectedType == .book {
                             Section("Books") {
                                 ForEach(bookResults) { book in
-                                    let isAdded = existingItems.contains { item in item.id == book.id && item.type == .book }
-                                    SearchResultRow(title: book.title, subtitle: book.authors.joined(separator: ", "), posterURL: book.coverURL, isAdded: isAdded) {
+                                    SearchResultRow(title: book.title, subtitle: book.authors.joined(separator: ", "), posterURL: book.coverURL, isAdded: isAdded(id: book.id, type: .book)) {
                                         addBook(book)
                                     }
                                 }
@@ -108,20 +109,19 @@ struct SearchView: View {
             .navigationTitle("Add Media")
             .searchable(text: $searchText, placement: .toolbar, prompt: "Search movies, shows, books...")
             .task(id: searchText) {
-                // Debounce: Wait 300ms
                 if !searchText.isEmpty {
                     do {
                         try await Task.sleep(for: .milliseconds(300))
-                        performSearch()
+                        await performSearch()
                     } catch {
-                        // Task cancelled when user types again
+                        // Task cancelled
                     }
                 } else {
-                    performSearch() // Clear results if empty
+                    await performSearch()
                 }
             }
             .onChange(of: selectedType) { oldValue, newValue in
-                performSearch()
+                Task { await performSearch() }
             }
             .alert("Search Error", isPresented: $showError, presenting: errorMessage) { _ in
                 Button("OK") { errorMessage = nil }
@@ -148,15 +148,19 @@ struct SearchView: View {
     private func loadTrending() {
         Task {
             do {
-                trendingMovies = try await APIClient.shared.fetchTrendingMovies()
-                trendingTV = try await APIClient.shared.fetchTrendingTVShows()
+                let movies = try await APIClient.shared.fetchTrendingMovies()
+                let tv = try await APIClient.shared.fetchTrendingTVShows()
+                await MainActor.run {
+                    trendingMovies = movies
+                    trendingTV = tv
+                }
             } catch {
                 print("Error loading trending: \(error)")
             }
         }
     }
     
-    private func performSearch() {
+    private func performSearch() async {
         guard !searchText.isEmpty else { 
             movieResults = []
             tvResults = []
@@ -165,24 +169,40 @@ struct SearchView: View {
         }
         isSearching = true
         
-        Task {
-            do {
-                if selectedType == .all || selectedType == .movie {
-                    movieResults = try await APIClient.shared.searchMovies(query: searchText)
-                } else { movieResults = [] }
-                
-                if selectedType == .all || selectedType == .tvShow {
-                    tvResults = try await APIClient.shared.searchTVShows(query: searchText)
-                } else { tvResults = [] }
-                
-                if selectedType == .all || selectedType == .book {
-                    bookResults = try await APIClient.shared.searchBooks(query: searchText)
-                } else { bookResults = [] }
-                
-            } catch {
-                print("Search error: \(error)")
+        do {
+            var movies: [MovieSearchResult] = []
+            var tv: [TVSearchResult] = []
+            var books: [BookSearchResult] = []
+            
+            if selectedType == .all || selectedType == .movie {
+                movies = try await APIClient.shared.searchMovies(query: searchText)
             }
-            isSearching = false
+            
+            if selectedType == .all || selectedType == .tvShow {
+                tv = try await APIClient.shared.searchTVShows(query: searchText)
+            }
+            
+            if selectedType == .all || selectedType == .book {
+                books = try await APIClient.shared.searchBooks(query: searchText)
+            }
+            
+            let finalMovies = movies
+            let finalTV = tv
+            let finalBooks = books
+            
+            await MainActor.run {
+                self.movieResults = finalMovies
+                self.tvResults = finalTV
+                self.bookResults = finalBooks
+                self.isSearching = false
+            }
+        } catch {
+            let message = error.localizedDescription
+            await MainActor.run {
+                self.errorMessage = message
+                self.showError = true
+                self.isSearching = false
+            }
         }
     }
     
