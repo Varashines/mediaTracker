@@ -266,7 +266,7 @@ struct SearchResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if let urlString = posterURL, let url = URL(string: urlString) {
-                CachedImage(url: url) {
+                CachedImage(url: url, targetSize: CGSize(width: 70, height: 100)) {
                     Color.secondary.opacity(0.1)
                 }
                 .frame(width: 35, height: 50)

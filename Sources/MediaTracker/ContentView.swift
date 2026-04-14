@@ -263,7 +263,7 @@ struct MediaCard: View {
                 // Poster with fixed size
                 Group {
                     if let urlString = item.posterURL, let url = URL(string: urlString) {
-                        CachedImage(url: url) {
+                        CachedImage(url: url, targetSize: CGSize(width: 320, height: 480)) {
                             Rectangle()
                                 .fill(Color.secondary.opacity(0.1))
                                 .overlay { ProgressView().controlSize(.small) }
