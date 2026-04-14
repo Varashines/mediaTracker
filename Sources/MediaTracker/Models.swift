@@ -51,9 +51,19 @@ final class MediaItem {
         if currentType == .movie {
             return releaseDate
         } else if currentType == .tvShow {
-            return tvShowDetails?.nextEpisodeDate
+            // Priority: The oldest episode you haven't watched yet.
+            // Even if it aired last week, it stays in the header as 'Available Now'
+            return tvShowDetails?.oldestUnwatchedEpisodeAirDate ?? tvShowDetails?.nextEpisodeDate
         }
         return nil
+    }
+    
+    /// The absolute next episode to air in the future (regardless of watch history)
+    var absoluteNextAiringDate: Date? {
+        if type == .tvShow {
+            return tvShowDetails?.nextEpisodeDate
+        }
+        return releaseDate
     }
     
     var isRecentlyReleased: Bool {
@@ -123,6 +133,7 @@ final class MovieDetails {
     var runtime: Int?
     var genres: [String]
     var voteAverage: Double?
+    @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
     
     init(tmdbID: Int, runtime: Int? = nil, genres: [String] = [], voteAverage: Double? = nil) {
         self.tmdbID = tmdbID
@@ -150,6 +161,7 @@ final class TVShowDetails {
     var voteAverage: Double?
     
     @Relationship(deleteRule: .cascade) var seasons: [TVSeason] = []
+    @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
     
     var oldestUnwatchedEpisodeAirDate: Date? {
         let allEpisodes = seasons.flatMap { $0.episodes }
@@ -178,6 +190,21 @@ final class TVShowDetails {
 }
 
 @Model
+final class CastMember {
+    var name: String
+    var characterName: String
+    var profileURL: String?
+    var order: Int
+    
+    init(name: String, characterName: String, profileURL: String? = nil, order: Int = 0) {
+        self.name = name
+        self.characterName = characterName
+        self.profileURL = profileURL
+        self.order = order
+    }
+}
+
+@Model
 final class TVSeason {
     var seasonNumber: Int
     var name: String
@@ -201,49 +228,22 @@ final class TVEpisode {
     var name: String
     var overview: String
     var airDate: String?
+    var airstamp: String?
     var runtime: Int?
     var isWatched: Bool = false
     var season: TVSeason?
     
     var airDateAsDate: Date? {
-        guard let airDate = airDate else { return nil }
-        
-        if let show = season?.tvShowDetails {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm"
-            
-            let service = (show.network ?? "").lowercased()
-            let isNetflix = service.contains("netflix")
-            let isDisney = service.contains("disney+") || service.contains("hulu")
-            let isApple = service.contains("apple tv+")
-            
-            // Apply the same "Smart Default" logic as DateUtils
-            if isNetflix {
-                formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
-                return formatter.date(from: "\(airDate) 00:00")
-            } else if isDisney || isApple {
-                formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
-                // Assume 6PM PT for these major services if we don't have a specific time
-                // (Most reliable for Action/Marvel/StarWars)
-                return formatter.date(from: "\(airDate) 18:00")
-            } else if let tzName = show.timezone, let tz = TimeZone(identifier: tzName) {
-                formatter.timeZone = tz
-                let time = show.nextEpisodeTime ?? "20:00"
-                return formatter.date(from: "\(airDate) \(time)")
-            }
-        }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: airDate)
+        DateUtils.parseEpisodeDate(airDate, time: nil, airstamp: airstamp, timezone: season?.tvShowDetails?.timezone, serviceName: season?.tvShowDetails?.network, for: season?.tvShowDetails)
     }
     
-    init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, runtime: Int? = nil, isWatched: Bool = false) {
+    init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, airstamp: String? = nil, runtime: Int? = nil, isWatched: Bool = false) {
         self.episodeNumber = episodeNumber
         self.seasonNumber = seasonNumber
         self.name = name
         self.overview = overview
         self.airDate = airDate
+        self.airstamp = airstamp
         self.runtime = runtime
         self.isWatched = isWatched
     }

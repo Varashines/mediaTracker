@@ -21,7 +21,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @State private var viewModel = MediaViewModel()
-    @State private var showingSearch = false
+    @State private var isSearchActive = false
     
     var filteredItems: [MediaItem] {
         let baseItems: [MediaItem]
@@ -76,28 +76,35 @@ struct ContentView: View {
             .navigationTitle("Library")
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
-                MediaGridView(
-                    items: filteredItems, 
-                    selectedCategory: viewModel.selectedCategory, 
-                    showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
-                    searchText: viewModel.searchText
-                )
-                .navigationTitle(viewModel.navigationTitle(for: viewModel.selectedCategory))
+                Group {
+                    if isSearchActive {
+                        SearchView(
+                            searchText: $viewModel.searchText,
+                            isSearchActive: $isSearchActive,
+                            initialType: currentMediaType
+                        ) { item in
+                            isSearchActive = false
+                            viewModel.searchText = ""
+                            viewModel.navigationPath.append(item)
+                        }
+                        .transition(.opacity)
+                    } else {
+                        MediaGridView(
+                            items: filteredItems, 
+                            selectedCategory: viewModel.selectedCategory, 
+                            showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
+                            searchText: viewModel.searchText
+                        )
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.default, value: isSearchActive)
+                .navigationTitle(isSearchActive ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory))
                 .navigationDestination(for: MediaItem.self) { item in
                     DetailView(item: item)
                 }
-                .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search library...")
-                .toolbar {
-                    ToolbarItem {
-                        Button(action: { showingSearch = true }) {
-                            Label("Add Media", systemImage: "plus")
-                        }
-                    }
-                }
+                .searchable(text: $viewModel.searchText, isPresented: $isSearchActive, prompt: "Search movies, shows, books...")
             }
-        }
-        .sheet(isPresented: $showingSearch) {
-            SearchView(initialType: currentMediaType)
         }
         .onContinueUserActivity(CSSearchableItemActionType) { userActivity in
             if let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
