@@ -103,12 +103,13 @@ class APIClient {
         return (details.runtime, details.genres.map { $0.name }, details.vote_average, details.release_date)
     }
     
-    func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?) {
-        guard !tmdbApiKey.isEmpty else { return (0, 0, "", nil, [], nil, nil, nil, nil) }
-        guard let url = tmdbURL(path: "/tv/\(tmdbID)") else { throw URLError(.badURL) }
+    func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?) {
+        guard !tmdbApiKey.isEmpty else { return (0, 0, "", nil, [], nil, nil, nil, nil, nil) }
+        guard let url = tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids")]) else { throw URLError(.badURL) }
+        
         let (data, _) = try await URLSession.shared.data(from: url)
         let details = try decoder.decode(TMDBTVDetailsResponse.self, from: data)
-        return (details.number_of_seasons, details.number_of_episodes, details.status, details.vote_average, details.seasons ?? [], details.first_air_date, details.next_episode_to_air?.air_date, details.next_episode_to_air?.episode_number, details.next_episode_to_air?.season_number)
+        return (details.number_of_seasons, details.number_of_episodes, details.status, details.vote_average, details.seasons ?? [], details.first_air_date, details.next_episode_to_air?.air_date, details.next_episode_to_air?.episode_number, details.next_episode_to_air?.season_number, details.external_ids?.tvdb_id)
     }
 
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
@@ -119,14 +120,6 @@ class APIClient {
         return response.episodes.map { 
             TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
         }
-    }
-
-    func fetchTVExternalIDs(tmdbID: Int) async throws -> Int? {
-        guard !tmdbApiKey.isEmpty else { return nil }
-        guard let url = tmdbURL(path: "/tv/\(tmdbID)/external_ids") else { throw URLError(.badURL) }
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try decoder.decode(TMDBExternalIDsResponse.self, from: data)
-        return response.tvdb_id
     }
 
     func lookupTVMazeID(tvdbID: Int) async throws -> Int? {
@@ -171,6 +164,11 @@ struct TMDBTVDetailsResponse: Codable {
     let seasons: [TMDBSeasonBrief]?
     let first_air_date: String?
     let next_episode_to_air: TMDBNextEpisode?
+    let external_ids: TMDBExternalIDs?
+}
+
+struct TMDBExternalIDs: Codable {
+    let tvdb_id: Int?
 }
 
 struct TMDBNextEpisode: Codable {
@@ -253,10 +251,6 @@ struct GoogleVolumeInfo: Codable {
 
 struct GoogleImageLinks: Codable {
     let thumbnail: String?
-}
-
-struct TMDBExternalIDsResponse: Codable {
-    let tvdb_id: Int?
 }
 
 struct TVMazeShowLookupResponse: Codable {

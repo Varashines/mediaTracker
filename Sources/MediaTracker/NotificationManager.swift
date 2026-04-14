@@ -41,15 +41,10 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.body = "Is out today! Enjoy the premiere. 🍿"
         content.sound = .default
         
-        // Add poster attachment if available
-        if let posterURL = item.posterURL {
-            downloadImage(from: posterURL) { attachment in
-                if let attachment = attachment {
-                    content.attachments = [attachment]
-                }
-                self.finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
+        Task {
+            if let posterURL = item.posterURL, let attachment = try? await downloadImage(from: posterURL) {
+                content.attachments = [attachment]
             }
-        } else {
             finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
         }
     }
@@ -74,15 +69,10 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
         content.sound = .default
         
-        // Add poster attachment
-        if let posterURL = item.posterURL {
-            downloadImage(from: posterURL) { attachment in
-                if let attachment = attachment {
-                    content.attachments = [attachment]
-                }
-                self.finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: tv.nextEpisodeTime)
+        Task {
+            if let posterURL = item.posterURL, let attachment = try? await downloadImage(from: posterURL) {
+                content.attachments = [attachment]
             }
-        } else {
             finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: tv.nextEpisodeTime)
         }
     }
@@ -91,13 +81,9 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
         
-        // Use the components of the date directly.
-        // If it's a TVMaze-enhanced date, it will already have the correct hour/minute.
-        // If it's a TMDB date (midnight), we'll apply the default 1:30 PM.
         var date1 = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         
         if date1.hour == 0 && date1.minute == 0 {
-            // It's a midnight date (TMDB default), set to 1:30 PM
             date1.hour = 13
             date1.minute = 30
         }
@@ -107,7 +93,6 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         
         center.add(request1)
         
-        // 2. Second Notification: 9:30 AM the next day
         if let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: date) {
             var date2 = Calendar.current.dateComponents([.year, .month, .day], from: nextDay)
             date2.hour = 9
@@ -122,36 +107,18 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             
             center.add(request2)
         }
-        
-        let scheduledTime = "\(date1.hour ?? 0):\(String(format: "%02d", date1.minute ?? 0))"
-        print("📅 Dual notifications scheduled for \(content.title): Day 1 (\(scheduledTime)) & Day 2 (9:30 AM)")
     }
 
-    private func downloadImage(from urlString: String, completion: @escaping (UNNotificationAttachment?) -> Void) {
-        guard let url = URL(string: urlString) else {
-            completion(nil)
-            return
-        }
+    private func downloadImage(from urlString: String) async throws -> UNNotificationAttachment? {
+        guard let url = URL(string: urlString) else { return nil }
         
-        URLSession.shared.downloadTask(with: url) { location, response, error in
-            guard let location = location else {
-                completion(nil)
-                return
-            }
-            
-            // Move the file to a temporary location with a proper extension
-            let tmpDir = FileManager.default.temporaryDirectory
-            let tmpFile = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")
-            
-            do {
-                try FileManager.default.moveItem(at: location, to: tmpFile)
-                let attachment = try UNNotificationAttachment(identifier: UUID().uuidString, url: tmpFile, options: nil)
-                completion(attachment)
-            } catch {
-                print("❌ Attachment error: \(error)")
-                completion(nil)
-            }
-        }.resume()
+        let (location, _) = try await URLSession.shared.download(from: url)
+        
+        let tmpDir = FileManager.default.temporaryDirectory
+        let tmpFile = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")
+        
+        try FileManager.default.moveItem(at: location, to: tmpFile)
+        return try UNNotificationAttachment(identifier: UUID().uuidString, url: tmpFile, options: nil)
     }
     
     func cancelNotification(for item: MediaItem) {

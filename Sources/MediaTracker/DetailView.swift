@@ -171,7 +171,7 @@ struct DetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    forceRefresh()
+                    refreshData(force: true)
                 } label: {
                     if isRefreshing {
                         ProgressView().controlSize(.small)
@@ -183,114 +183,112 @@ struct DetailView: View {
             }
         }
         .onAppear {
-            fetchMissingDetails()
+            refreshData()
         }
     }
     
-    private func forceRefresh() {
+    private func refreshData(force: Bool = false) {
+        let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
+        if !force && hasData && !needsUpdate { return }
+        
         isRefreshing = true
         let itemType = item.type
         let itemID = item.id
         
         Task {
-            if itemType == .movie {
-                if let tmdbID = Int(itemID) {
-                    let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                    if let details = details {
-                        await MainActor.run {
-                            item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                            item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details.runtime, genres: details.genres, voteAverage: details.voteAverage)
-                            item.lastUpdated = Date()
-                            try? item.modelContext?.save()
-                            NotificationManager.shared.scheduleMovieNotification(item: item)
-                            isRefreshing = false
-                        }
-                    } else {
-                        await MainActor.run { isRefreshing = false }
-                    }
+            defer { 
+                Task { @MainActor in isRefreshing = false }
+            }
+            
+            do {
+                if itemType == .movie, let tmdbID = Int(itemID) {
+                    try await refreshMovie(tmdbID: tmdbID)
+                } else if itemType == .tvShow, let tmdbID = Int(itemID) {
+                    try await refreshTVShow(tmdbID: tmdbID)
                 }
-            } else if itemType == .tvShow {
-                if let tmdbID = Int(itemID) {
-                    let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-                    if let details = details {
-                        // Perform additional async lookups BEFORE MainActor.run
-                        var tvMazeID: Int?
-                        var mazeTime: String?
-                        var mazeName: String?
-                        var mazeFullDate: Date?
-                        
-                        if let tvdbID = try? await APIClient.shared.fetchTVExternalIDs(tmdbID: tmdbID) {
-                            if let mID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
-                                tvMazeID = mID
-                                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                                    mazeTime = schedule.airtime
-                                    mazeName = schedule.name
-                                    mazeFullDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
-                                    tvMazeID = mID // redundancy
-                                    // We will store the service name and timezone in tvDetails inside MainActor.run
-                                    let actualService = service 
-                                    let actualTimezone = timezone
-                                    
-                                    await MainActor.run {
-                                        if let tvDetails = item.tvShowDetails {
-                                            tvDetails.network = actualService
-                                            tvDetails.timezone = actualTimezone
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            } catch {
+                print("❌ Refresh error: \(error)")
+            }
+        }
+    }
+    
+    private func refreshMovie(tmdbID: Int) async throws {
+        let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
+        await MainActor.run {
+            item.releaseDate = DateUtils.parseDate(details.releaseDate)
+            item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details.runtime, genres: details.genres, voteAverage: details.voteAverage)
+            item.lastUpdated = Date()
+            NotificationManager.shared.scheduleMovieNotification(item: item)
+        }
+    }
+    
+    private func refreshTVShow(tmdbID: Int) async throws {
+        let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
+        
+        var tvMazeID: Int?
+        var mazeTime: String?
+        var mazeName: String?
+        var mazeFullDate: Date?
+        var actualService: String?
+        var actualTimezone: String?
+        
+        if let tvdbID = details.tvdbID {
+            if let mID = try await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
+                tvMazeID = mID
+                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
+                    mazeTime = schedule.airtime
+                    mazeName = schedule.name
+                    mazeFullDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                    actualService = service 
+                    actualTimezone = timezone
+                }
+            }
+        }
 
-                        await MainActor.run {
-                            item.releaseDate = DateUtils.parseDate(details.firstAirDate)
-                            item.lastUpdated = Date()
-                            
-                            let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
-                            tvDetails.status = details.status
-                            tvDetails.numberOfSeasons = details.seasonsCount
-                            tvDetails.numberOfEpisodes = details.episodesCount
-                            tvDetails.voteAverage = details.voteAverage
-                            tvDetails.nextEpisodeDate = mazeFullDate ?? DateUtils.parseDate(details.nextEpisodeDate)
-                            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                            tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                            tvDetails.tvMazeID = tvMazeID
-                            tvDetails.nextEpisodeTime = mazeTime
-                            
-                            if let tmdbNextDateString = details.nextEpisodeDate, let tmdbNextDate = DateUtils.parseDate(tmdbNextDateString) {
-                                if let mazeFullDate = mazeFullDate, Calendar.current.isDate(mazeFullDate, inSameDayAs: tmdbNextDate) {
-                                    tvDetails.nextEpisodeName = mazeName
-                                }
-                            }
-                            
-                            // Merge seasons
-                            for seasonBrief in details.seasons {
-                                if let existingSeason = tvDetails.seasons.first(where: { $0.seasonNumber == seasonBrief.season_number }) {
-                                    existingSeason.episodeCount = seasonBrief.episode_count
-                                    existingSeason.name = seasonBrief.name
-                                    existingSeason.airDate = seasonBrief.air_date
-                                } else {
-                                    tvDetails.seasons.append(TVSeason(seasonNumber: seasonBrief.season_number, name: seasonBrief.name, episodeCount: seasonBrief.episode_count, airDate: seasonBrief.air_date))
-                                }
-                            }
-                            item.tvShowDetails = tvDetails
-                            try? item.modelContext?.save()
-                            NotificationManager.shared.scheduleTVNotification(item: item)
-                        }
-                        
-                        // Fetch episodes for all seasons to get runtimes
-                        if let tv = item.tvShowDetails {
-                            for season in tv.seasons {
-                                await fetchEpisodesForSeason(season, tmdbID: tmdbID)
-                            }
-                        }
-                        
-                        await MainActor.run { isRefreshing = false }
-                    } else {
-                        await MainActor.run { isRefreshing = false }
+        await MainActor.run {
+            item.releaseDate = DateUtils.parseDate(details.firstAirDate)
+            item.lastUpdated = Date()
+            
+            let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
+            tvDetails.status = details.status
+            tvDetails.numberOfSeasons = details.seasonsCount
+            tvDetails.numberOfEpisodes = details.episodesCount
+            tvDetails.voteAverage = details.voteAverage
+            tvDetails.nextEpisodeDate = mazeFullDate ?? DateUtils.parseDate(details.nextEpisodeDate)
+            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
+            tvDetails.nextSeasonNumber = details.nextSeasonNumber
+            tvDetails.tvMazeID = tvMazeID
+            tvDetails.nextEpisodeTime = mazeTime
+            tvDetails.network = actualService ?? tvDetails.network
+            tvDetails.timezone = actualTimezone ?? tvDetails.timezone
+            
+            if let tmdbNextDateString = details.nextEpisodeDate, let tmdbNextDate = DateUtils.parseDate(tmdbNextDateString) {
+                if let mazeFullDate = mazeFullDate, Calendar.current.isDate(mazeFullDate, inSameDayAs: tmdbNextDate) {
+                    tvDetails.nextEpisodeName = mazeName
+                }
+            }
+            
+            // Merge seasons
+            for seasonBrief in details.seasons {
+                if let existingSeason = tvDetails.seasons.first(where: { $0.seasonNumber == seasonBrief.season_number }) {
+                    existingSeason.episodeCount = seasonBrief.episode_count
+                    existingSeason.name = seasonBrief.name
+                    existingSeason.airDate = seasonBrief.air_date
+                } else {
+                    tvDetails.seasons.append(TVSeason(seasonNumber: seasonBrief.season_number, name: seasonBrief.name, episodeCount: seasonBrief.episode_count, airDate: seasonBrief.air_date))
+                }
+            }
+            item.tvShowDetails = tvDetails
+            NotificationManager.shared.scheduleTVNotification(item: item)
+        }
+        
+        if let tv = item.tvShowDetails {
+            await withTaskGroup(of: Void.self) { group in
+                for season in tv.seasons {
+                    group.addTask {
+                        await fetchEpisodesForSeason(season, tmdbID: tmdbID)
                     }
                 }
-            } else {
-                await MainActor.run { isRefreshing = false }
             }
         }
     }
@@ -355,106 +353,9 @@ struct DetailView: View {
                         season.episodes.append(newEpisode)
                     }
                 }
-                try? item.modelContext?.save()
             }
         } catch {
             print("❌ Error fetching episodes: \(error)")
-        }
-    }
-    
-    private func fetchMissingDetails() {
-        // If critical data is missing, we fetch immediately. 
-        // If we have data, we only fetch if it's been 24h.
-        let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
-        if hasData && !needsUpdate { return }
-        
-        let itemType = item.type
-        let itemID = item.id
-        
-        Task {
-            if itemType == .movie {
-                if let tmdbID = Int(itemID) {
-                    let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                    if let details = details {
-                        await MainActor.run {
-                            item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                            item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details.runtime, genres: details.genres, voteAverage: details.voteAverage)
-                            item.lastUpdated = Date()
-                            try? item.modelContext?.save()
-                            NotificationManager.shared.scheduleMovieNotification(item: item)
-                        }
-                    }
-                }
-            } else if itemType == .tvShow {
-                if let tmdbID = Int(itemID) {
-                    let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-                    if let details = details {
-                        // Perform additional async lookups BEFORE MainActor.run
-                        var tvMazeID: Int?
-                        var mazeTime: String?
-                        var mazeName: String?
-                        var mazeFullDate: Date?
-                        
-                        if let tvdbID = try? await APIClient.shared.fetchTVExternalIDs(tmdbID: tmdbID) {
-                            if let mID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
-                                tvMazeID = mID
-                                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                                    mazeTime = schedule.airtime
-                                    mazeName = schedule.name
-                                    mazeFullDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
-                                    tvMazeID = mID // redundancy
-                                    // We will store the service name and timezone in tvDetails inside MainActor.run
-                                    let actualService = service 
-                                    let actualTimezone = timezone
-                                    
-                                    await MainActor.run {
-                                        if let tvDetails = item.tvShowDetails {
-                                            tvDetails.network = actualService
-                                            tvDetails.timezone = actualTimezone
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        await MainActor.run {
-                            item.releaseDate = DateUtils.parseDate(details.firstAirDate)
-                            item.lastUpdated = Date()
-                            
-                            let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
-                            tvDetails.status = details.status
-                            tvDetails.numberOfSeasons = details.seasonsCount
-                            tvDetails.numberOfEpisodes = details.episodesCount
-                            tvDetails.voteAverage = details.voteAverage
-                            tvDetails.nextEpisodeDate = mazeFullDate ?? DateUtils.parseDate(details.nextEpisodeDate)
-                            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                            tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                            tvDetails.tvMazeID = tvMazeID
-                            tvDetails.nextEpisodeTime = mazeTime
-                            
-                            if let tmdbNextDateString = details.nextEpisodeDate, let tmdbNextDate = DateUtils.parseDate(tmdbNextDateString) {
-                                if let mazeFullDate = mazeFullDate, Calendar.current.isDate(mazeFullDate, inSameDayAs: tmdbNextDate) {
-                                    tvDetails.nextEpisodeName = mazeName
-                                }
-                            }
-                            
-                            // Merge seasons
-                            for seasonBrief in details.seasons {
-                                if let existingSeason = tvDetails.seasons.first(where: { $0.seasonNumber == seasonBrief.season_number }) {
-                                    existingSeason.episodeCount = seasonBrief.episode_count
-                                    existingSeason.name = seasonBrief.name
-                                    existingSeason.airDate = seasonBrief.air_date
-                                } else {
-                                    tvDetails.seasons.append(TVSeason(seasonNumber: seasonBrief.season_number, name: seasonBrief.name, episodeCount: seasonBrief.episode_count, airDate: seasonBrief.air_date))
-                                }
-                            }
-                            item.tvShowDetails = tvDetails
-                            try? item.modelContext?.save()
-                            NotificationManager.shared.scheduleTVNotification(item: item)
-                        }
-                    }
-                }
-            }
         }
     }
 }

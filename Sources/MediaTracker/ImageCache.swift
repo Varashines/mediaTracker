@@ -5,35 +5,55 @@ class ImageCache {
     static let shared = ImageCache()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    
+    private let memoryCache = NSCache<NSString, NSImage>()
+
     private init() {
         let paths = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
         let basePath = paths.first ?? fileManager.temporaryDirectory
         cacheDirectory = basePath.appendingPathComponent("mediatracker_images")
-        
+
         if !fileManager.fileExists(atPath: cacheDirectory.path) {
             try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         }
+
+        // Limit memory cache to ~100 images to be safe
+        memoryCache.countLimit = 100
     }
-    
+
     private func fileName(for key: String) -> String {
         let inputData = Data(key.utf8)
         let hashed = SHA256.hash(data: inputData)
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
-    
+
     func get(forKey key: String) -> NSImage? {
+        // 1. Check Memory Cache (Fastest)
+        if let cachedImage = memoryCache.object(forKey: key as NSString) {
+            return cachedImage
+        }
+
+        // 2. Check Disk Cache
         let fileURL = cacheDirectory.appendingPathComponent(fileName(for: key))
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return NSImage(data: data)
+        guard let data = try? Data(contentsOf: fileURL), let image = NSImage(data: data) else { return nil }
+
+        // 3. Populate Memory Cache for next time
+        memoryCache.setObject(image, forKey: key as NSString)
+        return image
     }
-    
+
     func save(image: NSImage, forKey key: String) {
-        let fileURL = cacheDirectory.appendingPathComponent(fileName(for: key))
-        if let data = image.tiffRepresentation {
-            let bitmap = NSBitmapImageRep(data: data)
-            let jpegData = bitmap?.representation(using: .jpeg, properties: [:])
-            try? jpegData?.write(to: fileURL)
+        // Save to Memory
+        memoryCache.setObject(image, forKey: key as NSString)
+
+        // Save to Disk (Asynchronously to avoid blocking UI)
+        Task.detached(priority: .background) { [weak self] in
+            guard let self = self else { return }
+            let fileURL = self.cacheDirectory.appendingPathComponent(self.fileName(for: key))
+            if let data = image.tiffRepresentation {
+                let bitmap = NSBitmapImageRep(data: data)
+                let jpegData = bitmap?.representation(using: .jpeg, properties: [:])
+                try? jpegData?.write(to: fileURL)
+            }
         }
     }
 }

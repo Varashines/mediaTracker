@@ -135,6 +135,7 @@ final class MovieDetails {
 @Model
 final class TVShowDetails {
     var tmdbID: Int
+    var tvdbID: Int?
     var tvMazeID: Int?
     var nextEpisodeDate: Date?
     var nextEpisodeTime: String?
@@ -158,8 +159,9 @@ final class TVShowDetails {
         return dates.min()
     }
     
-    init(tmdbID: Int, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil) {
+    init(tmdbID: Int, tvdbID: Int? = nil, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil) {
         self.tmdbID = tmdbID
+        self.tvdbID = tvdbID
         self.tvMazeID = tvMazeID
         self.nextEpisodeDate = nextEpisodeDate
         self.nextEpisodeTime = nextEpisodeTime

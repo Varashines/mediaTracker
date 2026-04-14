@@ -107,8 +107,18 @@ struct SearchView: View {
             }
             .navigationTitle("Add Media")
             .searchable(text: $searchText, placement: .toolbar, prompt: "Search movies, shows, books...")
-            .onChange(of: searchText) { oldValue, newValue in
-                performSearch()
+            .task(id: searchText) {
+                // Debounce: Wait 300ms
+                if !searchText.isEmpty {
+                    do {
+                        try await Task.sleep(for: .milliseconds(300))
+                        performSearch()
+                    } catch {
+                        // Task cancelled when user types again
+                    }
+                } else {
+                    performSearch() // Clear results if empty
+                }
             }
             .onChange(of: selectedType) { oldValue, newValue in
                 performSearch()
@@ -203,6 +213,7 @@ struct SearchView: View {
                     tvDetails.seasons = details.seasons.map { season in
                         TVSeason(seasonNumber: season.season_number, name: season.name, episodeCount: season.episode_count, airDate: season.air_date)
                     }
+                    tvDetails.tvdbID = details.tvdbID
                     item.tvShowDetails = tvDetails
                 }
             }
