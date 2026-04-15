@@ -1,6 +1,32 @@
-# MediaTracker 🍿📺📚
+# MediaTracker 🍿📺📚 [v2.1.0]
 
 MediaTracker is a premium, native macOS application designed to help you organize and track your movies, TV shows, and books in one beautiful, unified interface. Built with **SwiftUI** and **SwiftData**, it offers a professional-grade experience for managing your library and staying on top of global releases with 100% accuracy.
+
+## Features
+
+- **Multi-Media Support:** Specialized detail views for Movies, TV Shows, and Books.
+- **Intelligent Navigation:** Automatically focuses on the first unwatched season or episode, so you never lose your place.
+- **Visual Progress Tracking:**
+    - **Blue-to-Green Interpolation:** Season tabs dynamically shift color based on completion percentage.
+    - **Ongoing Pulse:** Subtle animations highlight seasons you are currently watching.
+- **Automated Syncing:** 
+    - Fetches metadata, genres, and high-res posters via **TMDB**.
+    - Tracks global TV schedules and episode titles via **TVMaze**.
+    - Pulls book details and page counts using the **Google Books API**.
+- **Interactive Progress:** 
+    - Manage your watch history with a per-episode checklist.
+    - **Bulk Actions:** Mark entire seasons as watched or unwatched with a single click.
+    - **Drag & Drop:** Easily move items between Waitlist, In Progress, and Completed states in the grid.
+- **Dual Notifications:** Precise release alerts at the exact moment of availability in India, with follow-up reminders.
+- **Universal Search:** Search your local library and the web simultaneously in one unified grid.
+
+## v2.1.0 Improvements: Foundation for Fluency
+
+This update refines the core user experience and prepares the application for high-end macOS animations.
+
+- **Dynamic Theme Architecture:** Improved the hand-off between poster color extraction and UI tinting for faster view loading.
+- **Build System v2:** Updated `install.sh` for full v2.1.0 bundle compliance, ensuring seamless Spotlight integration.
+- **Refined State Handling:** Optimized the grid to detail transition logic in preparation for Hero-style animations.
 
 ## v2.0.0 Highlights
 

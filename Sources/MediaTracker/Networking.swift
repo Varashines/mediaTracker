@@ -48,17 +48,17 @@ actor APIClient {
         return decoded.results
     }
 
-    func searchMovies(query: String) async throws -> [MovieSearchResult] {
+    func searchMovies(query: String) async throws -> [MediaSearchResult] {
         let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: query)
         return results.map { $0.toSearchResult() }
     }
     
-    func searchTVShows(query: String) async throws -> [TVSearchResult] {
+    func searchTVShows(query: String) async throws -> [MediaSearchResult] {
         let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: query)
         return results.map { $0.toSearchResult() }
     }
     
-    func fetchTrendingMovies() async throws -> [MovieSearchResult] {
+    func fetchTrendingMovies() async throws -> [MediaSearchResult] {
         let url = try tmdbURL(path: "/trending/movie/day")
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
@@ -66,7 +66,7 @@ actor APIClient {
         return decoded.results.prefix(10).map { $0.toSearchResult() }
     }
     
-    func fetchTrendingTVShows() async throws -> [TVSearchResult] {
+    func fetchTrendingTVShows() async throws -> [MediaSearchResult] {
         let url = try tmdbURL(path: "/trending/tv/day")
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
@@ -108,7 +108,7 @@ actor APIClient {
     }
 
     // MARK: - Book Search
-    func searchBooks(query: String) async throws -> [BookSearchResult] {
+    func searchBooks(query: String) async throws -> [MediaSearchResult] {
         let components = URLComponents(string: "https://www.googleapis.com/books/v1/volumes")
         let key = googleBooksApiKey
         var items = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "maxResults", value: "20")]
@@ -123,7 +123,15 @@ actor APIClient {
             let coverURL = info.imageLinks?.thumbnail?
                 .replacingOccurrences(of: "http://", with: "https://")
                 .replacingOccurrences(of: "&zoom=1", with: "&zoom=2")
-            return BookSearchResult(id: item.id, title: info.title ?? "Unknown", authors: info.authors ?? ["Unknown"], overview: info.description ?? "", coverURL: coverURL, pageCount: info.pageCount)
+            return MediaSearchResult(
+                id: item.id,
+                title: info.title ?? "Unknown",
+                overview: info.description ?? "",
+                posterURL: coverURL,
+                releaseDate: nil,
+                genres: info.authors ?? ["Unknown"],
+                type: .book
+            )
         } ?? []
     }
 
@@ -163,42 +171,77 @@ actor APIClient {
 }
 
 // MARK: - Models
-protocol TMDBMedia {
+protocol TMDBMedia: Codable {
     var id: Int { get }
     var overview: String { get }
     var poster_path: String? { get }
+    var backdrop_path: String? { get }
+    var genre_ids: [Int]? { get }
+    var displayTitle: String { get }
+    var releaseDateString: String? { get }
+    var mediaType: MediaType { get }
+}
+
+extension TMDBMedia {
+    var backdrop_path: String? { nil } // Default implementation if not all have it
+    
+    func toSearchResult() -> MediaSearchResult {
+        let genreList = genre_ids?.compactMap { id in
+            mediaType == .movie ? TMDBGenreMap.movieGenres[id] : TMDBGenreMap.tvGenres[id]
+        }.prefix(2) ?? []
+        
+        return MediaSearchResult(
+            id: String(id),
+            title: displayTitle,
+            overview: overview,
+            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/w780\(poster_path!)" : nil,
+            releaseDate: releaseDateString,
+            genres: Array(genreList),
+            type: mediaType
+        )
+    }
+}
+
+struct MediaSearchResult: Identifiable, Codable {
+    let id: String
+    let title: String
+    let overview: String
+    let posterURL: String?
+    let releaseDate: String?
+    let genres: [String]
+    let type: MediaType
 }
 
 struct TMDBGenericResponse<T: Codable>: Codable {
     let results: [T]
 }
 
-struct TMDBMovie: Codable, TMDBMedia {
+struct TMDBMovie: TMDBMedia {
     let id: Int
     let title: String
     let overview: String
     let poster_path: String?
+    let backdrop_path: String?
     let release_date: String?
     let genre_ids: [Int]?
     
-    func toSearchResult() -> MovieSearchResult {
-        let genres = genre_ids?.compactMap { TMDBGenreMap.movieGenres[$0] }.prefix(2) ?? []
-        return MovieSearchResult(id: String(id), title: title, overview: overview, posterURL: "https://image.tmdb.org/t/p/w780\(poster_path ?? "")", releaseDate: release_date, genres: Array(genres))
-    }
+    var displayTitle: String { title }
+    var releaseDateString: String? { release_date }
+    var mediaType: MediaType { .movie }
 }
 
-struct TMDBTV: Codable, TMDBMedia {
+struct TMDBTV: TMDBMedia {
     let id: Int
     let name: String
     let overview: String
     let poster_path: String?
+    let backdrop_path: String?
     let first_air_date: String?
     let genre_ids: [Int]?
     
-    func toSearchResult() -> TVSearchResult {
-        let genres = genre_ids?.compactMap { TMDBGenreMap.tvGenres[$0] }.prefix(2) ?? []
-        return TVSearchResult(id: String(id), title: name, overview: overview, posterURL: "https://image.tmdb.org/t/p/w780\(poster_path ?? "")", releaseDate: first_air_date, genres: Array(genres))
-    }
+    var displayTitle: String { name }
+    var releaseDateString: String? { first_air_date }
+    var mediaType: MediaType { .tvShow }
 }
 
 struct TMDBGenreMap {
@@ -266,7 +309,4 @@ struct TVMazeCountry: Codable { let timezone: String? }
 struct TVMazeEmbedded: Codable { let nextepisode: TVMazeEpisode? }
 struct TVMazeEpisode: Codable { let season: Int?, number: Int?, name: String, airdate: String, airtime: String, airstamp: String? }
 
-struct MovieSearchResult: Identifiable { let id: String, title: String, overview: String, posterURL: String?, releaseDate: String?, genres: [String] }
-struct TVSearchResult: Identifiable { let id: String, title: String, overview: String, posterURL: String?, releaseDate: String?, genres: [String] }
-struct BookSearchResult: Identifiable { let id: String, title: String, authors: [String], overview: String, coverURL: String?, pageCount: Int? }
 struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String, overview: String, airDate: String?, runtime: Int? }

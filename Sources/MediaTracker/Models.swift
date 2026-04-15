@@ -115,6 +115,54 @@ final class MediaItem {
         return false
     }
     
+    var genres: [String] {
+        if let movie = movieDetails {
+            return movie.genres
+        } else if tvShowDetails != nil {
+            // TMDB TV details don't store genres directly in our model yet, 
+            // but we can add it or derive it. For now, we use existing fields.
+            return []
+        } else if let book = bookDetails {
+            return book.authors
+        }
+        return []
+    }
+
+    var nextAiringLabel: String? {
+        guard let date = nextAiringDate else { return isRecentlyReleased ? "Available Now" : nil }
+        
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        
+        if date > Date() {
+            if type == .movie {
+                return "Releases \(formatter.string(from: date))"
+            } else if type == .tvShow {
+                if let tv = tvShowDetails {
+                    let s = tv.nextSeasonNumber ?? 1
+                    let e = tv.nextEpisodeNumber ?? 1
+                    if e == 1 {
+                        return "S\(s) Premiere: \(formatter.string(from: date))"
+                    }
+                    return "S\(s), E\(e): \(formatter.string(from: date))"
+                }
+                return "Next: \(formatter.string(from: date))"
+            }
+        }
+        
+        return isRecentlyReleased ? "Available Now" : nil
+    }
+
+    var watchProgressLabel: String? {
+        if type == .tvShow, let tv = tvShowDetails {
+            let watched = tv.seasons.reduce(0) { $0 + $1.episodes.filter { $0.isWatched }.count }
+            let total = tv.numberOfEpisodes ?? 0
+            return "\(watched)/\(total)"
+        }
+        return state?.displayName
+    }
+    
     init(id: String, title: String, overview: String, posterURL: String? = nil, releaseDate: Date? = nil, isLiked: Bool? = nil, state: MediaState? = .wishlist, type: MediaType? = .movie) {
         self.id = id
         self.title = title

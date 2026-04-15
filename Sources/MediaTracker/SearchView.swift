@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 enum SearchType: String, CaseIterable {
     case all = "All"
@@ -8,62 +8,53 @@ enum SearchType: String, CaseIterable {
     case book = "Books"
 }
 
-enum AnySearchResult: Identifiable {
-    case movie(MovieSearchResult)
-    case tv(TVSearchResult)
-    case book(BookSearchResult)
-    
-    var id: String {
-        switch self {
-        case .movie(let m): return "movie-\(m.id)"
-        case .tv(let t): return "tv-\(t.id)"
-        case .book(let b): return "book-\(b.id)"
-        }
-    }
-}
-
 struct SearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var existingItems: [MediaItem]
-    
+
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
+    var submitTrigger: Int
     @State private var selectedType: SearchType = .all
-    @State private var resultsCount = 0 // Used to trigger staggered animations
-    
-    @State private var movieResults: [MovieSearchResult] = []
-    @State private var tvResults: [TVSearchResult] = []
-    @State private var bookResults: [BookSearchResult] = []
-    
-    @State private var trendingMovies: [MovieSearchResult] = []
-    @State private var trendingTV: [TVSearchResult] = []
-    
+    @State private var resultsCount = 0  // Used to trigger staggered animations
+
+    @State private var movieResults: [MediaSearchResult] = []
+    @State private var tvResults: [MediaSearchResult] = []
+    @State private var bookResults: [MediaSearchResult] = []
+
+    @State private var trendingMovies: [MediaSearchResult] = []
+    @State private var trendingTV: [MediaSearchResult] = []
+
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var showError = false
-    
+
     var onSelectLocal: ((MediaItem) -> Void)?
-    
-    private var allWebResults: [AnySearchResult] {
-        var results: [AnySearchResult] = []
+
+    private var allWebResults: [MediaSearchResult] {
+        var results: [MediaSearchResult] = []
         if selectedType == .all || selectedType == .movie {
-            let filtered = movieResults.filter { !isAdded(id: $0.id, type: .movie) }
-            results.append(contentsOf: filtered.prefix(6).map { .movie($0) })
+            results.append(
+                contentsOf: movieResults.filter { !isAdded(id: $0.id, type: .movie) }.prefix(10))
         }
         if selectedType == .all || selectedType == .tvShow {
-            let filtered = tvResults.filter { !isAdded(id: $0.id, type: .tvShow) }
-            results.append(contentsOf: filtered.prefix(6).map { .tv($0) })
+            results.append(
+                contentsOf: tvResults.filter { !isAdded(id: $0.id, type: .tvShow) }.prefix(10))
         }
         if selectedType == .all || selectedType == .book {
-            let filtered = bookResults.filter { !isAdded(id: $0.id, type: .book) }
-            results.append(contentsOf: filtered.prefix(6).map { .book($0) })
+            results.append(
+                contentsOf: bookResults.filter { !isAdded(id: $0.id, type: .book) }.prefix(10))
         }
         return results
     }
-    
-    init(searchText: Binding<String>, isSearchActive: Binding<Bool>, initialType: MediaType? = nil, onSelectLocal: ((MediaItem) -> Void)? = nil) {
+
+    init(
+        searchText: Binding<String>, isSearchActive: Binding<Bool>, submitTrigger: Int,
+        initialType: MediaType? = nil, onSelectLocal: ((MediaItem) -> Void)? = nil
+    ) {
         self._searchText = searchText
         self._isSearchActive = isSearchActive
+        self.submitTrigger = submitTrigger
         self.onSelectLocal = onSelectLocal
         if let type = initialType {
             let searchType: SearchType
@@ -77,7 +68,7 @@ struct SearchView: View {
             _selectedType = State(initialValue: .all)
         }
     }
-    
+
     private var localResults: [MediaItem] {
         guard !searchText.isEmpty else { return [] }
         var items = existingItems.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
@@ -90,18 +81,18 @@ struct SearchView: View {
                 default: return nil
                 }
             }()
-            
+
             if let type = filterType {
                 items = items.filter { $0.type == type }
             }
         }
         return items
     }
-    
+
     private func isAdded(id: String, type: MediaType) -> Bool {
         return existingItems.contains { $0.id == id && $0.type == type }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             Picker("Media Type", selection: $selectedType) {
@@ -111,27 +102,26 @@ struct SearchView: View {
             }
             .pickerStyle(.segmented)
             .padding()
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     if !searchText.isEmpty && !localResults.isEmpty {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("In Your Library")
+                            Text("From Library")
                                 .font(.title2.bold())
                                 .padding(.horizontal, 20)
-                            
+
                             let columns = [GridItem(.adaptive(minimum: 160), spacing: 20)]
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                 ForEach(localResults) { item in
                                     Button {
-                                        isSearchActive = false
                                         onSelectLocal?(item)
                                     } label: {
                                         UnifiedResultCard(
                                             title: item.title,
                                             category: item.type?.rawValue ?? "Media",
                                             year: item.releaseDate?.formatted(.dateTime.year()),
-                                            genres: [],
+                                            genres: item.genres,
                                             posterURL: item.posterURL,
                                             isAdded: true,
                                             isLocal: true
@@ -144,65 +134,31 @@ struct SearchView: View {
                         }
                         Divider().padding(.horizontal, 20)
                     }
-                    
+
                     if searchText.isEmpty {
                         VStack(spacing: 0) {
                             if selectedType == .all || selectedType == .movie {
-                                let items = trendingMovies.filter { !isAdded(id: $0.id, type: .movie) }.map { AnySearchResult.movie($0) }
+                                let items = trendingMovies.filter {
+                                    !isAdded(id: $0.id, type: .movie)
+                                }
                                 webSection(title: "Trending Movies", items: items)
                             }
                             if selectedType == .all || selectedType == .tvShow {
-                                let items = trendingTV.filter { !isAdded(id: $0.id, type: .tvShow) }.map { AnySearchResult.tv($0) }
+                                let items = trendingTV.filter { !isAdded(id: $0.id, type: .tvShow) }
                                 webSection(title: "Trending TV Shows", items: items)
                             }
                         }
                     } else if !allWebResults.isEmpty {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("From the Web")
+                            Text("From Web")
                                 .font(.title2.bold())
                                 .padding(.horizontal, 20)
-                            
+
                             let columns = [GridItem(.adaptive(minimum: 160), spacing: 20)]
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                 ForEach(allWebResults) { result in
-                                    Group {
-                                        switch result {
-                                        case .movie(let movie):
-                                            let year = movie.releaseDate?.prefix(4).description ?? "TBA"
-                                            UnifiedResultCard(
-                                                title: movie.title,
-                                                category: "Movie",
-                                                year: year,
-                                                genres: movie.genres,
-                                                posterURL: movie.posterURL,
-                                                isAdded: false
-                                            ) {
-                                                addMovie(movie)
-                                            }
-                                        case .tv(let tv):
-                                            let year = tv.releaseDate?.prefix(4).description ?? "TBA"
-                                            UnifiedResultCard(
-                                                title: tv.title,
-                                                category: "TV Show",
-                                                year: year,
-                                                genres: tv.genres,
-                                                posterURL: tv.posterURL,
-                                                isAdded: false
-                                            ) {
-                                                addTVShow(tv)
-                                            }
-                                        case .book(let book):
-                                            UnifiedResultCard(
-                                                title: book.title,
-                                                category: "Book",
-                                                year: nil,
-                                                genres: book.authors,
-                                                posterURL: book.coverURL,
-                                                isAdded: false
-                                            ) {
-                                                addBook(book)
-                                            }
-                                        }
+                                    UnifiedResultCard(result: result, isAdded: false) {
+                                        addMedia(result)
                                     }
                                     .transition(.opacity)
                                     .animation(.spring(duration: 0.5), value: allWebResults.count)
@@ -215,17 +171,16 @@ struct SearchView: View {
                 .padding(.vertical, 20)
             }
         }
-        .task(id: searchText) {
-            if !searchText.isEmpty {
-                do {
-                    try await Task.sleep(for: .milliseconds(300))
-                    await performSearch()
-                } catch {
-                    // Task cancelled implicitly handled
-                }
-            } else {
-                await performSearch()
+        .onChange(of: searchText) { oldValue, newValue in
+            if newValue.isEmpty {
+                movieResults = []
+                tvResults = []
+                bookResults = []
+                loadTrending()
             }
+        }
+        .onChange(of: submitTrigger) { oldValue, newValue in
+            Task { await performSearch() }
         }
         .onChange(of: selectedType) { oldValue, newValue in
             Task { await performSearch() }
@@ -239,60 +194,24 @@ struct SearchView: View {
             loadTrending()
         }
     }
-    
+
     @ViewBuilder
-    private func webSection(title: String, items: [AnySearchResult]) -> some View {
+    private func webSection(title: String, items: [MediaSearchResult]) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 16) {
                 Text(title)
                     .font(.title2.bold())
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
-                
+
                 let columns = [
                     GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)
                 ]
-                
+
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(items) { result in
-                        Group {
-                            switch result {
-                            case .movie(let movie):
-                                let year = movie.releaseDate?.prefix(4).description ?? "TBA"
-                                UnifiedResultCard(
-                                    title: movie.title,
-                                    category: "Movie",
-                                    year: year,
-                                    genres: movie.genres,
-                                    posterURL: movie.posterURL,
-                                    isAdded: false
-                                ) {
-                                    addMovie(movie)
-                                }
-                            case .tv(let tv):
-                                let year = tv.releaseDate?.prefix(4).description ?? "TBA"
-                                UnifiedResultCard(
-                                    title: tv.title,
-                                    category: "TV Show",
-                                    year: year,
-                                    genres: tv.genres,
-                                    posterURL: tv.posterURL,
-                                    isAdded: false
-                                ) {
-                                    addTVShow(tv)
-                                }
-                            case .book(let book):
-                                UnifiedResultCard(
-                                    title: book.title,
-                                    category: "Book",
-                                    year: nil,
-                                    genres: book.authors,
-                                    posterURL: book.coverURL,
-                                    isAdded: false
-                                ) {
-                                    addBook(book)
-                                }
-                            }
+                        UnifiedResultCard(result: result, isAdded: false) {
+                            addMedia(result)
                         }
                         .transition(.opacity)
                     }
@@ -302,7 +221,7 @@ struct SearchView: View {
             .padding(.bottom, 24)
         }
     }
-    
+
     private func loadTrending() {
         Task {
             do {
@@ -317,37 +236,37 @@ struct SearchView: View {
             }
         }
     }
-    
+
     private func performSearch() async {
-        guard !searchText.isEmpty else { 
+        guard !searchText.isEmpty else {
             movieResults = []
             tvResults = []
             bookResults = []
-            return 
+            return
         }
         isSearching = true
-        
+
         do {
-            var movies: [MovieSearchResult] = []
-            var tv: [TVSearchResult] = []
-            var books: [BookSearchResult] = []
-            
+            var movies: [MediaSearchResult] = []
+            var tv: [MediaSearchResult] = []
+            var books: [MediaSearchResult] = []
+
             if selectedType == .all || selectedType == .movie {
                 movies = try await APIClient.shared.searchMovies(query: searchText)
             }
-            
+
             if selectedType == .all || selectedType == .tvShow {
                 tv = try await APIClient.shared.searchTVShows(query: searchText)
             }
-            
+
             if selectedType == .all || selectedType == .book {
                 books = try await APIClient.shared.searchBooks(query: searchText)
             }
-            
+
             let finalMovies = movies
             let finalTV = tv
             let finalBooks = books
-            
+
             await MainActor.run {
                 self.movieResults = finalMovies
                 self.tvResults = finalTV
@@ -370,60 +289,49 @@ struct SearchView: View {
             }
         }
     }
-    
+
     @MainActor
-    private func addMovie(_ movie: MovieSearchResult) {
+    private func addMedia(_ result: MediaSearchResult) {
         Task {
-            let releaseDate = DateUtils.parseDate(movie.releaseDate)
-            let item = MediaItem(id: movie.id, title: movie.title, overview: movie.overview, posterURL: movie.posterURL, releaseDate: releaseDate, type: .movie)
-            if let tmdbID = Int(movie.id) {
+            let releaseDate =
+                result.releaseDate != nil ? DateUtils.parseDate(result.releaseDate) : nil
+            let item = MediaItem(
+                id: result.id, title: result.title, overview: result.overview,
+                posterURL: result.posterURL, releaseDate: releaseDate, type: result.type)
+
+            if result.type == .movie, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                item.movieDetails = MovieDetails(tmdbID: tmdbID, runtime: details?.runtime, genres: details?.genres ?? [], voteAverage: details?.voteAverage)
-            }
-            modelContext.insert(item)
-            SpotlightManager.shared.indexItem(item)
-            isSearchActive = false
-            onSelectLocal?(item)
-        }
-    }
-    
-    @MainActor
-    private func addTVShow(_ tv: TVSearchResult) {
-        Task {
-            let releaseDate = DateUtils.parseDate(tv.releaseDate)
-            let item = MediaItem(id: tv.id, title: tv.title, overview: tv.overview, posterURL: tv.posterURL, releaseDate: releaseDate, type: .tvShow)
-            if let tmdbID = Int(tv.id) {
+                item.movieDetails = MovieDetails(
+                    tmdbID: tmdbID, runtime: details?.runtime, genres: details?.genres ?? [],
+                    voteAverage: details?.voteAverage)
+            } else if result.type == .tvShow, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
                 if let details = details {
                     let tvDetails = TVShowDetails(
-                        tmdbID: tmdbID, 
+                        tmdbID: tmdbID,
                         status: details.status,
                         numberOfSeasons: details.seasonsCount,
                         numberOfEpisodes: details.episodesCount,
                         voteAverage: details.voteAverage
                     )
                     tvDetails.seasons = details.seasons.map { season in
-                        TVSeason(seasonNumber: season.season_number, name: season.name, episodeCount: season.episode_count, airDate: season.air_date)
+                        TVSeason(
+                            seasonNumber: season.season_number, name: season.name,
+                            episodeCount: season.episode_count, airDate: season.air_date)
                     }
                     tvDetails.tvdbID = details.tvdbID
                     item.tvShowDetails = tvDetails
                 }
+            } else if result.type == .book {
+                // For books, we don't have a separate details fetch yet in this simplified flow
+                // but we can initialize BookDetails from the search result if needed.
+                item.bookDetails = BookDetails(googleBooksID: result.id, authors: result.genres)
             }
+
             modelContext.insert(item)
             SpotlightManager.shared.indexItem(item)
-            isSearchActive = false
             onSelectLocal?(item)
         }
-    }
-    
-    @MainActor
-    private func addBook(_ book: BookSearchResult) {
-        let item = MediaItem(id: book.id, title: book.title, overview: book.overview, posterURL: book.coverURL, type: .book)
-        item.bookDetails = BookDetails(googleBooksID: book.id, authors: book.authors, pageCount: book.pageCount)
-        modelContext.insert(item)
-        SpotlightManager.shared.indexItem(item)
-        isSearchActive = false
-        onSelectLocal?(item)
     }
 }
 
@@ -436,9 +344,34 @@ struct UnifiedResultCard: View {
     let isAdded: Bool
     var isLocal: Bool = false
     let action: () -> Void
-    
+
+    init(result: MediaSearchResult, isAdded: Bool, action: @escaping () -> Void) {
+        self.title = result.title
+        self.category = result.type.rawValue
+        self.year = result.releaseDate?.prefix(4).description
+        self.genres = result.genres
+        self.posterURL = result.posterURL
+        self.isAdded = isAdded
+        self.isLocal = false
+        self.action = action
+    }
+
+    init(
+        title: String, category: String, year: String?, genres: [String], posterURL: String?,
+        isAdded: Bool, isLocal: Bool, action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.category = category
+        self.year = year
+        self.genres = genres
+        self.posterURL = posterURL
+        self.isAdded = isAdded
+        self.isLocal = isLocal
+        self.action = action
+    }
+
     @State private var isHovering = false
-    
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
@@ -458,10 +391,14 @@ struct UnifiedResultCard: View {
                     .frame(width: 160, height: 240)
                     .clipped()
                     .cornerRadius(12)
-                    .shadow(color: isHovering && !isAdded ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.1), radius: isHovering ? 12 : 4)
+                    .shadow(
+                        color: isHovering && !isAdded
+                            ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.1),
+                        radius: isHovering ? 12 : 4
+                    )
                     .scaleEffect(isHovering && !isAdded ? 1.02 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
-                    
+
                     // "In Library" Overlay
                     if isAdded {
                         ZStack {
@@ -469,7 +406,7 @@ struct UnifiedResultCard: View {
                                 .fill(.black.opacity(isLocal ? 0.1 : 0.6))
                                 .frame(width: 160, height: 240)
                                 .cornerRadius(12)
-                            
+
                             if !isLocal {
                                 VStack(spacing: 8) {
                                     Image(systemName: "checkmark.circle.fill")
@@ -478,21 +415,6 @@ struct UnifiedResultCard: View {
                                     Text("In Library")
                                         .font(.caption.bold())
                                         .foregroundStyle(.white)
-                                }
-                            } else {
-                                // Subtle badge for local items
-                                VStack {
-                                    HStack {
-                                        Spacer()
-                                        Image(systemName: "folder.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.white)
-                                            .padding(6)
-                                            .background(.ultraThinMaterial)
-                                            .clipShape(Circle())
-                                            .padding(8)
-                                    }
-                                    Spacer()
                                 }
                             }
                         }
@@ -503,7 +425,7 @@ struct UnifiedResultCard: View {
                                 .fill(.black.opacity(0.3))
                                 .frame(width: 160, height: 240)
                                 .cornerRadius(12)
-                            
+
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.white)
@@ -512,33 +434,39 @@ struct UnifiedResultCard: View {
                     }
                 }
                 .frame(width: 160, height: 240)
-                
+
                 // Text Content
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.headline)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .frame(height: 40, alignment: .topLeading)
                         .foregroundStyle(isAdded && !isLocal ? .secondary : .primary)
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Text(category)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(isAdded && !isLocal ? Color.secondary.opacity(0.1) : Color.accentColor.opacity(0.15))
-                                .foregroundStyle(isAdded && !isLocal ? .secondary : Color.accentColor)
+                                .background(
+                                    isAdded && !isLocal
+                                        ? Color.secondary.opacity(0.1)
+                                        : Color.accentColor.opacity(0.15)
+                                )
+                                .foregroundStyle(
+                                    isAdded && !isLocal ? .secondary : Color.accentColor
+                                )
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
-                            
+
                             if let year = year {
                                 Text(year)
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        
+
                         if !genres.isEmpty {
                             Text(genres.joined(separator: " • "))
                                 .font(.system(size: 11))
@@ -560,7 +488,7 @@ struct UnifiedResultCard: View {
             }
         }
     }
-    
+
     private var placeholderIcon: some View {
         Rectangle()
             .fill(Color.secondary.opacity(0.1))
@@ -570,7 +498,7 @@ struct UnifiedResultCard: View {
                     .foregroundStyle(.secondary.opacity(0.5))
             }
     }
-    
+
     private var iconName: String {
         if category.contains("Movie") { return "film" }
         if category.contains("TV Show") { return "tv" }

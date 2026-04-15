@@ -7,6 +7,7 @@ class MediaViewModel {
     var selectedCategory: String? = "Upcoming"
     var searchText: String = ""
     var navigationPath = NavigationPath()
+    var searchSubmitTrigger: Int = 0
     
     func navigationTitle(for category: String?) -> String {
         if let cat = category, let type = MediaType(rawValue: cat) {
@@ -81,10 +82,9 @@ struct ContentView: View {
                         SearchView(
                             searchText: $viewModel.searchText,
                             isSearchActive: $isSearchActive,
+                            submitTrigger: viewModel.searchSubmitTrigger,
                             initialType: currentMediaType
                         ) { item in
-                            isSearchActive = false
-                            viewModel.searchText = ""
                             viewModel.navigationPath.append(item)
                         }
                         .transition(.opacity)
@@ -104,6 +104,9 @@ struct ContentView: View {
                     DetailView(item: item)
                 }
                 .searchable(text: $viewModel.searchText, isPresented: $isSearchActive, prompt: "Search movies, shows, books...")
+                .onSubmit(of: .search) {
+                    viewModel.searchSubmitTrigger += 1
+                }
             }
         }
         .onContinueUserActivity(CSSearchableItemActionType) { userActivity in
@@ -380,13 +383,7 @@ struct MediaCard: View {
             } else if item.isActive {
                 HStack(spacing: 4) {
                     Image(systemName: "play.circle.fill")
-                    if item.type == .tvShow, let tv = item.tvShowDetails {
-                        let watched = tv.seasons.reduce(0) { $0 + $1.episodes.filter { $0.isWatched }.count }
-                        let total = tv.numberOfEpisodes ?? 0
-                        Text("\(watched)/\(total)")
-                    } else {
-                        Text("In Progress")
-                    }
+                    Text(item.watchProgressLabel ?? "In Progress")
                 }
                 .font(.system(size: 10, weight: .bold))
                 .padding(.vertical, 6)
@@ -400,7 +397,7 @@ struct MediaCard: View {
     
     @ViewBuilder
     private var upcomingBadge: some View {
-        if let label = upcomingLabel {
+        if let label = item.nextAiringLabel {
             Text(label)
                 .font(.system(size: 10, weight: .bold))
                 .padding(.vertical, 6)
@@ -409,30 +406,5 @@ struct MediaCard: View {
                 .background(item.isRecentlyReleased ? AnyShapeStyle(Color.green.opacity(0.8)) : AnyShapeStyle(Material.ultraThinMaterial))
                 .foregroundStyle(item.isRecentlyReleased ? .white : .primary)
         }
-    }
-    
-    private var upcomingLabel: String? {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        
-        // 1. Prioritize the FUTURE date (this is what is shown in Details)
-        if let date = item.nextAiringDate, date > Date() {
-            if item.type == .movie {
-                return "Releases \(formatter.string(from: date))"
-            } else if item.type == .tvShow {
-                if let tv = item.tvShowDetails, tv.nextEpisodeNumber == 1 {
-                    return "S\(tv.nextSeasonNumber ?? 1) Premiere: \(formatter.string(from: date))"
-                }
-                return "Next: \(formatter.string(from: date))"
-            }
-        }
-        
-        // 2. Fallback to Available Now if there's no future date but a recent release
-        if item.isRecentlyReleased {
-            return "Available Now"
-        }
-        
-        return nil
     }
 }
