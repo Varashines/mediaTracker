@@ -1,6 +1,7 @@
 import SwiftUI
 import CryptoKit
 
+@MainActor
 class ImageCache {
     static let shared = ImageCache()
     private let fileManager = FileManager.default
@@ -62,9 +63,11 @@ class ImageCache {
 
         memoryCache.setObject(finalImage, forKey: cacheKey as NSString)
         
-        Task.detached(priority: .background) { [weak self] in
-            guard let self = self else { return }
-            let fileURL = self.cacheDirectory.appendingPathComponent(self.fileName(for: key, size: targetSize))
+        let diskCacheDir = cacheDirectory
+        let diskFileName = fileName(for: key, size: targetSize)
+        
+        Task.detached(priority: .background) {
+            let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
             if let data = finalImage.tiffRepresentation {
                 let bitmap = NSBitmapImageRep(data: data)
                 let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
@@ -74,10 +77,26 @@ class ImageCache {
     }
     
     private func downsample(image: NSImage, to size: CGSize) -> NSImage {
-        let destRect = NSRect(origin: .zero, size: size)
+        let sourceSize = image.size
+        let sourceRect: NSRect
+        
+        let widthRatio = size.width / sourceSize.width
+        let heightRatio = size.height / sourceSize.height
+        let ratio = max(widthRatio, heightRatio)
+        
+        let newWidth = size.width / ratio
+        let newHeight = size.height / ratio
+        
+        sourceRect = NSRect(
+            x: (sourceSize.width - newWidth) / 2,
+            y: (sourceSize.height - newHeight) / 2,
+            width: newWidth,
+            height: newHeight
+        )
+        
         let newImage = NSImage(size: size)
         newImage.lockFocus()
-        image.draw(in: destRect, from: NSRect(origin: .zero, size: image.size), operation: .copy, fraction: 1.0)
+        image.draw(in: NSRect(origin: .zero, size: size), from: sourceRect, operation: .copy, fraction: 1.0)
         newImage.unlockFocus()
         return newImage
     }
@@ -185,16 +204,18 @@ struct CachedImage<Placeholder: View>: View {
         // 2. Download
         isLoading = true
         URLSession.shared.dataTask(with: url) { data, response, error in
-            defer { isLoading = false }
-            guard let data = data, let downloadedImage = NSImage(data: data) else { return }
+            guard let data = data, let downloadedImage = NSImage(data: data) else { 
+                Task { @MainActor in isLoading = false }
+                return 
+            }
             
-            ImageCache.shared.save(image: downloadedImage, forKey: key, targetSize: targetSize)
-            
-            DispatchQueue.main.async {
+            Task { @MainActor in
+                ImageCache.shared.save(image: downloadedImage, forKey: key, targetSize: targetSize)
                 if let finalImage = ImageCache.shared.get(forKey: key, targetSize: targetSize) {
                     self.image = finalImage
                     onImageLoaded?(finalImage)
                 }
+                isLoading = false
             }
         }.resume()
     }

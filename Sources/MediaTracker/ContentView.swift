@@ -23,6 +23,7 @@ struct ContentView: View {
     @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @State private var viewModel = MediaViewModel()
     @State private var isSearchActive = false
+    @State private var selectedHeroItem: MediaItem? = nil
     
     var filteredItems: [MediaItem] {
         let baseItems: [MediaItem]
@@ -93,12 +94,18 @@ struct ContentView: View {
                             items: filteredItems, 
                             selectedCategory: viewModel.selectedCategory, 
                             showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
-                            searchText: viewModel.searchText
+                            searchText: viewModel.searchText,
+                            onSelectHero: { item in
+                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                    viewModel.navigationPath.append(item)
+                                }
+                            }
                         )
                         .transition(.opacity)
                     }
-                }
-                .animation(.default, value: isSearchActive)
+                    }
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewModel.selectedCategory)
                 .navigationTitle(isSearchActive ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory))
                 .navigationDestination(for: MediaItem.self) { item in
                     DetailView(item: item)
@@ -136,6 +143,7 @@ struct MediaGridView: View {
     let selectedCategory: String?
     let showingUpcomingOnly: Bool
     let searchText: String
+    let onSelectHero: (MediaItem) -> Void
     
     @Environment(\.modelContext) private var modelContext
     
@@ -150,10 +158,18 @@ struct MediaGridView: View {
                     // Search Mode: Simple Grid of filtered items
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(value: item) {
+                            Button {
+                                onSelectHero(item)
+                            } label: {
                                 MediaCard(item: item)
                             }
                             .buttonStyle(.plain)
+                            .scrollTransition(.animated.threshold(.visible(0.1))) { content, phase in
+                                content
+                                    .opacity(phase.isIdentity ? 1 : 0)
+                                    .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                    .blur(radius: phase.isIdentity ? 0 : 2)
+                            }
                         }
                     }
                 } else if showingUpcomingOnly {
@@ -162,10 +178,18 @@ struct MediaGridView: View {
                     // Simple grid for 'Library' only
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(value: item) {
+                            Button {
+                                onSelectHero(item)
+                            } label: {
                                 MediaCard(item: item)
                             }
                             .buttonStyle(.plain)
+                            .scrollTransition(.animated.threshold(.visible(0.1))) { content, phase in
+                                content
+                                    .opacity(phase.isIdentity ? 1 : 0)
+                                    .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                    .blur(radius: phase.isIdentity ? 0 : 2)
+                            }
                         }
                     }
                 } else {
@@ -235,13 +259,21 @@ struct MediaGridView: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(items) { item in
-                            NavigationLink(value: item) {
+                            Button {
+                                onSelectHero(item)
+                            } label: {
                                 MediaCard(item: item)
                                     .onDrag {
                                         NSItemProvider(object: item.id as NSString)
                                     }
                             }
                             .buttonStyle(.plain)
+                            .scrollTransition(.animated.threshold(.visible(0.1))) { content, phase in
+                                content
+                                    .opacity(phase.isIdentity ? 1 : 0)
+                                    .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                    .blur(radius: phase.isIdentity ? 0 : 2)
+                            }
                         }
                     }
                 }
@@ -278,6 +310,7 @@ struct MediaGridView: View {
 struct MediaCard: View {
     @Environment(\.modelContext) private var modelContext
     let item: MediaItem
+    @State private var isHovered = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -285,13 +318,14 @@ struct MediaCard: View {
                 // Poster with fixed size
                 Group {
                     if let urlString = item.posterURL, let url = URL(string: urlString) {
-                        CachedImage(url: url, targetSize: CGSize(width: 480, height: 720)) {
+                        CachedImage(url: url, targetSize: CGSize(width: 600, height: 900)) {
                             Rectangle()
                                 .fill(Color.secondary.opacity(0.1))
                                 .overlay { ProgressView().controlSize(.small) }
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 160, height: 240)
+                        .clipped()
                     } else {
                         Rectangle()
                             .fill(Color.secondary.opacity(0.2))
@@ -301,10 +335,6 @@ struct MediaCard: View {
                             }
                     }
                 }
-                .frame(width: 160, height: 240)
-                .clipped()
-                .cornerRadius(12)
-                .shadow(radius: 2)
                 
                 // Status Badge (Top Right)
                 VStack {
@@ -329,6 +359,10 @@ struct MediaCard: View {
                 }
             }
             .frame(width: 160, height: 240)
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(isHovered ? 0.2 : 0.1), radius: isHovered ? 15 : 2, y: isHovered ? 8 : 1)
+            .scaleEffect(isHovered ? 1.05 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isHovered)
             
             // Text Content - Fixed height to ensure posters align perfectly
             VStack(alignment: .leading, spacing: 2) {
@@ -346,6 +380,11 @@ struct MediaCard: View {
         }
         .frame(width: 160)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.spring(duration: 0.3)) {
+                isHovered = hovering
+            }
+        }
         .contextMenu {
             Section("Status") {
                 ForEach(MediaState.allCases, id: \.self) { state in
@@ -408,3 +447,4 @@ struct MediaCard: View {
         }
     }
 }
+

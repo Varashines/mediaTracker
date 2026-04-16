@@ -2,6 +2,7 @@ import Foundation
 import CoreSpotlight
 import UniformTypeIdentifiers
 
+@MainActor
 class SpotlightManager {
     static let shared = SpotlightManager()
     
@@ -37,11 +38,12 @@ class SpotlightManager {
             attributeSet: attributeSet
         )
         
+        let title = item.title
         CSSearchableIndex.default().indexSearchableItems([searchableItem]) { error in
             if let error = error {
                 print("❌ Spotlight indexing error: \(error.localizedDescription)")
             } else {
-                print("✅ Spotlight indexed: \(item.title)")
+                print("✅ Spotlight indexed: \(title)")
             }
         }
     }

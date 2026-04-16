@@ -238,7 +238,7 @@ final class TVShowDetails {
 }
 
 @Model
-final class CastMember {
+final class CastMember: Identifiable {
     var name: String
     var characterName: String
     var profileURL: String?

@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct DetailView: View {
+    @Environment(\.colorScheme) var colorScheme
     @State private var viewModel: DetailViewModel
     
     init(item: MediaItem) {
@@ -10,13 +11,24 @@ struct DetailView: View {
     
     var body: some View {
         ZStack {
-            // Dynamic Background Gradient
-            LinearGradient(
-                gradient: Gradient(colors: [viewModel.themeColor.opacity(0.15), Color(NSColor.windowBackgroundColor)]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Liquid Glass Foundation Background
+            ZStack {
+                Color(NSColor.windowBackgroundColor)
+                    .ignoresSafeArea()
+                
+                viewModel.themeColor
+                    .opacity(colorScheme == .dark ? 0.35 : 0.15)
+                    .blur(radius: 120)
+                    .ignoresSafeArea()
+                
+                LinearGradient(
+                    gradient: Gradient(colors: [viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.1), .clear]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            }
+            .animation(.easeInOut(duration: 0.8), value: viewModel.themeColor)
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -40,19 +52,22 @@ struct DetailView: View {
                     
                     if let cast = (viewModel.item.movieDetails?.cast ?? viewModel.item.tvShowDetails?.cast), !cast.isEmpty {
                         Divider()
-                        CastSectionView(cast: cast)
+                        CastSectionViewNew(cast: cast, themeColor: viewModel.themeColor)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                     
                     if let tv = viewModel.item.tvShowDetails {
                         Divider()
-                        TVTrackingView(tvDetails: tv, onWatchedToggle: {
+                        TVTrackingView(tvDetails: tv, themeColor: viewModel.themeColor, onWatchedToggle: {
                             viewModel.checkOverallCompletion()
                         })
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                     
                     Divider()
                     
                     RatingSection(item: viewModel.item)
+                        .transition(.opacity)
                 }
                 .padding(30)
             }

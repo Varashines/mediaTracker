@@ -32,7 +32,11 @@ actor APIClient {
         let key = tmdbApiKey
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
-        var items = [URLQueryItem(name: "api_key", value: key)]
+        var items = [
+            URLQueryItem(name: "api_key", value: key),
+            URLQueryItem(name: "language", value: "en-US"),
+            URLQueryItem(name: "region", value: "IN")
+        ]
         items.append(contentsOf: queryItems)
         components?.queryItems = items
         guard let url = components?.url else { throw URLError(.badURL) }
@@ -41,7 +45,10 @@ actor APIClient {
 
     // MARK: - Generic Search
     private func searchTMDB<T: Codable & TMDBMedia>(path: String, query: String) async throws -> [T] {
-        let url = try tmdbURL(path: path, queryItems: [URLQueryItem(name: "query", value: query)])
+        let url = try tmdbURL(path: path, queryItems: [
+            URLQueryItem(name: "query", value: query),
+            URLQueryItem(name: "include_adult", value: "false")
+        ])
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<T>.self, from: data)
@@ -76,14 +83,30 @@ actor APIClient {
 
     // MARK: - Details
     func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, cast: [CastMemberResult]) {
-        let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits")])
+        let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
         let details = try decoder.decode(TMDBMovieDetailsResponse.self, from: data)
         let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
-        return (details.runtime, details.genres.map { $0.name }, details.vote_average, details.release_date, Array(cast))
+        
+        // Find a better release date (Prioritizing India regional data)
+        var finalReleaseDate = details.release_date
+        if let releaseDates = details.release_dates?.results {
+            // Priority 1: Any release date specifically for India (IN)
+            if let india = releaseDates.first(where: { $0.iso_3166_1 == "IN" }),
+               let localDate = india.release_dates.first {
+                finalReleaseDate = localDate.release_date.prefix(10).description
+            } 
+            // Priority 2: Fallback to US Theatrical if IN is missing
+            else if let us = releaseDates.first(where: { $0.iso_3166_1 == "US" }),
+                    let theatrical = us.release_dates.first(where: { $0.type == 3 }) {
+                finalReleaseDate = theatrical.release_date.prefix(10).description
+            }
+        }
+        
+        return (details.runtime, details.genres.map { $0.name }, details.vote_average, finalReleaseDate, Array(cast))
     }
     
     func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult]) {
@@ -260,7 +283,23 @@ struct TMDBGenreMap {
 }
 
 struct TMDBMovieDetailsResponse: Codable {
-    let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, credits: TMDBCreditsResponse?
+    let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?
+    let credits: TMDBCreditsResponse?
+    let release_dates: TMDBReleaseDatesResponse?
+}
+
+struct TMDBReleaseDatesResponse: Codable {
+    let results: [TMDBRegionalReleaseDates]
+}
+
+struct TMDBRegionalReleaseDates: Codable {
+    let iso_3166_1: String
+    let release_dates: [TMDBReleaseDateDetail]
+}
+
+struct TMDBReleaseDateDetail: Codable {
+    let release_date: String
+    let type: Int // 3 is Theatrical
 }
 
 struct TMDBTVDetailsResponse: Codable {

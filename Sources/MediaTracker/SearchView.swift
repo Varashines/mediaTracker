@@ -114,20 +114,19 @@ struct SearchView: View {
                             let columns = [GridItem(.adaptive(minimum: 160), spacing: 20)]
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                 ForEach(localResults) { item in
-                                    Button {
+                                    UnifiedResultCard(
+                                        title: item.title,
+                                        category: item.type?.rawValue ?? "Media",
+                                        year: item.releaseDate?.formatted(.dateTime.year()),
+                                        genres: item.genres,
+                                        posterURL: item.posterURL,
+                                        isAdded: true,
+                                        isLocal: true
+                                    ) {
+                                        // Improvement: Clear search focus when navigating to library item
+                                        isSearchActive = false
                                         onSelectLocal?(item)
-                                    } label: {
-                                        UnifiedResultCard(
-                                            title: item.title,
-                                            category: item.type?.rawValue ?? "Media",
-                                            year: item.releaseDate?.formatted(.dateTime.year()),
-                                            genres: item.genres,
-                                            posterURL: item.posterURL,
-                                            isAdded: true,
-                                            isLocal: true
-                                        ) {}
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.horizontal, 20)
@@ -301,9 +300,12 @@ struct SearchView: View {
 
             if result.type == .movie, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                item.movieDetails = MovieDetails(
-                    tmdbID: tmdbID, runtime: details?.runtime, genres: details?.genres ?? [],
-                    voteAverage: details?.voteAverage)
+                if let details = details {
+                    item.releaseDate = DateUtils.parseDate(details.releaseDate)
+                    item.movieDetails = MovieDetails(
+                        tmdbID: tmdbID, runtime: details.runtime, genres: details.genres,
+                        voteAverage: details.voteAverage)
+                }
             } else if result.type == .tvShow, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
                 if let details = details {
@@ -392,18 +394,18 @@ struct UnifiedResultCard: View {
                     .clipped()
                     .cornerRadius(12)
                     .shadow(
-                        color: isHovering && !isAdded
+                        color: isHovering && (!isAdded || isLocal)
                             ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.1),
                         radius: isHovering ? 12 : 4
                     )
-                    .scaleEffect(isHovering && !isAdded ? 1.02 : 1.0)
+                    .scaleEffect(isHovering && (!isAdded || isLocal) ? 1.02 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
 
                     // "In Library" Overlay
                     if isAdded {
                         ZStack {
                             Rectangle()
-                                .fill(.black.opacity(isLocal ? 0.1 : 0.6))
+                                .fill(.black.opacity(isLocal ? (isHovering ? 0.2 : 0.05) : 0.6))
                                 .frame(width: 160, height: 240)
                                 .cornerRadius(12)
 
@@ -416,10 +418,24 @@ struct UnifiedResultCard: View {
                                         .font(.caption.bold())
                                         .foregroundStyle(.white)
                                 }
+                            } else if isHovering {
+                                // Hint for library items
+                                VStack(spacing: 4) {
+                                    Image(systemName: "arrow.up.right.circle.fill")
+                                        .font(.system(size: 30))
+                                        .foregroundStyle(.white)
+                                    Text("Open Library")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(8)
+                                .background(.black.opacity(0.4))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .transition(.scale.combined(with: .opacity))
                             }
                         }
                     } else if isHovering {
-                        // Hover Overlay
+                        // Hover Overlay for New Items
                         ZStack {
                             Rectangle()
                                 .fill(.black.opacity(0.3))

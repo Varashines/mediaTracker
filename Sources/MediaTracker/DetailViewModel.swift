@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-@Observable
+@Observable @MainActor
 class DetailViewModel {
     var item: MediaItem
     var isRefreshing = false
@@ -46,7 +46,6 @@ class DetailViewModel {
         let itemID = item.id
         
         Task {
-            defer { Task { @MainActor in isRefreshing = false } }
             do {
                 if itemType == .movie, let tmdbID = Int(itemID) {
                     try await refreshMovie(tmdbID: tmdbID)
@@ -55,9 +54,11 @@ class DetailViewModel {
                 }
                 await MainActor.run {
                     updateThemeColor()
+                    isRefreshing = false
                 }
             } catch {
                 print("❌ Refresh error: \(error)")
+                await MainActor.run { isRefreshing = false }
             }
         }
     }
@@ -209,7 +210,6 @@ class DetailViewModel {
     
     func markAllAsWatched() {
         if let tv = item.tvShowDetails {
-            // Collecting persistent IDs to avoid Sendable issues
             let seasonIDs = tv.seasons.map { $0.persistentModelID }
             let tmdbID = tv.tmdbID
             
@@ -233,26 +233,22 @@ class DetailViewModel {
     }
     
     private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, tmdbID: Int) async {
-        await MainActor.run {
-            if let tv = self.item.tvShowDetails, 
-               let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }),
-               season.episodes.isEmpty {
-                Task {
-                    do {
-                        let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
-                        await MainActor.run {
-                            for ep in episodes {
-                                let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime)
-                                newEpisode.season = season
-                                season.episodes.append(newEpisode)
-                                newEpisode.isWatched = true
-                            }
-                            self.checkOverallCompletion()
-                        }
-                    } catch {
-                        print("❌ Error fetching episodes in markAllAsWatched: \(error)")
+        if let tv = self.item.tvShowDetails, 
+           let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }),
+           season.episodes.isEmpty {
+            do {
+                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
+                await MainActor.run {
+                    for ep in episodes {
+                        let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime)
+                        newEpisode.season = season
+                        season.episodes.append(newEpisode)
+                        newEpisode.isWatched = true
                     }
+                    self.checkOverallCompletion()
                 }
+            } catch {
+                print("❌ Error fetching episodes in markAllAsWatched: \(error)")
             }
         }
     }

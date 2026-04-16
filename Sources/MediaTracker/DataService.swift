@@ -19,6 +19,7 @@ struct MediaItemData: Codable {
     let watchHistory: [String: Bool] // EpisodeID: isWatched
 }
 
+@MainActor
 class DataService {
     static let shared = DataService()
     

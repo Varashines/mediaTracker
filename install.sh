@@ -5,12 +5,15 @@ APP_NAME="MediaTracker"
 BUNDLE_ID="com.vara.mediatracker"
 EXECUTABLE_NAME="MediaTracker"
 INSTALL_DIR="/Applications"
-BUILD_DIR=".build/apple/Products/Release"
+BUILD_DIR=".build/arm64-apple-macosx/release"
+
+echo "🧹 Cleaning previous build artifacts..."
+swift package clean
 
 echo "🚀 Building $APP_NAME in Release mode..."
 
 # 1. Build the executable
-swift build -c release --arch arm64 --arch x86_64
+swift build -c release --arch arm64
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed."
@@ -55,9 +58,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.1.0</string>
+    <string>2.1.1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>15.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

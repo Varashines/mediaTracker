@@ -19,6 +19,7 @@ extension Color {
 
 struct TVTrackingView: View {
     var tvDetails: TVShowDetails
+    var themeColor: Color
     var onWatchedToggle: () -> Void
 
     @State private var selectedSeasonNumber: Int?
@@ -41,7 +42,8 @@ struct TVTrackingView: View {
                         ForEach(sortedSeasons, id: \.seasonNumber) { season in
                             SeasonTab(
                                 season: season,
-                                isSelected: selectedSeasonNumber == season.seasonNumber
+                                isSelected: selectedSeasonNumber == season.seasonNumber,
+                                themeColor: themeColor
                             ) {
                                 withAnimation(.spring(duration: 0.3)) {
                                     selectedSeasonNumber = season.seasonNumber
@@ -59,7 +61,7 @@ struct TVTrackingView: View {
                         $0.seasonNumber == selectedNumber
                     })
                 {
-                    SeasonSection(season: selectedSeason, onWatchedToggle: onWatchedToggle)
+                    SeasonSection(season: selectedSeason, themeColor: themeColor, onWatchedToggle: onWatchedToggle)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -87,9 +89,11 @@ struct TVTrackingView: View {
 private struct SeasonTab: View {
     let season: TVSeason
     let isSelected: Bool
+    let themeColor: Color
     let action: () -> Void
 
     @State private var isAnimatingGlow = false
+    @Environment(\.colorScheme) var colorScheme
 
     private var progress: Double {
         let total = season.episodes.count
@@ -113,13 +117,13 @@ private struct SeasonTab: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 10)
                 .foregroundStyle(
-                    isSelected ? Color.accentColor : (isFullyWatched ? Color.green : .primary)
+                    isSelected ? (colorScheme == .dark ? .white : themeColor) : (isFullyWatched ? Color.green : .primary)
                 )
                 .background(
                     ZStack {
                         if isSelected {
                             RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .fill(Color.accentColor.opacity(0.1))
+                                .fill(themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15))
                         }
 
                         if isFullyWatched {
@@ -148,7 +152,7 @@ private struct SeasonTab: View {
 
     private var borderColor: Color {
         if isFullyWatched { return Color.green.opacity(0.8) }
-        if progress == 0 { return Color.blue.opacity(0.8) }
+        if progress == 0 { return themeColor.opacity(0.8) }
         return Color.primary.opacity(0.1)
     }
 
@@ -162,7 +166,7 @@ private struct SeasonTab: View {
                 
                 RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
                     .trim(from: progress, to: 1)
-                    .stroke(Color.blue.opacity(0.9), lineWidth: TVTrackingConstants.strokeWidth)
+                    .stroke(themeColor.opacity(0.9), lineWidth: TVTrackingConstants.strokeWidth)
             }
         }
     }
@@ -180,7 +184,9 @@ private struct SeasonTab: View {
 
 private struct SeasonSection: View {
     @Bindable var season: TVSeason
+    var themeColor: Color
     var onWatchedToggle: () -> Void
+    @Environment(\.colorScheme) var colorScheme
 
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
@@ -217,11 +223,28 @@ private struct SeasonSection: View {
                 } label: {
                     Label(isAllWatched ? "Clear Season" : "Mark Season Watched", systemImage: isAllWatched ? "xmark.circle" : "checkmark.circle")
                         .font(.caption.bold())
-                        .foregroundStyle(isAllWatched ? Color.secondary : Color.accentColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(isAllWatched ? Color.secondary.opacity(0.1) : Color.accentColor.opacity(0.1))
+                        .foregroundStyle(
+                            isAllWatched 
+                                ? Color.secondary 
+                                : (colorScheme == .dark ? Color.white : themeColor)
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            if isAllWatched {
+                                Color.secondary.opacity(0.1)
+                            } else {
+                                themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
+                                    .background(.ultraThinMaterial)
+                            }
+                        }
                         .clipShape(Capsule())
+                        .overlay {
+                            if !isAllWatched {
+                                Capsule()
+                                    .stroke(themeColor.opacity(colorScheme == .dark ? 0.5 : 0.3), lineWidth: 0.5)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
                 .disabled(season.episodes.isEmpty)
@@ -237,7 +260,7 @@ private struct SeasonSection: View {
                         season.episodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }),
                         id: \.episodeNumber
                     ) { ep in
-                        EpisodeCube(episode: ep) {
+                        EpisodeCube(episode: ep, themeColor: themeColor) {
                             onWatchedToggle()
                         }
                     }
@@ -259,7 +282,9 @@ private struct SeasonSection: View {
 
 private struct EpisodeCube: View {
     @Bindable var episode: TVEpisode
+    var themeColor: Color
     var onToggle: () -> Void
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Button {
@@ -275,12 +300,19 @@ private struct EpisodeCube: View {
                         .fontWeight(.bold)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(
-                            episode.isWatched
-                                ? Color.green.opacity(0.2) : Color.accentColor.opacity(0.1)
-                        )
-                        .foregroundStyle(episode.isWatched ? .green : .accentColor)
+                        .foregroundStyle(badgeForegroundColor)
+                        .background {
+                            badgeBackgroundColor
+                                .background(.ultraThinMaterial)
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(
+                                    badgeStrokeColor.opacity(colorScheme == .dark ? 0.5 : 0.3),
+                                    lineWidth: 0.5
+                                )
+                        }
 
                     Spacer()
 
@@ -330,23 +362,41 @@ private struct EpisodeCube: View {
         }
         .buttonStyle(.plain)
     }
+
+    private var badgeForegroundColor: Color {
+        if colorScheme == .dark { return .white }
+        return episode.isWatched ? .green : themeColor
+    }
+
+    private var badgeBackgroundColor: Color {
+        let opacity: CGFloat = colorScheme == .dark ? 0.4 : 0.2
+        return episode.isWatched ? Color.green.opacity(opacity) : themeColor.opacity(opacity)
+    }
+
+    private var badgeStrokeColor: Color {
+        episode.isWatched ? Color.green : themeColor
+    }
 }
 
 #if DEBUG
     #Preview {
-        let details = TVShowDetails(tmdbID: 0)
-        let season1 = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 2, airDate: nil)
-        let ep1 = TVEpisode(
-            episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: nil,
-            runtime: 42)
-        let ep2 = TVEpisode(
-            episodeNumber: 2, seasonNumber: 1, name: "Second", overview: "", airDate: nil,
-            runtime: 44)
-        ep1.season = season1
-        ep2.season = season1
-        season1.episodes = [ep1, ep2]
-        details.seasons = [season1]
-        return TVTrackingView(tvDetails: details) {}
+        let details: TVShowDetails = {
+            let d = TVShowDetails(tmdbID: 0)
+            let season1 = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 2, airDate: nil)
+            let ep1 = TVEpisode(
+                episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: nil,
+                runtime: 42)
+            let ep2 = TVEpisode(
+                episodeNumber: 2, seasonNumber: 1, name: "Second", overview: "", airDate: nil,
+                runtime: 44)
+            ep1.season = season1
+            ep2.season = season1
+            season1.episodes = [ep1, ep2]
+            d.seasons = [season1]
+            return d
+        }()
+        
+        return TVTrackingView(tvDetails: details, themeColor: .accentColor) {}
             .padding()
     }
 #endif
