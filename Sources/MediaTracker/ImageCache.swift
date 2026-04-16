@@ -18,9 +18,8 @@ class ImageCache {
             try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         }
         
-        memoryCache.countLimit = 150 // Increased slightly for thumbnails
+        memoryCache.countLimit = 150
         
-        // Prune on startup
         Task.detached(priority: .background) {
             await self.pruneDiskCacheIfNeeded()
         }
@@ -36,51 +35,69 @@ class ImageCache {
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
     
-    func get(forKey key: String, targetSize: CGSize? = nil) -> NSImage? {
+    func get(forKey key: String, targetSize: CGSize? = nil) async -> NSImage? {
         let cacheKey = targetSize != nil ? "\(key)_\(Int(targetSize!.width))x\(Int(targetSize!.height))" : key
         
+        // 1. Check Memory Cache
         if let cachedImage = memoryCache.object(forKey: cacheKey as NSString) {
             return cachedImage
         }
         
+        // 2. Check Disk Cache (Off-Main-Thread)
         let fileURL = cacheDirectory.appendingPathComponent(fileName(for: key, size: targetSize))
-        guard let data = try? Data(contentsOf: fileURL), let image = NSImage(data: data) else { return nil }
         
-        memoryCache.setObject(image, forKey: cacheKey as NSString)
-        return image
+        return await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: fileURL) else { return nil }
+            
+            // Use CGImageSource for efficient, non-blocking decoding
+            let options: [CFString: Any] = [
+                kCGImageSourceShouldCache: false,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ]
+            
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return nil
+            }
+            
+            let nsImage = NSImage(cgImage: cgImage, size: targetSize ?? NSSize(width: cgImage.width, height: cgImage.height))
+            
+            await MainActor.run {
+                self.memoryCache.setObject(nsImage, forKey: cacheKey as NSString)
+            }
+            
+            return nsImage
+        }.value
     }
     
-    func save(image: NSImage, forKey key: String, targetSize: CGSize? = nil) {
+    func save(image: NSImage, forKey key: String, targetSize: CGSize? = nil) async {
         let cacheKey = targetSize != nil ? "\(key)_\(Int(targetSize!.width))x\(Int(targetSize!.height))" : key
         
-        // Downsample if targetSize is provided
+        // 1. Memory Cache
         let finalImage: NSImage
         if let size = targetSize, image.size != size {
             finalImage = downsample(image: image, to: size)
         } else {
             finalImage = image
         }
-
         memoryCache.setObject(finalImage, forKey: cacheKey as NSString)
         
-        let diskCacheDir = cacheDirectory
-        let diskFileName = fileName(for: key, size: targetSize)
-        
-        // Extract data on MainActor as Data is Sendable, while NSImage is not.
+        // 2. Disk Cache (Background)
         guard let imageData = finalImage.tiffRepresentation else { return }
-        
+        let diskFileName = fileName(for: key, size: targetSize)
+        let diskCacheDir = cacheDirectory
+
         Task.detached(priority: .background) {
             let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
             let bitmap = NSBitmapImageRep(data: imageData)
-            let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+            let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
             try? jpegData?.write(to: fileURL)
         }
     }
     
     private func downsample(image: NSImage, to size: CGSize) -> NSImage {
         let sourceSize = image.size
-        let sourceRect: NSRect
-        
         let widthRatio = size.width / sourceSize.width
         let heightRatio = size.height / sourceSize.height
         let ratio = max(widthRatio, heightRatio)
@@ -88,7 +105,7 @@ class ImageCache {
         let newWidth = size.width / ratio
         let newHeight = size.height / ratio
         
-        sourceRect = NSRect(
+        let sourceRect = NSRect(
             x: (sourceSize.width - newWidth) / 2,
             y: (sourceSize.height - newHeight) / 2,
             width: newWidth,
@@ -118,43 +135,14 @@ class ImageCache {
         }
         
         if totalSize > maxDiskCacheSize {
-            // Sort by access date (oldest first)
             let sortedFiles = fileInfos.sorted(by: { $0.date < $1.date })
             var currentSize = totalSize
-            
             for file in sortedFiles {
-                if currentSize <= (maxDiskCacheSize * 8 / 10) { break } // Prune down to 80%
+                if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
                 try? fileManager.removeItem(at: file.url)
                 currentSize -= file.size
             }
-            print("🧹 Pruned disk cache: \(totalSize / 1024 / 1024)MB -> \(currentSize / 1024 / 1024)MB")
         }
-    }
-}
-
-struct ShimmerView: View {
-    @State private var phase: CGFloat = 0
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.secondary.opacity(0.1)
-                
-                LinearGradient(
-                    gradient: Gradient(colors: [.clear, .white.opacity(0.2), .clear]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: geometry.size.width * 2)
-                .offset(x: -geometry.size.width + (geometry.size.width * 2 * phase))
-            }
-        }
-        .onAppear {
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
-        }
-        .clipped()
     }
 }
 
@@ -181,22 +169,22 @@ struct CachedImage<Placeholder: View>: View {
                     .resizable()
             } else {
                 ZStack {
+                    Color.secondary.opacity(0.1) // Static placeholder background
                     placeholder
-                    ShimmerView()
                 }
-                .onAppear {
-                    loadImage()
+                .task(id: url) {
+                    await loadImage()
                 }
             }
         }
     }
     
-    private func loadImage() {
+    private func loadImage() async {
         guard let url = url, !isLoading else { return }
         let key = url.absoluteString
         
         // 1. Check Memory/Disk
-        if let cached = ImageCache.shared.get(forKey: key, targetSize: targetSize) {
+        if let cached = await ImageCache.shared.get(forKey: key, targetSize: targetSize) {
             self.image = cached
             onImageLoaded?(cached)
             return
@@ -204,20 +192,21 @@ struct CachedImage<Placeholder: View>: View {
         
         // 2. Download
         isLoading = true
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data, let downloadedImage = NSImage(data: data) else { 
-                Task { @MainActor in isLoading = false }
-                return 
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let downloadedImage = NSImage(data: data) else {
+                isLoading = false
+                return
             }
             
-            Task { @MainActor in
-                ImageCache.shared.save(image: downloadedImage, forKey: key, targetSize: targetSize)
-                if let finalImage = ImageCache.shared.get(forKey: key, targetSize: targetSize) {
-                    self.image = finalImage
-                    onImageLoaded?(finalImage)
-                }
-                isLoading = false
+            await ImageCache.shared.save(image: downloadedImage, forKey: key, targetSize: targetSize)
+            if let finalImage = await ImageCache.shared.get(forKey: key, targetSize: targetSize) {
+                self.image = finalImage
+                onImageLoaded?(finalImage)
             }
-        }.resume()
+            isLoading = false
+        } catch {
+            isLoading = false
+        }
     }
 }

@@ -122,8 +122,15 @@ private struct SeasonTab: View {
                 .background(
                     ZStack {
                         if isSelected {
+                            // Deep "pressed" background
                             RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .fill(themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15))
+                                .fill(themeColor.opacity(colorScheme == .dark ? 0.3 : 0.2))
+                            
+                            // Subtle inner shadow for depth
+                            RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
+                                .stroke(Color.black.opacity(0.1), lineWidth: 4)
+                                .blur(radius: 2)
+                                .mask(RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius))
                         }
 
                         if isFullyWatched {
@@ -137,17 +144,19 @@ private struct SeasonTab: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                        .stroke(borderColor, lineWidth: isFullyWatched || progress == 0 ? TVTrackingConstants.strokeWidth : TVTrackingConstants.secondaryStrokeWidth)
+                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : (isFullyWatched || progress == 0 ? TVTrackingConstants.strokeWidth : TVTrackingConstants.secondaryStrokeWidth))
                         .overlay(
                             progressOverlay
                         )
                 )
+                .scaleEffect(isSelected ? 0.96 : 1.0)
+                .shadow(color: isSelected ? .clear : .black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .onAppear { toggleAnimation() }
         .onChange(of: progress) { toggleAnimation() }
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: progress)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
     }
 
     private var borderColor: Color {
@@ -298,21 +307,7 @@ private struct EpisodeCube: View {
                     Text("E\(episode.episodeNumber)")
                         .font(.system(.caption, design: .monospaced))
                         .fontWeight(.bold)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .foregroundStyle(badgeForegroundColor)
-                        .background {
-                            badgeBackgroundColor
-                                .background(.ultraThinMaterial)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(
-                                    badgeStrokeColor.opacity(colorScheme == .dark ? 0.5 : 0.3),
-                                    lineWidth: 0.5
-                                )
-                        }
+                        .liquidGlassPill(accentColor: badgeStrokeColor)
 
                     Spacer()
 

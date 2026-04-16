@@ -70,20 +70,12 @@ struct TitleSection: View {
             HStack(spacing: 12) {
                 Text(item.type?.rawValue ?? "")
                     .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
-                    .foregroundStyle(colorScheme == .dark ? .white : themeColor)
-                    .clipShape(Capsule())
+                    .liquidGlassPill(accentColor: themeColor)
 
                 if item.isUpcoming {
                     Text("Upcoming")
                         .font(.subheadline.weight(.bold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.orange.opacity(colorScheme == .dark ? 0.25 : 0.15))
-                        .foregroundStyle(colorScheme == .dark ? .white : .orange)
-                        .clipShape(Capsule())
+                        .liquidGlassPill(accentColor: .orange)
                 }
 
                 Spacer().frame(width: 10)

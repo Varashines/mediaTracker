@@ -376,39 +376,30 @@ struct UnifiedResultCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                ZStack(alignment: .bottom) {
-                    // Poster with fixed size
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack(alignment: .top) {
+                    // 1. Poster Layer
                     Group {
                         if let urlString = posterURL, let url = URL(string: urlString) {
-                            CachedImage(url: url, targetSize: CGSize(width: 480, height: 720)) {
+                            CachedImage(url: url, targetSize: CGSize(width: 160, height: 240)) { _ in
+                            } placeholder: {
                                 placeholderIcon
                             }
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 160, height: 240)
+                            .clipped()
                         } else {
                             placeholderIcon
+                                .frame(width: 160, height: 240)
                         }
                     }
-                    .frame(width: 160, height: 240)
-                    .clipped()
-                    .cornerRadius(12)
-                    .shadow(
-                        color: isHovering && (!isAdded || isLocal)
-                            ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.1),
-                        radius: isHovering ? 12 : 4
-                    )
-                    .scaleEffect(isHovering && (!isAdded || isLocal) ? 1.02 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
-
-                    // "In Library" Overlay
+                    
+                    // 2. Hover/Status Overlay
                     if isAdded {
                         ZStack {
                             Rectangle()
                                 .fill(.black.opacity(isLocal ? (isHovering ? 0.2 : 0.05) : 0.6))
-                                .frame(width: 160, height: 240)
-                                .cornerRadius(12)
-
+                            
                             if !isLocal {
                                 VStack(spacing: 8) {
                                     Image(systemName: "checkmark.circle.fill")
@@ -419,89 +410,89 @@ struct UnifiedResultCard: View {
                                         .foregroundStyle(.white)
                                 }
                             } else if isHovering {
-                                // Hint for library items
                                 VStack(spacing: 4) {
                                     Image(systemName: "arrow.up.right.circle.fill")
                                         .font(.system(size: 30))
                                         .foregroundStyle(.white)
-                                    Text("Open Library")
+                                    Text("Open")
                                         .font(.caption2.bold())
                                         .foregroundStyle(.white)
                                 }
                                 .padding(8)
                                 .background(.black.opacity(0.4))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .transition(.scale.combined(with: .opacity))
                             }
                         }
                     } else if isHovering {
-                        // Hover Overlay for New Items
                         ZStack {
-                            Rectangle()
-                                .fill(.black.opacity(0.3))
-                                .frame(width: 160, height: 240)
-                                .cornerRadius(12)
-
+                            Rectangle().fill(.black.opacity(0.3))
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 40))
                                 .foregroundStyle(.white)
                         }
-                        .transition(.opacity)
                     }
+                    
+                    // 3. Top Pills
+                    topPills
                 }
                 .frame(width: 160, height: 240)
-
-                // Text Content
-                VStack(alignment: .leading, spacing: 6) {
+                .cornerRadius(12)
+                .scaleEffect(isHovering ? 1.02 : 1.0)
+                .animation(.easeOut(duration: 0.2), value: isHovering)
+                
+                // 4. Info Section (Below)
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.headline)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .frame(height: 40, alignment: .topLeading)
-                        .foregroundStyle(isAdded && !isLocal ? .secondary : .primary)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(category)
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    isAdded && !isLocal
-                                        ? Color.secondary.opacity(0.1)
-                                        : Color.accentColor.opacity(0.15)
-                                )
-                                .foregroundStyle(
-                                    isAdded && !isLocal ? .secondary : Color.accentColor
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                            if let year = year {
-                                Text(year)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if !genres.isEmpty {
-                            Text(genres.joined(separator: " • "))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
+                        .frame(height: 34, alignment: .topLeading)
+                    
+                    if let year = year {
+                        Text(year)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .liquidGlassPill(accentColor: .primary, isSolid: false)
                     }
                 }
-                .frame(width: 160)
+                .padding(.horizontal, 2)
             }
             .frame(width: 160)
             .contentShape(Rectangle())
+            .drawingGroup()
         }
         .buttonStyle(.plain)
         .disabled(isAdded && !isLocal)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
-            }
+            isHovering = hovering
+        }
+    }
+
+    @ViewBuilder
+    private var topPills: some View {
+        HStack(alignment: .top) {
+            categoryPill
+            Spacer()
+            statusPill
+        }
+        .padding(6)
+    }
+
+    @ViewBuilder
+    private var categoryPill: some View {
+        Image(systemName: iconName)
+            .font(.system(size: 9, weight: .bold))
+            .liquidGlassPill(accentColor: .accentColor, isSolid: false)
+    }
+
+    @ViewBuilder
+    private var statusPill: some View {
+        if isAdded {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .liquidGlassPill(accentColor: .green, isSolid: true)
         }
     }
 

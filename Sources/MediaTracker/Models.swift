@@ -40,6 +40,7 @@ final class MediaItem {
     var isLiked: Bool?
     var state: MediaState? = MediaState.wishlist
     var type: MediaType? = MediaType.movie
+    var themeColorHex: String?
     
     // Type-specific data
     var movieDetails: MovieDetails?

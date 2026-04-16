@@ -31,9 +31,23 @@ class DetailViewModel {
     }
     
     func updateThemeColor() {
+        if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
+            self.themeColor = cachedColor
+            return
+        }
+
         guard let urlString = item.posterURL, let url = URL(string: urlString) else { return }
-        if let cachedImage = ImageCache.shared.get(forKey: url.absoluteString) {
-            themeColor = ColorExtractor.dominantColor(from: cachedImage)
+        
+        Task {
+            if let cachedImage = await ImageCache.shared.get(forKey: url.absoluteString) {
+                let color = ColorExtractor.dominantColor(from: cachedImage)
+                await MainActor.run {
+                    withAnimation {
+                        self.themeColor = color
+                        self.item.themeColorHex = color.toHex()
+                    }
+                }
+            }
         }
     }
     
