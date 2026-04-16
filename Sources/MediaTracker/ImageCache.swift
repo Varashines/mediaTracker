@@ -1,6 +1,10 @@
 import SwiftUI
 import CryptoKit
 
+struct ImageContainer: @unchecked Sendable {
+    let image: NSImage
+}
+
 @MainActor
 class ImageCache {
     static let shared = ImageCache()
@@ -46,7 +50,7 @@ class ImageCache {
         // 2. Check Disk Cache (Off-Main-Thread)
         let fileURL = cacheDirectory.appendingPathComponent(fileName(for: key, size: targetSize))
         
-        return await Task.detached(priority: .userInitiated) {
+        let container = await Task.detached(priority: .userInitiated) { () -> ImageContainer? in
             guard let data = try? Data(contentsOf: fileURL) else { return nil }
             
             // Use CGImageSource for efficient, non-blocking decoding
@@ -62,13 +66,15 @@ class ImageCache {
             }
             
             let nsImage = NSImage(cgImage: cgImage, size: targetSize ?? NSSize(width: cgImage.width, height: cgImage.height))
-            
-            await MainActor.run {
-                self.memoryCache.setObject(nsImage, forKey: cacheKey as NSString)
-            }
-            
-            return nsImage
+            return ImageContainer(image: nsImage)
         }.value
+        
+        if let nsImage = container?.image {
+            self.memoryCache.setObject(nsImage, forKey: cacheKey as NSString)
+            return nsImage
+        }
+        
+        return nil
     }
     
     func save(image: NSImage, forKey key: String, targetSize: CGSize? = nil) async {

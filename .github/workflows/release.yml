@@ -34,7 +34,7 @@ jobs:
           BUILD_DIR=".build/apple/Products/Release"
           
           echo "🚀 Building $APP_NAME in Release mode..."
-          swift build -c release --arch arm64 --arch x86_64
+          swift build -c release --arch arm64
           
           echo "🎨 Generating App Icon..."
           swift generate_icon.swift
@@ -49,7 +49,7 @@ jobs:
           mkdir -p "$MACOS_DIR"
           mkdir -p "$RESOURCES_DIR"
           
-          cp "$BUILD_DIR/$EXECUTABLE_NAME" "$MACOS_DIR/"
+          cp ".build/arm64-apple-macosx/release/$EXECUTABLE_NAME" "$MACOS_DIR/"
           cp AppIcon.icns "$RESOURCES_DIR/"
           
           cat > "$CONTENTS_DIR/Info.plist" <<EOF
@@ -70,7 +70,7 @@ jobs:
               <key>CFBundleShortVersionString</key>
               <string>${GITHUB_REF_NAME#v}</string>
               <key>LSMinimumSystemVersion</key>
-              <string>14.0</string>
+              <string>15.0</string>
               <key>NSHighResolutionCapable</key>
               <true/>
           </dict>
