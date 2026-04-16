@@ -39,18 +39,21 @@ class SpotlightManager {
         )
         
         let title = item.title
-        CSSearchableIndex.default().indexSearchableItems([searchableItem]) { error in
-            if let error = error {
-                print("❌ Spotlight indexing error: \(error.localizedDescription)")
-            } else {
+        Task {
+            do {
+                try await CSSearchableIndex.default().indexSearchableItems([searchableItem])
                 print("✅ Spotlight indexed: \(title)")
+            } catch {
+                print("❌ Spotlight indexing error: \(error.localizedDescription)")
             }
         }
     }
     
     func removeItem(_ item: MediaItem) {
-        CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: [item.id]) { error in
-            if let error = error {
+        Task {
+            do {
+                try await CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: [item.id])
+            } catch {
                 print("❌ Spotlight removal error: \(error.localizedDescription)")
             }
         }
