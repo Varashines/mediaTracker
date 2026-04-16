@@ -66,13 +66,14 @@ class ImageCache {
         let diskCacheDir = cacheDirectory
         let diskFileName = fileName(for: key, size: targetSize)
         
+        // Extract data on MainActor as Data is Sendable, while NSImage is not.
+        guard let imageData = finalImage.tiffRepresentation else { return }
+        
         Task.detached(priority: .background) {
             let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
-            if let data = finalImage.tiffRepresentation {
-                let bitmap = NSBitmapImageRep(data: data)
-                let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
-                try? jpegData?.write(to: fileURL)
-            }
+            let bitmap = NSBitmapImageRep(data: imageData)
+            let jpegData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+            try? jpegData?.write(to: fileURL)
         }
     }
     
