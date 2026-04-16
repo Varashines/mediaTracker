@@ -19,14 +19,15 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return
         }
         
-        UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            DispatchQueue.main.async {
+        Task {
+            UNUserNotificationCenter.current().delegate = self
+            do {
+                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
                 if granted {
                     print("✅ Notification permission granted.")
-                } else if let error = error {
-                    print("❌ Notification permission error: \(error.localizedDescription)")
                 }
+            } catch {
+                print("❌ Notification permission error: \(error.localizedDescription)")
             }
         }
     }

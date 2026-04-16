@@ -116,6 +116,9 @@ struct ContentView: View {
                 }
             }
         }
+        .onAppear {
+            NotificationManager.shared.requestPermission()
+        }
         .onContinueUserActivity(CSSearchableItemActionType) { userActivity in
             if let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
                 if let item = allItems.first(where: { $0.id == identifier }) {
