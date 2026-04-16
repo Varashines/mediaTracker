@@ -68,26 +68,32 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $viewModel.selectedCategory) {
-                Label("Upcoming", systemImage: "calendar")
-                    .tag("Upcoming")
-                
-                Label("In Progress", systemImage: "play.circle")
-                    .tag("InProgress")
-                
-                Label("Waitlist", systemImage: "clock")
-                    .tag("Waitlist")
+                Group {
+                    Label("Upcoming", systemImage: "calendar")
+                        .tag("Upcoming")
+                    
+                    Label("In Progress", systemImage: "play.circle")
+                        .tag("InProgress")
+                    
+                    Label("Waitlist", systemImage: "clock")
+                        .tag("Waitlist")
 
-                Label("Library", systemImage: "tray.full")
-                    .tag("All")
+                    Label("Library", systemImage: "tray.full")
+                        .tag("All")
+                }
+                .padding(.vertical, 4)
                 
                 Section("Categories") {
                     ForEach(MediaType.allCases, id: \.self) { type in
                         Label(type.pluralName, systemImage: icon(for: type))
                             .tag(type.rawValue)
+                            .padding(.vertical, 4)
                     }
                 }
             }
+            .listStyle(.sidebar)
             .navigationTitle("Library")
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
                 Group {
@@ -245,17 +251,17 @@ struct MediaHeroCard: View {
             ZStack(alignment: .top) {
                 // 1. Poster Layer
                 if let urlString = item.posterURL, let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 440, height: 660)) { _ in } placeholder: {
+                    CachedImage(url: url, targetSize: CGSize(width: 400, height: 600)) { _ in } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
                     }
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 220, height: 330)
+                    .frame(width: 200, height: 300)
                     .clipped()
                 } else {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.2))
                         .overlay { Image(systemName: "photo").foregroundStyle(.secondary) }
-                        .frame(width: 220, height: 330)
+                        .frame(width: 200, height: 300)
                 }
                 
                 // 2. Glass Pills (Top Corners)
@@ -270,7 +276,7 @@ struct MediaHeroCard: View {
                     }
                 }
             }
-            .frame(width: 220, height: 330)
+            .frame(width: 200, height: 300)
             .cornerRadius(16)
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isHovered)
@@ -280,7 +286,7 @@ struct MediaHeroCard: View {
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
-                .frame(width: 220, alignment: .leading)
+                .frame(width: 200, alignment: .leading)
                 .padding(.horizontal, 4)
         }
         .onHover { hovering in
@@ -308,7 +314,7 @@ struct MediaHeroCard: View {
             case .none: EmptyView()
             }
         }
-        .font(.system(size: 11, weight: .bold)) // Standardized height
+        .font(.system(size: 10, weight: .bold))
         .liquidGlassPill(accentColor: .accentColor, isSolid: false)
     }
     
@@ -329,14 +335,14 @@ struct MediaHeroCard: View {
                     Text(item.watchProgressLabel ?? "")
                 }
                 .foregroundStyle(.white)
-                .liquidGlassPill(accentColor: .indigo, isSolid: true) // Changed to Indigo
+                .liquidGlassPill(accentColor: .indigo, isSolid: true)
             } else if item.state == .wishlist && !item.isUpcoming {
                 Image(systemName: "clock.fill")
                     .foregroundStyle(.white)
                     .liquidGlassPill(accentColor: .orange, isSolid: true)
             }
         }
-        .font(.system(size: 11, weight: .bold)) // Standardized height
+        .font(.system(size: 10, weight: .bold))
     }
     
     @ViewBuilder
@@ -345,25 +351,28 @@ struct MediaHeroCard: View {
             if item.isUpcoming {
                 Text(item.nextAiringLabel ?? "")
                     .foregroundStyle(item.isRecentlyReleased ? .green : .primary)
+                    .font(.system(size: 10, weight: .bold))
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
             } else if item.state == .wishlist {
-                Text("Waitlist") // Icon removed
+                Text("Waitlist")
                     .foregroundStyle(.orange)
+                    .font(.system(size: 10, weight: .bold))
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
             } else if item.state == .completed {
                 Text("Completed")
                     .foregroundStyle(.green)
+                    .font(.system(size: 10, weight: .bold))
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "play.fill")
                     Text(item.watchProgressLabel ?? "In Progress")
                 }
-                .foregroundStyle(.indigo) // Changed to Indigo
+                .foregroundStyle(.indigo)
+                .font(.system(size: 10, weight: .bold))
                 .liquidGlassPill(accentColor: .primary, isSolid: false)
             }
         }
-        .font(.system(size: 11, weight: .bold)) // Standardized height
     }
 }
 

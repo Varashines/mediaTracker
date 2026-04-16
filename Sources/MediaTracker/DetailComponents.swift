@@ -49,7 +49,7 @@ struct PosterView: View {
             }
             .frame(width: 240, height: 360)
             .cornerRadius(12)
-            .shadow(color: themeColor.opacity(0.3), radius: 25, x: 0, y: 15) // Deepened ambient shadow
+            .shadow(color: themeColor.opacity(0.3), radius: 25, x: 0, y: 15)  // Deepened ambient shadow
             .zIndex(1)
             .layoutPriority(1)
         }
@@ -165,17 +165,17 @@ struct CastSectionViewNew: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Cast & Crew")
                 .font(.title3.bold())
-                .padding(.horizontal, 30)
+                .padding(.horizontal, 10)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 let sortedCast = cast.sorted(by: { $0.order < $1.order })
-                
+
                 LazyHStack(alignment: .center, spacing: 16) {
                     ForEach(sortedCast) { member in
                         CastMemberCardNew(member: member, themeColor: themeColor)
                     }
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, 10)
                 .padding(.bottom, 15)
             }
         }
@@ -209,7 +209,7 @@ struct CastMemberCardNew: View {
             .frame(width: 60, height: 90)
             .background(Color.secondary.opacity(0.1))
             .clipped()
-            
+
             // Text Section (Right)
             VStack(alignment: .leading, spacing: 4) {
                 Text(member.name)
@@ -228,17 +228,15 @@ struct CastMemberCardNew: View {
             .frame(width: 140, alignment: .leading)
         }
         .frame(width: 200, height: 90)
-        .background(.ultraThinMaterial) // Glassmorphism base
+        .background(.ultraThinMaterial)  // Glassmorphism base
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(themeColor.opacity(colorScheme == .dark ? 0.5 : 0.2), lineWidth: 0.5) // Subtle accent stroke
+                .stroke(themeColor.opacity(colorScheme == .dark ? 0.5 : 0.35), lineWidth: 0.5)  // Subtle accent stroke
         )
-        .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 4) // Ambient accent shadow
+        .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.3 : 0.15), radius: 8, x: 0, y: 4)  // Ambient accent shadow
     }
 }
-
-
 
 struct MetadataLine: View {
     let label: String

@@ -17,12 +17,12 @@ struct DetailView: View {
                     .ignoresSafeArea()
                 
                 viewModel.themeColor
-                    .opacity(colorScheme == .dark ? 0.35 : 0.15)
+                    .opacity(colorScheme == .dark ? 0.35 : 0.22)
                     .blur(radius: 120)
                     .ignoresSafeArea()
                 
                 LinearGradient(
-                    gradient: Gradient(colors: [viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.1), .clear]),
+                    gradient: Gradient(colors: [viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.18), .clear]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -31,7 +31,7 @@ struct DetailView: View {
             .animation(.easeInOut(duration: 0.8), value: viewModel.themeColor)
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
                     // Optimized Header Section
                     MediaHeaderView(item: viewModel.item, themeColor: viewModel.themeColor, nextEpisodeText: viewModel.nextText) { newState in
                         if newState == .completed {
@@ -69,7 +69,7 @@ struct DetailView: View {
                     RatingSection(item: viewModel.item)
                         .transition(.opacity)
                 }
-                .padding(30)
+                .padding(24)
             }
             .navigationTitle("Details")
             .toolbar {
