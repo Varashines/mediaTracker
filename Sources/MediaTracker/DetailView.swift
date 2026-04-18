@@ -81,6 +81,10 @@ struct DetailView: View {
                             Divider()
                             TVTrackingView(tvDetails: tv, themeColor: viewModel.themeColor, onWatchedToggle: {
                                 viewModel.checkOverallCompletion()
+                            }, onSeasonSelected: { season in
+                                Task {
+                                    await viewModel.fetchEpisodesForSeason(season, tmdbID: tv.tmdbID)
+                                }
                             })
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
@@ -123,6 +127,7 @@ struct DetailView: View {
                 }
             }
             .tint(viewModel.themeColor)
+            .appBackground(tint: viewModel.themeColor)
         }
     }
     

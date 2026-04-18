@@ -59,23 +59,32 @@ class ImageCache {
         let fileURL = cacheDirectory.appendingPathComponent(diskFileName)
         
         let container = await Task.detached(priority: .userInitiated) { () -> ImageContainer? in
+            if Task.isCancelled { return nil }
             guard let data = try? Data(contentsOf: fileURL) else { return nil }
+            if Task.isCancelled { return nil }
             
             // Efficient decoding off-main
-            let options: [CFString: Any] = [
+            var options: [CFString: Any] = [
                 kCGImageSourceShouldCache: false,
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true
             ]
             
+            if let size = targetSize {
+                options[kCGImageSourceThumbnailMaxPixelSize] = Int(max(size.width, size.height))
+            }
+            
             guard let source = CGImageSourceCreateWithData(data as CFData, nil),
                   let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
                 return nil
             }
+            if Task.isCancelled { return nil }
             
             let nsImage = NSImage(cgImage: cgImage, size: targetSize ?? NSSize(width: cgImage.width, height: cgImage.height))
             return ImageContainer(image: nsImage)
         }.value
+        
+        if Task.isCancelled { return nil }
         
         if let nsImage = container?.image {
             let cacheKey = targetSize != nil ? "\(key)_\(Int(targetSize!.width))x\(Int(targetSize!.height))" : key
@@ -208,23 +217,40 @@ struct CachedImage<Placeholder: View>: View {
         guard let url = url, !isLoading else { return }
         let key = url.absoluteString
         
+        if Task.isCancelled { return }
+        
         // 1. Check Memory/Disk
         if let container = await ImageCache.shared.get(forKey: key, targetSize: targetSize) {
+            if Task.isCancelled { return }
             self.image = container.image
             onImageLoaded?(container.image)
             return
         }
         
+        if Task.isCancelled { return }
+        
         // 2. Download
         isLoading = true
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
+            
+            if Task.isCancelled { 
+                isLoading = false
+                return 
+            }
+            
             guard let downloadedImage = NSImage(data: data) else {
                 isLoading = false
                 return
             }
             
             await ImageCache.shared.save(image: downloadedImage, data: data, forKey: key, targetSize: targetSize)
+            
+            if Task.isCancelled {
+                isLoading = false
+                return
+            }
+            
             if let container = await ImageCache.shared.get(forKey: key, targetSize: targetSize) {
                 self.image = container.image
                 onImageLoaded?(container.image)

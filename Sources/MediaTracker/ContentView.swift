@@ -45,6 +45,7 @@ class MediaViewModel {
     var selectedNetwork: String? = nil
     var selectedLanguage: String? = nil
     var isBatchRefreshing: Bool = false
+    var lastDiscoveryCalculationHash: Int = 0
 
     // Processed Data (Main Actor Cache)
     var displayedItems: [MediaItem] = []
@@ -84,136 +85,49 @@ struct ContentView: View {
     
     @State private var updateTask: Task<Void, Never>?
     
-    private func updateDisplayedItems() {
+    private func updateDisplayedItems(delay: UInt64 = 50_000_000) {
         updateTask?.cancel()
         updateTask = Task {
             // Give a tiny buffer for rapid changes (like typing or toggling filters)
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(nanoseconds: delay)
             if Task.isCancelled { return }
             
             let category = viewModel.selectedCategory
             let searchText = viewModel.searchText
             let sortOrder = viewModel.sortOrder
             let network = viewModel.selectedNetwork
-            let items = allItems
-            
-            // Perform heavy lifting (filtering/sorting) off the main thread if possible
-            // Note: SwiftData models should technically be accessed on their owner's actor, 
-            // but for simple property reads of already-loaded items, we can gain some 
-            // breathing room by preparing the results then updating the UI.
-            
-            let validItems = items.filter { item in
-                item.modelContext != nil && !item.isDeleted
-            }
-            
-            var baseItems: [MediaItem]
-            
-            if category == "Upcoming" || category == nil {
-                baseItems = validItems.filter { $0.isUpcoming }
-                    .sorted { item1, item2 in
-                        guard let date1 = item1.nextAiringDate else { return false }
-                        guard let date2 = item2.nextAiringDate else { return true }
-                        return date1 < date2
-                    }
-            } else if category == "InProgress" {
-                baseItems = validItems.filter { $0.state == .active && !$0.isUpcoming }
-            } else if category == "Waitlist" {
-                baseItems = validItems.filter { $0.state == .wishlist && !$0.isUpcoming }
-            } else if category == "OnHold" {
-                baseItems = validItems.filter { $0.state == .onHold }
-            } else if category == "Dropped" {
-                baseItems = validItems.filter { $0.state == .dropped }
-            } else if category == "Rewatching" {
-                baseItems = validItems.filter { $0.state == .rewatching }
-            } else if category == "All" {
-                baseItems = validItems
-            } else {
-                baseItems = validItems.filter { $0.type?.rawValue == category }
-            }
-            
-            var results = baseItems
-            
-            // Filter by Network if specified
-            if let net = network, !net.isEmpty {
-                results = results.filter { item in
-                    if item.type == .tvShow {
-                        return item.tvShowDetails?.network == net
-                    }
-                    return false
-                }
-            }
-            
-            // Filter by Language if specified
-            if let lang = viewModel.selectedLanguage, !lang.isEmpty {
-                results = results.filter { item in
-                    if item.type == .tvShow {
-                        return item.tvShowDetails?.originalLanguage == lang
-                    } else if item.type == .movie {
-                        return item.movieDetails?.originalLanguage == lang
-                    }
-                    return false
-                }
-            }
-            
-            // Apply Smart Sorting
-            let isSortable = category == "All" || (category != nil && MediaType(rawValue: category!) != nil)
-            if isSortable {
-                switch sortOrder {
-                case .alphabetical:
-                    results.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-                case .newestRelease:
-                    results.sort { ($0.releaseDate ?? Date.distantPast) > ($1.releaseDate ?? Date.distantPast) }
-                case .recentlyAdded:
-                    results.sort { $0.dateAdded > $1.dateAdded }
-                }
-            }
-            
-            if !searchText.isEmpty {
-                let searchLower = searchText.lowercased()
-                results = results.filter { $0.searchableText.contains(searchLower) }
-            }
-            
-            let finalResults = results
-            let finalRecentlyAdded = Array(validItems.sorted(by: { $0.dateAdded > $1.dateAdded }).prefix(5))
-            
-            // 6. Final Step: Grouping (Heavy lifting off-main)
+            let language = viewModel.selectedLanguage
             let groupBy = viewModel.selectedGroupBy
-            var finalGroupedItems: [(String, [MediaItem])] = []
-            if groupBy != .none {
-                let dict = Dictionary(grouping: finalResults) { item -> String in
-                    switch groupBy {
-                    case .year:
-                        if let date = item.releaseDate {
-                            return Calendar.current.component(.year, from: date).description
-                        }
-                        return "Unknown Year"
-                    case .category:
-                        return item.type?.pluralName ?? "Unknown"
-                    case .none:
-                        return ""
-                    }
+            
+            do {
+                let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+                let result = try await filterActor.filterAndSort(
+                    category: category,
+                    searchText: searchText,
+                    sortOrder: sortOrder,
+                    network: network,
+                    language: language,
+                    groupBy: groupBy
+                )
+                
+                if Task.isCancelled { return }
+                
+                // Fault models back onto the MainActor
+                let displayed = result.displayedIDs.compactMap { self.modelContext.model(for: $0) as? MediaItem }
+                let recentlyAdded = result.recentlyAddedIDs.compactMap { self.modelContext.model(for: $0) as? MediaItem }
+                let grouped = result.groupedIDs.map { (key, ids) in
+                    (key, ids.compactMap { self.modelContext.model(for: $0) as? MediaItem })
                 }
                 
-                let sortedKeys = dict.keys.sorted { key1, key2 in
-                    if groupBy == .year {
-                        if key1 == "Unknown Year" { return false }
-                        if key2 == "Unknown Year" { return true }
-                        return key1 > key2 // Newest year first
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        viewModel.displayedItems = displayed
+                        viewModel.recentlyAddedItems = recentlyAdded
+                        viewModel.groupedItems = grouped
                     }
-                    return key1 < key2
                 }
-                
-                finalGroupedItems = sortedKeys.map { ($0, dict[$0] ?? []) }
-            }
-            
-            if Task.isCancelled { return }
-            
-            await MainActor.run {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    viewModel.displayedItems = finalResults
-                    viewModel.recentlyAddedItems = finalRecentlyAdded
-                    viewModel.groupedItems = finalGroupedItems
-                }
+            } catch {
+                print("Error filtering items: \(error)")
             }
         }
     }
@@ -286,7 +200,7 @@ struct ContentView: View {
             }
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
-                ZStack {
+                ZStack(alignment: .top) {
                     if isSearchActive {
                         SearchView(
                             searchText: $viewModel.searchText,
@@ -296,7 +210,7 @@ struct ContentView: View {
                         ) { item in
                             viewModel.navigationPath.append(item)
                         }
-                        .transition(.opacity)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     } else if viewModel.selectedCategory == "Discover" {
                         DiscoveryHubView(
                             items: allItems,
@@ -306,7 +220,7 @@ struct ContentView: View {
                                 viewModel.navigationPath.append(filter)
                             }
                         )
-                        .transition(.opacity)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     } else if viewModel.selectedCategory == "Upcoming" {
                         // Force unique identity for Upcoming to avoid layout morph stutter
                         MediaGridView(
@@ -332,7 +246,7 @@ struct ContentView: View {
                             }
                         )
                         .id("grid_upcoming")
-                        .transition(.opacity)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     } else {
                         MediaGridView(
                             items: viewModel.displayedItems, 
@@ -357,11 +271,10 @@ struct ContentView: View {
                             }
                         )
                         .id("grid_standard")
-                        .transition(.opacity)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     }
                 }
                 .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewModel.selectedCategory)
                 .navigationTitle(isSearchActive ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory))
                 .navigationDestination(for: MediaItem.self) { item in
                     DetailView(item: item, namespace: posterNamespace) { actorName in
@@ -426,7 +339,7 @@ struct ContentView: View {
                 }
             }
         }
-        .appBackground() // Apply to the whole NavigationSplitView
+        .appBackground(network: viewModel.selectedNetwork) // Apply to the whole NavigationSplitView
         .onAppear {
             NotificationManager.shared.requestPermission()
             updateDisplayedItems()
@@ -436,7 +349,7 @@ struct ContentView: View {
             viewModel.selectedNetwork = nil // RESET NETWORK FILTER ON CATEGORY CHANGE
             updateDisplayedItems()
         }
-        .onChange(of: viewModel.searchText) { updateDisplayedItems() }
+        .onChange(of: viewModel.searchText) { updateDisplayedItems(delay: 300_000_000) }
         .onChange(of: viewModel.sortOrder) { updateDisplayedItems() }
         .onChange(of: viewModel.selectedGroupBy) { updateDisplayedItems() }
         .onChange(of: allItems) { updateDisplayedItems() }
@@ -449,7 +362,12 @@ struct ContentView: View {
         }
     }
     
+    @State private var hasRunMaintenance = false
+    
     private func performMaintenanceRefresh() {
+        guard !hasRunMaintenance else { return }
+        hasRunMaintenance = true
+        
         let staleItems = allItems.filter { $0.requiresMaintenanceRefresh }
         guard !staleItems.isEmpty else { return }
         
@@ -606,6 +524,7 @@ struct MediaGridView: View {
                                     .draggable(item.id)
                                 }
                             }
+                            .drawingGroup()
                             .padding(.horizontal, 30)
                             .padding(.bottom, 40)
                         } else {
@@ -626,6 +545,7 @@ struct MediaGridView: View {
                                                 .buttonStyle(.plain)
                                             }
                                         }
+                                        .drawingGroup()
                                         .padding(.horizontal, 30)
                                     }
                                 }
@@ -644,24 +564,19 @@ struct FilteredLibraryGridView: View {
     let filter: DiscoveryFilter
     let allItems: [MediaItem]
     let namespace: Namespace.ID
+    @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
 
     var body: some View {
         let filteredItems = allItems.filter { item in
             switch filter.type {
             case .genre:
-                return item.genres.contains(filter.name)
+                return item.cachedGenres.contains(filter.name)
             case .studio:
-                // Only TV Networks remain as 'Studios'
-                return item.tvShowDetails?.network == filter.name
+                return item.cachedNetwork == filter.name
             case .language:
-                if item.type == .tvShow {
-                    return item.tvShowDetails?.originalLanguage == filter.name
-                } else if item.type == .movie {
-                    return item.movieDetails?.originalLanguage == filter.name
-                }
-                return false
+                return item.cachedLanguage == filter.name
             }
-        }
+        }.sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -674,11 +589,16 @@ struct FilteredLibraryGridView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .drawingGroup()
                 .padding(.horizontal, 30)
             }
             .padding(.vertical, 20)
         }
         .navigationTitle(displayTitle)
+        .appBackground(
+            network: filter.type == .studio ? filter.name : nil,
+            tint: filter.type != .studio ? appAccent.color : nil
+        )
     }
 
     private var displayTitle: String {

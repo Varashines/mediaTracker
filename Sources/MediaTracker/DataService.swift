@@ -59,11 +59,20 @@ actor BackgroundDataService {
                 movieDetails.voteAverage = details.voteAverage
                 movieDetails.originalLanguage = details.originalLanguage
 
-                movieDetails.cast.removeAll()
+                let existingCast = movieDetails.cast
+                var newCastList: [CastMember] = []
                 for c in details.cast {
                     let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    movieDetails.cast.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
+                    if let existing = existingCast.first(where: { $0.name == c.name }) {
+                        existing.characterName = c.character
+                        existing.profileURL = profileURL
+                        existing.order = c.order
+                        newCastList.append(existing)
+                    } else {
+                        newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
+                    }
                 }
+                movieDetails.cast = newCastList
 
                 item.movieDetails = movieDetails
                 item.lastUpdated = Date()
@@ -84,11 +93,20 @@ actor BackgroundDataService {
                 tvDetails.numberOfSeasons = details.seasonsCount
                 tvDetails.numberOfEpisodes = details.episodesCount
 
-                tvDetails.cast.removeAll()
+                let existingCast = tvDetails.cast
+                var newCastList: [CastMember] = []
                 for c in details.cast {
                     let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    tvDetails.cast.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
+                    if let existing = existingCast.first(where: { $0.name == c.name }) {
+                        existing.characterName = c.character
+                        existing.profileURL = profileURL
+                        existing.order = c.order
+                        newCastList.append(existing)
+                    } else {
+                        newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
+                    }
                 }
+                tvDetails.cast = newCastList
 
                 for seasonBrief in details.seasons {
                     if let existingSeason = tvDetails.seasons.first(where: { $0.seasonNumber == seasonBrief.season_number }) {
@@ -134,6 +152,17 @@ actor BackgroundDataService {
 @MainActor
 class DataService {
     static let shared = DataService()
+    
+    /// Tracks items refreshed during this app session to avoid redundant network calls.
+    private var sessionRefreshedItems = Set<String>()
+    
+    func hasRefreshedThisSession(id: String) -> Bool {
+        return sessionRefreshedItems.contains(id)
+    }
+    
+    func markAsRefreshedThisSession(id: String) {
+        sessionRefreshedItems.insert(id)
+    }
 
     func refreshMetadata(for items: [MediaItem], modelContext: ModelContext) {
         let itemIDs = items.map { $0.persistentModelID }

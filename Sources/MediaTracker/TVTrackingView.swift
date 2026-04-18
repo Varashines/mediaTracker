@@ -21,6 +21,7 @@ struct TVTrackingView: View {
     var tvDetails: TVShowDetails
     var themeColor: Color
     var onWatchedToggle: () -> Void
+    var onSeasonSelected: ((TVSeason) -> Void)? = nil
 
     @State private var selectedSeasonNumber: Int?
 
@@ -51,6 +52,7 @@ struct TVTrackingView: View {
                                 withAnimation(.spring(duration: 0.3)) {
                                     selectedSeasonNumber = season.seasonNumber
                                 }
+                                onSeasonSelected?(season)
                             }
                         }
                     }
@@ -85,9 +87,11 @@ struct TVTrackingView: View {
             season.episodes.contains(where: { !$0.isWatched })
         }) {
             selectedSeasonNumber = firstUnwatched.seasonNumber
-        } else {
+            onSeasonSelected?(firstUnwatched)
+        } else if let last = sortedSeasons.last {
             // 2. Default to the last season if all are watched
-            selectedSeasonNumber = sortedSeasons.last?.seasonNumber
+            selectedSeasonNumber = last.seasonNumber
+            onSeasonSelected?(last)
         }
     }
 }
@@ -132,11 +136,11 @@ private struct SeasonTab: View {
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(Color.indigo.opacity(colorScheme == .dark ? 0.3 : 0.15))
+                        .fill(themeColor.opacity(colorScheme == .dark ? 0.3 : 0.15))
                 }
             }
             .liquidGlassPill(
-                accentColor: isSelected ? .indigo : (isFullyWatched ? Color.semanticGreen(for: colorScheme) : .primary.opacity(0.12)),
+                accentColor: isSelected ? themeColor : (isFullyWatched ? Color.semanticGreen(for: colorScheme) : .primary.opacity(0.12)),
                 isSolid: false // Keep it glass!
             )
             .overlay {
@@ -153,7 +157,7 @@ private struct SeasonTab: View {
             )
             .scaleEffect(isSelected ? 1.05 : 1.0) // Proportional stretch on selection
             .shadow(
-                color: isSelected ? Color.indigo.opacity(0.2) : .black.opacity(0.03),
+                color: isSelected ? themeColor.opacity(0.2) : .black.opacity(0.03),
                 radius: isSelected ? 4 : 2, x: 0, y: 2)
         }
         .buttonStyle(.plain)

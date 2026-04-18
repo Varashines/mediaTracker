@@ -71,21 +71,21 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
     func brandBackground(for colorScheme: ColorScheme) -> Color {
         if colorScheme == .dark {
             switch self {
-            case .blue: return Color(red: 0.05, green: 0.07, blue: 0.12)
-            case .indigo: return Color(red: 0.06, green: 0.05, blue: 0.13)
-            case .purple: return Color(red: 0.08, green: 0.04, blue: 0.12)
-            case .rose: return Color(red: 0.12, green: 0.04, blue: 0.06)
-            case .orange: return Color(red: 0.12, green: 0.07, blue: 0.04)
-            case .mint: return Color(red: 0.04, green: 0.09, blue: 0.08)
+            case .blue: return Color(red: 0.02, green: 0.03, blue: 0.06)
+            case .indigo: return Color(red: 0.03, green: 0.02, blue: 0.07)
+            case .purple: return Color(red: 0.04, green: 0.02, blue: 0.06)
+            case .rose: return Color(red: 0.06, green: 0.02, blue: 0.03)
+            case .orange: return Color(red: 0.06, green: 0.03, blue: 0.02)
+            case .mint: return Color(red: 0.02, green: 0.05, blue: 0.04)
             }
         } else {
             switch self {
-            case .blue: return Color(red: 0.94, green: 0.96, blue: 1.0)
-            case .indigo: return Color(red: 0.95, green: 0.94, blue: 1.0)
-            case .purple: return Color(red: 0.96, green: 0.94, blue: 1.0)
-            case .rose: return Color(red: 1.0, green: 0.94, blue: 0.96)
-            case .orange: return Color(red: 1.0, green: 0.96, blue: 0.94)
-            case .mint: return Color(red: 0.94, green: 1.0, blue: 0.98)
+            case .blue: return Color(red: 0.97, green: 0.98, blue: 1.0)
+            case .indigo: return Color(red: 0.97, green: 0.97, blue: 1.0)
+            case .purple: return Color(red: 0.98, green: 0.97, blue: 1.0)
+            case .rose: return Color(red: 1.0, green: 0.97, blue: 0.98)
+            case .orange: return Color(red: 1.0, green: 0.98, blue: 0.97)
+            case .mint: return Color(red: 0.97, green: 1.0, blue: 0.99)
             }
         }
     }
@@ -115,6 +115,10 @@ final class MediaItem {
     var state: MediaState? = MediaState.wishlist
     var type: MediaType? = MediaType.movie
     var themeColorHex: String?
+    var cachedGenres: [String] = []
+    var cachedNetwork: String?
+    var cachedLanguage: String?
+    var cachedNextAiringDate: Date?
     var dateAdded: Date = Date()
     var searchableText: String = ""
     
@@ -123,32 +127,39 @@ final class MediaItem {
     var tvShowDetails: TVShowDetails?
     
     func updateSearchableText() {
-        var components = [title]
+        // Sync cached properties
         if let movie = movieDetails {
-            components.append(contentsOf: movie.genres)
+            self.cachedGenres = movie.genres
+            self.cachedNetwork = nil
+            self.cachedLanguage = movie.originalLanguage
+            self.cachedNextAiringDate = releaseDate
+        } else if let tv = tvShowDetails {
+            self.cachedGenres = tv.genres
+            self.cachedNetwork = tv.network
+            self.cachedLanguage = tv.originalLanguage
+            self.cachedNextAiringDate = tv.oldestUnwatchedEpisodeAirDate ?? tv.nextEpisodeDate
+        }
+
+        var components = [title]
+        components.append(contentsOf: cachedGenres)
+        if let movie = movieDetails {
             components.append(contentsOf: movie.cast.prefix(5).map { $0.name })
         } else if let tv = tvShowDetails {
-            components.append(contentsOf: tv.genres)
             components.append(contentsOf: tv.cast.prefix(5).map { $0.name })
         }
         self.searchableText = components.joined(separator: " ").lowercased()
     }
     
+    var genres: [String] {
+        return cachedGenres
+    }
+    
     var nextAiringDate: Date? {
-        guard modelContext != nil else { return nil }
-        let currentType = type ?? .movie
-        if currentType == .movie {
-            return releaseDate
-        } else if currentType == .tvShow {
-            guard let tv = tvShowDetails else { return nil }
-            return tv.oldestUnwatchedEpisodeAirDate ?? tv.nextEpisodeDate
-        }
-        return nil
+        return cachedNextAiringDate
     }
     
     /// The absolute next episode to air in the future (regardless of watch history)
     var absoluteNextAiringDate: Date? {
-        guard modelContext != nil else { return nil }
         if type == .tvShow {
             return tvShowDetails?.nextEpisodeDate
         }
@@ -156,17 +167,7 @@ final class MediaItem {
     }
     
     var isRecentlyReleased: Bool {
-        guard modelContext != nil else { return false }
-        let currentType = type ?? .movie
-        
-        let dateToCheck: Date?
-        if currentType == .tvShow {
-            dateToCheck = tvShowDetails?.oldestUnwatchedEpisodeAirDate
-        } else {
-            dateToCheck = releaseDate
-        }
-
-        guard let date = dateToCheck else { return false }
+        guard let date = cachedNextAiringDate else { return false }
         let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
         return date <= Date() && date >= fiveDaysAgo
     }
@@ -201,16 +202,6 @@ final class MediaItem {
         return false
     }
     
-    var genres: [String] {
-        guard modelContext != nil else { return [] }
-        if let movie = movieDetails {
-            return movie.genres
-        } else if let tv = tvShowDetails {
-            return tv.genres
-        }
-        return []
-    }
-
     var nextAiringLabel: String? {
         guard modelContext != nil else { return nil }
         guard let date = nextAiringDate else { return isRecentlyReleased ? "Available Now" : nil }
@@ -356,6 +347,7 @@ final class TVShowDetails {
     var cachedNextEpisodeToWatchLabel: String?
     var cachedHasWatchedAnyEpisode: Bool = false
     var cachedHasWatchedAllEpisodes: Bool = false
+    var cachedOldestUnwatchedEpisodeAirDate: Date?
     
     func recalculateCachedProperties() {
         let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
@@ -373,13 +365,14 @@ final class TVShowDetails {
         } else {
             self.cachedNextEpisodeToWatchLabel = nil
         }
+
+        let unwatched = allEpisodes.filter { !$0.isWatched }
+        let dates = unwatched.compactMap { $0.airDateAsDate }
+        self.cachedOldestUnwatchedEpisodeAirDate = dates.min()
     }
     
     var oldestUnwatchedEpisodeAirDate: Date? {
-        let allEpisodes = seasons.flatMap { $0.episodes }
-        let unwatched = allEpisodes.filter { !$0.isWatched }
-        let dates = unwatched.compactMap { $0.airDateAsDate }
-        return dates.min()
+        return cachedOldestUnwatchedEpisodeAirDate
     }
     
     init(tmdbID: Int, tvdbID: Int? = nil, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, networkLogoPath: String? = nil, originalLanguage: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil, genres: [String] = []) {

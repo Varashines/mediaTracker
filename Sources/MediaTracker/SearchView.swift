@@ -231,7 +231,7 @@ struct SearchView: View {
         }
         
         // 1. Debounce to prevent UI lag while typing
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        try? await Task.sleep(nanoseconds: 300_000_000)
         if Task.isCancelled { return }
         
         isSearching = true

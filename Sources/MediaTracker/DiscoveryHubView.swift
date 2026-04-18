@@ -9,6 +9,7 @@ struct DiscoveryHubView: View {
     
     @Environment(\.colorScheme) var colorScheme
     @State private var isRefreshing = false
+    @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
     
     var body: some View {
@@ -83,7 +84,7 @@ struct DiscoveryHubView: View {
                             } label: {
                                 let displayName = languageName(for: language.name)
                                 let displayNode = DiscoveryNode(name: displayName, logoPath: nil, count: language.count)
-                                HubTile(node: displayNode, icon: "character.bubble.fill", accentColor: .indigo, isLogoType: false)
+                                HubTile(node: displayNode, icon: "character.bubble.fill", accentColor: appAccent.color, isLogoType: false)
                             }
                             .buttonStyle(.plain)
                         }
@@ -103,7 +104,7 @@ struct DiscoveryHubView: View {
                             Button {
                                 onFilterSelected(DiscoveryFilter(type: .genre, name: genre.name))
                             } label: {
-                                HubTile(node: genre, icon: "tag.fill", accentColor: .indigo, isLogoType: false)
+                                HubTile(node: genre, icon: "tag.fill", accentColor: appAccent.color, isLogoType: false)
                             }
                             .buttonStyle(.plain)
                         }
@@ -136,19 +137,43 @@ struct DiscoveryHubView: View {
         }
     }
     
+    struct LightweightDiscoveryItem: Sendable {
+        let type: MediaType?
+        let network: String?
+        let networkLogoPath: String?
+        let genres: [String]
+        let originalLanguage: String?
+    }
+    
     private func refreshData(force: Bool) {
-        // Only refresh if forced or if never refreshed or if older than 24 hours
+        // Calculate a stable hash for the current library state
+        // We use count and the hash of the first/last items as a fast proxy for change.
+        let currentLibraryHash = items.count ^ (items.first?.id.hashValue ?? 0) ^ (items.last?.id.hashValue ?? 0)
+        let libraryChanged = viewModel.lastDiscoveryCalculationHash != currentLibraryHash
+
+        // Only refresh if forced, library changed, never refreshed, or if older than 24 hours
         let twentyFourHours: TimeInterval = 24 * 60 * 60
-        let needsRefresh = viewModel.lastDiscoveryRefresh == nil || 
+        let isStale = viewModel.lastDiscoveryRefresh == nil || 
                           Date().timeIntervalSince(viewModel.lastDiscoveryRefresh!) > twentyFourHours
         
-        guard force || needsRefresh else { return }
+        guard force || libraryChanged || isStale else { return }
         
         isRefreshing = true
         
+        let localHiddenStudios = hiddenStudios
+        let lightweightItems = items.map { item in
+            LightweightDiscoveryItem(
+                type: item.type,
+                network: item.cachedNetwork,
+                networkLogoPath: item.tvShowDetails?.networkLogoPath, // Still need for logos
+                genres: item.cachedGenres,
+                originalLanguage: item.cachedLanguage
+            )
+        }
+        
         // Use a background task for the heavy scanning
         Task.detached(priority: .userInitiated) {
-            let (networks, genres, languages) = await calculateDiscoveryData()
+            let (networks, genres, languages) = await Self.calculateDiscoveryData(from: lightweightItems, hiddenStudios: localHiddenStudios)
             
             await MainActor.run {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -156,13 +181,14 @@ struct DiscoveryHubView: View {
                     viewModel.cachedGenres = genres
                     viewModel.cachedLanguages = languages
                     viewModel.lastDiscoveryRefresh = Date()
+                    viewModel.lastDiscoveryCalculationHash = currentLibraryHash
                     isRefreshing = false
                 }
             }
         }
     }
     
-    private func calculateDiscoveryData() async -> (networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode]) {
+    private static func calculateDiscoveryData(from items: [LightweightDiscoveryItem], hiddenStudios: String) async -> (networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode]) {
         var networkMap: [String: String] = [:]
         var networkCounts: [String: Int] = [:]
         var genreCounts: [String: Int] = [:]
@@ -172,9 +198,9 @@ struct DiscoveryHubView: View {
         
         for item in items {
             // 1. Networks (Strictly TV Only)
-            if item.type == .tvShow, let tv = item.tvShowDetails, let name = tv.network {
-                if networkMap[name] == nil || (networkMap[name] == "" && tv.networkLogoPath != nil) {
-                    networkMap[name] = tv.networkLogoPath ?? ""
+            if item.type == .tvShow, let name = item.network {
+                if networkMap[name] == nil || (networkMap[name] == "" && item.networkLogoPath != nil) {
+                    networkMap[name] = item.networkLogoPath ?? ""
                 }
                 networkCounts[name, default: 0] += 1
             }
@@ -185,8 +211,7 @@ struct DiscoveryHubView: View {
             }
             
             // 3. Languages (All items)
-            let lang = (item.type == .movie ? item.movieDetails?.originalLanguage : item.tvShowDetails?.originalLanguage)
-            if let lang = lang {
+            if let lang = item.originalLanguage {
                 languageCounts[lang, default: 0] += 1
             }
         }
@@ -194,15 +219,26 @@ struct DiscoveryHubView: View {
         let networks: [DiscoveryNode] = networkMap.compactMap { (name: String, logo: String) -> DiscoveryNode? in
             guard !hiddenSet.contains(name) else { return nil }
             return DiscoveryNode(name: name, logoPath: logo.isEmpty ? nil : logo, count: networkCounts[name] ?? 0)
-        }.sorted { $0.count > $1.count }
+        }.sorted { 
+            if $0.count != $1.count { return $0.count > $1.count }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
         
         let genres: [DiscoveryNode] = genreCounts.map { (key: String, value: Int) -> DiscoveryNode in
             DiscoveryNode(name: key, logoPath: nil, count: value)
-        }.sorted { $0.count > $1.count }
+        }.sorted { 
+            if $0.count != $1.count { return $0.count > $1.count }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
             
         let languages: [DiscoveryNode] = languageCounts.map { (key: String, value: Int) -> DiscoveryNode in
             DiscoveryNode(name: key, logoPath: nil, count: value)
-        }.sorted { $0.count > $1.count }
+        }.sorted { 
+            if $0.count != $1.count { return $0.count > $1.count }
+            let name1 = Locale.current.localizedString(forLanguageCode: $0.name) ?? $0.name.uppercased()
+            let name2 = Locale.current.localizedString(forLanguageCode: $1.name) ?? $1.name.uppercased()
+            return name1.localizedCaseInsensitiveCompare(name2) == .orderedAscending
+        }
             
         return (networks, genres, languages)
     }

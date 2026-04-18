@@ -28,13 +28,16 @@ struct LiquidGlassModifier: ViewModifier {
             .padding(.vertical, 4)
             .foregroundStyle(foreground)
             .background {
-                ZStack {
-                    // "Frosted" high-performance background
-                    Capsule()
-                        .fill(.ultraThickMaterial)
-
+                if isSolid {
                     Capsule()
                         .fill(accentColor.opacity(tintOpacity))
+                } else {
+                    ZStack {
+                        Capsule()
+                            .fill(.ultraThickMaterial)
+                        Capsule()
+                            .fill(accentColor.opacity(tintOpacity))
+                    }
                 }
             }
             .clipShape(Capsule())
@@ -249,17 +252,6 @@ struct MediaThumbnailView: View {
                 // 3. Top Pills
                 topPills
 
-                // 4. Quick Watch Button (Overlay) - Bottom for In Progress
-                if let item = item,
-                    item.type == .tvShow && item.state == .active && !item.isUpcoming && isHovered
-                {
-                    VStack {
-                        Spacer()
-                        quickWatchOverlay(for: item)
-                            .padding(.bottom, mode == .hero ? 40 : 8)
-                    }
-                }
-
                 // 5. Info Pill (Bottom Center)
                 if let item = item, item.isUpcoming || mode == .hero {
                     VStack {
@@ -433,11 +425,6 @@ struct MediaThumbnailView: View {
                 typeBadge
             }
             Spacer()
-
-            if let item = item, item.isUpcoming && item.type == .tvShow && isHovered {
-                quickWatchOverlay(for: item)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
 
             if let item = item {
                 StatusBadgeView(item: item)
@@ -660,6 +647,8 @@ extension Color {
 }
 
 struct ThemeBackground: ViewModifier {
+    var networkOverride: String? = nil
+    var tintOverride: Color? = nil
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
     @Environment(\.colorScheme) var colorScheme
@@ -667,20 +656,29 @@ struct ThemeBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                if themeStyle == .brand {
-                    appAccent.brandBackground(for: colorScheme)
-                        .ignoresSafeArea()
-                } else {
-                    Color(NSColor.windowBackgroundColor)
-                        .ignoresSafeArea()
+                ZStack {
+                    if themeStyle == .brand {
+                        appAccent.brandBackground(for: colorScheme)
+                    } else {
+                        Color(NSColor.windowBackgroundColor)
+                    }
+
+                    if let tint = tintOverride {
+                        tint.opacity(colorScheme == .dark ? 0.15 : 0.05)
+                    } else if let network = networkOverride,
+                        let color = NetworkThemeManager.shared.color(for: network)
+                    {
+                        color.opacity(colorScheme == .dark ? 0.15 : 0.05)
+                    }
                 }
+                .ignoresSafeArea()
             }
     }
 }
 
 extension View {
-    func appBackground() -> some View {
-        self.modifier(ThemeBackground())
+    func appBackground(network: String? = nil, tint: Color? = nil) -> some View {
+        self.modifier(ThemeBackground(networkOverride: network, tintOverride: tint))
     }
 }
 
