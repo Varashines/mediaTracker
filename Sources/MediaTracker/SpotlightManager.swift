@@ -24,10 +24,6 @@ class SpotlightManager {
                 if let tv = item.tvShowDetails {
                     attributeSet.information = "Status: \(tv.status ?? "Unknown")"
                 }
-            case .book:
-                if let book = item.bookDetails {
-                    attributeSet.authorNames = book.authors
-                }
             }
         }
         

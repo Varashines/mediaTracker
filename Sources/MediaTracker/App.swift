@@ -8,7 +8,7 @@ struct MediaTrackerApp: App {
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self, BookDetails.self, TVSeason.self, TVEpisode.self, CastMember.self
+            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

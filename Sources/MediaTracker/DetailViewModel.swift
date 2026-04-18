@@ -13,6 +13,18 @@ class DetailViewModel {
     
     var needsUpdate: Bool {
         guard let lastUpdated = item.lastUpdated else { return true }
+        
+        // Active TV shows should check for updates every 24 hours
+        if item.type == .tvShow && item.state == .active {
+            return Date().timeIntervalSince(lastUpdated) > 86400
+        }
+        
+        // Maintenance rule for TV shows (30 days)
+        if item.type == .tvShow {
+            return item.requiresMaintenanceRefresh
+        }
+        
+        // Default 24h for movies
         return Date().timeIntervalSince(lastUpdated) > 86400
     }
     
@@ -35,19 +47,13 @@ class DetailViewModel {
             self.themeColor = cachedColor
             return
         }
-
-        guard let urlString = item.posterURL, let url = URL(string: urlString) else { return }
         
-        Task {
-            if let cachedImage = await ImageCache.shared.get(forKey: url.absoluteString) {
-                let color = ColorExtractor.dominantColor(from: cachedImage)
-                await MainActor.run {
-                    withAnimation {
-                        self.themeColor = color
-                        self.item.themeColorHex = color.toHex()
-                    }
-                }
-            }
+        // Read current accent from storage for fallback
+        let appAccentRaw = UserDefaults.standard.string(forKey: "app_accent") ?? AppAccent.indigo.rawValue
+        let appAccent = AppAccent(rawValue: appAccentRaw) ?? .indigo
+        
+        withAnimation {
+            self.themeColor = appAccent.color
         }
     }
     
@@ -66,17 +72,20 @@ class DetailViewModel {
                 } else if itemType == .tvShow, let tmdbID = Int(itemID) {
                     try await refreshTVShow(tmdbID: tmdbID)
                 }
+                
                 await MainActor.run {
                     updateThemeColor()
-                    isRefreshing = false
+                    self.isRefreshing = false
+                    try? self.item.modelContext?.save()
                 }
             } catch {
                 print("❌ Refresh error: \(error)")
-                await MainActor.run { isRefreshing = false }
+                await MainActor.run {
+                    self.isRefreshing = false
+                }
             }
         }
     }
-    
     private func refreshMovie(tmdbID: Int) async throws {
         let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
         await MainActor.run {
@@ -85,6 +94,7 @@ class DetailViewModel {
             movieDetails.runtime = details.runtime
             movieDetails.genres = details.genres
             movieDetails.voteAverage = details.voteAverage
+            movieDetails.originalLanguage = details.originalLanguage
             
             // Update Cast
             movieDetails.cast.removeAll()
@@ -157,6 +167,10 @@ class DetailViewModel {
             
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
             tvDetails.voteAverage = details.voteAverage
+            tvDetails.genres = details.genres
+            tvDetails.network = details.network
+            tvDetails.networkLogoPath = details.networkLogoPath
+            tvDetails.originalLanguage = details.originalLanguage
             tvDetails.nextEpisodeDate = finalMazeFullDate ?? DateUtils.parseEpisodeDate(details.nextEpisodeDate, serviceName: finalActualService ?? tvDetails.network, for: tvDetails)
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber
@@ -216,6 +230,8 @@ class DetailViewModel {
                 }
             }
             item.tvShowDetails = tvDetails
+            tvDetails.recalculateCachedProperties()
+            item.updateSearchableText()
             SpotlightManager.shared.indexItem(item)
             NotificationManager.shared.scheduleTVNotification(item: item)
             updateThemeColor()
@@ -239,6 +255,8 @@ class DetailViewModel {
                                 episode.isWatched = true
                             }
                         }
+                        tv.recalculateCachedProperties()
+                        self.item.updateSearchableText()
                         self.checkOverallCompletion()
                     }
                 }
@@ -259,6 +277,8 @@ class DetailViewModel {
                         season.episodes.append(newEpisode)
                         newEpisode.isWatched = true
                     }
+                    self.item.tvShowDetails?.recalculateCachedProperties()
+                    self.item.updateSearchableText()
                     self.checkOverallCompletion()
                 }
             } catch {
@@ -268,21 +288,8 @@ class DetailViewModel {
     }
     
     func checkOverallCompletion() {
-        guard let tv = item.tvShowDetails else { return }
-        let totalEpisodes = tv.numberOfEpisodes ?? 0
-        let watchedEpisodes = tv.seasons.reduce(0) { $0 + $1.episodes.filter { $0.isWatched }.count }
-        
         withAnimation {
-            if totalEpisodes > 0 {
-                if watchedEpisodes >= totalEpisodes {
-                    item.state = .completed
-                    NotificationManager.shared.cancelNotification(for: item)
-                } else if watchedEpisodes > 0 {
-                    item.state = .active
-                } else {
-                    item.state = .wishlist
-                }
-            }
+            item.checkOverallCompletion()
         }
     }
     

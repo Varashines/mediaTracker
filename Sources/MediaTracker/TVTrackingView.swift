@@ -32,9 +32,12 @@ struct TVTrackingView: View {
         VStack(alignment: .leading, spacing: 16) {
 
             if tvDetails.seasons.isEmpty {
-                ContentUnavailableView("No season data", systemImage: "tv.slash", description: Text("Season information hasn't been loaded yet."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "No season data", systemImage: "tv.slash",
+                    description: Text("Season information hasn't been loaded yet.")
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             } else {
                 // Horizontal Season Selector
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -61,8 +64,11 @@ struct TVTrackingView: View {
                         $0.seasonNumber == selectedNumber
                     })
                 {
-                    SeasonSection(season: selectedSeason, themeColor: themeColor, onWatchedToggle: onWatchedToggle)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    SeasonSection(
+                        season: selectedSeason, themeColor: themeColor,
+                        onWatchedToggle: onWatchedToggle
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
         }
@@ -112,45 +118,43 @@ private struct SeasonTab: View {
 
     var body: some View {
         Button(action: action) {
-            Text("Season \(season.seasonNumber)")
-                .font(.system(.subheadline, weight: isSelected ? .bold : .medium))
-                .padding(.horizontal, 30)
-                .padding(.vertical, 10)
-                .foregroundStyle(
-                    isSelected ? (colorScheme == .dark ? .white : themeColor) : (isFullyWatched ? Color.green : .primary)
-                )
-                .background(
-                    ZStack {
-                        if isSelected {
-                            // Deep "pressed" background
-                            RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .fill(themeColor.opacity(colorScheme == .dark ? 0.3 : 0.2))
-                            
-                            // Subtle inner shadow for depth
-                            RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .stroke(Color.black.opacity(0.1), lineWidth: 4)
-                                .blur(radius: 2)
-                                .mask(RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius))
-                        }
-
-                        if isFullyWatched {
-                            RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .fill(Color.green.opacity(0.12))
-                        } else if isOngoing {
-                            RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                                .fill(Color.blueToGreen(progress: progress).opacity(0.1))
-                        }
-                    }
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : (isFullyWatched || progress == 0 ? TVTrackingConstants.strokeWidth : TVTrackingConstants.secondaryStrokeWidth))
-                        .overlay(
-                            progressOverlay
-                        )
-                )
-                .scaleEffect(isSelected ? 0.96 : 1.0)
-                .shadow(color: isSelected ? .clear : .black.opacity(0.05), radius: 2, x: 0, y: 1)
+            HStack(spacing: 6) {
+                Text("Season \(season.seasonNumber)")
+                if isFullyWatched {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                }
+            }
+            .font(.system(.subheadline, weight: isSelected ? .bold : .medium))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 2)
+            .foregroundStyle(.primary)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.indigo.opacity(colorScheme == .dark ? 0.3 : 0.15))
+                }
+            }
+            .liquidGlassPill(
+                accentColor: isSelected ? .indigo : (isFullyWatched ? Color.semanticGreen(for: colorScheme) : .primary.opacity(0.12)),
+                isSolid: false // Keep it glass!
+            )
+            .overlay {
+                // Persistent Green Border for Completed Seasons (Selected or Not)
+                if isFullyWatched {
+                    Capsule()
+                        .stroke(Color.semanticGreen(for: colorScheme).opacity(0.8), lineWidth: 1.5)
+                        .padding(0.5)
+                }
+            }
+            .overlay(
+                progressOverlay
+                    .padding(0.5) // Align with border
+            )
+            .scaleEffect(isSelected ? 1.05 : 1.0) // Proportional stretch on selection
+            .shadow(
+                color: isSelected ? Color.indigo.opacity(0.2) : .black.opacity(0.03),
+                radius: isSelected ? 4 : 2, x: 0, y: 2)
         }
         .buttonStyle(.plain)
         .onAppear { toggleAnimation() }
@@ -160,29 +164,28 @@ private struct SeasonTab: View {
     }
 
     private var borderColor: Color {
-        if isFullyWatched { return Color.green.opacity(0.8) }
-        if progress == 0 { return themeColor.opacity(0.8) }
-        return Color.primary.opacity(0.1)
+        if isSelected { return isFullyWatched ? themeColor : .indigo }
+        if isFullyWatched { return Color.semanticGreen(for: colorScheme).opacity(0.8) }
+        return Color.primary.opacity(0.08)  // Neutral base track
     }
 
     @ViewBuilder
     private var progressOverlay: some View {
         if isOngoing {
-            ZStack {
-                RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.green, lineWidth: TVTrackingConstants.strokeWidth)
-                
-                RoundedRectangle(cornerRadius: TVTrackingConstants.cornerRadius)
-                    .trim(from: progress, to: 1)
-                    .stroke(themeColor.opacity(0.9), lineWidth: TVTrackingConstants.strokeWidth)
-            }
+            Capsule()
+                .trim(from: 0, to: progress)
+                .stroke(
+                    Color.semanticGreen(for: colorScheme),
+                    lineWidth: TVTrackingConstants.strokeWidth + 0.5) // Slightly thicker to be visible
         }
     }
 
     private func toggleAnimation() {
         if isOngoing {
-            withAnimation(.easeInOut(duration: TVTrackingConstants.animationDuration).repeatForever(autoreverses: true)) {
+            withAnimation(
+                .easeInOut(duration: TVTrackingConstants.animationDuration).repeatForever(
+                    autoreverses: true)
+            ) {
                 isAnimatingGlow = true
             }
         } else {
@@ -224,45 +227,49 @@ private struct SeasonSection: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Button {
                     toggleSeasonWatchedStatus()
                 } label: {
-                    Label(isAllWatched ? "Clear Season" : "Mark Season Watched", systemImage: isAllWatched ? "xmark.circle" : "checkmark.circle")
-                        .font(.caption.bold())
-                        .foregroundStyle(
-                            isAllWatched 
-                                ? Color.secondary 
-                                : (colorScheme == .dark ? Color.white : themeColor)
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background {
-                            if isAllWatched {
-                                Color.secondary.opacity(0.1)
-                            } else {
-                                themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
-                                    .background(.ultraThinMaterial)
-                            }
+                    Label(
+                        isAllWatched ? "Clear Season" : "Mark Season Watched",
+                        systemImage: isAllWatched ? "xmark.circle" : "checkmark.circle"
+                    )
+                    .font(.caption.bold())
+                    .foregroundStyle(isAllWatched ? .secondary : .primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        if isAllWatched {
+                            Color.secondary.opacity(0.1)
+                        } else {
+                            themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
+                                .background(.ultraThinMaterial)
                         }
-                        .clipShape(Capsule())
-                        .overlay {
-                            if !isAllWatched {
-                                Capsule()
-                                    .stroke(themeColor.opacity(colorScheme == .dark ? 0.5 : 0.3), lineWidth: 0.5)
-                            }
+                    }
+                    .clipShape(Capsule())
+                    .overlay {
+                        if !isAllWatched {
+                            Capsule()
+                                .stroke(
+                                    themeColor.opacity(colorScheme == .dark ? 0.5 : 0.3),
+                                    lineWidth: 0.5)
                         }
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(season.episodes.isEmpty)
             }
 
             if season.episodes.isEmpty {
-                ContentUnavailableView("No episodes", systemImage: "sparkles.tv", description: Text("Episode data is not available for this season."))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
+                ContentUnavailableView(
+                    "No episodes", systemImage: "sparkles.tv",
+                    description: Text("Episode data is not available for this season.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
@@ -284,6 +291,7 @@ private struct SeasonSection: View {
             for episode in season.episodes {
                 episode.isWatched = targetStatus
             }
+            season.tvShowDetails?.recalculateCachedProperties()
             onWatchedToggle()
         }
     }
@@ -299,6 +307,7 @@ private struct EpisodeCube: View {
         Button {
             withAnimation(.spring(duration: 0.2)) {
                 episode.isWatched.toggle()
+                episode.season?.tvShowDetails?.recalculateCachedProperties()
                 onToggle()
             }
         } label: {
@@ -307,13 +316,17 @@ private struct EpisodeCube: View {
                     Text("E\(episode.episodeNumber)")
                         .font(.system(.caption, design: .monospaced))
                         .fontWeight(.bold)
-                        .liquidGlassPill(accentColor: badgeStrokeColor)
+                        .liquidGlassPill(
+                            accentColor: badgeStrokeColor,
+                            isSolid: episode.isWatched,
+                            foregroundColor: badgeForegroundColor
+                        )
 
                     Spacer()
 
                     if episode.isWatched {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
                             .font(.caption)
                     }
                 }
@@ -359,17 +372,24 @@ private struct EpisodeCube: View {
     }
 
     private var badgeForegroundColor: Color {
-        if colorScheme == .dark { return .white }
-        return episode.isWatched ? .green : themeColor
+        if episode.isWatched { return .white }
+        return .secondary
     }
 
     private var badgeBackgroundColor: Color {
-        let opacity: CGFloat = colorScheme == .dark ? 0.4 : 0.2
-        return episode.isWatched ? Color.green.opacity(opacity) : themeColor.opacity(opacity)
+        if episode.isWatched {
+            return Color.semanticGreen(for: colorScheme)
+        } else {
+            return Color.secondary.opacity(0.12)
+        }
     }
 
     private var badgeStrokeColor: Color {
-        episode.isWatched ? Color.green : themeColor
+        if episode.isWatched {
+            return Color.semanticGreen(for: colorScheme)
+        } else {
+            return Color.primary.opacity(0.08)
+        }
     }
 }
 
@@ -390,7 +410,7 @@ private struct EpisodeCube: View {
             d.seasons = [season1]
             return d
         }()
-        
+
         return TVTrackingView(tvDetails: details, themeColor: .accentColor) {}
             .padding()
     }
