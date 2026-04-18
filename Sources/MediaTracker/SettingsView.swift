@@ -7,6 +7,8 @@ struct SettingsView: View {
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
+    @AppStorage("theme_preference") private var themePreference: Int = 0 // 0: System, 1: Light, 2: Dark
+    @AppStorage("now_watching_days") private var nowWatchingDays: Int = 2
     @Environment(\.colorScheme) var colorScheme
     
     @State private var activeTab: SettingsTab = .preferences
@@ -117,10 +119,62 @@ struct SettingsView: View {
                 SettingsRow(title: "Brand Theme", subtitle: "Use the selected accent for background tints.") {
                     Toggle("", isOn: Binding(
                         get: { themeStyle == .brand },
-                        set: { themeStyle = $0 ? .brand : .standard }
+                        set: { isBrand in themeStyle = isBrand ? .brand : .standard }
                     ))
                     .toggleStyle(.switch)
                     .labelsHidden()
+                }
+
+                Divider()
+
+                SettingsRow(title: "App Theme", subtitle: "Choose between system, light, or dark mode.") {
+                    Toggle("System", isOn: Binding(
+                        get: { themePreference == 0 },
+                        set: { newValue in
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                if newValue {
+                                    themePreference = 0
+                                } else {
+                                    // Robust check for the effective system appearance
+                                    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                                    themePreference = isDark ? 2 : 1
+                                }
+                            }
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                }
+
+                if themePreference != 0 {
+                    HStack(spacing: 12) {
+                        ThemePill(title: "Light", isSelected: themePreference == 1, accent: appAccent, mode: .light) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                themePreference = 1
+                            }
+                        }
+                        ThemePill(title: "Dark", isSelected: themePreference == 2, accent: appAccent, mode: .dark) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                themePreference = 2
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                    .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+                }
+
+                Divider()
+
+                SettingsRow(title: "Now Watching Window", subtitle: "Number of days to keep active titles in the 'Now Watching' section.") {
+                    HStack(spacing: 8) {
+                        Text("\(nowWatchingDays) \(nowWatchingDays == 1 ? "day" : "days")")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        
+                        Stepper("", value: $nowWatchingDays, in: 1...14)
+                            .labelsHidden()
+                            .controlSize(.small)
+                    }
                 }
             }
             
@@ -431,5 +485,38 @@ struct DiscoveryManagementView: View {
             if let tv = item.tvShowDetails, let name = tv.network { names.insert(name) }
         }
         availableNetworks = Array(names).sorted()
+    }
+}
+
+struct ThemePill: View {
+    let title: String
+    let isSelected: Bool
+    let accent: AppAccent
+    let mode: ColorScheme
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(mode == .dark ? Color.white : Color.black)
+                .opacity(isSelected ? 1.0 : 0.7)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(accent.brandBackground(for: mode))
+                        .overlay {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(accent.color.opacity(0.8), lineWidth: 2)
+                            } else {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                            }
+                        }
+                }
+        }
+        .buttonStyle(.plain)
     }
 }

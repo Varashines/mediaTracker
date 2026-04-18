@@ -14,11 +14,25 @@ actor MediaFilterActor {
         let fetchDescriptor = FetchDescriptor<MediaItem>()
         let items = try modelContext.fetch(fetchDescriptor)
         
+        // Settings Access (Note: ModelActor can't use @AppStorage directly)
+        let nowWatchingDays = UserDefaults.standard.integer(forKey: "now_watching_days")
+        let windowSeconds: TimeInterval = Double(max(nowWatchingDays, 1)) * 86400
+
         let validItems = items // No longer using soft-delete predicate
         
         var baseItems: [MediaItem]
         
-        if category == "Upcoming" || category == nil {
+        if category == "NowWatching" {
+            baseItems = validItems.filter { item in
+                guard (item.state == .active || item.state == .rewatching) && !item.isUpcoming else { return false }
+                let interactionDate = item.lastInteractionDate ?? item.lastUpdated ?? item.dateAdded
+                return Date().timeIntervalSince(interactionDate) <= windowSeconds
+            }.sorted { 
+                let d1 = $0.lastInteractionDate ?? $0.lastUpdated ?? $0.dateAdded
+                let d2 = $1.lastInteractionDate ?? $1.lastUpdated ?? $1.dateAdded
+                return d1 > d2
+            }
+        } else if category == "Upcoming" || category == nil {
             baseItems = validItems.filter { $0.isUpcoming }
                 .sorted { item1, item2 in
                     guard let date1 = item1.cachedNextAiringDate else { return false }
@@ -28,9 +42,9 @@ actor MediaFilterActor {
         } else if category == "InProgress" {
             baseItems = validItems.filter { $0.state == .active && !$0.isUpcoming }
                 .sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
-        } else if category == "Waitlist" {
+        } else if category == "Watchlist" {
             baseItems = validItems.filter { $0.state == .wishlist && !$0.isUpcoming }
-                .sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
+            .sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
         } else if category == "OnHold" {
             baseItems = validItems.filter { $0.state == .onHold }
         } else if category == "Dropped" {

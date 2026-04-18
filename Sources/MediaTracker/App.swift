@@ -5,6 +5,7 @@ import SwiftData
 struct MediaTrackerApp: App {
     // Keep a strong reference to the manager to ensure the delegate stays active
     private let notificationManager = NotificationManager.shared
+    @AppStorage("theme_preference") private var themePreference: Int = 0
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -30,12 +31,22 @@ struct MediaTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(mappedScheme)
         }
         .modelContainer(sharedModelContainer)
         
         Settings {
             SettingsView()
                 .modelContainer(sharedModelContainer)
+                .preferredColorScheme(mappedScheme)
+        }
+    }
+
+    private var mappedScheme: ColorScheme? {
+        switch themePreference {
+        case 1: return .light
+        case 2: return .dark
+        default: return nil
         }
     }
 }

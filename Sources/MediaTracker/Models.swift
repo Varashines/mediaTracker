@@ -12,7 +12,7 @@ enum MediaState: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .wishlist: return "Waitlist"
+        case .wishlist: return "Watchlist"
         case .active: return "In Progress"
         case .onHold: return "On Hold"
         case .dropped: return "Dropped"
@@ -71,12 +71,12 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
     func brandBackground(for colorScheme: ColorScheme) -> Color {
         if colorScheme == .dark {
             switch self {
-            case .blue: return Color(red: 0.02, green: 0.03, blue: 0.06)
-            case .indigo: return Color(red: 0.03, green: 0.02, blue: 0.07)
-            case .purple: return Color(red: 0.04, green: 0.02, blue: 0.06)
-            case .rose: return Color(red: 0.06, green: 0.02, blue: 0.03)
-            case .orange: return Color(red: 0.06, green: 0.03, blue: 0.02)
-            case .mint: return Color(red: 0.02, green: 0.05, blue: 0.04)
+            case .blue: return Color(red: 0.08, green: 0.12, blue: 0.24)
+            case .indigo: return Color(red: 0.12, green: 0.08, blue: 0.28)
+            case .purple: return Color(red: 0.16, green: 0.08, blue: 0.24)
+            case .rose: return Color(red: 0.24, green: 0.08, blue: 0.12)
+            case .orange: return Color(red: 0.24, green: 0.12, blue: 0.08)
+            case .mint: return Color(red: 0.08, green: 0.2, blue: 0.16)
             }
         } else {
             switch self {
@@ -120,6 +120,7 @@ final class MediaItem {
     var cachedLanguage: String?
     var cachedNextAiringDate: Date?
     var dateAdded: Date = Date()
+    var lastInteractionDate: Date?
     var searchableText: String = ""
     
     // Type-specific data
@@ -142,9 +143,21 @@ final class MediaItem {
 
         var components = [title]
         components.append(contentsOf: cachedGenres)
+        
+        if let network = cachedNetwork {
+            components.append(network)
+        }
+        
+        if let languageCode = cachedLanguage {
+            let localizedLanguage = Locale.current.localizedString(forLanguageCode: languageCode) ?? languageCode
+            components.append(localizedLanguage)
+        }
+
         if let movie = movieDetails {
+            components.append(contentsOf: movie.creators)
             components.append(contentsOf: movie.cast.prefix(5).map { $0.name })
         } else if let tv = tvShowDetails {
+            components.append(contentsOf: tv.creators)
             components.append(contentsOf: tv.cast.prefix(5).map { $0.name })
         }
         self.searchableText = components.joined(separator: " ").lowercased()
@@ -174,17 +187,19 @@ final class MediaItem {
     
     var isUpcoming: Bool {
         guard modelContext != nil else { return false }
-        
+
         // If it's completed, it's no longer "upcoming" for the user
         if state == .completed { return false }
-        
-        let airingDate = nextAiringDate
-        if let nextDate = airingDate, nextDate > Date() {
-            return true
-        }
-        return isRecentlyReleased
-    }
-    
+
+        // nextAiringDate for TV shows is already the first unwatched episode air date.
+        // For movies, it's the release date.
+        guard let date = nextAiringDate else { return false }
+
+        let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
+
+        // Show is upcoming if it's in the future OR it aired in the last 5 days (and we haven't watched it)
+        return date >= fiveDaysAgo
+    }    
     var isActive: Bool {
         guard modelContext != nil else { return false }
         let currentType = type ?? .movie
@@ -297,6 +312,7 @@ final class MediaItem {
                     state = .active
                 }
             }
+            lastInteractionDate = Date()
         }
     }
 }
@@ -308,14 +324,16 @@ final class MovieDetails {
     var genres: [String]
     var voteAverage: Double?
     var originalLanguage: String?
+    var creators: [String] = []
     @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
     
-    init(tmdbID: Int, runtime: Int? = nil, genres: [String] = [], voteAverage: Double? = nil, originalLanguage: String? = nil) {
+    init(tmdbID: Int, runtime: Int? = nil, genres: [String] = [], voteAverage: Double? = nil, originalLanguage: String? = nil, creators: [String] = []) {
         self.tmdbID = tmdbID
         self.runtime = runtime
         self.genres = genres
         self.voteAverage = voteAverage
         self.originalLanguage = originalLanguage
+        self.creators = creators
     }
 }
 
@@ -338,6 +356,7 @@ final class TVShowDetails {
     var numberOfEpisodes: Int?
     var voteAverage: Double?
     var genres: [String] = []
+    var creators: [String] = []
     
     @Relationship(deleteRule: .cascade) var seasons: [TVSeason] = []
     @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
@@ -375,7 +394,7 @@ final class TVShowDetails {
         return cachedOldestUnwatchedEpisodeAirDate
     }
     
-    init(tmdbID: Int, tvdbID: Int? = nil, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, networkLogoPath: String? = nil, originalLanguage: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil, genres: [String] = []) {
+    init(tmdbID: Int, tvdbID: Int? = nil, tvMazeID: Int? = nil, nextEpisodeDate: Date? = nil, nextEpisodeTime: String? = nil, nextEpisodeName: String? = nil, nextEpisodeNumber: Int? = nil, nextSeasonNumber: Int? = nil, status: String? = nil, network: String? = nil, networkLogoPath: String? = nil, originalLanguage: String? = nil, timezone: String? = nil, numberOfSeasons: Int? = nil, numberOfEpisodes: Int? = nil, voteAverage: Double? = nil, genres: [String] = [], creators: [String] = []) {
         self.tmdbID = tmdbID
         self.tvdbID = tvdbID
         self.tvMazeID = tvMazeID
@@ -393,6 +412,7 @@ final class TVShowDetails {
         self.numberOfEpisodes = numberOfEpisodes
         self.voteAverage = voteAverage
         self.genres = genres
+        self.creators = creators
     }
 }
 

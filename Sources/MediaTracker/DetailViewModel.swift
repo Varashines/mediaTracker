@@ -29,17 +29,26 @@ class DetailViewModel {
     }
     
     var nextText: String? {
-        guard let label = item.nextAiringLabel else { return nil }
+        // nextAiringDate is already the first unwatched episode air date for TV shows.
+        guard let date = item.nextAiringDate else { return nil }
         
-        let isPast = (item.nextAiringDate ?? Date()) < Date()
+        let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
+        
+        // Rule: If the next thing to watch aired more than 5 days ago, we are "behind".
+        // Hide the "Upcoming" UI entirely.
+        if date < fiveDaysAgo { return nil }
+        
+        let label = item.nextAiringLabel ?? "Available Now"
+        let isPast = date < Date()
+        
         if isPast {
-            if item.type == .movie { return "Available Now" }
-            let detail = nextEpisodeLabel(for: item.nextAiringDate ?? Date(), hideDate: true)
-            return detail.isEmpty ? label : "\(label): \(detail)"
+            if item.type == .movie { return "Now Streaming" }
+            let detail = nextEpisodeLabel(for: date, hideDate: true)
+            return detail.isEmpty ? "Now Streaming" : "Now Available: \(detail)"
         }
         
         if item.type == .movie { return label }
-        return "Next: \(nextEpisodeLabel(for: item.nextAiringDate ?? Date(), hideDate: false))"
+        return "Upcoming: \(nextEpisodeLabel(for: date, hideDate: false))"
     }
     
     func updateThemeColor() {
@@ -115,27 +124,29 @@ class DetailViewModel {
     }
     private func refreshMovie(tmdbID: Int) async throws {
         let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
+
         await MainActor.run {
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
+
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
             movieDetails.runtime = details.runtime
             movieDetails.genres = details.genres
             movieDetails.voteAverage = details.voteAverage
             movieDetails.originalLanguage = details.originalLanguage
+            movieDetails.creators = details.directors.map { $0.name }
             
-            // Update Cast
-            let existingCast = movieDetails.cast
+            // Update Cast (Directors First)
             var newCastList: [CastMember] = []
+            
+            // Add Directors
+            for d in details.directors {
+                let profileURL = d.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(d.profilePath!)" : nil
+                newCastList.append(CastMember(name: d.name, characterName: "Director", profileURL: profileURL, order: -1))
+            }
+            
             for c in details.cast {
                 let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                if let existing = existingCast.first(where: { $0.name == c.name }) {
-                    existing.characterName = c.character
-                    existing.profileURL = profileURL
-                    existing.order = c.order
-                    newCastList.append(existing)
-                } else {
-                    newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-                }
+                newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
             }
             movieDetails.cast = newCastList
             
@@ -196,23 +207,23 @@ class DetailViewModel {
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber
             tvDetails.tvMazeID = finalTvMazeID
+            tvDetails.creators = details.creators.map { $0.name }
             tvDetails.nextEpisodeTime = finalMazeTime
             tvDetails.network = finalActualService ?? tvDetails.network
             tvDetails.timezone = finalActualTimezone ?? tvDetails.timezone
             
-            // Update Cast
-            let existingCast = tvDetails.cast
+            // Update Cast (Creators First)
             var newCastList: [CastMember] = []
+            
+            // Add Creators
+            for c in details.creators {
+                let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                newCastList.append(CastMember(name: c.name, characterName: "Creator", profileURL: profileURL, order: -1))
+            }
+            
             for c in details.cast {
                 let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                if let existing = existingCast.first(where: { $0.name == c.name }) {
-                    existing.characterName = c.character
-                    existing.profileURL = profileURL
-                    existing.order = c.order
-                    newCastList.append(existing)
-                } else {
-                    newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-                }
+                newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
             }
             tvDetails.cast = newCastList
             
@@ -268,6 +279,7 @@ class DetailViewModel {
                                 episode.isWatched = true
                             }
                         }
+                        self.item.lastInteractionDate = Date()
                         tv.recalculateCachedProperties()
                         self.item.updateSearchableText()
                         self.checkOverallCompletion()

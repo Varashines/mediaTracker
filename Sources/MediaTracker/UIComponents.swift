@@ -270,24 +270,52 @@ struct MediaThumbnailView: View {
             .cornerRadius(mode == .hero ? 16 : 12)
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isHovered)
+// 6. Info Section (Below)
+VStack(alignment: .leading, spacing: 1) {
+    Text(title)
+        .font(.system(size: mode == .hero ? 15 : 13, weight: .bold))
+        .foregroundStyle(.primary)
+        .lineLimit(2)
+        .multilineTextAlignment(.leading)
 
-            // 6. Info Section (Below)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: mode == .hero ? 15 : 13, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+    if mode == .search {
+        HStack(spacing: 4) {
+            if let year = yearLabel {
+                Text(year)
+            }
 
-                if let year = yearLabel {
-                    Text(year)
-                        .font(.system(size: mode == .hero ? 12 : 10, weight: .medium))
-                        .foregroundStyle(.secondary)
+            Text("•")
+
+            if type == .tvShow {
+                if let network = item?.cachedNetwork {
+                    Text(network)
+                    Text("•")
+                }
+            } else {
+                if let langCode = item?.cachedLanguage ?? result?.originalLanguage {
+                    let lang = Locale.current.localizedString(forLanguageCode: langCode) ?? langCode.uppercased()
+                    Text(lang)
+                    Text("•")
                 }
             }
-            .frame(height: mode == .hero ? nil : 50, alignment: .topLeading)
-            .padding(.horizontal, 4)
+
+            if let genre = item?.cachedGenres.first ?? result?.genres.first {
+                Text(genre)
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    } else {
+        if let year = yearLabel {
+            Text(year)
+                .font(.system(size: mode == .hero ? 12 : 10, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+.frame(height: mode == .hero ? nil : 50, alignment: .topLeading)
+.padding(.horizontal, 4)
         }
         .frame(width: width)
         .contentShape(Rectangle())
@@ -373,6 +401,7 @@ struct MediaThumbnailView: View {
         if let next = allEpisodes.first(where: { !$0.isWatched }) {
             withAnimation(.spring()) {
                 next.isWatched = true
+                item.lastInteractionDate = Date()
                 item.checkOverallCompletion()
             }
         }
@@ -456,7 +485,7 @@ struct MediaThumbnailView: View {
                         isSolid: item.isRecentlyReleased
                     )
             } else if item.state == .wishlist {
-                Text("Waitlist")
+                Text("Watchlist")
                     .foregroundStyle(.orange)
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
             } else if item.state == .completed {
@@ -494,7 +523,10 @@ struct MediaThumbnailView: View {
         Section("Status") {
             ForEach(availableStates(for: item), id: \.self) { state in
                 Button(state.displayName) {
-                    item.state = state
+                    withAnimation {
+                        item.state = state
+                        item.lastInteractionDate = Date()
+                    }
                 }
             }
         }
@@ -536,7 +568,7 @@ struct LibraryEmptyStateView: View {
         switch category {
         case "Upcoming": return "Nothing Upcoming"
         case "InProgress": return "Nothing in Progress"
-        case "Waitlist": return "Waitlist is Empty"
+        case "Watchlist": return "Watchlist is Empty"
         case "OnHold": return "Nothing on Hold"
         case "Dropped": return "No Dropped Items"
         case "Rewatching": return "Not Re-watching Anything"
@@ -548,7 +580,7 @@ struct LibraryEmptyStateView: View {
         switch category {
         case "Upcoming": return "calendar.badge.clock"
         case "InProgress": return "play.slash"
-        case "Waitlist": return "clock.badge.exclamationmark"
+        case "Watchlist": return "list.bullet.rectangle"
         case "OnHold": return "pause.circle"
         case "Dropped": return "xmark.bin"
         case "Rewatching": return "arrow.clockwise.circle"
@@ -559,8 +591,8 @@ struct LibraryEmptyStateView: View {
     private var description: String {
         switch category {
         case "Upcoming": return "No releases or new episodes are expected soon."
-        case "InProgress": return "You're all caught up! Start something new from your waitlist."
-        case "Waitlist": return "Your waitlist is empty. Search for something to add!"
+        case "InProgress": return "You're all caught up! Start something new from your watchlist."
+        case "Watchlist": return "Your watchlist is empty. Search for something to add!"
         case "OnHold": return "Items you've paused will appear here."
         case "Dropped": return "Items you've decided not to finish."
         case "Rewatching": return "Everything you decide to experience again will live here."
@@ -649,6 +681,7 @@ extension Color {
 struct ThemeBackground: ViewModifier {
     var networkOverride: String? = nil
     var tintOverride: Color? = nil
+    var disableBrandBackground: Bool = false
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
     @Environment(\.colorScheme) var colorScheme
@@ -657,18 +690,18 @@ struct ThemeBackground: ViewModifier {
         content
             .background {
                 ZStack {
-                    if themeStyle == .brand {
+                    if themeStyle == .brand && !disableBrandBackground {
                         appAccent.brandBackground(for: colorScheme)
                     } else {
                         Color(NSColor.windowBackgroundColor)
                     }
 
                     if let tint = tintOverride {
-                        tint.opacity(colorScheme == .dark ? 0.15 : 0.05)
+                        tint.opacity(colorScheme == .dark ? 0.35 : 0.25)
                     } else if let network = networkOverride,
                         let color = NetworkThemeManager.shared.color(for: network)
                     {
-                        color.opacity(colorScheme == .dark ? 0.15 : 0.05)
+                        color.opacity(colorScheme == .dark ? 0.35 : 0.25)
                     }
                 }
                 .ignoresSafeArea()
@@ -677,8 +710,8 @@ struct ThemeBackground: ViewModifier {
 }
 
 extension View {
-    func appBackground(network: String? = nil, tint: Color? = nil) -> some View {
-        self.modifier(ThemeBackground(networkOverride: network, tintOverride: tint))
+    func appBackground(network: String? = nil, tint: Color? = nil, disableBrandBackground: Bool = false) -> some View {
+        self.modifier(ThemeBackground(networkOverride: network, tintOverride: tint, disableBrandBackground: disableBrandBackground))
     }
 }
 

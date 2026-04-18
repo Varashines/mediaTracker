@@ -58,19 +58,19 @@ actor BackgroundDataService {
                 movieDetails.genres = details.genres
                 movieDetails.voteAverage = details.voteAverage
                 movieDetails.originalLanguage = details.originalLanguage
+                movieDetails.creators = details.directors.map { $0.name }
 
-                let existingCast = movieDetails.cast
+                // Update Cast (Directors First)
                 var newCastList: [CastMember] = []
+                
+                for d in details.directors {
+                    let profileURL = d.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(d.profilePath!)" : nil
+                    newCastList.append(CastMember(name: d.name, characterName: "Director", profileURL: profileURL, order: -1))
+                }
+                
                 for c in details.cast {
                     let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    if let existing = existingCast.first(where: { $0.name == c.name }) {
-                        existing.characterName = c.character
-                        existing.profileURL = profileURL
-                        existing.order = c.order
-                        newCastList.append(existing)
-                    } else {
-                        newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-                    }
+                    newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
                 }
                 movieDetails.cast = newCastList
 
@@ -92,19 +92,19 @@ actor BackgroundDataService {
                 tvDetails.status = details.status
                 tvDetails.numberOfSeasons = details.seasonsCount
                 tvDetails.numberOfEpisodes = details.episodesCount
+                tvDetails.creators = details.creators.map { $0.name }
 
-                let existingCast = tvDetails.cast
+                // Update Cast (Creators First)
                 var newCastList: [CastMember] = []
+                
+                for c in details.creators {
+                    let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                    newCastList.append(CastMember(name: c.name, characterName: "Creator", profileURL: profileURL, order: -1))
+                }
+                
                 for c in details.cast {
                     let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    if let existing = existingCast.first(where: { $0.name == c.name }) {
-                        existing.characterName = c.character
-                        existing.profileURL = profileURL
-                        existing.order = c.order
-                        newCastList.append(existing)
-                    } else {
-                        newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-                    }
+                    newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
                 }
                 tvDetails.cast = newCastList
 

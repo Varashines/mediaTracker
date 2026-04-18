@@ -66,6 +66,7 @@ class MediaViewModel {
         if let cat = category, let type = MediaType(rawValue: cat) {
             return type.pluralName
         }
+        if category == "NowWatching" { return "Now Watching" }
         if category == "InProgress" { return "In Progress" }
         if category == "OnHold" { return "On Hold" }
         if category == "Dropped" { return "Dropped" }
@@ -153,12 +154,15 @@ struct ContentView: View {
                 Group {
                     Label("Upcoming", systemImage: "calendar")
                         .tag("Upcoming")
+
+                    Label("Now Watching", systemImage: "sparkles")
+                        .tag("NowWatching")
                     
                     Label("In Progress", systemImage: "play.circle")
                         .tag("InProgress")
                     
-                    Label("Waitlist", systemImage: "clock")
-                        .tag("Waitlist")
+                    Label("Watchlist", systemImage: "list.bullet.rectangle")
+                        .tag("Watchlist")
 
                     Label("Library", systemImage: "tray.full")
                         .tag("All")
@@ -433,7 +437,7 @@ struct MediaGridView: View {
     
     private var isMainSection: Bool {
         guard let cat = selectedCategory else { return false }
-        return ["InProgress", "Waitlist", "All", "OnHold", "Dropped", "Rewatching"].contains(cat)
+        return ["NowWatching", "InProgress", "Watchlist", "All", "OnHold", "Dropped", "Rewatching"].contains(cat)
     }
     
     var body: some View {

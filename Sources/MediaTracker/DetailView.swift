@@ -127,7 +127,7 @@ struct DetailView: View {
                 }
             }
             .tint(viewModel.themeColor)
-            .appBackground(tint: viewModel.themeColor)
+            .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
         }
     }
     

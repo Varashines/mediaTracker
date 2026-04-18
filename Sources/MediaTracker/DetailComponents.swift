@@ -88,9 +88,10 @@ struct TitleSection: View {
                     .liquidGlassPill(accentColor: themeColor)
 
                 if item.isUpcoming {
-                    Text("Upcoming")
+                    let isStreaming = (item.nextAiringDate ?? Date()) < Date()
+                    Text(isStreaming ? "Now Streaming" : "Upcoming")
                         .font(.subheadline.weight(.bold))
-                        .liquidGlassPill(accentColor: .orange)
+                        .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
                 }
 
                 Spacer().frame(width: 10)

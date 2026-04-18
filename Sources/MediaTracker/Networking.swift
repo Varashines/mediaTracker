@@ -78,13 +78,17 @@ actor APIClient {
     }
 
     // MARK: - Details
-    func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, originalLanguage: String?, cast: [CastMemberResult]) {
+    func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
         let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
         let details = try decoder.decode(TMDBMovieDetailsResponse.self, from: data)
         let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
+        } ?? []
+        
+        let directors = details.credits?.crew?.filter { $0.job == "Director" }.map { 
+            CastMemberResult(name: $0.name, character: "Director", profilePath: $0.profile_path, order: -1)
         } ?? []
         
         // Find a better release date (Prioritizing India regional data)
@@ -102,10 +106,10 @@ actor APIClient {
             }
         }
         
-        return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, originalLanguage: details.original_language, cast: Array(cast))
-    }
-    
-    func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult]) {
+        return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, originalLanguage: details.original_language, cast: Array(cast), directors: directors)
+        }
+
+        func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
         let url = try tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
         let (data, response) = try await URLSession.shared.data(from: url)
         try validateResponse(response)
@@ -113,10 +117,12 @@ actor APIClient {
         let cast = d.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
+        let creators = d.created_by?.map { 
+            CastMemberResult(name: $0.name, character: "Creator", profilePath: $0.profile_path, order: -1)
+        } ?? []
         let network = d.networks?.first
-        return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast))
-    }
-
+        return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast), creators)
+        }
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
         let url = try tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -182,6 +188,13 @@ extension TMDBMedia {
             mediaType == .movie ? TMDBGenreMap.movieGenres[id] : TMDBGenreMap.tvGenres[id]
         }.prefix(2) ?? []
         
+        var languageCode: String? = nil
+        if let movie = self as? TMDBMovie {
+            languageCode = movie.original_language
+        } else if let tv = self as? TMDBTV {
+            languageCode = tv.original_language
+        }
+
         return MediaSearchResult(
             id: String(id),
             title: displayTitle,
@@ -189,7 +202,8 @@ extension TMDBMedia {
             posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/w342\(poster_path!)" : nil,
             releaseDate: releaseDateString,
             genres: Array(genreList),
-            type: mediaType
+            type: mediaType,
+            originalLanguage: languageCode
         )
     }
 }
@@ -202,6 +216,7 @@ struct MediaSearchResult: Identifiable, Codable {
     let releaseDate: String?
     let genres: [String]
     let type: MediaType
+    let originalLanguage: String?
 }
 
 struct TMDBGenericResponse<T: Codable>: Codable {
@@ -216,6 +231,7 @@ struct TMDBMovie: TMDBMedia {
     let backdrop_path: String?
     let release_date: String?
     let genre_ids: [Int]?
+    let original_language: String?
     
     var displayTitle: String { title }
     var releaseDateString: String? { release_date }
@@ -230,6 +246,7 @@ struct TMDBTV: TMDBMedia {
     let backdrop_path: String?
     let first_air_date: String?
     let genre_ids: [Int]?
+    let original_language: String?
     
     var displayTitle: String { name }
     var releaseDateString: String? { first_air_date }
@@ -276,7 +293,13 @@ struct TMDBTVDetailsResponse: Codable {
     let number_of_seasons: Int, number_of_episodes: Int, status: String, vote_average: Double?, genres: [TMDBGenre]
     let original_language: String?
     let networks: [TMDBNetwork]?
+    let created_by: [TMDBPerson]?
     let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?
+}
+
+struct TMDBPerson: Codable {
+    let name: String
+    let profile_path: String?
 }
 
 struct TMDBNetwork: Codable {
@@ -286,6 +309,13 @@ struct TMDBNetwork: Codable {
 
 struct TMDBCreditsResponse: Codable {
     let cast: [TMDBMovieCastMember]
+    let crew: [TMDBMovieCrewMember]?
+}
+
+struct TMDBMovieCrewMember: Codable {
+    let name: String
+    let job: String
+    let profile_path: String?
 }
 
 struct TMDBMovieCastMember: Codable {
