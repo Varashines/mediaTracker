@@ -27,8 +27,10 @@ actor MediaFilterActor {
                 }
         } else if category == "InProgress" {
             baseItems = validItems.filter { $0.state == .active && !$0.isUpcoming }
+                .sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
         } else if category == "Waitlist" {
             baseItems = validItems.filter { $0.state == .wishlist && !$0.isUpcoming }
+                .sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
         } else if category == "OnHold" {
             baseItems = validItems.filter { $0.state == .onHold }
         } else if category == "Dropped" {
