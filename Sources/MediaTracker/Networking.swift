@@ -18,6 +18,11 @@ actor APIClient {
     static let shared = APIClient()
     private let decoder = JSONDecoder()
     
+    // Phase 2: Search Cache
+    private var searchCache: [String: [MediaSearchResult]] = [:]
+    private var lastSearchTime: [String: Date] = [:]
+    private let cacheExpiry: TimeInterval = 300 // 5 minutes
+    
     private var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
 
     nonisolated var isTMDBConfigured: Bool {
@@ -52,13 +57,31 @@ actor APIClient {
     }
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
+        let cacheKey = "movie_\(query)"
+        if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
+            return searchCache[cacheKey] ?? []
+        }
+        
         let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: query)
-        return results.map { $0.toSearchResult() }
+        let final = results.map { $0.toSearchResult() }
+        
+        searchCache[cacheKey] = final
+        lastSearchTime[cacheKey] = Date()
+        return final
     }
     
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
+        let cacheKey = "tv_\(query)"
+        if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
+            return searchCache[cacheKey] ?? []
+        }
+
         let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: query)
-        return results.map { $0.toSearchResult() }
+        let final = results.map { $0.toSearchResult() }
+        
+        searchCache[cacheKey] = final
+        lastSearchTime[cacheKey] = Date()
+        return final
     }
     
     func fetchTrendingMovies() async throws -> [MediaSearchResult] {
@@ -199,7 +222,7 @@ extension TMDBMedia {
             id: String(id),
             title: displayTitle,
             overview: overview,
-            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/w342\(poster_path!)" : nil,
+            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/w780\(poster_path!)" : nil,
             releaseDate: releaseDateString,
             genres: Array(genreList),
             type: mediaType,

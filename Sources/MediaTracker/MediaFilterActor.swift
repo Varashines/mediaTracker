@@ -1,6 +1,22 @@
 import Foundation
 import SwiftData
 
+struct MediaThumbnailMetadata: Sendable, Identifiable {
+    let id: PersistentIdentifier
+    let title: String
+    let posterURL: String?
+    let releaseDate: Date?
+    let state: MediaState?
+    let type: MediaType?
+    let cachedNextAiringDate: Date?
+    let cachedNetwork: String?
+    let badgeText: String?
+    let watchProgress: String?
+    let progress: Double?
+    let isUpcoming: Bool
+    let versionHash: Int
+}
+
 @ModelActor
 actor MediaFilterActor {
     func filterAndSort(
@@ -10,7 +26,7 @@ actor MediaFilterActor {
         network: String?,
         language: String?,
         groupBy: GroupBy
-    ) throws -> (displayedIDs: [PersistentIdentifier], recentlyAddedIDs: [PersistentIdentifier], groupedIDs: [(String, [PersistentIdentifier])]) {
+    ) throws -> (displayed: [MediaThumbnailMetadata], recentlyAdded: [MediaThumbnailMetadata], grouped: [(String, [MediaThumbnailMetadata])]) {
         let fetchDescriptor = FetchDescriptor<MediaItem>()
         let items = try modelContext.fetch(fetchDescriptor)
         
@@ -24,7 +40,7 @@ actor MediaFilterActor {
         
         if category == "NowWatching" {
             baseItems = validItems.filter { item in
-                guard (item.state == .active || item.state == .rewatching) && !item.isUpcoming else { return false }
+                guard item.state == .active && !item.isUpcoming else { return false }
                 let interactionDate = item.lastInteractionDate ?? item.lastUpdated ?? item.dateAdded
                 return Date().timeIntervalSince(interactionDate) <= windowSeconds
             }.sorted { 
@@ -87,7 +103,26 @@ actor MediaFilterActor {
         let finalResults = results
         let finalRecentlyAdded = Array(validItems.sorted(by: { $0.dateAdded > $1.dateAdded }).prefix(5))
         
-        var finalGroupedItems: [(String, [PersistentIdentifier])] = []
+        // Helper to convert to lightweight metadata
+        func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
+            MediaThumbnailMetadata(
+                id: item.persistentModelID,
+                title: item.title,
+                posterURL: item.posterURL,
+                releaseDate: item.releaseDate,
+                state: item.state,
+                type: item.type,
+                cachedNextAiringDate: item.cachedNextAiringDate,
+                cachedNetwork: item.cachedNetwork,
+                badgeText: item.badgeText,
+                watchProgress: item.watchProgressLabel,
+                progress: item.progress,
+                isUpcoming: item.isUpcoming,
+                versionHash: item.lastStateChangeDate.hashValue
+            )
+        }
+
+        var finalGroupedItems: [(String, [MediaThumbnailMetadata])] = []
         if groupBy != .none {
             let dict = Dictionary(grouping: finalResults) { item -> String in
                 switch groupBy {
@@ -113,14 +148,14 @@ actor MediaFilterActor {
             }
             
             finalGroupedItems = sortedKeys.map { key in
-                (key, dict[key]!.map { $0.persistentModelID })
+                (key, dict[key]!.map { toMetadata($0) })
             }
         }
         
         return (
-            displayedIDs: finalResults.map { $0.persistentModelID },
-            recentlyAddedIDs: finalRecentlyAdded.map { $0.persistentModelID },
-            groupedIDs: finalGroupedItems
+            displayed: finalResults.map { toMetadata($0) },
+            recentlyAdded: finalRecentlyAdded.map { toMetadata($0) },
+            grouped: finalGroupedItems
         )
     }
 }

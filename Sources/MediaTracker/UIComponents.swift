@@ -4,23 +4,26 @@ struct LiquidGlassModifier: ViewModifier {
     let accentColor: Color
     let isSolid: Bool
     let foregroundColor: Color?
+    let progress: Double?
     @Environment(\.colorScheme) var colorScheme
 
-    init(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil) {
+    init(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil) {
         self.accentColor = accentColor
         self.isSolid = isSolid
         self.foregroundColor = foregroundColor
+        self.progress = progress
     }
 
     func body(content: Content) -> some View {
         let isLight = accentColor.isLightColor
+        let isAsleep = SleepManager.shared.isAsleep
 
         // If solid, always white. If frosted, use primary (adaptive black/white).
         let defaultForeground = isSolid ? Color.white : .primary
         let foreground = foregroundColor ?? defaultForeground
 
         // If solid, high opacity. If frosted, subtle tint.
-        let tintOpacity = isSolid ? (colorScheme == .dark ? 0.8 : 0.9) : (isLight ? 0.35 : 0.5)
+        let tintOpacity = isSolid ? 1.0 : (isLight ? 0.35 : 0.5)
 
         return
             content
@@ -28,56 +31,102 @@ struct LiquidGlassModifier: ViewModifier {
             .padding(.vertical, 4)
             .foregroundStyle(foreground)
             .background {
-                if isSolid {
+                if isAsleep {
+                    // FLAT BACKGROUND DURING SLEEP
                     Capsule()
-                        .fill(accentColor.opacity(tintOpacity))
+                        .fill(isSolid ? accentColor : Color.gray.opacity(0.2))
                 } else {
-                    ZStack {
-                        Capsule()
-                            .fill(.ultraThickMaterial)
-                        Capsule()
-                            .fill(accentColor.opacity(tintOpacity))
+                    ZStack(alignment: .leading) {
+                        if isSolid {
+                            Capsule()
+                                .fill(accentColor.opacity(tintOpacity))
+                        } else {
+                            ZStack {
+                                Capsule()
+                                    .fill(.ultraThickMaterial)
+                                Capsule()
+                                    .fill(accentColor.opacity(tintOpacity))
+                            }
+                        }
+
+                        // Glow & Fill Progress
+                        if let progress = progress {
+                            GeometryReader { geo in
+                                Capsule()
+                                    .fill(foreground.opacity(0.15))
+                                    .frame(width: geo.size.width * CGFloat(min(max(progress, 0), 1)))
+                            }
+                        }
                     }
                 }
             }
             .clipShape(Capsule())
             .overlay {
                 // Subtle stroke for definition
-                Capsule()
-                    .stroke(
-                        accentColor.opacity(isSolid ? 1.0 : (isLight ? 0.7 : 0.5)), lineWidth: 0.5)
+                if !isAsleep {
+                    Capsule()
+                        .stroke(
+                            accentColor.opacity(isSolid ? 1.0 : (isLight ? 0.7 : 0.5)), lineWidth: 0.5)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                // Glowing bottom line for progress
+                if let progress = progress, !isAsleep {
+                    GeometryReader { geo in
+                        VStack {
+                            Spacer()
+                            Capsule()
+                                .fill(foreground.opacity(0.8))
+                                .frame(width: geo.size.width * CGFloat(min(max(progress, 0), 1)), height: 1.5)
+                                .shadow(color: foreground.opacity(0.5), radius: 2, x: 0, y: 0)
+                                .padding(.horizontal, 4)
+                                .padding(.bottom, 1)
+                        }
+                    }
+                }
             }
     }
 }
 
 extension View {
-    func liquidGlassPill(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil)
+    func liquidGlassPill(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil)
         -> some View
     {
         self.modifier(
             LiquidGlassModifier(
-                accentColor: accentColor, isSolid: isSolid, foregroundColor: foregroundColor))
+                accentColor: accentColor, isSolid: isSolid, foregroundColor: foregroundColor, progress: progress))
     }
 }
 
 // MARK: - Status Badge View
 struct StatusBadgeView: View {
     let item: MediaItem?
+    let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
 
     init(item: MediaItem) {
         self.item = item
+        self.metadata = nil
+        self.result = nil
+    }
+    
+    init(metadata: MediaThumbnailMetadata) {
+        self.item = nil
+        self.metadata = metadata
         self.result = nil
     }
 
     init(result: MediaSearchResult) {
         self.item = nil
+        self.metadata = nil
         self.result = result
     }
 
     var body: some View {
         if let item = item {
             itemStatusBadge(item)
+        } else if let metadata = metadata {
+            metadataStatusBadge(metadata)
         } else if let result = result {
             resultStatusBadge(result)
         }
@@ -85,38 +134,52 @@ struct StatusBadgeView: View {
 
     @ViewBuilder
     private func itemStatusBadge(_ item: MediaItem) -> some View {
+        statusUI(isUpcoming: item.isUpcoming, state: item.state, watchProgressLabel: item.watchProgressLabel, progress: item.progress)
+    }
+
+    @ViewBuilder
+    private func metadataStatusBadge(_ m: MediaThumbnailMetadata) -> some View {
+        statusUI(isUpcoming: m.isUpcoming, state: m.state, watchProgressLabel: m.watchProgress, progress: m.progress)
+    }
+
+    @ViewBuilder
+    private func statusUI(isUpcoming: Bool, state: MediaState?, watchProgressLabel: String?, progress: Double?) -> some View {
         Group {
-            if item.isUpcoming {
+            if isUpcoming {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.yellow)
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else if item.state == .completed {
+            } else if state == .completed {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.white)
                     .liquidGlassPill(accentColor: .green, isSolid: true)
-            } else if item.isActive || item.state == .rewatching {
+            } else if state == .active || state == .rewatching {
                 HStack(spacing: 2) {
                     Image(
-                        systemName: item.state == .rewatching
+                        systemName: state == .rewatching
                             ? "arrow.clockwise" : "play.circle.fill")
-                    if item.state != .rewatching {
-                        Text(item.watchProgressLabel ?? "")
+                    if let label = watchProgressLabel {
+                        Text(label)
                     }
                 }
                 .foregroundStyle(.white)
                 .liquidGlassPill(
-                    accentColor: item.state == .rewatching ? .orange : .indigo, isSolid: true)
-            } else if item.state == .onHold {
+                    accentColor: state == .rewatching ? .orange : .indigo, 
+                    isSolid: true,
+                    progress: progress
+                )
+            }
+ else if state == .onHold {
                 Image(systemName: "pause.circle.fill")
                     .foregroundStyle(.white)
                     .liquidGlassPill(
                         accentColor: Color(red: 0.9, green: 0.5, blue: 0.0), isSolid: true)  // Amber
-            } else if item.state == .dropped {
+            } else if state == .dropped {
                 Image(systemName: "xmark.bin.fill")
                     .foregroundStyle(.white)
                     .liquidGlassPill(
                         accentColor: Color(red: 0.8, green: 0.2, blue: 0.2), isSolid: true)  // Muted Red
-            } else if item.state == .wishlist && !item.isUpcoming {
+            } else if state == .wishlist && !isUpcoming {
                 Image(systemName: "clock.fill")
                     .foregroundStyle(.white)
                     .liquidGlassPill(accentColor: .orange, isSolid: true)
@@ -146,9 +209,11 @@ struct MediaThumbnailView: View {
     }
 
     let item: MediaItem?
+    let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
     let mode: DisplayMode
     var showTypeBadge: Bool = true
+    var isUpcomingSection: Bool = false
     var isLocalInSearch: Bool = false
     var action: (() -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -160,19 +225,36 @@ struct MediaThumbnailView: View {
     @State private var isButtonHovered = false
 
     init(
-        item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
+        item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, action: (() -> Void)? = nil
     ) {
         self.item = item
+        self.metadata = nil
         self.result = nil
         self.mode = mode
         self.showTypeBadge = showTypeBadge
+        self.isUpcomingSection = isUpcomingSection
+        self.namespace = namespace
+        self.action = action
+    }
+    
+    init(
+        metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
+        namespace: Namespace.ID? = nil, action: (() -> Void)? = nil
+    ) {
+        self.item = nil
+        self.metadata = metadata
+        self.result = nil
+        self.mode = mode
+        self.showTypeBadge = showTypeBadge
+        self.isUpcomingSection = isUpcomingSection
         self.namespace = namespace
         self.action = action
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
         self.item = nil
+        self.metadata = nil
         self.result = result
         self.mode = .search
         self.isLocalInSearch = isLocal
@@ -195,19 +277,19 @@ struct MediaThumbnailView: View {
     }
 
     private var title: String {
-        item?.title ?? result?.title ?? ""
+        item?.title ?? metadata?.title ?? result?.title ?? ""
     }
 
     private var posterURL: String? {
-        item?.posterURL ?? result?.posterURL
+        item?.posterURL ?? metadata?.posterURL ?? result?.posterURL
     }
 
     private var type: MediaType {
-        item?.type ?? result?.type ?? .movie
+        item?.type ?? metadata?.type ?? result?.type ?? .movie
     }
 
     private var yearLabel: String? {
-        if let date = item?.releaseDate {
+        if let date = item?.releaseDate ?? metadata?.releaseDate {
             return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
         } else if let dateString = result?.releaseDate, dateString.count >= 4 {
             return String(dateString.prefix(4))
@@ -216,7 +298,7 @@ struct MediaThumbnailView: View {
     }
 
     private var isAdded: Bool {
-        item != nil || isLocalInSearch
+        item != nil || metadata != nil || isLocalInSearch
     }
 
     var body: some View {
@@ -232,6 +314,8 @@ struct MediaThumbnailView: View {
         }
         .contextMenu {
             if let item = item {
+                libraryContextMenu(for: item)
+            } else if let metadata = metadata, let item = modelContext.model(for: metadata.id) as? MediaItem {
                 libraryContextMenu(for: item)
             }
         }
@@ -249,11 +333,38 @@ struct MediaThumbnailView: View {
                     searchOverlay
                 }
 
-                // 3. Top Pills
-                topPills
+                // 3. Top Section (Always show Film/TV top left, Status Badge top right)
+                HStack(alignment: .top) {
+                    if showTypeBadge {
+                        typeBadge
+                    }
+                    Spacer()
+                    
+                    let badge = Group {
+                        if let m = metadata {
+                            StatusBadgeView(metadata: m)
+                        } else if let item = item {
+                            StatusBadgeView(item: item)
+                        }
+                    }
+                    
+                    if let ns = namespace {
+                        let geomID = item?.id ?? "\(metadata?.id.hashValue ?? 0)"
+                        badge.matchedGeometryEffect(id: "badge_\(geomID)", in: ns)
+                    } else {
+                        badge
+                    }
+                }
+                .padding(6)
 
                 // 5. Info Pill (Bottom Center)
-                if let item = item, item.isUpcoming || mode == .hero {
+                if let m = metadata {
+                    VStack {
+                        Spacer()
+                        infoRowMetadata(for: m)
+                            .padding(6)
+                    }
+                } else if let item = item {
                     VStack {
                         Spacer()
                         infoRow(for: item)
@@ -263,8 +374,11 @@ struct MediaThumbnailView: View {
             }
             .frame(width: width, height: height)
             .background {
-                if let item = item, let ns = namespace {
-                    Color.clear.matchedGeometryEffect(id: "poster_bg_\(item.id)", in: ns)
+                if let ns = namespace {
+                    let geomID = item?.id ?? "\(metadata?.id.hashValue ?? 0)"
+                    if !geomID.isEmpty {
+                        Color.clear.matchedGeometryEffect(id: "poster_bg_\(geomID)", in: ns)
+                    }
                 }
             }
             .cornerRadius(mode == .hero ? 16 : 12)
@@ -272,11 +386,18 @@ struct MediaThumbnailView: View {
             .animation(.easeOut(duration: 0.2), value: isHovered)
 // 6. Info Section (Below)
 VStack(alignment: .leading, spacing: 1) {
-    Text(title)
+    let titleView = Text(title)
         .font(.system(size: mode == .hero ? 15 : 13, weight: .bold))
         .foregroundStyle(.primary)
         .lineLimit(2)
         .multilineTextAlignment(.leading)
+
+    if let ns = namespace {
+        let geomID = item?.id ?? "\(metadata?.id.hashValue ?? 0)"
+        titleView.matchedGeometryEffect(id: "title_\(geomID)", in: ns)
+    } else {
+        titleView
+    }
 
     if mode == .search {
         HStack(spacing: 4) {
@@ -287,7 +408,7 @@ VStack(alignment: .leading, spacing: 1) {
             Text("•")
 
             if type == .tvShow {
-                if let network = item?.cachedNetwork {
+                if let network = item?.cachedNetwork ?? metadata?.cachedNetwork {
                     Text(network)
                     Text("•")
                 }
@@ -328,7 +449,8 @@ VStack(alignment: .leading, spacing: 1) {
     private var posterLayer: some View {
         let content = Group {
             if let urlString = posterURL, let url = URL(string: urlString) {
-                CachedImage(url: url, targetSize: CGSize(width: width * 2, height: height * 2)) {
+                // Request slightly more pixels (3x) to ensure crispness even on high-end Retina screens
+                CachedImage(url: url, targetSize: CGSize(width: width * 3, height: height * 3)) {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
@@ -349,8 +471,13 @@ VStack(alignment: .leading, spacing: 1) {
             }
         }
 
-        if let item = item, let ns = namespace {
-            content.matchedGeometryEffect(id: "poster_\(item.id)", in: ns)
+        if let ns = namespace {
+            let geomID = item?.id ?? "\(metadata?.id.hashValue ?? 0)"
+            if !geomID.isEmpty {
+                content.matchedGeometryEffect(id: "poster_\(geomID)", in: ns)
+            } else {
+                content
+            }
         } else {
             content
         }
@@ -448,21 +575,6 @@ VStack(alignment: .leading, spacing: 1) {
     }
 
     @ViewBuilder
-    private var topPills: some View {
-        HStack(alignment: .top) {
-            if showTypeBadge {
-                typeBadge
-            }
-            Spacer()
-
-            if let item = item {
-                StatusBadgeView(item: item)
-            }
-        }
-        .padding(6)
-    }
-
-    @ViewBuilder
     private var typeBadge: some View {
         Group {
             switch type {
@@ -476,46 +588,66 @@ VStack(alignment: .leading, spacing: 1) {
 
     @ViewBuilder
     private func infoRow(for item: MediaItem) -> some View {
+        infoRowUI(badgeText: item.badgeText, state: item.state, watchProgressLabel: item.watchProgressLabel, progress: item.progress, isUpcomingSection: isUpcomingSection, isUpcoming: item.isUpcoming)
+    }
+
+    @ViewBuilder
+    private func infoRowMetadata(for m: MediaThumbnailMetadata) -> some View {
+        infoRowUI(badgeText: m.badgeText, state: m.state, watchProgressLabel: m.watchProgress, progress: m.progress, isUpcomingSection: isUpcomingSection, isUpcoming: m.isUpcoming)
+    }
+
+    @ViewBuilder
+    private func infoRowUI(badgeText: String?, state: MediaState?, watchProgressLabel: String?, progress: Double?, isUpcomingSection: Bool, isUpcoming: Bool) -> some View {
         Group {
-            if item.isUpcoming {
-                Text(item.nextAiringLabel ?? "")
-                    .liquidGlassPill(
-                        accentColor: item.isRecentlyReleased
-                            ? Color.semanticGreen(for: colorScheme) : .primary,
-                        isSolid: item.isRecentlyReleased
-                    )
-            } else if item.state == .wishlist {
+            let isAvailable = badgeText?.contains("Streaming") == true || badgeText?.contains("Available") == true || (badgeText?.contains("🍿 Season") == true && badgeText?.contains("Drops") == false)
+
+            if state == .completed {
+                // NO PILL FOR COMPLETED
+                EmptyView()
+            } else if (isUpcomingSection || isUpcoming) && badgeText != nil {
+                // FORCE BADGE FOR UPCOMING SECTION OR UPCOMING ITEMS IN LIBRARY
+                badgeContent(badgeText: badgeText!, isAvailable: isAvailable, state: state, progress: progress)
+            } else if (state == .active || state == .rewatching) && watchProgressLabel != nil {
+                // HIDE BOTTOM PILL FOR ACTIVE IF NOT UPCOMING (redundant with top-right badge)
+                EmptyView()
+            } else if let badgeText = badgeText, isUpcomingSection {
+                // BADGE ONLY IF UPCOMING SECTION
+                badgeContent(badgeText: badgeText, isAvailable: isAvailable, state: state, progress: progress)
+            } else if state == .wishlist && isUpcomingSection {
                 Text("Watchlist")
                     .foregroundStyle(.orange)
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else if item.state == .completed {
-                Text("Completed")
-                    .foregroundStyle(.primary)
-                    .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else if item.state == .onHold {
-                Text("On Hold (\(item.watchProgressLabel ?? "Paused"))")
+            } else if state == .onHold {
+                Text("On Hold (\(watchProgressLabel ?? "Paused"))")
                     .foregroundStyle(Color(red: 0.9, green: 0.5, blue: 0.0))  // Amber
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else if item.state == .dropped {
-                Text("Dropped (\(item.watchProgressLabel ?? "End"))")
+            } else if state == .dropped {
+                Text("Dropped (\(watchProgressLabel ?? "End"))")
                     .foregroundStyle(Color(red: 0.8, green: 0.2, blue: 0.2))  // Red
                     .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else if item.state == .rewatching {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Re-watching")
-                }
-                .foregroundStyle(.orange)
-                .liquidGlassPill(accentColor: .primary, isSolid: false)
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: "play.fill")
-                    Text(item.watchProgressLabel ?? "In Progress")
-                }
-                .liquidGlassPill(accentColor: appAccent.color, isSolid: true)
             }
         }
-        .font(.system(size: 9, weight: .bold))
+    }
+
+    @ViewBuilder
+    private func badgeContent(badgeText: String, isAvailable: Bool, state: MediaState?, progress: Double?) -> some View {
+        HStack(spacing: 6) {
+            // Funky & Vibey Icon
+            Image(systemName: isAvailable ? "play.fill" : "sparkles")
+                .font(.system(size: 10, weight: .black))
+                .symbolEffect(.pulse, options: .repeating, value: isAvailable)
+                .foregroundStyle(isAvailable ? .white : .yellow)
+
+            Text(badgeText)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .font(.system(size: 9, weight: .bold))
+        }
+        .liquidGlassPill(
+            accentColor: isAvailable ? Color.semanticGreen(for: colorScheme) : .primary,
+            isSolid: isAvailable,
+            progress: (isAvailable && (state == .active || state == .rewatching)) ? progress : nil
+        )
     }
 
     @ViewBuilder
@@ -533,7 +665,6 @@ VStack(alignment: .leading, spacing: 1) {
         Divider()
         Button(role: .destructive) {
             NotificationManager.shared.cancelNotification(for: item)
-            SpotlightManager.shared.removeItem(item)
             modelContext.delete(item)
         } label: {
             Label("Remove", systemImage: "trash")
@@ -606,7 +737,7 @@ extension Color {
 
     static func semanticGreen(for colorScheme: ColorScheme) -> Color {
         if colorScheme == .dark {
-            return Color.green  // Existing bright green for OLED/Dark
+            return Color.green // Return to vibrant bright green
         } else {
             return Color(red: 0.0, green: 0.6, blue: 0.2)  // More vibrant but high-contrast green for Light Mode
         }
@@ -687,21 +818,27 @@ struct ThemeBackground: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
 
     func body(content: Content) -> some View {
+        let isAsleep = SleepManager.shared.isAsleep
+        
         content
             .background {
                 ZStack {
-                    if themeStyle == .brand && !disableBrandBackground {
-                        appAccent.brandBackground(for: colorScheme)
-                    } else {
+                    if isAsleep {
                         Color(NSColor.windowBackgroundColor)
-                    }
+                    } else {
+                        if themeStyle == .brand && !disableBrandBackground {
+                            appAccent.brandBackground(for: colorScheme)
+                        } else {
+                            Color(NSColor.windowBackgroundColor)
+                        }
 
-                    if let tint = tintOverride {
-                        tint.opacity(colorScheme == .dark ? 0.35 : 0.25)
-                    } else if let network = networkOverride,
-                        let color = NetworkThemeManager.shared.color(for: network)
-                    {
-                        color.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                        if let tint = tintOverride {
+                            tint.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                        } else if let network = networkOverride,
+                            let color = NetworkThemeManager.shared.color(for: network)
+                        {
+                            color.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                        }
                     }
                 }
                 .ignoresSafeArea()

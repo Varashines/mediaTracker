@@ -4,7 +4,6 @@ import SwiftUI
 struct MediaHeaderView: View {
     @Bindable var item: MediaItem
     let themeColor: Color
-    let nextEpisodeText: String?
     var viewModel: DetailViewModel? = nil
     var namespace: Namespace.ID? = nil
     var onStatusChange: ((MediaState?) -> Void)? = nil
@@ -15,16 +14,25 @@ struct MediaHeaderView: View {
             PosterView(item: item, themeColor: themeColor, namespace: namespace)
 
             VStack(alignment: .leading, spacing: 20) {
-                TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange)
+                TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
 
-                if let nextText = nextEpisodeText {
-                    Text(nextText)
-                        .font(.headline)
-                        .liquidGlassPill(
-                            accentColor: item.nextAiringDate ?? Date() < Date() ? Color.semanticGreen(for: colorScheme) : themeColor,
-                            isSolid: item.nextAiringDate ?? Date() < Date()
-                        )
-                        .padding(.top, 4)
+                if item.isUpcoming, let badgeText = item.detailBadgeText {
+                    let isAvailable = badgeText.contains("Streaming") || badgeText.contains("Available")
+                    
+                    HStack(spacing: 8) {
+                        Image(systemName: isAvailable ? "play.fill" : "sparkles")
+                            .font(.system(size: 14, weight: .black))
+                            .symbolEffect(.pulse, options: .repeating, value: isAvailable)
+                            .foregroundStyle(isAvailable ? .white : .yellow)
+
+                        Text(badgeText)
+                            .font(.headline)
+                    }
+                    .liquidGlassPill(
+                        accentColor: isAvailable ? Color.semanticGreen(for: colorScheme) : themeColor,
+                        isSolid: isAvailable
+                    )
+                    .padding(.top, 4)
                 }
 
                 MetadataSection(item: item, themeColor: themeColor)
@@ -43,7 +51,7 @@ struct PosterView: View {
 
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
-            let content = CachedImage(url: url, targetSize: CGSize(width: 600, height: 900)) { _ in
+            let content = CachedImage(url: url, targetSize: CGSize(width: 600, height: 900), priority: .critical) { _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
                 }
@@ -75,12 +83,19 @@ struct TitleSection: View {
     @Bindable var item: MediaItem
     let themeColor: Color
     var onStatusChange: ((MediaState?) -> Void)?
+    var namespace: Namespace.ID? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(item.title)
+            let titleView = Text(item.title)
                 .font(.system(size: 34, weight: .bold))
+            
+            if let ns = namespace {
+                titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
+            } else {
+                titleView
+            }
 
             HStack(spacing: 12) {
                 Text(item.type?.rawValue ?? "")
@@ -89,9 +104,15 @@ struct TitleSection: View {
 
                 if item.isUpcoming {
                     let isStreaming = (item.nextAiringDate ?? Date()) < Date()
-                    Text(isStreaming ? "Now Streaming" : "Upcoming")
+                    let badge = Text(isStreaming ? "Now Streaming" : "Upcoming")
                         .font(.subheadline.weight(.bold))
                         .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
+                    
+                    if let ns = namespace {
+                        badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
+                    } else {
+                        badge
+                    }
                 }
 
                 Spacer().frame(width: 10)
@@ -238,7 +259,7 @@ struct CastMemberCardNew: View {
                 // Image Section (Left)
                 Group {
                     if let urlString = member.profileURL, let url = URL(string: urlString) {
-                        CachedImage(url: url, targetSize: CGSize(width: 120, height: 180)) { _ in
+                        CachedImage(url: url, targetSize: CGSize(width: 120, height: 180), priority: .low) { _ in
                         } placeholder: {
                             ProgressView().controlSize(.small)
                         }

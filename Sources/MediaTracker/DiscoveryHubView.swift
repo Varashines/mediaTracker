@@ -146,6 +146,9 @@ struct DiscoveryHubView: View {
     }
     
     private func refreshData(force: Bool) {
+        // Skip if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+
         // Calculate a stable hash for the current library state
         // We use count and the hash of the first/last items as a fast proxy for change.
         let currentLibraryHash = items.count ^ (items.first?.id.hashValue ?? 0) ^ (items.last?.id.hashValue ?? 0)
@@ -162,12 +165,16 @@ struct DiscoveryHubView: View {
         
         let localHiddenStudios = hiddenStudios
         let lightweightItems = items.map { item in
-            LightweightDiscoveryItem(
+            // Fallback for cases where cached properties might be missing (e.g. legacy data)
+            let genres = !item.cachedGenres.isEmpty ? item.cachedGenres : (item.movieDetails?.genres ?? item.tvShowDetails?.genres ?? [])
+            let language = item.cachedLanguage ?? item.movieDetails?.originalLanguage ?? item.tvShowDetails?.originalLanguage
+            
+            return LightweightDiscoveryItem(
                 type: item.type,
                 network: item.cachedNetwork,
                 networkLogoPath: item.tvShowDetails?.networkLogoPath, // Still need for logos
-                genres: item.cachedGenres,
-                originalLanguage: item.cachedLanguage
+                genres: genres,
+                originalLanguage: language
             )
         }
         

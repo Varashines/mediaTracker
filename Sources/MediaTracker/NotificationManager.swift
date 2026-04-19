@@ -83,20 +83,37 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
         
-        var date1 = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        // Ensure we use the user's current calendar to respect their local timezone (e.g., IST)
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         
-        if date1.hour == 0 && date1.minute == 0 {
-            date1.hour = 13
-            date1.minute = 30
+        // 1. If a specific time string is provided (e.g., "20:00") and the date is at 00:00, use the time string.
+        if let time = time, dateComponents.hour == 0 && dateComponents.minute == 0 {
+            let timeParts = time.split(separator: ":")
+            if timeParts.count >= 2, let h = Int(timeParts[0]), let m = Int(timeParts[1]) {
+                dateComponents.hour = h
+                dateComponents.minute = m
+            }
         }
         
-        let trigger1 = UNCalendarNotificationTrigger(dateMatching: date1, repeats: false)
+        // 2. Default fallback: If it's still 00:00 local time, it's likely a date-only object from a generic release.
+        // We use 09:00 AM as a more sensible "day-of" notification time than 13:30.
+        // If DateUtils parsing provided a specific drop time (like 09:30 AM IST for Apple TV+), 
+        // it will already be in dateComponents and we trust it.
+        if dateComponents.hour == 0 && dateComponents.minute == 0 {
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+        }
+        
+        let trigger1 = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
         let request1 = UNNotificationRequest(identifier: "\(identifier)-day1", content: content, trigger: trigger1)
         
         center.add(request1)
         
-        if let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: date) {
-            var date2 = Calendar.current.dateComponents([.year, .month, .day], from: nextDay)
+        // Secondary Reminder (Next Day at 9:30 AM)
+        if let scheduledDate = calendar.date(from: dateComponents),
+           let nextDay = calendar.date(byAdding: .day, value: 1, to: scheduledDate) {
+            var date2 = calendar.dateComponents([.year, .month, .day], from: nextDay)
             date2.hour = 9
             date2.minute = 30
             

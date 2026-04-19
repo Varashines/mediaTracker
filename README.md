@@ -43,7 +43,6 @@ MediaTracker isn't just a database; it's a visual journey. Every corner of the a
 - **Performance Engine:**
     - **Background Refresh:** Metadata automatically scans for updates (new seasons, episode titles) without interrupting the user.
     - **Decoding Pipeline:** Surgical use of `CGImageSource` for memory-efficient image loading.
-    - **Spotlight Integration:** Full CoreSpotlight indexing for Cmd+Space deep linking.
 
 ## 🚦 Getting Started
 

@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import CoreSpotlight
 
 enum SortOrder: String, CaseIterable, Identifiable {
     case alphabetical = "Alphabetical"
@@ -46,11 +45,12 @@ class MediaViewModel {
     var selectedLanguage: String? = nil
     var isBatchRefreshing: Bool = false
     var lastDiscoveryCalculationHash: Int = 0
+    var gridResetID: UUID = UUID()
 
-    // Processed Data (Main Actor Cache)
-    var displayedItems: [MediaItem] = []
-    var recentlyAddedItems: [MediaItem] = []
-    var groupedItems: [(String, [MediaItem])] = []
+    // Processed Data (Main Actor Cache) - NOW USING LIGHTWEIGHT METADATA
+    var displayedItems: [MediaThumbnailMetadata] = []
+    var recentlyAddedItems: [MediaThumbnailMetadata] = []
+    var groupedItems: [(String, [MediaThumbnailMetadata])] = []
 
     // Discovery Cache
     var cachedNetworks: [DiscoveryNode] = []
@@ -76,6 +76,7 @@ class MediaViewModel {
         return category ?? "Library"
     }
 }
+
 struct ContentView: View {
     @Namespace private var posterNamespace
     @Environment(\.modelContext) private var modelContext
@@ -87,6 +88,9 @@ struct ContentView: View {
     @State private var updateTask: Task<Void, Never>?
     
     private func updateDisplayedItems(delay: UInt64 = 50_000_000) {
+        // Skip updating if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+        
         updateTask?.cancel()
         updateTask = Task {
             // Give a tiny buffer for rapid changes (like typing or toggling filters)
@@ -113,18 +117,11 @@ struct ContentView: View {
                 
                 if Task.isCancelled { return }
                 
-                // Fault models back onto the MainActor
-                let displayed = result.displayedIDs.compactMap { self.modelContext.model(for: $0) as? MediaItem }
-                let recentlyAdded = result.recentlyAddedIDs.compactMap { self.modelContext.model(for: $0) as? MediaItem }
-                let grouped = result.groupedIDs.map { (key, ids) in
-                    (key, ids.compactMap { self.modelContext.model(for: $0) as? MediaItem })
-                }
-                
                 await MainActor.run {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        viewModel.displayedItems = displayed
-                        viewModel.recentlyAddedItems = recentlyAdded
-                        viewModel.groupedItems = grouped
+                        viewModel.displayedItems = result.displayed
+                        viewModel.recentlyAddedItems = result.recentlyAdded
+                        viewModel.groupedItems = result.grouped
                     }
                 }
             } catch {
@@ -134,13 +131,17 @@ struct ContentView: View {
     }
     
     private func performBatchRefresh() {
-        let itemsToRefresh = viewModel.displayedItems
+        // Find actual MediaItems from the metadata IDs
+        let ids = viewModel.displayedItems.map { $0.id }
+        let itemsToRefresh = ids.compactMap { modelContext.model(for: $0) as? MediaItem }
+        
         viewModel.isBatchRefreshing = true
         
         DataService.shared.refreshMetadata(for: itemsToRefresh, modelContext: modelContext)
         
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            // Give network tasks a moment to start
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             await MainActor.run {
                 viewModel.isBatchRefreshing = false
                 updateDisplayedItems()
@@ -150,187 +151,47 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $viewModel.selectedCategory) {
-                Group {
-                    Label("Upcoming", systemImage: "calendar")
-                        .tag("Upcoming")
-
-                    Label("Now Watching", systemImage: "sparkles")
-                        .tag("NowWatching")
-                    
-                    Label("In Progress", systemImage: "play.circle")
-                        .tag("InProgress")
-                    
-                    Label("Watchlist", systemImage: "list.bullet.rectangle")
-                        .tag("Watchlist")
-
-                    Label("Library", systemImage: "tray.full")
-                        .tag("All")
+            SidebarView(selection: $viewModel.selectedCategory)
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden) // Allow appBackground to show through sidebar
+                .navigationTitle("Library")
+                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
+                .onChange(of: viewModel.selectedCategory) {
+                    viewModel.selectedNetwork = nil
+                    viewModel.selectedLanguage = nil
+                    updateDisplayedItems()
                 }
-                .padding(.vertical, 4)
-                
-                Section("Smart Folders") {
-                    Label("On Hold", systemImage: "pause.circle")
-                        .tag("OnHold")
-                    Label("Dropped", systemImage: "xmark.bin")
-                        .tag("Dropped")
-                    Label("Re-watching", systemImage: "arrow.clockwise.circle")
-                        .tag("Rewatching")
-                }
-                .padding(.vertical, 4)
-                
-                Section("Explore") {
-                    Label("Discover", systemImage: "sparkles.tv")
-                        .tag("Discover")
-                }
-                .padding(.vertical, 4)
-                
-                Section("Categories") {
-                    ForEach(MediaType.allCases, id: \.self) { type in
-                        Label(type.pluralName, systemImage: icon(for: type))
-                            .tag(type.rawValue)
-                            .padding(.vertical, 4)
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden) // Allow appBackground to show through sidebar
-            .navigationTitle("Library")
-            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-            .onChange(of: viewModel.selectedCategory) {
-                viewModel.selectedNetwork = nil
-                viewModel.selectedLanguage = nil
-                updateDisplayedItems()
-            }
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
-                ZStack(alignment: .top) {
-                    if isSearchActive {
-                        SearchView(
-                            searchText: $viewModel.searchText,
-                            isSearchActive: $isSearchActive,
-                            submitTrigger: viewModel.searchSubmitTrigger,
-                            initialType: currentMediaType
-                        ) { item in
-                            viewModel.navigationPath.append(item)
-                        }
-                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                    } else if viewModel.selectedCategory == "Discover" {
-                        DiscoveryHubView(
-                            items: allItems,
-                            namespace: posterNamespace,
-                            viewModel: viewModel,
-                            onFilterSelected: { filter in
-                                viewModel.navigationPath.append(filter)
-                            }
-                        )
-                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                    } else if viewModel.selectedCategory == "Upcoming" {
-                        // Force unique identity for Upcoming to avoid layout morph stutter
-                        MediaGridView(
-                            items: viewModel.displayedItems, 
-                            recentlyAdded: viewModel.recentlyAddedItems,
-                            groupedItems: viewModel.groupedItems,
-                            selectedCategory: viewModel.selectedCategory, 
-                            showingUpcomingOnly: true,
-                            searchText: viewModel.searchText,
-                            groupBy: viewModel.selectedGroupBy,
-                            selectedNetwork: viewModel.selectedNetwork,
-                            namespace: posterNamespace,
-                            onSelectHero: { item in
-                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                    viewModel.navigationPath.append(item)
-                                }
-                            },
-                            onNetworkSelected: { network in
-                                withAnimation {
-                                    viewModel.selectedNetwork = network.isEmpty ? nil : network
-                                    updateDisplayedItems()
-                                }
-                            }
-                        )
-                        .id("grid_upcoming")
-                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                    } else {
-                        MediaGridView(
-                            items: viewModel.displayedItems, 
-                            recentlyAdded: viewModel.recentlyAddedItems,
-                            groupedItems: viewModel.groupedItems,
-                            selectedCategory: viewModel.selectedCategory, 
-                            showingUpcomingOnly: false,
-                            searchText: viewModel.searchText,
-                            groupBy: viewModel.selectedGroupBy,
-                            selectedNetwork: viewModel.selectedNetwork,
-                            namespace: posterNamespace,
-                            onSelectHero: { item in
-                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                    viewModel.navigationPath.append(item)
-                                }
-                            },
-                            onNetworkSelected: { network in
-                                withAnimation {
-                                    viewModel.selectedNetwork = network.isEmpty ? nil : network
-                                    updateDisplayedItems()
-                                }
-                            }
-                        )
-                        .id("grid_standard")
-                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                    }
-                }
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+                mainContent
+                    .id(viewModel.gridResetID)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
                 .navigationTitle(isSearchActive ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory))
                 .navigationDestination(for: MediaItem.self) { item in
                     DetailView(item: item, namespace: posterNamespace) { actorName in
                         viewModel.selectedCategory = "All" // Switch to All to check all titles
                         viewModel.searchText = actorName
                         isSearchActive = false // STAY IN LIBRARY VIEW
-                        viewModel.navigationPath = NavigationPath() // Clear path to go back to grid
+                        updateDisplayedItems()
                     }
                 }
                 .navigationDestination(for: DiscoveryFilter.self) { filter in
                     FilteredLibraryGridView(filter: filter, allItems: allItems, namespace: posterNamespace)
                 }
-                .searchable(text: $viewModel.searchText, isPresented: $isSearchActive, prompt: "Search movies, shows...")
+                .searchable(text: $viewModel.searchText, isPresented: $isSearchActive, placement: .automatic, prompt: "Search movies & shows")
                 .onSubmit(of: .search) {
                     viewModel.searchSubmitTrigger += 1
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         if !isSearchActive && isSortable {
-                            Menu {
-                                Picker("Sort By", selection: $viewModel.sortOrder) {
-                                    ForEach(SortOrder.allCases) { order in
-                                        Label(order.rawValue, systemImage: order.icon)
-                                            .tag(order)
-                                    }
-                                }
-                                
-                                Picker("Group By", selection: $viewModel.selectedGroupBy) {
-                                    ForEach(GroupBy.allCases) { group in
-                                        Label(group.rawValue, systemImage: group.icon)
-                                            .tag(group)
-                                    }
-                                }
-                            } label: {
-                                Label("Display Settings", systemImage: "line.3.horizontal.decrease.circle")
-                            }
+                            displaySettingsMenu
                         }
                     }
                     
                     ToolbarItem(placement: .primaryAction) {
                         if !isSearchActive && isSortable {
-                            Button {
-                                performBatchRefresh()
-                            } label: {
-                                if viewModel.isBatchRefreshing {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Label("Refresh All", systemImage: "arrow.clockwise")
-                                }
-                            }
-                            .disabled(viewModel.isBatchRefreshing)
-                            .help("Refresh metadata for all items in this view")
+                            refreshButton
                         }
                     }
                 }
@@ -342,27 +203,151 @@ struct ContentView: View {
                     .opacity(0)
                 }
             }
+            .sleepModeSupport()
         }
         .appBackground(network: viewModel.selectedNetwork) // Apply to the whole NavigationSplitView
         .onAppear {
             NotificationManager.shared.requestPermission()
             updateDisplayedItems()
             performMaintenanceRefresh()
-        }
-        .onChange(of: viewModel.selectedCategory) {
-            viewModel.selectedNetwork = nil // RESET NETWORK FILTER ON CATEGORY CHANGE
-            updateDisplayedItems()
+            
+            // Phase 3 Deep Optimization: Reset context on sleep
+            SleepManager.shared.purgeDataCache = {
+                // rollBack discards all unsaved changes and faults all objects back to the disk.
+                // This is the most effective way to drop memory usage for SwiftData.
+                if modelContext.hasChanges {
+                    try? modelContext.save()
+                }
+                modelContext.rollback()
+            }
         }
         .onChange(of: viewModel.searchText) { updateDisplayedItems(delay: 300_000_000) }
         .onChange(of: viewModel.sortOrder) { updateDisplayedItems() }
         .onChange(of: viewModel.selectedGroupBy) { updateDisplayedItems() }
         .onChange(of: allItems) { updateDisplayedItems() }
-        .onContinueUserActivity(CSSearchableItemActionType) { userActivity in
-            if let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
-                if let item = allItems.first(where: { $0.id == identifier }) {
-                    viewModel.navigationPath = NavigationPath([item])
-                }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+            updateDisplayedItems()
+        }
+        .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
+            if !isAsleep {
+                // FORCE A HARD RESET OF VIEW IDENTITY ON WAKE
+                viewModel.gridResetID = UUID()
+                updateDisplayedItems()
             }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        ZStack(alignment: .top) {
+            if isSearchActive {
+                SearchView(
+                    searchText: $viewModel.searchText,
+                    isSearchActive: $isSearchActive,
+                    submitTrigger: viewModel.searchSubmitTrigger,
+                    initialType: currentMediaType
+                ) { item in
+                    viewModel.navigationPath.append(item)
+                }
+                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+            } else if viewModel.selectedCategory == "Discover" {
+                DiscoveryHubView(
+                    items: allItems,
+                    namespace: posterNamespace,
+                    viewModel: viewModel,
+                    onFilterSelected: { filter in
+                        viewModel.navigationPath.append(filter)
+                    }
+                )
+                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+            } else if viewModel.selectedCategory == "Upcoming" {
+                // Force unique identity for Upcoming to avoid layout morph stutter
+                MediaGridView(
+                    items: viewModel.displayedItems, 
+                    recentlyAdded: viewModel.recentlyAddedItems,
+                    groupedItems: viewModel.groupedItems,
+                    selectedCategory: viewModel.selectedCategory, 
+                    showingUpcomingOnly: true,
+                    searchText: viewModel.searchText,
+                    groupBy: viewModel.selectedGroupBy,
+                    selectedNetwork: viewModel.selectedNetwork,
+                    namespace: posterNamespace,
+                    onSelectHero: { metadata in
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                viewModel.navigationPath.append(item)
+                            }
+                        }
+                    },
+                    onNetworkSelected: { network in
+                        withAnimation {
+                            viewModel.selectedNetwork = network.isEmpty ? nil : network
+                            updateDisplayedItems()
+                        }
+                    }
+                )
+                .id("grid_upcoming")
+                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+            } else {
+                MediaGridView(
+                    items: viewModel.displayedItems, 
+                    recentlyAdded: viewModel.recentlyAddedItems,
+                    groupedItems: viewModel.groupedItems,
+                    selectedCategory: viewModel.selectedCategory, 
+                    showingUpcomingOnly: false,
+                    searchText: viewModel.searchText,
+                    groupBy: viewModel.selectedGroupBy,
+                    selectedNetwork: viewModel.selectedNetwork,
+                    namespace: posterNamespace,
+                    onSelectHero: { metadata in
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                viewModel.navigationPath.append(item)
+                            }
+                        }
+                    },
+                    onNetworkSelected: { network in
+                        withAnimation {
+                            viewModel.selectedNetwork = network.isEmpty ? nil : network
+                            updateDisplayedItems()
+                        }
+                    }
+                )
+                .id("grid_standard")
+                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var refreshButton: some View {
+        Button(action: performBatchRefresh) {
+            if viewModel.isBatchRefreshing {
+                ProgressView().controlSize(.small)
+            } else {
+                Label("Refresh All", systemImage: "arrow.clockwise")
+            }
+        }
+        .disabled(viewModel.isBatchRefreshing)
+        .help("Refresh metadata for all items in this view")
+    }
+
+    @ViewBuilder
+    private var displaySettingsMenu: some View {
+        Menu {
+            Picker("Sort", selection: $viewModel.sortOrder) {
+                Text("Alphabetical").tag(SortOrder.alphabetical)
+                Text("Newest Release").tag(SortOrder.newestRelease)
+                Text("Recently Added").tag(SortOrder.recentlyAdded)
+            }
+            
+            Picker("Group", selection: $viewModel.selectedGroupBy) {
+                Text("None").tag(GroupBy.none)
+                Text("By Year").tag(GroupBy.year)
+                Text("By Category").tag(GroupBy.category)
+            }
+        } label: {
+            Label("Display", systemImage: "line.3.horizontal.decrease.circle")
         }
     }
     
@@ -372,8 +357,11 @@ struct ContentView: View {
         guard !hasRunMaintenance else { return }
         hasRunMaintenance = true
         
-        let staleItems = allItems.filter { $0.requiresMaintenanceRefresh }
-        guard !staleItems.isEmpty else { return }
+        // Find TV shows that haven't been updated in 24 hours
+        let staleThreshold = Date().addingTimeInterval(-24 * 60 * 60)
+        let staleItems = allItems.filter { $0.type == .tvShow && ($0.lastUpdated ?? .distantPast) < staleThreshold }
+        
+        if staleItems.isEmpty { return }
         
         print("🧹 Maintenance: Refreshing \(staleItems.count) stale TV shows...")
         DataService.shared.refreshMetadata(for: staleItems, modelContext: modelContext)
@@ -388,7 +376,65 @@ struct ContentView: View {
         if cat == "Discover" { return false }
         return cat == "All" || MediaType(rawValue: cat) != nil
     }
-    
+}
+
+// Phase 2 Optimization: Sidebar Tokenization
+@MainActor
+struct SidebarView: View, Equatable {
+    @Binding var selection: String?
+
+    nonisolated static func == (lhs: SidebarView, rhs: SidebarView) -> Bool {
+        // Compare projected values which are Sendable
+        return lhs._selection.wrappedValue == rhs._selection.wrappedValue
+    }
+
+    var body: some View {
+        List(selection: $selection) {
+            Group {
+                Label("Upcoming", systemImage: "calendar")
+                    .tag("Upcoming")
+
+                Label("Now Watching", systemImage: "sparkles")
+                    .tag("NowWatching")
+                
+                Label("In Progress", systemImage: "play.circle")
+                    .tag("InProgress")
+                
+                Label("Watchlist", systemImage: "list.bullet.rectangle")
+                    .tag("Watchlist")
+
+                Label("Library", systemImage: "tray.full")
+                    .tag("All")
+            }
+            .padding(.vertical, 4)
+            
+            Section("Smart Folders") {
+                Label("On Hold", systemImage: "pause.circle")
+                    .tag("OnHold")
+                Label("Dropped", systemImage: "xmark.bin")
+                    .tag("Dropped")
+                Label("Re-watching", systemImage: "arrow.clockwise.circle")
+                    .tag("Rewatching")
+            }
+            .padding(.vertical, 4)
+            
+            Section("Explore") {
+                Label("Discover", systemImage: "sparkles.tv")
+                    .tag("Discover")
+            }
+            .padding(.vertical, 4)
+            
+            Section("Categories") {
+                ForEach(MediaType.allCases, id: \.self) { type in
+                    let name = type.pluralName
+                    let img = icon(for: type)
+                    Label(name, systemImage: img)
+                        .tag(type.rawValue)
+                }
+            }
+        }
+    }
+
     private func icon(for type: MediaType) -> String {
         switch type {
         case .movie: return "film"
@@ -412,16 +458,16 @@ private func availableStates(for item: MediaItem) -> [MediaState] {
 }
 
 struct MediaGridView: View {
-    let items: [MediaItem]
-    let recentlyAdded: [MediaItem]
-    let groupedItems: [(String, [MediaItem])]
+    let items: [MediaThumbnailMetadata]
+    let recentlyAdded: [MediaThumbnailMetadata]
+    let groupedItems: [(String, [MediaThumbnailMetadata])]
     let selectedCategory: String?
     let showingUpcomingOnly: Bool
     let searchText: String
     let groupBy: GroupBy
     let selectedNetwork: String?
     let namespace: Namespace.ID
-    let onSelectHero: (MediaItem) -> Void
+    let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onNetworkSelected: (String) -> Void
     
     @Environment(\.modelContext) private var modelContext
@@ -430,34 +476,45 @@ struct MediaGridView: View {
         GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)
     ]
     
-    private var isCategoryPage: Bool {
+    var isCategoryPage: Bool {
         guard let cat = selectedCategory else { return false }
         return MediaType(rawValue: cat) != nil
     }
-    
-    private var isMainSection: Bool {
-        guard let cat = selectedCategory else { return false }
-        return ["NowWatching", "InProgress", "Watchlist", "All", "OnHold", "Dropped", "Rewatching"].contains(cat)
+
+    var isMainSection: Bool {
+        ["NowWatching", "InProgress", "Watchlist", "All"].contains(selectedCategory)
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                if showingUpcomingOnly && !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("Featured")
+                if !searchText.isEmpty && !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Search Results")
                             .font(.system(size: 28, weight: .bold))
                             .padding(.horizontal, 30)
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 20) {
-                                ForEach(items.prefix(5)) { item in
-                                    MediaThumbnailView(item: item, mode: .hero, namespace: namespace)
-                                        .onTapGesture { onSelectHero(item) }
+                    }
+                } else if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil {
+                    // Hero Section for Upcoming
+                    if items.isEmpty {
+                        LibraryEmptyStateView(category: selectedCategory)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Featured")
+                                .font(.system(size: 28, weight: .bold))
+                                .padding(.horizontal, 30)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 25) {
+                                    ForEach(items.prefix(5)) { metadata in
+                                        MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace)
+                                            .id(metadata.versionHash)
+                                            .onTapGesture { onSelectHero(metadata) }
+                                    }
                                 }
+                                .padding(.horizontal, 30)
+                                .padding(.bottom, 10)
                             }
-                            .padding(.horizontal, 30)
-                            .padding(.bottom, 10)
                         }
                     }
                 }
@@ -501,11 +558,14 @@ struct MediaGridView: View {
                                 
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 20) {
-                                        ForEach(recentlyAdded) { item in
-                                            NavigationLink(value: item) {
-                                                MediaThumbnailView(item: item, mode: .grid)
+                                        ForEach(recentlyAdded) { metadata in
+                                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                                NavigationLink(value: item) {
+                                                    MediaThumbnailView(metadata: metadata, mode: .grid)
+                                                        .id(metadata.versionHash)
+                                                }
+                                                .buttonStyle(.plain)
                                             }
-                                            .buttonStyle(.plain)
                                         }
                                     }
                                     .padding(.horizontal, 30)
@@ -520,12 +580,15 @@ struct MediaGridView: View {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                 let displayItems = showingUpcomingOnly ? Array(items.dropFirst(min(items.count, 5))) : items
                                 
-                                ForEach(displayItems) { item in
-                                    NavigationLink(value: item) {
-                                        MediaThumbnailView(item: item, mode: .grid, showTypeBadge: !isCategoryPage, namespace: namespace)
+                                ForEach(displayItems) { metadata in
+                                    if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                        NavigationLink(value: item) {
+                                            MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace)
+                                                .id(metadata.versionHash)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .draggable(item.id)
                                     }
-                                    .buttonStyle(.plain)
-                                    .draggable(item.id)
                                 }
                             }
                             .drawingGroup()
@@ -534,7 +597,7 @@ struct MediaGridView: View {
                         } else {
                             // Pre-calculated Grouped View
                             VStack(alignment: .leading, spacing: 40) {
-                                ForEach(groupedItems, id: \.0) { (key, groupItems) in
+                                ForEach(groupedItems, id: \.0) { (key, groupMetadatas) in
                                     VStack(alignment: .leading, spacing: 15) {
                                         Text(key)
                                             .font(.title2.bold())
@@ -542,11 +605,14 @@ struct MediaGridView: View {
                                             .padding(.horizontal, 30)
                                         
                                         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                                            ForEach(groupItems) { item in
-                                                NavigationLink(value: item) {
-                                                    MediaThumbnailView(item: item, mode: .grid, showTypeBadge: groupBy != .category, namespace: namespace)
+                                            ForEach(groupMetadatas) { metadata in
+                                                if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                                    NavigationLink(value: item) {
+                                                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: groupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace)
+                                                            .id(metadata.versionHash)
+                                                    }
+                                                    .buttonStyle(.plain)
                                                 }
-                                                .buttonStyle(.plain)
                                             }
                                         }
                                         .drawingGroup()
@@ -574,11 +640,13 @@ struct FilteredLibraryGridView: View {
         let filteredItems = allItems.filter { item in
             switch filter.type {
             case .genre:
-                return item.cachedGenres.contains(filter.name)
+                let genres = !item.cachedGenres.isEmpty ? item.cachedGenres : (item.movieDetails?.genres ?? item.tvShowDetails?.genres ?? [])
+                return genres.contains(filter.name)
             case .studio:
                 return item.cachedNetwork == filter.name
             case .language:
-                return item.cachedLanguage == filter.name
+                let language = item.cachedLanguage ?? item.movieDetails?.originalLanguage ?? item.tvShowDetails?.originalLanguage
+                return language == filter.name
             }
         }.sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
 
@@ -612,4 +680,3 @@ struct FilteredLibraryGridView: View {
         return filter.name
     }
 }
-

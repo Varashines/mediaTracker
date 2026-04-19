@@ -25,6 +25,7 @@ struct SearchView: View {
     @State private var trendingTV: [MediaSearchResult] = []
 
     @State private var isSearching = false
+    @State private var isOfflineResultsOnly = false
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var searchTask: Task<Void, Never>?
@@ -84,6 +85,18 @@ struct SearchView: View {
             }
             .overlay(alignment: .bottom) {
                 Divider()
+            }
+
+            if isOfflineResultsOnly {
+                HStack {
+                    Image(systemName: "wifi.slash")
+                    Text("Offline: showing library results only")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(Color.secondary.opacity(0.1))
             }
 
             ScrollView {
@@ -175,6 +188,9 @@ struct SearchView: View {
             updateLibraryLookup()
             loadTrending()
         }
+        .onDisappear {
+            searchTask?.cancel()
+        }
         .onChange(of: existingItems) {
             updateLibraryLookup()
         }
@@ -223,10 +239,14 @@ struct SearchView: View {
     }
 
     private func performSearch() async {
+        // Skip searching if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+
         guard !searchText.isEmpty else {
             movieResults = []
             tvResults = []
             localResults = []
+            isOfflineResultsOnly = false
             return
         }
         
@@ -235,6 +255,7 @@ struct SearchView: View {
         if Task.isCancelled { return }
         
         isSearching = true
+        isOfflineResultsOnly = false
         
         // 2. Perform Local Filter (off-main logic where possible)
         let currentSearch = searchText
@@ -251,6 +272,11 @@ struct SearchView: View {
             case .tvShow: matchesType = item.type == .tvShow
             }
             return matchesText && matchesType
+        }
+
+        // Show local results immediately
+        await MainActor.run {
+            self.localResults = filteredLocal
         }
 
         do {
@@ -271,10 +297,10 @@ struct SearchView: View {
             if Task.isCancelled { return }
 
             await MainActor.run {
-                self.localResults = filteredLocal
                 self.movieResults = finalMovies
                 self.tvResults = finalTV
                 self.isSearching = false
+                self.isOfflineResultsOnly = false
                 withAnimation {
                     self.resultsCount += 1
                 }
@@ -284,11 +310,18 @@ struct SearchView: View {
                 await MainActor.run { self.isSearching = false }
                 return
             }
-            let message = error.localizedDescription
+            
             await MainActor.run {
-                self.errorMessage = message
-                self.showError = true
                 self.isSearching = false
+                // Only show error if we have no local results to show
+                if self.localResults.isEmpty {
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                    self.isOfflineResultsOnly = false
+                } else {
+                    print("Offline search: showing local results only. Error: \(error.localizedDescription)")
+                    self.isOfflineResultsOnly = true
+                }
             }
         }
     }
@@ -308,8 +341,12 @@ struct SearchView: View {
                 if let details = details {
                     item.releaseDate = DateUtils.parseDate(details.releaseDate)
                     item.movieDetails = MovieDetails(
-                        tmdbID: tmdbID, runtime: details.runtime, genres: details.genres,
-                        voteAverage: details.voteAverage)
+                        tmdbID: tmdbID, 
+                        runtime: details.runtime, 
+                        genres: details.genres,
+                        voteAverage: details.voteAverage,
+                        originalLanguage: details.originalLanguage
+                    )
                 }
             } else if result.type == .tvShow, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
@@ -317,6 +354,9 @@ struct SearchView: View {
                     let tvDetails = TVShowDetails(
                         tmdbID: tmdbID,
                         status: details.status,
+                        network: details.network,
+                        networkLogoPath: details.networkLogoPath,
+                        originalLanguage: details.originalLanguage,
                         numberOfSeasons: details.seasonsCount,
                         numberOfEpisodes: details.episodesCount,
                         voteAverage: details.voteAverage,
@@ -328,15 +368,13 @@ struct SearchView: View {
                             episodeCount: season.episode_count, airDate: season.air_date)
                     }
                     tvDetails.tvdbID = details.tvdbID
-                    tvDetails.network = details.network
-                    tvDetails.networkLogoPath = details.networkLogoPath
                     item.tvShowDetails = tvDetails
                 }
             }
 
+            item.updateSearchableText()
             modelContext.insert(item)
             try? modelContext.save() // FORCE PERMANENCE
-            SpotlightManager.shared.indexItem(item)
             onSelectLocal?(item)
         }
     }

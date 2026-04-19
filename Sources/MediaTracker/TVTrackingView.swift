@@ -18,7 +18,7 @@ extension Color {
 }
 
 struct TVTrackingView: View {
-    var tvDetails: TVShowDetails
+    @Bindable var tvDetails: TVShowDetails
     var themeColor: Color
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
@@ -295,7 +295,7 @@ private struct SeasonSection: View {
             for episode in season.episodes {
                 episode.isWatched = targetStatus
             }
-            season.tvShowDetails?.recalculateCachedProperties()
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             onWatchedToggle()
         }
     }
@@ -311,7 +311,7 @@ private struct EpisodeCube: View {
         Button {
             withAnimation(.spring(duration: 0.2)) {
                 episode.isWatched.toggle()
-                episode.season?.tvShowDetails?.recalculateCachedProperties()
+                episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
                 onToggle()
             }
         } label: {

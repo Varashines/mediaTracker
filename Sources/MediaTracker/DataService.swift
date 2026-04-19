@@ -53,6 +53,18 @@ actor BackgroundDataService {
             if item.type == .movie, let tmdbID = Int(item.id) {
                 let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
                 item.releaseDate = DateUtils.parseDate(details.releaseDate)
+                
+                // Phase 3 Interning
+                item.cachedLanguage = await StringPool.shared.intern(details.originalLanguage)
+                item.cachedGenres = await withTaskGroup(of: String.self) { group in
+                    for g in details.genres {
+                        group.addTask { await StringPool.shared.intern(g) ?? g }
+                    }
+                    var interned: [String] = []
+                    for await res in group { interned.append(res) }
+                    return interned
+                }
+
                 let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
                 movieDetails.runtime = details.runtime
                 movieDetails.genres = details.genres
@@ -76,6 +88,7 @@ actor BackgroundDataService {
 
                 item.movieDetails = movieDetails
                 item.lastUpdated = Date()
+                item.lastStateChangeDate = Date()
                 item.updateSearchableText()
                 
                 // Note: We skip MainActor indexing here for simplicity and safety.
@@ -83,6 +96,19 @@ actor BackgroundDataService {
             } else if item.type == .tvShow, let tmdbID = Int(item.id) {
                 let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
                 item.releaseDate = DateUtils.parseDate(details.firstAirDate)
+                
+                // Phase 3 Interning
+                item.cachedNetwork = await StringPool.shared.intern(details.network)
+                item.cachedLanguage = await StringPool.shared.intern(details.originalLanguage)
+                item.cachedGenres = await withTaskGroup(of: String.self) { group in
+                    for g in details.genres {
+                        group.addTask { await StringPool.shared.intern(g) ?? g }
+                    }
+                    var interned: [String] = []
+                    for await res in group { interned.append(res) }
+                    return interned
+                }
+
                 let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
                 tvDetails.voteAverage = details.voteAverage
                 tvDetails.genres = details.genres
@@ -141,6 +167,7 @@ actor BackgroundDataService {
                 item.tvShowDetails = tvDetails
                 tvDetails.recalculateCachedProperties()
                 item.lastUpdated = Date()
+                item.lastStateChangeDate = Date()
                 item.updateSearchableText()
             }
         } catch {
@@ -165,6 +192,9 @@ class DataService {
     }
 
     func refreshMetadata(for items: [MediaItem], modelContext: ModelContext) {
+        // Skip if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+
         let itemIDs = items.map { $0.persistentModelID }
         let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
         

@@ -3,40 +3,52 @@ import SwiftUI
 
 class ColorExtractor {
     static func dominantColor(from image: NSImage) -> Color {
-        // Create a tiny thumbnail to sample from - much faster and memory efficient
-        let sampleSize = NSSize(width: 40, height: 40)
-        let thumbnail = NSImage(size: sampleSize)
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return .accentColor
+        }
+        return dominantColor(from: cgImage)
+    }
+
+    static func dominantColor(from cgImage: CGImage) -> Color {
+        // Sample every 4th pixel of a small 40x40 thumbnail
+        let width = 40
+        let height = 40
         
-        thumbnail.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: sampleSize), from: .zero, operation: .copy, fraction: 1.0)
-        thumbnail.unlockFocus()
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let bitsPerComponent = 8
         
-        guard let tiffData = thumbnail.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData) else {
+        var rawData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+        
+        guard let context = CGContext(data: &rawData,
+                                      width: width,
+                                      height: height,
+                                      bitsPerComponent: bitsPerComponent,
+                                      bytesPerRow: bytesPerRow,
+                                      space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else {
             return .accentColor
         }
         
-        var r: CGFloat = 0
-        var g: CGFloat = 0
-        var b: CGFloat = 0
-        var count: CGFloat = 0
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         
-        let pixelsWide = bitmap.pixelsWide
-        let pixelsHigh = bitmap.pixelsHigh
+        var r: Float = 0
+        var g: Float = 0
+        var b: Float = 0
+        var count: Float = 0
         
-        // Sample every pixel of our tiny thumbnail
-        for x in 0..<pixelsWide {
-            for y in 0..<pixelsHigh {
-                if let color = bitmap.colorAt(x: x, y: y) {
-                    let brightness = (color.redComponent + color.greenComponent + color.blueComponent) / 3
-                    // Ignore extreme colors (too dark or too bright)
-                    if brightness > 0.15 && brightness < 0.85 {
-                        r += color.redComponent
-                        g += color.greenComponent
-                        b += color.blueComponent
-                        count += 1
-                    }
-                }
+        for i in stride(from: 0, to: rawData.count, by: bytesPerPixel) {
+            let pr = Float(rawData[i]) / 255.0
+            let pg = Float(rawData[i+1]) / 255.0
+            let pb = Float(rawData[i+2]) / 255.0
+            
+            let brightness = (pr + pg + pb) / 3.0
+            if brightness > 0.15 && brightness < 0.85 {
+                r += pr
+                g += pg
+                b += pb
+                count += 1
             }
         }
         

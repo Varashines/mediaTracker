@@ -9,6 +9,8 @@ class DetailViewModel {
     
     init(item: MediaItem) {
         self.item = item
+        // Initial pre-warm for cached data
+        prewarmCast()
     }
     
     var needsUpdate: Bool {
@@ -28,30 +30,10 @@ class DetailViewModel {
         return Date().timeIntervalSince(lastUpdated) > 86400
     }
     
-    var nextText: String? {
-        // nextAiringDate is already the first unwatched episode air date for TV shows.
-        guard let date = item.nextAiringDate else { return nil }
-        
-        let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
-        
-        // Rule: If the next thing to watch aired more than 5 days ago, we are "behind".
-        // Hide the "Upcoming" UI entirely.
-        if date < fiveDaysAgo { return nil }
-        
-        let label = item.nextAiringLabel ?? "Available Now"
-        let isPast = date < Date()
-        
-        if isPast {
-            if item.type == .movie { return "Now Streaming" }
-            let detail = nextEpisodeLabel(for: date, hideDate: true)
-            return detail.isEmpty ? "Now Streaming" : "Now Available: \(detail)"
-        }
-        
-        if item.type == .movie { return label }
-        return "Upcoming: \(nextEpisodeLabel(for: date, hideDate: false))"
-    }
-    
     func updateThemeColor() {
+        // Skip if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+
         if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
             self.themeColor = cachedColor
             return
@@ -87,6 +69,9 @@ class DetailViewModel {
     }
     
     func refreshData(force: Bool = false) {
+        // Skip if app is in sleep mode
+        guard !SleepManager.shared.isAsleep else { return }
+
         let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
         
         // Session Throttling: If we already refreshed this specific item in this app session, skip unless forced.
@@ -113,6 +98,7 @@ class DetailViewModel {
                     updateThemeColor()
                     self.isRefreshing = false
                     try? self.item.modelContext?.save()
+                    self.prewarmCast()
                 }
             } catch {
                 print("❌ Refresh error: \(error)")
@@ -122,6 +108,15 @@ class DetailViewModel {
             }
         }
     }
+
+    private func prewarmCast() {
+        let cast = (item.movieDetails?.cast ?? item.tvShowDetails?.cast) ?? []
+        let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
+        if !urls.isEmpty {
+            ImageCache.shared.prewarmImages(urls: urls, targetSize: CGSize(width: 120, height: 180), priority: .low)
+        }
+    }
+
     private func refreshMovie(tmdbID: Int) async throws {
         let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
 
@@ -152,7 +147,6 @@ class DetailViewModel {
             
             item.movieDetails = movieDetails
             item.lastUpdated = Date()
-            SpotlightManager.shared.indexItem(item)
             NotificationManager.shared.scheduleMovieNotification(item: item)
         }
     }
@@ -249,7 +243,6 @@ class DetailViewModel {
             item.tvShowDetails = tvDetails
             tvDetails.recalculateCachedProperties()
             item.updateSearchableText()
-            SpotlightManager.shared.indexItem(item)
             NotificationManager.shared.scheduleTVNotification(item: item)
             updateThemeColor()
             
@@ -315,6 +308,20 @@ class DetailViewModel {
     func checkOverallCompletion() {
         withAnimation {
             item.checkOverallCompletion()
+            item.tvShowDetails?.recalculateCachedProperties() // Fallback to ensure counts are fresh
+            item.syncCachedProperties() // Explicitly fix denormalization gap
+            item.lastStateChangeDate = Date() // Trigger grid refresh
+            
+            // EXPLICIT SAVE: Ensure all background actors see the latest state before the notification is sent.
+            try? item.modelContext?.save()
+            
+            // Phase 1: Global Pulse
+            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            
+            // Broadcast the change so the Main Page also updates its badge
+            if let posterURL = item.posterURL {
+                ImageCache.shared.ping(url: posterURL)
+            }
         }
     }
     
@@ -351,55 +358,5 @@ class DetailViewModel {
         } catch {
             print("❌ Error fetching episodes: \(error)")
         }
-    }
-    
-    func nextEpisodeLabel(for date: Date, hideDate: Bool = false) -> String {
-        let dateString = date.formatted(date: .abbreviated, time: .shortened)
-        guard let tv = item.tvShowDetails else { return hideDate ? "" : dateString }
-        
-        let allEpisodes = tv.seasons.flatMap { $0.episodes }
-        
-        let matchingEpisodes = allEpisodes.filter { ep in
-            if let epDate = ep.airDateAsDate {
-                return abs(epDate.timeIntervalSince(date)) < 60 
-            }
-            return false
-        }
-        
-        let sortedMatching = matchingEpisodes
-            .filter { !$0.isWatched }
-            .sorted { (ep1, ep2) in
-                if ep1.seasonNumber == ep2.seasonNumber {
-                    return ep1.episodeNumber < ep2.episodeNumber
-                }
-                return ep1.seasonNumber < ep2.seasonNumber
-            }
-        
-        let finalEpisode = sortedMatching.first ?? matchingEpisodes.sorted { (ep1, ep2) in
-            if ep1.seasonNumber == ep2.seasonNumber {
-                return ep1.episodeNumber < ep2.episodeNumber
-            }
-            return ep1.seasonNumber < ep2.seasonNumber
-        }.first
-        
-        let dateSuffix = hideDate ? "" : " (\(dateString))"
-        
-        if let ep = finalEpisode {
-            let seasonItem = tv.seasons.first(where: { $0.seasonNumber == ep.seasonNumber })
-            let isFullSeasonDrop = seasonItem != nil && matchingEpisodes.count == seasonItem!.episodeCount && matchingEpisodes.count > 1
-            
-            if isFullSeasonDrop {
-                return "Full Season \(ep.seasonNumber) 🍿\(dateSuffix)"
-            }
-            
-            let title = ep.name.isEmpty ? "TBA" : ep.name
-            return "S\(ep.seasonNumber), E\(ep.episodeNumber): \(title)\(dateSuffix)"
-        }
-        
-        if let s = tv.nextSeasonNumber, let e = tv.nextEpisodeNumber {
-            return "S\(s), E\(e): \(tv.nextEpisodeName ?? "TBA")\(dateSuffix)"
-        }
-        
-        return hideDate ? "" : dateString
     }
 }

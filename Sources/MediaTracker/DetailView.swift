@@ -7,6 +7,7 @@ struct DetailView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
+    
     @State private var viewModel: DetailViewModel
     @State private var isAppeared = false
     
@@ -50,14 +51,14 @@ struct DetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Optimized Header Section
-                    MediaHeaderView(item: viewModel.item, themeColor: viewModel.themeColor, nextEpisodeText: viewModel.nextText, namespace: namespace) { newState in
+                    MediaHeaderView(item: viewModel.item, themeColor: viewModel.themeColor, namespace: namespace) { newState in
                         if newState == .completed {
                             viewModel.markAllAsWatched()
                         }
                     }
                     .onAppear {
                         viewModel.updateThemeColor()
-                        viewModel.refreshData() // Automatic Smart Refresh
+                        viewModel.refreshData() 
                     }
                     
                     if (viewModel.item.type == .movie && viewModel.item.movieDetails?.genres.isEmpty != false) || (viewModel.item.type == .tvShow && viewModel.item.tvShowDetails?.status == nil) {
@@ -126,6 +127,12 @@ struct DetailView: View {
                     isAppeared = true
                 }
             }
+            .onDisappear {
+                isAppeared = false
+            }
+            .onChange(of: viewModel.item.lastStateChangeDate) {
+                // Sync labels
+            }
             .tint(viewModel.themeColor)
             .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
         }
@@ -135,10 +142,8 @@ struct DetailView: View {
         let itemToDelete = viewModel.item
         dismiss()
         
-        // Wait for dismissal animation to start before deleting data
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NotificationManager.shared.cancelNotification(for: itemToDelete)
-            SpotlightManager.shared.removeItem(itemToDelete)
             modelContext.delete(itemToDelete)
             try? modelContext.save()
         }

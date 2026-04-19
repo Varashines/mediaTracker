@@ -2,6 +2,24 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+// Phase 3 Optimization: String Interning (Flyweight Pattern)
+// Shared actor to ensure common strings only occupy memory once.
+actor StringPool {
+    static let shared = StringPool()
+    private var pool: Set<String> = []
+
+    func intern(_ string: String?) -> String? {
+        guard let string = string, !string.isEmpty else { return nil }
+        
+        if let existing = pool.first(where: { $0 == string }) {
+            return existing
+        }
+        
+        pool.insert(string)
+        return string
+    }
+}
+
 enum MediaState: String, Codable, CaseIterable {
     case wishlist = "Wishlist"
     case active = "Active"
@@ -103,11 +121,15 @@ struct DiscoveryNode: Identifiable, Equatable {
     let count: Int
 }
 
+extension Notification.Name {
+    static let mediaStateChanged = Notification.Name("mediaStateChanged")
+}
+
 @Model
 final class MediaItem {
     var id: String
     var title: String
-    var overview: String
+    @Attribute(.externalStorage) var overview: String
     var posterURL: String?
     var releaseDate: Date?
     var lastUpdated: Date?
@@ -118,17 +140,18 @@ final class MediaItem {
     var cachedGenres: [String] = []
     var cachedNetwork: String?
     var cachedLanguage: String?
+
     var cachedNextAiringDate: Date?
     var dateAdded: Date = Date()
     var lastInteractionDate: Date?
-    var searchableText: String = ""
+    var lastStateChangeDate: Date = Date()
+    @Attribute(.externalStorage) var searchableText: String = ""
     
     // Type-specific data
     var movieDetails: MovieDetails?
     var tvShowDetails: TVShowDetails?
     
-    func updateSearchableText() {
-        // Sync cached properties
+    func syncCachedProperties() {
         if let movie = movieDetails {
             self.cachedGenres = movie.genres
             self.cachedNetwork = nil
@@ -140,7 +163,11 @@ final class MediaItem {
             self.cachedLanguage = tv.originalLanguage
             self.cachedNextAiringDate = tv.oldestUnwatchedEpisodeAirDate ?? tv.nextEpisodeDate
         }
+    }
 
+    func updateSearchableText() {
+        syncCachedProperties()
+        
         var components = [title]
         components.append(contentsOf: cachedGenres)
         
@@ -217,30 +244,97 @@ final class MediaItem {
         return false
     }
     
-    var nextAiringLabel: String? {
+    private var baseBadgeComponents: (epInfo: String, dateString: String?, isAvailable: Bool)? {
         guard modelContext != nil else { return nil }
-        guard let date = nextAiringDate else { return isRecentlyReleased ? "Available Now" : nil }
         
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        
-        if date > Date() {
-            if type == .movie {
-                return "Releases \(formatter.string(from: date))"
-            } else if type == .tvShow {
-                if let tv = tvShowDetails {
-                    let s = tv.nextSeasonNumber ?? 1
-                    let e = tv.nextEpisodeNumber ?? 1
-                    if e == 1 {
-                        return "S\(s) Premiere: \(formatter.string(from: date))"
+        if type == .movie {
+            guard let date = nextAiringDate else { 
+                return isRecentlyReleased ? ("", "Now Streaming", true) : nil 
+            }
+            let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date()
+            if date < fiveDaysAgo { return nil }
+            
+            let isAvailable = date <= Date()
+            let ds: String
+            if isAvailable {
+                ds = "Now Streaming"
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .none
+                ds = "Releases \(formatter.string(from: date))"
+            }
+            return (epInfo: "", dateString: ds, isAvailable: isAvailable)
+        } else if type == .tvShow {
+            guard let tv = tvShowDetails else { return nil }
+            
+            let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+            let allEpisodes = sortedSeasons.flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
+            let unwatched = allEpisodes.filter { !$0.isWatched }
+            
+            let ep: (season: Int, episode: Int, date: Date?, isTrueFullSeason: Bool)
+            if let next = unwatched.first {
+                var isBingeDrop = false
+                
+                // TRUE FULL SEASON LOGIC: 
+                // 1. Next episode is E1
+                // 2. Season has > 1 episode
+                // 3. First and last episode dates match
+                if next.episodeNumber == 1, let season = next.season, season.episodeCount > 1 {
+                    let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                    if let firstDate = sortedEpisodes.first?.airDateAsDate,
+                       let lastDate = sortedEpisodes.last?.airDateAsDate,
+                       abs(firstDate.timeIntervalSince(lastDate)) < 86400 { // Same day
+                        isBingeDrop = true
                     }
-                    return "S\(s), E\(e): \(formatter.string(from: date))"
                 }
+                
+                ep = (next.seasonNumber, next.episodeNumber, next.airDateAsDate, isBingeDrop)
+            } else if let s = tv.nextSeasonNumber, let e = tv.nextEpisodeNumber, let d = tv.nextEpisodeDate {
+                ep = (s, e, d, false) // Fallback for future known next episode
+            } else {
+                return nil
+            }
+            
+            let isAvailable = ep.date != nil && ep.date! <= Date()
+            
+            if ep.isTrueFullSeason {
+                let ds = isAvailable ? "Now Streaming" : ep.date?.formatted(date: .abbreviated, time: .omitted) ?? ""
+                return (epInfo: "🍿 Season \(ep.season)\(isAvailable ? "" : " Drops")", dateString: ds, isAvailable: isAvailable)
+            } else {
+                let ds: String?
+                if isAvailable {
+                    ds = "Now Streaming"
+                } else if let d = ep.date {
+                    ds = d.formatted(date: .abbreviated, time: .shortened)
+                } else {
+                    ds = nil
+                }
+                return (epInfo: "S\(ep.season), E\(ep.episode)", dateString: ds, isAvailable: isAvailable)
             }
         }
-        return isRecentlyReleased ? "Available Now" : nil
+        return nil
     }
+
+    var gridBadgeText: String? {
+        guard let comps = baseBadgeComponents else { return nil }
+        if comps.epInfo.isEmpty { return comps.dateString }
+        if let ds = comps.dateString {
+            return "\(comps.epInfo)\n\(ds)"
+        }
+        return comps.epInfo
+    }
+
+    var detailBadgeText: String? {
+        guard let comps = baseBadgeComponents else { return nil }
+        if comps.epInfo.isEmpty { return comps.dateString }
+        if let ds = comps.dateString {
+            return "\(comps.epInfo): \(ds)"
+        }
+        return comps.epInfo
+    }
+
+    var badgeText: String? { gridBadgeText }
 
     var watchProgressLabel: String? {
         guard modelContext != nil else { return state?.displayName }
@@ -248,6 +342,13 @@ final class MediaItem {
             return tv.cachedWatchProgressLabel ?? state?.displayName
         }
         return state?.displayName
+    }
+    
+    var progress: Double? {
+        if type == .tvShow {
+            return tvShowDetails?.cachedProgress
+        }
+        return nil
     }
     
     var hasWatchedAnyEpisode: Bool {
@@ -325,6 +426,10 @@ final class MovieDetails {
     var voteAverage: Double?
     var originalLanguage: String?
     var creators: [String] = []
+    
+    @Relationship(inverse: \MediaItem.movieDetails)
+    var item: MediaItem? // Relationship back to parent
+
     @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
     
     init(tmdbID: Int, runtime: Int? = nil, genres: [String] = [], voteAverage: Double? = nil, originalLanguage: String? = nil, creators: [String] = []) {
@@ -357,7 +462,10 @@ final class TVShowDetails {
     var voteAverage: Double?
     var genres: [String] = []
     var creators: [String] = []
-    
+
+    @Relationship(inverse: \MediaItem.tvShowDetails)
+    var item: MediaItem? // Relationship back to parent
+
     @Relationship(deleteRule: .cascade) var seasons: [TVSeason] = []
     @Relationship(deleteRule: .cascade) var cast: [CastMember] = []
     
@@ -367,27 +475,51 @@ final class TVShowDetails {
     var cachedHasWatchedAnyEpisode: Bool = false
     var cachedHasWatchedAllEpisodes: Bool = false
     var cachedOldestUnwatchedEpisodeAirDate: Date?
+    var cachedProgress: Double?
     
-    func recalculateCachedProperties() {
+    func recalculateCachedProperties(triggerSync: Bool = false) {
         let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        
+        // Phase 2 Fix: Find the first season with unwatched episodes
+        // We look for a season where not all episodes are watched, OR a season that has zero episodes loaded (yet)
+        if let currentSeason = sortedSeasons.first(where: { s in 
+            let unwatchedInSeason = s.episodes.filter { !$0.isWatched }
+            return !unwatchedInSeason.isEmpty || s.episodeCount == 0
+        }) {
+            let seasonWatched = currentSeason.episodes.filter { $0.isWatched }.count
+            // If episodes aren't loaded yet, show 0/total for that season
+            let totalInSeason = currentSeason.episodeCount > 0 ? currentSeason.episodeCount : 0
+            self.cachedWatchProgressLabel = "S\(currentSeason.seasonNumber), \(seasonWatched)/\(totalInSeason)"
+            self.cachedHasWatchedAnyEpisode = seasonWatched > 0 || seasons.contains(where: { $0.seasonNumber < currentSeason.seasonNumber })
+            self.cachedHasWatchedAllEpisodes = false
+            self.cachedProgress = totalInSeason > 0 ? Double(seasonWatched) / Double(totalInSeason) : 0.0
+        } else {
+            // Everything is watched, or no seasons exist
+            let allEpisodes = sortedSeasons.flatMap { $0.episodes }
+            let totalWatched = allEpisodes.filter { $0.isWatched }.count
+            let totalCount = sortedSeasons.reduce(0) { $0 + $1.episodeCount }
+            self.cachedWatchProgressLabel = "\(totalWatched)/\(totalCount)"
+            self.cachedHasWatchedAnyEpisode = totalWatched > 0
+            self.cachedHasWatchedAllEpisodes = totalCount > 0 && totalWatched >= totalCount
+            self.cachedProgress = totalCount > 0 ? Double(totalWatched) / Double(totalCount) : 0.0
+        }
+        
+        // Badge Logic Sync
         let allEpisodes = sortedSeasons.flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
+        let unwatched = allEpisodes.filter { !$0.isWatched }
         
-        let totalCount = sortedSeasons.reduce(0) { $0 + $1.episodeCount }
-        let watchedCount = allEpisodes.filter { $0.isWatched }.count
-        
-        self.cachedWatchProgressLabel = "\(watchedCount)/\(totalCount)"
-        self.cachedHasWatchedAnyEpisode = watchedCount > 0
-        self.cachedHasWatchedAllEpisodes = totalCount > 0 && watchedCount >= totalCount
-        
-        if let next = allEpisodes.first(where: { !$0.isWatched }), let season = next.season {
+        if let next = unwatched.first, let season = next.season {
             self.cachedNextEpisodeToWatchLabel = "S\(season.seasonNumber), E\(next.episodeNumber)"
+            self.cachedOldestUnwatchedEpisodeAirDate = next.airDateAsDate
         } else {
             self.cachedNextEpisodeToWatchLabel = nil
+            self.cachedOldestUnwatchedEpisodeAirDate = nil
         }
-
-        let unwatched = allEpisodes.filter { !$0.isWatched }
-        let dates = unwatched.compactMap { $0.airDateAsDate }
-        self.cachedOldestUnwatchedEpisodeAirDate = dates.min()
+        
+        if triggerSync {
+            self.item?.syncCachedProperties()
+            self.item?.lastStateChangeDate = Date()
+        }
     }
     
     var oldestUnwatchedEpisodeAirDate: Date? {
@@ -453,7 +585,7 @@ final class TVEpisode {
     var episodeNumber: Int
     var seasonNumber: Int
     var name: String
-    var overview: String
+    @Attribute(.externalStorage) var overview: String
     var airDate: String?
     var airstamp: String?
     var runtime: Int?
