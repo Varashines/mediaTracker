@@ -6,120 +6,148 @@ struct SettingsView: View {
     @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
-    @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
-    @AppStorage("theme_preference") private var themePreference: Int = 0 // 0: System, 1: Light, 2: Dark
-    @AppStorage("now_watching_days") private var nowWatchingDays: Int = 2
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @AppStorage("theme_preference") private var themePreference: Int = 0 
     @Environment(\.colorScheme) var colorScheme
     
-    @State private var activeTab: SettingsTab = .preferences
+    @State private var activeTab: SettingsTab = .general
 
     enum SettingsTab: String, CaseIterable, Identifiable {
-        case preferences = "General"
-        case tvDiscovery = "Discovery"
+        case general = "General"
+        case discovery = "Discovery"
+        case library = "Library"
+        case advanced = "Advanced"
         
         var id: String { self.rawValue }
         var icon: String {
             switch self {
-            case .preferences: return "gearshape.fill"
-            case .tvDiscovery: return "sparkles.tv.fill"
+            case .general: return "gearshape"
+            case .discovery: return "sparkles.tv"
+            case .library: return "tray.full"
+            case .advanced: return "hammer"
             }
         }
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // macOS Style Toolbar
-            HStack(spacing: 0) {
-                Spacer()
-                ForEach(SettingsTab.allCases) { tab in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                            activeTab = tab
-                        }
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 18))
-                                .foregroundStyle(activeTab == tab ? appAccent.color : .secondary)
-                                .frame(width: 34, height: 34)
-                                .background {
-                                    if activeTab == tab {
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(appAccent.color.opacity(0.12))
-                                    }
-                                }
-                            
-                            Text(tab.rawValue)
-                                .font(.system(size: 11, weight: activeTab == tab ? .semibold : .medium))
-                                .foregroundStyle(activeTab == tab ? .primary : .secondary)
-                        }
-                        .frame(width: 70)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(Color(NSColor.windowBackgroundColor))
-            
-            Divider()
-            
-            // Content Area
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    switch activeTab {
-                    case .preferences:
-                        preferencesContent
-                    case .tvDiscovery:
-                        DiscoveryManagementView()
-                    }
-                }
-                .padding(24)
-            }
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-        }
-        .frame(width: 440, height: 480)
-        .fontDesign(.rounded)
-    }
-    
-    private var preferencesContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SettingsGroup(title: "APPEARANCE") {
-                SettingsRow(title: "Accent Color", subtitle: "Personalize the app's primary hue.") {
-                    HStack(spacing: 10) {
-                        ForEach(AppAccent.allCases) { accent in
+        NavigationStack {
+            VStack(spacing: 0) {
+                // macOS Style Centered Toolbar
+                VStack(spacing: 12) {
+                    Text(activeTab.rawValue)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: 16) {
+                        ForEach(SettingsTab.allCases) { tab in
                             Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    appAccent = accent
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    activeTab = tab
                                 }
                             } label: {
-                                Circle()
-                                    .fill(accent.color)
-                                    .frame(width: 14, height: 14)
-                                    .overlay {
-                                        if appAccent == accent {
-                                            Circle()
-                                                .stroke(Color.primary.opacity(0.5), lineWidth: 2)
-                                                .frame(width: 22, height: 22)
-                                        }
-                                    }
+                                VStack(spacing: 4) {
+                                    let isSelected = activeTab == tab
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 18))
+                                        .frame(width: 32, height: 32)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(isSelected ? Color.primary.opacity(0.1) : Color.clear)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .stroke(Color.primary.opacity(isSelected ? 0.1 : 0), lineWidth: 0.5)
+                                        )
+                                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                                    
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 11, weight: isSelected ? .medium : .regular))
+                                        .foregroundStyle(isSelected ? .primary : .secondary)
+                                }
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .frame(height: 24)
-                    .padding(.trailing, 4)
+                }
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity)
+                .background(Material.thin)
+                
+                Divider()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        switch activeTab {
+                        case .general:
+                            generalSettings
+                        case .discovery:
+                            discoverySettings
+                        case .library:
+                            librarySettings
+                        case .advanced:
+                            advancedSettings
+                        }
+                        
+                        // App Info
+                        VStack(spacing: 4) {
+                            Text("MediaTracker v2.5.0")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                            Text("Designed for macOS")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                    }
+                    .padding(24)
+                }
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
+            }
+        }
+        .frame(width: 480, height: 560)
+        .fontDesign(.rounded)
+        .alert("Repair Complete", isPresented: Binding(
+            get: { DataService.shared.showMaintenanceComplete },
+            set: { DataService.shared.showMaintenanceComplete = $0 }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your library has been healed and unique identifiers assigned.")
+        }
+    }
+    
+    // MARK: - Sections
+    
+    private var generalSettings: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsSection(title: "Appearance") {
+                SettingsRow(title: "Accent Color", subtitle: "Personalize the app's primary hue.") {
+                    HStack(spacing: 10) {
+                        ForEach(AppAccent.allCases) { accent in
+                            Circle()
+                                .fill(accent.color)
+                                .frame(width: 14, height: 14)
+                                .overlay {
+                                    if appAccent == accent {
+                                        Circle()
+                                            .stroke(Color.primary, lineWidth: 2)
+                                            .frame(width: 22, height: 22)
+                                    }
+                                }
+                                .onTapGesture { appAccent = accent }
+                        }
+                    }
                 }
                 
                 Divider()
                 
-                SettingsRow(title: "Brand Theme", subtitle: "Use the selected accent for background tints.") {
+                SettingsRow(title: "Brand Tints", subtitle: "Enable dynamic glass background effects.") {
                     Toggle("", isOn: Binding(
                         get: { themeStyle == .brand },
-                        set: { isBrand in themeStyle = isBrand ? .brand : .standard }
+                        set: { themeStyle = $0 ? .brand : .standard }
                     ))
                     .toggleStyle(.switch)
                     .labelsHidden()
@@ -127,138 +155,183 @@ struct SettingsView: View {
 
                 Divider()
 
-                SettingsRow(title: "App Theme", subtitle: "Choose between system, light, or dark mode.") {
-                    Toggle("System", isOn: Binding(
-                        get: { themePreference == 0 },
-                        set: { newValue in
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                if newValue {
-                                    themePreference = 0
-                                } else {
-                                    // Robust check for the effective system appearance
-                                    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                                    themePreference = isDark ? 2 : 1
-                                }
-                            }
-                        }
-                    ))
-                    .toggleStyle(.switch)
+                SettingsRow(title: "Theme Mode", subtitle: "Switch between light and dark UI.") {
+                    Picker("", selection: $themePreference) {
+                        Text("System").tag(0)
+                        Text("Light").tag(1)
+                        Text("Dark").tag(2)
+                    }
                     .labelsHidden()
-                }
-
-                if themePreference != 0 {
-                    HStack(spacing: 12) {
-                        ThemePill(title: "Light", isSelected: themePreference == 1, accent: appAccent, mode: .light) {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                themePreference = 1
-                            }
-                        }
-                        ThemePill(title: "Dark", isSelected: themePreference == 2, accent: appAccent, mode: .dark) {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                themePreference = 2
-                            }
-                        }
-                    }
-                    .padding(.top, 4)
-                    .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
-                }
-
-                Divider()
-
-                SettingsRow(title: "Now Watching Window", subtitle: "Number of days to keep active titles in the 'Now Watching' section.") {
-                    HStack(spacing: 8) {
-                        Text("\(nowWatchingDays) \(nowWatchingDays == 1 ? "day" : "days")")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        
-                        Stepper("", value: $nowWatchingDays, in: 1...14)
-                            .labelsHidden()
-                            .controlSize(.small)
-                    }
+                    .frame(width: 90)
                 }
             }
-            
-            SettingsGroup(title: "SERVICES") {
+        }
+    }
+    
+    private var discoverySettings: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsSection(title: "Content Filtering") {
+                DiscoveryManagementView()
+            }
+        }
+    }
+    
+    private var librarySettings: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsSection(title: "API Services") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("TMDB API Key")
                                 .font(.system(size: 13, weight: .medium))
-                            Text("Required to fetch movies and TV show metadata.")
+                            Text("Required for movie and series metadata.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
-                            Text("Get Key")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.blue)
-                        }
+                        Link("Get Key", destination: URL(string: "https://www.themoviedb.org/settings/api")!)
+                            .font(.system(size: 11, weight: .bold))
                     }
                     
                     SecureField("Required", text: $tmdbApiKey)
-                        .textFieldStyle(.plain)
+                        .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, design: .monospaced))
-                        .padding(8)
-                        .background(Color.primary.opacity(0.04))
-                        .cornerRadius(6)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
                 }
             }
             
-            SettingsGroup(title: "DATA MANAGEMENT") {
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Library Portability")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Export your watch history or import a backup.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    
+            SettingsSection(title: "Library Management") {
+                SettingsRow(title: "Backup & Restore", subtitle: "Export your history or import a JSON backup.") {
                     HStack(spacing: 8) {
                         Button { DataService.shared.exportLibrary(items: allItems) } label: {
-                            Label("Export", systemImage: "square.and.arrow.up")
+                            Image(systemName: "square.and.arrow.up")
                         }
-                        .buttonStyle(.bordered)
-                        
                         Button { DataService.shared.importLibrary(modelContext: modelContext) } label: {
-                            Label("Import", systemImage: "square.and.arrow.down")
+                            Image(systemName: "square.and.arrow.down")
                         }
-                        .buttonStyle(.bordered)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                
+                Divider()
+                
+                SettingsRow(title: "Database Repair", subtitle: "Fix identifiers and remove duplicate entries.") {
+                    Button {
+                        DataService.shared.runMaintenance(modelContext: modelContext)
+                    } label: {
+                        if DataService.shared.isRunningMaintenance {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Run")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(DataService.shared.isRunningMaintenance)
+                }
+            }
+        }
+    }
+    
+    private var advancedSettings: some View {
+        VStack(alignment: .leading, spacing: 32) {
+            tuningSection
+            
+            SettingsSection(title: "Diagnostics") {
+                SettingsRow(title: "Test Notifications", subtitle: "Verify alert permissions and rich actions.") {
+                    Button("Send Test") {
+                        NotificationManager.shared.sendTestNotification()
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }
-            
-            SettingsGroup(title: "ADVANCED") {
-                SettingsRow(title: "Notifications", subtitle: "Test local alerts to verify permissions.") {
-                    Button {
-                        NotificationManager.shared.sendTestNotification()
-                    } label: {
-                        Image(systemName: "bell.badge.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.indigo)
+        }
+    }
+
+    // NEW: Algorithmic Tuning in Settings
+    @State private var wGenre = 30.0
+    @State private var wCreator = 30.0
+    @State private var wLang = 10.0
+    @State private var wCast = 5.0
+    @State private var wNetwork = 5.0
+    @State private var hasUnsavedTuning = false
+
+    @AppStorage("taste_weight_genre") private var storedWGenre = 30.0
+    @AppStorage("taste_weight_creator") private var storedWCreator = 30.0
+    @AppStorage("taste_weight_lang") private var storedWLang = 10.0
+    @AppStorage("taste_weight_cast") private var storedWCast = 5.0
+    @AppStorage("taste_weight_network") private var storedWNetwork = 5.0
+
+    private var tuningSection: some View {
+        SettingsSection(title: "Algorithm Tuning") {
+            VStack(spacing: 16) {
+                Text("Adjust how much each factor influences your 'For You' recommendations.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 4)
+
+                tuningSlider(label: "Genres", value: $wGenre, color: .purple)
+                tuningSlider(label: "Directors", value: $wCreator, color: .blue)
+                tuningSlider(label: "Language", value: $wLang, color: .green)
+                tuningSlider(label: "Cast", value: $wCast, color: .orange)
+                
+                HStack {
+                    Spacer()
+                    if hasUnsavedTuning {
+                        Button("Apply Changes") {
+                            applyTuning()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(appAccent.color)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            
-            VStack(alignment: .center, spacing: 4) {
-                Text("MediaTracker v2.4")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-                Text("Designed with Love")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
         }
+        .onAppear {
+            wGenre = storedWGenre
+            wCreator = storedWCreator
+            wLang = storedWLang
+            wCast = storedWCast
+            wNetwork = storedWNetwork
+            hasUnsavedTuning = false
+        }
+    }
+
+    @ViewBuilder
+    private func tuningSlider(label: String, value: Binding<Double>, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 11, weight: .bold))
+                Spacer()
+                Text("\(Int(value.wrappedValue))")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: 0...100, step: 5)
+                .tint(color)
+                .onChange(of: value.wrappedValue) { _, _ in hasUnsavedTuning = true }
+        }
+    }
+
+    private func applyTuning() {
+        storedWGenre = wGenre
+        storedWCreator = wCreator
+        storedWLang = wLang
+        storedWCast = wCast
+        storedWNetwork = wNetwork
+        hasUnsavedTuning = false
+        NotificationCenter.default.post(name: .tasteWeightsChanged, object: nil)
+        AppErrorState.shared.surfaceError("Algorithm Updated", systemImage: "sparkles")
     }
 }
 
-struct SettingsGroup<Content: View>: View {
+// MARK: - Reusable Components
+
+struct SettingsSection<Content: View>: View {
     let title: String
     let content: Content
     
@@ -268,22 +341,22 @@ struct SettingsGroup<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
-                .padding(.leading, 4)
+                .padding(.leading, 8)
             
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 content
             }
             .padding(16)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-            )
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
         }
     }
 }
@@ -310,17 +383,16 @@ struct SettingsRow<Content: View>: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer()
+            Spacer(minLength: 20)
             content
         }
     }
 }
 
 struct DiscoveryManagementView: View {
-    @Query(sort: \MediaItem.title) private var items: [MediaItem]
+    @Query(sort: \NetworkEntity.name) private var networkEntities: [NetworkEntity]
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
     @State private var availableNetworks: [String] = []
-    @Environment(\.colorScheme) var colorScheme
     
     private var hiddenList: [String] {
         hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.sorted()
@@ -334,137 +406,87 @@ struct DiscoveryManagementView: View {
     @State private var networkSearchText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("HIDDEN NETWORKS")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
+                Text("Hidden Networks")
+                    .font(.system(size: 13, weight: .medium))
                 
                 Spacer()
                 
-                if !addableNetworks.isEmpty {
-                    Button {
-                        isAddPopoverPresented.toggle()
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 20, height: 20)
-                            .background(Color.primary.opacity(0.08))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $isAddPopoverPresented, arrowEdge: .bottom) {
-                        VStack(spacing: 0) {
-                            TextField("Search networks...", text: $networkSearchText)
-                                .textFieldStyle(.plain)
-                                .padding(8)
-                                .background(Color.primary.opacity(0.05))
-                                .cornerRadius(6)
-                                .padding(10)
-                            
-                            Divider()
-                            
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    let filtered = addableNetworks.filter { 
-                                        networkSearchText.isEmpty || $0.localizedCaseInsensitiveContains(networkSearchText) 
-                                    }
-                                    
-                                    if filtered.isEmpty {
-                                        Text("No matches")
-                                            .font(.caption)
-                                            .foregroundStyle(.tertiary)
-                                            .padding(.vertical, 20)
-                                    } else {
-                                        ForEach(filtered, id: \.self) { name in
-                                            Button {
-                                                toggleHidden(name)
-                                                isAddPopoverPresented = false
-                                                networkSearchText = ""
-                                            } label: {
-                                                HStack {
-                                                    Text(name)
-                                                        .font(.system(size: 12))
-                                                    Spacer()
-                                                }
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .contentShape(Rectangle())
-                                            }
-                                            .buttonStyle(.plain)
-                                            
-                                            if name != filtered.last {
-                                                Divider().padding(.horizontal, 8)
-                                            }
+                Button {
+                    isAddPopoverPresented.toggle()
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .popover(isPresented: $isAddPopoverPresented, arrowEdge: .bottom) {
+                    VStack(spacing: 0) {
+                        TextField("Search networks...", text: $networkSearchText)
+                            .textFieldStyle(.roundedBorder)
+                            .padding(12)
+                        
+                        Divider()
+                        
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                let filtered = addableNetworks.filter { 
+                                    networkSearchText.isEmpty || $0.localizedCaseInsensitiveContains(networkSearchText) 
+                                }
+                                
+                                if filtered.isEmpty {
+                                    Text("No matches").font(.caption).padding(.vertical, 20)
+                                } else {
+                                    ForEach(filtered, id: \.self) { name in
+                                        Button {
+                                            toggleHidden(name)
+                                            isAddPopoverPresented = false
+                                        } label: {
+                                            Text(name)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(8)
                                         }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
-                            .frame(height: 200)
                         }
-                        .frame(width: 200)
+                        .frame(height: 180)
                     }
+                    .frame(width: 200)
                 }
             }
-            .padding(.horizontal, 4)
             
             VStack(spacing: 0) {
                 if hiddenList.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "eye")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.tertiary)
-                        Text("All networks are visible")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
+                    Text("All networks are visible")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
                 } else {
                     ForEach(hiddenList, id: \.self) { name in
                         HStack {
                             Text(name)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 13))
                             Spacer()
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    toggleHidden(name)
-                                }
-                            } label: {
+                            Button { toggleHidden(name) } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         
                         if name != hiddenList.last {
-                            Divider().padding(.leading, 16)
+                            Divider().padding(.leading, 12)
                         }
                     }
                 }
             }
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-            )
-            
-            HStack {
-                Button("Reset to Defaults") {
-                    withAnimation { hiddenStudios = "" }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                
-                Spacer()
-                
-                Text("\(hiddenList.count) hidden")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-            }
+            .background(Color.primary.opacity(0.03))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .onAppear { calculateNetworks() }
     }
@@ -480,43 +502,6 @@ struct DiscoveryManagementView: View {
     }
 
     private func calculateNetworks() {
-        var names: Set<String> = []
-        for item in items where item.type == .tvShow {
-            if let tv = item.tvShowDetails, let name = tv.network { names.insert(name) }
-        }
-        availableNetworks = Array(names).sorted()
-    }
-}
-
-struct ThemePill: View {
-    let title: String
-    let isSelected: Bool
-    let accent: AppAccent
-    let mode: ColorScheme
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(mode == .dark ? Color.white : Color.black)
-                .opacity(isSelected ? 1.0 : 0.7)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(accent.brandBackground(for: mode))
-                        .overlay {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(accent.color.opacity(0.8), lineWidth: 2)
-                            } else {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                            }
-                        }
-                }
-        }
-        .buttonStyle(.plain)
+        availableNetworks = networkEntities.map { $0.name }.sorted()
     }
 }

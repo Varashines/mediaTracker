@@ -1,7 +1,41 @@
 import AppKit
 import SwiftUI
+import ImageIO
 
 class ColorExtractor {
+    /// Extracts the dominant color using high-performance ImageIO thumbnails to minimize memory pressure.
+    static func dominantColor(from url: URL) -> Color {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 40
+        ]
+        
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return .accentColor
+        }
+        
+        return dominantColor(from: cgImage)
+    }
+
+    static func dominantColor(from data: Data) -> Color {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 40
+        ]
+        
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return .accentColor
+        }
+        
+        return dominantColor(from: cgImage)
+    }
+
     static func dominantColor(from image: NSImage) -> Color {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return .accentColor
@@ -10,9 +44,9 @@ class ColorExtractor {
     }
 
     static func dominantColor(from cgImage: CGImage) -> Color {
-        // Sample every 4th pixel of a small 40x40 thumbnail
-        let width = 40
-        let height = 40
+        // Sample every pixel of the small 40x40 thumbnail
+        let width = cgImage.width
+        let height = cgImage.height
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bytesPerPixel = 4
@@ -31,7 +65,7 @@ class ColorExtractor {
             return .accentColor
         }
         
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
         
         var r: Float = 0
         var g: Float = 0
@@ -44,6 +78,7 @@ class ColorExtractor {
             let pb = Float(rawData[i+2]) / 255.0
             
             let brightness = (pr + pg + pb) / 3.0
+            // Exclude extreme darks and extreme lights
             if brightness > 0.15 && brightness < 0.85 {
                 r += pr
                 g += pg

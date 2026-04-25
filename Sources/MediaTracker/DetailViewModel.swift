@@ -11,6 +11,28 @@ class DetailViewModel {
         self.item = item
         // Initial pre-warm for cached data
         prewarmCast()
+        
+        // Immediate local cleanup of legacy crew cards (non-blocking)
+        Task {
+            guard let context = item.modelContext else { return }
+            await MainActor.run {
+                if let tv = item.tvShowDetails {
+                    for member in tv.cast {
+                        if member.characterName == "Creator" || member.characterName == "Director" {
+                            context.delete(member)
+                        }
+                    }
+                }
+                if let movie = item.movieDetails {
+                    for member in movie.cast {
+                        if member.characterName == "Creator" || member.characterName == "Director" {
+                            context.delete(member)
+                        }
+                    }
+                }
+                try? context.save()
+            }
+        }
     }
     
     var needsUpdate: Bool {
@@ -60,8 +82,8 @@ class DetailViewModel {
         }
         
         // Read current accent from storage for fallback
-        let appAccentRaw = UserDefaults.standard.string(forKey: "app_accent") ?? AppAccent.indigo.rawValue
-        let appAccent = AppAccent(rawValue: appAccentRaw) ?? .indigo
+        let appAccentRaw = UserDefaults.standard.string(forKey: "app_accent") ?? AppAccent.cosmic.rawValue
+        let appAccent = AppAccent(rawValue: appAccentRaw) ?? .cosmic
         
         withAnimation {
             self.themeColor = appAccent.color
@@ -74,37 +96,31 @@ class DetailViewModel {
 
         let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
         
-        // Session Throttling: If we already refreshed this specific item in this app session, skip unless forced.
+        // Session Throttling
         if !force && DataService.shared.hasRefreshedThisSession(id: item.id) {
             return
         }
 
         if !force && hasData && !needsUpdate { return }
         
+        // Capture context while on MainActor
+        guard let context = item.modelContext else { return }
+        
         isRefreshing = true
-        let itemType = item.type
-        let itemID = item.id
+        let itemID = item.persistentModelID
+        let rawID = item.id
         
         Task {
-            do {
-                if itemType == .movie, let tmdbID = Int(itemID) {
-                    try await refreshMovie(tmdbID: tmdbID)
-                } else if itemType == .tvShow, let tmdbID = Int(itemID) {
-                    try await refreshTVShow(tmdbID: tmdbID)
-                }
-                
-                await MainActor.run {
-                    DataService.shared.markAsRefreshedThisSession(id: itemID)
+            let backgroundService = BackgroundDataService(modelContainer: context.container)
+            let success = await backgroundService.refreshSingleItem(id: itemID)
+            
+            await MainActor.run {
+                if success {
+                    DataService.shared.markAsRefreshedThisSession(id: rawID)
                     updateThemeColor()
-                    self.isRefreshing = false
-                    try? self.item.modelContext?.save()
                     self.prewarmCast()
                 }
-            } catch {
-                print("❌ Refresh error: \(error)")
-                await MainActor.run {
-                    self.isRefreshing = false
-                }
+                self.isRefreshing = false
             }
         }
     }
@@ -114,144 +130,6 @@ class DetailViewModel {
         let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {
             ImageCache.shared.prewarmImages(urls: urls, targetSize: CGSize(width: 120, height: 180), priority: .low)
-        }
-    }
-
-    private func refreshMovie(tmdbID: Int) async throws {
-        let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-
-        await MainActor.run {
-            item.releaseDate = DateUtils.parseDate(details.releaseDate)
-
-            let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
-            movieDetails.runtime = details.runtime
-            movieDetails.genres = details.genres
-            movieDetails.voteAverage = details.voteAverage
-            movieDetails.originalLanguage = details.originalLanguage
-            movieDetails.creators = details.directors.map { $0.name }
-            
-            // Update Cast (Directors First)
-            var newCastList: [CastMember] = []
-            
-            // Add Directors
-            for d in details.directors {
-                let profileURL = d.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(d.profilePath!)" : nil
-                newCastList.append(CastMember(name: d.name, characterName: "Director", profileURL: profileURL, order: -1))
-            }
-            
-            for c in details.cast {
-                let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-            }
-            movieDetails.cast = newCastList
-            
-            item.movieDetails = movieDetails
-            item.lastUpdated = Date()
-            NotificationManager.shared.scheduleMovieNotification(item: item)
-        }
-    }
-    
-    private func refreshTVShow(tmdbID: Int) async throws {
-        let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-        
-        var tvMazeID: Int?
-        var mazeTime: String?
-        var mazeName: String?
-        var mazeFullDate: Date?
-        var actualService: String?
-        var actualTimezone: String?
-        
-        var allTVMazeEpisodes: [TVMazeEpisode] = []
-        if let tvdbID = details.tvdbID {
-            if let mID = try await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
-                tvMazeID = mID
-                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                    mazeTime = schedule.airtime
-                    mazeName = schedule.name
-                    mazeFullDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
-                    actualService = service 
-                    actualTimezone = timezone
-                }
-                if let fetched = try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID) {
-                    allTVMazeEpisodes = fetched
-                }
-            }
-        }
-
-        // Fix Swift 6 concurrency warnings by shadowing with let (immutable copies)
-        let finalAllTVMazeEpisodes = allTVMazeEpisodes
-        let finalTvMazeID = tvMazeID
-        let finalMazeTime = mazeTime
-        let finalMazeName = mazeName
-        let finalMazeFullDate = mazeFullDate
-        let finalActualService = actualService
-        let finalActualTimezone = actualTimezone
-
-        await MainActor.run {
-            item.releaseDate = DateUtils.parseDate(details.firstAirDate)
-            item.lastUpdated = Date()
-            
-            let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
-            tvDetails.voteAverage = details.voteAverage
-            tvDetails.genres = details.genres
-            tvDetails.network = details.network
-            tvDetails.networkLogoPath = details.networkLogoPath
-            tvDetails.originalLanguage = details.originalLanguage
-            tvDetails.nextEpisodeDate = finalMazeFullDate ?? DateUtils.parseEpisodeDate(details.nextEpisodeDate, serviceName: finalActualService ?? tvDetails.network, for: tvDetails)
-            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-            tvDetails.nextSeasonNumber = details.nextSeasonNumber
-            tvDetails.tvMazeID = finalTvMazeID
-            tvDetails.creators = details.creators.map { $0.name }
-            tvDetails.nextEpisodeTime = finalMazeTime
-            tvDetails.network = finalActualService ?? tvDetails.network
-            tvDetails.timezone = finalActualTimezone ?? tvDetails.timezone
-            
-            // Update Cast (Creators First)
-            var newCastList: [CastMember] = []
-            
-            // Add Creators
-            for c in details.creators {
-                let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                newCastList.append(CastMember(name: c.name, characterName: "Creator", profileURL: profileURL, order: -1))
-            }
-            
-            for c in details.cast {
-                let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                newCastList.append(CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order))
-            }
-            tvDetails.cast = newCastList
-            
-            if let tmdbNextDateString = details.nextEpisodeDate, let tmdbNextDate = DateUtils.parseDate(tmdbNextDateString) {
-                if let mazeFullDate = finalMazeFullDate, Calendar.current.isDate(mazeFullDate, inSameDayAs: tmdbNextDate) {
-                    tvDetails.nextEpisodeName = finalMazeName
-                }
-            }
-            
-            for seasonBrief in details.seasons {
-                let existingSeason = tvDetails.seasons.first(where: { $0.seasonNumber == seasonBrief.season_number })
-                if let s = existingSeason {
-                    s.episodeCount = seasonBrief.episode_count
-                    s.name = seasonBrief.name
-                    s.airDate = seasonBrief.air_date
-                    s.tvShowDetails = tvDetails
-                } else {
-                    let newSeason = TVSeason(seasonNumber: seasonBrief.season_number, name: seasonBrief.name, episodeCount: seasonBrief.episode_count, airDate: seasonBrief.air_date)
-                    newSeason.tvShowDetails = tvDetails
-                    tvDetails.seasons.append(newSeason)
-                }
-            }
-            item.tvShowDetails = tvDetails
-            tvDetails.recalculateCachedProperties()
-            item.updateSearchableText()
-            NotificationManager.shared.scheduleTVNotification(item: item)
-            updateThemeColor()
-            
-            // Initial fetch of episodes for the first season to populate the UI
-            if let firstSeason = tvDetails.seasons.sorted(by: { $0.seasonNumber < $1.seasonNumber }).first {
-                Task {
-                    await fetchEpisodesForSeason(firstSeason, tmdbID: tmdbID, tvMazeEpisodes: finalAllTVMazeEpisodes)
-                }
-            }
         }
     }
     
@@ -315,6 +193,19 @@ class DetailViewModel {
             // EXPLICIT SAVE: Ensure all background actors see the latest state before the notification is sent.
             try? item.modelContext?.save()
             
+            // Sync Discovery Entities
+            let itemID = item.persistentModelID
+            let container = item.modelContext?.container
+            Task.detached {
+                if let container = container {
+                    let sync = DiscoverySyncService(modelContainer: container)
+                    let actorContext = ModelContext(container)
+                    if let fetchedItem = actorContext.model(for: itemID) as? MediaItem {
+                        await sync.updateItemAdded(fetchedItem)
+                    }
+                }
+            }
+            
             // Phase 1: Global Pulse
             NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
             
@@ -322,41 +213,6 @@ class DetailViewModel {
             if let posterURL = item.posterURL {
                 ImageCache.shared.ping(url: posterURL)
             }
-        }
-    }
-    
-    func fetchEpisodesForSeason(_ season: TVSeason, tmdbID: Int, tvMazeEpisodes: [TVMazeEpisode] = []) async {
-        let seasonNumber = season.seasonNumber
-        let seasonID = season.persistentModelID
-        let finalTvMazeEpisodes = tvMazeEpisodes
-
-        do {
-            let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber)
-            await MainActor.run {
-                // Find the season again on MainActor
-                guard let tv = self.item.tvShowDetails,
-                      let seasonOnMain = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
-                
-                for ep in episodes {
-                    let matchingMaze = finalTvMazeEpisodes.first { $0.season == seasonNumber && $0.number == ep.episodeNumber }
-                    let airstamp = matchingMaze?.airstamp
-                    
-                    if let existingEpisode = seasonOnMain.episodes.first(where: { $0.episodeNumber == ep.episodeNumber }) {
-                        existingEpisode.name = ep.name
-                        existingEpisode.overview = ep.overview
-                        existingEpisode.airDate = ep.airDate
-                        existingEpisode.airstamp = airstamp
-                        existingEpisode.runtime = ep.runtime
-                        existingEpisode.season = seasonOnMain
-                    } else {
-                        let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: airstamp, runtime: ep.runtime)
-                        newEpisode.season = seasonOnMain
-                        seasonOnMain.episodes.append(newEpisode)
-                    }
-                }
-            }
-        } catch {
-            print("❌ Error fetching episodes: \(error)")
         }
     }
 }

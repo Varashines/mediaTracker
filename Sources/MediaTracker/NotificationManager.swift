@@ -1,12 +1,19 @@
 import Foundation
+import SwiftData
 @preconcurrency import UserNotifications
 
 @MainActor
 class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
     
+    private var modelContainer: ModelContainer?
+    
     override init() {
         super.init()
+    }
+
+    func setModelContainer(_ container: ModelContainer) {
+        self.modelContainer = container
     }
     
     private var isProperlyBundled: Bool {
@@ -15,14 +22,24 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
 
     func requestPermission() {
         guard isProperlyBundled else {
-            print("⚠️ Skipping notification permission request: App is not running from a proper .app bundle (expected in Xcode/SPM environments). Run the installed version for notifications.")
+            print("⚠️ Skipping notification permission request: App is not running from a proper .app bundle.")
             return
         }
         
         Task {
-            UNUserNotificationCenter.current().delegate = self
+            let center = UNUserNotificationCenter.current()
+            center.delegate = self
+            
+            // Register Categories and Actions
+            let markWatchedAction = UNNotificationAction(identifier: "MARK_WATCHED_ACTION", title: "Mark as Watched", options: [.foreground])
+            
+            let movieCategory = UNNotificationCategory(identifier: "MOVIE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
+            let tvCategory = UNNotificationCategory(identifier: "TV_EPISODE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
+            
+            center.setNotificationCategories([movieCategory, tvCategory])
+
             do {
-                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+                let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
                 if granted {
                     print("✅ Notification permission granted.")
                 }
@@ -32,35 +49,45 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
     }
     
-    func scheduleMovieNotification(item: MediaItem) {
+    func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) {
         guard isProperlyBundled else { return }
-        guard let releaseDate = item.releaseDate, releaseDate > Date() else { return }
+        guard let releaseDate = releaseDate, releaseDate > Date() else { return }
         
-        let identifier = "movie-\(item.id)"
+        let identifier = "movie-\(id)"
         let content = UNMutableNotificationContent()
-        content.title = item.title
+        content.title = title
         content.subtitle = "Movie Release"
         content.body = "Is out today! Enjoy the premiere. 🍿"
         content.sound = .default
+        content.categoryIdentifier = "MOVIE_RELEASE"
+        content.userInfo = ["ITEM_ID": id, "ITEM_TYPE": "movie"]
         
         Task {
-            if let posterURL = item.posterURL, let attachment = try? await downloadImage(from: posterURL) {
+            if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
                 content.attachments = [attachment]
             }
             finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
         }
     }
     
-    func scheduleTVNotification(item: MediaItem) {
+    func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) {
         guard isProperlyBundled else { return }
-        guard let tv = item.tvShowDetails, let nextDate = item.nextAiringDate, nextDate > Date() else { return }
+        guard let nextDate = nextDate, nextDate > Date() else { return }
         
-        let identifier = "tv-\(item.id)"
+        let identifier = "tv-\(id)"
         let content = UNMutableNotificationContent()
-        content.title = item.title
+        content.title = title
+        content.categoryIdentifier = "TV_EPISODE_RELEASE"
         
-        let season = tv.nextSeasonNumber ?? 0
-        let episode = tv.nextEpisodeNumber ?? 0
+        let season = nextSeasonNumber ?? 0
+        let episode = nextEpisodeNumber ?? 0
+        
+        content.userInfo = [
+            "ITEM_ID": id, 
+            "ITEM_TYPE": "tvShow",
+            "SEASON_NUMBER": season,
+            "EPISODE_NUMBER": episode
+        ]
         
         if episode == 1 {
             content.subtitle = "Season Premiere"
@@ -72,10 +99,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         content.sound = .default
         
         Task {
-            if let posterURL = item.posterURL, let attachment = try? await downloadImage(from: posterURL) {
+            if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
                 content.attachments = [attachment]
             }
-            finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: tv.nextEpisodeTime)
+            finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime)
         }
     }
     
@@ -140,11 +167,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         return try UNNotificationAttachment(identifier: UUID().uuidString, url: tmpFile, options: nil)
     }
     
-    func cancelNotification(for item: MediaItem) {
+    func cancelNotification(id: String, type: MediaType) {
         guard isProperlyBundled else { return }
-        let baseID = item.type == .movie ? "movie-\(item.id)" : "tv-\(item.id)"
+        let baseID = type == .movie ? "movie-\(id)" : "tv-\(id)"
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(baseID)-day1", "\(baseID)-day2"])
     }
+
     
     func sendTestNotification() {
         guard isProperlyBundled else {
@@ -156,6 +184,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         content.subtitle = "Rich Notification"
         content.body = "This is what your alerts will look like! 🍿"
         content.sound = .default
+        content.categoryIdentifier = "MOVIE_RELEASE" // Use an existing category to show actions
         
         // Use a generic placeholder or last item poster for test
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
@@ -167,5 +196,30 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     // MARK: - UNUserNotificationCenterDelegate
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .list, .sound])
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        let actionIdentifier = response.actionIdentifier
+        
+        if actionIdentifier == "MARK_WATCHED_ACTION" {
+            guard let itemID = userInfo["ITEM_ID"] as? String,
+                  let itemType = userInfo["ITEM_TYPE"] as? String,
+                  let container = modelContainer else {
+                completionHandler()
+                return
+            }
+            
+            let season = userInfo["SEASON_NUMBER"] as? Int
+            let episode = userInfo["EPISODE_NUMBER"] as? Int
+            
+            Task {
+                let actionService = BackgroundActionService(modelContainer: container)
+                try? await actionService.markAsWatched(itemID: itemID, type: itemType, season: season, episode: episode)
+                completionHandler()
+            }
+        } else {
+            completionHandler()
+        }
     }
 }

@@ -10,35 +10,40 @@ struct ImageContainer: @unchecked Sendable {
 actor DiskIOActor {
     static let shared = DiskIOActor()
     private var activeCount = 0
-    private let maxConcurrentReads = 4
+    private let maxConcurrent = 3
 
-    func run<T>(priority: TaskPriority? = nil, operation: @escaping @Sendable () async throws -> T) async rethrows -> T {
-        while activeCount >= maxConcurrentReads {
-            await Task.yield()
+    func run<T>(_ work: @Sendable () async throws -> T) async rethrows -> T {
+        while activeCount >= maxConcurrent {
+            try? await Task.sleep(nanoseconds: 10_000_000)
         }
         activeCount += 1
         defer { activeCount -= 1 }
-        return try await operation()
+        return try await work()
     }
 }
 
 @MainActor
+@Observable
 class ImageCache {
     static let shared = ImageCache()
+    
+    // Performance: Prioritize small memory cache for 8GB M1 Macs
+    private let memoryCache = NSCache<NSString, CGImage>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    private let memoryCache = NSCache<NSString, CGImage>()
-    private let maxDiskCacheSize: Int64 = 150 * 1024 * 1024 
+    private let maxDiskCacheSize: Int64 = 150 * 1024 * 1024 // 150MB
     
-    // Broadcast system for live updates
-    private let updateSubject = PassthroughSubject<String, Never>()
-    var updates: AnyPublisher<String, Never> { updateSubject.eraseToAnyPublisher() }
-
+    // Notification for broadcast updates
+    let updates = PassthroughSubject<String, Never>()
+    
     // Task de-duplication registry - NOW TRACKING BASE URL
     private var activeTasks: [String: Task<Void, Never>] = [:]
     
     // Reverse lookup to find ANY size of an image URL in memory
     private var urlToKeys: [String: Set<String>] = [:]
+    
+    // Phase 3 Optimization: In-Memory Disk Cache Index
+    private var diskCacheIndex: Set<String> = []
 
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
@@ -55,9 +60,52 @@ class ImageCache {
         
         memoryCache.countLimit = 200 
         
+        // Phase 1 Optimization: Asynchronous Disk Indexing (M1 Startup Fix)
+        Task.detached(priority: .background) {
+            let fm = FileManager.default
+            if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
+                let fileNames = Set(files.map { $0.lastPathComponent })
+                await MainActor.run {
+                    ImageCache.shared.diskCacheIndex = fileNames
+                }
+            }
+        }
+        
+        // Dynamic Resource Management
+        NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.performMemoryCompaction(level: .warning) }
+        }
+        
+        NotificationCenter.default.addObserver(forName: .memoryPressureCritical, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.performMemoryCompaction(level: .critical) }
+        }
+
         Task.detached(priority: .background) {
             await ImageCache.shared.pruneDiskCacheIfNeeded()
         }
+    }
+    
+    /// macOS 26 Tahoe inspired Memory Compaction
+    @MainActor
+    private func performMemoryCompaction(level: MemoryPressureLevel) {
+        let limit: Int
+        switch level {
+        case .warning:
+            limit = 50
+            // Prune only oldest 50%
+            self.memoryCache.countLimit = limit
+        case .critical:
+            limit = 10
+            self.memoryCache.countLimit = limit
+            self.memoryCache.removeAllObjects()
+            self.urlToKeys.removeAll()
+            // Force a sync to disk for any pending metadata
+            NotificationCenter.default.post(name: NSNotification.Name("ForceSwiftDataSave"), object: nil)
+        }
+    }
+    
+    enum MemoryPressureLevel {
+        case warning, critical
     }
     
     func clearMemoryCache() {
@@ -65,18 +113,19 @@ class ImageCache {
         urlToKeys.removeAll()
     }
     
-    func checkMemoryCache(forKey key: String, targetSize: CGSize? = nil) -> ImageContainer? {
+    func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {
+        // 1. Exact size match
         let specificKey = generateCacheKey(key: key, size: targetSize)
-        
-        // 1. Check for the exact size
-        if let image = memoryCache.object(forKey: specificKey as NSString) {
-            return ImageContainer(image: image)
+        if let exact = memoryCache.object(forKey: specificKey as NSString) {
+            return ImageContainer(image: exact)
         }
         
-        // 2. Fuzzy Match: Check if ANY version of this URL is in memory
+        // 2. Fuzzy match (Any size already in memory for this URL)
         if let keys = urlToKeys[key] {
-            let availableImages = keys.compactMap { memoryCache.object(forKey: $0 as NSString) }
-            if let bestMatch = availableImages.sorted(by: { $0.width > $1.width }).first {
+            // Prefer largest available
+            let sortedKeys = keys.sorted { $0.count > $1.count }
+            if let bestMatchKey = sortedKeys.first,
+               let bestMatch = memoryCache.object(forKey: bestMatchKey as NSString) {
                 return ImageContainer(image: bestMatch)
             }
         }
@@ -86,43 +135,44 @@ class ImageCache {
 
     private func generateCacheKey(key: String, size: CGSize?) -> String {
         guard let size = size else { return key }
-        let physicalWidth = Int(size.width * screenScale)
-        let physicalHeight = Int(size.height * screenScale)
-        return "\(key)_\(physicalWidth)x\(physicalHeight)"
+        return "\(key)_\(Int(size.width))x\(Int(size.height))"
     }
     
     private func fileName(for key: String, size: CGSize?) -> String {
-        let cacheKey = generateCacheKey(key: key, size: size)
-        let inputData = cacheKey.count > 0 ? Data(cacheKey.utf8) : Data()
-        let hashed = SHA256.hash(data: inputData)
-        return hashed.compactMap { String(format: "%02x", $0) }.joined()
-    }
-    
-    private func loadFromDisk(fileURL: URL, targetSize: CGSize?) async -> ImageContainer? {
-        await DiskIOActor.shared.run {
-            guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
-            
-            let physicalSize = targetSize != nil ? max(targetSize!.width, targetSize!.height) * self.screenScale : 600
-            let maxPixelSize = Int(physicalSize)
-            
-            let options: [CFString: Any] = [
-                kCGImageSourceShouldCache: false,
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-            ]
-            
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                return nil
-            }
-            
-            return ImageContainer(image: cgImage)
+        let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        if let size = size {
+            return "\(hash)_\(Int(size.width))_\(Int(size.height)).jpg"
         }
+        return "\(hash).jpg"
     }
 
-    enum ImagePriority {
-        case critical, normal, low
+    func getTinyProxy(forKey key: String) async -> ImageContainer? {
+        let tinySize = CGSize(width: 50, height: 75)
+        let tinyKey = generateCacheKey(key: key, size: tinySize)
+        
+        // 1. Memory Check
+        if let image = memoryCache.object(forKey: tinyKey as NSString) {
+            return ImageContainer(image: image)
+        }
+        
+        // 2. Disk Check (Optimized via Index)
+        let diskFileName = fileName(for: key, size: tinySize)
+        guard diskCacheIndex.contains(diskFileName) else { return nil }
+        
+        let fileURL = cacheDirectory.appendingPathComponent(diskFileName)
+        
+        if let container = await loadFromDisk(fileURL: fileURL, targetSize: tinySize) {
+            memoryCache.setObject(container.image, forKey: tinyKey as NSString)
+            registerKeyForURL(key, specificKey: tinyKey)
+            return container
+        }
+        
+        return nil
+    }
+
+    func cancel(forKey key: String) {
+        activeTasks[key]?.cancel()
+        activeTasks[key] = nil
     }
 
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal) async -> ImageContainer? {
@@ -141,35 +191,47 @@ class ImageCache {
             }
         }
         
+        if Task.isCancelled { return nil }
+
         let task = Task { [weak self] in
             guard let self = self else { return }
-            let diskFileName = fileName(for: key, size: targetSize)
-            let fileURL = cacheDirectory.appendingPathComponent(diskFileName)
+            let diskFileName = self.fileName(for: key, size: targetSize)
+            let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
             
-            // Try disk
-            if let container = await loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
-                self.memoryCache.setObject(container.image, forKey: specificKey as NSString)
-                self.registerKeyForURL(key, specificKey: specificKey)
-                self.updateSubject.send(key) 
-                return
+            // Try disk (Optimized via Index)
+            if self.diskCacheIndex.contains(diskFileName) {
+                if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
+                    if Task.isCancelled { return }
+                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString)
+                    self.registerKeyForURL(key, specificKey: specificKey)
+                    self.updates.send(key) 
+                    return
+                }
             }
             
+            if Task.isCancelled { return }
+
             // Download logic
             do {
                 guard let url = URL(string: key) else { return }
                 let (data, _) = try await URLSession.shared.data(from: url)
+                if Task.isCancelled { return }
                 guard let nsImage = NSImage(data: data) else { return }
                 
                 await self.save(image: nsImage, data: data, forKey: key, targetSize: targetSize)
                 
+                if Task.isCancelled { return }
+
                 // Re-load decoded version after save to verify
-                if let container = await loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
+                if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
                     self.memoryCache.setObject(container.image, forKey: specificKey as NSString)
                     self.registerKeyForURL(key, specificKey: specificKey)
-                    self.updateSubject.send(key)
+                    self.updates.send(key)
                 }
             } catch {
-                print("Download error: \(error)")
+                if !(error is CancellationError) {
+                    print("Download error: \(error)")
+                }
             }
         }
         
@@ -189,7 +251,7 @@ class ImageCache {
     }
 
     func ping(url: String) {
-        updateSubject.send(url)
+        updates.send(url)
     }
 
     func isExactMatch(image: CGImage, forURL url: String, size: CGSize?) -> Bool {
@@ -216,7 +278,7 @@ class ImageCache {
         
         // Only decode for memory cache if we don't have a CGImage yet
         let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        let tinyProxyFileName = fileName(for: key, size: CGSize(width: 50, height: 50))
+        let tinyProxyFileName = fileName(for: key, size: CGSize(width: 50, height: 75))
         
         await Task.detached(priority: .background) {
             let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
@@ -244,6 +306,14 @@ class ImageCache {
                     let tinyData = tinyBitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.4])
                     try? tinyData?.write(to: proxyURL)
                 }
+                
+                await MainActor.run {
+                    _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
+                }
+            }
+
+            await MainActor.run {
+                _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
             }
         }.value
     }
@@ -269,8 +339,27 @@ class ImageCache {
                 if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
                 try? fileManager.removeItem(at: file.url)
                 currentSize -= file.size
+                
+                let fileName = file.url.lastPathComponent
+                await MainActor.run {
+                    _ = ImageCache.shared.diskCacheIndex.remove(fileName)
+                }
             }
         }
+    }
+
+    private func loadFromDisk(fileURL: URL, targetSize: CGSize?) async -> ImageContainer? {
+        return await DiskIOActor.shared.run {
+            guard let data = try? Data(contentsOf: fileURL),
+                  let image = NSImage(data: data) else { return nil }
+            
+            guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            return ImageContainer(image: cgImage)
+        }
+    }
+
+    enum ImagePriority {
+        case low, normal, critical
     }
 }
 
@@ -278,6 +367,8 @@ struct CachedImage<Placeholder: View>: View {
     let url: URL?
     let targetSize: CGSize?
     let priority: ImageCache.ImagePriority
+    var themeColor: Color? = nil
+    var isFastScrolling: Bool = false
     var onImageLoaded: ((CGImage) -> Void)? = nil
     @ViewBuilder let placeholder: Placeholder
     
@@ -286,10 +377,12 @@ struct CachedImage<Placeholder: View>: View {
     @State private var isLoading = false
     @State private var broadcastCancellable: AnyCancellable?
 
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
         self.targetSize = targetSize
         self.priority = priority
+        self.themeColor = themeColor
+        self.isFastScrolling = isFastScrolling
         self.onImageLoaded = onImageLoaded
         self.placeholder = placeholder()
         
@@ -306,7 +399,7 @@ struct CachedImage<Placeholder: View>: View {
     
     var body: some View {
         Group {
-            if SleepManager.shared.isAsleep {
+            if SleepManager.shared.isAsleep || (isFastScrolling && image == nil && fuzzyMatch == nil) {
                 staticPlaceholder
             } else if let finalImage = image {
                 Image(finalImage, scale: 1.0, label: Text(""))
@@ -321,18 +414,30 @@ struct CachedImage<Placeholder: View>: View {
                 staticPlaceholder
             }
         }
-        .animation(.easeIn(duration: 0.25), value: image == nil)
+        .animation(.smooth(duration: 0.2), value: image == nil)
         .onAppear {
             // 2. LISTEN-FIRST: Setup listener before any loading begins
             setupBroadcastListener()
             
-            if image == nil {
+            if image == nil && !isFastScrolling {
                 Task { await attemptLoad() }
+            }
+        }
+        .onDisappear {
+            if let url = url {
+                ImageCache.shared.cancel(forKey: url.absoluteString)
             }
         }
         .task(id: url) {
             // Safety re-check on URL change
-            await attemptLoad()
+            if !isFastScrolling {
+                await attemptLoad()
+            }
+        }
+        .onChange(of: isFastScrolling) { oldValue, newValue in
+            if !newValue && image == nil {
+                Task { await attemptLoad() }
+            }
         }
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {
@@ -348,9 +453,19 @@ struct CachedImage<Placeholder: View>: View {
 
     @ViewBuilder
     private var staticPlaceholder: some View {
-        ZStack {
-            Color.secondary.opacity(0.1)
-            placeholder
+        if let color = themeColor {
+            Rectangle()
+                .fill(color.opacity(0.15))
+                .overlay {
+                    Image(systemName: "film")
+                        .foregroundStyle(color.opacity(0.3))
+                        .font(.system(size: 24))
+                }
+        } else {
+            ZStack {
+                Color.secondary.opacity(0.1)
+                placeholder
+            }
         }
     }
 
@@ -379,27 +494,30 @@ struct CachedImage<Placeholder: View>: View {
                     self.image = container.image
                     self.fuzzyMatch = nil
                 }
+                return
             } else {
                 self.fuzzyMatch = container.image
-                await loadImage()
             }
-        } else {
-            // Tiny Proxy check
-            if let tiny = ImageCache.shared.checkMemoryCache(forKey: key, targetSize: CGSize(width: 50, height: 50)) {
-                self.fuzzyMatch = tiny.image
-            }
-            await loadImage()
         }
+        
+        // Fetch Tiny Proxy (Disk check included in getTinyProxy)
+        if fuzzyMatch == nil {
+            if let container = await ImageCache.shared.getTinyProxy(forKey: key) {
+                withAnimation(.easeIn(duration: 0.2)) {
+                    self.fuzzyMatch = container.image
+                }
+            }
+        }
+        
+        await loadImage()
     }
     
     private func loadImage() async {
         guard let url = url, !isLoading else { return }
-        let key = url.absoluteString
-        
         isLoading = true
         defer { isLoading = false }
-
-        if let container = await ImageCache.shared.get(forKey: key, targetSize: targetSize, priority: priority) {
+        
+        if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority) {
             if Task.isCancelled { return }
             withAnimation(.easeIn(duration: 0.25)) {
                 self.image = container.image

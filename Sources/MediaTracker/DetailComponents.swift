@@ -51,28 +51,37 @@ struct PosterView: View {
 
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
-            let content = CachedImage(url: url, targetSize: CGSize(width: 600, height: 900), priority: .critical) { _ in
-                } placeholder: {
-                    Rectangle().fill(Color.secondary.opacity(0.1))
+            ZStack {
+                // 1. Aurora Glow Background
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeColor.opacity(0.5))
+                    .frame(width: 220, height: 330)
+                    .blur(radius: 50)
+                    .offset(y: 10)
+                
+                let content = CachedImage(url: url, targetSize: CGSize(width: 600, height: 900), priority: .critical, themeColor: themeColor) { _ in
+                    } placeholder: {
+                        Rectangle().fill(Color.secondary.opacity(0.1))
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 240, height: 360)
+                    .clipped()
+                
+                Group {
+                    if let ns = namespace {
+                        content
+                            .matchedGeometryEffect(id: "poster_\(item.id)", in: ns)
+                            .background {
+                                Color.clear.matchedGeometryEffect(id: "poster_bg_\(item.id)", in: ns)
+                            }
+                    } else {
+                        content
+                    }
                 }
-                .aspectRatio(contentMode: .fill)
                 .frame(width: 240, height: 360)
-                .clipped()
-            
-            Group {
-                if let ns = namespace {
-                    content
-                        .matchedGeometryEffect(id: "poster_\(item.id)", in: ns)
-                        .background {
-                            Color.clear.matchedGeometryEffect(id: "poster_bg_\(item.id)", in: ns)
-                        }
-                } else {
-                    content
-                }
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 15)
             }
-            .frame(width: 240, height: 360)
-            .cornerRadius(12)
-            .shadow(color: themeColor.opacity(0.3), radius: 25, x: 0, y: 15)  // Deepened ambient shadow
             .zIndex(1)
             .layoutPriority(1)
         }
@@ -87,14 +96,25 @@ struct TitleSection: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let titleView = Text(item.title)
-                .font(.system(size: 34, weight: .bold))
-            
-            if let ns = namespace {
-                titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
-            } else {
-                titleView
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                let titleView = Text(item.title)
+                    .font(.system(size: 34, weight: .bold))
+                
+                if let ns = namespace {
+                    titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
+                } else {
+                    titleView
+                }
+                
+                // Creators/Directors Row
+                let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
+                if !creators.isEmpty {
+                    Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, -2)
+                }
             }
 
             HStack(spacing: 12) {
@@ -119,6 +139,10 @@ struct TitleSection: View {
 
                 StatusPicker(item: item, onChange: onStatusChange)
             }
+            
+            // New Expressive Taste Toggle
+            TasteToggle(item: item, themeColor: themeColor)
+                .padding(.top, 4)
         }
     }
 }
@@ -143,23 +167,16 @@ struct StatusPicker: View {
             .frame(width: 130)
             .labelsHidden()
             .onChange(of: item.state) { oldValue, newValue in
+                item.lastUpdated = Date()
+                item.lastInteractionDate = Date()
+                item.lastStateChangeDate = Date()
                 onChange?(newValue)
             }
         }
     }
     
     private var availableStates: [MediaState] {
-        guard item.type == .tvShow else { return MediaState.allCases }
-        
-        if item.hasWatchedAllEpisodes {
-            return [.completed, .rewatching]
-        }
-        
-        if item.hasWatchedAnyEpisode {
-            return [.active, .onHold, .dropped, .rewatching, .completed]
-        }
-        
-        return MediaState.allCases
+        item.availableStates
     }
 }
 
@@ -171,7 +188,9 @@ struct MetadataSection: View {
         VStack(alignment: .leading, spacing: 10) {
             if let movie = item.movieDetails {
                 HStack(spacing: 8) {
-                    MetadataLine(label: "Status", value: "Released", themeColor: themeColor)
+                    if let date = item.releaseDate {
+                        MetadataLine(label: "Release Date", value: date.formatted(date: .long, time: .omitted), themeColor: themeColor)
+                    }
                     if let lang = movie.originalLanguage {
                         MetadataLine(label: "Language", value: lang, themeColor: themeColor, isLanguage: true)
                     }
@@ -229,7 +248,8 @@ struct CastSectionViewNew: View {
                 .padding(.horizontal, 10)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                let sortedCast = cast.sorted(by: { $0.order < $1.order })
+                let filteredCast = cast.filter { $0.characterName != "Creator" && $0.characterName != "Director" }
+                let sortedCast = filteredCast.sorted(by: { $0.order < $1.order })
 
                 LazyHStack(alignment: .center, spacing: 16) {
                     ForEach(sortedCast) { member in
@@ -259,7 +279,7 @@ struct CastMemberCardNew: View {
                 // Image Section (Left)
                 Group {
                     if let urlString = member.profileURL, let url = URL(string: urlString) {
-                        CachedImage(url: url, targetSize: CGSize(width: 120, height: 180), priority: .low) { _ in
+                        CachedImage(url: url, targetSize: CGSize(width: 120, height: 180), priority: .low, themeColor: themeColor) { _ in
                         } placeholder: {
                             ProgressView().controlSize(.small)
                         }
@@ -337,46 +357,6 @@ struct MetadataLine: View {
     }
 }
 
-struct RatingSection: View {
-    @Bindable var item: MediaItem
-
-    var body: some View {
-        HStack(spacing: 40) {
-            MyRatingView(item: item)
-
-            if let rating = item.movieDetails?.voteAverage ?? item.tvShowDetails?.voteAverage {
-                CommunityRatingView(rating: rating)
-            }
-        }
-    }
-}
-
-struct MyRatingView: View {
-    @Bindable var item: MediaItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("My Rating")
-                .font(.headline)
-
-            HStack(spacing: 20) {
-                RatingButton(
-                    isSelected: item.isLiked == true, type: .like, icon: "hand.thumbsup",
-                    label: "Like"
-                ) {
-                    item.isLiked = true
-                }
-                RatingButton(
-                    isSelected: item.isLiked == false, type: .dislike, icon: "hand.thumbsdown",
-                    label: "Dislike"
-                ) {
-                    item.isLiked = false
-                }
-            }
-        }
-    }
-}
-
 struct CommunityRatingView: View {
     let rating: Double
 
@@ -391,55 +371,5 @@ struct CommunityRatingView: View {
                     .font(.title3.bold())
             }
         }
-    }
-}
-
-struct RatingButton: View {
-    let isSelected: Bool
-    let type: RatingType
-    let icon: String
-    let label: String
-    let action: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-
-    enum RatingType {
-        case like, dislike
-    }
-
-    private var activeColor: Color {
-        switch type {
-        case .like: return Color.semanticGreen(for: colorScheme)
-        case .dislike: return Color.semanticRed(for: colorScheme)
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: isSelected ? "\(icon).fill" : icon)
-                Text(label)
-            }
-            .font(.subheadline.bold())
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .foregroundStyle(isSelected ? .white : .primary)
-            .background {
-                if isSelected {
-                    activeColor
-                } else {
-                    Color.primary.opacity(0.05)
-                        .background(.ultraThinMaterial)
-                }
-            }
-            .clipShape(Capsule())
-            .overlay {
-                if !isSelected {
-                    Capsule()
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                }
-            }
-            .shadow(color: isSelected ? activeColor.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
     }
 }

@@ -2,278 +2,219 @@ import SwiftUI
 import SwiftData
 
 struct DiscoveryHubView: View {
-    let items: [MediaItem]
+    @Environment(\.modelContext) private var modelContext
     let namespace: Namespace.ID
     @Bindable var viewModel: MediaViewModel
-    var onFilterSelected: (DiscoveryFilter) -> Void
+    let onFilterSelected: (DiscoveryFilter) -> Void
     
     @Environment(\.colorScheme) var colorScheme
-    @State private var isRefreshing = false
-    @AppStorage("app_accent") private var appAccent: AppAccent = .indigo
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
     
+    // Performance: Local state to prevent "View Pop-in"
+    @State private var hasDataLoaded = false
+
     var body: some View {
+        let columns = [GridItem(.adaptive(minimum: 160), spacing: 20)]
+        
         ScrollView {
-            VStack(alignment: .leading, spacing: 50) {
-                // Header
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Media Galaxy")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                        Text("Explore your collection as an organic cluster.")
-                            .font(.subheadline)
+            VStack(alignment: .leading, spacing: 40) {
+                // 1. Studios
+                if !viewModel.cachedNetworks.isEmpty {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Studios")
+                            .font(.title3.bold())
                             .fontDesign(.rounded)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        refreshData(force: true)
-                    } label: {
-                        HStack {
-                            if isRefreshing {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
+                            .padding(.horizontal, 30)
+                        
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            let nets = viewModel.cachedNetworks
+                            ForEach(nets.indices, id: \.self) { idx in
+                                Button {
+                                    onFilterSelected(DiscoveryFilter(type: .studio, name: nets[idx].name))
+                                } label: {
+                                    UltraNetworkTile(network: nets[idx], staggerIndex: idx)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            Text("Refresh")
                         }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isRefreshing)
-                }
-                .padding(.horizontal, 30)
-                
-                // 1. Studios & Networks Section
-                VStack(alignment: .leading, spacing: 15) {
-                    Text("Studios & Networks")
-                        .font(.title2.bold())
-                        .fontDesign(.rounded)
                         .padding(.horizontal, 30)
-                    
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 20)], spacing: 20) {
-                        ForEach(viewModel.cachedNetworks) { network in
-                            Button {
-                                onFilterSelected(DiscoveryFilter(type: .studio, name: network.name))
-                            } label: {
-                                HubTile(node: network, icon: "tv.fill", accentColor: .indigo, isLogoType: true)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 30)
                 }
                 
-                // 2. Languages Section
-                VStack(alignment: .leading, spacing: 15) {
-                    Text("Languages")
-                        .font(.title2.bold())
-                        .fontDesign(.rounded)
-                        .padding(.horizontal, 30)
-                    
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 20)], spacing: 20) {
-                        ForEach(viewModel.cachedLanguages) { language in
-                            Button {
-                                onFilterSelected(DiscoveryFilter(type: .language, name: language.name))
-                            } label: {
-                                let displayName = languageName(for: language.name)
-                                let displayNode = DiscoveryNode(name: displayName, logoPath: nil, count: language.count)
-                                HubTile(node: displayNode, icon: "character.bubble.fill", accentColor: appAccent.color, isLogoType: false)
+                // 3. Languages
+                if !viewModel.cachedLanguages.isEmpty {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("World Languages")
+                            .font(.title3.bold())
+                            .fontDesign(.rounded)
+                            .padding(.horizontal, 30)
+                        
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            let langs = viewModel.cachedLanguages
+                            ForEach(langs.indices, id: \.self) { idx in
+                                Button {
+                                    onFilterSelected(DiscoveryFilter(type: .language, name: langs[idx].code ?? langs[idx].name))
+                                } label: {
+                                    UltraPillTile(item: langs[idx], icon: "character.bubble.fill", color: appAccent.color, staggerIndex: idx)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 30)
                 }
                 
-                // 3. Genres Section
-                VStack(alignment: .leading, spacing: 15) {
-                    Text("Genres")
-                        .font(.title2.bold())
-                        .fontDesign(.rounded)
-                        .padding(.horizontal, 30)
-                    
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 20)], spacing: 20) {
-                        ForEach(viewModel.cachedGenres) { genre in
-                            Button {
-                                onFilterSelected(DiscoveryFilter(type: .genre, name: genre.name))
-                            } label: {
-                                HubTile(node: genre, icon: "tag.fill", accentColor: appAccent.color, isLogoType: false)
+                // 4. Genres
+                if !viewModel.cachedGenres.isEmpty {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Explore Genres")
+                            .font(.title3.bold())
+                            .fontDesign(.rounded)
+                            .padding(.horizontal, 30)
+                        
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            let genres = viewModel.cachedGenres
+                            ForEach(genres.indices, id: \.self) { idx in
+                                Button {
+                                    onFilterSelected(DiscoveryFilter(type: .genre, name: genres[idx].name))
+                                } label: {
+                                    UltraPillTile(item: genres[idx], icon: "tag.fill", color: appAccent.color, staggerIndex: idx)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 30)
                 }
             }
-            .padding(.vertical, 30)
-            .background {
-                ZStack {
-                    Circle()
-                        .fill(Color.pink.opacity(colorScheme == .dark ? 0.08 : 0.04))
-                        .frame(width: 400, height: 400)
-                        .blur(radius: 80)
-                        .offset(x: 200, y: -300)
-                    
-                    Circle()
-                        .fill(Color.teal.opacity(colorScheme == .dark ? 0.08 : 0.04))
-                        .frame(width: 400, height: 400)
-                        .blur(radius: 80)
-                        .offset(x: -200, y: 300)
-                }
+            .padding(.vertical, 40)
+        }
+        .scrollClipDisabled()
+        .background(Color.clear)
+        .onAppear {
+            // Optimization: Only refresh if empty
+            if viewModel.cachedNetworks.isEmpty {
+                refreshData(force: false)
             }
         }
-        .onAppear {
+        .onReceive(NotificationCenter.default.publisher(for: .tasteWeightsChanged)) { _ in
             refreshData(force: false)
         }
-        .onChange(of: hiddenStudios) {
-            refreshData(force: true)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    refreshData(force: true)
+                } label: {
+                    Label("Force Sync", systemImage: "bolt.fill")
+                }
+                .help("Re-calculate Discovery metrics")
+            }
         }
-    }
-    
-    struct LightweightDiscoveryItem: Sendable {
-        let type: MediaType?
-        let network: String?
-        let networkLogoPath: String?
-        let genres: [String]
-        let originalLanguage: String?
     }
     
     private func refreshData(force: Bool) {
-        // Skip if app is in sleep mode
-        guard !SleepManager.shared.isAsleep else { return }
-
-        // Calculate a stable hash for the current library state
-        // We use count and the hash of the first/last items as a fast proxy for change.
-        let currentLibraryHash = items.count ^ (items.first?.id.hashValue ?? 0) ^ (items.last?.id.hashValue ?? 0)
-        let libraryChanged = viewModel.lastDiscoveryCalculationHash != currentLibraryHash
-
-        // Only refresh if forced, library changed, never refreshed, or if older than 24 hours
-        let twentyFourHours: TimeInterval = 24 * 60 * 60
-        let isStale = viewModel.lastDiscoveryRefresh == nil || 
-                          Date().timeIntervalSince(viewModel.lastDiscoveryRefresh!) > twentyFourHours
+        let container = modelContext.container
+        let localHidden = hiddenStudios
         
-        guard force || libraryChanged || isStale else { return }
-        
-        isRefreshing = true
-        
-        let localHiddenStudios = hiddenStudios
-        let lightweightItems = items.map { item in
-            // Fallback for cases where cached properties might be missing (e.g. legacy data)
-            let genres = !item.cachedGenres.isEmpty ? item.cachedGenres : (item.movieDetails?.genres ?? item.tvShowDetails?.genres ?? [])
-            let language = item.cachedLanguage ?? item.movieDetails?.originalLanguage ?? item.tvShowDetails?.originalLanguage
-            
-            return LightweightDiscoveryItem(
-                type: item.type,
-                network: item.cachedNetwork,
-                networkLogoPath: item.tvShowDetails?.networkLogoPath, // Still need for logos
-                genres: genres,
-                originalLanguage: language
-            )
+        // Phase 4: Ensure persistent actors are initialized on the MainActor
+        if force && viewModel.discoverySyncService == nil {
+            viewModel.discoverySyncService = DiscoverySyncService(modelContainer: container)
+        }
+        if viewModel.tasteActor == nil {
+            viewModel.tasteActor = TasteActor(modelContainer: container)
         }
         
-        // Use a background task for the heavy scanning
+        let syncService = viewModel.discoverySyncService
+        let tasteActor = viewModel.tasteActor
+
         Task.detached(priority: .userInitiated) {
-            let (networks, genres, languages) = await Self.calculateDiscoveryData(from: lightweightItems, hiddenStudios: localHiddenStudios)
+            let context = ModelContext(container)
+            
+            // Sync if forced or empty
+            if force {
+                await syncService?.syncLibrary(force: true)
+            }
+            
+            // Fetch snapshots
+            let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
+            let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
+            let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
+            
+            let nets = (try? context.fetch(netDescriptor)) ?? []
+            let hiddenSet = Set(localHidden.components(separatedBy: ",").filter { !$0.isEmpty })
+            let filteredNets = nets.filter { !hiddenSet.contains($0.name) }
+            
+            let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex) }
+            let snGenres = ((try? context.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
+            let snLangs = ((try? context.fetch(langDescriptor)) ?? []).map { 
+                let name = LanguageUtils.languageName(for: $0.code)
+                return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count) 
+            }
+            
+            // Phase 3 Optimization: NPU-Accelerated Recommendations
+            guard let taste = tasteActor else { return }
+            let recommendations = await taste.calculateRecommendations()
+            let snRecs = recommendations.compactMap { (id, reason) -> MediaThumbnailMetadata? in
+                guard let item = context.model(for: id) as? MediaItem else { return nil }
+                return MediaThumbnailMetadata(
+                    id: item.persistentModelID,
+                    title: item.title,
+                    posterURL: item.posterURL,
+                    backdropURL: item.backdropURL,
+                    overview: item.overview,
+                    genres: item.cachedGenres,
+                    releaseDate: item.releaseDate,
+                    state: item.state,
+                    type: item.type,
+                    taste: item.tasteValue,
+                    cachedNextAiringDate: item.cachedNextAiringDate,
+                    cachedNetwork: item.cachedNetwork,
+                    themeColorHex: item.themeColorHex,
+                    badgeText: item.badgeText,
+                    watchProgress: item.storedWatchProgressLabel,
+                    nextEpisodeToWatchLabel: item.storedNextEpisodeLabel,
+                    progress: item.storedProgress,
+                    isUpcoming: item.storedIsUpcoming,
+                    isBingeDrop: item.storedIsBingeDrop,
+                    smartBadgeLabel: item.storedSmartBadgeLabel,
+                    smartBadgeIcon: item.storedSmartBadgeIcon,
+                    isSparkleBadge: item.storedSmartBadgeIsSparkle,
+                    versionHash: item.lastStateChangeDate.hashValue,
+                    recommendationReason: reason
+                )
+            }
             
             await MainActor.run {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    viewModel.cachedNetworks = networks
-                    viewModel.cachedGenres = genres
-                    viewModel.cachedLanguages = languages
-                    viewModel.lastDiscoveryRefresh = Date()
-                    viewModel.lastDiscoveryCalculationHash = currentLibraryHash
-                    isRefreshing = false
+                withAnimation(.smooth(duration: 0.5)) {
+                    self.viewModel.cachedNetworks = snNets
+                    self.viewModel.cachedGenres = snGenres
+                    self.viewModel.cachedLanguages = snLangs
+                    self.viewModel.forYouRecommendations = snRecs
+                    self.hasDataLoaded = true
                 }
             }
         }
-    }
-    
-    private static func calculateDiscoveryData(from items: [LightweightDiscoveryItem], hiddenStudios: String) async -> (networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode]) {
-        var networkMap: [String: String] = [:]
-        var networkCounts: [String: Int] = [:]
-        var genreCounts: [String: Int] = [:]
-        var languageCounts: [String: Int] = [:]
-        
-        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
-        
-        for item in items {
-            // 1. Networks (Strictly TV Only)
-            if item.type == .tvShow, let name = item.network {
-                if networkMap[name] == nil || (networkMap[name] == "" && item.networkLogoPath != nil) {
-                    networkMap[name] = item.networkLogoPath ?? ""
-                }
-                networkCounts[name, default: 0] += 1
-            }
-            
-            // 2. Genres (All items)
-            for genre in item.genres {
-                genreCounts[genre, default: 0] += 1
-            }
-            
-            // 3. Languages (All items)
-            if let lang = item.originalLanguage {
-                languageCounts[lang, default: 0] += 1
-            }
-        }
-        
-        let networks: [DiscoveryNode] = networkMap.compactMap { (name: String, logo: String) -> DiscoveryNode? in
-            guard !hiddenSet.contains(name) else { return nil }
-            return DiscoveryNode(name: name, logoPath: logo.isEmpty ? nil : logo, count: networkCounts[name] ?? 0)
-        }.sorted { 
-            if $0.count != $1.count { return $0.count > $1.count }
-            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-        
-        let genres: [DiscoveryNode] = genreCounts.map { (key: String, value: Int) -> DiscoveryNode in
-            DiscoveryNode(name: key, logoPath: nil, count: value)
-        }.sorted { 
-            if $0.count != $1.count { return $0.count > $1.count }
-            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-            
-        let languages: [DiscoveryNode] = languageCounts.map { (key: String, value: Int) -> DiscoveryNode in
-            DiscoveryNode(name: key, logoPath: nil, count: value)
-        }.sorted { 
-            if $0.count != $1.count { return $0.count > $1.count }
-            let name1 = Locale.current.localizedString(forLanguageCode: $0.name) ?? $0.name.uppercased()
-            let name2 = Locale.current.localizedString(forLanguageCode: $1.name) ?? $1.name.uppercased()
-            return name1.localizedCaseInsensitiveCompare(name2) == .orderedAscending
-        }
-            
-        return (networks, genres, languages)
-    }
-    
-    private func languageName(for code: String) -> String {
-        Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()
     }
 }
 
-struct HubTile: View {
-    let node: DiscoveryNode
-    let icon: String
-    let accentColor: Color
-    var isLogoType: Bool = true
-    @State private var isHovered = false
+// MARK: - Ultra Lightweight Primitives
+
+struct UltraNetworkTile: View {
+    let network: DiscoveryNode
+    var staggerIndex: Int? = nil
     @Environment(\.colorScheme) var colorScheme
-    @State private var manager = NetworkThemeManager.shared
-    
-    private var displayAccentColor: Color {
-        if isLogoType, let cached = manager.color(for: node.name) {
-            return cached
-        }
-        return accentColor
-    }
+    @State private var isHovered = false
+    @State private var isAppeared = false
     
     var body: some View {
         ZStack {
-            // Flattened Liquid Glass Surface
+            let baseColor = network.themeColorHex.flatMap { Color(hex: $0) } ?? .secondary
+            
+            // Adaptive Glass: Use ThinMaterial on M1 for GPU efficiency
             UnevenRoundedRectangle(
                 topLeadingRadius: 24,
                 bottomLeadingRadius: 8,
@@ -281,99 +222,159 @@ struct HubTile: View {
                 topTrailingRadius: 8,
                 style: .continuous
             )
-                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                .overlay {
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 24,
-                        bottomLeadingRadius: 8,
-                        bottomTrailingRadius: 24,
-                        topTrailingRadius: 8,
-                        style: .continuous
-                    )
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    displayAccentColor.opacity(isHovered ? 0.8 : 0.4),
-                                    .clear,
-                                    displayAccentColor.opacity(isHovered ? 0.3 : 0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
-                        )
-                }
-                .background {
-                    // Subtle tint instead of heavy material
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 24,
-                        bottomLeadingRadius: 8,
-                        bottomTrailingRadius: 24,
-                        topTrailingRadius: 8,
-                        style: .continuous
-                    )
-                        .fill(displayAccentColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
-                }
+            .fill(.thinMaterial)
+            .opacity(colorScheme == .dark ? 0.8 : 0.4)
+            .overlay {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 24,
+                    topTrailingRadius: 8,
+                    style: .continuous
+                )
+                .fill(baseColor.opacity(colorScheme == .dark ? 0.2 : 0.1))
+            }
+            .overlay {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 24,
+                    topTrailingRadius: 8,
+                    style: .continuous
+                )
+                .stroke(baseColor.opacity(isHovered ? 0.6 : 0.2), lineWidth: 1.5)
+            }
             
-            // Content layer
+            // Content Layer with Fade Transition on Hover
             ZStack {
-                if isLogoType {
-                    if let path = node.logoPath, let url = URL(string: "https://image.tmdb.org/t/p/w185\(path)") {
-                        CachedImage(url: url) { image in
-                            // Extract color if not already cached
-                            if manager.themeMap[node.name] == nil {
-                                let container = ImageContainer(image: image)
-                                Task.detached(priority: .background) {
-                                    let dominant = ColorExtractor.dominantColor(from: container.image)
-                                    await MainActor.run {
-                                        manager.save(color: dominant, for: node.name)
-                                    }
-                                }
-                            }
-                        } placeholder: {
-                            Text(node.name)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.primary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .aspectRatio(contentMode: .fit)
-                        .padding(15)
+                if let path = network.logoPath, let url = URL(string: "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(path)") {
+                    CachedImage(url: url, themeColor: baseColor) { _ in } placeholder: {
+                        Text(network.name)
+                            .font(.system(size: 14, weight: .black))
+                            .multilineTextAlignment(.center)
+                    }
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 40)
+                    .padding(.horizontal, 20)
+                    .opacity(isHovered ? 0 : 1)
+                    .scaleEffect(isHovered ? 0.9 : 1)
+                } else {
+                    Text(network.name)
+                        .font(.system(size: 16, weight: .black))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
                         .opacity(isHovered ? 0 : 1)
                         .scaleEffect(isHovered ? 0.9 : 1)
-                    } else {
-                        Text(node.name)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 15)
-                            .opacity(isHovered ? 0 : 1)
-                            .scaleEffect(isHovered ? 0.9 : 1)
-                    }
                 }
                 
-                if !isLogoType || isHovered {
+                if isHovered {
                     VStack(spacing: 4) {
-                        Text(node.name)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.primary)
+                        Text(network.name)
+                            .font(.system(size: 15, weight: .black))
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 15)
+                            .lineLimit(2)
                         
-                        if isHovered {
-                            Text("\(node.count) \(node.count == 1 ? "item" : "items")")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
+                        Text("\(network.count) items")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
                     }
-                    .opacity(!isLogoType || isHovered ? 1 : 0)
+                    .padding(.horizontal, 10)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
         }
         .frame(height: 90)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .shadow(color: displayAccentColor.opacity(isHovered ? 0.2 : 0.05), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0) // No shadow when not hovered
+        .padding(10)
+        .scaleEffect(isHovered ? 1.04 : (isAppeared ? 1.0 : 0.9))
+        .opacity(isAppeared ? 1 : 0)
+        .shadow(color: (network.themeColorHex.flatMap { Color(hex: $0) } ?? .black).opacity(isHovered ? 0.3 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 8 : 0)
+        .onAppear {
+            let delay = Double(staggerIndex ?? 0 % 20) * 0.03
+            withAnimation(.smooth(duration: 0.4).delay(delay)) {
+                isAppeared = true
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
+struct UltraPillTile: View {
+    let item: DiscoveryNode
+    let icon: String
+    let color: Color
+    var staggerIndex: Int? = nil
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
+    @State private var isAppeared = false
+    
+    var body: some View {
+        ZStack {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 8,
+                bottomTrailingRadius: 24,
+                topTrailingRadius: 8,
+                style: .continuous
+            )
+            .fill(.thinMaterial)
+            .opacity(colorScheme == .dark ? 0.8 : 0.4)
+            .overlay {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 24,
+                    topTrailingRadius: 8,
+                    style: .continuous
+                )
+                .fill(color.opacity(colorScheme == .dark ? 0.15 : 0.05))
+            }
+            .overlay {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 24,
+                    topTrailingRadius: 8,
+                    style: .continuous
+                )
+                .stroke(color.opacity(isHovered ? 0.5 : 0.2), lineWidth: 1)
+            }
+            
+            VStack(spacing: 4) {
+                if !isHovered {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(color)
+                        .padding(.bottom, 2)
+                        .transition(.opacity)
+                }
+                
+                Text(item.name)
+                    .font(.system(size: 14, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 10)
+                
+                if isHovered {
+                    Text("\(item.count) items")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+        }
+        .frame(height: 90)
+        .padding(10)
+        .scaleEffect(isHovered ? 1.04 : (isAppeared ? 1.0 : 0.9))
+        .opacity(isAppeared ? 1 : 0)
+        .shadow(color: color.opacity(isHovered ? 0.3 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 8 : 0)
+        .onAppear {
+            let delay = Double(staggerIndex ?? 0 % 20) * 0.03
+            withAnimation(.smooth(duration: 0.4).delay(delay)) {
+                isAppeared = true
+            }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         .onHover { isHovered = $0 }
     }

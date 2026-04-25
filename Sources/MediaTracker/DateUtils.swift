@@ -48,48 +48,51 @@ struct DateUtils {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
 
+        var finalDate: Date? = nil
+
         // 2. Aggressive Streaming Overrides (Force global release times)
         if isApple {
             // Apple TV+: Drops at Midnight ET (9:30 AM IST).
             // API often lists US date (Thursday), which is already Friday morning in India.
             formatter.timeZone = TimeZone(identifier: "America/New_York")
             if let baseDate = formatter.date(from: "\(dateString) 00:00") {
-                return Calendar.current.date(byAdding: .day, value: 1, to: baseDate)
+                finalDate = Calendar.current.date(byAdding: .day, value: 1, to: baseDate)
             }
         } else if isDisney {
             // Disney+ (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET (6:30 AM IST).
-            // 9 PM ET on Tuesday is 6:30 AM IST on Wednesday (Next Day), so no manual offset needed.
             formatter.timeZone = TimeZone(identifier: "America/New_York")
-            return formatter.date(from: "\(dateString) 21:00")
+            finalDate = formatter.date(from: "\(dateString) 21:00")
         } else if isNetflix {
             // Netflix: Midnight PT (12:30 PM IST).
             formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
-            return formatter.date(from: "\(dateString) 00:00")
+            finalDate = formatter.date(from: "\(dateString) 00:00")
         } else if isAmazon {
             // Amazon Prime: Midnight GMT (5:30 AM IST)
             formatter.timeZone = TimeZone(identifier: "GMT")
-            return formatter.date(from: "\(dateString) 00:00")
+            finalDate = formatter.date(from: "\(dateString) 00:00")
         } else if isHulu {
             // Hulu: Midnight ET (9:30 AM IST)
             formatter.timeZone = TimeZone(identifier: "America/New_York")
-            return formatter.date(from: "\(dateString) 00:00")
+            finalDate = formatter.date(from: "\(dateString) 00:00")
         }
 
-        // 3. Fallback: Trust high-precision ISO airstamp if available (Great for HBO, AMC, etc.)
-        if let airstamp = airstamp, let date = isoFormatter.date(from: airstamp) {
-            return date
+        if finalDate == nil {
+            // 3. Fallback: Trust high-precision ISO airstamp if available
+            if let airstamp = airstamp, let date = isoFormatter.date(from: airstamp) {
+                finalDate = date
+            } else if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
+                // 4. Manual fallback to provided timezone
+                formatter.timeZone = tz
+                let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
+                finalDate = formatter.date(from: "\(dateString) \(timeToUse)")
+            } else {
+                // 6. Final raw date fallback
+                let dateOnlyFormatter = DateFormatter()
+                dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+                finalDate = dateOnlyFormatter.date(from: dateString)
+            }
         }
 
-        // 4. Manual fallback to provided timezone or UTC
-        if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
-            formatter.timeZone = tz
-            let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
-            return formatter.date(from: "\(dateString) \(timeToUse)")
-        }
-
-        // 6. Final raw date fallback
-        let dateOnlyFormatter = DateFormatter()
-        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
-        return dateOnlyFormatter.date(from: dateString)
+        return finalDate
     }
 }

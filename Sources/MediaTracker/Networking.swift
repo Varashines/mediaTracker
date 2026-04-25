@@ -18,12 +18,30 @@ actor APIClient {
     static let shared = APIClient()
     private let decoder = JSONDecoder()
     
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .useProtocolCachePolicy // This handles ETags/304 automatically
+        config.urlCache = URLCache.shared
+        return URLSession(configuration: config)
+    }()
+    
     // Phase 2: Search Cache
     private var searchCache: [String: [MediaSearchResult]] = [:]
     private var lastSearchTime: [String: Date] = [:]
     private let cacheExpiry: TimeInterval = 300 // 5 minutes
     
     private var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
+
+    init() {
+        NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
+            Task { [weak self] in await self?.clearSearchCache() }
+        }
+    }
+
+    private func clearSearchCache() {
+        searchCache.removeAll()
+        lastSearchTime.removeAll()
+    }
 
     nonisolated var isTMDBConfigured: Bool {
         UserDefaults.standard.string(forKey: "tmdb_api_key")?.isEmpty == false
@@ -50,7 +68,7 @@ actor APIClient {
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "include_adult", value: "false")
         ])
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<T>.self, from: data)
         return decoded.results
@@ -86,7 +104,7 @@ actor APIClient {
     
     func fetchTrendingMovies() async throws -> [MediaSearchResult] {
         let url = try tmdbURL(path: "/trending/movie/day")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<TMDBMovie>.self, from: data)
         return decoded.results.prefix(10).map { $0.toSearchResult() }
@@ -94,16 +112,16 @@ actor APIClient {
     
     func fetchTrendingTVShows() async throws -> [MediaSearchResult] {
         let url = try tmdbURL(path: "/trending/tv/day")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<TMDBTV>.self, from: data)
         return decoded.results.prefix(10).map { $0.toSearchResult() }
     }
 
     // MARK: - Details
-    func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
+    func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
         let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let details = try decoder.decode(TMDBMovieDetailsResponse.self, from: data)
         let cast = details.credits?.cast.prefix(15).map { 
@@ -129,12 +147,12 @@ actor APIClient {
             }
         }
         
-        return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, originalLanguage: details.original_language, cast: Array(cast), directors: directors)
+        return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, backdropPath: details.backdrop_path, posterPath: details.poster_path, originalLanguage: details.original_language, cast: Array(cast), directors: directors)
         }
 
-        func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
+        func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
         let url = try tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let d = try decoder.decode(TMDBTVDetailsResponse.self, from: data)
         let cast = d.credits?.cast.prefix(15).map { 
@@ -144,11 +162,17 @@ actor APIClient {
             CastMemberResult(name: $0.name, character: "Creator", profilePath: $0.profile_path, order: -1)
         } ?? []
         let network = d.networks?.first
-        return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast), creators)
+        return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, d.backdrop_path, d.poster_path, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast), creators)
         }
+    
+    // Adaptive Asset Scaling: Restore high quality for Retina displays
+    nonisolated var idealThumbnailSize: String {
+        return "w500"
+    }
+
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
         let url = try tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBSeasonResponse.self, from: data)
         return decoded.episodes.map { 
@@ -156,12 +180,23 @@ actor APIClient {
         }
     }
 
+    func searchPerson(query: String) async throws -> String? {
+        let url = try tmdbURL(path: "/search/person", queryItems: [
+            URLQueryItem(name: "query", value: query),
+            URLQueryItem(name: "include_adult", value: "false")
+        ])
+        let (data, response) = try await session.data(from: url)
+        try validateResponse(response)
+        let decoded = try decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
+        return decoded.results.first?.profile_path
+    }
+
     // MARK: - TVMaze Integration
     func lookupTVMazeID(tvdbID: Int) async throws -> Int? {
         var components = URLComponents(string: "https://api.tvmaze.com/lookup/shows")
         components?.queryItems = [URLQueryItem(name: "thetvdb", value: String(tvdbID))]
         guard let url = components?.url else { throw URLError(.badURL) }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         if let http = response as? HTTPURLResponse, http.statusCode == 200 {
             let show = try decoder.decode(TVMazeShowLookupResponse.self, from: data)
             return show.id
@@ -171,7 +206,7 @@ actor APIClient {
 
     func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?) {
         let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let r = try decoder.decode(TVMazeResponse.self, from: data)
         return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name)
@@ -179,7 +214,7 @@ actor APIClient {
 
     func fetchTVMazeEpisodes(tvMazeID: Int) async throws -> [TVMazeEpisode] {
         let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes")!
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         return try decoder.decode([TVMazeEpisode].self, from: data)
     }
@@ -222,7 +257,7 @@ extension TMDBMedia {
             id: String(id),
             title: displayTitle,
             overview: overview,
-            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/w780\(poster_path!)" : nil,
+            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster_path!)" : nil,
             releaseDate: releaseDateString,
             genres: Array(genreList),
             type: mediaType,
@@ -292,7 +327,7 @@ struct TMDBGenreMap {
 }
 
 struct TMDBMovieDetailsResponse: Codable {
-    let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?
+    let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, backdrop_path: String?, poster_path: String?
     let original_language: String?
     let credits: TMDBCreditsResponse?
     let release_dates: TMDBReleaseDatesResponse?
@@ -313,7 +348,7 @@ struct TMDBReleaseDateDetail: Codable {
 }
 
 struct TMDBTVDetailsResponse: Codable {
-    let number_of_seasons: Int, number_of_episodes: Int, status: String, vote_average: Double?, genres: [TMDBGenre]
+    let number_of_seasons: Int, number_of_episodes: Int, status: String, vote_average: Double?, genres: [TMDBGenre], backdrop_path: String?, poster_path: String?
     let original_language: String?
     let networks: [TMDBNetwork]?
     let created_by: [TMDBPerson]?
@@ -374,3 +409,7 @@ struct TVMazeEmbedded: Codable { let nextepisode: TVMazeEpisode? }
 struct TVMazeEpisode: Codable { let season: Int?, number: Int?, name: String, airdate: String, airtime: String, airstamp: String? }
 
 struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String, overview: String, airDate: String?, runtime: Int? }
+
+struct TMDBPersonSearchEntry: Codable {
+    let profile_path: String?
+}

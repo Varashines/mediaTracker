@@ -8,7 +8,7 @@ final class MediaTrackerTests: XCTestCase {
         XCTAssertNotNil(appleDate)
         
         let calendar = Calendar.current
-        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: appleDate!)
+        let _ = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: appleDate!)
         
         // If current locale is IST (+5:30), then 00:00 ET (Thursday) + 1 day = 00:00 ET (Friday)
         // 00:00 ET is 09:30 AM or 10:30 AM IST depending on DST.
