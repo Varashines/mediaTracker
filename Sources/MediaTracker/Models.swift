@@ -267,7 +267,12 @@ final class MediaItem {
     }
     
     var gridBadgeText: String? { badgeText }
-    var detailBadgeText: String? { badgeText }
+    var detailBadgeText: String? {
+        if isUpcoming {
+            return cachedNextAiringDate?.formatted(date: .abbreviated, time: .shortened)
+        }
+        return nil
+    }
     var watchProgressLabel: String? { storedWatchProgressLabel }
     var nextEpisodeToWatchLabel: String? { storedNextEpisodeLabel }
     var nextAiringDate: Date? { cachedNextAiringDate }
@@ -301,6 +306,7 @@ final class MediaItem {
         if type == .movie, let movie = movieDetails {
             self.cachedGenres = movie.genres
             self.cachedLanguage = movie.originalLanguage
+            self.cachedNextAiringDate = self.releaseDate
         } else if type == .tvShow, let tv = tvShowDetails {
             self.cachedGenres = tv.genres
             self.cachedLanguage = tv.originalLanguage
@@ -318,9 +324,13 @@ final class MediaItem {
                 self.storedWatchProgressLabel = "\(watched.count)/\(allEpisodes.count) EP"
                 if let next = allEpisodes.first(where: { !$0.isWatched }) {
                     self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                    self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
                 } else {
                     self.storedNextEpisodeLabel = nil
+                    self.cachedNextAiringDate = tv.nextEpisodeDate
                 }
+            } else {
+                self.cachedNextAiringDate = tv.nextEpisodeDate
             }
         }
         self.storedIsUpcoming = isUpcoming

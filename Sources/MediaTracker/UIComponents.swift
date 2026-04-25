@@ -214,7 +214,7 @@ struct SmartBadgeView: View {
             let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
 
             // 2. Determine Display Label
-            let displayLabel = (isUpcoming ? nextEpisodeLabel : watchProgressLabel) ?? currentState.displayName
+            let displayLabel = nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
 
             // 3. Determine Icon
             let icon = isAvailable ? "play.fill" : (isUpcoming ? "sparkles" : currentState.iconName)
@@ -415,7 +415,7 @@ struct MediaThumbnailView: View {
                     if currentState != .completed {
                         let stats = (item?.modelContext != nil ? item?.storedNextEpisodeLabel : metadata?.nextEpisodeToWatchLabel)
                         let progress = (item?.modelContext != nil ? item?.watchProgressLabel : metadata?.watchProgress)
-                        let currentInfo = (item?.calculateIsUpcoming ?? metadata?.isUpcoming ?? false) ? stats : progress
+                        let currentInfo = stats ?? progress
                         
                         if let info = currentInfo {
                             Text("•")
