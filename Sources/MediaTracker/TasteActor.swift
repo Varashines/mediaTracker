@@ -168,6 +168,7 @@ actor TasteActor {
                     potentialReasons.append(("Because you like \(g)", aff, 0))
                 }
             }
+            let genreAverageAffinity = item.cachedGenres.isEmpty ? 0 : (genreTotalAffinity / Double(item.cachedGenres.count))
             
             // Network matching
             var networkAff: Double = 0
@@ -204,7 +205,7 @@ actor TasteActor {
                 }
             }
             
-            let totalScore = (genreTotalAffinity * wGenre) + 
+            let totalScore = (genreAverageAffinity * wGenre) + 
                              (networkAff * wNetwork) + 
                              (castTotalAffinity * wCast) + 
                              (creatorTotalAffinity * wCreator) +

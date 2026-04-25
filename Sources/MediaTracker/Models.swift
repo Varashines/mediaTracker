@@ -250,7 +250,17 @@ final class MediaItem {
         self.updateSearchableText()
     }
 
-    var availableStates: [MediaState] { MediaState.allCases }
+    var availableStates: [MediaState] { 
+        if type == .movie { return MediaState.allCases }
+        
+        let progress = storedProgress ?? 0
+        if progress >= 1.0 {
+            return [.completed, .rewatching]
+        } else if progress > 0 {
+            return [.active, .onHold, .dropped, .rewatching, .completed]
+        }
+        return MediaState.allCases
+    }
 
     var isUpcoming: Bool {
         guard let date = cachedNextAiringDate else { return false }
@@ -288,10 +298,23 @@ final class MediaItem {
 
     func checkOverallCompletion() {
         if type == .tvShow, let details = tvShowDetails {
-            let all = details.seasons.flatMap { $0.episodes }
-            if !all.isEmpty && all.allSatisfy({ $0.isWatched }) {
+            let allEpisodes = details.seasons.filter { $0.seasonNumber > 0 }.flatMap { $0.episodes }
+            if allEpisodes.isEmpty { return }
+            
+            let watchedCount = allEpisodes.filter { $0.isWatched }.count
+            let progress = Double(watchedCount) / Double(allEpisodes.count)
+            let currentState = state ?? .wishlist
+            let now = Date()
+            
+            if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
                 self.state = .completed
-                self.lastStateChangeDate = Date()
+                self.lastStateChangeDate = now
+            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+                self.state = .active
+                self.lastStateChangeDate = now
+            } else if progress == 0 && (currentState == .active || currentState == .completed) {
+                self.state = .wishlist
+                self.lastStateChangeDate = now
             }
         }
     }
@@ -326,6 +349,22 @@ final class MediaItem {
                 return e1.episodeNumber < e2.episodeNumber
             }
             let watched = allEpisodes.filter { $0.isWatched }
+            
+            // AUTOMATION: State Transitions based on progress
+            if !allEpisodes.isEmpty {
+                let progress = Double(watched.count) / Double(allEpisodes.count)
+                
+                if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
+                    self.state = .completed
+                    self.lastStateChangeDate = now
+                } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+                    self.state = .active
+                    self.lastStateChangeDate = now
+                } else if progress == 0 && (currentState == .active || currentState == .completed) {
+                    self.state = .wishlist
+                    self.lastStateChangeDate = now
+                }
+            }
             
             // 1. Binge-Drop Detection (All remaining episodes of the current season released on same day)
             let unwatched = allEpisodes.filter { !$0.isWatched }
@@ -379,10 +418,10 @@ final class MediaItem {
                         self.storedSmartBadgeIcon = "flag.checkered"
                         self.storedSmartBadgeIsSparkle = true
                     } 
-                    // Priority 3: Binge (For Watchlist multi-season OR Liked/Loved with < 80% progress)
+                    // Priority 3: Binge (For multi-season Liked/Loved/Watchlist with >= 30% progress)
                     else if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
                             (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
-                            (self.storedProgress ?? 0) < 0.8 {
+                            (self.storedProgress ?? 0) >= 0.3 {
                         self.storedSmartBadgeLabel = "BINGE"
                         self.storedSmartBadgeIcon = "sparkles.tv"
                         self.storedSmartBadgeIsSparkle = false
@@ -401,17 +440,8 @@ final class MediaItem {
                 self.storedWatchProgressLabel = nil
                 self.storedNextEpisodeLabel = nil
                 self.cachedNextAiringDate = tv.nextEpisodeDate
-                let isAvailable = (tv.nextEpisodeDate != nil) && (tv.nextEpisodeDate! <= now)
-                
-                // Logic: Binge? (Multi-season show with 0 progress)
-                if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
-                   (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) {
-                    self.storedSmartBadgeLabel = "BINGE"
-                    self.storedSmartBadgeIcon = "sparkles.tv"
-                    self.storedSmartBadgeIsSparkle = false
-                } else {
-                    self.storedSmartBadgeLabel = nil
-                }
+                // No BINGE badge for 0 progress
+                self.storedSmartBadgeLabel = nil
             }
         }
         

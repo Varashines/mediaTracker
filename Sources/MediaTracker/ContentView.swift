@@ -89,7 +89,7 @@ class MediaViewModel {
         if category == "Completed" { return "Completed" }
         if category == "Archive" { return "Archive" }
         if category == "Disliked" { return "Disliked" }
-        if category == "Binge" { return "Bingeable" }
+        if category == "Binge" { return "Binge" }
         if category == "Discover" { return "Discovery Hub" }
         if category == "Insights" { return "Taste Insights" }
         if category == "All" { return "Library" }
@@ -528,13 +528,21 @@ struct ContentView: View {
             Button {
                 performBatchRefresh()
             } label: {
-                Label("Refresh Library", systemImage: "arrow.clockwise")
+                Label("Sync Visible Grid", systemImage: "arrow.clockwise")
             }
             
             Button {
                 performMetadataRefresh()
             } label: {
-                Label("Refresh All Metadata", systemImage: "bolt.fill")
+                Label("Force Full Library Refresh", systemImage: "bolt.fill")
+            }
+            
+            Divider()
+            
+            Button {
+                DataService.shared.runMaintenance(modelContext: modelContext)
+            } label: {
+                Label("Heal & Repair Library", systemImage: "bandage.fill")
             }
         } label: {
             if viewModel.isBatchRefreshing {
@@ -630,7 +638,7 @@ struct SidebarView: View, Equatable {
                     .tag("Archive")
                 Label("Disliked", systemImage: "hand.thumbsdown.fill")
                     .tag("Disliked")
-                Label("Bingeable", systemImage: "rectangle.stack.fill")
+                Label("Binge", systemImage: "rectangle.stack.fill")
                     .tag("Binge")
             }            .padding(.vertical, 4)
             
@@ -686,8 +694,14 @@ struct MediaGridView: View {
     let onLoadMore: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @State private var visibleCount = 40 // Initial snappiness
     @State private var scrollTimer: Timer?
+    
+    @State private var upcomingScrollProgress: Double = 0
+    @State private var upcomingScrollSpace = UUID().uuidString
+    @State private var upcomingContentWidth: CGFloat = 0
+    @State private var upcomingContainerWidth: CGFloat = 0
 
     var isCategoryPage: Bool {
         guard let cat = selectedCategory else { return false }
@@ -695,7 +709,7 @@ struct MediaGridView: View {
     }
 
     var isMainSection: Bool {
-        ["Home", "InProgress", "Watchlist", "All", "Archive", "Loved", "Completed", "Disliked"].contains(selectedCategory)
+        ["Home", "InProgress", "Watchlist", "All", "Archive", "Loved", "Completed", "Disliked", "Binge", "Upcoming"].contains(selectedCategory)
     }
 
     var body: some View {
@@ -719,10 +733,39 @@ struct MediaGridView: View {
                 }
 
                 // 2. Eager Featured Carousel (Upcoming View)
-                if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil && !featuredCarouselItems.isEmpty {                    VStack(alignment: .leading, spacing: 15) {
-                        Text("Featured")
-                            .font(.system(size: 28, weight: .bold))
-                            .padding(.horizontal, 30)
+                if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil && !featuredCarouselItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 15) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Featured")
+                                .font(.system(size: 28, weight: .bold))
+                            
+                            Spacer()
+                            
+                            if featuredCarouselItems.count > 1 {
+                                GeometryReader { geo in
+                                    let availableWidth = geo.size.width
+                                    let itemWidth = max(40, min(availableWidth, availableWidth * 0.3))
+                                    let scrollableTrackWidth = availableWidth - itemWidth
+                                    
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.secondary.opacity(0.15))
+                                            .background(Capsule().fill(.ultraThinMaterial))
+                                            .frame(height: 4)
+                                        
+                                        Capsule()
+                                            .fill(appAccent.color.gradient)
+                                            .frame(width: itemWidth, height: 4)
+                                            .offset(x: upcomingScrollProgress * scrollableTrackWidth)
+                                            .shadow(color: appAccent.color.opacity(0.3), radius: 4, x: 0, y: 2)
+                                    }
+                                    .frame(maxHeight: .infinity, alignment: .center)
+                                }
+                                .frame(width: 150, height: 4)
+                                .padding(.trailing, 10)
+                            }
+                        }
+                        .padding(.horizontal, 30)
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .top, spacing: 20) {
@@ -737,6 +780,32 @@ struct MediaGridView: View {
                                 }
                             }
                             .padding(.horizontal, 30)
+                            .padding(.vertical, 20)
+                            .background(
+                                GeometryReader { geo in
+                                    let minX = geo.frame(in: .named(upcomingScrollSpace)).minX
+                                    Color.clear
+                                        .preference(key: ScrollOffsetKey.self, value: [upcomingScrollSpace: minX])
+                                        .onAppear { upcomingContentWidth = geo.size.width }
+                                        .onChange(of: geo.size.width) { _, newValue in upcomingContentWidth = newValue }
+                                }
+                            )
+                        }
+                        .coordinateSpace(name: upcomingScrollSpace)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear { upcomingContainerWidth = geo.size.width }
+                                    .onChange(of: geo.size.width) { _, newValue in upcomingContainerWidth = newValue }
+                            }
+                        )
+                        .onPreferenceChange(ScrollOffsetKey.self) { dict in
+                            guard let minX = dict[upcomingScrollSpace] else { return }
+                            let maxScroll = max(1, upcomingContentWidth - upcomingContainerWidth)
+                            let currentScroll = max(0, -minX)
+                            withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
+                                upcomingScrollProgress = min(1.0, currentScroll / maxScroll)
+                            }
                         }
                     }
                     .compositingGroup()
@@ -754,10 +823,13 @@ struct MediaGridView: View {
                             .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 30)
-                    } else if !isCategoryPage && !isMainSection && selectedCategory != "Upcoming" && selectedCategory != "Discover" {
+                    } else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
                         Text(selectedCategory ?? "Library").font(.system(size: 24, weight: .bold)).padding(.horizontal, 30)
                     } else if selectedCategory == "Upcoming" {
-                        Text("Queue").font(.system(size: 24, weight: .bold)).padding(.horizontal, 30)
+                        Text("Queue")
+                            .font(.system(size: 24, weight: .bold))
+                            .padding(.horizontal, 30)
+                            .padding(.bottom, 10)
                     }
                     
                     if items.isEmpty && groupedItems.isEmpty {
@@ -779,6 +851,7 @@ struct MediaGridView: View {
                                         }
                                     }
                                     .padding(.horizontal, 30)
+                                    .padding(.vertical, 15)
                                 }
                             }
                             .compositingGroup()
@@ -788,7 +861,7 @@ struct MediaGridView: View {
                         // 3. Main Collection with Chunking & Pagination
                         if groupBy == .none && selectedCategory != "Archive" && selectedCategory != "Home" && selectedCategory != "Binge" {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                                let baseItems = showingUpcomingOnly ? Array(items.dropFirst(min(items.count, 5))) : items
+                                let baseItems = showingUpcomingOnly ? Array(items.dropFirst(featuredCarouselItems.count)) : items
                                 
                                 ForEach(baseItems.indices, id: \.self) { idx in
                                     let metadata = baseItems[idx]
@@ -809,8 +882,8 @@ struct MediaGridView: View {
                                     }
                                 }
                             }
-                            .drawingGroup() // Metal Layer Flattening for VRAM efficiency
                             .padding(.horizontal, 30)
+                            .padding(.top, 20)
                             .padding(.bottom, 40)
                         } else {
                             // Grouped View
@@ -841,6 +914,7 @@ struct MediaGridView: View {
                                             }
                                         }
                                         .padding(.horizontal, 30)
+                                        .padding(.top, 10)
                                     }
                                 }
                             }

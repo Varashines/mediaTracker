@@ -55,15 +55,12 @@ struct DiscoveryHubView: View {
         let container = modelContext.container
         let localHidden = hiddenStudios
         
-        if force && viewModel.discoverySyncService == nil {
-            viewModel.discoverySyncService = DiscoverySyncService(modelContainer: container)
-        }
-
-        let syncService = viewModel.discoverySyncService
+        let syncService = DiscoverySyncService(modelContainer: container)
 
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
-            if force { await syncService?.syncLibrary(force: true) }
+            // Local Aggregation only - no networking here
+            await syncService.syncLibrary(force: force)
             
             let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
             let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
@@ -105,22 +102,21 @@ struct DiscoverySection: View {
     let nodes: [DiscoveryNode]
     let style: DiscoveryCardStyle
     let onSelected: (DiscoveryNode) -> Void
-    
-    // Responsive Grid with enough spacing for 1.1x scaling
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 30)
-    ]
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            HStack {
-                Label(title, systemImage: icon)
-                    .font(.system(size: 22, weight: .bold))
-                Spacer()
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(appAccent.color)
+                
+                Text(title)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
             }
             .padding(.horizontal, 40)
             
-            LazyVGrid(columns: columns, spacing: 30) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: style == .logo ? 200 : 180), spacing: 24)], spacing: 24) {
                 ForEach(nodes) { node in
                     DiscoveryCard(node: node, style: style) { onSelected(node) }
                 }
@@ -140,17 +136,35 @@ struct DiscoveryCard: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
+    private var themeColor: Color {
+        if let hex = node.themeColorHex, let color = Color(hex: hex) {
+            return color
+        }
+        return appAccent.color
+    }
+
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Background: Inverted Asymmetric Oval Shape
-                UnevenRoundedRectangle(topLeadingRadius: 15, bottomLeadingRadius: 35, bottomTrailingRadius: 15, topTrailingRadius: 35)
-                    .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
-                    .overlay {
-                        if let hex = node.themeColorHex, let color = Color(hex: hex) {
-                            color.opacity(isHovered ? 0.25 : 0.05)
-                        }
+                // Main Layer
+                Group {
+                    if style == .logo {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .stroke(themeColor.opacity(isHovered ? 0.6 : 0.15), lineWidth: isHovered ? 2 : 1)
+                            }
+                    } else {
+                        Capsule()
+                            .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .overlay {
+                                Capsule()
+                                    .stroke(themeColor.opacity(isHovered ? 0.6 : 0.15), lineWidth: isHovered ? 2 : 1)
+                            }
                     }
+                }
+                .shadow(color: themeColor.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
                 
                 if style == .logo {
                     logoContent
@@ -158,24 +172,18 @@ struct DiscoveryCard: View {
                     textContent
                 }
             }
-            .frame(height: 90)
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 15, bottomLeadingRadius: 35, bottomTrailingRadius: 15, topTrailingRadius: 35))
-            .overlay {
-                UnevenRoundedRectangle(topLeadingRadius: 15, bottomLeadingRadius: 35, bottomTrailingRadius: 15, topTrailingRadius: 35)
-                    .stroke(isHovered ? appAccent.color.opacity(0.6) : Color.clear, lineWidth: 2)
-            }
-            .shadow(color: .black.opacity(isHovered ? 0.25 : 0), radius: 20, y: 15)
+            .frame(height: style == .logo ? 140 : 80)
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.1 : 1.0)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
         .opacity(isAppeared ? 1 : 0)
         .onAppear {
-            let delay = Double.random(in: 0...0.2)
-            withAnimation(.smooth(duration: 0.4).delay(delay)) {
+            let delay = Double.random(in: 0...0.15)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(delay)) {
                 isAppeared = true
             }
         }
-        .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.8), value: isHovered)
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
         .onHover { isHovered = $0 }
     }
     
@@ -188,39 +196,44 @@ struct DiscoveryCard: View {
                 } placeholder: {
                     ProgressView().controlSize(.small)
                 }
-                .frame(width: 100, height: 45)
-                .scaleEffect(isHovered ? 0.6 : 1.0)
-                .opacity(isHovered ? 0.1 : 1.0)
-                .blur(radius: isHovered ? 5 : 0)
+                .frame(width: isHovered ? 90 : 120, height: isHovered ? 45 : 60)
+                .offset(y: isHovered ? -15 : 0)
+            } else {
+                Text(node.name)
+                    .font(.system(size: 20, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .offset(y: isHovered ? -15 : 0)
             }
             
             VStack(spacing: 2) {
-                Text(node.name)
-                    .font(.system(size: 15, weight: .black))
-                    .multilineTextAlignment(.center)
+                if node.logoPath != nil {
+                    Text(node.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                }
                 Text("\(node.count) TITLES")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(appAccent.color)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
             .opacity(isHovered ? 1 : 0)
-            .scaleEffect(isHovered ? 1.0 : 0.7)
-            .offset(y: isHovered ? 0 : 20)
+            .offset(y: isHovered ? 30 : 45)
+            .scaleEffect(isHovered ? 1.0 : 0.9)
         }
+        .padding(20)
     }
     
     @ViewBuilder
     private var textContent: some View {
-        VStack(spacing: 4) {
-            Text(node.name.uppercased())
-                .font(.system(size: 14, weight: .black, design: .rounded))
-                .kerning(1.2)
-                .offset(y: isHovered ? -8 : 10)
+        ZStack {
+            Text(node.name)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .offset(y: isHovered ? -8 : 0)
             
             Text("\(node.count) ITEMS")
-                .font(.system(size: 10, weight: .black))
-                .foregroundStyle(appAccent.color)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
                 .opacity(isHovered ? 1 : 0)
-                .offset(y: isHovered ? -8 : 10)
+                .offset(y: isHovered ? 12 : 20)
         }
     }
 }

@@ -65,7 +65,12 @@ actor MediaFilterActor {
         if let category = category {
             switch category {
             case "Home":
-                predicate = #Predicate<MediaItem> { $0.stateValue == "Active" || $0.stateValue == "Re-watching" || $0.storedIsUpcoming == true }
+                predicate = #Predicate<MediaItem> { 
+                    $0.stateValue != "Completed" && 
+                    $0.stateValue != "On Hold" && 
+                    $0.stateValue != "Dropped" &&
+                    $0.tasteValue != "Dislike"
+                }
             case "Upcoming": 
                 predicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true }
                 explicitSort = [SortDescriptor(\.cachedNextAiringDate, order: .forward)]
@@ -124,6 +129,7 @@ actor MediaFilterActor {
         limit: Int? = nil,
         offset: Int? = nil
     ) throws -> PaginatedResult {
+        let now = Date()
         // 1. Fetch data with database-level filtering (Category Only to keep Predicate simple)
         var predicate: Predicate<MediaItem>? = nil
         var explicitSort: [SortDescriptor<MediaItem>]? = nil
@@ -131,7 +137,12 @@ actor MediaFilterActor {
         if let category = category {
             switch category {
             case "Home":
-                predicate = #Predicate<MediaItem> { $0.stateValue == "Active" || $0.stateValue == "Re-watching" || $0.storedIsUpcoming == true }
+                predicate = #Predicate<MediaItem> { 
+                    $0.stateValue != "Completed" && 
+                    $0.stateValue != "On Hold" && 
+                    $0.stateValue != "Dropped" &&
+                    $0.tasteValue != "Dislike"
+                }
             case "Upcoming":
                 predicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true }
                 explicitSort = [SortDescriptor(\.cachedNextAiringDate, order: .forward)]
@@ -208,7 +219,14 @@ actor MediaFilterActor {
                     let airDate = item.cachedNextAiringDate ?? .distantPast
                     let isFuture = airDate > now
                     let isActive = item.stateValue == "Active" || item.stateValue == "Re-watching"
-                    let isRecentlyReleased = item.storedIsUpcoming && airDate <= now
+                    
+                    // Replace the flawed storedIsUpcoming check with explicit smart badge presence.
+                    // If it has a recent drop badge, it's a recent release regardless of Watchlist status.
+                    // NEW badge clutters dashboard for TV show premieres, so only allow NEW for movies.
+                    let isRecentlyReleased = item.storedSmartBadgeLabel == "STREAMING" || 
+                                             (item.storedSmartBadgeLabel == "NEW" && item.typeValue == "Movie") || 
+                                             item.storedIsBingeDrop
+                                             
                     return (isActive && !isFuture) || isRecentlyReleased
                 }.sorted { item1, item2 in
                     let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now
@@ -241,7 +259,18 @@ actor MediaFilterActor {
                 )
             case "Upcoming":
                 results.sort { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
-                featuredUpcoming = results.prefix(5).map { toMetadata($0) }
+                let tenDaysFromNow = now.addingTimeInterval(86400 * 10)
+                let tenDayItems = results.filter { 
+                    if let date = $0.cachedNextAiringDate {
+                        return date <= tenDaysFromNow && date > now
+                    }
+                    return false
+                }
+                if tenDayItems.isEmpty {
+                    featuredUpcoming = results.prefix(5).map { toMetadata($0) }
+                } else {
+                    featuredUpcoming = tenDayItems.map { toMetadata($0) }
+                }
             case "InProgress":
                 results.sort {
                     if $0.storedIsBingeDrop != $1.storedIsBingeDrop { return $0.storedIsBingeDrop && !$1.storedIsBingeDrop }

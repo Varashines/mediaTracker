@@ -22,9 +22,34 @@ actor MaintenanceService {
         let descriptor = FetchDescriptor<MediaItem>()
         let items = (try? modelContext.fetch(descriptor)) ?? []
         
-        for item in items {
-            // 1. Assign uniqueIDs to legacy data
-            if let tmdbID = Int(item.id) {
+        // 0. Deduplicate MediaItems (Ensures no two items share the same TMDB ID)
+        let groupedItems = Dictionary(grouping: items, by: { $0.id })
+        for (id, duplicates) in groupedItems where duplicates.count > 1 {
+            print("🔍 Maintenance: Found \(duplicates.count) duplicates for ID \(id)")
+            let sorted = duplicates.sorted { 
+                let score1 = ($0.posterURL != nil ? 2 : 0) + ($0.tvShowDetails != nil ? 5 : 0)
+                let score2 = ($1.posterURL != nil ? 2 : 0) + ($1.tvShowDetails != nil ? 5 : 0)
+                if score1 != score2 { return score1 > score2 }
+                return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
+            }
+            // Keep the best one, delete the rest
+            for i in 1..<sorted.count {
+                modelContext.delete(sorted[i])
+            }
+        }
+        
+        // Fetch fresh list after deduplication
+        let sanitizedItems = (try? modelContext.fetch(descriptor)) ?? []
+        
+        for item in sanitizedItems {
+            // 1. Migrate legacy IDs to prefixed format (prevents Movie/TV collisions)
+            if !item.id.contains("_") {
+                let typePrefix = item.type == .movie ? "movie" : "tv"
+                item.id = "\(typePrefix)_\(item.id)"
+            }
+
+            // 2. Assign uniqueIDs to episodes
+            if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
                     tv.item = item
                     for season in tv.seasons {
@@ -40,7 +65,7 @@ actor MaintenanceService {
                             episode.season = season
                         }
                         
-                        // 2. Remove duplicate episodes within the same season
+                        // 3. Remove duplicate episodes within the same season
                         let grouped = Dictionary(grouping: season.episodes, by: { $0.episodeNumber })
                         for (_, eps) in grouped where eps.count > 1 {
                             // Keep the one with the most data
@@ -51,7 +76,7 @@ actor MaintenanceService {
                         }
                     }
                     
-                    // 3. Purge legacy Crew cards
+                    // 4. Purge legacy Crew cards
                     for member in tv.cast {
                         if member.characterName == "Creator" || member.characterName == "Director" {
                             modelContext.delete(member)
@@ -84,9 +109,16 @@ class DataService {
     /// Tracks items refreshed during this app session to avoid redundant network calls.
     private var sessionRefreshedItems = Set<String>()
     
+    /// Tracks items currently being added to prevent race conditions and duplicates.
+    private var itemsInProgress = Set<String>()
+    
     // Feedback State
     var isRunningMaintenance = false
     var showMaintenanceComplete = false
+
+    func isProcessing(id: String) -> Bool { itemsInProgress.contains(id) }
+    func startProcessing(id: String) { itemsInProgress.insert(id) }
+    func stopProcessing(id: String) { itemsInProgress.remove(id) }
 
     func hasRefreshedThisSession(id: String) -> Bool {
         return sessionRefreshedItems.contains(id)
@@ -172,10 +204,13 @@ class DataService {
                     let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
                     
                     for itemData in backup.items {
-                        let key = "\(itemData.id)_\(itemData.type)"
+                        let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
+                        let uniqueID = "\(typePrefix)_\(itemData.id.split(separator: "_").last ?? itemData.id[...])"
+                        let key = "\(uniqueID)_\(itemData.type)"
+                        
                         if !existingKeys.contains(key) {
                             let item = MediaItem(
-                                id: itemData.id,
+                                id: uniqueID,
                                 title: itemData.title,
                                 overview: "",
                                 posterURL: nil,
@@ -228,226 +263,6 @@ actor BackgroundActionService {
         // Notify UI
         Task { @MainActor in
             NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-        }
-    }
-}
-
-/// A background actor for heavy SwiftData operations and throttled networking.
-@ModelActor
-actor BackgroundDataService {
-    private let decoder = JSONDecoder()
-
-    private var isThermalThrottled: Bool {
-        // Phase 1 Optimization: Thermal Awareness for fanless M1 Air
-        if ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical {
-            return true
-        }
-        if ProcessInfo.processInfo.isLowPowerModeEnabled {
-            return true
-        }
-        return false
-    }
-
-    func refreshMetadata(for itemIDs: [PersistentIdentifier], metadataOnly: Bool = false) async {
-        if isThermalThrottled {
-            print("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.")
-            return
-        }
-        
-        var errorCount = 0
-        
-        // Phase 2 Optimization: CPU-Aware Throttling
-        let processorCount = ProcessInfo.processInfo.activeProcessorCount
-        let maxConcurrent = max(2, min(5, processorCount / 2))
-        
-        // Use withTaskGroup to throttle network requests
-        await withTaskGroup(of: Bool.self) { group in
-            var activeTasks = 0
-            
-            for id in itemIDs {
-                if activeTasks >= maxConcurrent {
-                    if await !group.next()! { errorCount += 1 }
-                    activeTasks -= 1
-                }
-                
-                group.addTask {
-                    await self.refreshSingleItem(id: id, metadataOnly: metadataOnly)
-                }
-                activeTasks += 1
-            }
-            
-            while activeTasks > 0 {
-                if await !group.next()! { errorCount += 1 }
-                activeTasks -= 1
-            }
-        }
-        
-        print("✅ Background Refresh: Completed with \(errorCount) errors.")
-    }
-
-    func refreshSingleItem(id: PersistentIdentifier, metadataOnly: Bool = false) async -> Bool {
-        guard let item = modelContext.model(for: id) as? MediaItem else { return false }
-        
-        do {
-            if item.type == .movie, let tmdbID = Int(item.id) {
-                let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                
-                // Diff-based update
-                item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                
-                // Poster & Backdrop Upgrade
-                if let poster = details.posterPath {
-                    item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                }
-                if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
-                }
-                
-                let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
-                movieDetails.item = item
-                movieDetails.runtime = details.runtime
-                movieDetails.genres = details.genres
-                movieDetails.voteAverage = details.voteAverage
-                movieDetails.originalLanguage = details.originalLanguage
-                movieDetails.creators = details.directors.map { $0.name }
-                
-                // Sync Cast
-                for member in movieDetails.cast { modelContext.delete(member) }
-                var newCastList: [CastMember] = []
-                for c in details.cast {
-                    let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                    member.movieDetails = movieDetails
-                    modelContext.insert(member)
-                    newCastList.append(member)
-                }
-                movieDetails.cast = newCastList
-                
-                if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
-                
-                item.lastUpdated = Date()
-                
-            } else if item.type == .tvShow, let tmdbID = Int(item.id) {
-                let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-                
-                // Phase 2 Optimization: Head-Only Smart Refresh
-                let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
-                
-                let isAlreadyCurrent = tvDetails.numberOfEpisodes == details.episodesCount && 
-                                     tvDetails.status == details.status && 
-                                     item.releaseDate != nil &&
-                                     !metadataOnly &&
-                                     !tvDetails.seasons.isEmpty
-                
-                if isAlreadyCurrent && item.state != .active {
-                    // Just update a few key bits without full season sync
-                    tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(details.nextEpisodeDate, serviceName: tvDetails.network, for: tvDetails)
-                    tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                    tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                    item.lastUpdated = Date()
-                    return true
-                }
-
-                // Nil-safe date update
-                if let newDate = DateUtils.parseDate(details.firstAirDate) {
-                    item.releaseDate = newDate
-                }
-                
-                // Poster & Backdrop Upgrade
-                if let poster = details.posterPath {
-                    item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                }
-                if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
-                }
-                
-                // Parallel Season Fetching
-                var tvMazeID: Int? = nil
-                
-                if let tvdbID = details.tvdbID {
-                    // Phase 2 Optimization: Persisted TVMaze ID
-                    if let existingMazeID = tvDetails.tvMazeID {
-                        tvMazeID = existingMazeID
-                    } else if let mID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
-                        tvMazeID = mID
-                    }
-                    
-                    if let mID = tvMazeID {
-                        if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                            tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
-                        }
-                        // We skip detailed episode fetch here as it's handled by TMDB seasons
-                    }
-                }
-
-                // Update Cast
-                for member in tvDetails.cast { modelContext.delete(member) }
-                var newCastList: [CastMember] = []
-                for c in details.cast {
-                    let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                    member.tvShowDetails = tvDetails
-                    modelContext.insert(member)
-                    newCastList.append(member)
-                }
-
-                // Diff-based Sync
-                if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
-                tvDetails.item = item
-                
-                tvDetails.voteAverage = details.voteAverage
-                tvDetails.genres = details.genres
-                tvDetails.network = details.network
-                tvDetails.networkLogoPath = details.networkLogoPath
-                tvDetails.originalLanguage = details.originalLanguage
-                tvDetails.status = details.status
-                tvDetails.numberOfSeasons = details.seasonsCount
-                tvDetails.numberOfEpisodes = details.episodesCount
-                tvDetails.tvMazeID = tvMazeID
-                tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                tvDetails.creators = details.creators.map { $0.name }
-                tvDetails.cast = newCastList
-                
-                if !metadataOnly {
-                    let shouldFetchAll = item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || (details.episodesCount < 30)
-                    let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
-
-                    for seasonData in seasonsToSync {
-                        let sNum = seasonData.season_number
-                        let season = tvDetails.seasons.first(where: { $0.seasonNumber == sNum }) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
-                        
-                        if season.modelContext == nil {
-                            season.tvShowDetails = tvDetails
-                            modelContext.insert(season)
-                        }
-                        
-                        let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
-                        for ep in episodes {
-                            let episode = season.episodes.first(where: { $0.episodeNumber == ep.episodeNumber }) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
-                            
-                            if episode.modelContext == nil {
-                                episode.season = season
-                                modelContext.insert(episode)
-                            } else {
-                                episode.name = ep.name
-                                episode.overview = ep.overview
-                                episode.airDate = ep.airDate
-                            }
-                        }
-                    }
-                }
-                
-                item.lastUpdated = Date()
-            }
-            
-            item.syncCachedProperties()
-            item.updateSearchableText()
-            try modelContext.save()
-            return true
-        } catch {
-            print("❌ Refresh error for \(item.title): \(error)")
-            return false
         }
     }
 }

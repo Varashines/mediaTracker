@@ -64,26 +64,24 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.item = item
         item.tvShowDetails = tvDetails
         
-        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 3, showID: 105)
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 105)
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
         
-        // Released 10 days ago
+        // Released 10 days ago, with 40% progress
         let airDate = "2026-04-15"
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Ep 1", overview: "", airDate: airDate, showID: 105)
-        let ep2 = TVEpisode(episodeNumber: 2, seasonNumber: 1, name: "Ep 2", overview: "", airDate: airDate, showID: 105)
-        let ep3 = TVEpisode(episodeNumber: 3, seasonNumber: 1, name: "Ep 3", overview: "", airDate: airDate, showID: 105)
-        
-        [ep1, ep2, ep3].forEach { 
-            $0.season = season
-            season.episodes.append($0)
-            context.insert($0)
+        for i in 1...10 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: airDate, showID: 105)
+            ep.isWatched = (i <= 4)
+            ep.season = season
+            season.episodes.append(ep)
+            context.insert(ep)
         }
         
         item.syncCachedProperties()
         
         XCTAssertFalse(item.storedIsBingeDrop, "Should NOT be detected as Binge Drop (Too old)")
-        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Should fall back to BINGE badge")
+        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Should fall back to BINGE badge with 40% progress")
     }
 
     @MainActor
@@ -141,12 +139,26 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.item = item
         item.tvShowDetails = tvDetails
         
-        // No episodes loaded yet, but nextEpisodeDate is in the past
+        // No episodes loaded yet = 0 progress
         tvDetails.nextEpisodeDate = DateUtils.parseDate("2026-01-01")
         
         item.syncCachedProperties()
         
-        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Watchlist multi-season show should be BINGE if available")
+        XCTAssertNil(item.storedSmartBadgeLabel, "Watchlist show with 0 progress should NOT be BINGE")
+        
+        // Now give it 35% progress
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 102)
+        season.tvShowDetails = tvDetails
+        tvDetails.seasons.append(season)
+        for i in 1...10 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01", showID: 102)
+            ep.isWatched = (i <= 3)
+            ep.season = season
+            season.episodes.append(ep)
+        }
+        
+        item.syncCachedProperties()
+        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Watchlist show with 30% progress should be BINGE")
     }
 
     @MainActor
@@ -158,7 +170,7 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // 5. Setup a Liked show with < 80% progress (Available)
+        // 5. Setup a Liked show with 20% progress (Below 30% threshold)
         let item = MediaItem(id: "liked_binge", title: "Liked Binge", overview: "Overview", type: .tvShow)
         item.state = .active
         item.tasteValue = "Like"
@@ -169,20 +181,27 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.item = item
         item.tvShowDetails = tvDetails
         
-        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 103)
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 20, showID: 103)
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
         
-        for i in 1...10 {
+        for i in 1...20 {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2025-01-01", showID: 103)
-            ep.isWatched = (i <= 5) // 50% progress
+            ep.isWatched = (i <= 4) // 20% progress
             ep.season = season
             season.episodes.append(ep)
         }
         
         item.syncCachedProperties()
+        XCTAssertNil(item.storedSmartBadgeLabel, "Liked show with < 30% progress should NOT be BINGE")
         
-        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Liked show with 50% progress should be BINGE")
+        // Give it 90% progress (No max threshold)
+        for i in 5...18 {
+            season.episodes[i-1].isWatched = true
+        }
+        
+        item.syncCachedProperties()
+        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Liked show with 90% progress should be BINGE")
     }
     
     @MainActor

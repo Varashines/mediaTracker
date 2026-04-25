@@ -327,10 +327,18 @@ struct SearchView: View {
 
     @MainActor
     private func addMedia(_ result: MediaSearchResult) {
+        let typePrefix = result.type == .movie ? "movie" : "tv"
+        let uniqueID = "\(typePrefix)_\(result.id)"
+
+        // Prevent race condition (double-click)
+        if DataService.shared.isProcessing(id: uniqueID) { return }
+        DataService.shared.startProcessing(id: uniqueID)
+
         Task {
+            defer { DataService.shared.stopProcessing(id: uniqueID) }
+
             // Uniqueness Check
-            let tmdbID = result.id
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == tmdbID })
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
             if let existing = try? modelContext.fetch(descriptor).first {
                 await MainActor.run {
                     AppErrorState.shared.surfaceError("Title already in Library", systemImage: "info.circle.fill")
@@ -342,7 +350,7 @@ struct SearchView: View {
 
             let releaseDate = result.releaseDate != nil ? DateUtils.parseDate(result.releaseDate) : nil
             let item = MediaItem(
-                id: result.id, title: result.title, overview: result.overview,
+                id: uniqueID, title: result.title, overview: result.overview,
                 posterURL: result.posterURL, releaseDate: releaseDate, type: result.type)
             item.dateAdded = Date()
 
@@ -408,6 +416,9 @@ struct SearchView: View {
                     }
                     tvDetails.tvMazeID = details.tvdbID
                     item.tvShowDetails = tvDetails
+                    
+                    // Trigger immediate background sync for episodes
+                    DataService.shared.refreshMetadata(for: [item], modelContext: modelContext)
                 }
             }
 
