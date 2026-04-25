@@ -81,6 +81,10 @@ struct PosterView: View {
                 .frame(width: 240, height: 360)
                 .cornerRadius(12)
                 .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 15)
+                .overlay(alignment: .topLeading) {
+                    SmartBadgeView(item: item)
+                        .padding(12)
+                }
             }
             .zIndex(1)
             .layoutPriority(1)

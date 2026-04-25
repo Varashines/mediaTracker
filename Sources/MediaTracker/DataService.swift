@@ -410,7 +410,10 @@ actor BackgroundDataService {
                 tvDetails.cast = newCastList
                 
                 if !metadataOnly {
-                    for seasonData in details.seasons {
+                    let shouldFetchAll = item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || (details.episodesCount < 30)
+                    let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
+
+                    for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
                         let season = tvDetails.seasons.first(where: { $0.seasonNumber == sNum }) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
                         

@@ -152,7 +152,7 @@ struct SmartBadgeView: View {
         if let metadata = metadata {
             if let label = metadata.smartBadgeLabel, let icon = metadata.smartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: metadata.isSparkleBadge)
-            } else {
+            } else if metadata.type == .movie {
                 statusUI(
                     isUpcoming: metadata.isUpcoming,
                     state: metadata.state,
@@ -165,7 +165,7 @@ struct SmartBadgeView: View {
         } else if let item = item, item.modelContext != nil {
             if let label = item.storedSmartBadgeLabel, let icon = item.storedSmartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle)
-            } else {
+            } else if item.type == .movie {
                 statusUI(
                     isUpcoming: item.storedIsUpcoming,
                     state: item.state,
@@ -175,7 +175,7 @@ struct SmartBadgeView: View {
                     progress: item.storedProgress
                 )
             }
-        } else if result != nil {
+        } else if let res = result, res.type == .movie {
              statusUI(isUpcoming: false, state: .wishlist, badgeText: nil, watchProgressLabel: nil, nextEpisodeLabel: nil, progress: nil)
         }
     }
@@ -397,6 +397,21 @@ struct MediaThumbnailView: View {
                     .fill(.ultraThinMaterial.opacity(0.6))
             }
             
+            // Smart Badge (Top Leading)
+            VStack {
+                HStack {
+                    if let item = item {
+                        SmartBadgeView(item: item)
+                    } else if let metadata = metadata {
+                        SmartBadgeView(metadata: metadata)
+                    }
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(8)
+            .opacity(isHovered ? 0 : 1) // Hide when hovered to reveal shadow gallery
+            
             // 2. SHADOW GALLERY: The Reveal (Centered)
             VStack(spacing: 8) {
                 Text(title.uppercased())
@@ -446,34 +461,6 @@ struct MediaThumbnailView: View {
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
                 searchOverlay
-            }
-            
-            // 4. Compact state icons at bottom (Even without hover)
-            if !isHovered {
-                VStack {
-                    Spacer()
-                    let state = (item?.modelContext != nil ? item?.state : metadata?.state) ?? .wishlist
-                    let upcoming = (item?.calculateIsUpcoming ?? metadata?.isUpcoming ?? false)
-                    
-                    if upcoming {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(appAccent.color)
-                            .shadow(color: appAccent.color.opacity(0.6), radius: 3)
-                            .padding(.bottom, 8)
-                    } else if state == .completed {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 11, weight: .black))
-                            .foregroundStyle(appAccent.color)
-                            .shadow(color: appAccent.color.opacity(0.4), radius: 3)
-                            .padding(.bottom, 8)
-                    } else if state != .active && state != .rewatching {
-                        Image(systemName: state.iconName)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.bottom, 8)
-                    }
-                }
             }
         }
         .frame(width: width, height: height)
@@ -846,6 +833,10 @@ struct HomeHeroCard: View {
                     .frame(width: 140, height: 210)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 10)
+                    .overlay(alignment: .topLeading) {
+                        SmartBadgeView(metadata: metadata)
+                            .padding(8)
+                    }
                 }
                 
                 // 4. Immersive Details (Right Side)

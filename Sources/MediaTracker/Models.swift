@@ -269,7 +269,11 @@ final class MediaItem {
     var gridBadgeText: String? { badgeText }
     var detailBadgeText: String? {
         if isUpcoming {
-            return cachedNextAiringDate?.formatted(date: .abbreviated, time: .shortened)
+            if type == .tvShow {
+                return cachedNextAiringDate?.formatted(date: .abbreviated, time: .shortened)
+            } else {
+                return cachedNextAiringDate?.formatted(date: .abbreviated, time: .omitted)
+            }
         }
         return nil
     }
@@ -303,6 +307,9 @@ final class MediaItem {
     }
 
     func syncCachedProperties() {
+        let now = Date()
+        let currentState = state ?? .wishlist
+        
         if type == .movie, let movie = movieDetails {
             self.cachedGenres = movie.genres
             self.cachedLanguage = movie.originalLanguage
@@ -313,26 +320,120 @@ final class MediaItem {
             self.cachedNetwork = tv.network
             self.cachedNetworkLogoPath = tv.networkLogoPath
             
-            // Recalculate episode stats
-            let allEpisodes = tv.seasons.flatMap { $0.episodes }.sorted { e1, e2 in
+            // Recalculate episode stats - EXCLUDE SEASON 0 (Specials)
+            let allEpisodes = tv.seasons.filter { $0.seasonNumber > 0 }.flatMap { $0.episodes }.sorted { e1, e2 in
                 if e1.seasonNumber != e2.seasonNumber { return e1.seasonNumber < e2.seasonNumber }
                 return e1.episodeNumber < e2.episodeNumber
             }
             let watched = allEpisodes.filter { $0.isWatched }
+            
+            // 1. Binge-Drop Detection (All remaining episodes of the current season released on same day)
+            let unwatched = allEpisodes.filter { !$0.isWatched }
+            if let firstUnwatched = unwatched.first {
+                let currentSNum = firstUnwatched.seasonNumber
+                let seasonUnwatched = unwatched.filter { $0.seasonNumber == currentSNum }
+                
+                if seasonUnwatched.count > 1 {
+                    let firstDate = seasonUnwatched[0].airDate
+                    let isSameDate = seasonUnwatched.allSatisfy { $0.airDate == firstDate && $0.airDate != nil }
+                    let airDateAsDate = seasonUnwatched[0].airDateAsDate
+                    
+                    if isSameDate, let date = airDateAsDate {
+                        let daysSinceRelease = now.timeIntervalSince(date) / 86400
+                        // Binge drop if released in the past 5 days (and <= now)
+                        if daysSinceRelease >= 0 && daysSinceRelease <= 5 {
+                            self.storedIsBingeDrop = true
+                        } else {
+                            self.storedIsBingeDrop = false
+                        }
+                    } else {
+                        self.storedIsBingeDrop = false
+                    }
+                } else {
+                    self.storedIsBingeDrop = false
+                }
+            } else {
+                self.storedIsBingeDrop = false
+            }
+
             if !allEpisodes.isEmpty {
                 self.storedProgress = Double(watched.count) / Double(allEpisodes.count)
                 self.storedWatchProgressLabel = "\(watched.count)/\(allEpisodes.count) EP"
-                if let next = allEpisodes.first(where: { !$0.isWatched }) {
+                
+                if let next = unwatched.first {
                     self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
                     self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                    
+                    // Strictly require valid air date for availability-based badges
+                    let isAvailable = (next.airDateAsDate != nil) && (next.airDateAsDate! <= now)
+
+                    // Priority 1: Binge Drop (High Value Milestone)
+                    if self.storedIsBingeDrop {
+                        self.storedSmartBadgeLabel = "BINGE DROP"
+                        self.storedSmartBadgeIcon = "sparkles.tv"
+                        self.storedSmartBadgeIsSparkle = true
+                    } 
+                    // Priority 2: Finale (End of the road) - Also require air date for certainty
+                    else if isAvailable, let season = next.season, next.episodeNumber == season.episodeCount {
+                        self.storedSmartBadgeLabel = "FINALE"
+                        self.storedSmartBadgeIcon = "flag.checkered"
+                        self.storedSmartBadgeIsSparkle = true
+                    } 
+                    // Priority 3: Binge (For Watchlist multi-season OR Liked/Loved with < 80% progress)
+                    else if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
+                            (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
+                            (self.storedProgress ?? 0) < 0.8 {
+                        self.storedSmartBadgeLabel = "BINGE"
+                        self.storedSmartBadgeIcon = "sparkles.tv"
+                        self.storedSmartBadgeIsSparkle = false
+                    } else {
+                        self.storedSmartBadgeLabel = nil
+                    }
                 } else {
+                    // All currently known episodes watched
                     self.storedNextEpisodeLabel = nil
                     self.cachedNextAiringDate = tv.nextEpisodeDate
+                    self.storedSmartBadgeLabel = nil
                 }
             } else {
+                // No episodes loaded yet OR only Season 0 episodes exist
+                self.storedProgress = 0
+                self.storedWatchProgressLabel = nil
+                self.storedNextEpisodeLabel = nil
                 self.cachedNextAiringDate = tv.nextEpisodeDate
+                let isAvailable = (tv.nextEpisodeDate != nil) && (tv.nextEpisodeDate! <= now)
+                
+                // Logic: Binge? (Multi-season show with 0 progress)
+                if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
+                   (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) {
+                    self.storedSmartBadgeLabel = "BINGE"
+                    self.storedSmartBadgeIcon = "sparkles.tv"
+                    self.storedSmartBadgeIsSparkle = false
+                } else {
+                    self.storedSmartBadgeLabel = nil
+                }
             }
         }
+        
+        // 2. Final Badge Overrides & Logic (Only if not already set by Finale/Binge Drop)
+        if self.storedSmartBadgeLabel == nil {
+            let isEnded = tvShowDetails?.status?.lowercased().contains("ended") ?? false || tvShowDetails?.status?.lowercased().contains("canceled") ?? false
+            
+            if let airDate = cachedNextAiringDate, 
+               airDate <= now && airDate > now.addingTimeInterval(-86400 * 2), // Last 48 hours
+               currentState != .completed,
+               !isEnded {
+                 self.storedSmartBadgeLabel = "STREAMING"
+                 self.storedSmartBadgeIcon = "play.fill"
+                 self.storedSmartBadgeIsSparkle = true
+            } else if let release = releaseDate, 
+                      release <= now && release > now.addingTimeInterval(-86400 * 7) { // Last 7 days
+                self.storedSmartBadgeLabel = "NEW"
+                self.storedSmartBadgeIcon = "sparkles"
+                self.storedSmartBadgeIsSparkle = true
+            }
+        }
+
         self.storedIsUpcoming = isUpcoming
         updateSearchableText()
     }

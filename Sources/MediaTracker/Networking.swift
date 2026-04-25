@@ -18,6 +18,15 @@ actor APIClient {
     static let shared = APIClient()
     private let decoder = JSONDecoder()
     
+    private var cacheFolder: URL {
+        let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        let folder = paths[0].appendingPathComponent("api_details_cache")
+        if !FileManager.default.fileExists(atPath: folder.path) {
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        return folder
+    }
+    
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy // This handles ETags/304 automatically
@@ -60,6 +69,22 @@ actor APIClient {
         components?.queryItems = items
         guard let url = components?.url else { throw URLError(.badURL) }
         return url
+    }
+
+    // MARK: - Disk Cache Helpers
+    private func getCachedData(forKey key: String) -> Data? {
+        let fileURL = cacheFolder.appendingPathComponent(key)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let modificationDate = attributes[.modificationDate] as? Date,
+              Date().timeIntervalSince(modificationDate) < (7 * 86400) else { // 7 day cache
+            return nil
+        }
+        return try? Data(contentsOf: fileURL)
+    }
+
+    private func saveToCache(data: Data, forKey key: String) {
+        let fileURL = cacheFolder.appendingPathComponent(key)
+        try? data.write(to: fileURL)
     }
 
     // MARK: - Generic Search
@@ -120,10 +145,22 @@ actor APIClient {
 
     // MARK: - Details
     func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
+        let cacheKey = "movie_details_\(tmdbID).json"
+        if let cachedData = getCachedData(forKey: cacheKey),
+           let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
+            return processMovieDetails(details)
+        }
+
         let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
         let (data, response) = try await session.data(from: url)
         try validateResponse(response)
+        
+        saveToCache(data: data, forKey: cacheKey)
         let details = try decoder.decode(TMDBMovieDetailsResponse.self, from: data)
+        return processMovieDetails(details)
+    }
+
+    private func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
         let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -135,26 +172,35 @@ actor APIClient {
         // Find a better release date (Prioritizing India regional data)
         var finalReleaseDate = details.release_date
         if let releaseDates = details.release_dates?.results {
-            // Priority 1: Any release date specifically for India (IN)
             if let india = releaseDates.first(where: { $0.iso_3166_1 == "IN" }),
                let localDate = india.release_dates.first {
                 finalReleaseDate = localDate.release_date.prefix(10).description
-            } 
-            // Priority 2: Fallback to US Theatrical if IN is missing
-            else if let us = releaseDates.first(where: { $0.iso_3166_1 == "US" }),
+            } else if let us = releaseDates.first(where: { $0.iso_3166_1 == "US" }),
                     let theatrical = us.release_dates.first(where: { $0.type == 3 }) {
                 finalReleaseDate = theatrical.release_date.prefix(10).description
             }
         }
         
         return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, backdropPath: details.backdrop_path, posterPath: details.poster_path, originalLanguage: details.original_language, cast: Array(cast), directors: directors)
+    }
+
+    func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
+        let cacheKey = "tv_details_\(tmdbID).json"
+        if let cachedData = getCachedData(forKey: cacheKey),
+           let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
+            return processTVDetails(d)
         }
 
-        func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
         let url = try tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
         let (data, response) = try await session.data(from: url)
         try validateResponse(response)
+        
+        saveToCache(data: data, forKey: cacheKey)
         let d = try decoder.decode(TMDBTVDetailsResponse.self, from: data)
+        return processTVDetails(d)
+    }
+
+    private func processTVDetails(_ d: TMDBTVDetailsResponse) -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
         let cast = d.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -163,7 +209,7 @@ actor APIClient {
         } ?? []
         let network = d.networks?.first
         return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, d.backdrop_path, d.poster_path, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast), creators)
-        }
+    }
     
     // Adaptive Asset Scaling: Restore high quality for Retina displays
     nonisolated var idealThumbnailSize: String {

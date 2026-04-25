@@ -89,6 +89,7 @@ class MediaViewModel {
         if category == "Completed" { return "Completed" }
         if category == "Archive" { return "Archive" }
         if category == "Disliked" { return "Disliked" }
+        if category == "Binge" { return "Bingeable" }
         if category == "Discover" { return "Discovery Hub" }
         if category == "Insights" { return "Taste Insights" }
         if category == "All" { return "Library" }
@@ -359,7 +360,7 @@ struct ContentView: View {
                     }
                     
                     ToolbarItem(placement: .primaryAction) {
-                        if !isSearchActive && isSortable {
+                        if !isSearchActive && isRefreshable {
                             refreshButton
                         }
                     }
@@ -394,41 +395,32 @@ struct ContentView: View {
                 let syncService = DiscoverySyncService(modelContainer: container)
                 await syncService.syncLibrary(force: false)
                 
-                // 2. Migration: Ensure stateValue and typeValue are populated for existing items
+                // 2. Migration: Ensure all smart badges and binge flags are computed
                 let context = ModelContext(container)
                 let descriptor = FetchDescriptor<MediaItem>()
                 if let items = try? context.fetch(descriptor) {
                     var itemsChanged = false
                     for item in items {
+                        // FORCE SYNC: Ensure new Binge/BingeDrop logic runs for every item
+                        item.syncCachedProperties()
+                        itemsChanged = true
+                        
                         if item.stateValue == "Wishlist" && item.state != .wishlist {
                             item.stateValue = item.state?.rawValue ?? "Wishlist"
-                            itemsChanged = true
                         }
                         if item.typeValue == "Movie" && item.type != .movie {
                             item.typeValue = item.type?.rawValue ?? "Movie"
-                            itemsChanged = true
                         }
+                        
                         // Migration: Flatten network logo path
                         if item.type == .tvShow && item.cachedNetworkLogoPath == nil,
                            let logo = item.tvShowDetails?.networkLogoPath {
                             item.cachedNetworkLogoPath = logo
-                            itemsChanged = true
-                        }
-                        
-                        // Re-calculate all stored UI fields if missing or for migration
-                        if item.storedNextEpisodeLabel == nil && item.type == .tvShow {
-                            item.syncCachedProperties()
-                            itemsChanged = true
-                        }
-                        // Force recalculate upcoming flag to ensure correct category placement
-                        if item.storedIsUpcoming != item.calculateIsUpcoming {
-                            item.storedIsUpcoming = item.calculateIsUpcoming
-                            item.syncCachedProperties()
-                            itemsChanged = true
                         }
                     }
                     if itemsChanged {
                         try? context.save()
+                        await MainActor.run { updateDisplayedItems() }
                     }
                 }
                 print("🏁 Delayed Background Maintenance Complete.")
@@ -590,8 +582,13 @@ struct ContentView: View {
 
     private var isSortable: Bool {
         guard let cat = viewModel.selectedCategory else { return false }
-        if cat == "Discover" { return false }
-        return cat == "All" || MediaType(rawValue: cat) != nil
+        if cat == "Discover" || cat == "Insights" { return false }
+        return cat == "All" || cat == "InProgress" || cat == "Watchlist" || cat == "Loved" || cat == "Completed" || cat == "Binge" || MediaType(rawValue: cat) != nil
+    }
+
+    private var isRefreshable: Bool {
+        guard viewModel.selectedCategory != nil else { return false }
+        return true
     }
 }
 
@@ -633,6 +630,8 @@ struct SidebarView: View, Equatable {
                     .tag("Archive")
                 Label("Disliked", systemImage: "hand.thumbsdown.fill")
                     .tag("Disliked")
+                Label("Bingeable", systemImage: "rectangle.stack.fill")
+                    .tag("Binge")
             }            .padding(.vertical, 4)
             
             Section("Explore") {
@@ -787,7 +786,7 @@ struct MediaGridView: View {
                         }
 
                         // 3. Main Collection with Chunking & Pagination
-                        if groupBy == .none && selectedCategory != "Archive" && selectedCategory != "Home" {
+                        if groupBy == .none && selectedCategory != "Archive" && selectedCategory != "Home" && selectedCategory != "Binge" {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                 let baseItems = showingUpcomingOnly ? Array(items.dropFirst(min(items.count, 5))) : items
                                 
@@ -925,8 +924,8 @@ struct FilteredLibraryGridView: View {
     private var displayTitle: String {
         switch filter.type {
         case .studio: return filter.name
-        case .genre: return "\(filter.name) Movies & Shows"
-        case .language: return "\(LanguageUtils.languageName(for: filter.name)) Titles"
+        case .genre: return filter.name
+        case .language: return LanguageUtils.languageName(for: filter.name)
         }
     }
 
