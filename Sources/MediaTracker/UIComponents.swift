@@ -1169,34 +1169,67 @@ class NetworkThemeManager {
 
 @preconcurrency
 struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
 struct HeroCarousel: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
     let recommendations: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
     var isFastScrolling: Bool = false
     @Environment(\.modelContext) private var modelContext
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     
-    @State private var scrollOffset: CGFloat = 0
-    @State private var containerWidth: CGFloat = 0
+    @State private var scrollProgress: Double = 0
+    @State private var scrollSpace = UUID().uuidString
     @State private var contentWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with Integrated Progress Bar
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                Text(title)
+                
+                Spacer()
+                
+                if recommendations.count > 1 {
+                    GeometryReader { geo in
+                        let availableWidth = geo.size.width
+                        let itemWidth = max(40, min(availableWidth, availableWidth * 0.3)) // Proportional pill
+                        let scrollableTrackWidth = availableWidth - itemWidth
+                        
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.15))
+                                .background(Capsule().fill(.ultraThinMaterial))
+                                .frame(height: 4)
+                            
+                            Capsule()
+                                .fill(appAccent.color.gradient)
+                                .frame(width: itemWidth, height: 4)
+                                .offset(x: scrollProgress * scrollableTrackWidth)
+                                .shadow(color: appAccent.color.opacity(0.3), radius: 4, x: 0, y: 2)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .center) // Center vertically in HStack
+                    }
+                    .frame(width: 150, height: 4) // Fixed width for the progress bar itself
+                    .padding(.trailing, 10)
+                }
+            }
+            .font(.system(size: 28, weight: .black))
+            .padding(.horizontal, 40)
+            .padding(.bottom, 8)
+            
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 24) {
-                    // Offset Tracking Proxy
-                    GeometryReader { proxy in
-                        let minX = proxy.frame(in: .named("carousel_outer")).minX
-                        Color.clear.preference(key: ScrollOffsetKey.self, value: minX)
-                    }
-                    .frame(width: 0, height: 0)
-
                     ForEach(Array(recommendations.enumerated()), id: \.offset) { index, metadata in
                         if let item = modelContext.model(for: metadata.id) as? MediaItem {
                             NavigationLink(value: item) {
@@ -1210,54 +1243,134 @@ struct HeroCarousel: View {
                 .padding(.vertical, 20)
                 .background(
                     GeometryReader { geo in
+                        let minX = geo.frame(in: .named(scrollSpace)).minX
                         Color.clear
+                            .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
                             .onAppear { contentWidth = geo.size.width }
                             .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
                     }
                 )
             }
+            .coordinateSpace(name: scrollSpace)
+            .frame(height: 320) // Constrain height to prevent greedy vertical expansion
             .scrollClipDisabled()
-            .onPreferenceChange(ScrollOffsetKey.self) { value in
-                // Proxy is at leading edge of HStack (which has 40px padding).
-                // So when unscrolled, value is 40.
-                scrollOffset = value
-            }
-        }
-        .coordinateSpace(name: "carousel_outer")
-        .background(
-            GeometryReader { geo in
-                Color.clear.onAppear { containerWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
-            }
-        )
-        
-        // Progress Indicator (Bar below)
-        if !recommendations.isEmpty {
-            GeometryReader { geo in
-                let availableWidth = geo.size.width - 80
-                let itemWidth = availableWidth / CGFloat(recommendations.count)
-                
-                // Progress Calculation:
-                // Unscrolled: scrollOffset = 40. 
-                // Fully scrolled: scrollOffset = 40 - (contentWidth - containerWidth)
-                let maxScroll = max(1, contentWidth - containerWidth)
-                let currentScroll = max(0, 40 - scrollOffset)
-                let scrollPercentage = min(1.0, currentScroll / maxScroll)
-                
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(.secondary.opacity(0.15))
-                        .frame(height: 3)
-                    
-                    Capsule()
-                        .fill(appAccent.color)
-                        .frame(width: itemWidth, height: 3)
-                        .offset(x: scrollPercentage * (availableWidth - itemWidth))
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { containerWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
                 }
-                .padding(.horizontal, 40)
+            )
+            .onPreferenceChange(ScrollOffsetKey.self) { dict in
+                guard let minX = dict[scrollSpace] else { return }
+                let maxScroll = max(1, contentWidth - containerWidth)
+                let currentScroll = max(0, -minX)
+                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
+                    scrollProgress = min(1.0, currentScroll / maxScroll)
+                }
             }
-            .frame(height: 3)
-            .padding(.bottom, 20)
         }
+        .fixedSize(horizontal: false, vertical: true) // Ensure the carousel doesn't push elements away
+    }
+}
+
+// MARK: - Shelf Carousel (For Secondary Sections)
+
+struct ShelfCarousel: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
+    let items: [MediaThumbnailMetadata]
+    let namespace: Namespace.ID
+    var isFastScrolling: Bool = false
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    
+    @State private var scrollProgress: Double = 0
+    @State private var scrollSpace = UUID().uuidString
+    @State private var contentWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header with Integrated Progress Bar
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                Text(title)
+                
+                Spacer()
+                
+                if items.count > 1 {
+                    GeometryReader { geo in
+                        let availableWidth = geo.size.width
+                        let itemWidth = max(40, min(availableWidth, availableWidth * 0.2)) // Proportional pill
+                        let scrollableTrackWidth = availableWidth - itemWidth
+                        
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.1))
+                                .background(Capsule().fill(.ultraThinMaterial))
+                                .frame(height: 3)
+                            
+                            Capsule()
+                                .fill(appAccent.color.gradient)
+                                .frame(width: itemWidth, height: 3)
+                                .offset(x: scrollProgress * scrollableTrackWidth)
+                                .shadow(color: appAccent.color.opacity(0.3), radius: 2, x: 0, y: 1)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .center)
+                    }
+                    .frame(width: 120, height: 3) // Fixed width for the progress bar itself
+                    .padding(.trailing, 20)
+                }
+            }
+            .font(.system(size: 28, weight: .black))
+            .padding(.horizontal, 40)
+            .padding(.bottom, 4)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(items) { metadata in
+                        if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                            NavigationLink(value: item) {
+                                MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 12)
+                .background(
+                    GeometryReader { geo in
+                        let minX = geo.frame(in: .named(scrollSpace)).minX
+                        Color.clear
+                            .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
+                            .onAppear { contentWidth = geo.size.width }
+                            .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
+                    }
+                )
+            }
+            .coordinateSpace(name: scrollSpace)
+            .frame(height: 270) // Fixed height for 160x240 grid cards + padding
+            .scrollClipDisabled()
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { containerWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
+                }
+            )
+            .onPreferenceChange(ScrollOffsetKey.self) { dict in
+                guard let minX = dict[scrollSpace] else { return }
+                let maxScroll = max(1, contentWidth - containerWidth)
+                let currentScroll = max(0, -minX)
+                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
+                    scrollProgress = min(1.0, currentScroll / maxScroll)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -708,48 +708,14 @@ struct MediaGridView: View {
                 if selectedCategory == "Home" && searchText.isEmpty && selectedNetwork == nil {
                     // Personalized For You (Top Carousel)
                     if !recommendations.isEmpty {
-                        VStack(alignment: .leading, spacing: 20) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(.yellow)
-                                Text("For You")
-                                Spacer()
-                            }
-                            .font(.system(size: 28, weight: .black))
-                            .padding(.horizontal, 30)
-
-                            HeroCarousel(recommendations: recommendations, namespace: namespace, isFastScrolling: isFastScrolling)
-                        }
-                        .padding(.bottom, 20)
+                        HeroCarousel(title: "For You", icon: "sparkles", iconColor: .yellow, recommendations: recommendations, namespace: namespace, isFastScrolling: isFastScrolling)
+                            .padding(.bottom, 20)
                     }
 
                     // Continue Watching (Middle Carousel)
                     if !homeContinueWatching.isEmpty {
-                        VStack(alignment: .leading, spacing: 20) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "play.fill")
-                                    .foregroundStyle(.blue)
-                                Text("Continue Watching")
-                            }
-                            .font(.system(size: 28, weight: .black))
-                            .padding(.horizontal, 30)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 20) {
-                                    ForEach(homeContinueWatching) { (metadata: MediaThumbnailMetadata) in
-                                        if let item = modelContext.model(for: metadata.id) as? MediaItem {
-                                            NavigationLink(value: item) {
-                                                MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 30)
-                            }
-                        }
-                        .padding(.bottom, 20)
+                        ShelfCarousel(title: "Continue Watching", icon: "play.fill", iconColor: .blue, items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling)
+                            .padding(.bottom, 20)
                     }
                 }
 
