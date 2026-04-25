@@ -95,18 +95,17 @@ struct InsightsView: View {
     @ViewBuilder
     private func genreSection(data: [(name: String, affinity: Double)]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Top Genres")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+            SectionHeader(title: "Top Genres", icon: "film.stack", iconColor: appAccent.color)
             
             PillGrid(items: data.prefix(12).map { $0.name }, color: appAccent.color)
+                .padding(.horizontal, 40)
         }
     }
 
     @ViewBuilder
     private func personSection(title: String, data: [(name: String, affinity: Double, imageURL: String?)], color: Color) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text(title)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+            SectionHeader(title: title, icon: color == .blue ? "person.2.badge.gearshape" : "star.fill", iconColor: color)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 24) {
@@ -115,7 +114,7 @@ struct InsightsView: View {
                     }
                 }
                 .padding(.vertical, 5)
-                .padding(.horizontal, 2)
+                .padding(.horizontal, 40)
             }
         }
     }

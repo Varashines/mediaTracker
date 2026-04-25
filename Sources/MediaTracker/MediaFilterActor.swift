@@ -26,8 +26,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
     let isSparkleBadge: Bool
     let versionHash: Int
     let recommendationReason: String?
+    let remainingCount: Int?
 
-    var formattedMetadata: String {        var parts: [String] = []
+    var formattedMetadata: String {
+        var parts: [String] = []
         if let releaseDate = releaseDate {
             parts.append(Calendar.current.component(.year, from: releaseDate).description)
         }
@@ -352,10 +354,10 @@ actor MediaFilterActor {
                 smartBadgeIcon: item.storedSmartBadgeIcon,
                 isSparkleBadge: item.storedSmartBadgeIsSparkle,
                 versionHash: item.lastStateChangeDate.hashValue,
-                recommendationReason: nil
-            )
-        }
-
+                recommendationReason: nil,
+                remainingCount: item.remainingEpisodesCount
+                )
+                }
         var finalGroupedItems: [(String, [MediaThumbnailMetadata])] = []
         if groupBy != .none {
             let dict = Dictionary(grouping: results) { item -> String in

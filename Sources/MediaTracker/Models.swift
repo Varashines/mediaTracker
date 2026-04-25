@@ -200,6 +200,7 @@ final class MediaItem {
     var lastInteractionDate: Date?
     var lastStateChangeDate: Date = Date()
     var dateAdded: Date = Date()
+    var remainingEpisodesCount: Int?
     
     var tasteValue: String = "None"
     var stateValue: String = "Wishlist"
@@ -349,6 +350,9 @@ final class MediaItem {
                 return e1.episodeNumber < e2.episodeNumber
             }
             let watched = allEpisodes.filter { $0.isWatched }
+            let remaining = allEpisodes.count - watched.count
+            self.remainingEpisodesCount = remaining
+            tv.remainingEpisodesCount = remaining
             
             // AUTOMATION: State Transitions based on progress
             if !allEpisodes.isEmpty {
@@ -499,6 +503,7 @@ final class TVShowDetails {
     var originalLanguage: String?
     var creators: [String] = []
     var timezone: String?
+    var remainingEpisodesCount: Int?
     var nextEpisodeDate: Date?
     var nextEpisodeNumber: Int?
     var nextSeasonNumber: Int?

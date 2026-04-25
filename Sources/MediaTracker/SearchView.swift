@@ -14,6 +14,7 @@ struct SearchView: View {
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
     var submitTrigger: Int
+    var viewModel: MediaViewModel
     @State private var selectedType: SearchType = .all
     @State private var resultsCount = 0
 
@@ -42,9 +43,6 @@ struct SearchView: View {
         }
     }
 
-    @State private var trendingMovies: [MediaSearchResult] = []
-    @State private var trendingTV: [MediaSearchResult] = []
-
     @State private var isSearching = false
     @State private var isOfflineResultsOnly = false
     @State private var errorMessage: String?
@@ -68,11 +66,12 @@ struct SearchView: View {
 
     init(
         searchText: Binding<String>, isSearchActive: Binding<Bool>, submitTrigger: Int,
-        initialType: MediaType? = nil, onSelectLocal: ((MediaItem) -> Void)? = nil
+        initialType: MediaType? = nil, viewModel: MediaViewModel, onSelectLocal: ((MediaItem) -> Void)? = nil
     ) {
         self._searchText = searchText
         self._isSearchActive = isSearchActive
         self.submitTrigger = submitTrigger
+        self.viewModel = viewModel
         self.onSelectLocal = onSelectLocal
         if let type = initialType {
             let searchType: SearchType
@@ -166,10 +165,10 @@ struct SearchView: View {
                     if searchText.isEmpty {
                         VStack(spacing: 40) {
                             if selectedType == .all || selectedType == .movie {
-                                webSection(title: "Trending Movies", icon: "flame.fill", items: filterExisting(trendingMovies))
+                                webSection(title: "Trending Movies", icon: "flame.fill", items: filterExisting(viewModel.trendingMovies))
                             }
                             if selectedType == .all || selectedType == .tvShow {
-                                webSection(title: "Trending TV Shows", icon: "sparkles", items: filterExisting(trendingTV))
+                                webSection(title: "Trending TV Shows", icon: "sparkles", items: filterExisting(viewModel.trendingTV))
                             }
                         }
                     } else if !allWebResults.isEmpty {
@@ -206,7 +205,6 @@ struct SearchView: View {
             if newValue.isEmpty {
                 movieResults = []
                 tvResults = []
-                loadTrending()
             } else {
                 searchTask = Task { await performSearch() }
             }
@@ -217,9 +215,7 @@ struct SearchView: View {
             Text(message)
         }
         .onAppear {
-            if searchText.isEmpty {
-                loadTrending()
-            } else {
+            if !searchText.isEmpty {
                 searchTask = Task { await performSearch() }
             }
         }
@@ -254,21 +250,6 @@ struct SearchView: View {
     private func filterExisting(_ results: [MediaSearchResult]) -> [MediaSearchResult] {
         let lookup = Set(existingItems.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
         return results.filter { !lookup.contains("\($0.id)_\($0.type.rawValue)") }
-    }
-
-    private func loadTrending() {
-        Task {
-            do {
-                let movies = try await APIClient.shared.fetchTrendingMovies()
-                let tv = try await APIClient.shared.fetchTrendingTVShows()
-                await MainActor.run {
-                    trendingMovies = movies
-                    trendingTV = tv
-                }
-            } catch {
-                print("Error loading trending: \(error)")
-            }
-        }
     }
 
     private func performSearch() async {

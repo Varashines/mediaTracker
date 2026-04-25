@@ -3,6 +3,7 @@ import SwiftData
 
 struct DiscoveryHubView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var existingItems: [MediaItem]
     let namespace: Namespace.ID
     @Bindable var viewModel: MediaViewModel
     let onFilterSelected: (DiscoveryFilter) -> Void
@@ -14,18 +15,24 @@ struct DiscoveryHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 60) { // Increased spacing for scale effect
                 if hasDataLoaded {
-                    // 1. Networks / Studios (Full Grid)
+                    // 1. Trending Sections
+                    VStack(spacing: 40) {
+                        trendingSection(title: "Trending Movies", icon: "flame.fill", items: filterExisting(viewModel.trendingMovies))
+                        trendingSection(title: "Trending TV Shows", icon: "sparkles", items: filterExisting(viewModel.trendingTV))
+                    }
+                    .padding(.top, 20)
+
+                    // 2. Networks & Studios (Full Grid)
                     DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
                         onFilterSelected(DiscoveryFilter(type: .studio, name: node.name))
                     }
-                    .padding(.top, 40)
 
-                    // 2. Genres (Full Grid)
+                    // 3. Genres (Full Grid)
                     DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.cachedGenres, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                     }
 
-                    // 3. Languages (Full Grid)
+                    // 4. Languages (Full Grid)
                     DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.cachedLanguages, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
@@ -47,6 +54,86 @@ struct DiscoveryHubView: View {
         .refreshable { refreshData(force: true) }
     }
     
+    @ViewBuilder
+    private func trendingSection(title: String, icon: String, items: [MediaSearchResult]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 24) {
+                SectionHeader(title: title, icon: icon, iconColor: .secondary)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 20) {
+                        ForEach(items) { result in
+                            MediaThumbnailView(result: result, isLocal: false) {
+                                addMedia(result)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                }
+            }
+        }
+    }
+
+    private func filterExisting(_ results: [MediaSearchResult]) -> [MediaSearchResult] {
+        let lookup = Set(existingItems.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
+        return results.filter { !lookup.contains("\($0.id)_\($0.type.rawValue)") }
+    }
+
+    private func addMedia(_ result: MediaSearchResult) {
+        // Implement navigation or addition logic here
+        // For simplicity, we can trigger the search item addition logic
+        // But better is to just append it to the path if we have it
+        // For now, let's keep it consistent with SearchView's addition logic
+        // We might need to move addMedia to a shared service if it gets too complex
+        
+        let typePrefix = result.type == .movie ? "movie" : "tv"
+        let uniqueID = "\(typePrefix)_\(result.id)"
+
+        if DataService.shared.isProcessing(id: uniqueID) { return }
+        DataService.shared.startProcessing(id: uniqueID)
+
+        Task {
+            defer { DataService.shared.stopProcessing(id: uniqueID) }
+
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                await MainActor.run {
+                    viewModel.navigationPath.append(existing)
+                }
+                return
+            }
+
+            let releaseDate = result.releaseDate != nil ? DateUtils.parseDate(result.releaseDate) : nil
+            let item = MediaItem(id: uniqueID, title: result.title, overview: result.overview, posterURL: result.posterURL, releaseDate: releaseDate, type: result.type)
+            item.dateAdded = Date()
+            
+            // Basic details fetch (same as SearchView)
+            if result.type == .movie, let tmdbID = Int(result.id) {
+                if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID) {
+                     item.releaseDate = DateUtils.parseDate(details.releaseDate)
+                     if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
+                     let movieDetails = MovieDetails(tmdbID: tmdbID)
+                     movieDetails.item = item
+                     item.movieDetails = movieDetails
+                }
+            } else if result.type == .tvShow, let tmdbID = Int(result.id) {
+                if let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID) {
+                    if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
+                    let tvDetails = TVShowDetails(tmdbID: tmdbID)
+                    tvDetails.item = item
+                    item.tvShowDetails = tvDetails
+                }
+            }
+
+            modelContext.insert(item)
+            try? modelContext.save()
+            
+            await MainActor.run {
+                viewModel.navigationPath.append(item)
+            }
+        }
+    }
+
     private func refreshData(force: Bool) {
         if !force, hasDataLoaded, let last = viewModel.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 600 {
             return
@@ -59,7 +146,11 @@ struct DiscoveryHubView: View {
 
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
-            // Local Aggregation only - no networking here
+            // 1. Trending Fetch
+            async let trendingMovies = APIClient.shared.fetchTrendingMovies()
+            async let trendingTV = APIClient.shared.fetchTrendingTVShows()
+            
+            // 2. Local Aggregation
             await syncService.syncLibrary(force: force)
             
             let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
@@ -77,9 +168,14 @@ struct DiscoveryHubView: View {
                 return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count) 
             }
             
+            let fetchedMovies = (try? await trendingMovies) ?? []
+            let fetchedTV = (try? await trendingTV) ?? []
+            
             await MainActor.run {
                 withAnimation(.smooth(duration: 0.5)) {
                     self.viewModel.lastDiscoveryRefresh = Date()
+                    self.viewModel.trendingMovies = fetchedMovies
+                    self.viewModel.trendingTV = fetchedTV
                     self.viewModel.cachedNetworks = snNets
                     self.viewModel.cachedGenres = snGenres
                     self.viewModel.cachedLanguages = snLangs
@@ -106,15 +202,7 @@ struct DiscoverySection: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(appAccent.color)
-                
-                Text(title)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-            }
-            .padding(.horizontal, 40)
+            SectionHeader(title: title, icon: icon, iconColor: appAccent.color)
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: style == .logo ? 200 : 180), spacing: 24)], spacing: 24) {
                 ForEach(nodes) { node in

@@ -74,6 +74,10 @@ class MediaViewModel {
     var forYouRecommendations: [MediaThumbnailMetadata] = []
     var lastDiscoveryRefresh: Date?
 
+    // Trending Cache
+    var trendingMovies: [MediaSearchResult] = []
+    var trendingTV: [MediaSearchResult] = []
+
     func navigationTitle(for category: String?) -> String {
         if let network = selectedNetwork { return network }
         if let lang = selectedLanguage {
@@ -231,11 +235,13 @@ struct ContentView: View {
                                 smartBadgeIcon: item.storedSmartBadgeIcon,
                                 isSparkleBadge: item.storedSmartBadgeIsSparkle,
                                 versionHash: item.lastStateChangeDate.hashValue,
-                                recommendationReason: reason
-                            )
-                        }
-                    }
-                }            } catch {
+                                recommendationReason: reason,
+                                remainingCount: item.remainingEpisodesCount
+                                )
+                                }
+                                }
+                                }
+            } catch {
                 print("Error filtering items: \(error)")
             }
         }
@@ -464,7 +470,8 @@ struct ContentView: View {
                 },
                 onLoadMore: {
                     loadMoreItems()
-                }
+                },
+                viewModel: viewModel
             )
             .id("LibraryStage")
             .opacity(isSearchActive ? 0 : ((isDiscover || isInsights) ? 0 : 1))
@@ -506,7 +513,8 @@ struct ContentView: View {
                     searchText: $viewModel.searchText,
                     isSearchActive: $isSearchActive,
                     submitTrigger: viewModel.searchSubmitTrigger,
-                    initialType: currentMediaType
+                    initialType: currentMediaType,
+                    viewModel: viewModel
                 ) { item in
                     viewModel.navigationPath.append(item)
                 }
@@ -692,6 +700,7 @@ struct MediaGridView: View {
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onNetworkSelected: (String) -> Void
     let onLoadMore: () -> Void
+    var viewModel: MediaViewModel
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
@@ -713,21 +722,28 @@ struct MediaGridView: View {
     }
 
     var body: some View {
-        let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+        GeometryReader { mainGeo in
+            let availableWidth = mainGeo.size.width
+            let itemWidth: CGFloat = 160
+            let spacing: CGFloat = 20
+            let horizontalPadding: CGFloat = 30
+            let usableWidth = availableWidth - (horizontalPadding * 2)
+            let columnsCount = max(2, Int(usableWidth / (itemWidth + spacing)))
+            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnsCount)
 
-        ScrollView {
+            ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 // 1. Home Dashboard Sections
                 if selectedCategory == "Home" && searchText.isEmpty && selectedNetwork == nil {
-                    // Personalized For You (Top Carousel)
-                    if !recommendations.isEmpty {
-                        HeroCarousel(title: "For You", icon: "sparkles", iconColor: .yellow, recommendations: recommendations, namespace: namespace, isFastScrolling: isFastScrolling)
+                    // Continue Watching (Top Carousel)
+                    if !homeContinueWatching.isEmpty {
+                        ShelfCarousel(title: "Continue Watching", icon: "play.fill", iconColor: .blue, items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling)
                             .padding(.bottom, 20)
                     }
 
-                    // Continue Watching (Middle Carousel)
-                    if !homeContinueWatching.isEmpty {
-                        ShelfCarousel(title: "Continue Watching", icon: "play.fill", iconColor: .blue, items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling)
+                    // Personalized For You (Middle Carousel)
+                    if !recommendations.isEmpty {
+                        HeroCarousel(title: "For You", icon: "sparkles", iconColor: .yellow, recommendations: recommendations, namespace: namespace, isFastScrolling: isFastScrolling)
                             .padding(.bottom, 20)
                     }
                 }
@@ -735,37 +751,12 @@ struct MediaGridView: View {
                 // 2. Eager Featured Carousel (Upcoming View)
                 if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil && !featuredCarouselItems.isEmpty {
                     VStack(alignment: .leading, spacing: 15) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("Featured")
-                                .font(.system(size: 28, weight: .bold))
-                            
-                            Spacer()
-                            
-                            if featuredCarouselItems.count > 1 {
-                                GeometryReader { geo in
-                                    let availableWidth = geo.size.width
-                                    let itemWidth = max(40, min(availableWidth, availableWidth * 0.3))
-                                    let scrollableTrackWidth = availableWidth - itemWidth
-                                    
-                                    ZStack(alignment: .leading) {
-                                        Capsule()
-                                            .fill(Color.secondary.opacity(0.15))
-                                            .background(Capsule().fill(.ultraThinMaterial))
-                                            .frame(height: 4)
-                                        
-                                        Capsule()
-                                            .fill(appAccent.color.gradient)
-                                            .frame(width: itemWidth, height: 4)
-                                            .offset(x: upcomingScrollProgress * scrollableTrackWidth)
-                                            .shadow(color: appAccent.color.opacity(0.3), radius: 4, x: 0, y: 2)
-                                    }
-                                    .frame(maxHeight: .infinity, alignment: .center)
-                                }
-                                .frame(width: 150, height: 4)
-                                .padding(.trailing, 10)
-                            }
-                        }
-                        .padding(.horizontal, 30)
+                        SectionHeader(
+                            title: "Featured",
+                            icon: nil,
+                            iconColor: .primary,
+                            scrollProgress: featuredCarouselItems.count > 1 ? upcomingScrollProgress : nil
+                        )
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .top, spacing: 20) {
@@ -814,31 +805,33 @@ struct MediaGridView: View {
                 VStack(alignment: .leading, spacing: 15) {
                     // Header Logic
                     if let network = selectedNetwork {
-                        HStack {
-                            Text(network)
-                                .font(.system(size: 24, weight: .bold))
-                            Button { withAnimation { onNetworkSelected("") } } label: {
-                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        SectionHeader(title: network, icon: "tv", iconColor: appAccent.color)
+                            .overlay(alignment: .trailing) {
+                                Button { withAnimation { onNetworkSelected("") } } label: {
+                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, 40)
                             }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 30)
                     } else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
-                        Text(selectedCategory ?? "Library").font(.system(size: 24, weight: .bold)).padding(.horizontal, 30)
+                        SectionHeader(title: selectedCategory ?? "Library", icon: "folder", iconColor: .secondary)
                     } else if selectedCategory == "Upcoming" {
-                        Text("Queue")
-                            .font(.system(size: 24, weight: .bold))
-                            .padding(.horizontal, 30)
+                        SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
                             .padding(.bottom, 10)
                     }
                     
                     if items.isEmpty && groupedItems.isEmpty {
-                        LibraryEmptyStateView(category: selectedCategory)
+                        LibraryEmptyStateView(category: selectedCategory) {
+                            withAnimation {
+                                viewModel.selectedCategory = "Discover"
+                            }
+                        }
                     } else {
+
                         // 2. Eager Recently Added Row (Always Ready)
                         if selectedCategory == "All" && searchText.isEmpty && selectedNetwork == nil {
                             VStack(alignment: .leading, spacing: 15) {
-                                Text("Recently Added").font(.system(size: 24, weight: .bold)).padding(.horizontal, 30)
+                                SectionHeader(title: "Recently Added", icon: "clock.badge.checkmark", iconColor: .orange)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 20) {
                                         ForEach(recentlyAdded) { metadata in
@@ -890,17 +883,11 @@ struct MediaGridView: View {
                             VStack(alignment: .leading, spacing: 60) {
                                 ForEach(groupedItems, id: \.0) { (key, groupMetadatas) in
                                     VStack(alignment: .leading, spacing: 25) {
-                                        if key == "Coming Soon" && selectedCategory == "Home" {
-                                            HStack(spacing: 12) {
-                                                Image(systemName: "calendar")
-                                                    .foregroundStyle(.secondary)
-                                                Text("Coming Soon")
-                                            }
-                                            .font(.system(size: 28, weight: .black))
-                                            .padding(.horizontal, 30)
-                                        } else {
-                                            Text(key).font(.title2.bold()).foregroundStyle(.secondary).padding(.horizontal, 30)
-                                        }
+                                        SectionHeader(
+                                            title: key,
+                                            icon: (key == "Coming Soon" && selectedCategory == "Home") ? "calendar" : nil,
+                                            iconColor: .secondary
+                                        )
                                         
                                         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                             ForEach(groupMetadatas) { metadata in
@@ -950,6 +937,7 @@ struct MediaGridView: View {
         .onAppear { visibleCount = 40 }
         .onChange(of: items.count) { visibleCount = 40 }
     }
+}
 }
 
 struct FilteredLibraryGridView: View {
