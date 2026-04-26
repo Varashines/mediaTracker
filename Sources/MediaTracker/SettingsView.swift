@@ -245,6 +245,17 @@ struct SettingsView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
+                
+                Divider()
+                
+                SettingsRow(title: "Image Cache", subtitle: "Clear all downloaded posters and logos to force a refresh.") {
+                    Button("Clear") {
+                        ImageCache.shared.clearFullCache()
+                        AppErrorState.shared.surfaceError("Image Cache Cleared", systemImage: "photo.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
     }

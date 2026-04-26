@@ -15,24 +15,17 @@ struct DiscoveryHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 60) { // Increased spacing for scale effect
                 if hasDataLoaded {
-                    // 1. Trending Sections
-                    VStack(spacing: 40) {
-                        trendingSection(title: "Trending Movies", icon: "flame.fill", items: filterExisting(viewModel.trendingMovies))
-                        trendingSection(title: "Trending TV Shows", icon: "sparkles", items: filterExisting(viewModel.trendingTV))
-                    }
-                    .padding(.top, 20)
-
-                    // 2. Networks & Studios (Full Grid)
+                    // 1. Networks & Studios (Full Grid)
                     DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
                         onFilterSelected(DiscoveryFilter(type: .studio, name: node.name))
                     }
 
-                    // 3. Genres (Full Grid)
+                    // 2. Genres (Full Grid)
                     DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.cachedGenres, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                     }
 
-                    // 4. Languages (Full Grid)
+                    // 3. Languages (Full Grid)
                     DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.cachedLanguages, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
@@ -46,164 +39,55 @@ struct DiscoveryHubView: View {
                     .padding(.top, 100)
                 }
             }
+            .padding(.vertical, 20)
             .padding(.bottom, 100)
             // Essential: Prevent clipping during scaling
             .scrollTargetLayout()
         }
         .onAppear { refreshData(force: false) }
-        .refreshable { refreshData(force: true) }
+        .refreshable { 
+            ImageCache.shared.clearFullCache()
+            refreshData(force: true) 
+        }
+        .onChange(of: viewModel.discoveryRefreshTrigger) {
+            refreshData(force: true)
+        }
     }
     
-    @ViewBuilder
-    private func trendingSection(title: String, icon: String, items: [MediaSearchResult]) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 24) {
-                SectionHeader(title: title, icon: icon, iconColor: .secondary)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(items) { result in
-                            MediaThumbnailView(result: result, isLocal: false) {
-                                addMedia(result)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 40)
-                }
-            }
-        }
-    }
-
-    private func filterExisting(_ results: [MediaSearchResult]) -> [MediaSearchResult] {
-        let lookup = Set(existingItems.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
-        return results.filter { !lookup.contains("\($0.id)_\($0.type.rawValue)") }
-    }
-
-    private func addMedia(_ result: MediaSearchResult) {
-        // Implement navigation or addition logic here
-        // For simplicity, we can trigger the search item addition logic
-        // But better is to just append it to the path if we have it
-        // For now, let's keep it consistent with SearchView's addition logic
-        // We might need to move addMedia to a shared service if it gets too complex
-        
-        let typePrefix = result.type == .movie ? "movie" : "tv"
-        let uniqueID = "\(typePrefix)_\(result.id)"
-
-        if DataService.shared.isProcessing(id: uniqueID) { return }
-        DataService.shared.startProcessing(id: uniqueID)
-
-        Task {
-            defer { DataService.shared.stopProcessing(id: uniqueID) }
-
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-            if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
-                await MainActor.run {
-                    viewModel.navigationPath.append(existing)
-                }
-                return
-            }
-
-            let releaseDate = result.releaseDate != nil ? DateUtils.parseDate(result.releaseDate) : nil
-            let item = MediaItem(id: uniqueID, title: result.title, overview: result.overview, posterURL: result.posterURL, releaseDate: releaseDate, type: result.type)
-            item.dateAdded = Date()
-            
-            // Basic details fetch (same as SearchView)
-            if result.type == .movie, let tmdbID = Int(result.id) {
-                if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID) {
-                     item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                     if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
-                     
-                     let movieDetails = MovieDetails(tmdbID: tmdbID)
-                     movieDetails.item = item
-                     movieDetails.runtime = details.runtime
-                     movieDetails.genres = details.genres
-                     movieDetails.voteAverage = details.voteAverage
-                     movieDetails.originalLanguage = details.originalLanguage
-                     movieDetails.creators = details.directors.map { $0.name }
-                     
-                     movieDetails.cast = details.cast.map { c in
-                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                         let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                         member.movieDetails = movieDetails
-                         return member
-                     }
-                     
-                     item.movieDetails = movieDetails
-                }
-            } else if result.type == .tvShow, let tmdbID = Int(result.id) {
-                if let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID) {
-                    if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
-                    let tvDetails = TVShowDetails(tmdbID: tmdbID)
-                    tvDetails.item = item
-                    tvDetails.status = details.status
-                    tvDetails.network = details.network
-                    tvDetails.numberOfSeasons = details.seasonsCount
-                    tvDetails.numberOfEpisodes = details.episodesCount
-                    tvDetails.genres = details.genres
-                    tvDetails.creators = details.creators.map { $0.name }
-                    
-                    tvDetails.cast = details.cast.map { c in
-                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                        member.tvShowDetails = tvDetails
-                        return member
-                    }
-                    
-                    item.tvShowDetails = tvDetails
-                }
-            }
-
-            modelContext.insert(item)
-            try? modelContext.save()
-            
-            await MainActor.run {
-                viewModel.navigationPath.append(item)
-            }
-        }
-    }
-
     private func refreshData(force: Bool) {
         if !force, hasDataLoaded, let last = viewModel.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 600 {
             return
         }
-        
+
         let container = modelContext.container
         let localHidden = hiddenStudios
-        
+
         let syncService = DiscoverySyncService(modelContainer: container)
 
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
-            // 1. Trending Fetch
-            async let trendingMovies = APIClient.shared.fetchTrendingMovies()
-            async let trendingTV = APIClient.shared.fetchTrendingTVShows()
-            
-            // 2. Local Aggregation
+
+            // 1. Local Aggregation
             await syncService.syncLibrary(force: force)
-            
+
             let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
             let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
             let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
-            
+
             let nets = (try? context.fetch(netDescriptor)) ?? []
             let hiddenSet = Set(localHidden.components(separatedBy: ",").filter { !$0.isEmpty })
             let filteredNets = nets.filter { !hiddenSet.contains($0.name) }
-            
+
             let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex) }
             let snGenres = ((try? context.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
-            let snLangs = ((try? context.fetch(langDescriptor)) ?? []).map { 
+            let snLangs = ((try? context.fetch(langDescriptor)) ?? []).map {
                 let name = LanguageUtils.languageName(for: $0.code)
-                return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count) 
+                return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
             }
-            
-            let fetchedMovies = (try? await trendingMovies) ?? []
-            let fetchedTV = (try? await trendingTV) ?? []
-            
+
             await MainActor.run {
                 withAnimation(.smooth(duration: 0.5)) {
                     self.viewModel.lastDiscoveryRefresh = Date()
-                    self.viewModel.trendingMovies = fetchedMovies
-                    self.viewModel.trendingTV = fetchedTV
                     self.viewModel.cachedNetworks = snNets
                     self.viewModel.cachedGenres = snGenres
                     self.viewModel.cachedLanguages = snLangs
@@ -213,7 +97,6 @@ struct DiscoveryHubView: View {
         }
     }
 }
-
 // MARK: - Rich Grid Components
 
 enum DiscoveryCardStyle {
@@ -307,11 +190,12 @@ struct DiscoveryCard: View {
     private var logoContent: some View {
         ZStack {
             if let logo = node.logoPath {
-                AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w300\(logo)")) { image in
-                    image.resizable().aspectRatio(contentMode: .fit)
+                CachedImage(url: URL(string: "https://image.tmdb.org/t/p/w300\(logo)"), targetSize: CGSize(width: 360, height: 180), alwaysPreserveAlpha: true) {
+                    _ in
                 } placeholder: {
                     ProgressView().controlSize(.small)
                 }
+                .aspectRatio(contentMode: .fit)
                 .frame(width: isHovered ? 90 : 120, height: isHovered ? 45 : 60)
                 .offset(y: isHovered ? -15 : 0)
             } else {

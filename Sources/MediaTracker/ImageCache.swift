@@ -113,6 +113,25 @@ class ImageCache {
         urlToKeys.removeAll()
     }
     
+    func clearFullCache() {
+        clearMemoryCache()
+        
+        // Purge disk
+        Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            let files = (try? fm.contentsOfDirectory(at: self.cacheDirectory, includingPropertiesForKeys: nil)) ?? []
+            for file in files {
+                try? fm.removeItem(at: file)
+            }
+            
+            await MainActor.run {
+                self.diskCacheIndex.removeAll()
+                // Force UI to refresh existing views
+                self.updates.send("CLEARED_ALL")
+            }
+        }
+    }
+    
     func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {
         // 1. Exact size match
         let specificKey = generateCacheKey(key: key, size: targetSize)
@@ -175,7 +194,7 @@ class ImageCache {
         activeTasks[key] = nil
     }
 
-    func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal) async -> ImageContainer? {
+    func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
         // 1. Memory Check
         let specificKey = generateCacheKey(key: key, size: targetSize)
         if let image = memoryCache.object(forKey: specificKey as NSString) {
@@ -218,7 +237,7 @@ class ImageCache {
                 if Task.isCancelled { return }
                 guard let nsImage = NSImage(data: data) else { return }
                 
-                await self.save(image: nsImage, data: data, forKey: key, targetSize: targetSize)
+                await self.save(image: nsImage, data: data, forKey: key, targetSize: targetSize, alwaysPreserveAlpha: alwaysPreserveAlpha)
                 
                 if Task.isCancelled { return }
 
@@ -271,7 +290,7 @@ class ImageCache {
         }
     }
     
-    func save(image: NSImage, data: Data? = nil, forKey key: String, targetSize: CGSize? = nil) async {
+    func save(image: NSImage, data: Data? = nil, forKey key: String, targetSize: CGSize? = nil, alwaysPreserveAlpha: Bool = false) async {
         let rawData = data
         let diskFileName = fileName(for: key, size: targetSize)
         let diskCacheDir = cacheDirectory
@@ -289,7 +308,18 @@ class ImageCache {
             } else if let cg = cgImage {
                 // Resize or re-encode if necessary
                 let bitmap = NSBitmapImageRep(cgImage: cg)
-                let dataToWrite = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+                
+                // If it's a logo or we explicitly want to preserve alpha, use PNG. Otherwise JPEG.
+                let hasAlpha = cg.alphaInfo != .none && cg.alphaInfo != .noneSkipLast && cg.alphaInfo != .noneSkipFirst
+                let usePNG = alwaysPreserveAlpha || hasAlpha
+                
+                let dataToWrite: Data?
+                if usePNG {
+                    dataToWrite = bitmap.representation(using: .png, properties: [:])
+                } else {
+                    dataToWrite = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+                }
+                
                 try? dataToWrite?.write(to: fileURL)
             }
             
@@ -303,7 +333,16 @@ class ImageCache {
                 tinyImage.unlockFocus()
                 if let tinyTiff = tinyImage.tiffRepresentation,
                    let tinyBitmap = NSBitmapImageRep(data: tinyTiff) {
-                    let tinyData = tinyBitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.4])
+                    
+                    let hasAlpha = cg.alphaInfo != .none && cg.alphaInfo != .noneSkipLast && cg.alphaInfo != .noneSkipFirst
+                    let usePNG = alwaysPreserveAlpha || hasAlpha
+                    
+                    let tinyData: Data?
+                    if usePNG {
+                        tinyData = tinyBitmap.representation(using: .png, properties: [:])
+                    } else {
+                        tinyData = tinyBitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.4])
+                    }
                     try? tinyData?.write(to: proxyURL)
                 }
                 
@@ -369,6 +408,7 @@ struct CachedImage<Placeholder: View>: View {
     let priority: ImageCache.ImagePriority
     var themeColor: Color? = nil
     var isFastScrolling: Bool = false
+    var alwaysPreserveAlpha: Bool = false
     var onImageLoaded: ((CGImage) -> Void)? = nil
     @ViewBuilder let placeholder: Placeholder
     
@@ -377,12 +417,13 @@ struct CachedImage<Placeholder: View>: View {
     @State private var isLoading = false
     @State private var broadcastCancellable: AnyCancellable?
 
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
         self.targetSize = targetSize
         self.priority = priority
         self.themeColor = themeColor
         self.isFastScrolling = isFastScrolling
+        self.alwaysPreserveAlpha = alwaysPreserveAlpha
         self.onImageLoaded = onImageLoaded
         self.placeholder = placeholder()
         
@@ -475,9 +516,14 @@ struct CachedImage<Placeholder: View>: View {
         
         broadcastCancellable?.cancel()
         broadcastCancellable = ImageCache.shared.updates
-            .filter { $0 == key }
+            .filter { $0 == key || $0 == "CLEARED_ALL" }
             .receive(on: DispatchQueue.main)
             .sink { _ in
+                // If the whole cache was cleared, we MUST drop local state
+                if ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) == nil {
+                    self.image = nil
+                    self.fuzzyMatch = nil
+                }
                 Task { await attemptLoad() }
             }
     }
@@ -517,7 +563,7 @@ struct CachedImage<Placeholder: View>: View {
         isLoading = true
         defer { isLoading = false }
         
-        if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority) {
+        if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority, alwaysPreserveAlpha: alwaysPreserveAlpha) {
             if Task.isCancelled { return }
             withAnimation(.easeIn(duration: 0.25)) {
                 self.image = container.image

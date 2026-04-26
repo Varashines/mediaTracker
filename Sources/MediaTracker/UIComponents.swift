@@ -645,10 +645,11 @@ struct MediaThumbnailView: View {
     private var searchOverlay: some View {
         if isAdded {
             ZStack {
-                Rectangle()
-                    .fill(.black.opacity(isLocalInSearch ? (isHovered ? 0.2 : 0.05) : 0.6))
-
+                // Dimming layer only for non-local results to emphasize "In Library"
                 if !isLocalInSearch {
+                    Rectangle()
+                        .fill(.black.opacity(0.6))
+                    
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 40))
@@ -658,26 +659,28 @@ struct MediaThumbnailView: View {
                             .foregroundStyle(.white)
                     }
                 } else if isHovered {
-                    VStack(spacing: 4) {
-                        Image(systemName: "arrow.up.right.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundStyle(.white)
-                        Text("Open")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.white)
-                    }
-                    .padding(8)
-                    .background(.black.opacity(0.4))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    // Local result in search - main hover info handles the reveal
+                    // but we can add an extra "Open" indicator if we want
+                    Rectangle()
+                        .fill(.black.opacity(0.2))
                 }
             }
         } else if isHovered {
-            ZStack {
-                Rectangle().fill(.black.opacity(0.3))
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.white)
+            // New Web Result - Show "Add" UI that doesn't cover center
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 4)
+                        .padding(12)
+                }
             }
+            .background(
+                LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom)
+            )
         }
     }
 
@@ -959,6 +962,129 @@ struct HomeHeroCard: View {
         }
         
         return "Picked for you"
+    }
+}
+
+// MARK: - Premium Transitions
+
+struct PerspectiveDepthModifier: ViewModifier {
+    let isActive: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(isActive ? 1 : 0)
+            .blur(radius: isActive ? 0 : 15)
+            .scaleEffect(isActive ? 1.0 : 0.92)
+            .offset(y: isActive ? 0 : 20)
+            .allowsHitTesting(isActive)
+            .zIndex(isActive ? 1 : 0)
+    }
+}
+
+struct EntranceStaggerModifier: ViewModifier {
+    let index: Int
+    @State private var isAppeared = false
+    
+    func body(content: Content) -> some View {
+        content
+            .offset(y: isAppeared ? 0 : 20)
+            .opacity(isAppeared ? 1 : 0)
+            .onAppear {
+                let delay = Double(index % 24) * 0.03
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.78).delay(delay)) {
+                    isAppeared = true
+                }
+            }
+    }
+}
+
+extension View {
+    func entranceStagger(index: Int) -> some View {
+        modifier(EntranceStaggerModifier(index: index))
+    }
+}
+
+// MARK: - Skeleton Placeholders
+
+struct MediaThumbnailPlaceholder: View {
+    let mode: MediaThumbnailView.DisplayMode
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var width: CGFloat {
+        switch mode {
+        case .hero: return 200
+        default: return 160
+        }
+    }
+
+    private var height: CGFloat {
+        switch mode {
+        case .hero: return 300
+        default: return 240
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
+                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
+                .overlay {
+                    RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                }
+            
+            VStack {
+                Spacer()
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(height: 12)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
+        }
+        .frame(width: width, height: height)
+        .shimmer()
+    }
+}
+
+struct HomeHeroCardPlaceholder: View {
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                }
+            
+            HStack(spacing: 24) {
+                // Vertical Poster Skeleton
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 140, height: 210)
+                
+                // Details Skeleton
+                VStack(alignment: .leading, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(width: 200, height: 24)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.08))
+                        .frame(width: 120, height: 16)
+                    
+                    Spacer()
+                }
+                .padding(.vertical, 30)
+                
+                Spacer()
+            }
+            .padding(24)
+        }
+        .frame(width: 500, height: 280)
+        .shimmer()
     }
 }
 

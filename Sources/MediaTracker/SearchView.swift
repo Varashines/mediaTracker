@@ -51,16 +51,16 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>?
 
     private var allWebResults: [MediaSearchResult] {
-        let lookup = Set(existingItems.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
+        let lookup = Set(existingItems.map { "\($0.id)" })
         var results: [MediaSearchResult] = []
         
         if selectedType == .all || selectedType == .movie {
             results.append(
-                contentsOf: movieResults.filter { !lookup.contains("\($0.id)_\(MediaType.movie.rawValue)") }.prefix(15))
+                contentsOf: movieResults.filter { !lookup.contains("movie_\($0.id)") }.prefix(15))
         }
         if selectedType == .all || selectedType == .tvShow {
             results.append(
-                contentsOf: tvResults.filter { !lookup.contains("\($0.id)_\(MediaType.tvShow.rawValue)") }.prefix(15))
+                contentsOf: tvResults.filter { !lookup.contains("tv_\($0.id)") }.prefix(15))
         }
         return results
     }
@@ -218,6 +218,24 @@ struct SearchView: View {
         .onAppear {
             if !searchText.isEmpty {
                 searchTask = Task { await performSearch() }
+            }
+            
+            // Ensure trending data is available even if removed from Discovery Hub
+            if viewModel.trendingMovies.isEmpty || viewModel.trendingTV.isEmpty {
+                Task {
+                    async let movies = APIClient.shared.fetchTrendingMovies()
+                    async let tv = APIClient.shared.fetchTrendingTVShows()
+                    
+                    let fetchedMovies = (try? await movies) ?? []
+                    let fetchedTV = (try? await tv) ?? []
+                    
+                    await MainActor.run {
+                        withAnimation {
+                            viewModel.trendingMovies = fetchedMovies
+                            viewModel.trendingTV = fetchedTV
+                        }
+                    }
+                }
             }
         }
     }
