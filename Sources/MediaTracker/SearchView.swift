@@ -321,7 +321,7 @@ struct SearchView: View {
 
             // Uniqueness Check
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-            if let existing = try? modelContext.fetch(descriptor).first {
+            if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
                 await MainActor.run {
                     AppErrorState.shared.surfaceError("Title already in Library", systemImage: "info.circle.fill")
                     isSearchActive = false

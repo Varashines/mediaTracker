@@ -155,6 +155,7 @@ struct DetailView: View {
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
             modelContext.delete(itemToDelete)
             try? modelContext.save()
+            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
 
             Task.detached {
                 let sync = DiscoverySyncService(modelContainer: container)

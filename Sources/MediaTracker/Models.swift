@@ -251,13 +251,13 @@ final class MediaItem {
         self.updateSearchableText()
     }
 
-    var availableStates: [MediaState] { 
+    static func availableStates(for type: MediaType, progress: Double?) -> [MediaState] {
         if type == .movie { return MediaState.allCases }
         
-        let progress = storedProgress ?? 0
-        if progress >= 1.0 {
+        let progressVal = progress ?? 0
+        if progressVal >= 1.0 {
             return [.completed, .rewatching]
-        } else if progress > 0 {
+        } else if progressVal > 0 {
             return [.active, .onHold, .dropped, .rewatching, .completed]
         }
         return MediaState.allCases

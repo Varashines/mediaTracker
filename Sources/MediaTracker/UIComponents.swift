@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct StatusBadgePrimitive: View {
     let label: String
@@ -265,9 +266,26 @@ struct MediaThumbnailView: View {
         case hero, grid, search
     }
 
+    // 1. Immutable Captured Snapshot
+    private let capturedID: PersistentIdentifier?
+    private let capturedTitle: String
+    private let capturedPosterURL: String?
+    private let capturedType: MediaType
+    private let capturedState: MediaState
+    private let capturedProgress: Double?
+    private let capturedReleaseDate: Date?
+    private let capturedThemeColorHex: String?
+    private let capturedNextEpisodeLabel: String?
+    private let capturedWatchProgress: String?
+    private let capturedIsUpcoming: Bool
+    private let capturedGridBadgeText: String?
+    
+    // 2. Reference Layer (Used only if object is valid)
     let item: MediaItem?
     let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
+    
+    // 3. Configuration
     let mode: DisplayMode
     var showTypeBadge: Bool = true
     var isUpcomingSection: Bool = false
@@ -275,7 +293,7 @@ struct MediaThumbnailView: View {
     var action: (() -> Void)? = nil
     var namespace: Namespace.ID? = nil
     var staggerIndex: Int? = nil
-    var isFastScrolling: Bool = false // NEW: Support for velocity-aware rendering
+    var isFastScrolling: Bool = false
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -299,6 +317,20 @@ struct MediaThumbnailView: View {
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
         self.action = action
+        
+        // IMMEDIATE CAPTURE - This prevents crashes if item is deleted later
+        self.capturedID = item.persistentModelID
+        self.capturedTitle = item.title
+        self.capturedPosterURL = item.posterURL
+        self.capturedType = item.type ?? .movie
+        self.capturedState = item.state ?? .wishlist
+        self.capturedProgress = item.storedProgress
+        self.capturedReleaseDate = item.releaseDate
+        self.capturedThemeColorHex = item.themeColorHex
+        self.capturedNextEpisodeLabel = item.storedNextEpisodeLabel
+        self.capturedWatchProgress = item.watchProgressLabel
+        self.capturedIsUpcoming = item.calculateIsUpcoming
+        self.capturedGridBadgeText = item.gridBadgeText
     }
     
     init(
@@ -315,6 +347,19 @@ struct MediaThumbnailView: View {
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
         self.action = action
+        
+        self.capturedID = metadata.id
+        self.capturedTitle = metadata.title
+        self.capturedPosterURL = metadata.posterURL
+        self.capturedType = metadata.type ?? .movie
+        self.capturedState = metadata.state ?? .wishlist
+        self.capturedProgress = metadata.progress
+        self.capturedReleaseDate = metadata.releaseDate
+        self.capturedThemeColorHex = metadata.themeColorHex
+        self.capturedNextEpisodeLabel = metadata.nextEpisodeToWatchLabel
+        self.capturedWatchProgress = metadata.watchProgress
+        self.capturedIsUpcoming = metadata.isUpcoming
+        self.capturedGridBadgeText = metadata.badgeText
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
@@ -326,6 +371,19 @@ struct MediaThumbnailView: View {
         self.action = action
         self.namespace = nil
         self.staggerIndex = nil
+        
+        self.capturedID = nil
+        self.capturedTitle = result.title
+        self.capturedPosterURL = result.posterURL
+        self.capturedType = result.type
+        self.capturedState = .wishlist
+        self.capturedProgress = 0
+        self.capturedReleaseDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
+        self.capturedThemeColorHex = nil
+        self.capturedNextEpisodeLabel = nil
+        self.capturedWatchProgress = nil
+        self.capturedIsUpcoming = false
+        self.capturedGridBadgeText = nil
     }
 
     private var width: CGFloat {
@@ -342,61 +400,21 @@ struct MediaThumbnailView: View {
         }
     }
 
-    private var title: String {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            return item.title
-        }
-        return metadata?.title ?? result?.title ?? ""
-    }
-
-    private var posterURL: String? {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            return item.posterURL
-        }
-        return metadata?.posterURL ?? result?.posterURL
-    }
-
-    private var type: MediaType {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            return item.type ?? .movie
-        }
-        return metadata?.type ?? result?.type ?? .movie
-    }
-
-    private var safeState: MediaState {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            return item.state ?? .wishlist
-        }
-        return metadata?.state ?? .wishlist
-    }
-
-    private var safeProgress: Double? {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            return item.storedProgress
-        }
-        return metadata?.progress
-    }
+    private var title: String { capturedTitle }
+    private var posterURL: String? { capturedPosterURL }
+    private var type: MediaType { capturedType }
+    private var safeState: MediaState { capturedState }
+    private var safeProgress: Double? { capturedProgress }
 
     private var yearLabel: String? {
-        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-            if let date = item.releaseDate {
-                return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
-            }
-        } else if let metadata = metadata {
-            if let date = metadata.releaseDate {
-                return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
-            }
-        } else if let dateString = result?.releaseDate, dateString.count >= 4 {
-            return String(dateString.prefix(4))
+        if let date = capturedReleaseDate {
+            return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
         }
         return nil
     }
 
     private var isAdded: Bool {
-        if !isRemoved, let item = item {
-            return item.modelContext != nil && !item.isDeleted
-        }
-        return metadata != nil || isLocalInSearch
+        return capturedID != nil || isLocalInSearch
     }
 
     var body: some View {
@@ -413,10 +431,8 @@ struct MediaThumbnailView: View {
             }
         }
         .contextMenu {
-            if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-                libraryContextMenu(for: item, type: self.type, state: self.safeState)
-            } else if !isRemoved, let metadata = metadata, let item = modelContext.model(for: metadata.id) as? MediaItem, item.modelContext != nil, !item.isDeleted {
-                libraryContextMenu(for: item, type: self.type, state: self.safeState)
+            if !isRemoved, let id = capturedID {
+                libraryContextMenu(for: id, type: capturedType, state: capturedState, progress: capturedProgress)
             }
         }
     }
@@ -436,10 +452,12 @@ struct MediaThumbnailView: View {
             // Smart Badge (Top Leading)
             VStack {
                 HStack {
-                    if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
-                        SmartBadgeView(item: item)
-                    } else if let metadata = metadata {
-                        SmartBadgeView(metadata: metadata)
+                    if !isRemoved {
+                        if let item = item, item.modelContext != nil, !item.isDeleted {
+                            SmartBadgeView(item: item)
+                        } else if let metadata = metadata {
+                            SmartBadgeView(metadata: metadata)
+                        }
                     }
                     Spacer()
                 }
@@ -462,12 +480,8 @@ struct MediaThumbnailView: View {
                     }
                     
                     // Show stats/progress in the hover stack (But NOT if completed)
-                    let currentState = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.state : metadata?.state) ?? .wishlist
-                    if currentState != .completed {
-                        let stats = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.storedNextEpisodeLabel : metadata?.nextEpisodeToWatchLabel)
-                        let progress = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.watchProgressLabel : metadata?.watchProgress)
-                        let currentInfo = stats ?? progress
-                        
+                    if capturedState != .completed {
+                        let currentInfo = capturedNextEpisodeLabel ?? capturedWatchProgress
                         if let info = currentInfo {
                             Text("•")
                             Text(info)
@@ -480,8 +494,7 @@ struct MediaThumbnailView: View {
                 .shadow(color: .black.opacity(0.6), radius: 2)
                 
                 // RESTORED DATE ROW
-                if (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.calculateIsUpcoming : metadata?.isUpcoming) ?? false, 
-                   let date = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.gridBadgeText : metadata?.badgeText) {
+                if capturedIsUpcoming, let date = capturedGridBadgeText {
                     Text(date.uppercased())
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .kerning(1.5)
@@ -503,8 +516,7 @@ struct MediaThumbnailView: View {
         .background {
             if let ns = namespace {
                 let itemIDString: String = {
-                    if let item = item, item.modelContext != nil, !item.isDeleted { return "\(item.id)" }
-                    if let metadata = metadata { return "\(metadata.id)" }
+                    if let id = capturedID { return "\(id)" }
                     return "\(result?.id.hashValue ?? 0)"
                 }()
                 
@@ -534,10 +546,8 @@ struct MediaThumbnailView: View {
     private var posterLayer: some View {
         let content = Group {
             if let urlString = posterURL, let url = URL(string: urlString) {
-                let colorString = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.themeColorHex : metadata?.themeColorHex)
-                let baseColor = colorString.flatMap { Color(hex: $0) }
+                let baseColor = capturedThemeColorHex.flatMap { Color(hex: $0) }
                 
-                // Request slightly more pixels (3x) to ensure crispness even on high-end Retina screens
                 CachedImage(url: url, targetSize: CGSize(width: width * 3, height: height * 3), themeColor: baseColor, isFastScrolling: isFastScrolling) {
                     _ in
                 } placeholder: {
@@ -562,8 +572,7 @@ struct MediaThumbnailView: View {
 
         if let ns = namespace {
             let itemIDString: String = {
-                if let item = item, item.modelContext != nil, !item.isDeleted { return "\(item.id)" }
-                if let metadata = metadata { return "\(metadata.id)" }
+                if let id = capturedID { return "\(id)" }
                 return "\(result?.id.hashValue ?? 0)"
             }()
             
@@ -578,13 +587,15 @@ struct MediaThumbnailView: View {
     }
 
     @ViewBuilder
-    private func quickWatchOverlay(for item: MediaItem) -> some View {
-        if item.modelContext != nil && !item.isDeleted {
+    private func quickWatchOverlay() -> some View {
+        if !isRemoved, let id = capturedID {
             Button {
-                markNextEpisodeAsWatched(for: item)
+                if let item = modelContext.model(for: id) as? MediaItem, !item.isDeleted {
+                    markNextEpisodeAsWatched(for: item)
+                }
             } label: {
                 HStack(spacing: 6) {
-                    if isButtonHovered, let nextLabel = item.nextEpisodeToWatchLabel {
+                    if isButtonHovered, let nextLabel = capturedNextEpisodeLabel {
                         Text(nextLabel)
                             .font(.system(size: 8, weight: .bold))
                             .transition(
@@ -683,81 +694,62 @@ struct MediaThumbnailView: View {
     }
 
     @ViewBuilder
-    private func libraryContextMenu(for item: MediaItem, type: MediaType, state: MediaState) -> some View {
-        if item.modelContext != nil && !item.isDeleted {
-            Section("Quick Actions") {
-                if type == .tvShow {
-                    Button {
-                        if item.modelContext != nil && !item.isDeleted {
-                            markNextEpisodeAsWatched(for: item)
-                        }
-                    } label: {
-                        Label("Mark Next Episode Watched", systemImage: "play.fill")
+    private func libraryContextMenu(for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?) -> some View {
+        Section("Quick Actions") {
+            if type == .tvShow {
+                Button {
+                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                        markNextEpisodeAsWatched(for: item)
                     }
-                }
-                
-                if state != .completed {
-                    Button {
-                        if item.modelContext != nil && !item.isDeleted {
-                            withAnimation {
-                                item.state = .completed
-                                item.lastUpdated = Date()
-                                item.lastInteractionDate = Date()
-                            }
-                        }
-                    } label: {
-                        Label("Quick Complete", systemImage: "checkmark.seal.fill")
-                    }
+                } label: {
+                    Label("Mark Next Episode Watched", systemImage: "play.fill")
                 }
             }
             
-            Section("Status") {
-                ForEach(availableStates(for: type, progress: safeProgress), id: \.self) { targetState in
-                    Button(targetState.displayName) {
-                        if item.modelContext != nil && !item.isDeleted {
-                            withAnimation {
-                                item.state = targetState
-                                item.lastUpdated = Date()
-                                item.lastInteractionDate = Date()
-                                item.lastStateChangeDate = Date()
-                            }
+            if state != .completed {
+                Button {
+                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                        withAnimation {
+                            item.state = .completed
+                            item.lastUpdated = Date()
+                            item.lastInteractionDate = Date()
+                        }
+                    }
+                } label: {
+                    Label("Quick Complete", systemImage: "checkmark.seal.fill")
+                }
+            }
+        }
+        
+        Section("Status") {
+            ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) { targetState in
+                Button(targetState.displayName) {
+                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                        withAnimation {
+                            item.state = targetState
+                            item.lastUpdated = Date()
+                            item.lastInteractionDate = Date()
+                            item.lastStateChangeDate = Date()
                         }
                     }
                 }
             }
-            Divider()
-            Button(role: .destructive) {
-                if item.modelContext != nil && !item.isDeleted {
-                    withAnimation {
-                        isRemoved = true
-                    }
-                    
-                    let id = item.id
-                    let capturedType = type
-                    NotificationManager.shared.cancelNotification(id: id, type: capturedType)
-                    
-                    // Delay deletion to allow SwiftUI to re-render and avoid accessing a deleted object
-                    Task {
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                        modelContext.delete(item)
-                    }
-                }
-            } label: {
-                Label("Remove", systemImage: "trash")
+        }
+        Divider()
+        Button(role: .destructive) {
+            withAnimation {
+                isRemoved = true
             }
+            
+            if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                let id = item.id
+                NotificationManager.shared.cancelNotification(id: id, type: type)
+                modelContext.delete(item)
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            }
+        } label: {
+            Label("Remove", systemImage: "trash")
         }
-    }
-
-    private func availableStates(for type: MediaType, progress: Double?) -> [MediaState] {
-        if type == .movie { return MediaState.allCases }
-        
-        let progressVal = progress ?? 0
-        if progressVal >= 1.0 {
-            return [.completed, .rewatching]
-        } else if progressVal > 0 {
-            return [.active, .onHold, .dropped, .rewatching, .completed]
-        }
-        return MediaState.allCases
     }
 }
 
@@ -1286,7 +1278,7 @@ struct HeroCarousel: View {
                         Spacer(minLength: 16).id("HERO_START") // 16 + 24 spacing = 40px margin
                         
                         ForEach(Array(recommendations.enumerated()), id: \.offset) { index, metadata in
-                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                 NavigationLink(value: item) {
                                     HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
                                 }
@@ -1492,7 +1484,7 @@ struct ShelfCarousel: View {
                         Spacer(minLength: 10).id("SHELF_START") // 10 + 20 spacing = 30px margin
                         
                         ForEach(Array(items.enumerated()), id: \.offset) { index, metadata in
-                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                 NavigationLink(value: item) {
                                     MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
                                 }

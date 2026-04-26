@@ -388,6 +388,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .tasteWeightsChanged)) { _ in
             updateDisplayedItems(delay: 0)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+            updateDisplayedItems(delay: 0)
+        }
         .onAppear {
             NotificationManager.shared.requestPermission()
             
@@ -760,7 +763,7 @@ struct MediaGridView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .top, spacing: 20) {
                                 ForEach(featuredCarouselItems) { metadata in
-                                    if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                         NavigationLink(value: item) {
                                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
                                                 .id(metadata.versionHash)
@@ -834,7 +837,7 @@ struct MediaGridView: View {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 20) {
                                         ForEach(recentlyAdded) { metadata in
-                                            if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                                 NavigationLink(value: item) {
                                                     MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling).id(metadata.versionHash)
                                                 }
@@ -857,7 +860,7 @@ struct MediaGridView: View {
                                 
                                 ForEach(baseItems.indices, id: \.self) { idx in
                                     let metadata = baseItems[idx]
-                                    if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                         NavigationLink(value: item) {
                                             MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
                                                 .id(metadata.versionHash)
@@ -890,7 +893,7 @@ struct MediaGridView: View {
                                         
                                         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                             ForEach(groupMetadatas) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                                     NavigationLink(value: item) {
                                                         MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: groupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling)
                                                             .id(metadata.versionHash)
@@ -960,9 +963,11 @@ struct FilteredLibraryGridView: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(Array(items.indices), id: \.self) { idx in
                             let item = items[idx]
-                            NavigationLink(value: item) {
-                                MediaThumbnailView(item: item, mode: .grid, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
-                            }                            .buttonStyle(.plain)
+                            if !item.isDeleted {
+                                NavigationLink(value: item) {
+                                    MediaThumbnailView(item: item, mode: .grid, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                }                            .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding(.horizontal, 30)

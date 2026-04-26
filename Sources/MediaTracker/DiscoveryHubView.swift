@@ -96,7 +96,7 @@ struct DiscoveryHubView: View {
             defer { DataService.shared.stopProcessing(id: uniqueID) }
 
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-            if let existing = try? modelContext.fetch(descriptor).first {
+            if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
                 await MainActor.run {
                     viewModel.navigationPath.append(existing)
                 }

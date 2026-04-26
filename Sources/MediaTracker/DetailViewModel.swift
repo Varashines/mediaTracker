@@ -14,16 +14,17 @@ class DetailViewModel {
         
         // Immediate local cleanup of legacy crew cards (non-blocking)
         Task {
-            guard let context = item.modelContext else { return }
+            guard item.modelContext != nil, !item.isDeleted else { return }
             await MainActor.run {
-                if let tv = item.tvShowDetails {
+                guard !self.item.isDeleted, let context = self.item.modelContext else { return }
+                if let tv = self.item.tvShowDetails {
                     for member in tv.cast {
                         if member.characterName == "Creator" || member.characterName == "Director" {
                             context.delete(member)
                         }
                     }
                 }
-                if let movie = item.movieDetails {
+                if let movie = self.item.movieDetails {
                     for member in movie.cast {
                         if member.characterName == "Creator" || member.characterName == "Director" {
                             context.delete(member)
@@ -127,6 +128,7 @@ class DetailViewModel {
     }
 
     private func prewarmCast() {
+        guard item.modelContext != nil, !item.isDeleted else { return }
         let cast = (item.movieDetails?.cast ?? item.tvShowDetails?.cast) ?? []
         let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {

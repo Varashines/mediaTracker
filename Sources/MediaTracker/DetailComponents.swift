@@ -187,16 +187,7 @@ struct StatusPicker: View {
     
     private var availableStates: [MediaState] {
         guard item.modelContext != nil && !item.isDeleted else { return [] }
-        
-        if item.type == .movie { return MediaState.allCases }
-        
-        let progress = item.storedProgress ?? 0
-        if progress >= 1.0 {
-            return [.completed, .rewatching]
-        } else if progress > 0 {
-            return [.active, .onHold, .dropped, .rewatching, .completed]
-        }
-        return MediaState.allCases
+        return MediaItem.availableStates(for: item.type ?? .movie, progress: item.storedProgress)
     }
 }
 
