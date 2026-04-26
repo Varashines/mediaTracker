@@ -146,6 +146,7 @@ struct DetailView: View {
 
         withAnimation {
             isDeleted = true
+            FeedbackManager.shared.trigger(.removeFromLibrary)
         }
 
         dismiss()

@@ -7,7 +7,7 @@ class AppThemeCoordinator {
     
     var categoryMoodColor: Color = .clear
     private var lastUpdate: Date = .distantPast
-    private let updateInterval: TimeInterval = 0.5 // Debounce mood updates
+    private let updateInterval: TimeInterval = 1.5 // Debounce mood updates significantly to save CPU
 
     func updateMood(for colors: [Color], colorScheme: ColorScheme, force: Bool = false) {
         // Debounce logic: prevent too many background shifts during active scroll

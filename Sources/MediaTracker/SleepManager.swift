@@ -8,27 +8,39 @@ class SleepManager {
     
     var isAsleep: Bool = false
     var purgeDataCache: (() -> Void)?
+    private var lastInteractionDate: Date = Date()
     private var timer: AnyCancellable?
     private let idleThreshold: TimeInterval = 120 // 2 minutes
     
     private init() {
-        resetTimer()
         setupInteractionMonitor()
+        startIdleTimer()
+    }
+    
+    private func startIdleTimer() {
+        timer?.cancel()
+        timer = Timer.publish(every: 10, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.checkIdleState()
+            }
+    }
+
+    private func checkIdleState() {
+        guard !isAsleep else { return }
+        if Date().timeIntervalSince(lastInteractionDate) >= idleThreshold {
+            enterSleepMode()
+        }
     }
     
     func resetTimer() {
+        lastInteractionDate = Date()
         if isAsleep {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 isAsleep = false
             }
+            print("🌅 App woke up from sleep mode.")
         }
-        
-        timer?.cancel()
-        timer = Timer.publish(every: idleThreshold, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.enterSleepMode()
-            }
     }
     
     private func enterSleepMode() {

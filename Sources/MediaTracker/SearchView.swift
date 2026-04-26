@@ -327,6 +327,7 @@ struct SearchView: View {
 
     @MainActor
     private func addMedia(_ result: MediaSearchResult) {
+        FeedbackManager.shared.trigger(.addToLibrary)
         let typePrefix = result.type == .movie ? "movie" : "tv"
         let uniqueID = "\(typePrefix)_\(result.id)"
 
@@ -364,7 +365,7 @@ struct SearchView: View {
                         item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                     }
                     if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
+                        item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
                     }
 
                     let movieDetails = MovieDetails(tmdbID: tmdbID)
@@ -391,7 +392,7 @@ struct SearchView: View {
                         item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                     }
                     if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
+                        item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
                     }
 
                     let tvDetails = TVShowDetails(tmdbID: tmdbID)

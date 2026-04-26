@@ -84,10 +84,10 @@ enum ThemeStyle: String, Codable, CaseIterable, Identifiable {
 enum AppAccent: String, CaseIterable, Identifiable, Codable {
     case cosmic = "Cosmic"
     case solar = "Solar"
-    case neon = "Neon"
+    case ocean = "Ocean"
     case berry = "Berry"
     case minty = "Minty"
-    case honey = "Honey"
+    case emerald = "Emerald"
     case candy = "Candy"
     case lava = "Lava"
 
@@ -97,10 +97,10 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .cosmic: return Color(red: 0.55, green: 0.35, blue: 0.95)
         case .solar: return Color(red: 1.00, green: 0.45, blue: 0.20)
-        case .neon: return Color(red: 0.00, green: 0.85, blue: 0.95)
+        case .ocean: return Color(red: 0.10, green: 0.45, blue: 0.90) // Darker blue
         case .berry: return Color(red: 0.85, green: 0.15, blue: 0.45)
         case .minty: return Color(red: 0.00, green: 0.80, blue: 0.60)
-        case .honey: return Color(red: 1.00, green: 0.75, blue: 0.00)
+        case .emerald: return Color(red: 0.15, green: 0.65, blue: 0.35) // Deep green
         case .candy: return Color(red: 1.00, green: 0.40, blue: 0.70)
         case .lava: return Color(red: 1.00, green: 0.20, blue: 0.30)
         }
@@ -111,10 +111,10 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
             switch self {
             case .cosmic: return Color(red: 0.12, green: 0.08, blue: 0.25)
             case .solar: return Color(red: 0.25, green: 0.12, blue: 0.08)
-            case .neon: return Color(red: 0.08, green: 0.20, blue: 0.24)
+            case .ocean: return Color(red: 0.05, green: 0.15, blue: 0.28)
             case .berry: return Color(red: 0.22, green: 0.08, blue: 0.16)
             case .minty: return Color(red: 0.08, green: 0.22, blue: 0.18)
-            case .honey: return Color(red: 0.24, green: 0.20, blue: 0.08)
+            case .emerald: return Color(red: 0.05, green: 0.22, blue: 0.10)
             case .candy: return Color(red: 0.24, green: 0.10, blue: 0.18)
             case .lava: return Color(red: 0.25, green: 0.08, blue: 0.10)
             }
@@ -122,10 +122,10 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
             switch self {
             case .cosmic: return Color(red: 0.97, green: 0.96, blue: 1.0)
             case .solar: return Color(red: 1.0, green: 0.98, blue: 0.96)
-            case .neon: return Color(red: 0.96, green: 1.0, blue: 1.0)
+            case .ocean: return Color(red: 0.95, green: 0.98, blue: 1.0)
             case .berry: return Color(red: 1.0, green: 0.96, blue: 0.98)
             case .minty: return Color(red: 0.96, green: 1.0, blue: 0.98)
-            case .honey: return Color(red: 1.0, green: 0.99, blue: 0.96)
+            case .emerald: return Color(red: 0.96, green: 1.0, blue: 0.96)
             case .candy: return Color(red: 1.0, green: 0.96, blue: 0.99)
             case .lava: return Color(red: 1.0, green: 0.96, blue: 0.96)
             }
@@ -345,37 +345,57 @@ final class MediaItem {
             self.cachedNetworkLogoPath = tv.networkLogoPath
             
             // Recalculate episode stats - EXCLUDE SEASON 0 (Specials)
-            let allEpisodes = tv.seasons.filter { $0.seasonNumber > 0 }.flatMap { $0.episodes }.sorted { e1, e2 in
-                if e1.seasonNumber != e2.seasonNumber { return e1.seasonNumber < e2.seasonNumber }
-                return e1.episodeNumber < e2.episodeNumber
+            // Phase 3 Optimization: Pre-filter seasons to reduce flattened episode count processing
+            let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
+            let allEpisodes = relevantSeasons.flatMap { $0.episodes }
+            
+            if allEpisodes.isEmpty {
+                self.storedProgress = 0
+                self.storedWatchProgressLabel = nil
+                self.storedNextEpisodeLabel = nil
+                self.cachedNextAiringDate = tv.nextEpisodeDate
+                self.storedSmartBadgeLabel = nil
+                self.remainingEpisodesCount = 0
+                tv.remainingEpisodesCount = 0
+                return
             }
+            
             let watched = allEpisodes.filter { $0.isWatched }
             let remaining = allEpisodes.count - watched.count
             self.remainingEpisodesCount = remaining
             tv.remainingEpisodesCount = remaining
             
             // AUTOMATION: State Transitions based on progress
-            if !allEpisodes.isEmpty {
-                let progress = Double(watched.count) / Double(allEpisodes.count)
-                
-                if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
-                    self.state = .completed
-                    self.lastStateChangeDate = now
-                } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                    self.state = .active
-                    self.lastStateChangeDate = now
-                } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                    self.state = .wishlist
-                    self.lastStateChangeDate = now
-                }
+            let progress = Double(watched.count) / Double(allEpisodes.count)
+            
+            if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
+                self.state = .completed
+                self.lastStateChangeDate = now
+            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+                self.state = .active
+                self.lastStateChangeDate = now
+            } else if progress == 0 && (currentState == .active || currentState == .completed) {
+                self.state = .wishlist
+                self.lastStateChangeDate = now
             }
             
-            // 1. Binge-Drop Detection (All remaining episodes of the current season released on same day)
-            let unwatched = allEpisodes.filter { !$0.isWatched }
+            self.storedProgress = progress
+            self.storedWatchProgressLabel = "\(watched.count)/\(allEpisodes.count) EP"
+
+            // 1. Binge-Drop Detection & Next Episode Label (Requires sorting only on unwatched)
+            let unwatched = allEpisodes.filter { !$0.isWatched }.sorted { e1, e2 in
+                if e1.seasonNumber != e2.seasonNumber { return e1.seasonNumber < e2.seasonNumber }
+                return e1.episodeNumber < e2.episodeNumber
+            }
+            
             if let firstUnwatched = unwatched.first {
+                self.storedNextEpisodeLabel = "S\(firstUnwatched.seasonNumber) E\(firstUnwatched.episodeNumber)"
+                self.cachedNextAiringDate = firstUnwatched.airDateAsDate ?? tv.nextEpisodeDate
+
                 let currentSNum = firstUnwatched.seasonNumber
                 let seasonUnwatched = unwatched.filter { $0.seasonNumber == currentSNum }
                 
+                // Binge-Drop Check
                 if seasonUnwatched.count > 1 {
                     let firstDate = seasonUnwatched[0].airDate
                     let isSameDate = seasonUnwatched.allSatisfy { $0.airDate == firstDate && $0.airDate != nil }
@@ -383,69 +403,40 @@ final class MediaItem {
                     
                     if isSameDate, let date = airDateAsDate {
                         let daysSinceRelease = now.timeIntervalSince(date) / 86400
-                        // Binge drop if released in the past 5 days (and <= now)
-                        if daysSinceRelease >= 0 && daysSinceRelease <= 5 {
-                            self.storedIsBingeDrop = true
-                        } else {
-                            self.storedIsBingeDrop = false
-                        }
+                        self.storedIsBingeDrop = (daysSinceRelease >= 0 && daysSinceRelease <= 5)
                     } else {
                         self.storedIsBingeDrop = false
                     }
                 } else {
                     self.storedIsBingeDrop = false
                 }
-            } else {
-                self.storedIsBingeDrop = false
-            }
-
-            if !allEpisodes.isEmpty {
-                self.storedProgress = Double(watched.count) / Double(allEpisodes.count)
-                self.storedWatchProgressLabel = "\(watched.count)/\(allEpisodes.count) EP"
                 
-                if let next = unwatched.first {
-                    self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
-                    self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-                    
-                    // Strictly require valid air date for availability-based badges
-                    let isAvailable = (next.airDateAsDate != nil) && (next.airDateAsDate! <= now)
+                // Badge Logic
+                let isAvailable = (firstUnwatched.airDateAsDate != nil) && (firstUnwatched.airDateAsDate! <= now)
 
-                    // Priority 1: Binge Drop (High Value Milestone)
-                    if self.storedIsBingeDrop {
-                        self.storedSmartBadgeLabel = "BINGE DROP"
-                        self.storedSmartBadgeIcon = "sparkles.tv"
-                        self.storedSmartBadgeIsSparkle = true
-                    } 
-                    // Priority 2: Finale (End of the road) - Also require air date for certainty
-                    else if isAvailable, let season = next.season, next.episodeNumber == season.episodeCount {
-                        self.storedSmartBadgeLabel = "FINALE"
-                        self.storedSmartBadgeIcon = "flag.checkered"
-                        self.storedSmartBadgeIsSparkle = true
-                    } 
-                    // Priority 3: Binge (For multi-season Liked/Loved/Watchlist with >= 30% progress)
-                    else if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
-                            (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
-                            (self.storedProgress ?? 0) >= 0.3 {
-                        self.storedSmartBadgeLabel = "BINGE"
-                        self.storedSmartBadgeIcon = "sparkles.tv"
-                        self.storedSmartBadgeIsSparkle = false
-                    } else {
-                        self.storedSmartBadgeLabel = nil
-                    }
+                if self.storedIsBingeDrop {
+                    self.storedSmartBadgeLabel = "BINGE DROP"
+                    self.storedSmartBadgeIcon = "sparkles.tv"
+                    self.storedSmartBadgeIsSparkle = true
+                } else if isAvailable, let season = firstUnwatched.season, firstUnwatched.episodeNumber == season.episodeCount {
+                    self.storedSmartBadgeLabel = "FINALE"
+                    self.storedSmartBadgeIcon = "flag.checkered"
+                    self.storedSmartBadgeIsSparkle = true
+                } else if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
+                        (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
+                        progress >= 0.3 {
+                    self.storedSmartBadgeLabel = "BINGE"
+                    self.storedSmartBadgeIcon = "sparkles.tv"
+                    self.storedSmartBadgeIsSparkle = false
                 } else {
-                    // All currently known episodes watched
-                    self.storedNextEpisodeLabel = nil
-                    self.cachedNextAiringDate = tv.nextEpisodeDate
                     self.storedSmartBadgeLabel = nil
                 }
             } else {
-                // No episodes loaded yet OR only Season 0 episodes exist
-                self.storedProgress = 0
-                self.storedWatchProgressLabel = nil
+                // All currently known episodes watched
                 self.storedNextEpisodeLabel = nil
                 self.cachedNextAiringDate = tv.nextEpisodeDate
-                // No BINGE badge for 0 progress
                 self.storedSmartBadgeLabel = nil
+                self.storedIsBingeDrop = false
             }
         }
         

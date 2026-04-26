@@ -265,10 +265,10 @@ struct ContentView: View {
                                 versionHash: item.lastStateChangeDate.hashValue,
                                 recommendationReason: reason,
                                 remainingCount: item.remainingEpisodesCount
-                                )
-                                }
-                                }
-                                }
+                            )
+                        }
+                    }
+                }
             } catch {
                 print("Error filtering items: \(error)")
             }
@@ -340,9 +340,57 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var mainContent: some View {
+        if isSearchActive {
+            SearchView(
+                searchText: $viewModel.searchText,
+                isSearchActive: $isSearchActive,
+                submitTrigger: viewModel.searchSubmitTrigger,
+                initialType: currentMediaType,
+                viewModel: viewModel
+            ) { item in
+                viewModel.selectedCategory = "All"
+                viewModel.searchText = item.title
+                viewModel.navigationPath = NavigationPath()
+                updateDisplayedItems()
+            }
+        } else if viewModel.selectedCategory == "Discover" {
+            DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
+                viewModel.navigationPath.append(filter)
+            }
+        } else if viewModel.selectedCategory == "Insights" {
+            InsightsView()
+        } else {
+            MainLibraryView(
+                items: viewModel.displayedItems,
+                featuredCarouselItems: viewModel.featuredUpcomingItems,
+                recentlyAdded: viewModel.recentlyAddedItems,
+                homeContinueWatching: viewModel.homeContinueWatchingItems,
+                groupedItems: viewModel.groupedItems,
+                recommendations: viewModel.recommendations,
+                selectedCategory: viewModel.selectedCategory,
+                showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
+                searchText: viewModel.searchText,
+                selectedNetwork: viewModel.selectedNetwork,
+                namespace: posterNamespace,
+                isFastScrolling: $viewModel.isFastScrolling,
+                onSelectHero: { _ in },
+                onNetworkSelected: { network in
+                    viewModel.selectedNetwork = network
+                    updateDisplayedItems()
+                },
+                onLoadMore: {
+                    loadMoreItems()
+                },
+                viewModel: viewModel
+            )
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $viewModel.selectedCategory)
+            SidebarNavigation(selection: $viewModel.selectedCategory)
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden) // Allow appBackground to show through sidebar
                 .navigationTitle("Library")
@@ -388,174 +436,28 @@ struct ContentView: View {
                     }
                 }
                 .background {
-                    Button("") {
-                        isSearchActive = true
+                    Group {
+                        Button("") { viewModel.selectedCategory = "Home" }.keyboardShortcut("1", modifiers: .command)
+                        Button("") { viewModel.selectedCategory = "Upcoming" }.keyboardShortcut("2", modifiers: .command)
+                        Button("") { viewModel.selectedCategory = "InProgress" }.keyboardShortcut("3", modifiers: .command)
+                        Button("") { viewModel.selectedCategory = "Watchlist" }.keyboardShortcut("4", modifiers: .command)
+                        Button("") { viewModel.selectedCategory = "All" }.keyboardShortcut("5", modifiers: .command)
+                        
+                        Button("") { isSearchActive = true }
+                            .keyboardShortcut("f", modifiers: .command)
                     }
-                    .keyboardShortcut("f", modifiers: .command)
                     .opacity(0)
                 }
             }
             .sleepModeSupport()
         }
         .appBackground(network: viewModel.selectedNetwork, category: viewModel.selectedCategory) // Apply to the whole NavigationSplitView
-        .onReceive(NotificationCenter.default.publisher(for: .tasteWeightsChanged)) { _ in
-            updateDisplayedItems(delay: 0)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-            updateDisplayedItems(delay: 0)
-        }
-        .onAppear {
-            NotificationManager.shared.requestPermission()
-            
-            // Priority 1: UI Hydration (Fetch 'Upcoming' immediately)
-            updateDisplayedItems(delay: 0)
-
-            // Priority 2: Delayed Maintenance (Wait 15 seconds for system to settle)
-            let container = modelContext.container
-            Task.detached(priority: .background) {
-                // Wait for the user to finish looking at the initial launch screen
-                try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
-                
-                // 1. Initial Discovery Sync
-                let syncService = DiscoverySyncService(modelContainer: container)
-                await syncService.syncLibrary(force: false)
-                
-                // 2. Migration: Ensure all smart badges and binge flags are computed
-                let context = ModelContext(container)
-                let descriptor = FetchDescriptor<MediaItem>()
-                if let items = try? context.fetch(descriptor) {
-                    var itemsChanged = false
-                    for item in items {
-                        // FORCE SYNC: Ensure new Binge/BingeDrop logic runs for every item
-                        item.syncCachedProperties()
-                        itemsChanged = true
-                        
-                        if item.stateValue == "Wishlist" && item.state != .wishlist {
-                            item.stateValue = item.state?.rawValue ?? "Wishlist"
-                        }
-                        if item.typeValue == "Movie" && item.type != .movie {
-                            item.typeValue = item.type?.rawValue ?? "Movie"
-                        }
-                        
-                        // Migration: Flatten network logo path
-                        if item.type == .tvShow && item.cachedNetworkLogoPath == nil,
-                           let logo = item.tvShowDetails?.networkLogoPath {
-                            item.cachedNetworkLogoPath = logo
-                        }
-                    }
-                    if itemsChanged {
-                        try? context.save()
-                        await MainActor.run { updateDisplayedItems() }
-                    }
-                }
-                print("🏁 Delayed Background Maintenance Complete.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var mainContent: some View {
-        let activeCat = viewModel.selectedCategory
-        let isDiscover = activeCat == "Discover"
-        let isInsights = activeCat == "Insights"
-        let isHome = activeCat == "Home"
-        let isLibrary = !isDiscover && !isInsights && !isHome
-        
-        ZStack(alignment: .top) {
-            // 1. Home Stage
-            Group {
-                if isHome {
-                    MediaGridView(
-                        items: viewModel.displayedItems,
-                        featuredCarouselItems: [],
-                        recentlyAdded: viewModel.recentlyAddedItems,
-                        homeContinueWatching: viewModel.homeContinueWatchingItems,
-                        groupedItems: viewModel.groupedItems,
-                        recommendations: viewModel.recommendations,
-                        selectedCategory: "Home",
-                        showingUpcomingOnly: false,
-                        searchText: viewModel.searchText,
-                        selectedNetwork: viewModel.selectedNetwork,
-                        namespace: posterNamespace,
-                        isFastScrolling: $viewModel.isFastScrolling,
-                        onSelectHero: { metadata in navigate(to: metadata) },
-                        onNetworkSelected: { onNetworkSelected($0) },
-                        onLoadMore: { loadMoreItems() },
-                        viewModel: viewModel
-                    )
-                }
-            }
-            .id("HomeStage")
-            .modifier(PerspectiveDepthModifier(isActive: isHome))
-            
-            // 2. Library Stage (All / Movies / TV / Categories)
-            Group {
-                if isLibrary {
-                    MediaGridView(
-                        items: viewModel.displayedItems,
-                        featuredCarouselItems: activeCat == "Upcoming" ? viewModel.featuredUpcomingItems : [],
-                        recentlyAdded: viewModel.recentlyAddedItems,
-                        homeContinueWatching: [],
-                        groupedItems: viewModel.groupedItems,
-                        recommendations: [],
-                        selectedCategory: activeCat,
-                        showingUpcomingOnly: activeCat == "Upcoming",
-                        searchText: viewModel.searchText,
-                        selectedNetwork: viewModel.selectedNetwork,
-                        namespace: posterNamespace,
-                        isFastScrolling: $viewModel.isFastScrolling,
-                        onSelectHero: { metadata in navigate(to: metadata) },
-                        onNetworkSelected: { onNetworkSelected($0) },
-                        onLoadMore: { loadMoreItems() },
-                        viewModel: viewModel
-                    )
-                }
-            }
-            .id("LibraryStage")
-            .modifier(PerspectiveDepthModifier(isActive: isLibrary))
-            
-            // 3. Discovery Stage
-            DiscoveryHubView(
-                namespace: posterNamespace,
-                viewModel: viewModel,
-                onFilterSelected: { filter in
-                    viewModel.navigationPath.append(filter)
-                }
-            )
-            .id("DiscoverStage")
-            .modifier(PerspectiveDepthModifier(isActive: isDiscover))
-
-            // 4. Insights Stage
-            InsightsView()
-                .id("InsightsStage")
-                .modifier(PerspectiveDepthModifier(isActive: isInsights))
-
-            // 5. Dynamic Search Overlay
-            if isSearchActive {
-                SearchView(
-                    searchText: $viewModel.searchText,
-                    isSearchActive: $isSearchActive,
-                    submitTrigger: viewModel.searchSubmitTrigger,
-                    initialType: currentMediaType,
-                    viewModel: viewModel
-                ) { item in
-                    viewModel.navigationPath.append(item)
-                }
-                .zIndex(100)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 1.1)).combined(with: .offset(y: 20)),
-                    removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
-            }
-        }
-        .background {
-            // Fluid Background Morphing
-            themeCoordinator.categoryMoodColor
-                .animation(.smooth(duration: 0.8), value: viewModel.selectedCategory)
-                .ignoresSafeArea()
-        }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
+        .task {
+            // Trigger initial data load
+            updateDisplayedItems()
+        }
     }
 
     private func navigate(to metadata: MediaThumbnailMetadata) {
@@ -649,488 +551,6 @@ struct ContentView: View {
     }
 }
 
-// Phase 2 Optimization: Sidebar Tokenization
-@MainActor
-struct SidebarView: View, Equatable {
-    @Binding var selection: String?
-
-    nonisolated static func == (lhs: SidebarView, rhs: SidebarView) -> Bool {
-        // Compare projected values which are Sendable
-        return lhs._selection.wrappedValue == rhs._selection.wrappedValue
-    }
-
-    var body: some View {
-        List(selection: $selection) {
-            Group {
-                Label("Home", systemImage: "house.fill")
-                    .tag("Home")
-
-                Label("Upcoming", systemImage: "calendar")
-                    .tag("Upcoming")
-
-                Label("In Progress", systemImage: "play.circle")
-                    .tag("InProgress")
-
-                Label("Watchlist", systemImage: "list.bullet.rectangle")
-                    .tag("Watchlist")
-
-                Label("Library", systemImage: "tray.full")
-                    .tag("All")
-            }            .padding(.vertical, 4)
-
-            Section("Smart Folders") {
-                Label("Loved", systemImage: "heart.fill")
-                    .tag("Loved")
-                Label("Completed", systemImage: "checkmark.circle.fill")
-                    .tag("Completed")
-                Label("Archive", systemImage: "archivebox")
-                    .tag("Archive")
-                Label("Disliked", systemImage: "hand.thumbsdown.fill")
-                    .tag("Disliked")
-                Label("Binge", systemImage: "rectangle.stack.fill")
-                    .tag("Binge")
-            }            .padding(.vertical, 4)
-            
-            Section("Explore") {
-                Label("Discovery Hub", systemImage: "sparkles.tv")
-                    .tag("Discover")
-                
-                Label("Insights", systemImage: "chart.bar.xaxis")
-                    .tag("Insights")
-            }
-            .padding(.vertical, 4)
-            
-            Section("Categories") {
-                ForEach(MediaType.allCases, id: \.self) { type in
-                    let name = type.pluralName
-                    let img = icon(for: type)
-                    Label(name, systemImage: img)
-                        .tag(type.rawValue)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func icon(for type: MediaType) -> String {
-        switch type {
-        case .movie: return "film"
-        case .tvShow: return "tv"
-        }
-    }
-}
-
-struct MediaGridView: View {
-    let items: [MediaThumbnailMetadata]
-    let featuredCarouselItems: [MediaThumbnailMetadata]
-    let recentlyAdded: [MediaThumbnailMetadata]
-    let homeContinueWatching: [MediaThumbnailMetadata]
-    let groupedItems: [(String, [MediaThumbnailMetadata])]
-    let recommendations: [MediaThumbnailMetadata]
-    let selectedCategory: String?
-    let showingUpcomingOnly: Bool
-    let searchText: String
-    let selectedNetwork: String?
-    let namespace: Namespace.ID
-    @Binding var isFastScrolling: Bool
-    let onSelectHero: (MediaThumbnailMetadata) -> Void
-    let onNetworkSelected: (String) -> Void
-    let onLoadMore: () -> Void
-    var viewModel: MediaViewModel
-
-    @Environment(\.modelContext) private var modelContext
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @State private var visibleCount = 40 // Initial snappiness
-    @State private var scrollTimer: Timer?
-    
-    @State private var upcomingScrollProgress: Double = 0
-    @State private var upcomingScrollSpace = UUID().uuidString
-    @State private var upcomingContentWidth: CGFloat = 0
-    @State private var upcomingContainerWidth: CGFloat = 0
-
-    @State private var continueWatchingScrollProgress: Double = 0
-    @State private var continueWatchingScrollSpace = UUID().uuidString
-    @State private var continueWatchingContentWidth: CGFloat = 0
-    @State private var continueWatchingContainerWidth: CGFloat = 0
-
-    @State private var forYouScrollProgress: Double = 0
-    @State private var forYouScrollSpace = UUID().uuidString
-    @State private var forYouContentWidth: CGFloat = 0
-    @State private var forYouContainerWidth: CGFloat = 0
-
-    var isCategoryPage: Bool {
-        guard let cat = selectedCategory else { return false }
-        return MediaType(rawValue: cat) != nil
-    }
-
-    var isMainSection: Bool {
-        ["Home", "InProgress", "Watchlist", "All", "Archive", "Loved", "Completed", "Disliked", "Binge", "Upcoming"].contains(selectedCategory)
-    }
-
-    var body: some View {
-        GeometryReader { mainGeo in
-            let availableWidth = mainGeo.size.width
-            let itemWidth: CGFloat = 160
-            let spacing: CGFloat = 20
-            let horizontalPadding: CGFloat = 30
-            let usableWidth = availableWidth - (horizontalPadding * 2)
-            let columnsCount = max(2, Int(usableWidth / (itemWidth + spacing)))
-            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnsCount)
-
-            ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                    if selectedCategory == "Home" && searchText.isEmpty && selectedNetwork == nil {
-                        // Continue Watching (Top Carousel)
-                        VStack(alignment: .leading, spacing: 10) {
-                            SectionHeader(
-                                title: "Continue Watching", 
-                                icon: "play.fill", 
-                                iconColor: .blue,
-                                scrollProgress: homeContinueWatching.count > 1 ? continueWatchingScrollProgress : nil
-                            )
-                            
-                            if !homeContinueWatching.isEmpty {
-                                ScrollViewReader { proxy in
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 20) {
-                                            Spacer(minLength: 10)
-                                            ForEach(homeContinueWatching) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
-                                                        MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                }
-                                            }
-                                            Spacer(minLength: 10)
-                                        }
-                                        .padding(.vertical, 15)
-                                        .background(
-                                            GeometryReader { geo in
-                                                let minX = geo.frame(in: .named(continueWatchingScrollSpace)).minX
-                                                Color.clear
-                                                    .preference(key: ScrollOffsetKey.self, value: [continueWatchingScrollSpace: minX])
-                                                    .onAppear { continueWatchingContentWidth = geo.size.width }
-                                                    .onChange(of: geo.size.width) { _, newValue in continueWatchingContentWidth = newValue }
-                                            }
-                                        )
-                                    }
-                                    .coordinateSpace(name: continueWatchingScrollSpace)
-                                    .background(
-                                        GeometryReader { geo in
-                                            Color.clear
-                                                .onAppear { continueWatchingContainerWidth = geo.size.width }
-                                                .onChange(of: geo.size.width) { _, newValue in continueWatchingContainerWidth = newValue }
-                                        }
-                                    )
-                                    .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                                        guard let minX = dict[continueWatchingScrollSpace] else { return }
-                                        let maxScroll = max(1, continueWatchingContentWidth - continueWatchingContainerWidth)
-                                        let currentScroll = max(0, -minX)
-                                        withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                                            continueWatchingScrollProgress = min(1.0, currentScroll / maxScroll)
-                                        }
-                                    }
-                                    .scrollClipDisabled()
-                                }
-                            } else {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 20) {
-                                        ForEach(0..<6, id: \.self) { _ in
-                                            MediaThumbnailPlaceholder(mode: .grid)
-                                        }
-                                    }
-                                    .padding(.horizontal, 30)
-                                    .padding(.vertical, 15)
-                                }
-                                .scrollClipDisabled()
-                            }
-                        }
-                        .padding(.bottom, 20)
-
-                        // Personalized For You (Middle Carousel)
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(
-                                title: "For You", 
-                                icon: "sparkles", 
-                                iconColor: .yellow,
-                                scrollProgress: recommendations.count > 1 ? forYouScrollProgress : nil
-                            )
-                            
-                            if !recommendations.isEmpty {
-                                ScrollViewReader { proxy in
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 24) {
-                                            Spacer(minLength: 16)
-                                            ForEach(recommendations) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
-                                                        HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                }
-                                            }
-                                            Spacer(minLength: 16)
-                                        }
-                                        .padding(.vertical, 20)
-                                        .background(
-                                            GeometryReader { geo in
-                                                let minX = geo.frame(in: .named(forYouScrollSpace)).minX
-                                                Color.clear
-                                                    .preference(key: ScrollOffsetKey.self, value: [forYouScrollSpace: minX])
-                                                    .onAppear { forYouContentWidth = geo.size.width }
-                                                    .onChange(of: geo.size.width) { _, newValue in forYouContentWidth = newValue }
-                                            }
-                                        )
-                                    }
-                                    .coordinateSpace(name: forYouScrollSpace)
-                                    .background(
-                                        GeometryReader { geo in
-                                            Color.clear
-                                                .onAppear { forYouContainerWidth = geo.size.width }
-                                                .onChange(of: geo.size.width) { _, newValue in forYouContainerWidth = newValue }
-                                        }
-                                    )
-                                    .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                                        guard let minX = dict[forYouScrollSpace] else { return }
-                                        let maxScroll = max(1, forYouContentWidth - forYouContainerWidth)
-                                        let currentScroll = max(0, -minX)
-                                        withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                                            forYouScrollProgress = min(1.0, currentScroll / maxScroll)
-                                        }
-                                    }
-                                    .scrollClipDisabled()
-                                }
-                            } else {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 24) {
-                                        ForEach(0..<3, id: \.self) { _ in
-                                            HomeHeroCardPlaceholder()
-                                        }
-                                    }
-                                    .padding(.horizontal, 30)
-                                    .padding(.vertical, 20)
-                                }
-                                .scrollClipDisabled()
-                            }
-                        }
-                        .padding(.bottom, 20)
-                    }
-
-                // 2. Eager Featured Carousel (Upcoming View)
-                if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil && !featuredCarouselItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 15) {
-                        SectionHeader(
-                            title: "Featured",
-                            icon: nil,
-                            iconColor: .primary,
-                            scrollProgress: featuredCarouselItems.count > 1 ? upcomingScrollProgress : nil
-                        )
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 20) {
-                                ForEach(featuredCarouselItems) { metadata in
-                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                        NavigationLink(value: item) {
-                                            MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                .id(metadata.versionHash)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 30)
-                            .padding(.vertical, 20)
-                            .background(
-                                GeometryReader { geo in
-                                    let minX = geo.frame(in: .named(upcomingScrollSpace)).minX
-                                    Color.clear
-                                        .preference(key: ScrollOffsetKey.self, value: [upcomingScrollSpace: minX])
-                                        .onAppear { upcomingContentWidth = geo.size.width }
-                                        .onChange(of: geo.size.width) { _, newValue in upcomingContentWidth = newValue }
-                                }
-                            )
-                        }
-                        .coordinateSpace(name: upcomingScrollSpace)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear { upcomingContainerWidth = geo.size.width }
-                                    .onChange(of: geo.size.width) { _, newValue in upcomingContainerWidth = newValue }
-                            }
-                        )
-                        .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                            guard let minX = dict[upcomingScrollSpace] else { return }
-                            let maxScroll = max(1, upcomingContentWidth - upcomingContainerWidth)
-                            let currentScroll = max(0, -minX)
-                            withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                                upcomingScrollProgress = min(1.0, currentScroll / maxScroll)
-                            }
-                        }
-                    }
-                    .compositingGroup()
-                }
-                
-                VStack(alignment: .leading, spacing: 15) {
-                    // Header Logic
-                    if let network = selectedNetwork {
-                        SectionHeader(title: network, icon: "tv", iconColor: appAccent.color)
-                            .overlay(alignment: .trailing) {
-                                Button { withAnimation { onNetworkSelected("") } } label: {
-                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 40)
-                            }
-                    } else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
-                        SectionHeader(title: selectedCategory ?? "Library", icon: "folder", iconColor: .secondary)
-                    } else if selectedCategory == "Upcoming" {
-                        SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
-                            .padding(.bottom, 10)
-                    }
-                    
-                    if items.isEmpty && groupedItems.isEmpty {
-                        if viewModel.isInitialLoading {
-                            // Section-Aware Grid Skeletons
-                            VStack(alignment: .leading, spacing: 25) {
-                                if selectedCategory == "Home" {
-                                    SectionHeader(title: "Coming Soon", icon: "calendar", iconColor: .secondary)
-                                } else {
-                                    SectionHeader(title: "Loading Library...", icon: "hourglass", iconColor: .secondary)
-                                }
-                                
-                                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                                    ForEach(0..<12, id: \.self) { _ in
-                                        MediaThumbnailPlaceholder(mode: .grid)
-                                    }
-                                }
-                                .padding(.horizontal, 30)
-                            }
-                            .padding(.top, 10)
-                        } else {
-                            LibraryEmptyStateView(category: selectedCategory) {
-                                withAnimation {
-                                    viewModel.selectedCategory = "Discover"
-                                }
-                            }
-                        }
-                    } else {
-
-                        // 2. Eager Recently Added Row (Always Ready)
-                        if selectedCategory == "All" && searchText.isEmpty && selectedNetwork == nil {
-                            VStack(alignment: .leading, spacing: 15) {
-                                SectionHeader(title: "Recently Added", icon: "clock.badge.checkmark", iconColor: .orange)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 20) {
-                                        ForEach(recentlyAdded) { metadata in
-                                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                NavigationLink(value: item) {
-                                                    MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling).id(metadata.versionHash)
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal, 30)
-                                    .padding(.vertical, 15)
-                                }
-                                .scrollClipDisabled()
-                            }
-                            .compositingGroup()
-                            Divider().padding(.horizontal, 30).padding(.bottom, 20)
-                        }
-
-                        // 3. Main Collection with Chunking & Pagination
-                        if viewModel.currentGroupBy == .none && selectedCategory != "Archive" && selectedCategory != "Home" && selectedCategory != "Binge" {
-                            LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                                let baseItems = showingUpcomingOnly ? Array(items.dropFirst(featuredCarouselItems.count)) : items
-                                
-                                ForEach(baseItems.indices, id: \.self) { idx in
-                                    let metadata = baseItems[idx]
-                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                        NavigationLink(value: item) {
-                                            MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
-                                                .id(metadata.versionHash)
-                                                .entranceStagger(index: idx)
-                                                .onAppear {
-                                                    // Phase 4: Infinite Scroll Trigger
-                                                    let lastID = items.last?.id
-                                                    if metadata.id == lastID {
-                                                        onLoadMore()
-                                                    }
-                                                }
-                                        }
-                                        .buttonStyle(.plain)
-                                        .draggable(item.id)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 30)
-                            .padding(.top, 20)
-                            .padding(.bottom, 40)
-                        } else {
-                            // Grouped View
-                            VStack(alignment: .leading, spacing: 60) {
-                                ForEach(groupedItems, id: \.0) { (key, groupMetadatas) in
-                                    VStack(alignment: .leading, spacing: 25) {
-                                        SectionHeader(
-                                            title: key,
-                                            icon: (key == "Coming Soon" && selectedCategory == "Home") ? "calendar" : nil,
-                                            iconColor: .secondary
-                                        )
-                                        
-                                        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                                            ForEach(groupMetadatas) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
-                                                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                            .id(metadata.versionHash)
-                                                            .entranceStagger(index: 0) // Simplified stagger for grouped
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                }
-                                            }
-                                        }
-                                        .padding(.horizontal, 30)
-                                        .padding(.top, 10)
-                                    }
-                                }
-                            }
-                            .padding(.bottom, 40)
-                        }
-                    }
-                }
-            }
-            .padding(.vertical, 20)
-            .background {
-                GeometryReader { geo in
-                    let currentY = geo.frame(in: .global).minY
-                    Color.clear
-                        .onChange(of: currentY) { oldValue, newValue in
-                            let velocity = abs(newValue - oldValue)
-                            if velocity > 30 && !isFastScrolling {
-                                isFastScrolling = true
-                            }
-                            
-                            scrollTimer?.invalidate()
-                            scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                                Task { @MainActor in
-                                    withAnimation(.smooth) {
-                                        isFastScrolling = false
-                                    }
-                                }
-                            }
-                        }
-                }
-            }
-        }
-        .scrollClipDisabled()
-        .onAppear { visibleCount = 40 }
-        .onChange(of: items.count) { visibleCount = 40 }
-        }
-    }
-}
-
 struct FilteredLibraryGridView: View {
     let filter: DiscoveryFilter
     let namespace: Namespace.ID
@@ -1155,7 +575,7 @@ struct FilteredLibraryGridView: View {
                             if !item.isDeleted {
                                 NavigationLink(value: item) {
                                     MediaThumbnailView(item: item, mode: .grid, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
-                                }                            .buttonStyle(.plain)
+                                }                            .buttonStyle(.interactive)
                             }
                         }
                     }

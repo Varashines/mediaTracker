@@ -102,7 +102,6 @@ private struct SeasonTab: View {
     let themeColor: Color
     let action: () -> Void
 
-    @State private var isAnimatingGlow = false
     @Environment(\.colorScheme) var colorScheme
 
     private var progress: Double {
@@ -160,9 +159,7 @@ private struct SeasonTab: View {
                 color: isSelected ? themeColor.opacity(0.2) : .black.opacity(0.03),
                 radius: isSelected ? 4 : 2, x: 0, y: 2)
         }
-        .buttonStyle(.plain)
-        .onAppear { toggleAnimation() }
-        .onChange(of: progress) { toggleAnimation() }
+        .buttonStyle(.interactive(feedback: nil))
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: progress)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
     }
@@ -181,19 +178,6 @@ private struct SeasonTab: View {
                 .stroke(
                     Color.semanticGreen(for: colorScheme),
                     lineWidth: TVTrackingConstants.strokeWidth + 0.5) // Slightly thicker to be visible
-        }
-    }
-
-    private func toggleAnimation() {
-        if isOngoing {
-            withAnimation(
-                .easeInOut(duration: TVTrackingConstants.animationDuration).repeatForever(
-                    autoreverses: true)
-            ) {
-                isAnimatingGlow = true
-            }
-        } else {
-            isAnimatingGlow = false
         }
     }
 }
@@ -263,7 +247,7 @@ private struct SeasonSection: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(feedback: nil))
                 .disabled(season.episodes.isEmpty)
             }
 
@@ -311,6 +295,7 @@ private struct EpisodeCube: View {
         Button {
             withAnimation(.spring(duration: 0.2)) {
                 episode.isWatched.toggle()
+                FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
                 episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
                 onToggle()
             }
@@ -372,7 +357,7 @@ private struct EpisodeCube: View {
                     )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.interactive(feedback: nil))
     }
 
     private var badgeForegroundColor: Color {

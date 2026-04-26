@@ -73,7 +73,7 @@ actor BackgroundDataService {
                     item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                 }
                 if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
+                    item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
                 }
                 
                 let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
@@ -136,7 +136,7 @@ actor BackgroundDataService {
                     item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                 }
                 if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w780\(backdrop)"
+                    item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
                 }
                 
                 // Parallel Season Fetching

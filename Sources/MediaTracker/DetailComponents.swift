@@ -52,7 +52,7 @@ struct PosterView: View {
     var namespace: Namespace.ID? = nil
 
     var body: some View {
-        if let urlString = item.posterURL, let url = URL(string: urlString) {
+        if let urlString = item.posterURL, let url = URL(string: urlString.replacingOccurrences(of: "w500", with: "original").replacingOccurrences(of: "w780", with: "original")) {
             ZStack {
                 // 1. Aurora Glow Background
                 RoundedRectangle(cornerRadius: 16)
@@ -335,7 +335,7 @@ struct CastMemberCardNew: View {
             .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)  // Ambient accent shadow
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.interactive)
     }
 }
 

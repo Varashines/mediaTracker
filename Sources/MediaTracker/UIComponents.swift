@@ -260,502 +260,6 @@ struct SmartBadgeView: View {
 
 }
 
-// MARK: - Unified Media Thumbnail View
-struct MediaThumbnailView: View {
-    enum DisplayMode {
-        case hero, grid, search
-    }
-
-    // 1. Immutable Captured Snapshot
-    private let capturedID: PersistentIdentifier?
-    private let capturedTitle: String
-    private let capturedPosterURL: String?
-    private let capturedType: MediaType
-    private let capturedState: MediaState
-    private let capturedProgress: Double?
-    private let capturedReleaseDate: Date?
-    private let capturedThemeColorHex: String?
-    private let capturedNextEpisodeLabel: String?
-    private let capturedWatchProgress: String?
-    private let capturedIsUpcoming: Bool
-    private let capturedGridBadgeText: String?
-    
-    // 2. Reference Layer (Used only if object is valid)
-    let item: MediaItem?
-    let metadata: MediaThumbnailMetadata?
-    let result: MediaSearchResult?
-    
-    // 3. Configuration
-    let mode: DisplayMode
-    var showTypeBadge: Bool = true
-    var isUpcomingSection: Bool = false
-    var isLocalInSearch: Bool = false
-    var action: (() -> Void)? = nil
-    var namespace: Namespace.ID? = nil
-    var staggerIndex: Int? = nil
-    var isFastScrolling: Bool = false
-
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @State private var isHovered = false
-    @State private var isButtonHovered = false
-    @State private var isAppeared = false
-    @State private var isRemoved = false
-
-    init(
-        item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, action: (() -> Void)? = nil
-    ) {
-        self.item = item
-        self.metadata = nil
-        self.result = nil
-        self.mode = mode
-        self.showTypeBadge = showTypeBadge
-        self.isUpcomingSection = isUpcomingSection
-        self.namespace = namespace
-        self.staggerIndex = staggerIndex
-        self.isFastScrolling = isFastScrolling
-        self.action = action
-        
-        // IMMEDIATE CAPTURE - This prevents crashes if item is deleted later
-        self.capturedID = item.persistentModelID
-        self.capturedTitle = item.title
-        self.capturedPosterURL = item.posterURL
-        self.capturedType = item.type ?? .movie
-        self.capturedState = item.state ?? .wishlist
-        self.capturedProgress = item.storedProgress
-        self.capturedReleaseDate = item.releaseDate
-        self.capturedThemeColorHex = item.themeColorHex
-        self.capturedNextEpisodeLabel = item.storedNextEpisodeLabel
-        self.capturedWatchProgress = item.watchProgressLabel
-        self.capturedIsUpcoming = item.calculateIsUpcoming
-        self.capturedGridBadgeText = item.gridBadgeText
-    }
-    
-    init(
-        metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, action: (() -> Void)? = nil
-    ) {
-        self.item = nil
-        self.metadata = metadata
-        self.result = nil
-        self.mode = mode
-        self.showTypeBadge = showTypeBadge
-        self.isUpcomingSection = isUpcomingSection
-        self.namespace = namespace
-        self.staggerIndex = staggerIndex
-        self.isFastScrolling = isFastScrolling
-        self.action = action
-        
-        self.capturedID = metadata.id
-        self.capturedTitle = metadata.title
-        self.capturedPosterURL = metadata.posterURL
-        self.capturedType = metadata.type ?? .movie
-        self.capturedState = metadata.state ?? .wishlist
-        self.capturedProgress = metadata.progress
-        self.capturedReleaseDate = metadata.releaseDate
-        self.capturedThemeColorHex = metadata.themeColorHex
-        self.capturedNextEpisodeLabel = metadata.nextEpisodeToWatchLabel
-        self.capturedWatchProgress = metadata.watchProgress
-        self.capturedIsUpcoming = metadata.isUpcoming
-        self.capturedGridBadgeText = metadata.badgeText
-    }
-
-    init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
-        self.item = nil
-        self.metadata = nil
-        self.result = result
-        self.mode = .search
-        self.isLocalInSearch = isLocal
-        self.action = action
-        self.namespace = nil
-        self.staggerIndex = nil
-        
-        self.capturedID = nil
-        self.capturedTitle = result.title
-        self.capturedPosterURL = result.posterURL
-        self.capturedType = result.type
-        self.capturedState = .wishlist
-        self.capturedProgress = 0
-        self.capturedReleaseDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
-        self.capturedThemeColorHex = nil
-        self.capturedNextEpisodeLabel = nil
-        self.capturedWatchProgress = nil
-        self.capturedIsUpcoming = false
-        self.capturedGridBadgeText = nil
-    }
-
-    private var width: CGFloat {
-        switch mode {
-        case .hero: return 200
-        default: return 160
-        }
-    }
-
-    private var height: CGFloat {
-        switch mode {
-        case .hero: return 300
-        default: return 240
-        }
-    }
-
-    private var title: String { capturedTitle }
-    private var posterURL: String? { capturedPosterURL }
-    private var type: MediaType { capturedType }
-    private var safeState: MediaState { capturedState }
-    private var safeProgress: Double? { capturedProgress }
-
-    private var yearLabel: String? {
-        if let date = capturedReleaseDate {
-            return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
-        }
-        return nil
-    }
-
-    private var isAdded: Bool {
-        return capturedID != nil || isLocalInSearch
-    }
-
-    var body: some View {
-        Group {
-            if !isRemoved {
-                if let action = action {
-                    Button(action: action) {
-                        mainContent
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    mainContent
-                }
-            }
-        }
-        .contextMenu {
-            if !isRemoved, let id = capturedID {
-                libraryContextMenu(for: id, type: capturedType, state: capturedState, progress: capturedProgress)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var mainContent: some View {
-        ZStack(alignment: .center) {
-            // 1. Poster Layer
-            posterLayer
-                .blur(radius: isHovered ? 15 : 0)
-            
-            if isHovered {
-                Rectangle()
-                    .fill(.ultraThinMaterial.opacity(0.6))
-            }
-            
-            // Smart Badge (Top Leading)
-            VStack {
-                HStack {
-                    if !isRemoved {
-                        if let item = item, item.modelContext != nil, !item.isDeleted {
-                            SmartBadgeView(item: item)
-                        } else if let metadata = metadata {
-                            SmartBadgeView(metadata: metadata)
-                        }
-                    }
-                    Spacer()
-                }
-                Spacer()
-            }
-            .padding(8)
-            .opacity(isHovered ? 0 : 1) // Hide when hovered to reveal shadow gallery
-            
-            // 2. SHADOW GALLERY: The Reveal (Centered)
-            VStack(spacing: 8) {
-                Text(title.uppercased())
-                    .font(.system(size: mode == .hero ? 18 : 13, weight: .black, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.8), radius: 4)
-                
-                HStack(spacing: 6) {
-                    if let year = yearLabel {
-                        Text(year)
-                    }
-                    
-                    // Show stats/progress in the hover stack (But NOT if completed)
-                    if capturedState != .completed {
-                        let currentInfo = capturedNextEpisodeLabel ?? capturedWatchProgress
-                        if let info = currentInfo {
-                            Text("•")
-                            Text(info)
-                        }
-                    }
-                }
-                .font(.system(size: mode == .hero ? 12 : 10, weight: .bold, design: .rounded))
-                .kerning(1.0)
-                .foregroundStyle(.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.6), radius: 2)
-                
-                // RESTORED DATE ROW
-                if capturedIsUpcoming, let date = capturedGridBadgeText {
-                    Text(date.uppercased())
-                        .font(.system(size: 8, weight: .black, design: .rounded))
-                        .kerning(1.5)
-                        .padding(.top, 4)
-                        .foregroundStyle(date.contains("STREAMING") ? appAccent.color : .white)
-                        .shadow(color: .black.opacity(0.4), radius: 2)
-                }
-            }
-            .padding(.horizontal, 12)
-            .opacity(isHovered ? 1 : 0)
-            .scaleEffect(isHovered ? 1.0 : 0.9)
-            
-            // 3. Search Mode (Modal status remains visible)
-            if mode == .search {
-                searchOverlay
-            }
-        }
-        .frame(width: width, height: height)
-        .background {
-            if let ns = namespace {
-                let itemIDString: String = {
-                    if let id = capturedID { return "\(id)" }
-                    return "\(result?.id.hashValue ?? 0)"
-                }()
-                
-                if !itemIDString.isEmpty {
-                    Color.clear.matchedGeometryEffect(id: "poster_bg_\(itemIDString)", in: ns)
-                }
-            }
-        }
-        .cornerRadius(mode == .hero ? 16 : 12)
-        .opacity(isAppeared ? 1 : 0)
-        .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : 0.9))
-        .offset(y: isAppeared ? 0 : 10)
-        .onAppear {
-            let delay = Double(staggerIndex ?? 0 % 20) * 0.04
-            withAnimation(.smooth(duration: 0.5).delay(delay)) {
-                isAppeared = true
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isHovered)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
-    }
-
-    @ViewBuilder
-    private var posterLayer: some View {
-        let content = Group {
-            if let urlString = posterURL, let url = URL(string: urlString) {
-                let baseColor = capturedThemeColorHex.flatMap { Color(hex: $0) }
-                
-                CachedImage(url: url, targetSize: CGSize(width: width * 3, height: height * 3), themeColor: baseColor, isFastScrolling: isFastScrolling) {
-                    _ in
-                } placeholder: {
-                    Rectangle().fill(Color.secondary.opacity(0.1))
-                        .shimmer()
-                        .overlay { ProgressView().controlSize(.small) }
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: width, height: height)
-                .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .overlay {
-                        Image(systemName: type == .movie ? "film" : "tv")
-                            .font(.system(size: mode == .hero ? 40 : 30))
-                            .foregroundStyle(.secondary.opacity(0.5))
-                    }
-                    .frame(width: width, height: height)
-            }
-        }
-
-        if let ns = namespace {
-            let itemIDString: String = {
-                if let id = capturedID { return "\(id)" }
-                return "\(result?.id.hashValue ?? 0)"
-            }()
-            
-            if !itemIDString.isEmpty {
-                content.matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
-            } else {
-                content
-            }
-        } else {
-            content
-        }
-    }
-
-    @ViewBuilder
-    private func quickWatchOverlay() -> some View {
-        if !isRemoved, let id = capturedID {
-            Button {
-                if let item = modelContext.model(for: id) as? MediaItem, !item.isDeleted {
-                    markNextEpisodeAsWatched(for: item)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    if isButtonHovered, let nextLabel = capturedNextEpisodeLabel {
-                        Text(nextLabel)
-                            .font(.system(size: 8, weight: .bold))
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                    removal: .opacity))
-                    }
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8, weight: .bold))
-                }
-                .padding(6)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.1), radius: 2)
-                .overlay(
-                    Capsule()
-                        .stroke(.white.opacity(0.3), lineWidth: 0.5)
-                )
-                .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isButtonHovered = hovering
-                }
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-        }
-    }
-
-    private func markNextEpisodeAsWatched(for item: MediaItem) {
-        guard item.modelContext != nil && !item.isDeleted, let tv = item.tvShowDetails else { return }
-        let allEpisodes = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-            .flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
-
-        if let next = allEpisodes.first(where: { !$0.isWatched }) {
-            next.isWatched = true
-            item.lastInteractionDate = Date()
-            Task { @MainActor in
-                item.checkOverallCompletion()
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var searchOverlay: some View {
-        if isAdded {
-            ZStack {
-                // Dimming layer only for non-local results to emphasize "In Library"
-                if !isLocalInSearch {
-                    Rectangle()
-                        .fill(.black.opacity(0.6))
-                    
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.green)
-                        Text("In Library")
-                            .font(.caption.bold())
-                            .foregroundStyle(.white)
-                    }
-                } else if isHovered {
-                    // Local result in search - main hover info handles the reveal
-                    // but we can add an extra "Open" indicator if we want
-                    Rectangle()
-                        .fill(.black.opacity(0.2))
-                }
-            }
-        } else if isHovered {
-            // New Web Result - Show "Add" UI that doesn't cover center
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.white)
-                        .shadow(radius: 4)
-                        .padding(12)
-                }
-            }
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom)
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var typeBadge: some View {
-        Group {
-            switch type {
-            case .movie: Image(systemName: "film")
-            case .tvShow: Image(systemName: "tv")
-            }
-        }
-        .font(.system(size: 9, weight: .bold))
-        .liquidGlassPill(accentColor: appAccent.color, isSolid: false)
-    }
-
-    @ViewBuilder
-    private func libraryContextMenu(for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?) -> some View {
-        Section("Quick Actions") {
-            if type == .tvShow {
-                Button {
-                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
-                        markNextEpisodeAsWatched(for: item)
-                    }
-                } label: {
-                    Label("Mark Next Episode Watched", systemImage: "play.fill")
-                }
-            }
-            
-            if state != .completed {
-                Button {
-                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
-                        withAnimation {
-                            item.state = .completed
-                            item.lastUpdated = Date()
-                            item.lastInteractionDate = Date()
-                        }
-                    }
-                } label: {
-                    Label("Quick Complete", systemImage: "checkmark.seal.fill")
-                }
-            }
-        }
-        
-        Section("Status") {
-            ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) { targetState in
-                Button(targetState.displayName) {
-                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
-                        withAnimation {
-                            item.state = targetState
-                            item.lastUpdated = Date()
-                            item.lastInteractionDate = Date()
-                            item.lastStateChangeDate = Date()
-                        }
-                    }
-                }
-            }
-        }
-        Divider()
-        Button(role: .destructive) {
-            withAnimation {
-                isRemoved = true
-            }
-            
-            if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
-                let id = item.id
-                NotificationManager.shared.cancelNotification(id: id, type: type)
-                modelContext.delete(item)
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-            }
-        } label: {
-            Label("Remove", systemImage: "trash")
-        }
-    }
-}
-
 // MARK: - Taste Controls
 struct TasteToggle: View {
     @Bindable var item: MediaItem
@@ -796,8 +300,17 @@ struct TasteToggle: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if item.tasteValue == val {
                 item.tasteValue = "None"
+                FeedbackManager.shared.trigger(.click)
             } else {
                 item.tasteValue = val
+                
+                // Creative Feedback Personality
+                switch val {
+                case "Love": FeedbackManager.shared.trigger(.tasteLove)
+                case "Like": FeedbackManager.shared.trigger(.tasteLike)
+                case "Dislike": FeedbackManager.shared.trigger(.tasteDislike)
+                default: FeedbackManager.shared.trigger(.click)
+                }
             }
         }
     }
@@ -832,136 +345,7 @@ struct TastePill: View {
             .clipShape(Capsule())
             .shadow(color: isSelected ? activeColor.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
         }
-        .buttonStyle(.plain)
-    }
-}
-
-struct HomeHeroCard: View {
-    let metadata: MediaThumbnailMetadata
-    let item: MediaItem?
-    let namespace: Namespace.ID
-    var isFastScrolling: Bool = false
-    @State private var isHovered = false
-    @Environment(\.modelContext) private var modelContext
-    
-    var body: some View {
-        ZStack(alignment: .leading) {
-            // 1. Cinematic Backdrop (Blurred & Darkened)
-            if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
-                CachedImage(url: url, targetSize: CGSize(width: 1500, height: 840), isFastScrolling: isFastScrolling) { _ in } placeholder: {
-                    Rectangle().fill(Color.secondary.opacity(0.1))
-                        .shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 500, height: 280)
-                .clipped()
-                .blur(radius: isHovered ? 20 : 12)
-                .overlay(Color.black.opacity(isHovered ? 0.6 : 0.45))
-            } else {
-                Rectangle().fill(Color.black.opacity(0.8))
-                    .frame(width: 500, height: 280)
-            }
-            
-            // 2. Matching Your Taste Tag (Top Right)
-            if let context = recommendationContext {
-                VStack {
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10, weight: .black))
-                            Text(context.uppercased())
-                                .font(.system(size: 9, weight: .black))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(.white)
-                        .background(.ultraThinMaterial.opacity(0.8))
-                        .clipShape(Capsule())
-                        .overlay {
-                            Capsule().stroke(.white.opacity(0.1), lineWidth: 0.5)
-                        }
-                        .padding(20)
-                    }
-                    Spacer()
-                }
-            }
-            
-            HStack(spacing: 24) {
-                // 3. Floating Vertical Poster (3D Depth)
-                if let poster = metadata.posterURL, let url = URL(string: poster) {
-                    CachedImage(url: url, targetSize: CGSize(width: 300, height: 450), isFastScrolling: isFastScrolling) { _ in } placeholder: {
-                        Rectangle().fill(Color.secondary.opacity(0.1))
-                            .shimmer()
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 140, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 10)
-                    .overlay(alignment: .topLeading) {
-                        SmartBadgeView(metadata: metadata)
-                            .padding(8)
-                    }
-                }
-                
-                // 4. Immersive Details (Right Side)
-                VStack(alignment: .leading, spacing: 6) {
-                    if metadata.isUpcoming {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(.yellow)
-                            .padding(.bottom, 2)
-                    }
-                    
-                    Text(metadata.title)
-                        .font(.system(size: 28, weight: .black))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .shadow(color: .black.opacity(0.5), radius: 2)
-                    
-                    Text(metadata.formattedMetadata)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .padding(.trailing, 20)
-                
-                Spacer()
-            }
-            .padding(.leading, 30)
-        }
-        .frame(width: 500, height: 280)
-        .cornerRadius(24)
-        .shadow(color: .black.opacity(isHovered ? 0.3 : 0), radius: 20, x: 0, y: 10)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
-        .onHover { isHovered = $0 }
-    }
-    
-    private var recommendationContext: String? {
-        // Priority 0: Explicit Recommendation Reason from Taste Engine
-        if let reason = metadata.recommendationReason {
-            return reason
-        }
-
-        guard let item = item, item.modelContext != nil, !item.isDeleted else { return nil }
-        
-        // Priority 1: Creators/Directors
-        let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
-        if let firstCreator = creators.first {
-            return "\(item.type == .movie ? "Directed by" : "Created by") \(firstCreator)"
-        }
-        
-        // Priority 2: Leading Cast
-        let cast = (item.movieDetails?.cast ?? item.tvShowDetails?.cast) ?? []
-        if let firstActor = cast.sorted(by: { $0.order < $1.order }).first {
-            return "Starring \(firstActor.name)"
-        }
-        
-        // Priority 3: Primary Genre
-        if let firstGenre = metadata.genres.first {
-            return "\(firstGenre) Selection"
-        }
-        
-        return "Picked for you"
+        .buttonStyle(.interactive(feedback: nil))
     }
 }
 
@@ -1006,88 +390,6 @@ extension View {
 
 // MARK: - Skeleton Placeholders
 
-struct MediaThumbnailPlaceholder: View {
-    let mode: MediaThumbnailView.DisplayMode
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var width: CGFloat {
-        switch mode {
-        case .hero: return 200
-        default: return 160
-        }
-    }
-
-    private var height: CGFloat {
-        switch mode {
-        case .hero: return 300
-        default: return 240
-        }
-    }
-    
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
-                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
-                .overlay {
-                    RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                }
-            
-            VStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(height: 12)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-            }
-        }
-        .frame(width: width, height: height)
-        .shimmer()
-    }
-}
-
-struct HomeHeroCardPlaceholder: View {
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                }
-            
-            HStack(spacing: 24) {
-                // Vertical Poster Skeleton
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 140, height: 210)
-                
-                // Details Skeleton
-                VStack(alignment: .leading, spacing: 12) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 200, height: 24)
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.08))
-                        .frame(width: 120, height: 16)
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 30)
-                
-                Spacer()
-            }
-            .padding(24)
-        }
-        .frame(width: 500, height: 280)
-        .shimmer()
-    }
-}
-
 // MARK: - Library Empty State View
 struct LibraryEmptyStateView: View {
     let category: String?
@@ -1110,7 +412,7 @@ struct LibraryEmptyStateView: View {
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive)
                 }
             }
         }
@@ -1230,31 +532,14 @@ extension Color {
 }
 
 struct ShimmerEffect: ViewModifier {
-    @State private var phase: CGFloat = 0
-    @Environment(\.colorScheme) var colorScheme
+    @State private var phase: Double = 0.6
     
     func body(content: Content) -> some View {
         content
-            .overlay(
-                GeometryReader { geo in
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: colorScheme == .dark ? .white.opacity(0.15) : .white.opacity(0.5), location: 0.5),
-                            .init(color: .clear, location: 1)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .rotationEffect(.degrees(30))
-                    .frame(width: geo.size.width * 3)
-                    .offset(x: -geo.size.width * 1.5 + (geo.size.width * 3 * phase))
-                }
-            )
-            .mask(content)
+            .opacity(phase)
             .onAppear {
-                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                    phase = 1
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    phase = 0.3
                 }
             }
     }
@@ -1299,16 +584,10 @@ struct ThemeBackground: ViewModifier {
                             color.opacity(colorScheme == .dark ? 0.35 : 0.25)
                         }
                         
-                        // Phase 2 Optimization: Metal-Accelerated Ambience
-                        TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
-                            Color.clear
-                                .colorEffect(
-                                    ShaderLibrary.backgroundGlow(
-                                        .float2(NSScreen.main?.frame.size ?? .zero),
-                                        .float(timeline.date.timeIntervalSinceReferenceDate),
-                                        .float(isDiscover ? 1.0 : 0.0)
-                                    )
-                                )
+                        // Optimized Static Ambience (Replaces energy-heavy Metal shader)
+                        ZStack {
+                            RadialGradient(colors: [Color.pink.opacity(isDiscover ? 0.08 : 0.04), .clear], center: .topTrailing, startRadius: 0, endRadius: 800)
+                            RadialGradient(colors: [Color.teal.opacity(isDiscover ? 0.08 : 0.04), .clear], center: .bottomLeading, startRadius: 0, endRadius: 800)
                         }
                     }
                 }
@@ -1408,7 +687,7 @@ struct HeroCarousel: View {
                                 NavigationLink(value: item) {
                                     HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.interactive)
                                 .id(index)
                             }
                         }
@@ -1508,72 +787,6 @@ struct HeroCarousel: View {
 
 // MARK: - Standardized Components
 
-struct SectionHeader: View {
-    let title: String
-    let icon: String?
-    let iconColor: Color
-    var subtitle: String? = nil
-    var scrollProgress: Double? = nil
-    var showDivider: Bool = false
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .foregroundStyle(iconColor)
-                        .font(.system(size: 24, weight: .black))
-                }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 28, weight: .black, design: .rounded))
-                    
-                    if let subtitle = subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .kerning(1.0)
-                    }
-                }
-                
-                Spacer()
-                
-                if let progress = scrollProgress {
-                    GeometryReader { geo in
-                        let availableWidth = geo.size.width
-                        let itemWidth = max(40, min(availableWidth, availableWidth * 0.3))
-                        let scrollableTrackWidth = availableWidth - itemWidth
-                        
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.15))
-                                .background(Capsule().fill(.ultraThinMaterial))
-                                .frame(height: 4)
-                            
-                            Capsule()
-                                .fill(appAccent.color.gradient)
-                                .frame(width: itemWidth, height: 4)
-                                .offset(x: progress * scrollableTrackWidth)
-                                .shadow(color: appAccent.color.opacity(0.3), radius: 4, x: 0, y: 2)
-                        }
-                        .frame(maxHeight: .infinity, alignment: .center)
-                    }
-                    .frame(width: 150, height: 4)
-                    .padding(.trailing, 10)
-                }
-            }
-            .padding(.horizontal, 40)
-            
-            if showDivider {
-                Divider().padding(.horizontal, 40).padding(.top, 4)
-            }
-        }
-    }
-}
-
 // MARK: - Shelf Carousel (For Secondary Sections)
 
 struct ShelfCarousel: View {
@@ -1614,7 +827,7 @@ struct ShelfCarousel: View {
                                 NavigationLink(value: item) {
                                     MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.interactive)
                                 .id(index)
                             }
                         }

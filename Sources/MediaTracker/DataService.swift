@@ -109,6 +109,10 @@ class DataService {
     /// Tracks items refreshed during this app session to avoid redundant network calls.
     private var sessionRefreshedItems = Set<String>()
     
+    /// Batch Queue for coalescing metadata refresh requests
+    private var pendingRefreshIDs = Set<PersistentIdentifier>()
+    private var refreshTask: Task<Void, Never>?
+
     /// Tracks items currently being added to prevent race conditions and duplicates.
     private var itemsInProgress = Set<String>()
     
@@ -133,10 +137,23 @@ class DataService {
         guard !SleepManager.shared.isAsleep else { return }
 
         let itemIDs = items.map { $0.persistentModelID }
-        let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
         
-        Task {
-            await backgroundService.refreshMetadata(for: itemIDs, metadataOnly: metadataOnly)
+        // Phase 4 Optimization: Coalesce into Batch Queue
+        pendingRefreshIDs.formUnion(itemIDs)
+        
+        refreshTask?.cancel()
+        refreshTask = Task {
+            // Wait for potential rapid-fire calls to finish (e.g. during an import or scroll)
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            if Task.isCancelled { return }
+            
+            let idsToProcess = Array(pendingRefreshIDs)
+            pendingRefreshIDs.removeAll()
+            
+            if !idsToProcess.isEmpty {
+                let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
+                await backgroundService.refreshMetadata(for: idsToProcess, metadataOnly: metadataOnly)
+            }
         }
     }
 

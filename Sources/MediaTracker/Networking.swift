@@ -213,7 +213,7 @@ actor APIClient {
     
     // Adaptive Asset Scaling: Restore high quality for Retina displays
     nonisolated var idealThumbnailSize: String {
-        return "w500"
+        return "w780"
     }
 
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
