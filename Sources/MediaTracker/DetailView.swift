@@ -23,7 +23,7 @@ struct DetailView: View {
     
     var body: some View {
         ZStack {
-            if isDeleted {
+            if isDeleted || viewModel.item.modelContext == nil || viewModel.item.isDeleted {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
                 // Liquid Glass Foundation Background

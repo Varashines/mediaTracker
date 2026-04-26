@@ -162,7 +162,7 @@ struct SmartBadgeView: View {
                     progress: metadata.progress
                 )
             }
-        } else if let item = item, item.modelContext != nil {
+        } else if let item = item, item.modelContext != nil, !item.isDeleted {
             if let label = item.storedSmartBadgeLabel, let icon = item.storedSmartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle, remaining: item.remainingEpisodesCount)
             } else if item.type == .movie {
@@ -283,6 +283,7 @@ struct MediaThumbnailView: View {
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var isAppeared = false
+    @State private var isRemoved = false
 
     init(
         item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
@@ -342,28 +343,42 @@ struct MediaThumbnailView: View {
     }
 
     private var title: String {
-        if let item = item, item.modelContext != nil {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
             return item.title
         }
         return metadata?.title ?? result?.title ?? ""
     }
 
     private var posterURL: String? {
-        if let item = item, item.modelContext != nil {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
             return item.posterURL
         }
         return metadata?.posterURL ?? result?.posterURL
     }
 
     private var type: MediaType {
-        if let item = item, item.modelContext != nil {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
             return item.type ?? .movie
         }
         return metadata?.type ?? result?.type ?? .movie
     }
 
+    private var safeState: MediaState {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
+            return item.state ?? .wishlist
+        }
+        return metadata?.state ?? .wishlist
+    }
+
+    private var safeProgress: Double? {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
+            return item.storedProgress
+        }
+        return metadata?.progress
+    }
+
     private var yearLabel: String? {
-        if let item = item, item.modelContext != nil {
+        if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
             if let date = item.releaseDate {
                 return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
             }
@@ -378,28 +393,30 @@ struct MediaThumbnailView: View {
     }
 
     private var isAdded: Bool {
-        if let item = item {
-            return item.modelContext != nil
+        if !isRemoved, let item = item {
+            return item.modelContext != nil && !item.isDeleted
         }
         return metadata != nil || isLocalInSearch
     }
 
     var body: some View {
         Group {
-            if let action = action {
-                Button(action: action) {
+            if !isRemoved {
+                if let action = action {
+                    Button(action: action) {
+                        mainContent
+                    }
+                    .buttonStyle(.plain)
+                } else {
                     mainContent
                 }
-                .buttonStyle(.plain)
-            } else {
-                mainContent
             }
         }
         .contextMenu {
-            if let item = item, item.modelContext != nil {
-                libraryContextMenu(for: item)
-            } else if let metadata = metadata, let item = modelContext.model(for: metadata.id) as? MediaItem, item.modelContext != nil {
-                libraryContextMenu(for: item)
+            if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
+                libraryContextMenu(for: item, type: self.type, state: self.safeState)
+            } else if !isRemoved, let metadata = metadata, let item = modelContext.model(for: metadata.id) as? MediaItem, item.modelContext != nil, !item.isDeleted {
+                libraryContextMenu(for: item, type: self.type, state: self.safeState)
             }
         }
     }
@@ -419,7 +436,7 @@ struct MediaThumbnailView: View {
             // Smart Badge (Top Leading)
             VStack {
                 HStack {
-                    if let item = item {
+                    if !isRemoved, let item = item, item.modelContext != nil, !item.isDeleted {
                         SmartBadgeView(item: item)
                     } else if let metadata = metadata {
                         SmartBadgeView(metadata: metadata)
@@ -445,10 +462,10 @@ struct MediaThumbnailView: View {
                     }
                     
                     // Show stats/progress in the hover stack (But NOT if completed)
-                    let currentState = (item?.modelContext != nil ? item?.state : metadata?.state) ?? .wishlist
+                    let currentState = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.state : metadata?.state) ?? .wishlist
                     if currentState != .completed {
-                        let stats = (item?.modelContext != nil ? item?.storedNextEpisodeLabel : metadata?.nextEpisodeToWatchLabel)
-                        let progress = (item?.modelContext != nil ? item?.watchProgressLabel : metadata?.watchProgress)
+                        let stats = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.storedNextEpisodeLabel : metadata?.nextEpisodeToWatchLabel)
+                        let progress = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.watchProgressLabel : metadata?.watchProgress)
                         let currentInfo = stats ?? progress
                         
                         if let info = currentInfo {
@@ -463,8 +480,8 @@ struct MediaThumbnailView: View {
                 .shadow(color: .black.opacity(0.6), radius: 2)
                 
                 // RESTORED DATE ROW
-                if (item?.calculateIsUpcoming ?? metadata?.isUpcoming ?? false), 
-                   let date = (item?.modelContext != nil ? item?.gridBadgeText : metadata?.badgeText) {
+                if (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.calculateIsUpcoming : metadata?.isUpcoming) ?? false, 
+                   let date = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.gridBadgeText : metadata?.badgeText) {
                     Text(date.uppercased())
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .kerning(1.5)
@@ -486,7 +503,7 @@ struct MediaThumbnailView: View {
         .background {
             if let ns = namespace {
                 let itemIDString: String = {
-                    if let item = item, item.modelContext != nil { return "\(item.id)" }
+                    if let item = item, item.modelContext != nil, !item.isDeleted { return "\(item.id)" }
                     if let metadata = metadata { return "\(metadata.id)" }
                     return "\(result?.id.hashValue ?? 0)"
                 }()
@@ -517,7 +534,7 @@ struct MediaThumbnailView: View {
     private var posterLayer: some View {
         let content = Group {
             if let urlString = posterURL, let url = URL(string: urlString) {
-                let colorString = (item?.modelContext != nil ? item?.themeColorHex : metadata?.themeColorHex)
+                let colorString = (!isRemoved && item?.modelContext != nil && item?.isDeleted == false ? item?.themeColorHex : metadata?.themeColorHex)
                 let baseColor = colorString.flatMap { Color(hex: $0) }
                 
                 // Request slightly more pixels (3x) to ensure crispness even on high-end Retina screens
@@ -545,7 +562,7 @@ struct MediaThumbnailView: View {
 
         if let ns = namespace {
             let itemIDString: String = {
-                if let item = item, item.modelContext != nil { return "\(item.id)" }
+                if let item = item, item.modelContext != nil, !item.isDeleted { return "\(item.id)" }
                 if let metadata = metadata { return "\(metadata.id)" }
                 return "\(result?.id.hashValue ?? 0)"
             }()
@@ -562,43 +579,45 @@ struct MediaThumbnailView: View {
 
     @ViewBuilder
     private func quickWatchOverlay(for item: MediaItem) -> some View {
-        Button {
-            markNextEpisodeAsWatched(for: item)
-        } label: {
-            HStack(spacing: 6) {
-                if isButtonHovered, let nextLabel = item.nextEpisodeToWatchLabel {
-                    Text(nextLabel)
-                        .font(.system(size: 8, weight: .bold))
-                        .transition(
-                            .asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity))
-                }
+        if item.modelContext != nil && !item.isDeleted {
+            Button {
+                markNextEpisodeAsWatched(for: item)
+            } label: {
+                HStack(spacing: 6) {
+                    if isButtonHovered, let nextLabel = item.nextEpisodeToWatchLabel {
+                        Text(nextLabel)
+                            .font(.system(size: 8, weight: .bold))
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                    removal: .opacity))
+                    }
 
-                Image(systemName: "play.fill")
-                    .font(.system(size: 8, weight: .bold))
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .padding(6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.1), radius: 2)
+                .overlay(
+                    Capsule()
+                        .stroke(.white.opacity(0.3), lineWidth: 0.5)
+                )
+                .foregroundStyle(.white)
             }
-            .padding(6)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 2)
-            .overlay(
-                Capsule()
-                    .stroke(.white.opacity(0.3), lineWidth: 0.5)
-            )
-            .foregroundStyle(.white)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isButtonHovered = hovering
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    isButtonHovered = hovering
+                }
             }
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {
-        guard let tv = item.tvShowDetails else { return }
+        guard item.modelContext != nil && !item.isDeleted, let tv = item.tvShowDetails else { return }
         let allEpisodes = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
             .flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
 
@@ -664,52 +683,81 @@ struct MediaThumbnailView: View {
     }
 
     @ViewBuilder
-    private func libraryContextMenu(for item: MediaItem) -> some View {
-        Section("Quick Actions") {
-            if item.type == .tvShow {
-                Button {
-                    markNextEpisodeAsWatched(for: item)
-                } label: {
-                    Label("Mark Next Episode Watched", systemImage: "play.fill")
+    private func libraryContextMenu(for item: MediaItem, type: MediaType, state: MediaState) -> some View {
+        if item.modelContext != nil && !item.isDeleted {
+            Section("Quick Actions") {
+                if type == .tvShow {
+                    Button {
+                        if item.modelContext != nil && !item.isDeleted {
+                            markNextEpisodeAsWatched(for: item)
+                        }
+                    } label: {
+                        Label("Mark Next Episode Watched", systemImage: "play.fill")
+                    }
+                }
+                
+                if state != .completed {
+                    Button {
+                        if item.modelContext != nil && !item.isDeleted {
+                            withAnimation {
+                                item.state = .completed
+                                item.lastUpdated = Date()
+                                item.lastInteractionDate = Date()
+                            }
+                        }
+                    } label: {
+                        Label("Quick Complete", systemImage: "checkmark.seal.fill")
+                    }
                 }
             }
             
-            if item.state != .completed {
-                Button {
-                    withAnimation {
-                        item.state = .completed
-                        item.lastUpdated = Date()
-                        item.lastInteractionDate = Date()
-                    }
-                } label: {
-                    Label("Quick Complete", systemImage: "checkmark.seal.fill")
-                }
-            }
-        }
-        
-        Section("Status") {
-            ForEach(availableStates(for: item), id: \.self) { state in
-                Button(state.displayName) {
-                    withAnimation {
-                        item.state = state
-                        item.lastUpdated = Date()
-                        item.lastInteractionDate = Date()
-                        item.lastStateChangeDate = Date()
+            Section("Status") {
+                ForEach(availableStates(for: type, progress: safeProgress), id: \.self) { targetState in
+                    Button(targetState.displayName) {
+                        if item.modelContext != nil && !item.isDeleted {
+                            withAnimation {
+                                item.state = targetState
+                                item.lastUpdated = Date()
+                                item.lastInteractionDate = Date()
+                                item.lastStateChangeDate = Date()
+                            }
+                        }
                     }
                 }
             }
-        }
-        Divider()
-        Button(role: .destructive) {
-            NotificationManager.shared.cancelNotification(id: item.id, type: item.type ?? .movie)
-            modelContext.delete(item)
-        } label: {
-            Label("Remove", systemImage: "trash")
+            Divider()
+            Button(role: .destructive) {
+                if item.modelContext != nil && !item.isDeleted {
+                    withAnimation {
+                        isRemoved = true
+                    }
+                    
+                    let id = item.id
+                    let capturedType = type
+                    NotificationManager.shared.cancelNotification(id: id, type: capturedType)
+                    
+                    // Delay deletion to allow SwiftUI to re-render and avoid accessing a deleted object
+                    Task {
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                        modelContext.delete(item)
+                    }
+                }
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
         }
     }
 
-    private func availableStates(for item: MediaItem) -> [MediaState] {
-        item.availableStates
+    private func availableStates(for type: MediaType, progress: Double?) -> [MediaState] {
+        if type == .movie { return MediaState.allCases }
+        
+        let progressVal = progress ?? 0
+        if progressVal >= 1.0 {
+            return [.completed, .rewatching]
+        } else if progressVal > 0 {
+            return [.active, .onHold, .dropped, .rewatching, .completed]
+        }
+        return MediaState.allCases
     }
 }
 
@@ -719,34 +767,37 @@ struct TasteToggle: View {
     let themeColor: Color
     
     var body: some View {
-        HStack(spacing: 12) {
-            TastePill(
-                label: "Love",
-                icon: "heart",
-                isSelected: item.tasteValue == "Love",
-                activeColor: .red,
-                action: { setTaste("Love") }
-            )
-            
-            TastePill(
-                label: "Like",
-                icon: "hand.thumbsup",
-                isSelected: item.tasteValue == "Like",
-                activeColor: .blue,
-                action: { setTaste("Like") }
-            )
-            
-            TastePill(
-                label: "Dislike",
-                icon: "hand.thumbsdown",
-                isSelected: item.tasteValue == "Dislike",
-                activeColor: .gray,
-                action: { setTaste("Dislike") }
-            )
+        if item.modelContext != nil && !item.isDeleted {
+            HStack(spacing: 12) {
+                TastePill(
+                    label: "Love",
+                    icon: "heart",
+                    isSelected: item.tasteValue == "Love",
+                    activeColor: .red,
+                    action: { setTaste("Love") }
+                )
+                
+                TastePill(
+                    label: "Like",
+                    icon: "hand.thumbsup",
+                    isSelected: item.tasteValue == "Like",
+                    activeColor: .blue,
+                    action: { setTaste("Like") }
+                )
+                
+                TastePill(
+                    label: "Dislike",
+                    icon: "hand.thumbsdown",
+                    isSelected: item.tasteValue == "Dislike",
+                    activeColor: .gray,
+                    action: { setTaste("Dislike") }
+                )
+            }
         }
     }
     
     private func setTaste(_ val: String) {
+        guard item.modelContext != nil && !item.isDeleted else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if item.tasteValue == val {
                 item.tasteValue = "None"
@@ -896,7 +947,7 @@ struct HomeHeroCard: View {
             return reason
         }
 
-        guard let item = item else { return nil }
+        guard let item = item, item.modelContext != nil, !item.isDeleted else { return nil }
         
         // Priority 1: Creators/Directors
         let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []

@@ -112,8 +112,22 @@ struct DiscoveryHubView: View {
                 if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID) {
                      item.releaseDate = DateUtils.parseDate(details.releaseDate)
                      if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
+                     
                      let movieDetails = MovieDetails(tmdbID: tmdbID)
                      movieDetails.item = item
+                     movieDetails.runtime = details.runtime
+                     movieDetails.genres = details.genres
+                     movieDetails.voteAverage = details.voteAverage
+                     movieDetails.originalLanguage = details.originalLanguage
+                     movieDetails.creators = details.directors.map { $0.name }
+                     
+                     movieDetails.cast = details.cast.map { c in
+                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                         let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                         member.movieDetails = movieDetails
+                         return member
+                     }
+                     
                      item.movieDetails = movieDetails
                 }
             } else if result.type == .tvShow, let tmdbID = Int(result.id) {
@@ -121,6 +135,20 @@ struct DiscoveryHubView: View {
                     if let poster = details.posterPath { item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)" }
                     let tvDetails = TVShowDetails(tmdbID: tmdbID)
                     tvDetails.item = item
+                    tvDetails.status = details.status
+                    tvDetails.network = details.network
+                    tvDetails.numberOfSeasons = details.seasonsCount
+                    tvDetails.numberOfEpisodes = details.episodesCount
+                    tvDetails.genres = details.genres
+                    tvDetails.creators = details.creators.map { $0.name }
+                    
+                    tvDetails.cast = details.cast.map { c in
+                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        member.tvShowDetails = tvDetails
+                        return member
+                    }
+                    
                     item.tvShowDetails = tvDetails
                 }
             }

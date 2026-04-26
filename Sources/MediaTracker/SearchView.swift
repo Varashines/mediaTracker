@@ -30,6 +30,7 @@ struct SearchView: View {
         
         let searchTokens = processedSearchText.split(separator: " ").map(String.init)
         return existingItems.filter { item in
+            guard !item.isDeleted else { return false }
             let target = item.searchableText
             let matchesText = searchTokens.allSatisfy { target.contains($0) }
             
@@ -351,6 +352,11 @@ struct SearchView: View {
                     let movieDetails = MovieDetails(tmdbID: tmdbID)
                     movieDetails.item = item
                     movieDetails.runtime = details.runtime
+                    movieDetails.genres = details.genres
+                    movieDetails.voteAverage = details.voteAverage
+                    movieDetails.originalLanguage = details.originalLanguage
+                    movieDetails.creators = details.directors.map { $0.name }
+                    
                     movieDetails.cast = details.cast.map { c in
                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
                         let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)

@@ -53,8 +53,8 @@ class DetailViewModel {
     }
     
     func updateThemeColor() {
-        // Skip if app is in sleep mode
-        guard !SleepManager.shared.isAsleep else { return }
+        // Skip if item is deleted or app is in sleep mode
+        guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
 
         if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
             self.themeColor = cachedColor
@@ -91,8 +91,8 @@ class DetailViewModel {
     }
     
     func refreshData(force: Bool = false) {
-        // Skip if app is in sleep mode
-        guard !SleepManager.shared.isAsleep else { return }
+        // Skip if item is deleted or app is in sleep mode
+        guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
 
         let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
         
@@ -115,6 +115,7 @@ class DetailViewModel {
             let success = await backgroundService.refreshSingleItem(id: itemID)
             
             await MainActor.run {
+                guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                 if success {
                     DataService.shared.markAsRefreshedThisSession(id: rawID)
                     updateThemeColor()
@@ -134,6 +135,7 @@ class DetailViewModel {
     }
     
     func markAllAsWatched() {
+        guard item.modelContext != nil, !item.isDeleted else { return }
         if let tv = item.tvShowDetails {
             let seasonIDs = tv.seasons.map { $0.persistentModelID }
             let tmdbID = tv.tmdbID
@@ -144,6 +146,7 @@ class DetailViewModel {
                 }
                 
                 await MainActor.run {
+                    guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                     if let tv = self.item.tvShowDetails {
                         for season in tv.seasons {
                             for episode in season.episodes {
@@ -167,6 +170,7 @@ class DetailViewModel {
             do {
                 let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
                 await MainActor.run {
+                    guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                     for ep in episodes {
                         let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime)
                         newEpisode.season = season
@@ -184,6 +188,7 @@ class DetailViewModel {
     }
     
     func checkOverallCompletion() {
+        guard item.modelContext != nil, !item.isDeleted else { return }
         withAnimation {
             item.checkOverallCompletion()
             item.tvShowDetails?.recalculateCachedProperties() // Fallback to ensure counts are fresh

@@ -180,6 +180,7 @@ struct ContentView: View {
                     if category == "Upcoming", let firstHero = result.featuredUpcoming.first {
                         let heroID = firstHero.id
                         if let item = modelContext.model(for: heroID) as? MediaItem,
+                           !item.isDeleted,
                            let hex = item.themeColorHex,
                            let color = Color(hex: hex) {
                             themeCoordinator.updateMood(for: [color], colorScheme: capturedColorScheme)
@@ -187,6 +188,7 @@ struct ContentView: View {
                     } else if category == "Home", let firstHome = result.homeContinueWatching.first {
                         let heroID = firstHome.id
                         if let item = modelContext.model(for: heroID) as? MediaItem,
+                           !item.isDeleted,
                            let hex = item.themeColorHex,
                            let color = Color(hex: hex) {
                             themeCoordinator.updateMood(for: [color], colorScheme: capturedColorScheme)
@@ -195,6 +197,7 @@ struct ContentView: View {
                         let visibleIDs = result.displayed.prefix(10).map { $0.id }
                         let visibleColors = visibleIDs.compactMap { id -> Color? in
                             guard let item = modelContext.model(for: id) as? MediaItem,
+                                  !item.isDeleted,
                                   let hex = item.themeColorHex else { return nil }
                             return Color(hex: hex)
                         }
@@ -210,7 +213,7 @@ struct ContentView: View {
                     await MainActor.run {
                         // Find metadata for these IDs
                         self.viewModel.recommendations = recs.compactMap { (id, reason) -> MediaThumbnailMetadata? in
-                            guard let item = modelContext.model(for: id) as? MediaItem else { return nil }
+                            guard let item = modelContext.model(for: id) as? MediaItem, !item.isDeleted else { return nil }
                             return MediaThumbnailMetadata(
                                 id: item.persistentModelID,
                                 title: item.title,
@@ -677,10 +680,6 @@ struct SidebarView: View, Equatable {
         case .tvShow: return "tv"
         }
     }
-}
-
-private func availableStates(for item: MediaItem) -> [MediaState] {
-    item.availableStates
 }
 
 struct MediaGridView: View {

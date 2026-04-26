@@ -178,12 +178,12 @@ actor BackgroundDataService {
                 tvDetails.networkLogoPath = details.networkLogoPath
                 tvDetails.originalLanguage = details.originalLanguage
                 tvDetails.status = details.status
+                tvDetails.creators = details.creators.map { $0.name }
                 tvDetails.numberOfSeasons = details.seasonsCount
                 tvDetails.numberOfEpisodes = details.episodesCount
                 tvDetails.tvMazeID = tvMazeID
                 tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
                 tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                tvDetails.creators = details.creators.map { $0.name }
                 tvDetails.cast = newCastList
                 
                 if !metadataOnly {

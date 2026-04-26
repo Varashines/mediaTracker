@@ -10,36 +10,38 @@ struct MediaHeaderView: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        HStack(alignment: .center, spacing: 30) {
-            PosterView(item: item, themeColor: themeColor, namespace: namespace)
-
-            VStack(alignment: .leading, spacing: 20) {
-                TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
-
-                if item.isUpcoming, let badgeText = item.detailBadgeText {
-                    let isAvailable = badgeText.contains("Streaming") || badgeText.contains("Available")
+        if item.modelContext != nil && !item.isDeleted {
+            HStack(alignment: .center, spacing: 30) {
+                PosterView(item: item, themeColor: themeColor, namespace: namespace)
+                
+                VStack(alignment: .leading, spacing: 20) {
+                    TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
                     
-                    HStack(spacing: 8) {
-                        Image(systemName: isAvailable ? "play.fill" : "sparkles")
-                            .font(.system(size: 14, weight: .black))
-                            .symbolEffect(.pulse, options: .repeating, value: isAvailable)
-                            .foregroundStyle(isAvailable ? .white : .yellow)
-
-                        Text(badgeText)
-                            .font(.headline)
+                    if item.isUpcoming, let badgeText = item.detailBadgeText {
+                        let isAvailable = badgeText.contains("Streaming") || badgeText.contains("Available")
+                        
+                        HStack(spacing: 8) {
+                            Image(systemName: isAvailable ? "play.fill" : "sparkles")
+                                .font(.system(size: 14, weight: .black))
+                                .symbolEffect(.pulse, options: .repeating, value: isAvailable)
+                                .foregroundStyle(isAvailable ? .white : .yellow)
+                            
+                            Text(badgeText)
+                                .font(.headline)
+                        }
+                        .liquidGlassPill(
+                            accentColor: isAvailable ? Color.semanticGreen(for: colorScheme) : themeColor,
+                            isSolid: isAvailable
+                        )
+                        .padding(.top, 4)
                     }
-                    .liquidGlassPill(
-                        accentColor: isAvailable ? Color.semanticGreen(for: colorScheme) : themeColor,
-                        isSolid: isAvailable
-                    )
-                    .padding(.top, 4)
+                    
+                    MetadataSection(item: item, themeColor: themeColor)
+                    
+                    OverviewSection(overview: item.overview)
                 }
-
-                MetadataSection(item: item, themeColor: themeColor)
-
-                OverviewSection(overview: item.overview)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -100,53 +102,55 @@ struct TitleSection: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                let titleView = Text(item.title)
-                    .font(.system(size: 34, weight: .bold))
-                
-                if let ns = namespace {
-                    titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
-                } else {
-                    titleView
-                }
-                
-                // Creators/Directors Row
-                let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
-                if !creators.isEmpty {
-                    Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, -2)
-                }
-            }
-
-            HStack(spacing: 12) {
-                Text(item.type?.rawValue ?? "")
-                    .font(.subheadline.weight(.semibold))
-                    .liquidGlassPill(accentColor: themeColor)
-
-                if item.isUpcoming {
-                    let isStreaming = (item.nextAiringDate ?? Date()) < Date()
-                    let badge = Text(isStreaming ? "Now Streaming" : "Upcoming")
-                        .font(.subheadline.weight(.bold))
-                        .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
+        if item.modelContext != nil && !item.isDeleted {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    let titleView = Text(item.title)
+                        .font(.system(size: 34, weight: .bold))
                     
                     if let ns = namespace {
-                        badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
+                        titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
                     } else {
-                        badge
+                        titleView
+                    }
+                    
+                    // Creators/Directors Row
+                    let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
+                    if !creators.isEmpty {
+                        Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, -2)
                     }
                 }
 
-                Spacer().frame(width: 10)
+                HStack(spacing: 12) {
+                    Text(item.type?.rawValue ?? "")
+                        .font(.subheadline.weight(.semibold))
+                        .liquidGlassPill(accentColor: themeColor)
 
-                StatusPicker(item: item, onChange: onStatusChange)
+                    if item.isUpcoming {
+                        let isStreaming = (item.nextAiringDate ?? Date()) < Date()
+                        let badge = Text(isStreaming ? "Now Streaming" : "Upcoming")
+                            .font(.subheadline.weight(.bold))
+                            .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
+                        
+                        if let ns = namespace {
+                            badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
+                        } else {
+                            badge
+                        }
+                    }
+
+                    Spacer().frame(width: 10)
+
+                    StatusPicker(item: item, onChange: onStatusChange)
+                }
+                
+                // New Expressive Taste Toggle
+                TasteToggle(item: item, themeColor: themeColor)
+                    .padding(.top, 4)
             }
-            
-            // New Expressive Taste Toggle
-            TasteToggle(item: item, themeColor: themeColor)
-                .padding(.top, 4)
         }
     }
 }
@@ -156,31 +160,43 @@ struct StatusPicker: View {
     var onChange: ((MediaState?) -> Void)?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("Status:")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        if item.modelContext != nil && !item.isDeleted {
+            HStack(spacing: 6) {
+                Text("Status:")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-            Picker("Status", selection: $item.state) {
-                ForEach(availableStates, id: \.self) { state in
-                    Text(state.displayName)
-                        .tag(state as MediaState?)
+                Picker("Status", selection: $item.state) {
+                    ForEach(availableStates, id: \.self) { state in
+                        Text(state.displayName)
+                            .tag(state as MediaState?)
+                    }
                 }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 130)
-            .labelsHidden()
-            .onChange(of: item.state) { oldValue, newValue in
-                item.lastUpdated = Date()
-                item.lastInteractionDate = Date()
-                item.lastStateChangeDate = Date()
-                onChange?(newValue)
+                .pickerStyle(.menu)
+                .frame(width: 130)
+                .labelsHidden()
+                .onChange(of: item.state) { oldValue, newValue in
+                    item.lastUpdated = Date()
+                    item.lastInteractionDate = Date()
+                    item.lastStateChangeDate = Date()
+                    onChange?(newValue)
+                }
             }
         }
     }
     
     private var availableStates: [MediaState] {
-        item.availableStates
+        guard item.modelContext != nil && !item.isDeleted else { return [] }
+        
+        if item.type == .movie { return MediaState.allCases }
+        
+        let progress = item.storedProgress ?? 0
+        if progress >= 1.0 {
+            return [.completed, .rewatching]
+        } else if progress > 0 {
+            return [.active, .onHold, .dropped, .rewatching, .completed]
+        }
+        return MediaState.allCases
     }
 }
 
