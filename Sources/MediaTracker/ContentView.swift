@@ -1,13 +1,13 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 enum SortOrder: String, CaseIterable, Identifiable {
     case alphabetical = "Alphabetical"
     case newestRelease = "Newest Release"
     case recentlyAdded = "Recently Added"
-    
+
     var id: String { self.rawValue }
-    
+
     var icon: String {
         switch self {
         case .alphabetical: return "textformat.abc"
@@ -21,9 +21,9 @@ enum GroupBy: String, CaseIterable, Identifiable {
     case none = "None"
     case year = "Year"
     case category = "Category"
-    
+
     var id: String { self.rawValue }
-    
+
     var icon: String {
         switch self {
         case .none: return "square.grid.2x2"
@@ -39,38 +39,33 @@ class MediaViewModel {
     var searchText: String = ""
     var navigationPath = NavigationPath()
     var searchSubmitTrigger: Int = 0
-    
+
     // Per-category view settings
     var categorySortOrders: [String: SortOrder] = [:]
     var categoryGroupBys: [String: GroupBy] = [:]
-    
+
     var currentSortOrder: SortOrder {
         let cat = selectedCategory ?? "All"
         return categorySortOrders[cat] ?? .alphabetical
     }
-    
+
     var currentGroupBy: GroupBy {
         let cat = selectedCategory ?? "All"
         return categoryGroupBys[cat] ?? .none
     }
 
-    var selectedNetwork: String? = nil
+    var selectedNetworks: [String]? = nil
     var selectedLanguage: String? = nil
     var isBatchRefreshing: Bool = false
     var lastDiscoveryCalculationHash: Int = 0
     var gridResetID: UUID = UUID()
-    var isInitialLoading: Bool = true // Track first load
-    var discoveryRefreshTrigger: Int = 0 // NEW: Trigger for Discovery Hub refresh
-
-    // Persistent Actors to prevent deinitialization warnings
-    var filterActor: MediaFilterActor?
-    var discoverySyncService: DiscoverySyncService?
-    var tasteActor: TasteActor?
+    var isInitialLoading: Bool = true  // Track first load
+    var discoveryRefreshTrigger: Int = 0  // NEW: Trigger for Discovery Hub refresh
 
     // Pagination State
     var totalItemCount: Int = 0
     var currentOffset: Int = 0
-    let pageSize: Int = 200
+    let pageSize: Int = 50
     var isLoadingMore: Bool = false
     var isFastScrolling: Bool = false
 
@@ -89,12 +84,10 @@ class MediaViewModel {
     var forYouRecommendations: [MediaThumbnailMetadata] = []
     var lastDiscoveryRefresh: Date?
 
-    // Trending Cache
-    var trendingMovies: [MediaSearchResult] = []
-    var trendingTV: [MediaSearchResult] = []
-
     func navigationTitle(for category: String?) -> String {
-        if let network = selectedNetwork { return network }
+        if let networks = selectedNetworks, let first = networks.first {
+            return networks.count == 1 ? first : "Merged Studios"
+        }
         if let lang = selectedLanguage {
             return Locale.current.localizedString(forLanguageCode: lang) ?? lang.uppercased()
         }
@@ -125,16 +118,14 @@ struct ContentView: View {
     @State private var isSearchActive = false
     @State private var selectedHeroItem: MediaItem? = nil
     @State private var isSyncHovered = false
-    
+
     @State private var updateTask: Task<Void, Never>?
-    
+
     private func updateDisplayedItems(delay: UInt64 = 150_000_000) {
         // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
-        let capturedColorScheme: ColorScheme = colorScheme
-
-        // Zero-Jitter Sequencing: If we just switched categories, give the transition 
+        // Zero-Jitter Sequencing: If we just switched categories, give the transition
         // a moment to breathe before building the new grid items.
         let executionDelay = delay
 
@@ -146,7 +137,7 @@ struct ContentView: View {
             let currentSearchText = viewModel.searchText
             let category = viewModel.selectedCategory
             let sortOrder = viewModel.currentSortOrder
-            let network = viewModel.selectedNetwork
+            let networks = viewModel.selectedNetworks
             let language = viewModel.selectedLanguage
             let groupBy = viewModel.currentGroupBy
 
@@ -155,117 +146,66 @@ struct ContentView: View {
 
             // Reset pagination for new filter/sort
             await MainActor.run {
+                viewModel.displayedItems = []
                 viewModel.currentOffset = 0
                 viewModel.isLoadingMore = false
             }
 
             do {
-                if viewModel.filterActor == nil {
-                    viewModel.filterActor = MediaFilterActor(modelContainer: modelContext.container)
-                }
-                let filterActor = viewModel.filterActor!
-                
+                let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+
                 // Phase 4 Optimization: Pagination limit
                 let limit = viewModel.pageSize
-                
                 let result = try await filterActor.filterAndSort(
                     category: category,
-                    searchText: currentSearchText, 
+                    searchText: currentSearchText,
                     sortOrder: sortOrder,
-                    network: network,
+                    network: networks,
                     language: language,
                     groupBy: groupBy,
                     limit: limit,
                     offset: 0
                 )
-                
+
                 if Task.isCancelled { return }
-                
+
                 await MainActor.run {
                     viewModel.totalItemCount = result.totalCount
-                    
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        viewModel.displayedItems = result.displayed
-                        viewModel.featuredUpcomingItems = result.featuredUpcoming
-                        viewModel.recentlyAddedItems = result.recentlyAdded
-                        viewModel.homeContinueWatchingItems = result.homeContinueWatching
-                        viewModel.groupedItems = result.grouped
-                    }
-                    
-                    // Allow UI to process data arrival before removing skeletons
-                    Task {
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                        await MainActor.run {
-                            viewModel.isInitialLoading = false
+                    viewModel.displayedItems = result.displayed
+                    viewModel.featuredUpcomingItems = result.featuredUpcoming
+                    viewModel.recentlyAddedItems = result.recentlyAdded
+                    viewModel.homeContinueWatchingItems = result.homeContinueWatching
+                    viewModel.groupedItems = result.grouped
+                    viewModel.isInitialLoading = false
+
+                    // If we just loaded "All" category, also extract colors for Sidebar
+                    if category == "Discover" || category == "All" {
+                        // Extract network colors in background
+                        let container = modelContext.container
+                        Task.detached(priority: .background) {
+                            let sync = DiscoverySyncService(modelContainer: container)
+                            await sync.syncLibrary(force: false)
                         }
-                    }
-                    
-                    // Update theme mood based on visible items
-                    // Prioritize featured carousel if on Upcoming, or Continue Watching if on Home
-                    if category == "Upcoming", let firstHero = result.featuredUpcoming.first {
-                        let heroID = firstHero.id
-                        if let item = modelContext.model(for: heroID) as? MediaItem,
-                           !item.isDeleted,
-                           let hex = item.themeColorHex,
-                           let color = Color(hex: hex) {
-                            themeCoordinator.updateMood(for: [color], colorScheme: capturedColorScheme)
-                        }
-                    } else if category == "Home", let firstHome = result.homeContinueWatching.first {
-                        let heroID = firstHome.id
-                        if let item = modelContext.model(for: heroID) as? MediaItem,
-                           !item.isDeleted,
-                           let hex = item.themeColorHex,
-                           let color = Color(hex: hex) {
-                            themeCoordinator.updateMood(for: [color], colorScheme: capturedColorScheme)
-                        }
-                    } else {
-                        let visibleIDs = result.displayed.prefix(10).map { $0.id }
-                        let visibleColors = visibleIDs.compactMap { id -> Color? in
-                            guard let item = modelContext.model(for: id) as? MediaItem,
-                                  !item.isDeleted,
-                                  let hex = item.themeColorHex else { return nil }
-                            return Color(hex: hex)
-                        }
-                        themeCoordinator.updateMood(for: visibleColors, colorScheme: capturedColorScheme)
                     }
                 }
-                
+
                 // Async Recommendation Calculation (Only for Home view)
                 if category == "Home" {
+                    // Spread the load: Wait 2 seconds before heavy taste analytics
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if Task.isCancelled { return }
+
                     let tasteActor = TasteActor(modelContainer: modelContext.container)
                     let recs = await tasteActor.calculateRecommendations()
 
                     await MainActor.run {
                         // Find metadata for these IDs
-                        self.viewModel.recommendations = recs.compactMap { (id, reason) -> MediaThumbnailMetadata? in
-                            guard let item = modelContext.model(for: id) as? MediaItem, !item.isDeleted else { return nil }
-                            return MediaThumbnailMetadata(
-                                id: item.persistentModelID,
-                                title: item.title,
-                                posterURL: item.posterURL,
-                                backdropURL: item.backdropURL,
-                                overview: item.overview,
-                                genres: item.cachedGenres,
-                                releaseDate: item.releaseDate,
-                                state: item.state,
-                                type: item.type,
-                                taste: item.tasteValue,
-                                cachedNextAiringDate: item.cachedNextAiringDate,
-                                cachedNetwork: item.cachedNetwork,
-                                themeColorHex: item.themeColorHex,
-                                badgeText: item.badgeText,
-                                watchProgress: item.storedWatchProgressLabel,
-                                nextEpisodeToWatchLabel: item.storedNextEpisodeLabel,
-                                progress: item.storedProgress,
-                                isUpcoming: item.storedIsUpcoming,
-                                isBingeDrop: item.storedIsBingeDrop,
-                                smartBadgeLabel: item.storedSmartBadgeLabel,
-                                smartBadgeIcon: item.storedSmartBadgeIcon,
-                                isSparkleBadge: item.storedSmartBadgeIsSparkle,
-                                versionHash: item.lastStateChangeDate.hashValue,
-                                recommendationReason: reason,
-                                remainingCount: item.remainingEpisodesCount
-                            )
+                        self.viewModel.recommendations = recs.compactMap {
+                            (id, reason) -> MediaThumbnailMetadata? in
+                            guard let item = modelContext.model(for: id) as? MediaItem,
+                                !item.isDeleted
+                            else { return nil }
+                            return MediaThumbnailMetadata(item: item, recommendationReason: reason)
                         }
                     }
                 }
@@ -276,16 +216,17 @@ struct ContentView: View {
     }
 
     private func loadMoreItems() {
-        guard !viewModel.isLoadingMore && viewModel.displayedItems.count < viewModel.totalItemCount else { return }
-        
+        guard !viewModel.isLoadingMore && viewModel.displayedItems.count < viewModel.totalItemCount
+        else { return }
+
         viewModel.isLoadingMore = true
         let nextOffset = viewModel.displayedItems.count
-        
+
         Task {
             let currentSearchText = viewModel.searchText
             let category = viewModel.selectedCategory
             let sortOrder = viewModel.currentSortOrder
-            let network = viewModel.selectedNetwork
+            let networks = viewModel.selectedNetworks
             let language = viewModel.selectedLanguage
             let groupBy = viewModel.currentGroupBy
             let limit = viewModel.pageSize
@@ -294,48 +235,23 @@ struct ContentView: View {
                 let filterActor = MediaFilterActor(modelContainer: modelContext.container)
                 let result = try await filterActor.filterAndSort(
                     category: category,
-                    searchText: currentSearchText, 
+                    searchText: currentSearchText,
                     sortOrder: sortOrder,
-                    network: network,
+                    network: networks,
                     language: language,
                     groupBy: groupBy,
                     limit: limit,
                     offset: nextOffset
                 )
-                
+
                 await MainActor.run {
                     viewModel.displayedItems.append(contentsOf: result.displayed)
                     viewModel.isLoadingMore = false
                     viewModel.currentOffset = nextOffset
                 }
             } catch {
-                print("Error loading more items: \(error)")
+                print("Error loading more: \(error)")
                 await MainActor.run { viewModel.isLoadingMore = false }
-            }
-        }
-    }
-    
-    private func performLibrarySync() {
-        // 1. Find items to sync (Visible items + recently added for speed, or all if small)
-        let ids = viewModel.displayedItems.map { $0.id }
-        let itemsToRefresh = ids.compactMap { modelContext.model(for: $0) as? MediaItem }
-        
-        if itemsToRefresh.isEmpty { return }
-        
-        viewModel.isBatchRefreshing = true
-        
-        // 2. Clear image cache to force-refresh posters/logos (as requested)
-        ImageCache.shared.clearFullCache()
-        
-        // 3. Trigger metadata update
-        DataService.shared.refreshMetadata(for: itemsToRefresh, modelContext: modelContext)
-        
-        Task {
-            // Give network tasks a moment to start
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            await MainActor.run {
-                viewModel.isBatchRefreshing = false
-                updateDisplayedItems()
             }
         }
     }
@@ -350,10 +266,7 @@ struct ContentView: View {
                 initialType: currentMediaType,
                 viewModel: viewModel
             ) { item in
-                viewModel.selectedCategory = "All"
-                viewModel.searchText = item.title
-                viewModel.navigationPath = NavigationPath()
-                updateDisplayedItems()
+                viewModel.navigationPath.append(item)
             }
         } else if viewModel.selectedCategory == "Discover" {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
@@ -372,13 +285,12 @@ struct ContentView: View {
                 selectedCategory: viewModel.selectedCategory,
                 showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
                 searchText: viewModel.searchText,
-                selectedNetwork: viewModel.selectedNetwork,
+                selectedNetworks: viewModel.selectedNetworks,
                 namespace: posterNamespace,
                 isFastScrolling: $viewModel.isFastScrolling,
                 onSelectHero: { _ in },
-                onNetworkSelected: { network in
-                    viewModel.selectedNetwork = network
-                    updateDisplayedItems()
+                onNetworkSelected: { networks in
+                    onNetworkSelected(networks)
                 },
                 onLoadMore: {
                     loadMoreItems()
@@ -392,66 +304,81 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarNavigation(selection: $viewModel.selectedCategory)
                 .listStyle(.sidebar)
-                .scrollContentBackground(.hidden) // Allow appBackground to show through sidebar
+                .scrollContentBackground(.hidden)  // Allow appBackground to show through sidebar
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: viewModel.selectedCategory) {
-                    viewModel.selectedNetwork = nil
+                    viewModel.selectedNetworks = nil
                     viewModel.selectedLanguage = nil
-                    viewModel.isInitialLoading = true // Reset loading state for category switch
+                    viewModel.isInitialLoading = true  // Reset loading state for category switch
                     updateDisplayedItems()
                 }
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
                 mainContent
                     .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
-                .navigationTitle(isSearchActive ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory))
-                .navigationDestination(for: MediaItem.self) { item in
-                    DetailView(item: item, namespace: posterNamespace) { actorName in
-                        viewModel.selectedCategory = "All" // Switch to All to check all titles
-                        viewModel.searchText = actorName
-                        viewModel.navigationPath = NavigationPath() // CLEAR NAVIGATION STACK
-                        isSearchActive = true // ACTIVATE SEARCH VIEW
-                        updateDisplayedItems()
-                    }
-                }
-                .navigationDestination(for: DiscoveryFilter.self) { filter in
-                    FilteredLibraryGridView(filter: filter, namespace: posterNamespace, isFastScrolling: $viewModel.isFastScrolling)
-                }
-                .searchable(text: $viewModel.searchText, isPresented: $isSearchActive, placement: .automatic, prompt: "Search movies & shows")
-                .onSubmit(of: .search) {
-                    viewModel.searchSubmitTrigger += 1
-                }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        if !isSearchActive && isSortable {
-                            displaySettingsMenu
+                    .navigationTitle(
+                        isSearchActive
+                            ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
+                    )
+                    .navigationDestination(for: MediaItem.self) { item in
+                        DetailView(item: item, namespace: posterNamespace) { actorName in
+                            viewModel.selectedCategory = "All"  // Switch to All to check all titles
+                            viewModel.searchText = actorName
+                            viewModel.navigationPath = NavigationPath()  // CLEAR NAVIGATION STACK
+                            isSearchActive = true  // ACTIVATE SEARCH VIEW
+                            updateDisplayedItems()
                         }
                     }
-                    
-                    ToolbarItem(placement: .primaryAction) {
-                        if !isSearchActive && isRefreshable {
-                            refreshButton
+                    .navigationDestination(for: DiscoveryFilter.self) { filter in
+                        FilteredLibraryGridView(
+                            filter: filter, namespace: posterNamespace,
+                            isFastScrolling: $viewModel.isFastScrolling)
+                    }
+                    .searchable(
+                        text: $viewModel.searchText, isPresented: $isSearchActive,
+                        placement: .automatic, prompt: "Search movies & shows"
+                    )
+                    .onSubmit(of: .search) {
+                        viewModel.searchSubmitTrigger += 1
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            if !isSearchActive && isSortable {
+                                displaySettingsMenu
+                            }
+                        }
+
+                        ToolbarItem(placement: .primaryAction) {
+                            if !isSearchActive && isRefreshable {
+                                refreshButton
+                            }
                         }
                     }
-                }
-                .background {
-                    Group {
-                        Button("") { viewModel.selectedCategory = "Home" }.keyboardShortcut("1", modifiers: .command)
-                        Button("") { viewModel.selectedCategory = "Upcoming" }.keyboardShortcut("2", modifiers: .command)
-                        Button("") { viewModel.selectedCategory = "InProgress" }.keyboardShortcut("3", modifiers: .command)
-                        Button("") { viewModel.selectedCategory = "Watchlist" }.keyboardShortcut("4", modifiers: .command)
-                        Button("") { viewModel.selectedCategory = "All" }.keyboardShortcut("5", modifiers: .command)
-                        
-                        Button("") { isSearchActive = true }
-                            .keyboardShortcut("f", modifiers: .command)
+                    .background {
+                        Group {
+                            Button("") { viewModel.selectedCategory = "Home" }.keyboardShortcut(
+                                "1", modifiers: .command)
+                            Button("") { viewModel.selectedCategory = "Upcoming" }.keyboardShortcut(
+                                "2", modifiers: .command)
+                            Button("") { viewModel.selectedCategory = "InProgress" }
+                                .keyboardShortcut("3", modifiers: .command)
+                            Button("") { viewModel.selectedCategory = "Watchlist" }
+                                .keyboardShortcut("4", modifiers: .command)
+                            Button("") { viewModel.selectedCategory = "All" }.keyboardShortcut(
+                                "5", modifiers: .command)
+
+                            Button("") { isSearchActive = true }
+                                .keyboardShortcut("f", modifiers: .command)
+                        }
+                        .opacity(0)
                     }
-                    .opacity(0)
-                }
             }
             .sleepModeSupport()
         }
-        .appBackground(network: viewModel.selectedNetwork, category: viewModel.selectedCategory) // Apply to the whole NavigationSplitView
+        .appBackground(
+            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory
+        )  // Apply to the whole NavigationSplitView
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
         .task {
@@ -468,9 +395,9 @@ struct ContentView: View {
         }
     }
 
-    private func onNetworkSelected(_ network: String) {
+    private func onNetworkSelected(_ networks: [String]) {
         withAnimation {
-            viewModel.selectedNetwork = network.isEmpty ? nil : network
+            viewModel.selectedNetworks = networks.isEmpty ? nil : networks
             updateDisplayedItems()
         }
     }
@@ -478,13 +405,18 @@ struct ContentView: View {
     @ViewBuilder
     private var refreshButton: some View {
         Button {
-            performLibrarySync()
+            if viewModel.selectedCategory == "Discover" {
+                ImageCache.shared.clearFullCache()
+                viewModel.discoveryRefreshTrigger += 1
+            } else {
+                performLibrarySync()
+            }
         } label: {
             ZStack {
                 Circle()
                     .fill(isSyncHovered ? Color.primary.opacity(0.1) : Color.clear)
                     .frame(width: 32, height: 32)
-                
+
                 if viewModel.isBatchRefreshing {
                     ProgressView().controlSize(.small)
                 } else {
@@ -506,22 +438,34 @@ struct ContentView: View {
     @ViewBuilder
     private var displaySettingsMenu: some View {
         let cat = viewModel.selectedCategory ?? "All"
-        
+
         Menu {
-            Picker("Sort By", selection: Binding(
-                get: { viewModel.currentSortOrder },
-                set: { viewModel.categorySortOrders[cat] = $0; updateDisplayedItems() }
-            )) {
+            Picker(
+                "Sort By",
+                selection: Binding(
+                    get: { viewModel.currentSortOrder },
+                    set: {
+                        viewModel.categorySortOrders[cat] = $0
+                        updateDisplayedItems()
+                    }
+                )
+            ) {
                 ForEach(SortOrder.allCases) { order in
                     Label(order.rawValue, systemImage: order.icon)
                         .tag(order)
                 }
             }
-            
-            Picker("Group By", selection: Binding(
-                get: { viewModel.currentGroupBy },
-                set: { viewModel.categoryGroupBys[cat] = $0; updateDisplayedItems() }
-            )) {
+
+            Picker(
+                "Group By",
+                selection: Binding(
+                    get: { viewModel.currentGroupBy },
+                    set: {
+                        viewModel.categoryGroupBys[cat] = $0
+                        updateDisplayedItems()
+                    }
+                )
+            ) {
                 ForEach(GroupBy.allCases) { group in
                     Label(group.rawValue, systemImage: group.icon)
                         .tag(group)
@@ -540,14 +484,34 @@ struct ContentView: View {
     private var isSortable: Bool {
         guard let cat = viewModel.selectedCategory else { return false }
         if cat == "Discover" || cat == "Insights" { return false }
-        return cat == "All" || cat == "InProgress" || cat == "Watchlist" || cat == "Loved" || cat == "Completed" || cat == "Binge" || MediaType(rawValue: cat) != nil
+        return cat == "All" || cat == "InProgress" || cat == "Watchlist" || cat == "Loved"
+            || cat == "Completed" || cat == "Binge" || MediaType(rawValue: cat) != nil
     }
 
     private var isRefreshable: Bool {
         guard let cat = viewModel.selectedCategory else { return false }
-        // Discovery Hub has its own refreshable logic (pull to refresh)
-        if cat == "Discover" || cat == "Insights" || cat == "Home" { return false }
+        if cat == "Insights" || cat == "Home" { return false }
         return true
+    }
+
+    private func performLibrarySync() {
+        guard !viewModel.isBatchRefreshing else { return }
+
+        let descriptor = FetchDescriptor<MediaItem>()
+        guard let items = try? modelContext.fetch(descriptor) else { return }
+
+        viewModel.isBatchRefreshing = true
+
+        DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
+
+        // Listen for batch completion
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await MainActor.run {
+                viewModel.isBatchRefreshing = false
+                updateDisplayedItems()
+            }
+        }
     }
 }
 
@@ -557,75 +521,58 @@ struct FilteredLibraryGridView: View {
     @Binding var isFastScrolling: Bool
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @Environment(\.modelContext) private var modelContext
-    
+
     @State private var items: [MediaItem] = []
-    @State private var isLoading = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, minHeight: 200)
-                } else {
-                    let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                        ForEach(Array(items.indices), id: \.self) { idx in
-                            let item = items[idx]
-                            if !item.isDeleted {
-                                NavigationLink(value: item) {
-                                    MediaThumbnailView(item: item, mode: .grid, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
-                                }                            .buttonStyle(.interactive)
-                            }
+                // SectionHeader(title: filter.name, icon: filter.type == .studio ? "tv" : (filter.type == .genre ? "film" : "character.bubble"), iconColor: appAccent.color)
+
+                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+                    ForEach(items) { item in
+                        NavigationLink(value: item) {
+                            MediaThumbnailView(
+                                item: item, mode: .grid, namespace: namespace,
+                                isFastScrolling: isFastScrolling)
                         }
+                        .buttonStyle(.interactive)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 10)
                 }
             }
-            .padding(.vertical, 20)
+            .padding(30)
         }
-        .scrollClipDisabled()
-        .navigationTitle(displayTitle)
-        .appBackground(
-            network: filter.type == .studio ? filter.name : nil,
-            tint: filter.type != .studio ? appAccent.color : nil
-        )
-        .onAppear {
+        .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
+        .task {
             fetchItems()
         }
     }
 
-    private var displayTitle: String {
-        switch filter.type {
-        case .studio: return filter.name
-        case .genre: return filter.name
-        case .language: return LanguageUtils.languageName(for: filter.name)
-        }
-    }
-
     private func fetchItems() {
-        let type = filter.type
-        let name = filter.name
-        
-        let descriptor = FetchDescriptor<MediaItem>(
-            sortBy: [SortDescriptor(\.releaseDate, order: .reverse)]
-        )
-        
-        do {
-            let all = try modelContext.fetch(descriptor)
-            switch type {
-            case .studio:
-                items = all.filter { $0.cachedNetwork == name }
-            case .genre:
-                items = all.filter { $0.cachedGenres.contains(name) }
-            case .language:
-                items = all.filter { $0.cachedLanguage == name }
+        let descriptor = FetchDescriptor<MediaItem>()
+        if let all = try? modelContext.fetch(descriptor) {
+            withAnimation {
+                self.items = all.filter { item in
+                    switch filter.type {
+                    case .studio:
+                        let targets = filter.sourceNames ?? [filter.name]
+                        let normalizedTargets = targets.map {
+                            $0.lowercased().trimmingCharacters(in: .whitespaces)
+                        }
+                        if let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(
+                            in: .whitespaces)
+                        {
+                            return normalizedTargets.contains(itemNet)
+                        }
+                        return false
+                    case .genre:
+                        return item.cachedGenres.contains(filter.name)
+                    case .language:
+                        return item.cachedLanguage == filter.name
+                    }
+                }.sorted { $0.title < $1.title }
             }
-            isLoading = false
-        } catch {
-            print("Error fetching filtered items: \(error)")
-            isLoading = false
         }
     }
 }

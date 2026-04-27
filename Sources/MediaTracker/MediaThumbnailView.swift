@@ -68,9 +68,9 @@ struct MediaThumbnailView: View {
         self.capturedReleaseDate = item.releaseDate
         self.capturedThemeColorHex = item.themeColorHex
         self.capturedNextEpisodeLabel = item.storedNextEpisodeLabel
-        self.capturedWatchProgress = item.watchProgressLabel
-        self.capturedIsUpcoming = item.calculateIsUpcoming
-        self.capturedGridBadgeText = item.gridBadgeText
+        self.capturedWatchProgress = item.storedWatchProgressLabel
+        self.capturedIsUpcoming = item.isUpcoming
+        self.capturedGridBadgeText = item.badgeText
     }
     
     init(
@@ -140,22 +140,27 @@ struct MediaThumbnailView: View {
         }
     }
 
-    private var title: String { capturedTitle }
-    private var posterURL: String? { capturedPosterURL }
-    private var type: MediaType { capturedType }
-    private var safeState: MediaState { capturedState }
-    private var safeProgress: Double? { capturedProgress }
+    private var title: String { item?.title ?? capturedTitle }
+    private var posterURL: String? { item?.posterURL ?? capturedPosterURL }
+    private var type: MediaType { item?.type ?? capturedType }
+    private var safeState: MediaState { item?.state ?? capturedState }
+    private var safeProgress: Double? { item?.storedProgress ?? capturedProgress }
 
     private var yearLabel: String? {
-        if let date = capturedReleaseDate {
+        if let date = item?.releaseDate ?? capturedReleaseDate {
             return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
         }
         return nil
     }
 
     private var isAdded: Bool {
-        return capturedID != nil || isLocalInSearch
+        return (item != nil || capturedID != nil) || isLocalInSearch
     }
+
+    private var nextEpisodeLabel: String? { item?.storedNextEpisodeLabel ?? capturedNextEpisodeLabel }
+    private var watchProgress: String? { item?.storedWatchProgressLabel ?? capturedWatchProgress }
+    private var isUpcoming: Bool { item?.isUpcoming ?? capturedIsUpcoming }
+    private var gridBadgeText: String? { item?.badgeText ?? capturedGridBadgeText }
 
     var body: some View {
         Group {
@@ -220,8 +225,8 @@ struct MediaThumbnailView: View {
                     }
                     
                     // Show stats/progress in the hover stack (But NOT if completed)
-                    if capturedState != .completed {
-                        let currentInfo = capturedNextEpisodeLabel ?? capturedWatchProgress
+                    if safeState != .completed {
+                        let currentInfo = nextEpisodeLabel ?? watchProgress
                         if let info = currentInfo {
                             Text("•")
                             Text(info)
@@ -234,7 +239,7 @@ struct MediaThumbnailView: View {
                 .shadow(color: .black.opacity(0.6), radius: 2)
                 
                 // RESTORED DATE ROW
-                if capturedIsUpcoming, let date = capturedGridBadgeText {
+                if isUpcoming, let date = gridBadgeText {
                     Text(date.uppercased())
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .kerning(1.5)
@@ -286,13 +291,13 @@ struct MediaThumbnailView: View {
     private var posterLayer: some View {
         let content = Group {
             if let urlString = posterURL, let url = URL(string: urlString) {
-                let baseColor = capturedThemeColorHex.flatMap { Color(hex: $0) }
+                let baseColor = (item?.themeColorHex ?? capturedThemeColorHex).flatMap { Color(hex: $0) }
+                let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
                 
-                CachedImage(url: url, targetSize: CGSize(width: width * 3, height: height * 3), themeColor: baseColor, isFastScrolling: isFastScrolling) {
+                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
-                        .shimmer()
                         .overlay { ProgressView().controlSize(.small) }
                 }
                 .aspectRatio(contentMode: .fill)
@@ -323,47 +328,6 @@ struct MediaThumbnailView: View {
             }
         } else {
             content
-        }
-    }
-
-    @ViewBuilder
-    private func quickWatchOverlay() -> some View {
-        if !isRemoved, let id = capturedID {
-            Button {
-                if let item = modelContext.model(for: id) as? MediaItem, !item.isDeleted {
-                    markNextEpisodeAsWatched(for: item)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    if isButtonHovered, let nextLabel = capturedNextEpisodeLabel {
-                        Text(nextLabel)
-                            .font(.system(size: 8, weight: .bold))
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                    removal: .opacity))
-                    }
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8, weight: .bold))
-                }
-                .padding(6)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.1), radius: 2)
-                .overlay(
-                    Capsule()
-                        .stroke(.white.opacity(0.3), lineWidth: 0.5)
-                )
-                .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isButtonHovered = hovering
-                }
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.9)))
         }
     }
 
@@ -534,6 +498,5 @@ struct MediaThumbnailPlaceholder: View {
             }
         }
         .frame(width: width, height: height)
-        .shimmer()
     }
 }

@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
+    @AppStorage("studio_aliases") private var studioAliases = ""
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @AppStorage("theme_preference") private var themePreference: Int = 0 
@@ -214,7 +215,21 @@ struct SettingsView: View {
     }
     
     private var discoverySettings: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 32) {
+            SettingsSection(title: "Studio Aliases") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Merge multiple studios into one and pick an icon.")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    
+                    StudioAliasManagerView()
+                    
+                    Text("Changes apply after the next Discovery refresh.")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
             SettingsSection(title: "Content Filtering") {
                 DiscoveryManagementView()
             }
@@ -485,6 +500,209 @@ struct DiscoveryManagementView: View {
 
     private func calculateNetworks() {
         availableNetworks = networkEntities.map { $0.name }.sorted()
+    }
+}
+
+struct StudioAliasManagerView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var items: [MediaItem]
+    @AppStorage("studio_aliases") private var studioAliases = ""
+    
+    @State private var groups: [AliasGroup] = []
+    @State private var availableNetworks: [String] = []
+    @State private var showingAddGroup = false
+    @State private var newGroupName = ""
+    
+    struct AliasGroup: Identifiable {
+        let id = UUID()
+        var target: String
+        var sources: Set<String>
+        var preferredLogo: String?
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // 1. Group List
+            VStack(spacing: 12) {
+                if groups.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "rectangle.3.group")
+                            .font(.system(size: 24))
+                        Text("No studio groups created.")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                } else {
+                    ForEach($groups) { $group in
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text(group.target)
+                                    .font(.system(size: 14, weight: .bold))
+                                Spacer()
+                                Button { 
+                                    groups.removeAll { $0.id == group.id }
+                                    save()
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.red.opacity(0.8))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            // Source Picker
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(availableNetworks, id: \.self) { net in
+                                        let isSelected = group.sources.contains(net)
+                                        Button {
+                                            if isSelected {
+                                                group.sources.remove(net)
+                                                if group.preferredLogo == net { group.preferredLogo = nil }
+                                            } else {
+                                                group.sources.insert(net)
+                                            }
+                                            save()
+                                            FeedbackManager.shared.trigger(.click)
+                                        } label: {
+                                            Text(net)
+                                                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(isSelected ? Color.blue.opacity(0.15) : Color.primary.opacity(0.05))
+                                                .clipShape(Capsule())
+                                                .overlay {
+                                                    if isSelected {
+                                                        Capsule().stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                                    }
+                                                }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            
+                            // Logo Picker
+                            if !group.sources.isEmpty {
+                                HStack(spacing: 10) {
+                                    Text("Logo Source:")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    ForEach(Array(group.sources).sorted(), id: \.self) { src in
+                                        let isLogo = group.preferredLogo == src
+                                        Button {
+                                            group.preferredLogo = src
+                                            save()
+                                            FeedbackManager.shared.trigger(.click)
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: isLogo ? "checkmark.circle.fill" : "circle")
+                                                    .font(.system(size: 10))
+                                                Text(src)
+                                                    .font(.system(size: 11))
+                                            }
+                                            .foregroundStyle(isLogo ? Color.blue : .secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .padding(16)
+                        .background(Color.primary.opacity(0.03))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+            }
+            
+            // 2. Add Button
+            if showingAddGroup {
+                HStack {
+                    TextField("Group Name (e.g. Disney)", text: $newGroupName)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    
+                    Button("Create") {
+                        if !newGroupName.isEmpty {
+                            groups.append(AliasGroup(target: newGroupName, sources: [], preferredLogo: nil))
+                            newGroupName = ""
+                            showingAddGroup = false
+                            save()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    
+                    Button("Cancel") { showingAddGroup = false }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            } else {
+                Button {
+                    withAnimation { showingAddGroup = true }
+                } label: {
+                    Label("Add New Group", systemImage: "plus.circle.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.blue)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear { 
+            calculateNetworks()
+            load()
+        }
+    }
+    
+    private func calculateNetworks() {
+        let allNets = items.compactMap { $0.cachedNetwork }
+        availableNetworks = Array(Set(allNets)).sorted()
+    }
+    
+    private func load() {
+        let lines = studioAliases.components(separatedBy: .newlines)
+        var parsed: [AliasGroup] = []
+        
+        for line in lines where line.contains("=") {
+            let mainParts = line.components(separatedBy: "|")
+            let aliasPart = mainParts[0]
+            let logoPart = mainParts.count > 1 ? mainParts[1] : nil
+            
+            let sides = aliasPart.components(separatedBy: "=")
+            guard sides.count >= 2 else { continue }
+            
+            let target = sides[0].trimmingCharacters(in: .whitespaces)
+            let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            
+            var preferredLogoSource: String? = nil
+            if let logoStr = logoPart, logoStr.contains("Logo:") {
+                preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
+            }
+            
+            parsed.append(AliasGroup(target: target, sources: Set(sources), preferredLogo: preferredLogoSource))
+        }
+        self.groups = parsed
+    }
+    
+    private func save() {
+        var output = ""
+        for group in groups {
+            let sourcesStr = Array(group.sources).sorted().joined(separator: ", ")
+            var line = "\(group.target) = \(sourcesStr)"
+            if let logo = group.preferredLogo {
+                line += " | Logo: \(logo)"
+            }
+            output += line + "\n"
+        }
+        studioAliases = output.trimmingCharacters(in: .newlines)
     }
 }
 

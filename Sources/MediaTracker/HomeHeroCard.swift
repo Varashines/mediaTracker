@@ -13,9 +13,9 @@ struct HomeHeroCard: View {
         ZStack(alignment: .leading) {
             // 1. Cinematic Backdrop (Blurred & Darkened)
             if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
-                CachedImage(url: url, targetSize: CGSize(width: 1500, height: 840), isFastScrolling: isFastScrolling) { _ in } placeholder: {
+                CachedImage(url: url, targetSize: .backdropLarge, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
-                        .shimmer()
+                        .overlay { ProgressView().controlSize(.small) }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 500, height: 280)
@@ -55,9 +55,9 @@ struct HomeHeroCard: View {
             HStack(spacing: 24) {
                 // 3. Floating Vertical Poster (3D Depth)
                 if let poster = metadata.posterURL, let url = URL(string: poster) {
-                    CachedImage(url: url, targetSize: CGSize(width: 300, height: 450), isFastScrolling: isFastScrolling) { _ in } placeholder: {
+                    CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
-                            .shimmer()
+                            .overlay { ProgressView().controlSize(.small) }
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 140, height: 210)
@@ -167,6 +167,5 @@ struct HomeHeroCardPlaceholder: View {
             .padding(24)
         }
         .frame(width: 500, height: 280)
-        .shimmer()
     }
 }

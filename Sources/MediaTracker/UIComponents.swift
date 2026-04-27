@@ -466,6 +466,13 @@ struct LibraryEmptyStateView: View {
     }
 }
 
+extension CGSize {
+    static let thumbSmall = CGSize(width: 160, height: 240)
+    static let thumbMedium = CGSize(width: 320, height: 480)
+    static let thumbLarge = CGSize(width: 600, height: 900)
+    static let backdropLarge = CGSize(width: 1500, height: 840)
+}
+
 extension Color {
     static let detailAccent = Color.blue
 
@@ -531,24 +538,7 @@ extension Color {
     }
 }
 
-struct ShimmerEffect: ViewModifier {
-    @State private var phase: Double = 0.6
-    
-    func body(content: Content) -> some View {
-        content
-            .opacity(phase)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    phase = 0.3
-                }
-            }
-    }
-}
-
 extension View {
-    func shimmer() -> some View {
-        modifier(ShimmerEffect())
-    }
 }
 
 struct ThemeBackground: ViewModifier {
@@ -602,6 +592,14 @@ extension View {
     }
 }
 
+@preconcurrency
+struct ScrollOffsetKey: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 @MainActor
 @Observable
 class NetworkThemeManager {
@@ -639,288 +637,36 @@ class NetworkThemeManager {
     }
 }
 
-// MARK: - Hero Carousel with Progress Indicator
-
-@preconcurrency
-struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
-struct HeroCarousel: View {
-    let title: String
-    let icon: String
-    let iconColor: Color
-    let recommendations: [MediaThumbnailMetadata]
-    let namespace: Namespace.ID
-    var isFastScrolling: Bool = false
-    @Environment(\.modelContext) private var modelContext
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+struct CustomDisclosureStyle: DisclosureGroupStyle {
+    let buttonColor: Color
     
-    @State private var scrollProgress: Double = 0
-    @State private var scrollSpace = UUID().uuidString
-    @State private var contentWidth: CGFloat = 0
-    @State private var containerWidth: CGFloat = 0
-    @State private var isHovered = false
-    @State private var currentScrollX: CGFloat = 0
-    @State private var currentIndex: Int = 0
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(
-                title: title,
-                icon: icon,
-                iconColor: iconColor,
-                scrollProgress: recommendations.count > 1 ? scrollProgress : nil
-            )
-            .padding(.bottom, 8)
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                // High-response spring for the toggle
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    configuration.isExpanded.toggle()
+                }
+            } label: {
+                configuration.label
+                    .contentShape(Rectangle())
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
             
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 24) {
-                        Spacer(minLength: 16).id("HERO_START") // 16 + 24 spacing = 40px margin
-                        
-                        ForEach(Array(recommendations.enumerated()), id: \.offset) { index, metadata in
-                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                NavigationLink(value: item) {
-                                    HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
-                                }
-                                .buttonStyle(.interactive)
-                                .id(index)
-                            }
-                        }
-                        
-                        Spacer(minLength: 16)
-                    }
-                    .padding(.vertical, 20)
-                    .background(
-                        GeometryReader { geo in
-                            let minX = geo.frame(in: .named(scrollSpace)).minX
-                            Color.clear
-                                .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
-                                .onAppear { contentWidth = geo.size.width }
-                                .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
-                        }
+            if configuration.isExpanded {
+                configuration.content
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity
+                                .combined(with: .scale(scale: 0.98, anchor: .top))
+                                .combined(with: .move(edge: .top)),
+                            removal: .opacity
+                                .combined(with: .scale(scale: 0.95))
+                        )
                     )
-                }
-                .coordinateSpace(name: scrollSpace)
-                .scrollClipDisabled()
-                .overlay(alignment: .center) {
-                    // Side Arrows
-                    HStack {
-                        carouselArrow(systemImage: "chevron.left", isLeft: true, proxy: proxy)
-                            .opacity((isHovered && currentScrollX < -1) ? 1 : 0)
-                        
-                        Spacer()
-                        
-                        carouselArrow(systemImage: "chevron.right", isLeft: false, proxy: proxy)
-                            .opacity((isHovered && abs(currentScrollX) < contentWidth - containerWidth - 1) ? 1 : 0)
-                    }
-                    .padding(.horizontal, 15)
-                    .allowsHitTesting(isHovered)
-                }
-            }
-            .frame(height: 320)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHovered = hovering
-                }
-            }
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { containerWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
-                }
-            )
-            .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                guard let minX = dict[scrollSpace] else { return }
-                currentScrollX = minX
-                
-                // Update currentIndex for arrow navigation
-                let cardWidth: CGFloat = 500
-                let spacing: CGFloat = 24
-                currentIndex = Int(round(abs(minX) / (cardWidth + spacing)))
-                
-                let maxScroll = max(1, contentWidth - containerWidth)
-                let currentScroll = max(0, -minX)
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                    scrollProgress = min(1.0, currentScroll / maxScroll)
-                }
             }
         }
-        .onHover { isHovered = $0 }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private func carouselArrow(systemImage: String, isLeft: Bool, proxy: ScrollViewProxy) -> some View {
-        Button {
-            let cardWidth: CGFloat = 500
-            let spacing: CGFloat = 24
-            let step = max(1, Int(containerWidth / (cardWidth + spacing)))
-            let targetIndex = isLeft ? max(0, currentIndex - step) : min(recommendations.count - 1, currentIndex + step)
-            
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                if isLeft && targetIndex == 0 {
-                    proxy.scrollTo("HERO_START", anchor: .leading)
-                } else {
-                    proxy.scrollTo(targetIndex, anchor: .leading)
-                }
-                currentIndex = targetIndex
-            }
-        } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .shadow(radius: 4)
-        }
-        .buttonStyle(.plain)
     }
 }
 
-// MARK: - Standardized Components
-
-// MARK: - Shelf Carousel (For Secondary Sections)
-
-struct ShelfCarousel: View {
-    let title: String
-    let icon: String
-    let iconColor: Color
-    let items: [MediaThumbnailMetadata]
-    let namespace: Namespace.ID
-    var isFastScrolling: Bool = false
-    @Environment(\.modelContext) private var modelContext
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    
-    @State private var scrollProgress: Double = 0
-    @State private var scrollSpace = UUID().uuidString
-    @State private var contentWidth: CGFloat = 0
-    @State private var containerWidth: CGFloat = 0
-    @State private var isHovered = false
-    @State private var currentScrollX: CGFloat = 0
-    @State private var currentIndex: Int = 0
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(
-                title: title,
-                icon: icon,
-                iconColor: iconColor,
-                scrollProgress: items.count > 1 ? scrollProgress : nil
-            )
-            .padding(.bottom, 4)
-            
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        Spacer(minLength: 10).id("SHELF_START") // 10 + 20 spacing = 30px margin
-                        
-                        ForEach(Array(items.enumerated()), id: \.offset) { index, metadata in
-                            if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                NavigationLink(value: item) {
-                                    MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
-                                }
-                                .buttonStyle(.interactive)
-                                .id(index)
-                            }
-                        }
-                        
-                        Spacer(minLength: 10)
-                    }
-                    .padding(.vertical, 12)
-                    .background(
-                        GeometryReader { geo in
-                            let minX = geo.frame(in: .named(scrollSpace)).minX
-                            Color.clear
-                                .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
-                                .onAppear { contentWidth = geo.size.width }
-                                .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
-                        }
-                    )
-                }
-                .coordinateSpace(name: scrollSpace)
-                .scrollClipDisabled()
-                .overlay(alignment: .center) {
-                    // Side Arrows
-                    HStack {
-                        carouselArrow(systemImage: "chevron.left", isLeft: true, proxy: proxy)
-                            .opacity((isHovered && currentScrollX < -1) ? 1 : 0)
-                        
-                        Spacer()
-                        
-                        carouselArrow(systemImage: "chevron.right", isLeft: false, proxy: proxy)
-                            .opacity((isHovered && abs(currentScrollX) < contentWidth - containerWidth - 1) ? 1 : 0)
-                    }
-                    .padding(.horizontal, 15)
-                    .allowsHitTesting(isHovered)
-                }
-            }
-            .frame(height: 270)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHovered = hovering
-                }
-            }
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { containerWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
-                }
-            )
-            .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                guard let minX = dict[scrollSpace] else { return }
-                currentScrollX = minX
-                
-                // Update currentIndex for arrow navigation
-                let itemWidth: CGFloat = 160
-                let spacing: CGFloat = 20
-                currentIndex = Int(round(abs(minX) / (itemWidth + spacing)))
-
-                let maxScroll = max(1, contentWidth - containerWidth)
-                let currentScroll = max(0, -minX)
-                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
-                    scrollProgress = min(1.0, currentScroll / maxScroll)
-                }
-            }
-        }
-        .onHover { isHovered = $0 }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private func carouselArrow(systemImage: String, isLeft: Bool, proxy: ScrollViewProxy) -> some View {
-        Button {
-            let itemWidth: CGFloat = 160
-            let spacing: CGFloat = 20
-            let step = max(1, Int(containerWidth / (itemWidth + spacing)))
-            let targetIndex = isLeft ? max(0, currentIndex - step) : min(items.count - 1, currentIndex + step)
-            
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                if isLeft && targetIndex == 0 {
-                    proxy.scrollTo("SHELF_START", anchor: .leading)
-                } else {
-                    proxy.scrollTo(targetIndex, anchor: .leading)
-                }
-                currentIndex = targetIndex
-            }
-        } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .shadow(radius: 4)
-        }
-        .buttonStyle(.plain)
-    }
-}

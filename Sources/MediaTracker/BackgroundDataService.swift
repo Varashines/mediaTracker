@@ -17,7 +17,7 @@ actor BackgroundDataService {
         return false
     }
 
-    func refreshMetadata(for itemIDs: [PersistentIdentifier], metadataOnly: Bool = false) async {
+    func refreshMetadata(for itemIDs: [String], metadataOnly: Bool = false, force: Bool = false) async {
         if isThermalThrottled {
             print("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.")
             return
@@ -30,33 +30,51 @@ actor BackgroundDataService {
         let maxConcurrent = max(2, min(5, processorCount / 2))
         
         // Use withTaskGroup to throttle network requests
-        await withTaskGroup(of: Bool.self) { group in
+        var refreshedIDs: [String] = []
+        await withTaskGroup(of: (String, Bool).self) { group in
             var activeTasks = 0
             
             for id in itemIDs {
                 if activeTasks >= maxConcurrent {
-                    if await !group.next()! { errorCount += 1 }
+                    if let (refID, success) = await group.next() {
+                        if success { refreshedIDs.append(refID) } else { errorCount += 1 }
+                    }
                     activeTasks -= 1
                 }
                 
                 group.addTask {
-                    await self.refreshSingleItem(id: id, metadataOnly: metadataOnly)
+                    let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
+                    return (id, success)
                 }
                 activeTasks += 1
             }
             
             while activeTasks > 0 {
-                if await !group.next()! { errorCount += 1 }
+                if let (refID, success) = await group.next() {
+                    if success { refreshedIDs.append(refID) } else { errorCount += 1 }
+                }
                 activeTasks -= 1
+            }
+        }
+
+        // Phase 2 Optimization: Batch Save
+        try? modelContext.save()
+        
+        // Phase 5: Bulk Notification (Only after save!)
+        for refID in refreshedIDs {
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refID])
             }
         }
         
         print("✅ Background Refresh: Completed with \(errorCount) errors.")
     }
 
-    func refreshSingleItem(id: PersistentIdentifier, metadataOnly: Bool = false) async -> Bool {
-        // Crash Prevention: Ensure the item still exists in the store before processing
-        guard let item = modelContext.model(for: id) as? MediaItem else { return false }
+    func refreshSingleItem(id: String, metadataOnly: Bool = false, force: Bool = false, shouldSave: Bool = true) async -> Bool {
+        // Crash Prevention: Use a safe fetch descriptor instead of model(for:) with PersistentIdentifier.
+        // This avoids crashing if the item was deleted or hasn't been committed yet.
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
+        guard let item = try? modelContext.fetch(descriptor).first else { return false }
         
         let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
         guard let tmdbID = Int(tmdbIDString) else { return false }
@@ -73,7 +91,7 @@ actor BackgroundDataService {
                     item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                 }
                 if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
+                    item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
                 }
                 
                 let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
@@ -81,20 +99,31 @@ actor BackgroundDataService {
                 movieDetails.runtime = details.runtime
                 movieDetails.genres = details.genres
                 movieDetails.voteAverage = details.voteAverage
-                movieDetails.originalLanguage = details.originalLanguage
+                movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
                 movieDetails.creators = details.directors.map { $0.name }
                 
-                // Sync Cast
-                for member in movieDetails.cast { modelContext.delete(member) }
-                var newCastList: [CastMember] = []
-                for c in details.cast {
-                    let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                    member.movieDetails = movieDetails
-                    modelContext.insert(member)
-                    newCastList.append(member)
+                // Update Cast - Only if changed
+                let newCastResults = details.cast
+                let currentCast = item.displayCast
+                let hasChanged = currentCast.count != newCastResults.count || 
+                                zip(currentCast.sorted(by: { $0.name < $1.name }), 
+                                    newCastResults.sorted(by: { $0.name < $1.name }))
+                                .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+
+                if hasChanged || movieDetails.cast.isEmpty {
+                    let oldCast = movieDetails.cast
+                    for member in oldCast { modelContext.delete(member) }
+                    
+                    var newCastList: [CastMember] = []
+                    for c in newCastResults {
+                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        member.movieDetails = movieDetails
+                        modelContext.insert(member)
+                        newCastList.append(member)
+                    }
+                    movieDetails.cast = newCastList
                 }
-                movieDetails.cast = newCastList
                 
                 if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
                 
@@ -109,7 +138,8 @@ actor BackgroundDataService {
                 let totalCachedEpisodes = tvDetails.seasons.reduce(0) { $0 + $1.episodes.count }
                 let hasMissingEpisodes = tvDetails.seasons.contains(where: { $0.episodes.isEmpty }) && !tvDetails.seasons.isEmpty
 
-                let isAlreadyCurrent = tvDetails.numberOfEpisodes == details.episodesCount && 
+                let isAlreadyCurrent = !force && 
+                                     tvDetails.numberOfEpisodes == details.episodesCount && 
                                      tvDetails.status == details.status && 
                                      item.releaseDate != nil &&
                                      !metadataOnly &&
@@ -136,7 +166,7 @@ actor BackgroundDataService {
                     item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                 }
                 if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
+                    item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
                 }
                 
                 // Parallel Season Fetching
@@ -157,15 +187,27 @@ actor BackgroundDataService {
                     }
                 }
 
-                // Update Cast
-                for member in tvDetails.cast { modelContext.delete(member) }
-                var newCastList: [CastMember] = []
-                for c in details.cast {
-                    let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
-                    member.tvShowDetails = tvDetails
-                    modelContext.insert(member)
-                    newCastList.append(member)
+                // Update Cast - Only if changed
+                let newCastResults = details.cast
+                let currentCast = item.displayCast
+                let hasCastChanged = currentCast.count != newCastResults.count || 
+                                   zip(currentCast.sorted(by: { $0.name < $1.name }), 
+                                       newCastResults.sorted(by: { $0.name < $1.name }))
+                                   .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+
+                if hasCastChanged || tvDetails.cast.isEmpty {
+                    let oldCast = tvDetails.cast
+                    for member in oldCast { modelContext.delete(member) }
+                    
+                    var newCastList: [CastMember] = []
+                    for c in newCastResults {
+                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        member.tvShowDetails = tvDetails
+                        modelContext.insert(member)
+                        newCastList.append(member)
+                    }
+                    tvDetails.cast = newCastList
                 }
 
                 // Diff-based Sync
@@ -174,21 +216,20 @@ actor BackgroundDataService {
                 
                 tvDetails.voteAverage = details.voteAverage
                 tvDetails.genres = details.genres
-                tvDetails.network = details.network
+                tvDetails.network = await StringPool.shared.intern(details.network)
                 tvDetails.networkLogoPath = details.networkLogoPath
-                tvDetails.originalLanguage = details.originalLanguage
-                tvDetails.status = details.status
+                tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
+                tvDetails.status = await StringPool.shared.intern(details.status)
                 tvDetails.creators = details.creators.map { $0.name }
                 tvDetails.numberOfSeasons = details.seasonsCount
                 tvDetails.numberOfEpisodes = details.episodesCount
                 tvDetails.tvMazeID = tvMazeID
                 tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
                 tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                tvDetails.cast = newCastList
                 
                 if !metadataOnly {
                     // FORCE FULL SYNC if episodes are missing (totalCount == 0) or any season is empty
-                    let shouldFetchAll = item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
+                    let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
                     let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
 
                     for seasonData in seasonsToSync {
@@ -198,21 +239,32 @@ actor BackgroundDataService {
                         if season.modelContext == nil {
                             season.tvShowDetails = tvDetails
                             modelContext.insert(season)
+                            // FORCE SYNC: Explicitly append to parent array to trigger MainActor redraw
+                            if !tvDetails.seasons.contains(where: { $0.seasonNumber == sNum }) {
+                                tvDetails.seasons.append(season)
+                            }
                         }
                         
-                        let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
-                        for ep in episodes {
-                            let episode = season.episodes.first(where: { $0.episodeNumber == ep.episodeNumber }) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
-                            
-                            if episode.modelContext == nil {
-                                episode.season = season
-                                modelContext.insert(episode)
-                            } else {
-                                episode.name = ep.name
-                                episode.overview = ep.overview
-                                episode.airDate = ep.airDate
-                                episode.runtime = ep.runtime
+                        if let episodes = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) {
+                            for ep in episodes {
+                                let episode = season.episodes.first(where: { $0.episodeNumber == ep.episodeNumber }) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
+                                
+                                if episode.modelContext == nil {
+                                    episode.season = season
+                                    modelContext.insert(episode)
+                                    // FORCE SYNC: Explicitly append to parent array to trigger MainActor redraw
+                                    if !season.episodes.contains(where: { $0.episodeNumber == ep.episodeNumber }) {
+                                        season.episodes.append(episode)
+                                    }
+                                } else {
+                                    episode.name = ep.name
+                                    episode.overview = ep.overview
+                                    episode.airDate = ep.airDate
+                                    episode.runtime = ep.runtime
+                                }
                             }
+                        } else {
+                            print("⚠️ Failed to fetch episodes for \(item.title) season \(sNum).")
                         }
                     }
                     tvDetails.recalculateCachedProperties()
@@ -223,7 +275,35 @@ actor BackgroundDataService {
             
             item.syncCachedProperties()
             item.updateSearchableText()
-            try modelContext.save()
+            
+            // Phase 5: Notification Scheduling
+            if item.type == .movie {
+                await NotificationManager.shared.scheduleMovieNotification(
+                    id: item.id, 
+                    title: item.title, 
+                    releaseDate: item.releaseDate, 
+                    posterURL: item.posterURL
+                )
+            } else if item.type == .tvShow, let tv = item.tvShowDetails {
+                await NotificationManager.shared.scheduleTVNotification(
+                    id: item.id, 
+                    title: item.title, 
+                    posterURL: item.posterURL, 
+                    nextDate: tv.nextEpisodeDate, 
+                    nextEpisodeNumber: tv.nextEpisodeNumber, 
+                    nextSeasonNumber: tv.nextSeasonNumber, 
+                    nextEpisodeTime: nil
+                )
+            }
+
+            if shouldSave {
+                try modelContext.save()
+                let refreshedID = item.id
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
+                }
+            }
+            
             return true
         } catch {
             print("❌ Refresh error for \(item.title): \(error)")

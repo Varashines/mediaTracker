@@ -2,9 +2,13 @@ import AppKit
 import SwiftUI
 import ImageIO
 
+@MainActor
 class ColorExtractor {
     /// Extracts the dominant color using high-performance ImageIO thumbnails to minimize memory pressure.
     static func dominantColor(from url: URL) -> Color {
+        // LOCKDOWN: Skip pixel processing if hibernating
+        if SleepManager.shared.isAsleep { return .accentColor }
+
         let options: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
             kCGImageSourceCreateThumbnailFromImageAlways: true,

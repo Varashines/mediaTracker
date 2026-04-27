@@ -11,11 +11,11 @@ struct MainLibraryView: View {
     let selectedCategory: String?
     let showingUpcomingOnly: Bool
     let searchText: String
-    let selectedNetwork: String?
+    let selectedNetworks: [String]?
     let namespace: Namespace.ID
     @Binding var isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
-    let onNetworkSelected: (String) -> Void
+    let onNetworkSelected: ([String]) -> Void
     let onLoadMore: () -> Void
     var viewModel: MediaViewModel
 
@@ -60,7 +60,7 @@ struct MainLibraryView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
-                    if selectedCategory == "Home" && searchText.isEmpty && selectedNetwork == nil {
+                    if selectedCategory == "Home" && searchText.isEmpty && selectedNetworks == nil {
                         // Continue Watching (Top Carousel)
                         VStack(alignment: .leading, spacing: 10) {
                             SectionHeader(
@@ -78,7 +78,7 @@ struct MainLibraryView: View {
                                             ForEach(homeContinueWatching) { metadata in
                                                 if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
                                                     NavigationLink(value: item) {
-                                                        MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
+                                                        MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
                                                     }
                                                     .buttonStyle(.interactive)
                                                 }
@@ -118,7 +118,7 @@ struct MainLibraryView: View {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 20) {
                                         ForEach(0..<6, id: \.self) { _ in
-                                            MediaThumbnailPlaceholder(mode: .grid)
+                                            MediaThumbnailPlaceholder(mode: .hero)
                                         }
                                     }
                                     .padding(.horizontal, 30)
@@ -199,7 +199,7 @@ struct MainLibraryView: View {
                     }
 
                     // 2. Eager Featured Carousel (Upcoming View)
-                    if showingUpcomingOnly && searchText.isEmpty && selectedNetwork == nil && !featuredCarouselItems.isEmpty {
+                    if showingUpcomingOnly && searchText.isEmpty && selectedNetworks == nil && !featuredCarouselItems.isEmpty {
                         VStack(alignment: .leading, spacing: 15) {
                             SectionHeader(
                                 title: "Featured",
@@ -254,16 +254,18 @@ struct MainLibraryView: View {
                     
                     VStack(alignment: .leading, spacing: 15) {
                         // Header Logic
-                        if let network = selectedNetwork {
-                            SectionHeader(title: network, icon: "tv", iconColor: appAccent.color)
+                        if let networks = selectedNetworks, let first = networks.first {
+                            let title = networks.count == 1 ? first : "Merged Studios"
+                            SectionHeader(title: title, icon: "tv", iconColor: appAccent.color)
                                 .overlay(alignment: .trailing) {
-                                    Button { withAnimation { onNetworkSelected("") } } label: {
+                                    Button { withAnimation { onNetworkSelected([]) } } label: {
                                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                                     }
                                     .buttonStyle(.plain)
                                     .padding(.trailing, 40)
                                 }
-                        } else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
+                        }
+ else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
                             SectionHeader(title: selectedCategory ?? "Library", icon: "folder", iconColor: .secondary)
                         } else if selectedCategory == "Upcoming" {
                             SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
@@ -297,7 +299,7 @@ struct MainLibraryView: View {
                             }
                         } else {
                             // 2. Eager Recently Added Row (Always Ready)
-                            if selectedCategory == "All" && searchText.isEmpty && selectedNetwork == nil {
+                            if selectedCategory == "All" && searchText.isEmpty && selectedNetworks == nil {
                                 VStack(alignment: .leading, spacing: 15) {
                                     SectionHeader(title: "Recently Added", icon: "clock.badge.checkmark", iconColor: .orange)
                                     ScrollView(.horizontal, showsIndicators: false) {
@@ -404,6 +406,12 @@ struct MainLibraryView: View {
                 }
             }
             .scrollClipDisabled()
+            .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
+                if isAsleep {
+                    scrollTimer?.invalidate()
+                    isFastScrolling = false
+                }
+            }
             .onAppear { visibleCount = 40 }
             .onChange(of: items.count) { visibleCount = 40 }
         }

@@ -136,6 +136,15 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable {
 struct DiscoveryFilter: Hashable, Codable {
     let type: FilterType
     let name: String
+    var sourceNames: [String]? = nil
+}
+
+struct SimpleCastMember: Codable, Identifiable {
+    var id: String { "\(name)_\(characterName)" }
+    let name: String
+    let characterName: String
+    let profileURL: String?
+    let order: Int
 }
 
 struct DiscoveryNode: Identifiable, Equatable, Codable {
@@ -145,6 +154,7 @@ struct DiscoveryNode: Identifiable, Equatable, Codable {
     let logoPath: String?
     let count: Int
     var themeColorHex: String? = nil
+    var sourceNames: [String]? = nil
 }
 
 @Model
@@ -153,11 +163,23 @@ final class NetworkEntity {
     var logoPath: String?
     var count: Int = 0
     var themeColorHex: String?
+    var sourceNamesData: Data? = nil
 
-    init(name: String, logoPath: String?, count: Int = 1) {
+    var sourceNames: [String]? {
+        get {
+            guard let data = sourceNamesData else { return nil }
+            return try? JSONDecoder().decode([String].self, from: data)
+        }
+        set {
+            sourceNamesData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    init(name: String, logoPath: String?, count: Int = 1, sourceNames: [String]? = nil) {
         self.name = name
         self.logoPath = logoPath
         self.count = count
+        self.sourceNames = sourceNames
     }
 }
 
@@ -186,6 +208,7 @@ final class LanguageEntity {
 extension Notification.Name {
     static let mediaStateChanged = Notification.Name("mediaStateChanged")
     static let tasteWeightsChanged = Notification.Name("tasteWeightsChanged")
+    static let mediaItemRefreshed = Notification.Name("mediaItemRefreshed")
 }
 
 @Model
@@ -236,6 +259,15 @@ final class MediaItem {
     var storedProgress: Double?
     var searchableText: String = ""
 
+    var displayCast: [SimpleCastMember] {
+        if let movie = movieDetails, !movie.cast.isEmpty {
+            return movie.cast.map { SimpleCastMember(name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+        } else if let tv = tvShowDetails, !tv.cast.isEmpty {
+            return tv.cast.map { SimpleCastMember(name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+        }
+        return []
+    }
+
     init(id: String, title: String, overview: String, posterURL: String? = nil, backdropURL: String? = nil, releaseDate: Date? = nil, type: MediaType? = .movie) {
         self.id = id
         self.title = title
@@ -268,8 +300,6 @@ final class MediaItem {
         return date > Date()
     }
     
-    var calculateIsUpcoming: Bool { isUpcoming }
-
     var badgeText: String? {
         if isUpcoming {
             return cachedNextAiringDate?.formatted(date: .abbreviated, time: .omitted)
@@ -278,6 +308,7 @@ final class MediaItem {
     }
     
     var gridBadgeText: String? { badgeText }
+    
     var detailBadgeText: String? {
         if isUpcoming {
             if type == .tvShow {
@@ -288,9 +319,6 @@ final class MediaItem {
         }
         return nil
     }
-    var watchProgressLabel: String? { storedWatchProgressLabel }
-    var nextEpisodeToWatchLabel: String? { storedNextEpisodeLabel }
-    var nextAiringDate: Date? { cachedNextAiringDate }
 
     var requiresMaintenanceRefresh: Bool {
         guard let last = lastUpdated else { return true }
@@ -333,7 +361,7 @@ final class MediaItem {
     func syncCachedProperties() {
         let now = Date()
         let currentState = state ?? .wishlist
-        
+
         if type == .movie, let movie = movieDetails {
             self.cachedGenres = movie.genres
             self.cachedLanguage = movie.originalLanguage
@@ -343,7 +371,6 @@ final class MediaItem {
             self.cachedLanguage = tv.originalLanguage
             self.cachedNetwork = tv.network
             self.cachedNetworkLogoPath = tv.networkLogoPath
-            
             // Recalculate episode stats - EXCLUDE SEASON 0 (Specials)
             // Phase 3 Optimization: Pre-filter seasons to reduce flattened episode count processing
             let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
@@ -361,9 +388,10 @@ final class MediaItem {
             }
             
             let watched = allEpisodes.filter { $0.isWatched }
-            let remaining = allEpisodes.count - watched.count
-            self.remainingEpisodesCount = remaining
-            tv.remainingEpisodesCount = remaining
+            let aired = allEpisodes.filter { ($0.airDateAsDate ?? .distantFuture) <= now }
+            let remaining = aired.count - watched.count
+            self.remainingEpisodesCount = max(0, remaining)
+            tv.remainingEpisodesCount = max(0, remaining)
             
             // AUTOMATION: State Transitions based on progress
             let progress = Double(watched.count) / Double(allEpisodes.count)
@@ -412,7 +440,9 @@ final class MediaItem {
                 }
                 
                 // Badge Logic
-                let isAvailable = (firstUnwatched.airDateAsDate != nil) && (firstUnwatched.airDateAsDate! <= now)
+                let airDate = firstUnwatched.airDateAsDate
+                let isAvailable = (airDate != nil) && (airDate! <= now)
+                let isRecentlyAired = isAvailable && airDate! > now.addingTimeInterval(-86400 * 2)
 
                 if self.storedIsBingeDrop {
                     self.storedSmartBadgeLabel = "BINGE DROP"
@@ -422,9 +452,14 @@ final class MediaItem {
                     self.storedSmartBadgeLabel = "FINALE"
                     self.storedSmartBadgeIcon = "flag.checkered"
                     self.storedSmartBadgeIsSparkle = true
-                } else if isAvailable && (tv.numberOfSeasons ?? 0) > 1 && 
+                } else if isRecentlyAired {
+                    // Recently aired (last 48h) should trigger STREAMING badge instead of BINGE
+                    self.storedSmartBadgeLabel = "STREAMING"
+                    self.storedSmartBadgeIcon = "play.fill"
+                    self.storedSmartBadgeIsSparkle = true
+                } else if isAvailable && (tv.numberOfSeasons ?? 0) >= 1 && 
                         (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
-                        progress >= 0.3 {
+                        progress >= 0.3 && (self.remainingEpisodesCount ?? 0) > 1 {
                     self.storedSmartBadgeLabel = "BINGE"
                     self.storedSmartBadgeIcon = "sparkles.tv"
                     self.storedSmartBadgeIsSparkle = false
@@ -460,10 +495,10 @@ final class MediaItem {
         }
 
         self.storedIsUpcoming = isUpcoming
-        updateSearchableText()
-    }
-}
 
+        updateSearchableText()
+        }
+        }
 @Model
 final class MovieDetails {
     var tmdbID: Int
@@ -561,6 +596,7 @@ final class TVEpisode {
     var airstamp: String?
     var runtime: Int?
     var isWatched: Bool = false
+    var showID: Int?
     var uniqueID: String? = nil
     var season: TVSeason?
     
@@ -577,6 +613,7 @@ final class TVEpisode {
         self.airstamp = airstamp
         self.runtime = runtime
         self.isWatched = isWatched
+        self.showID = showID
         if let showID = showID {
             self.uniqueID = "\(showID)_\(seasonNumber)_\(episodeNumber)"
         } else {

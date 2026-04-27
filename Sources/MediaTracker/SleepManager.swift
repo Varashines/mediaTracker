@@ -43,6 +43,10 @@ class SleepManager {
         }
     }
     
+    func forceSleep() {
+        enterSleepMode()
+    }
+    
     private func enterSleepMode() {
         guard !isAsleep else { return }
         withAnimation(.easeInOut(duration: 1.0)) {
@@ -64,7 +68,13 @@ class SleepManager {
     private func setupInteractionMonitor() {
         #if os(macOS)
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown, .mouseMoved, .scrollWheel]) { [weak self] event in
-            self?.resetTimer()
+            // ONLY wake up if the user is interacting with the main window.
+            // This allows the MenuBar dashboard to be used without waking the heavy main app view.
+            guard let self = self, let main = NSApp.mainWindow, event.window == main else {
+                return event
+            }
+            
+            self.resetTimer()
             return event
         }
         #endif
@@ -78,7 +88,7 @@ struct SleepOverlayModifier: ViewModifier {
         ZStack {
             content
                 .disabled(sleepManager.isAsleep)
-                .blur(radius: sleepManager.isAsleep ? 10 : 0)
+                .opacity(sleepManager.isAsleep ? 0 : 1)
                 .scaleEffect(sleepManager.isAsleep ? 0.98 : 1.0)
             
             if sleepManager.isAsleep {

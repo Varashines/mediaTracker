@@ -58,8 +58,7 @@ class ImageCache {
             try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         }
         
-        memoryCache.countLimit = 200 
-        
+        memoryCache.countLimit = 60
         // Phase 1 Optimization: Asynchronous Disk Indexing (M1 Startup Fix)
         Task.detached(priority: .background) {
             let fm = FileManager.default
@@ -128,6 +127,44 @@ class ImageCache {
                 self.diskCacheIndex.removeAll()
                 // Force UI to refresh existing views
                 self.updates.send("CLEARED_ALL")
+            }
+        }
+    }
+
+    func clearCache(forURLs urls: [String]) {
+        let hashes = urls.map { url in
+            let h = SHA256.hash(data: Data(url.utf8)).map { String(format: "%02x", $0) }.joined()
+            
+            // 1. Memory Clear
+            if let keys = urlToKeys[url] {
+                for key in keys {
+                    memoryCache.removeObject(forKey: key as NSString)
+                }
+                urlToKeys.removeValue(forKey: url)
+            }
+            return h
+        }
+        
+        if hashes.isEmpty { return }
+
+        // 2. Disk Clear
+        Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            let files = (try? fm.contentsOfDirectory(at: self.cacheDirectory, includingPropertiesForKeys: nil)) ?? []
+            for file in files {
+                let fileName = file.lastPathComponent
+                if hashes.contains(where: { fileName.hasPrefix($0) }) {
+                    try? fm.removeItem(at: file)
+                    await MainActor.run {
+                        _ = ImageCache.shared.diskCacheIndex.remove(fileName)
+                    }
+                }
+            }
+            
+            await MainActor.run {
+                for url in urls {
+                    self.updates.send(url)
+                }
             }
         }
     }
@@ -294,6 +331,7 @@ class ImageCache {
         let rawData = data
         let diskFileName = fileName(for: key, size: targetSize)
         let diskCacheDir = cacheDirectory
+        let screenScale = self.screenScale
         
         // Only decode for memory cache if we don't have a CGImage yet
         let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
@@ -302,8 +340,33 @@ class ImageCache {
         await Task.detached(priority: .background) {
             let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
             
-            // PASS-THROUGH: Write raw data directly if available and no resizing needed
-            if let data = rawData, targetSize == nil {
+            // Phase 3 Optimization: Downsample before saving to disk to save space and I/O
+            if let targetSize = targetSize, let data = rawData {
+                let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+                if let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) {
+                    let maxDimension = max(targetSize.width, targetSize.height) * screenScale
+                    let downsampleOptions = [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceShouldCacheImmediately: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: maxDimension
+                    ] as CFDictionary
+                    
+                    if let downsampledCG = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
+                        let bitmap = NSBitmapImageRep(cgImage: downsampledCG)
+                        let hasAlpha = downsampledCG.alphaInfo != .none && downsampledCG.alphaInfo != .noneSkipLast && downsampledCG.alphaInfo != .noneSkipFirst
+                        let usePNG = alwaysPreserveAlpha || hasAlpha
+                        
+                        let dataToWrite = usePNG ? bitmap.representation(using: .png, properties: [:]) : bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+                        try? dataToWrite?.write(to: fileURL)
+                    } else {
+                        try? data.write(to: fileURL)
+                    }
+                } else {
+                    try? data.write(to: fileURL)
+                }
+            } else if let data = rawData, targetSize == nil {
+                // PASS-THROUGH: Write raw data directly if available and no resizing needed
                 try? data.write(to: fileURL)
             } else if let cg = cgImage {
                 // Resize or re-encode if necessary
@@ -388,11 +451,30 @@ class ImageCache {
     }
 
     private func loadFromDisk(fileURL: URL, targetSize: CGSize?) async -> ImageContainer? {
+        let screenScale = self.screenScale
         return await DiskIOActor.shared.run {
-            guard let data = try? Data(contentsOf: fileURL),
-                  let image = NSImage(data: data) else { return nil }
+            guard let data = try? Data(contentsOf: fileURL) else { return nil }
             
-            guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            if let targetSize = targetSize {
+                let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+                if let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) {
+                    let maxDimension = max(targetSize.width, targetSize.height) * screenScale
+                    let downsampleOptions = [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceShouldCacheImmediately: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: maxDimension
+                    ] as CFDictionary
+                    
+                    if let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
+                        return ImageContainer(image: cgImage)
+                    }
+                }
+            }
+            
+            // Fallback for missing targetSize or failed downsample
+            guard let image = NSImage(data: data),
+                  let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
             return ImageContainer(image: cgImage)
         }
     }

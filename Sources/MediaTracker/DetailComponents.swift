@@ -52,7 +52,7 @@ struct PosterView: View {
     var namespace: Namespace.ID? = nil
 
     var body: some View {
-        if let urlString = item.posterURL, let url = URL(string: urlString.replacingOccurrences(of: "w500", with: "original").replacingOccurrences(of: "w780", with: "original")) {
+        if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
                 // 1. Aurora Glow Background
                 RoundedRectangle(cornerRadius: 16)
@@ -61,7 +61,7 @@ struct PosterView: View {
                     .blur(radius: 50)
                     .offset(y: 10)
                 
-                let content = CachedImage(url: url, targetSize: CGSize(width: 600, height: 900), priority: .critical, themeColor: themeColor) { _ in
+                let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .critical, themeColor: themeColor) { _ in
                     } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
                     }
@@ -130,7 +130,7 @@ struct TitleSection: View {
                         .liquidGlassPill(accentColor: themeColor)
 
                     if item.isUpcoming {
-                        let isStreaming = (item.nextAiringDate ?? Date()) < Date()
+                        let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
                         let badge = Text(isStreaming ? "Now Streaming" : "Upcoming")
                             .font(.subheadline.weight(.bold))
                             .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
@@ -223,7 +223,9 @@ struct MetadataSection: View {
                 HStack(spacing: 8) {
                     MetadataLine(label: "Genres", value: tv.genres.joined(separator: ", "), themeColor: themeColor)
                     if let s = tv.numberOfSeasons, let e = tv.numberOfEpisodes {
-                        MetadataLine(label: "Library", value: "\(s) Seasons, \(e) Episodes", themeColor: themeColor)
+                        let sLabel = s == 1 ? "Season" : "Seasons"
+                        let eLabel = e == 1 ? "Episode" : "Episodes"
+                        MetadataLine(label: "Library", value: "\(s) \(sLabel), \(e) \(eLabel)", themeColor: themeColor)
                     }
                 }
             }
@@ -248,36 +250,48 @@ struct OverviewSection: View {
 }
 
 struct CastSectionViewNew: View {
-    let cast: [CastMember]
+    let cast: [SimpleCastMember]
     let themeColor: Color
     var onCastSelected: ((String) -> Void)? = nil
+    
+    @State private var isVisible = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Cast & Crew")
-                .font(.title3.bold())
-                .padding(.horizontal, 10)
-
             ScrollView(.horizontal, showsIndicators: false) {
                 let filteredCast = cast.filter { $0.characterName != "Creator" && $0.characterName != "Director" }
                 let sortedCast = filteredCast.sorted(by: { $0.order < $1.order })
 
                 LazyHStack(alignment: .center, spacing: 16) {
-                    ForEach(sortedCast) { member in
+                    ForEach(Array(sortedCast.enumerated()), id: \.element.id) { index, member in
                         CastMemberCardNew(member: member, themeColor: themeColor) {
                             onCastSelected?(member.name)
                         }
+                        .offset(x: isVisible ? 0 : 40)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.95)
+                        .animation(
+                            .spring(response: 0.5, dampingFraction: 0.8)
+                            .delay(Double(index) * 0.05),
+                            value: isVisible
+                        )
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 15)
             }
         }
+        .onAppear {
+            isVisible = true
+        }
+        .onDisappear {
+            isVisible = false
+        }
     }
 }
 
 struct CastMemberCardNew: View {
-    let member: CastMember
+    let member: SimpleCastMember
     let themeColor: Color
     var action: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
@@ -365,22 +379,5 @@ struct MetadataLine: View {
             return Locale.current.localizedString(forLanguageCode: value) ?? value.uppercased()
         }
         return value
-    }
-}
-
-struct CommunityRatingView: View {
-    let rating: Double
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Community Rating")
-                .font(.headline)
-            HStack {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                Text(String(format: "%.1f / 10", rating))
-                    .font(.title3.bold())
-            }
-        }
     }
 }

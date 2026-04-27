@@ -17,7 +17,7 @@ struct DiscoveryHubView: View {
                 if hasDataLoaded {
                     // 1. Networks & Studios (Full Grid)
                     DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
-                        onFilterSelected(DiscoveryFilter(type: .studio, name: node.name))
+                        onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
                     }
 
                     // 2. Genres (Full Grid)
@@ -46,7 +46,6 @@ struct DiscoveryHubView: View {
         }
         .onAppear { refreshData(force: false) }
         .refreshable { 
-            ImageCache.shared.clearFullCache()
             refreshData(force: true) 
         }
         .onChange(of: viewModel.discoveryRefreshTrigger) {
@@ -55,10 +54,18 @@ struct DiscoveryHubView: View {
     }
     
     private func refreshData(force: Bool) {
-        if !force, hasDataLoaded, let last = viewModel.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 600 {
+        if !force, hasDataLoaded, let last = viewModel.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 30 {
             return
         }
 
+        // Phase 5 Optimization: Pre-check for existing data to avoid flicker
+        let netDescriptor = FetchDescriptor<NetworkEntity>()
+        let existingCount = (try? modelContext.fetchCount(netDescriptor)) ?? 0
+        if existingCount > 0 {
+            self.hasDataLoaded = true
+        }
+
+        viewModel.isBatchRefreshing = true
         let container = modelContext.container
         let localHidden = hiddenStudios
 
@@ -67,22 +74,42 @@ struct DiscoveryHubView: View {
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
 
-            // 1. Local Aggregation
-            await syncService.syncLibrary(force: force)
+            let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [
+                SortDescriptor(\.count, order: .reverse),
+                SortDescriptor(\.name, order: .forward)
+            ])
+            let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [
+                SortDescriptor(\.count, order: .reverse),
+                SortDescriptor(\.name, order: .forward)
+            ])
+            let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
+                SortDescriptor(\.count, order: .reverse),
+                SortDescriptor(\.code, order: .forward)
+            ])
 
-            let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
-            let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
-            let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [SortDescriptor(\.count, order: .reverse)])
+            let existingNets = (try? context.fetch(netDescriptor)) ?? []
+            let existingGenres = (try? context.fetch(genreDescriptor)) ?? []
+            
+            // 1. Local Aggregation - ONLY if forced or empty
+            if force || (existingNets.isEmpty && existingGenres.isEmpty) {
+                await syncService.syncLibrary(force: force)
+            }
 
             let nets = (try? context.fetch(netDescriptor)) ?? []
             let hiddenSet = Set(localHidden.components(separatedBy: ",").filter { !$0.isEmpty })
             let filteredNets = nets.filter { !hiddenSet.contains($0.name) }
 
-            let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex) }
+            let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
             let snGenres = ((try? context.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
             let snLangs = ((try? context.fetch(langDescriptor)) ?? []).map {
                 let name = LanguageUtils.languageName(for: $0.code)
                 return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
+            }
+
+            // Selective Cache Clearing for Logos
+            if force {
+                let logoURLs = nets.compactMap { $0.logoPath }.map { "https://image.tmdb.org/t/p/w300\($0)" }
+                await ImageCache.shared.clearCache(forURLs: logoURLs)
             }
 
             await MainActor.run {
@@ -92,6 +119,7 @@ struct DiscoveryHubView: View {
                     self.viewModel.cachedGenres = snGenres
                     self.viewModel.cachedLanguages = snLangs
                     self.hasDataLoaded = true
+                    self.viewModel.isBatchRefreshing = false
                 }
             }
         }

@@ -127,23 +127,8 @@ actor APIClient {
         return final
     }
     
-    func fetchTrendingMovies() async throws -> [MediaSearchResult] {
-        let url = try tmdbURL(path: "/trending/movie/day")
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let decoded = try decoder.decode(TMDBGenericResponse<TMDBMovie>.self, from: data)
-        return decoded.results.prefix(10).map { $0.toSearchResult() }
-    }
-    
-    func fetchTrendingTVShows() async throws -> [MediaSearchResult] {
-        let url = try tmdbURL(path: "/trending/tv/day")
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let decoded = try decoder.decode(TMDBGenericResponse<TMDBTV>.self, from: data)
-        return decoded.results.prefix(10).map { $0.toSearchResult() }
-    }
-
     // MARK: - Details
+
     func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
         let cacheKey = "movie_details_\(tmdbID).json"
         if let cachedData = getCachedData(forKey: cacheKey),

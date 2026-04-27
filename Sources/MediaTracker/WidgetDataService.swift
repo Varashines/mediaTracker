@@ -20,7 +20,7 @@ actor WidgetDataService {
             WidgetMediaItem(
                 id: item.id,
                 title: item.title,
-                subtitle: item.storedNextEpisodeLabel ?? item.gridBadgeText ?? "",
+                subtitle: item.storedNextEpisodeLabel ?? item.badgeText ?? "",
                 posterURL: item.posterURL
             )
         }

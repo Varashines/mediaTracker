@@ -319,4 +319,71 @@ final class BingeLogicTests: XCTestCase {
         
         XCTAssertNil(item.storedSmartBadgeLabel, "Should NOT have BINGE or FINALE badge if air date is missing")
     }
+
+    @MainActor
+    func testStreamingPriorityOverBinge() async throws {
+        let schema = Schema([
+            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self
+        ])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        // 9. Show with 70% progress, Loved, Ep 8 aired TODAY, Ep 9-10 in FUTURE.
+        // Today is April 27, 2026
+        let item = MediaItem(id: "streaming_priority", title: "Streaming Priority Show", overview: "Overview", type: .tvShow)
+        item.tasteValue = "Love"
+        item.state = .active
+        context.insert(item)
+        
+        let tvDetails = TVShowDetails(tmdbID: 109)
+        tvDetails.numberOfSeasons = 1
+        tvDetails.item = item
+        item.tvShowDetails = tvDetails
+        
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 109)
+        season.tvShowDetails = tvDetails
+        tvDetails.seasons.append(season)
+        
+        // 1-7 Watched (Long ago)
+        for i in 1...7 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01", showID: 109)
+            ep.isWatched = true
+            ep.season = season
+            season.episodes.append(ep)
+        }
+        
+        // 8 Aired TODAY (April 27, 2026)
+        let ep8 = TVEpisode(episodeNumber: 8, seasonNumber: 1, name: "Ep 8", overview: "", airDate: "2026-04-27", showID: 109)
+        ep8.isWatched = false
+        ep8.season = season
+        season.episodes.append(ep8)
+        
+        // 9-10 Future
+        let ep9 = TVEpisode(episodeNumber: 9, seasonNumber: 1, name: "Ep 9", overview: "", airDate: "2026-05-04", showID: 109)
+        let ep10 = TVEpisode(episodeNumber: 10, seasonNumber: 1, name: "Ep 10", overview: "", airDate: "2026-05-11", showID: 109)
+        [ep9, ep10].forEach {
+            $0.isWatched = false
+            $0.season = season
+            season.episodes.append($0)
+        }
+        
+        item.syncCachedProperties()
+        
+        // Should be STREAMING because Ep 8 just aired
+        XCTAssertEqual(item.storedSmartBadgeLabel, "STREAMING", "Should be STREAMING because Ep 8 just aired")
+        
+        // Remaining count should be 1 (Only Ep 8)
+        XCTAssertEqual(item.remainingEpisodesCount, 1, "Remaining count should only include aired episodes")
+        
+        // Now test BINGE fallback with multiple episodes aired more than 2 days ago
+        ep8.airDate = "2026-04-20" // 7 days ago
+        // Add another aired episode to trigger BINGE (> 1 remaining)
+        ep9.airDate = "2026-04-21" // 6 days ago
+        
+        item.syncCachedProperties()
+        
+        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE", "Should fall back to BINGE after streaming window passes and multiple episodes are available")
+        XCTAssertEqual(item.remainingEpisodesCount, 2, "Remaining count should be 2")
+    }
 }

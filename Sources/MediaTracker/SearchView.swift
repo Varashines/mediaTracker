@@ -163,16 +163,7 @@ struct SearchView: View {
                     }
 
                     // SECTION 2: Global Web Results
-                    if searchText.isEmpty {
-                        VStack(spacing: 40) {
-                            if selectedType == .all || selectedType == .movie {
-                                webSection(title: "Trending Movies", icon: "flame.fill", items: filterExisting(viewModel.trendingMovies))
-                            }
-                            if selectedType == .all || selectedType == .tvShow {
-                                webSection(title: "Trending TV Shows", icon: "sparkles", items: filterExisting(viewModel.trendingTV))
-                            }
-                        }
-                    } else if !allWebResults.isEmpty {
+                    if !allWebResults.isEmpty {
                         VStack(alignment: .leading, spacing: 20) {
                             HStack {
                                 Image(systemName: "globe")
@@ -219,56 +210,7 @@ struct SearchView: View {
             if !searchText.isEmpty {
                 searchTask = Task { await performSearch() }
             }
-            
-            // Ensure trending data is available even if removed from Discovery Hub
-            if viewModel.trendingMovies.isEmpty || viewModel.trendingTV.isEmpty {
-                Task {
-                    async let movies = APIClient.shared.fetchTrendingMovies()
-                    async let tv = APIClient.shared.fetchTrendingTVShows()
-                    
-                    let fetchedMovies = (try? await movies) ?? []
-                    let fetchedTV = (try? await tv) ?? []
-                    
-                    await MainActor.run {
-                        withAnimation {
-                            viewModel.trendingMovies = fetchedMovies
-                            viewModel.trendingTV = fetchedTV
-                        }
-                    }
-                }
-            }
         }
-    }
-
-    @ViewBuilder
-    private func webSection(title: String, icon: String, items: [MediaSearchResult]) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Image(systemName: icon)
-                        .foregroundStyle(.secondary)
-                    Text(title)
-                        .font(.title3.bold())
-                }
-                .padding(.horizontal, 30)
-
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
-                    ForEach(items) { result in
-                        MediaThumbnailView(result: result, isLocal: false) {
-                            addMedia(result)
-                        }
-                        .id("trending_\(result.id)")
-                    }
-                }
-                .padding(.horizontal, 30)
-            }
-        }
-    }
-
-    private func filterExisting(_ results: [MediaSearchResult]) -> [MediaSearchResult] {
-        let lookup = Set(existingItems.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
-        return results.filter { !lookup.contains("\($0.id)_\($0.type.rawValue)") }
     }
 
     private func performSearch() async {
@@ -365,7 +307,7 @@ struct SearchView: View {
                         item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                     }
                     if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
+                        item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
                     }
 
                     let movieDetails = MovieDetails(tmdbID: tmdbID)
@@ -373,8 +315,9 @@ struct SearchView: View {
                     movieDetails.runtime = details.runtime
                     movieDetails.genres = details.genres
                     movieDetails.voteAverage = details.voteAverage
-                    movieDetails.originalLanguage = details.originalLanguage
+                    movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
                     movieDetails.creators = details.directors.map { $0.name }
+
                     
                     movieDetails.cast = details.cast.map { c in
                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
@@ -392,14 +335,14 @@ struct SearchView: View {
                         item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                     }
                     if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/original\(backdrop)"
+                        item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
                     }
 
                     let tvDetails = TVShowDetails(tmdbID: tmdbID)
-                    tvDetails.status = details.status
-                    tvDetails.network = details.network
+                    tvDetails.status = await StringPool.shared.intern(details.status)
+                    tvDetails.network = await StringPool.shared.intern(details.network)
                     tvDetails.networkLogoPath = details.networkLogoPath
-                    tvDetails.originalLanguage = details.originalLanguage
+                    tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
                     tvDetails.numberOfSeasons = details.seasonsCount
                     tvDetails.numberOfEpisodes = details.episodesCount
                     tvDetails.voteAverage = details.voteAverage
@@ -424,13 +367,26 @@ struct SearchView: View {
                     item.tvShowDetails = tvDetails
                     
                     // Trigger immediate background sync for episodes
-                    DataService.shared.refreshMetadata(for: [item], modelContext: modelContext)
+                    DataService.shared.refreshMetadata(for: [item], modelContext: modelContext, skipDelay: true)
                 }
             }
 
             item.updateSearchableText()
+            item.syncCachedProperties()
+
             modelContext.insert(item)
             try? modelContext.save()
+            
+            // Sync Discovery Entities
+            let itemID = item.persistentModelID
+            let container = modelContext.container
+            Task.detached {
+                let sync = DiscoverySyncService(modelContainer: container)
+                let actorContext = ModelContext(container)
+                if let fetchedItem = actorContext.model(for: itemID) as? MediaItem {
+                    await sync.updateItemAdded(fetchedItem)
+                }
+            }
             
             // Navigate to the newly added item's detail view
             await MainActor.run {

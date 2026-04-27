@@ -11,29 +11,6 @@ class DetailViewModel {
         self.item = item
         // Initial pre-warm for cached data
         prewarmCast()
-        
-        // Immediate local cleanup of legacy crew cards (non-blocking)
-        Task {
-            guard item.modelContext != nil, !item.isDeleted else { return }
-            await MainActor.run {
-                guard !self.item.isDeleted, let context = self.item.modelContext else { return }
-                if let tv = self.item.tvShowDetails {
-                    for member in tv.cast {
-                        if member.characterName == "Creator" || member.characterName == "Director" {
-                            context.delete(member)
-                        }
-                    }
-                }
-                if let movie = self.item.movieDetails {
-                    for member in movie.cast {
-                        if member.characterName == "Creator" || member.characterName == "Director" {
-                            context.delete(member)
-                        }
-                    }
-                }
-                try? context.save()
-            }
-        }
     }
     
     var needsUpdate: Bool {
@@ -66,16 +43,14 @@ class DetailViewModel {
         if let posterURL = item.posterURL, let url = URL(string: posterURL) {
             Task {
                 // Try to get from cache first
-                if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: CGSize(width: 320, height: 480)) {
+                if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: .thumbMedium) {
                     let extracted = ColorExtractor.dominantColor(from: container.image)
                     let hex = extracted.toHex()
                     
-                    await MainActor.run {
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            self.themeColor = extracted
-                            self.item.themeColorHex = hex
-                            // No need to explicitly save, SwiftData handles it or it will be saved on refresh
-                        }
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        self.themeColor = extracted
+                        self.item.themeColorHex = hex
+                        // No need to explicitly save, SwiftData handles it or it will be saved on refresh
                     }
                     return
                 }
@@ -106,25 +81,41 @@ class DetailViewModel {
         
         // Capture context while on MainActor
         guard let context = item.modelContext else { return }
-        
+
         isRefreshing = true
-        let itemID = item.persistentModelID
         let rawID = item.id
-        
+
         Task {
             let backgroundService = BackgroundDataService(modelContainer: context.container)
-            let success = await backgroundService.refreshSingleItem(id: itemID)
-            
+            let success = await backgroundService.refreshSingleItem(id: rawID, force: force)
+
             await MainActor.run {
                 guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                 if success {
-                    DataService.shared.markAsRefreshedThisSession(id: rawID)
-                    updateThemeColor()
-                    self.prewarmCast()
+                    self.refreshLocalItem()
                 }
                 self.isRefreshing = false
             }
         }
+    }
+
+    func refreshLocalItem() {
+        guard !item.isDeleted else { return }
+        
+        // SwiftData automatically propagates background saves to the main context.
+        // FORCE RELOAD: Access the collections to trigger a merge of background data.
+        if let tv = item.tvShowDetails {
+            _ = tv.seasons.count
+            for s in tv.seasons {
+                _ = s.episodes.count
+            }
+        }
+
+        item.syncCachedProperties()
+        item.tvShowDetails?.recalculateCachedProperties()
+        
+        updateThemeColor()
+        self.prewarmCast()
     }
 
     private func prewarmCast() {
@@ -196,10 +187,10 @@ class DetailViewModel {
             item.tvShowDetails?.recalculateCachedProperties() // Fallback to ensure counts are fresh
             item.syncCachedProperties() // Explicitly fix denormalization gap
             item.lastStateChangeDate = Date() // Trigger grid refresh
-            
+            item.lastInteractionDate = Date() // Bump to top of Continue Watching
+
             // EXPLICIT SAVE: Ensure all background actors see the latest state before the notification is sent.
-            try? item.modelContext?.save()
-            
+            try? item.modelContext?.save()            
             // Sync Discovery Entities
             let itemID = item.persistentModelID
             let container = item.modelContext?.container

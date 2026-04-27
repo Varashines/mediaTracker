@@ -16,20 +16,29 @@ struct TasteInsights: Sendable {
 
 @ModelActor
 actor TasteActor {
+    // Phase 3 Optimization: Cache affinity maps to prevent redundant full-library scans
+    // Using static storage because the actor is instantiated ephemerally to prevent ModelContext leaks.
+    @MainActor private static var cachedAffinityMap: (
+        genre: [String: Double], network: [String: Double], cast: [String: Double],
+        creator: [String: Double], language: [String: Double]
+    )?
+    @MainActor private static var lastAffinityCalculation: Date?
+    private let affinityCacheTTL: TimeInterval = 86400 // 24 hours
+
     func fetchTasteInsights() async -> TasteInsights {
         let profile = await calculateAffinityMaps()
-        
+
         let sortedGenres = profile.genre.map { ($0.key, $0.value) }
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
-        
+
         // Use rich enrichment for Top 10 people
         var creatorResults: [(name: String, affinity: Double, imageURL: String?)] = []
         let topCreators = profile.creator.map { ($0.key, $0.value) }
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
             .prefix(10)
-        
+
         for (name, affinity) in topCreators {
             let image = await resolvePersonImage(for: name)
             creatorResults.append((name, affinity, image))
@@ -40,16 +49,18 @@ actor TasteActor {
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
             .prefix(10)
-            
+
         for (name, affinity) in topCast {
             let image = await resolvePersonImage(for: name)
             castResults.append((name, affinity, image))
         }
-            
-        let sortedLangs = profile.language.map { (LanguageUtils.languageName(for: $0.key), $0.value) }
-            .filter { $0.1 > 0 }
-            .sorted { $0.1 > $1.1 }
-            
+
+        let sortedLangs = profile.language.map {
+            (LanguageUtils.languageName(for: $0.key), $0.value)
+        }
+        .filter { $0.1 > 0 }
+        .sorted { $0.1 > $1.1 }
+
         return TasteInsights(
             genreAffinities: sortedGenres,
             creatorAffinities: creatorResults,
@@ -60,14 +71,17 @@ actor TasteActor {
 
     private func resolvePersonImage(for name: String) async -> String? {
         // 1. Check local Cache Entity
-        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { $0.name == name })
+        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
+            predicate: #Predicate { $0.name == name })
         if let cached = try? modelContext.fetch(cacheDescriptor).first {
             return cached.profileURL
         }
 
         // 2. Check Library CastMembers
         let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
-        if let member = try? modelContext.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
+        if let member = try? modelContext.fetch(castDescriptor).first(where: {
+            $0.profileURL != nil
+        }) {
             let url = member.profileURL
             // Save to cache for next time
             modelContext.insert(PersonImageEntity(name: name, profileURL: url))
@@ -85,9 +99,24 @@ actor TasteActor {
         return nil
     }
 
-    private func calculateAffinityMaps() async -> (genre: [String: Double], network: [String: Double], cast: [String: Double], creator: [String: Double], language: [String: Double]) {
+    private func calculateAffinityMaps() async -> (
+        genre: [String: Double], network: [String: Double], cast: [String: Double],
+        creator: [String: Double], language: [String: Double]
+    ) {
+        // LOCKDOWN: Skip heavy calculations if the app is hibernating
+        if await SleepManager.shared.isAsleep {
+            return ([:], [:], [:], [:], [:])
+        }
+
+        let (cached, last) = await MainActor.run { (Self.cachedAffinityMap, Self.lastAffinityCalculation) }
+        if let cached = cached, let last = last, Date().timeIntervalSince(last) < affinityCacheTTL {
+            return cached
+        }
+
         let descriptor = FetchDescriptor<MediaItem>()
-        guard let allItems = try? modelContext.fetch(descriptor) else { return ([:], [:], [:], [:], [:]) }
+        guard let allItems = try? modelContext.fetch(descriptor) else {
+            return ([:], [:], [:], [:], [:])
+        }
 
         struct CategoryStats {
             var loved = 0
@@ -106,43 +135,65 @@ actor TasteActor {
         var castStats: [String: CategoryStats] = [:]
         var creatorStats: [String: CategoryStats] = [:]
         var languageStats: [String: CategoryStats] = [:]
-        
+
         let ratedItems = allItems.filter { $0.tasteValue != "None" }
-        
+
         for item in ratedItems {
             let taste = item.tasteValue
             let update: (inout CategoryStats) -> Void = { stats in
                 stats.total += 1
-                if taste == "Love" { stats.loved += 1 }
-                else if taste == "Like" { stats.liked += 1 }
-                else if taste == "Dislike" { stats.disliked += 1 }
+                if taste == "Love" {
+                    stats.loved += 1
+                } else if taste == "Like" {
+                    stats.liked += 1
+                } else if taste == "Dislike" {
+                    stats.disliked += 1
+                }
             }
             for g in item.cachedGenres { update(&genreStats[g, default: CategoryStats()]) }
             if let n = item.cachedNetwork { update(&networkStats[n, default: CategoryStats()]) }
             if let l = item.cachedLanguage { update(&languageStats[l, default: CategoryStats()]) }
-            
-            let cast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
+
+            let cast =
+                (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name }
+                    ?? [])
             for actor in cast { update(&castStats[actor, default: CategoryStats()]) }
             let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
             for creator in creators { update(&creatorStats[creator, default: CategoryStats()]) }
         }
-        
-        return (
+
+        let result = (
             genreStats.mapValues { $0.affinity(cutoff: 5) },
             networkStats.mapValues { $0.affinity(cutoff: 5) },
-            castStats.mapValues { $0.affinity(cutoff: 5) }, // Increased to 5
-            creatorStats.mapValues { $0.affinity(cutoff: 3) }, // Increased to 3
+            castStats.mapValues { $0.affinity(cutoff: 5) },  // Increased to 5
+            creatorStats.mapValues { $0.affinity(cutoff: 3) },  // Increased to 3
             languageStats.mapValues { $0.affinity(cutoff: 5) }
         )
+
+        await MainActor.run {
+            Self.cachedAffinityMap = result
+            Self.lastAffinityCalculation = Date()
+        }
+        return result
     }
 
     func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
         // Fetch Weights from UserDefaults (matches AppStorage keys in UI)
-        let wGenre = UserDefaults.standard.double(forKey: "taste_weight_genre") == 0 ? 20.0 : UserDefaults.standard.double(forKey: "taste_weight_genre")
-        let wCreator = UserDefaults.standard.double(forKey: "taste_weight_creator") == 0 ? 20.0 : UserDefaults.standard.double(forKey: "taste_weight_creator")
-        let wCast = UserDefaults.standard.double(forKey: "taste_weight_cast") == 0 ? 15.0 : UserDefaults.standard.double(forKey: "taste_weight_cast")
-        let wNetwork = UserDefaults.standard.double(forKey: "taste_weight_network") == 0 ? 5.0 : UserDefaults.standard.double(forKey: "taste_weight_network")
-        let wLang = UserDefaults.standard.double(forKey: "taste_weight_lang") == 0 ? 5.0 : UserDefaults.standard.double(forKey: "taste_weight_lang")
+        let wGenre =
+            UserDefaults.standard.double(forKey: "taste_weight_genre") == 0
+            ? 15.0 : UserDefaults.standard.double(forKey: "taste_weight_genre")
+        let wCreator =
+            UserDefaults.standard.double(forKey: "taste_weight_creator") == 0
+            ? 20.0 : UserDefaults.standard.double(forKey: "taste_weight_creator")
+        let wCast =
+            UserDefaults.standard.double(forKey: "taste_weight_cast") == 0
+            ? 15.0 : UserDefaults.standard.double(forKey: "taste_weight_cast")
+        let wNetwork =
+            UserDefaults.standard.double(forKey: "taste_weight_network") == 0
+            ? 5.0 : UserDefaults.standard.double(forKey: "taste_weight_network")
+        let wLang =
+            UserDefaults.standard.double(forKey: "taste_weight_lang") == 0
+            ? 10.0 : UserDefaults.standard.double(forKey: "taste_weight_lang")
 
         let profile = await calculateAffinityMaps()
         let genreAffinity = profile.genre
@@ -150,16 +201,17 @@ actor TasteActor {
         let castAffinity = profile.cast
         let creatorAffinity = profile.creator
         let langAffinity = profile.language
-        
+
         let descriptor = FetchDescriptor<MediaItem>()
         guard let allItems = try? modelContext.fetch(descriptor) else { return [] }
-        
+
         let wishlist = allItems.filter { $0.stateValue == "Wishlist" }
         var recommendations: [(id: PersistentIdentifier, score: Double, reason: String)] = []
-        
+        let now = Date()
+
         for item in wishlist {
-            var potentialReasons: [(String, Double, Int)] = [] // Label, Affinity, Priority (0=Genre, 1=Creator, 2=Other)
-            
+            var potentialReasons: [(String, Double, Int)] = []  // Label, Affinity, Priority (0=Genre, 1=Creator, 2=Other)
+
             // Genre matching
             var genreTotalAffinity: Double = 0
             for g in item.cachedGenres {
@@ -168,8 +220,10 @@ actor TasteActor {
                     potentialReasons.append(("Because you like \(g)", aff, 0))
                 }
             }
-            let genreAverageAffinity = item.cachedGenres.isEmpty ? 0 : (genreTotalAffinity / Double(item.cachedGenres.count))
-            
+            let genreAverageAffinity =
+                item.cachedGenres.isEmpty
+                ? 0 : (genreTotalAffinity / Double(item.cachedGenres.count))
+
             // Network matching
             var networkAff: Double = 0
             if let n = item.cachedNetwork, let aff = networkAffinity[n], aff != 0 {
@@ -183,10 +237,12 @@ actor TasteActor {
                 langAff = aff
                 potentialReasons.append(("In \(l)", aff, 3))
             }
-            
+
             // Cast matching (Reduced Weight with Decay)
             var castTotalAffinity: Double = 0
-            let itemCast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
+            let itemCast =
+                (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name }
+                    ?? [])
             for (idx, actor) in itemCast.prefix(5).enumerated() {
                 if let aff = castAffinity[actor], aff != 0 {
                     let decay = idx < 1 ? 1.0 : 0.5
@@ -194,27 +250,43 @@ actor TasteActor {
                     potentialReasons.append(("Starring \(actor)", aff, 2))
                 }
             }
-            
+
             // Creator matching
             var creatorTotalAffinity: Double = 0
             let itemCreators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
             for creator in itemCreators {
                 if let aff = creatorAffinity[creator], aff != 0 {
                     creatorTotalAffinity += aff
-                    potentialReasons.append(("\(item.type == .movie ? "Directed by" : "Created by") \(creator)", aff, 1))
+                    potentialReasons.append(
+                        ("\(item.type == .movie ? "Directed by" : "Created by") \(creator)", aff, 1)
+                    )
                 }
             }
-            
-            let totalScore = (genreAverageAffinity * wGenre) + 
-                             (networkAff * wNetwork) + 
-                             (castTotalAffinity * wCast) + 
-                             (creatorTotalAffinity * wCreator) +
-                             (langAff * wLang)
-            
-            if totalScore > 0 {
+
+            let totalScore =
+                (genreAverageAffinity * wGenre) + (networkAff * wNetwork)
+                + (castTotalAffinity * wCast) + (creatorTotalAffinity * wCreator)
+                + (langAff * wLang)
+
+            // Phase 4 Optimization: Time-Decay Factor (Symmetric)
+            // Prioritize items airing/releasing soon or recently released.
+            // Items without an assigned date are excluded from "For You".
+            guard let targetDate = item.cachedNextAiringDate ?? item.releaseDate else {
+                continue
+            }
+
+            let daysDifference = abs(now.timeIntervalSince(targetDate)) / 86400.0
+            // Inverse time decay: 1 / (1 + λ * days)
+            // λ = 0.005 ensures ~21% score retention at 2 years (730 days)
+            let timeDecay = 1.0 / (1.0 + 0.005 * daysDifference)
+
+            let finalScore = totalScore * timeDecay
+
+            if finalScore > 0 {
                 let bestReason: String = {
                     // Normalize reasons by weights so they match the user's priority
-                    let weightedReasons = potentialReasons.map { (label, aff, type) -> (String, Double) in
+                    let weightedReasons = potentialReasons.map {
+                        (label, aff, type) -> (String, Double) in
                         let weight: Double = {
                             switch type {
                             case 0: return wGenre
@@ -226,14 +298,14 @@ actor TasteActor {
                         }()
                         return (label, aff * weight)
                     }
-                    
+
                     return weightedReasons.max(by: { $0.1 < $1.1 })?.0 ?? "Picked for you"
                 }()
-                
-                recommendations.append((item.persistentModelID, totalScore, bestReason))
+
+                recommendations.append((item.persistentModelID, finalScore, bestReason))
             }
         }
-        
-        return recommendations.sorted { $0.score > $1.score }.prefix(8).map { ($0.id, $0.reason) }
+
+        return recommendations.sorted { $0.score > $1.score }.prefix(10).map { ($0.id, $0.reason) }
     }
 }

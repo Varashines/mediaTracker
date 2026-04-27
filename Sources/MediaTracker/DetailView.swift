@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -7,20 +7,22 @@ struct DetailView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    
+
     @State private var viewModel: DetailViewModel
     @State private var isAppeared = false
     @State private var isDeleted = false
-    
+    @State private var isCastExpanded = false
+
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
-    
-    init(item: MediaItem, namespace: Namespace.ID? = nil, onSearchActor: ((String) -> Void)? = nil) {
+
+    init(item: MediaItem, namespace: Namespace.ID? = nil, onSearchActor: ((String) -> Void)? = nil)
+    {
         _viewModel = State(initialValue: DetailViewModel(item: item))
         self.onSearchActor = onSearchActor
         self.namespace = namespace
     }
-    
+
     var body: some View {
         ZStack {
             if isDeleted || viewModel.item.modelContext == nil || viewModel.item.isDeleted {
@@ -35,15 +37,18 @@ struct DetailView: View {
                         Color(NSColor.windowBackgroundColor)
                             .ignoresSafeArea()
                     }
-                    
+
                     viewModel.themeColor
                         .opacity(isAppeared ? (colorScheme == .dark ? 0.4 : 0.25) : 0)
                         .blur(radius: isAppeared ? 120 : 80)
                         .scaleEffect(isAppeared ? 1.1 : 0.9)
                         .ignoresSafeArea()
-                    
+
                     LinearGradient(
-                        gradient: Gradient(colors: [viewModel.themeColor.opacity(isAppeared ? (colorScheme == .dark ? 0.3 : 0.2) : 0), .clear]),
+                        gradient: Gradient(colors: [
+                            viewModel.themeColor.opacity(
+                                isAppeared ? (colorScheme == .dark ? 0.3 : 0.2) : 0), .clear,
+                        ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -51,47 +56,91 @@ struct DetailView: View {
                 }
                 .animation(.spring(response: 0.8, dampingFraction: 0.85), value: isAppeared)
                 .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         // Optimized Header Section
-                        MediaHeaderView(item: viewModel.item, themeColor: viewModel.themeColor, namespace: namespace) { newState in
+                        MediaHeaderView(
+                            item: viewModel.item, themeColor: viewModel.themeColor,
+                            namespace: namespace
+                        ) { newState in
                             if newState == .completed {
                                 viewModel.markAllAsWatched()
                             }
                         }
                         .onAppear {
                             viewModel.updateThemeColor()
-                            viewModel.refreshData() 
+                            viewModel.refreshData()
                         }
-                        
-                        if (viewModel.item.type == .movie && viewModel.item.movieDetails?.genres.isEmpty != false) || (viewModel.item.type == .tvShow && viewModel.item.tvShowDetails?.status == nil) {
+
+                        if (viewModel.item.type == .movie
+                            && viewModel.item.movieDetails?.genres.isEmpty != false)
+                            || (viewModel.item.type == .tvShow
+                                && viewModel.item.tvShowDetails?.status == nil)
+                        {
                             if !APIClient.shared.isTMDBConfigured {
-                                Text("Please add your TMDB API Key in Settings to see more details.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    "Please add your TMDB API Key in Settings to see more details."
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
                         }
-                        
+
                         LazyVStack(alignment: .leading, spacing: 16) {
-                            if let cast = (viewModel.item.movieDetails?.cast ?? viewModel.item.tvShowDetails?.cast), !cast.isEmpty {
+                            if !viewModel.item.displayCast.isEmpty {
                                 Divider()
-                                CastSectionViewNew(cast: cast, themeColor: viewModel.themeColor) { actorName in
-                                    onSearchActor?(actorName)
+
+                                DisclosureGroup(isExpanded: $isCastExpanded) {
+                                    CastSectionViewNew(
+                                        cast: viewModel.item.displayCast,
+                                        themeColor: viewModel.themeColor
+                                    ) { actorName in
+                                        onSearchActor?(actorName)
+                                    }
+                                    .padding(.top, 10)
+                                } label: {
+                                    HStack {
+                                        Text("Cast")
+                                            .font(.title3.bold())
+                                        Spacer()
+                                        Text("\(viewModel.item.displayCast.count)")
+                                            .font(.caption.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(viewModel.themeColor.opacity(0.2))
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                .disclosureGroupStyle(
+                                    CustomDisclosureStyle(buttonColor: viewModel.themeColor)
+                                )
+                                .padding(.horizontal, 10)
                             }
-                            
+
                             if let tv = viewModel.item.tvShowDetails {
                                 Divider()
-                                TVTrackingView(tvDetails: tv, themeColor: viewModel.themeColor, onWatchedToggle: {
-                                    viewModel.checkOverallCompletion()
-                                }, onSeasonSelected: { _ in
-                                    viewModel.refreshData(force: true)
-                                })
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+
+                                VStack(alignment: .leading, spacing: 16) {
+                                    HStack {
+                                        Image(systemName: "play.tv.fill")
+                                            .foregroundStyle(viewModel.themeColor)
+                                        Text("Seasons & Episodes")
+                                            .font(.title3.bold())
+                                    }
+                                    .padding(.horizontal, 10)
+
+                                    TVTrackingView(
+                                        tvDetails: tv, themeColor: viewModel.themeColor,
+                                        onWatchedToggle: {
+                                            viewModel.checkOverallCompletion()
+                                        },
+                                        onSeasonSelected: { _ in
+                                            // Removed aggressive force refresh here to prevent destructive cast churn
+                                        })
+                                }
                             }
-                            
+
                             Divider()
                         }
                     }
@@ -111,7 +160,7 @@ struct DetailView: View {
                                 }
                             }
                             .disabled(viewModel.isRefreshing)
-                            
+
                             Button(role: .destructive) {
                                 deleteItem()
                             } label: {
@@ -128,13 +177,20 @@ struct DetailView: View {
                 }
                 .onDisappear {
                     isAppeared = false
+                    ImageCache.shared.clearMemoryCache()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) {
+                    notification in
+                    if let id = notification.userInfo?["id"] as? String, id == viewModel.item.id {
+                        viewModel.refreshLocalItem()
+                    }
                 }
                 .tint(viewModel.themeColor)
                 .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
             }
         }
     }
-    
+
     private func deleteItem() {
         let itemToDelete = viewModel.item
         let itemID = itemToDelete.id
@@ -142,7 +198,7 @@ struct DetailView: View {
         let network = itemToDelete.cachedNetwork
         let genres = itemToDelete.cachedGenres
         let lang = itemToDelete.cachedLanguage
-        let container = modelContext.container
+        // let container = modelContext.container
 
         withAnimation {
             isDeleted = true
@@ -158,9 +214,11 @@ struct DetailView: View {
             try? modelContext.save()
             NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
 
+            let container = modelContext.container
             Task.detached {
                 let sync = DiscoverySyncService(modelContainer: container)
                 await sync.updateItemDeleted(network: network, genres: genres, language: lang)
             }
         }
-    }}
+    }
+}

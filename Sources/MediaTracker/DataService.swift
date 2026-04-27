@@ -94,6 +94,7 @@ actor MaintenanceService {
                     }
                 }
             }
+            item.syncCachedProperties()
             item.updateSearchableText()
         }
         
@@ -110,12 +111,12 @@ class DataService {
     private var sessionRefreshedItems = Set<String>()
     
     /// Batch Queue for coalescing metadata refresh requests
-    private var pendingRefreshIDs = Set<PersistentIdentifier>()
+    private var pendingRefreshIDs = Set<String>()
     private var refreshTask: Task<Void, Never>?
 
     /// Tracks items currently being added to prevent race conditions and duplicates.
     private var itemsInProgress = Set<String>()
-    
+
     // Feedback State
     var isRunningMaintenance = false
     var showMaintenanceComplete = false
@@ -127,24 +128,25 @@ class DataService {
     func hasRefreshedThisSession(id: String) -> Bool {
         return sessionRefreshedItems.contains(id)
     }
-    
+
     func markAsRefreshedThisSession(id: String) {
         sessionRefreshedItems.insert(id)
     }
 
-    func refreshMetadata(for items: [MediaItem], modelContext: ModelContext, metadataOnly: Bool = false) {
+    func refreshMetadata(for items: [MediaItem], modelContext: ModelContext, metadataOnly: Bool = false, force: Bool = false, skipDelay: Bool = false) {
         // Skip if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
-        let itemIDs = items.map { $0.persistentModelID }
-        
+        let itemIDs = items.map { $0.id }
+
         // Phase 4 Optimization: Coalesce into Batch Queue
         pendingRefreshIDs.formUnion(itemIDs)
-        
         refreshTask?.cancel()
         refreshTask = Task {
             // Wait for potential rapid-fire calls to finish (e.g. during an import or scroll)
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            if !skipDelay {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            }
             if Task.isCancelled { return }
             
             let idsToProcess = Array(pendingRefreshIDs)
@@ -152,7 +154,7 @@ class DataService {
             
             if !idsToProcess.isEmpty {
                 let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
-                await backgroundService.refreshMetadata(for: idsToProcess, metadataOnly: metadataOnly)
+                await backgroundService.refreshMetadata(for: idsToProcess, metadataOnly: metadataOnly, force: force)
             }
         }
     }
@@ -286,6 +288,38 @@ actor BackgroundActionService {
 
 @ModelActor
 actor DiscoverySyncService {
+    private struct AliasRule {
+        let target: String
+        let sources: Set<String>
+        let preferredLogoSource: String?
+    }
+
+    private func parseAliases() -> [AliasRule] {
+        let aliasString = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
+        let lines = aliasString.components(separatedBy: .newlines)
+        var rules: [AliasRule] = []
+        
+        for line in lines where line.contains("=") {
+            let mainParts = line.components(separatedBy: "|")
+            let aliasPart = mainParts[0]
+            let logoPart = mainParts.count > 1 ? mainParts[1] : nil
+            
+            let sides = aliasPart.components(separatedBy: "=")
+            guard sides.count >= 2 else { continue }
+            
+            let target = sides[0].trimmingCharacters(in: .whitespaces)
+            let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            
+            var preferredLogoSource: String? = nil
+            if let logoStr = logoPart, logoStr.contains("Logo:") {
+                preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
+            }
+            
+            rules.append(AliasRule(target: target, sources: Set(sources), preferredLogoSource: preferredLogoSource))
+        }
+        return rules
+    }
+
     func syncLibrary(force: Bool) async {
         let descriptor = FetchDescriptor<MediaItem>()
         guard let items = try? modelContext.fetch(descriptor) else { return }
@@ -295,15 +329,49 @@ actor DiscoverySyncService {
         try? modelContext.delete(model: GenreEntity.self)
         try? modelContext.delete(model: LanguageEntity.self)
         
-        var networks: [String: (logo: String?, count: Int)] = [:]
+        // Studio Aliases
+        let rules = parseAliases()
+        var sourceToTarget: [String: String] = [:]
+        var targetToLogoSource: [String: String] = [:]
+        
+        for rule in rules {
+            for source in rule.sources {
+                sourceToTarget[source] = rule.target
+            }
+            if let pref = rule.preferredLogoSource {
+                targetToLogoSource[rule.target] = pref
+            }
+        }
+        
+        var networks: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genres: [String: Int] = [:]
         var languages: [String: Int] = [:]
         
         for item in items {
             // Count Networks
-            if item.type == .tvShow, let name = item.cachedNetwork {
-                let current = networks[name] ?? (logo: item.cachedNetworkLogoPath, count: 0)
-                networks[name] = (logo: current.logo, count: current.count + 1)
+            if item.type == .tvShow, let originalName = item.cachedNetwork {
+                let name = sourceToTarget[originalName] ?? originalName
+                let preferredSource = targetToLogoSource[name]
+                
+                let current = networks[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                var newLogo = current.logo
+                var newPriority = current.priority
+                var newSources = current.sources
+                if !newSources.contains(originalName) { newSources.append(originalName) }
+                
+                if let itemLogo = item.cachedNetworkLogoPath {
+                    if let pref = preferredSource, originalName == pref {
+                        // User's specific pick! Highest priority.
+                        newLogo = itemLogo
+                        newPriority = 100
+                    } else if newLogo == nil || (originalName == name && newPriority < 50) {
+                        // Prefer logo of the target name itself, or fallback to first available
+                        newLogo = itemLogo
+                        newPriority = (originalName == name) ? 50 : 10
+                    }
+                }
+                
+                networks[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
             }
             
             // Count Genres
@@ -319,7 +387,7 @@ actor DiscoverySyncService {
         
         // 2. Persist Discovery Entities
         for (name, data) in networks {
-            modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count))
+            modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources))
         }
         for (name, count) in genres {
             modelContext.insert(GenreEntity(name: name, count: count))
@@ -335,11 +403,64 @@ actor DiscoverySyncService {
     }
 
     func updateItemAdded(_ item: MediaItem) async {
-        await syncLibrary(force: false)
+        // Studio Aliases
+        let rules = parseAliases()
+        var sourceToTarget: [String: String] = [:]
+        for rule in rules {
+            for source in rule.sources {
+                sourceToTarget[source] = rule.target
+            }
+        }
+
+        // Incremental Network update
+        if item.type == .tvShow, let originalName = item.cachedNetwork {
+            let name = sourceToTarget[originalName] ?? originalName
+            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(NetworkEntity(name: name, logoPath: item.cachedNetworkLogoPath, count: 1))
+            }
+        }
+        
+        // ... (rest of function unchanged)
+        for genre in item.cachedGenres {
+            let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(GenreEntity(name: genre, count: 1))
+            }
+        }
+        
+        // Incremental Language update
+        if let lang = item.cachedLanguage {
+            let descriptor = FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(LanguageEntity(code: lang, count: 1))
+            }
+        }
+        
+        try? modelContext.save()
+        
+        // Ensure colors are updated for the new network
+        await extractMissingColors()
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?) async {
-        if let name = network {
+        // Studio Aliases
+        let rules = parseAliases()
+        var sourceToTarget: [String: String] = [:]
+        for rule in rules {
+            for source in rule.sources {
+                sourceToTarget[source] = rule.target
+            }
+        }
+
+        if let originalName = network {
+            let name = sourceToTarget[originalName] ?? originalName
             let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count -= 1
@@ -371,13 +492,20 @@ actor DiscoverySyncService {
         guard let networks = try? modelContext.fetch(descriptor) else { return }
         
         for network in networks where network.themeColorHex == nil {
+            let name = network.name
+            // Restore from cache if available
+            let cachedColor = await MainActor.run { NetworkThemeManager.shared.color(for: name) }
+            if let cachedColor = cachedColor {
+                network.themeColorHex = cachedColor.toHex()
+                continue
+            }
+            
             guard let logo = network.logoPath, let url = URL(string: "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(logo)") else { continue }
             
             if let (data, _) = try? await URLSession.shared.data(from: url) {
                 // Phase 3 Optimization: Low-memory color extraction from raw data
-                let color = ColorExtractor.dominantColor(from: data)
+                let color = await ColorExtractor.dominantColor(from: data)
                 network.themeColorHex = color.toHex()
-                let name = network.name
                 await MainActor.run { NetworkThemeManager.shared.save(color: color, for: name) }
             }
         }

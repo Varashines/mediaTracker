@@ -10,6 +10,9 @@ class AppThemeCoordinator {
     private let updateInterval: TimeInterval = 1.5 // Debounce mood updates significantly to save CPU
 
     func updateMood(for colors: [Color], colorScheme: ColorScheme, force: Bool = false) {
+        // LOCKDOWN: Skip theme math if the app is hibernating
+        if SleepManager.shared.isAsleep { return }
+
         // Debounce logic: prevent too many background shifts during active scroll
         if !force && Date().timeIntervalSince(lastUpdate) < updateInterval {
             return

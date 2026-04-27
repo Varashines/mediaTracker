@@ -79,6 +79,19 @@ struct TVTrackingView: View {
                 selectInitialSeason()
             }
         }
+        .onChange(of: tvDetails.seasons.count) { _, _ in
+            if selectedSeasonNumber == nil {
+                selectInitialSeason()
+            }
+        }
+        .onChange(of: tvDetails.item?.lastUpdated) { _, _ in
+            // If we are currently showing "No episodes" or nothing is selected,
+            // re-run the selection logic because background data might have arrived.
+            let currentSeason = tvDetails.seasons.first(where: { $0.seasonNumber == selectedSeasonNumber })
+            if selectedSeasonNumber == nil || (currentSeason?.episodes.isEmpty ?? true) {
+                selectInitialSeason()
+            }
+        }
     }
 
     private func selectInitialSeason() {
