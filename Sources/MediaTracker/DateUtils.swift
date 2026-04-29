@@ -1,5 +1,25 @@
 import Foundation
 
+struct StreamingServiceRule: Codable {
+    let patterns: [String]
+    let releaseTime: String // "HH:mm"
+    let timeZoneIdentifier: String
+    let dayOffset: Int
+    
+    static let defaults: [StreamingServiceRule] = [
+        // Apple TV+: Drops at Midnight ET, usually listed as US date but available in India next morning.
+        StreamingServiceRule(patterns: ["apple"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 1),
+        // Disney+ (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
+        StreamingServiceRule(patterns: ["disney"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Netflix: Midnight PT.
+        StreamingServiceRule(patterns: ["netflix"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
+        // Amazon Prime: Midnight GMT.
+        StreamingServiceRule(patterns: ["amazon", "prime"], releaseTime: "00:00", timeZoneIdentifier: "GMT", dayOffset: 0),
+        // Hulu: Midnight ET.
+        StreamingServiceRule(patterns: ["hulu"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0)
+    ]
+}
+
 struct DateUtils {
     static func parseDate(_ dateString: String?) -> Date? {
         guard let dateString = dateString else { return nil }
@@ -30,41 +50,19 @@ struct DateUtils {
         
         // 1. Identify the service explicitly for smart defaults
         let service = (serviceName ?? show?.network ?? "").lowercased()
-        let isNetflix = service.contains("netflix")
-        let isDisney = service.contains("disney")
-        let isApple = service.contains("apple")
-        let isAmazon = service.contains("amazon") || service.contains("prime")
-        let isHulu = service.contains("hulu")
         
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-
         var finalDate: Date? = nil
 
-        // 2. Aggressive Streaming Overrides (Force global release times)
-        if isApple {
-            // Apple TV+: Drops at Midnight ET (9:30 AM IST).
-            // API often lists US date (Thursday), which is already Friday morning in India.
-            formatter.timeZone = TimeZone(identifier: "America/New_York")
-            if let baseDate = formatter.date(from: "\(dateString) 00:00") {
-                finalDate = Calendar.current.date(byAdding: .day, value: 1, to: baseDate)
+        // 2. Data-Driven Streaming Overrides
+        if let rule = StreamingServiceRule.defaults.first(where: { rule in
+            rule.patterns.contains(where: { service.contains($0) })
+        }) {
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            formatter.timeZone = TimeZone(identifier: rule.timeZoneIdentifier)
+            if let baseDate = formatter.date(from: "\(dateString) \(rule.releaseTime)") {
+                finalDate = Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
             }
-        } else if isDisney {
-            // Disney+ (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET (6:30 AM IST).
-            formatter.timeZone = TimeZone(identifier: "America/New_York")
-            finalDate = formatter.date(from: "\(dateString) 21:00")
-        } else if isNetflix {
-            // Netflix: Midnight PT (12:30 PM IST).
-            formatter.timeZone = TimeZone(identifier: "America/Los_Angeles")
-            finalDate = formatter.date(from: "\(dateString) 00:00")
-        } else if isAmazon {
-            // Amazon Prime: Midnight GMT (5:30 AM IST)
-            formatter.timeZone = TimeZone(identifier: "GMT")
-            finalDate = formatter.date(from: "\(dateString) 00:00")
-        } else if isHulu {
-            // Hulu: Midnight ET (9:30 AM IST)
-            formatter.timeZone = TimeZone(identifier: "America/New_York")
-            finalDate = formatter.date(from: "\(dateString) 00:00")
         }
 
         if finalDate == nil {
@@ -73,11 +71,12 @@ struct DateUtils {
                 finalDate = date
             } else if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
                 // 4. Manual fallback to provided timezone
+                formatter.dateFormat = "yyyy-MM-dd HH:mm"
                 formatter.timeZone = tz
                 let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
                 finalDate = formatter.date(from: "\(dateString) \(timeToUse)")
             } else {
-                // 6. Final raw date fallback
+                // 5. Final raw date fallback
                 let dateOnlyFormatter = DateFormatter()
                 dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
                 finalDate = dateOnlyFormatter.date(from: dateString)

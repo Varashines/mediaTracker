@@ -74,6 +74,13 @@ actor MaintenanceService {
                                 modelContext.delete(sorted[i])
                             }
                         }
+                        
+                        // Phase 3 Optimization: Populate Persistent Dates
+                        for episode in season.episodes {
+                            if episode.airDateValue == nil {
+                                episode.updateAirDateValue()
+                            }
+                        }
                     }
                     
                     // 4. Purge legacy Crew cards

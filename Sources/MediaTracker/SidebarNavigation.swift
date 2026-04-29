@@ -14,7 +14,7 @@ struct SidebarNavigation: View, Equatable {
                 Label("Home", systemImage: "house.fill")
                     .tag("Home")
 
-                Label("Upcoming", systemImage: "calendar")
+                Label("Release Calendar", systemImage: "calendar")
                     .tag("Upcoming")
 
                 Label("In Progress", systemImage: "play.circle")
@@ -46,7 +46,7 @@ struct SidebarNavigation: View, Equatable {
                 Label("Discovery Hub", systemImage: "sparkles.tv")
                     .tag("Discover")
                 
-                Label("Insights", systemImage: "chart.bar.xaxis")
+                Label("Statistics", systemImage: "chart.bar.fill")
                     .tag("Insights")
             }
             .padding(.vertical, 4)

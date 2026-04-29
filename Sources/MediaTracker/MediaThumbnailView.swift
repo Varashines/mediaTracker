@@ -186,8 +186,19 @@ struct MediaThumbnailView: View {
     private var mainContent: some View {
         ZStack(alignment: .center) {
             // 1. Poster Layer
-            posterLayer
-                .blur(radius: isHovered ? 15 : 0)
+            ThumbnailPosterLayer(
+                posterURL: posterURL,
+                themeColorHex: item?.themeColorHex ?? capturedThemeColorHex,
+                mode: mode,
+                type: type,
+                isFastScrolling: isFastScrolling,
+                width: width,
+                height: height,
+                namespace: namespace,
+                capturedID: capturedID,
+                resultID: result?.id
+            )
+            .blur(radius: isHovered ? 15 : 0)
             
             Rectangle()
                 .fill(.ultraThinMaterial.opacity(0.6))
@@ -208,57 +219,34 @@ struct MediaThumbnailView: View {
                 Spacer()
             }
             .padding(8)
-            .opacity(isHovered ? 0 : 1) // Hide when hovered to reveal shadow gallery
+            .opacity(isHovered ? 0 : 1)
             
             // 2. SHADOW GALLERY: The Reveal (Centered)
-            VStack(spacing: 8) {
-                Text(title.uppercased())
-                    .font(.system(size: mode == .hero ? 18 : 13, weight: .black, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.8), radius: 4)
-                
-                HStack(spacing: 6) {
-                    if let year = yearLabel {
-                        Text(year)
-                    }
-                    
-                    // Show stats/progress in the hover stack (But NOT if completed)
-                    if safeState != .completed {
-                        let currentInfo = nextEpisodeLabel ?? watchProgress
-                        if let info = currentInfo {
-                            Text("•")
-                            Text(info)
-                        }
-                    }
-                }
-                .font(.system(size: mode == .hero ? 12 : 10, weight: .bold, design: .rounded))
-                .kerning(1.0)
-                .foregroundStyle(.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.6), radius: 2)
-                
-                // RESTORED DATE ROW
-                if isUpcoming, let date = gridBadgeText {
-                    Text(date.uppercased())
-                        .font(.system(size: 8, weight: .black, design: .rounded))
-                        .kerning(1.5)
-                        .padding(.top, 4)
-                        .foregroundStyle(date.contains("STREAMING") ? appAccent.color : .white)
-                        .shadow(color: .black.opacity(0.4), radius: 2)
-                }
-            }
-            .padding(.horizontal, 12)
-            .opacity(isHovered ? 1 : 0)
-            .scaleEffect(isHovered ? 1.0 : 0.9)
+            ThumbnailHoverOverlay(
+                title: title,
+                year: yearLabel,
+                state: safeState,
+                nextEpisodeLabel: nextEpisodeLabel,
+                watchProgress: watchProgress,
+                isUpcoming: isUpcoming,
+                gridBadgeText: gridBadgeText,
+                isHovered: isHovered,
+                mode: mode,
+                appAccent: appAccent
+            )
             
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
-                searchOverlay
+                ThumbnailSearchOverlay(
+                    isAdded: isAdded,
+                    isLocalInSearch: isLocalInSearch,
+                    isHovered: isHovered
+                )
             }
         }
         .frame(width: width, height: height)
         .background {
-            if let ns = namespace {
+            if let ns = namespace, !isFastScrolling {
                 let itemIDString: String = {
                     if let id = capturedID { return "\(id)" }
                     return "\(result?.id.hashValue ?? 0)"
@@ -270,10 +258,14 @@ struct MediaThumbnailView: View {
             }
         }
         .cornerRadius(mode == .hero ? 16 : 12)
-        .opacity(isAppeared ? 1 : 0)
-        .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : 0.9))
-        .offset(y: isAppeared ? 0 : 10)
+        .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
+        .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
+        .offset(y: (isAppeared || isFastScrolling) ? 0 : 10)
         .onAppear {
+            if isFastScrolling {
+                isAppeared = true
+                return
+            }
             let delay = Double(staggerIndex ?? 0 % 20) * 0.04
             withAnimation(.smooth(duration: 0.5).delay(delay)) {
                 isAppeared = true
@@ -283,50 +275,6 @@ struct MediaThumbnailView: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
-        }
-    }
-
-    @ViewBuilder
-    private var posterLayer: some View {
-        let content = Group {
-            if let urlString = posterURL, let url = URL(string: urlString) {
-                let baseColor = (item?.themeColorHex ?? capturedThemeColorHex).flatMap { Color(hex: $0) }
-                let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
-                
-                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
-                    _ in
-                } placeholder: {
-                    Rectangle().fill(Color.secondary.opacity(0.1))
-                        .overlay { ProgressView().controlSize(.small) }
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: width, height: height)
-                .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .overlay {
-                        Image(systemName: type == .movie ? "film" : "tv")
-                            .font(.system(size: mode == .hero ? 40 : 30))
-                            .foregroundStyle(.secondary.opacity(0.5))
-                    }
-                    .frame(width: width, height: height)
-            }
-        }
-
-        if let ns = namespace {
-            let itemIDString: String = {
-                if let id = capturedID { return "\(id)" }
-                return "\(result?.id.hashValue ?? 0)"
-            }()
-            
-            if !itemIDString.isEmpty {
-                content.matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
-            } else {
-                content
-            }
-        } else {
-            content
         }
     }
 
@@ -344,49 +292,6 @@ struct MediaThumbnailView: View {
                 try? item.modelContext?.save()
                 NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var searchOverlay: some View {
-        if isAdded {
-            ZStack {
-                // Dimming layer only for non-local results to emphasize "In Library"
-                if !isLocalInSearch {
-                    Rectangle()
-                        .fill(.black.opacity(0.6))
-                    
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.green)
-                        Text("In Library")
-                            .font(.caption.bold())
-                            .foregroundStyle(.white)
-                    }
-                } else if isHovered {
-                    // Local result in search - main hover info handles the reveal
-                    // but we can add an extra "Open" indicator if we want
-                    Rectangle()
-                        .fill(.black.opacity(0.2))
-                }
-            }
-        } else if isHovered {
-            // New Web Result - Show "Add" UI that doesn't cover center
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.white)
-                        .shadow(radius: 4)
-                        .padding(12)
-                }
-            }
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 

@@ -77,8 +77,6 @@ actor BackgroundDataService {
     }
 
     func refreshSingleItem(id: String, metadataOnly: Bool = false, force: Bool = false, shouldSave: Bool = true) async -> Bool {
-        // Crash Prevention: Use a safe fetch descriptor instead of model(for:) with PersistentIdentifier.
-        // This avoids crashing if the item was deleted or hasn't been committed yet.
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return false }
         
@@ -86,218 +84,16 @@ actor BackgroundDataService {
         guard let tmdbID = Int(tmdbIDString) else { return false }
 
         do {
+            let success: Bool
             if item.type == .movie {
-                let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                
-                // Diff-based update
-                item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                
-                // Poster & Backdrop Upgrade
-                if let poster = details.posterPath {
-                    item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                }
-                if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-                }
-                
-                let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
-                movieDetails.item = item
-                movieDetails.runtime = details.runtime
-                movieDetails.genres = details.genres
-                movieDetails.voteAverage = details.voteAverage
-                movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
-                movieDetails.creators = details.directors.map { $0.name }
-                
-                // Update Cast - Only if changed
-                let newCastResults = details.cast
-                let currentCast = item.displayCast
-                let hasChanged = currentCast.count != newCastResults.count || 
-                                zip(currentCast.sorted(by: { $0.name < $1.name }), 
-                                    newCastResults.sorted(by: { $0.name < $1.name }))
-                                .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
-
-                if hasChanged || movieDetails.cast.isEmpty {
-                    let oldCast = movieDetails.cast
-                    for member in oldCast { modelContext.delete(member) }
-                    
-                    var newCastList: [CastMember] = []
-                    for c in newCastResults {
-                        let profileURL: String?
-                        if let path = c.profilePath {
-                            profileURL = "https://image.tmdb.org/t/p/w185\(path)"
-                        } else {
-                            profileURL = nil
-                        }
-                        // Use unique ID to prevent duplicates
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
-                        member.movieDetails = movieDetails
-                        modelContext.insert(member)
-                        newCastList.append(member)
-                    }
-                    movieDetails.cast = newCastList
-                }
-                
-                if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
-                
-                item.lastUpdated = Date()
-                
+                success = await refreshMovie(item: item, tmdbID: tmdbID)
             } else if item.type == .tvShow {
-                let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-                
-                // Phase 2 Optimization: Head-Only Smart Refresh
-                let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
-                
-                let totalCachedEpisodes = tvDetails.seasons.reduce(0) { $0 + $1.episodes.count }
-                let hasMissingEpisodes = tvDetails.seasons.contains(where: { $0.episodes.isEmpty }) && !tvDetails.seasons.isEmpty
-
-                let isAlreadyCurrent = !force && 
-                                     tvDetails.numberOfEpisodes == details.episodesCount && 
-                                     tvDetails.status == details.status && 
-                                     item.releaseDate != nil &&
-                                     !metadataOnly &&
-                                     !tvDetails.seasons.isEmpty &&
-                                     !hasMissingEpisodes &&
-                                     totalCachedEpisodes > 0
-                
-                if isAlreadyCurrent && item.state != .active {
-                    // Just update a few key bits without full season sync
-                    tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(details.nextEpisodeDate, serviceName: tvDetails.network, for: tvDetails)
-                    tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                    tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                    item.lastUpdated = Date()
-                    return true
-                }
-
-                // Nil-safe date update
-                if let newDate = DateUtils.parseDate(details.firstAirDate) {
-                    item.releaseDate = newDate
-                }
-                
-                // Poster & Backdrop Upgrade
-                if let poster = details.posterPath {
-                    item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                }
-                if let backdrop = details.backdropPath {
-                    item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-                }
-                
-                // Parallel Season Fetching
-                var tvMazeID: Int? = nil
-                
-                if let tvdbID = details.tvdbID {
-                    // Phase 2 Optimization: Persisted TVMaze ID
-                    if let existingMazeID = tvDetails.tvMazeID {
-                        tvMazeID = existingMazeID
-                    } else if let mID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID) {
-                        tvMazeID = mID
-                    }
-                    
-                    if let mID = tvMazeID {
-                        if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                            tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
-                        }
-                    }
-                }
-
-                // Update Cast - Only if changed
-                let newCastResults = details.cast
-                let currentCast = item.displayCast
-                let hasCastChanged = currentCast.count != newCastResults.count || 
-                                   zip(currentCast.sorted(by: { $0.name < $1.name }), 
-                                       newCastResults.sorted(by: { $0.name < $1.name }))
-                                   .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
-
-                if hasCastChanged || tvDetails.cast.isEmpty {
-                    let oldCast = tvDetails.cast
-                    for member in oldCast { modelContext.delete(member) }
-                    
-                    var newCastList: [CastMember] = []
-                    for c in newCastResults {
-                        let profileURL: String?
-                        if let path = c.profilePath {
-                            profileURL = "https://image.tmdb.org/t/p/w185\(path)"
-                        } else {
-                            profileURL = nil
-                        }
-                        // Use unique ID to prevent duplicates
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
-                        member.tvShowDetails = tvDetails
-                        modelContext.insert(member)
-                        newCastList.append(member)
-                    }
-                    tvDetails.cast = newCastList
-                }
-
-                // Diff-based Sync
-                if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
-                tvDetails.item = item
-                
-                tvDetails.voteAverage = details.voteAverage
-                tvDetails.genres = details.genres
-                tvDetails.network = await StringPool.shared.intern(details.network)
-                tvDetails.networkLogoPath = details.networkLogoPath
-                tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
-                tvDetails.status = await StringPool.shared.intern(details.status)
-                tvDetails.creators = details.creators.map { $0.name }
-                tvDetails.numberOfSeasons = details.seasonsCount
-                tvDetails.numberOfEpisodes = details.episodesCount
-                tvDetails.tvMazeID = tvMazeID
-                tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-                tvDetails.nextSeasonNumber = details.nextSeasonNumber
-                
-                if !metadataOnly {
-                    // FORCE FULL SYNC if episodes are missing (totalCount == 0) or any season is empty
-                    let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
-                    let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
-
-                    for seasonData in seasonsToSync {
-                        let sNum = seasonData.season_number
-                        let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                        
-                        // Robust existence check via Fetch
-                        let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                        let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
-                        
-                        if season.modelContext == nil {
-                            season.tvShowDetails = tvDetails
-                            modelContext.insert(season)
-                            // Explicitly append to ensure relationship is established immediately for next steps
-                            if !tvDetails.seasons.contains(where: { $0.seasonNumber == sNum }) {
-                                tvDetails.seasons.append(season)
-                            }
-                        }
-                        
-                        if let episodes = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) {
-                            for ep in episodes {
-                                let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
-                                
-                                // Robust existence check via Fetch
-                                let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                                let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
-                                
-                                if episode.modelContext == nil {
-                                    episode.season = season
-                                    modelContext.insert(episode)
-                                    // Explicitly append to ensure relationship
-                                    if !season.episodes.contains(where: { $0.episodeNumber == ep.episodeNumber }) {
-                                        season.episodes.append(episode)
-                                    }
-                                } else {
-                                    episode.name = ep.name
-                                    episode.overview = ep.overview
-                                    episode.airDate = ep.airDate
-                                    episode.runtime = ep.runtime
-                                }
-                            }
-                        } else {
-                            print("⚠️ Failed to fetch episodes for \(item.title) season \(sNum).")
-                        }
-                    }
-                    tvDetails.recalculateCachedProperties()
-                }
-                
-                item.lastUpdated = Date()
+                success = await refreshTVShow(item: item, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
+            } else {
+                success = false
             }
+            
+            if !success { return false }
             
             item.syncCachedProperties()
             item.updateSearchableText()
@@ -323,21 +119,199 @@ actor BackgroundDataService {
             }
 
             if shouldSave {
-                do {
-                    try modelContext.save()
-                    let refreshedID = item.id
-                    Task { @MainActor in
-                        NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
-                    }
-                } catch {
-                    print("❌ Refresh error saving context for \(item.title): \(error)")
-                    return false
+                try modelContext.save()
+                let refreshedID = item.id
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
                 }
             }
-            
             return true
         } catch {
             print("❌ Refresh error for \(item.title): \(error)")
+            return false
+        }
+    }
+
+    private func refreshMovie(item: MediaItem, tmdbID: Int) async -> Bool {
+        do {
+            let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
+            item.releaseDate = DateUtils.parseDate(details.releaseDate)
+            
+            if let poster = details.posterPath {
+                item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
+            }
+            if let backdrop = details.backdropPath {
+                item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
+            }
+            
+            let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
+            movieDetails.item = item
+            movieDetails.runtime = details.runtime
+            movieDetails.genres = details.genres
+            movieDetails.voteAverage = details.voteAverage
+            movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
+            movieDetails.creators = details.directors.map { $0.name }
+            
+            // Update Cast
+            let newCastResults = details.cast
+            let currentCast = item.displayCast
+            let hasChanged = currentCast.count != newCastResults.count || 
+                            zip(currentCast.sorted(by: { $0.name < $1.name }), 
+                                newCastResults.sorted(by: { $0.name < $1.name }))
+                            .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+
+            if hasChanged || movieDetails.cast.isEmpty {
+                movieDetails.cast.forEach { modelContext.delete($0) }
+                
+                var newCastList: [CastMember] = []
+                for c in newCastResults {
+                    let profileURL = c.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
+                    member.movieDetails = movieDetails
+                    modelContext.insert(member)
+                    newCastList.append(member)
+                }
+                movieDetails.cast = newCastList
+            }
+            
+            if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
+            item.lastUpdated = Date()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func refreshTVShow(item: MediaItem, tmdbID: Int, metadataOnly: Bool, force: Bool) async -> Bool {
+        do {
+            let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
+            let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
+            
+            let totalCachedEpisodes = tvDetails.seasons.reduce(0) { $0 + $1.episodes.count }
+            let hasMissingEpisodes = tvDetails.seasons.contains(where: { $0.episodes.isEmpty }) && !tvDetails.seasons.isEmpty
+
+            let isAlreadyCurrent = !force && 
+                                 tvDetails.numberOfEpisodes == details.episodesCount && 
+                                 tvDetails.status == details.status && 
+                                 item.releaseDate != nil &&
+                                 !metadataOnly &&
+                                 !tvDetails.seasons.isEmpty &&
+                                 !hasMissingEpisodes &&
+                                 totalCachedEpisodes > 0
+            
+            if isAlreadyCurrent && item.state != .active {
+                tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(details.nextEpisodeDate, serviceName: tvDetails.network, for: tvDetails)
+                tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
+                tvDetails.nextSeasonNumber = details.nextSeasonNumber
+                item.lastUpdated = Date()
+                return true
+            }
+
+            if let newDate = DateUtils.parseDate(details.firstAirDate) {
+                item.releaseDate = newDate
+            }
+            
+            if let poster = details.posterPath {
+                item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
+            }
+            if let backdrop = details.backdropPath {
+                item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
+            }
+            
+            var tvMazeID = tvDetails.tvMazeID
+            if let tvdbID = details.tvdbID, tvMazeID == nil {
+                tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
+            }
+            
+            if let mID = tvMazeID {
+                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
+                    tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                }
+            }
+
+            // Update Cast
+            let newCastResults = details.cast
+            let currentCast = item.displayCast
+            let hasCastChanged = currentCast.count != newCastResults.count || 
+                               zip(currentCast.sorted(by: { $0.name < $1.name }), 
+                                   newCastResults.sorted(by: { $0.name < $1.name }))
+                               .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+
+            if hasCastChanged || tvDetails.cast.isEmpty {
+                tvDetails.cast.forEach { modelContext.delete($0) }
+                
+                var newCastList: [CastMember] = []
+                for c in newCastResults {
+                    let profileURL = c.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
+                    member.tvShowDetails = tvDetails
+                    modelContext.insert(member)
+                    newCastList.append(member)
+                }
+                tvDetails.cast = newCastList
+            }
+
+            if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
+            tvDetails.item = item
+            tvDetails.voteAverage = details.voteAverage
+            tvDetails.genres = details.genres
+            tvDetails.network = await StringPool.shared.intern(details.network)
+            tvDetails.networkLogoPath = details.networkLogoPath
+            tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
+            tvDetails.status = await StringPool.shared.intern(details.status)
+            tvDetails.creators = details.creators.map { $0.name }
+            tvDetails.numberOfSeasons = details.seasonsCount
+            tvDetails.numberOfEpisodes = details.episodesCount
+            tvDetails.tvMazeID = tvMazeID
+            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
+            tvDetails.nextSeasonNumber = details.nextSeasonNumber
+            
+            if !metadataOnly {
+                let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
+                let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
+
+                for seasonData in seasonsToSync {
+                    let sNum = seasonData.season_number
+                    let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                    
+                    let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                    let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
+                    
+                    if season.modelContext == nil {
+                        season.tvShowDetails = tvDetails
+                        modelContext.insert(season)
+                        if !tvDetails.seasons.contains(where: { $0.seasonNumber == sNum }) {
+                            tvDetails.seasons.append(season)
+                        }
+                    }
+                    
+                    if let episodes = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) {
+                        for ep in episodes {
+                            let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
+                            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                            let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
+                            
+                            if episode.modelContext == nil {
+                                episode.season = season
+                                modelContext.insert(episode)
+                                if !season.episodes.contains(where: { $0.episodeNumber == ep.episodeNumber }) {
+                                    season.episodes.append(episode)
+                                }
+                            } else {
+                                episode.name = ep.name
+                                episode.overview = ep.overview
+                                episode.airDate = ep.airDate
+                                episode.runtime = ep.runtime
+                            }
+                        }
+                    }
+                }
+                tvDetails.recalculateCachedProperties()
+            }
+            
+            item.lastUpdated = Date()
+            return true
+        } catch {
             return false
         }
     }

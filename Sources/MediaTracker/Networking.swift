@@ -34,7 +34,13 @@ actor APIClient {
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy // This handles ETags/304 automatically
-        config.urlCache = URLCache.shared
+        
+        // Phase 3 Enhancement: Substantially larger URLCache (64MB RAM, 256MB Disk)
+        config.urlCache = URLCache(
+            memoryCapacity: 64 * 1024 * 1024,
+            diskCapacity: 256 * 1024 * 1024,
+            directory: nil
+        )
         return URLSession(configuration: config)
     }()
     
@@ -104,13 +110,25 @@ actor APIClient {
     }
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
-        let cacheKey = "movie_\(query)"
+        let cacheKey = "search_movie_\(query)"
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
         }
         
+        // Phase 3: Disk Cache check for searches
+        if let cachedData = getCachedData(forKey: "\(cacheKey).json"),
+           let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+            searchCache[cacheKey] = results
+            lastSearchTime[cacheKey] = Date()
+            return results
+        }
+        
         let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: query)
         let final = results.map { $0.toSearchResult() }
+        
+        if let encoded = try? JSONEncoder().encode(final) {
+            saveToCache(data: encoded, forKey: "\(cacheKey).json")
+        }
         
         searchCache[cacheKey] = final
         lastSearchTime[cacheKey] = Date()
@@ -118,13 +136,25 @@ actor APIClient {
     }
     
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
-        let cacheKey = "tv_\(query)"
+        let cacheKey = "search_tv_\(query)"
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
         }
 
+        // Phase 3: Disk Cache check for searches
+        if let cachedData = getCachedData(forKey: "\(cacheKey).json"),
+           let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+            searchCache[cacheKey] = results
+            lastSearchTime[cacheKey] = Date()
+            return results
+        }
+
         let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: query)
         let final = results.map { $0.toSearchResult() }
+        
+        if let encoded = try? JSONEncoder().encode(final) {
+            saveToCache(data: encoded, forKey: "\(cacheKey).json")
+        }
         
         searchCache[cacheKey] = final
         lastSearchTime[cacheKey] = Date()
@@ -133,7 +163,7 @@ actor APIClient {
     
     // MARK: - Details
 
-    func fetchMovieDetails(tmdbID: Int) async throws -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
+    func fetchMovieDetails(tmdbID: Int) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
         if let cachedData = getCachedData(forKey: cacheKey),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
@@ -149,7 +179,7 @@ actor APIClient {
         return processMovieDetails(details)
     }
 
-    private func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> (runtime: Int?, genres: [String], voteAverage: Double?, releaseDate: String?, backdropPath: String?, posterPath: String?, originalLanguage: String?, cast: [CastMemberResult], directors: [CastMemberResult]) {
+    private func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
         let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -170,10 +200,20 @@ actor APIClient {
             }
         }
         
-        return (runtime: details.runtime, genres: details.genres.map { $0.name }, voteAverage: details.vote_average, releaseDate: finalReleaseDate, backdropPath: details.backdrop_path, posterPath: details.poster_path, originalLanguage: details.original_language, cast: Array(cast), directors: directors)
+        return MovieDetailsResult(
+            runtime: details.runtime, 
+            genres: details.genres.map { $0.name }, 
+            voteAverage: details.vote_average, 
+            releaseDate: finalReleaseDate, 
+            backdropPath: details.backdrop_path, 
+            posterPath: details.poster_path, 
+            originalLanguage: details.original_language, 
+            cast: Array(cast), 
+            directors: directors
+        )
     }
 
-    func fetchTVDetails(tmdbID: Int) async throws -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
+    func fetchTVDetails(tmdbID: Int) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
         if let cachedData = getCachedData(forKey: cacheKey),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
@@ -189,7 +229,7 @@ actor APIClient {
         return processTVDetails(d)
     }
 
-    private func processTVDetails(_ d: TMDBTVDetailsResponse) -> (seasonsCount: Int, episodesCount: Int, status: String, voteAverage: Double?, genres: [String], backdropPath: String?, posterPath: String?, network: String?, networkLogoPath: String?, originalLanguage: String?, seasons: [TMDBSeasonBrief], firstAirDate: String?, nextEpisodeDate: String?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, tvdbID: Int?, cast: [CastMemberResult], creators: [CastMemberResult]) {
+    private func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
         let cast = d.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -197,7 +237,27 @@ actor APIClient {
             CastMemberResult(name: $0.name, character: "Creator", profilePath: $0.profile_path, order: -1)
         } ?? []
         let network = d.networks?.first
-        return (d.number_of_seasons, d.number_of_episodes, d.status, d.vote_average, d.genres.map { $0.name }, d.backdrop_path, d.poster_path, network?.name, network?.logo_path, d.original_language, d.seasons ?? [], d.first_air_date, d.next_episode_to_air?.air_date, d.next_episode_to_air?.episode_number, d.next_episode_to_air?.season_number, d.external_ids?.tvdb_id, Array(cast), creators)
+        
+        return TVDetailsResult(
+            seasonsCount: d.number_of_seasons,
+            episodesCount: d.number_of_episodes,
+            status: d.status,
+            voteAverage: d.vote_average,
+            genres: d.genres.map { $0.name },
+            backdropPath: d.backdrop_path,
+            posterPath: d.poster_path,
+            network: network?.name,
+            networkLogoPath: network?.logo_path,
+            originalLanguage: d.original_language,
+            seasons: d.seasons ?? [],
+            firstAirDate: d.first_air_date,
+            nextEpisodeDate: d.next_episode_to_air?.air_date,
+            nextEpisodeNumber: d.next_episode_to_air?.episode_number,
+            nextSeasonNumber: d.next_episode_to_air?.season_number,
+            tvdbID: d.external_ids?.tvdb_id,
+            cast: Array(cast),
+            creators: creators
+        )
     }
     
     // Adaptive Asset Scaling: Restore high quality for Retina displays
@@ -447,4 +507,37 @@ struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String, overview
 
 struct TMDBPersonSearchEntry: Codable {
     let profile_path: String?
+}
+
+struct MovieDetailsResult {
+    let runtime: Int?
+    let genres: [String]
+    let voteAverage: Double?
+    let releaseDate: String?
+    let backdropPath: String?
+    let posterPath: String?
+    let originalLanguage: String?
+    let cast: [CastMemberResult]
+    let directors: [CastMemberResult]
+}
+
+struct TVDetailsResult {
+    let seasonsCount: Int
+    let episodesCount: Int
+    let status: String
+    let voteAverage: Double?
+    let genres: [String]
+    let backdropPath: String?
+    let posterPath: String?
+    let network: String?
+    let networkLogoPath: String?
+    let originalLanguage: String?
+    let seasons: [TMDBSeasonBrief]
+    let firstAirDate: String?
+    let nextEpisodeDate: String?
+    let nextEpisodeNumber: Int?
+    let nextSeasonNumber: Int?
+    let tvdbID: Int?
+    let cast: [CastMemberResult]
+    let creators: [CastMemberResult]
 }

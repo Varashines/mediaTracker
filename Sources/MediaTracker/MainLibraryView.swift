@@ -29,6 +29,11 @@ struct MainLibraryView: View {
     @State private var upcomingContentWidth: CGFloat = 0
     @State private var upcomingContainerWidth: CGFloat = 0
 
+    @State private var featuredScrollProgress: Double = 0
+    @State private var featuredScrollSpace = UUID().uuidString
+    @State private var featuredContentWidth: CGFloat = 0
+    @State private var featuredContainerWidth: CGFloat = 0
+
     @State private var continueWatchingScrollProgress: Double = 0
     @State private var continueWatchingScrollSpace = UUID().uuidString
     @State private var continueWatchingContentWidth: CGFloat = 0
@@ -101,9 +106,10 @@ struct MainLibraryView: View {
                                     .coordinateSpace(name: continueWatchingScrollSpace)
                                     .background(
                                         GeometryReader { geo in
+                                            let width = geo.size.width
                                             Color.clear
-                                                .onAppear { continueWatchingContainerWidth = geo.size.width }
-                                                .onChange(of: geo.size.width) { _, newValue in continueWatchingContainerWidth = newValue }
+                                                .onAppear { continueWatchingContainerWidth = width }
+                                                .onChange(of: width) { _, newValue in continueWatchingContainerWidth = newValue }
                                         }
                                     )
                                     .onPreferenceChange(ScrollOffsetKey.self) { dict in
@@ -137,7 +143,7 @@ struct MainLibraryView: View {
                                 title: "For You", 
                                 icon: "sparkles", 
                                 iconColor: .yellow,
-                                scrollProgress: recommendations.count > 1 ? forYouScrollProgress : nil
+                                scrollProgress: forYouScrollProgress
                             )
                             
                             if !recommendations.isEmpty {
@@ -177,11 +183,15 @@ struct MainLibraryView: View {
                                         }
                                     )
                                     .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                                        guard let minX = dict[forYouScrollSpace] else { return }
-                                        let maxScroll = max(1, forYouContentWidth - forYouContainerWidth)
-                                        let currentScroll = max(0, -minX)
-                                        withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                                            forYouScrollProgress = min(1.0, currentScroll / maxScroll)
+                                        if let minX = dict[forYouScrollSpace] {
+                                            let contentWidth = forYouContentWidth
+                                            let containerWidth = forYouContainerWidth
+                                            let maxScroll = max(1, contentWidth - containerWidth)
+                                            let currentScroll = max(0, -minX)
+                                            let progress = min(1.0, currentScroll / maxScroll)
+                                            withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
+                                                forYouScrollProgress = progress
+                                            }
                                         }
                                     }
                                     .scrollClipDisabled()
@@ -208,8 +218,8 @@ struct MainLibraryView: View {
                             SectionHeader(
                                 title: "Featured",
                                 icon: nil,
-                                iconColor: .primary,
-                                scrollProgress: featuredCarouselItems.count > 1 ? upcomingScrollProgress : nil
+                                iconColor: .secondary,
+                                scrollProgress: featuredScrollProgress
                             )
                             
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -230,28 +240,28 @@ struct MainLibraryView: View {
                                 .padding(.vertical, 20)
                                 .background(
                                     GeometryReader { geo in
-                                        let minX = geo.frame(in: .named(upcomingScrollSpace)).minX
+                                        let minX = geo.frame(in: .named(featuredScrollSpace)).minX
                                         Color.clear
-                                            .preference(key: ScrollOffsetKey.self, value: [upcomingScrollSpace: minX])
-                                            .onAppear { upcomingContentWidth = geo.size.width }
-                                            .onChange(of: geo.size.width) { _, newValue in upcomingContentWidth = newValue }
+                                            .preference(key: ScrollOffsetKey.self, value: [featuredScrollSpace: minX])
+                                            .onAppear { featuredContentWidth = geo.size.width }
+                                            .onChange(of: geo.size.width) { _, newValue in featuredContentWidth = newValue }
                                     }
                                 )
                             }
-                            .coordinateSpace(name: upcomingScrollSpace)
+                            .coordinateSpace(name: featuredScrollSpace)
                             .background(
                                 GeometryReader { geo in
                                     Color.clear
-                                        .onAppear { upcomingContainerWidth = geo.size.width }
-                                        .onChange(of: geo.size.width) { _, newValue in upcomingContainerWidth = newValue }
+                                        .onAppear { featuredContainerWidth = geo.size.width }
+                                        .onChange(of: geo.size.width) { _, newValue in featuredContainerWidth = newValue }
                                 }
                             )
                             .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                                guard let minX = dict[upcomingScrollSpace] else { return }
-                                let maxScroll = max(1, upcomingContentWidth - upcomingContainerWidth)
+                                guard let minX = dict[featuredScrollSpace] else { return }
+                                let maxScroll = max(1, featuredContentWidth - featuredContainerWidth)
                                 let currentScroll = max(0, -minX)
                                 withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
-                                    upcomingScrollProgress = min(1.0, currentScroll / maxScroll)
+                                    featuredScrollProgress = min(1.0, currentScroll / maxScroll)
                                 }
                             }
                         }
@@ -270,8 +280,7 @@ struct MainLibraryView: View {
                                     .buttonStyle(.plain)
                                     .padding(.trailing, 40)
                                 }
-                        }
- else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
+                        } else if !isCategoryPage && !isMainSection && selectedCategory != "Discover" {
                             SectionHeader(title: selectedCategory ?? "Library", icon: "folder", iconColor: .secondary)
                         } else if selectedCategory == "Upcoming" {
                             SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
@@ -329,7 +338,7 @@ struct MainLibraryView: View {
                             }
 
                             // 3. Main Collection with Chunking & Pagination
-                            if viewModel.currentGroupBy == .none && selectedCategory != "Archive" && selectedCategory != "Home" && selectedCategory != "Binge" {
+                            if viewModel.currentGroupBy == .none && selectedCategory != "Home" {
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                     let baseItems = showingUpcomingOnly ? Array(items.dropFirst(featuredCarouselItems.count)) : items
                                     

@@ -5,32 +5,25 @@ struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     
-    @State private var insights: TasteInsights?
+    @State private var stats: LibraryStats?
     @State private var isLoading = true
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 60) {
+            VStack(alignment: .leading, spacing: 50) {
                 if isLoading {
-                    ProgressView("Analyzing your library...")
-                        .frame(maxWidth: .infinity, minHeight: 400)
-                } else if let insights = insights {
-                    // 1. Profile Header
-                    profileHeader(insights: insights)
+                    loadingView
+                } else if let stats = stats {
+                    // 1. Hero: Total Watch Time
+                    watchTimeHero(minutes: stats.totalWatchTimeMinutes)
                     
-                    // 2. Top Genres (Simple List)
-                    if !insights.genreAffinities.isEmpty {
-                        genreSection(data: insights.genreAffinities)
-                    }
-
-                    // 3. Creative Visionaries (Top 10 Directors)
-                    if !insights.creatorAffinities.isEmpty {
-                        personSection(title: "Creative Visionaries", data: insights.creatorAffinities, color: .blue)
-                    }
+                    // 2. Overview Grid
+                    metricsGrid(stats: stats)
                     
-                    // 4. Recurring Stars (Top 10 Cast)
-                    if !insights.castAffinities.isEmpty {
-                        personSection(title: "Recurring Stars", data: insights.castAffinities, color: .orange)
+                    // 3. Genres & Networks
+                    HStack(alignment: .top, spacing: 40) {
+                        distributionSection(title: "Top Genres", data: stats.topGenres, icon: "tag.fill")
+                        distributionSection(title: "Top Networks", data: stats.topNetworks, icon: "tv.fill")
                     }
                 }
             }
@@ -45,157 +38,154 @@ struct InsightsView: View {
 
     private func refreshData() {
         Task {
-            let actor = TasteActor(modelContainer: modelContext.container)
-            let result = await actor.fetchTasteInsights()
+            let actor = LibraryStatsActor(modelContainer: modelContext.container)
+            let result = await actor.fetchStats()
             await MainActor.run {
-                self.insights = result
-                self.isLoading = false
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    self.stats = result
+                    self.isLoading = false
+                }
             }
         }
     }
 
     // MARK: - Components
-
+    
     @ViewBuilder
-    private func profileHeader(insights: TasteInsights) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Your Taste Profile")
-                .font(.system(size: 44, weight: .black, design: .rounded))
-            
-            HStack(spacing: 20) {
-                summaryTile(label: "Top Genre", value: insights.genreAffinities.first?.name ?? "N/A", color: .purple)
-                summaryTile(label: "Key Director", value: insights.creatorAffinities.first?.name ?? "N/A", color: .blue)
-                summaryTile(label: "Main Star", value: insights.castAffinities.first?.name ?? "N/A", color: .orange)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func summaryTile(label: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .black))
+    private var loadingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Analyzing your collection...")
+                .font(.headline)
                 .foregroundStyle(.secondary)
-            
-            Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-                .lineLimit(1)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, minHeight: 400)
+    }
+
+    @ViewBuilder
+    private func watchTimeHero(minutes: Int) -> some View {
+        let (days, hours, mins) = formatWatchTime(minutes: minutes)
+        
+        VStack(alignment: .leading, spacing: 16) {
+            Text("TOTAL WATCH TIME")
+                .font(.system(size: 12, weight: .black))
+                .foregroundStyle(appAccent.color)
+                .kerning(2)
+            
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if days > 0 {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(days)").font(.system(size: 64, weight: .black, design: .rounded))
+                        Text("days").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(.secondary)
+                    }
+                }
+                
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(hours)").font(.system(size: 64, weight: .black, design: .rounded))
+                    Text("hrs").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(.secondary)
+                }
+                
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(mins)").font(.system(size: 64, weight: .black, design: .rounded))
+                    Text("mins").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(40)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.05))
-        .cornerRadius(16)
-        .overlay {
-            RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.15), lineWidth: 1)
-        }
-    }
-
-    @ViewBuilder
-    private func genreSection(data: [(name: String, affinity: Double)]) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SectionHeader(title: "Top Genres", icon: "film.stack", iconColor: appAccent.color)
-            
-            PillGrid(items: data.prefix(12).map { $0.name }, color: appAccent.color)
-                .padding(.horizontal, 40)
-        }
-    }
-
-    @ViewBuilder
-    private func personSection(title: String, data: [(name: String, affinity: Double, imageURL: String?)], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SectionHeader(title: title, icon: color == .blue ? "person.2.badge.gearshape" : "star.fill", iconColor: color)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 24) {
-                    ForEach(data.prefix(10), id: \.name) { entry in
-                        InsightPersonCard(name: entry.name, imageURL: entry.imageURL, color: color)
-                    }
-                }
-                .padding(.vertical, 5)
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-}
-
-struct InsightPersonCard: View {
-    let name: String
-    let imageURL: String?
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        HStack(spacing: 0) {
-            // Image Section (Left)
-            Group {
-                if let urlString = imageURL, let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 160, height: 220), priority: .low, themeColor: color) { _ in
-                    } placeholder: {
-                        Rectangle().fill(color.opacity(0.1))
-                            .overlay { ProgressView().controlSize(.small) }
-                    }
-                    .scaledToFill()
-                } else {
-                    ZStack {
-                        color.opacity(0.1)
-                        Image(systemName: "person.fill")
-                            .foregroundStyle(color.opacity(0.5))
-                            .font(.system(size: 30))
-                    }
-                }
-            }
-            .frame(width: 80, height: 110)
-            .clipped()
-
-            // Text Section (Right)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(.primary)
-
-                Text("Top Contributor")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(width: 160, height: 110, alignment: .leading)
-        }
-        .frame(width: 240, height: 110)
-        .background(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(appAccent.color.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 32))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(color.opacity(colorScheme == .dark ? 0.3 : 0.1), lineWidth: 1.0)
+            RoundedRectangle(cornerRadius: 32)
+                .stroke(appAccent.color.opacity(0.1), lineWidth: 1)
         )
     }
-}
 
-struct PillGrid: View {
-    let items: [String]
-    let color: Color
-    
-    var body: some View {
-        let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-            ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                    .background(color.opacity(0.1))
-                    .foregroundStyle(color)
-                    .clipShape(Capsule())
-                    .overlay {
-                        Capsule().stroke(color.opacity(0.2), lineWidth: 1)
-                    }
+    @ViewBuilder
+    private func metricsGrid(stats: LibraryStats) -> some View {
+        let movieRate = stats.totalMovies > 0 ? Int((Double(stats.completedMovies) / Double(stats.totalMovies)) * 100) : 0
+        let tvRate = stats.totalTVShows > 0 ? Int((Double(stats.completedTVShows) / Double(stats.totalTVShows)) * 100) : 0
+        
+        VStack(alignment: .leading, spacing: 25) {
+            Text("Library Overview")
+                .font(.system(size: 24, weight: .black, design: .rounded))
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
+                metricCard(label: "Movies", value: "\(stats.totalMovies)", subValue: "\(movieRate)% Finished", icon: "film.fill", color: .blue)
+                metricCard(label: "TV Shows", value: "\(stats.totalTVShows)", subValue: "\(tvRate)% Finished", icon: "tv.fill", color: .purple)
+                metricCard(label: "Episodes", value: "\(stats.totalEpisodesWatched)", subValue: "Watched", icon: "play.rectangle.fill", color: .orange)
+                metricCard(label: "Library Size", value: "\(stats.totalMovies + stats.totalTVShows)", subValue: "Titles", icon: "tray.full.fill", color: .green)
             }
         }
+    }
+
+    @ViewBuilder
+    private func metricCard(label: String, value: String, subValue: String, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(color)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                Text(label)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            
+            Text(subValue)
+                .font(.system(size: 11, weight: .black))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(color.opacity(0.1))
+                .foregroundStyle(color)
+                .clipShape(Capsule())
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    @ViewBuilder
+    private func distributionSection(title: String, data: [(name: String, count: Int)], icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(appAccent.color)
+                Text(title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+            }
+            
+            VStack(spacing: 12) {
+                ForEach(data.prefix(8), id: \.name) { entry in
+                    HStack {
+                        Text(entry.name)
+                            .font(.system(size: 14, weight: .medium))
+                        Spacer()
+                        Text("\(entry.count)")
+                            .font(.system(size: 13, weight: .black, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.secondary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func formatWatchTime(minutes: Int) -> (days: Int, hours: Int, mins: Int) {
+        let days = minutes / (24 * 60)
+        let hours = (minutes % (24 * 60)) / 60
+        let mins = minutes % 60
+        return (days, hours, mins)
     }
 }

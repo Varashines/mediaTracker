@@ -1,38 +1,6 @@
 import SwiftData
 import SwiftUI
 
-enum SortOrder: String, CaseIterable, Identifiable {
-    case alphabetical = "Alphabetical"
-    case newestRelease = "Newest Release"
-    case recentlyAdded = "Recently Added"
-
-    var id: String { self.rawValue }
-
-    var icon: String {
-        switch self {
-        case .alphabetical: return "textformat.abc"
-        case .newestRelease: return "calendar"
-        case .recentlyAdded: return "clock.badge.checkmark"
-        }
-    }
-}
-
-enum GroupBy: String, CaseIterable, Identifiable {
-    case none = "None"
-    case year = "Year"
-    case category = "Category"
-
-    var id: String { self.rawValue }
-
-    var icon: String {
-        switch self {
-        case .none: return "square.grid.2x2"
-        case .year: return "calendar.badge.clock"
-        case .category: return "folder"
-        }
-    }
-}
-
 @Observable
 class MediaViewModel {
     var selectedCategory: String? = "Home"
@@ -74,6 +42,9 @@ class MediaViewModel {
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
+    
+    // Phase 3: Calendar Cache & Buffer
+    var calendarCache: [Date: CalendarResult] = [:]
 
     // Discovery Cache
     var cachedNetworks: [DiscoveryNode] = []
@@ -100,8 +71,9 @@ class MediaViewModel {
         if category == "Archive" { return "Archive" }
         if category == "Disliked" { return "Disliked" }
         if category == "Binge" { return "Binge" }
+        if category == "Upcoming" { return "Release Calendar" }
         if category == "Discover" { return "Discovery Hub" }
-        if category == "Insights" { return "Taste Insights" }
+        if category == "Insights" { return "Statistics" }
         if category == "All" { return "Library" }
         return category ?? "Library"
     }
@@ -114,6 +86,7 @@ struct ContentView: View {
     @State private var viewModel = MediaViewModel()
     @State private var themeCoordinator = AppThemeCoordinator.shared
     @State private var isSearchActive = false
+    @State private var sidebarSelection: String? = "Home"
     @State private var selectedHeroItem: MediaItem? = nil
     @State private var isSyncHovered = false
 
@@ -274,6 +247,9 @@ struct ContentView: View {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
+        } else if viewModel.selectedCategory == "Upcoming" {
+            ReleaseCalendarView(viewModel: viewModel)
+                .transition(.asymmetric(insertion: .opacity, removal: .opacity))
         } else if viewModel.selectedCategory == "Insights" {
             InsightsView()
         } else {
@@ -308,12 +284,13 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarNavigation(selection: $viewModel.selectedCategory)
+            SidebarNavigation(selection: $sidebarSelection)
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)  // Allow appBackground to show through sidebar
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-                .onChange(of: viewModel.selectedCategory) {
+                .onChange(of: sidebarSelection) { _, newValue in
+                    viewModel.selectedCategory = newValue
                     viewModel.selectedNetworks = nil
                     viewModel.selectedLanguage = nil
                     viewModel.isInitialLoading = true  // Reset loading state for category switch

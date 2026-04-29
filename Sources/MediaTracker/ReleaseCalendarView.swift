@@ -1,0 +1,364 @@
+import SwiftUI
+import SwiftData
+
+struct ReleaseCalendarView: View {
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @Namespace private var calendarNamespace
+    var viewModel: MediaViewModel
+    
+    @State private var calendarData: CalendarResult?
+    @State private var selectedDate: Date? // nil = All Month
+    @State private var currentDisplayMonth: Date = Calendar.current.startOfDay(for: Date())
+    @State private var isLoading = true
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // 1. LEFT PANE: The Contribution Graph
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Release Activity")
+                            .font(.system(size: 24, weight: .black, design: .rounded))
+                        
+                        monthNavigation
+                    }
+                    .padding(.top, 20)
+                    
+                    if let data = calendarData {
+                        contributionGraph(data: data)
+                    } else if isLoading {
+                        ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .padding(.horizontal, 30)
+            }
+            .frame(width: 320)
+            .background(Color.secondary.opacity(0.05))
+            
+            Divider()
+            
+            // 2. RIGHT PANE: Release Details
+            ScrollView {
+                VStack(alignment: .leading, spacing: 25) {
+                    if let data = calendarData {
+                        if let date = selectedDate, let dayInfo = data.days[date] {
+                            // Specific Day View
+                            headerSection(date: date, count: dayInfo.items.count)
+                            if dayInfo.items.isEmpty {
+                                emptyDayView(date: date)
+                            } else {
+                                releasesList(items: dayInfo.items)
+                            }
+                        } else {
+                            // All Month View
+                            headerSection(date: currentDisplayMonth, count: data.allItems.count, isAllMonth: true)
+                            if data.allItems.isEmpty {
+                                emptyDayView(date: currentDisplayMonth, isAllMonth: true)
+                            } else {
+                                allMonthReleasesList(data: data)
+                            }
+                        }
+                    }
+                }
+                .padding(40)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .onAppear {
+            refreshData(for: currentDisplayMonth)
+        }
+    }
+    
+    private var monthNavigation: some View {
+        HStack {
+            Button {
+                changeMonth(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            
+            Spacer()
+            
+            Button {
+                withAnimation(.spring(response: 0.3)) {
+                    selectedDate = nil
+                }
+            } label: {
+                Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(selectedDate == nil ? appAccent.color : .primary)
+            }
+            .buttonStyle(.plain)
+            
+            Spacer()
+            
+            Button {
+                changeMonth(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    
+    private func changeMonth(by value: Int) {
+        if let newMonth = Calendar.current.date(byAdding: .month, value: value, to: currentDisplayMonth) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                currentDisplayMonth = newMonth
+                selectedDate = nil // Reset to All Month view when navigating
+            }
+            refreshData(for: newMonth)
+        }
+    }
+    
+    private func refreshData(for month: Date) {
+        let calendar = Calendar.current
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
+        
+        // 1. Check Cache First
+        if let cached = viewModel.calendarCache[startOfMonth] {
+            self.calendarData = cached
+            self.isLoading = false
+            // Even if cached, we trigger background adjacent loads
+            preloadAdjacentMonths(around: startOfMonth)
+            return
+        }
+
+        isLoading = true
+        Task {
+            let actor = MediaFilterActor(modelContainer: modelContext.container)
+            do {
+                let result = try await actor.fetchCalendarData(for: startOfMonth)
+                await MainActor.run {
+                    viewModel.calendarCache[startOfMonth] = result
+                    if currentDisplayMonth == startOfMonth {
+                        self.calendarData = result
+                        self.isLoading = false
+                    }
+                    preloadAdjacentMonths(around: startOfMonth)
+                }
+            } catch {
+                print("❌ Calendar fetch error: \(error)")
+                await MainActor.run { self.isLoading = false }
+            }
+        }
+    }
+
+    private func preloadAdjacentMonths(around month: Date) {
+        let calendar = Calendar.current
+        let adjacentDates = [
+            calendar.date(byAdding: .month, value: -1, to: month),
+            calendar.date(byAdding: .month, value: 1, to: month)
+        ].compactMap { $0 }.map { calendar.date(from: calendar.dateComponents([.year, .month], from: $0))! }
+
+        let container = modelContext.container
+        for date in adjacentDates {
+            guard viewModel.calendarCache[date] == nil else { continue }
+            
+            Task.detached(priority: .background) {
+                let actor = MediaFilterActor(modelContainer: container)
+                if let result = try? await actor.fetchCalendarData(for: date) {
+                    await MainActor.run {
+                        viewModel.calendarCache[date] = result
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Graph Components
+    
+    @ViewBuilder
+    private func contributionGraph(data: CalendarResult) -> some View {
+        let calendar = Calendar.current
+        let sortedDays = data.days.values.sorted { $0.date < $1.date }
+        
+        // Group by weeks for the GitHub look, but aligned to actual weekdays
+        let weeks: [[CalendarDayInfo?]] = {
+            var res: [[CalendarDayInfo?]] = []
+            var currentWeek: [CalendarDayInfo?] = Array(repeating: nil, count: 7)
+            
+            for day in sortedDays {
+                let weekday = calendar.component(.weekday, from: day.date) // 1 = Sunday, 7 = Saturday
+                currentWeek[weekday - 1] = day
+                
+                if weekday == 7 {
+                    res.append(currentWeek)
+                    currentWeek = Array(repeating: nil, count: 7)
+                }
+            }
+            if currentWeek.contains(where: { $0 != nil }) {
+                res.append(currentWeek)
+            }
+            return res
+        }()
+        
+        VStack(alignment: .leading, spacing: 15) {
+            // Weekday labels
+            HStack(spacing: 4) {
+                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                    Text(day)
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 32)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(weeks.indices, id: \.self) { weekIdx in
+                    HStack(spacing: 4) {
+                        ForEach(0..<7) { dayIdx in
+                            if let day = weeks[weekIdx][dayIdx] {
+                                calendarCell(day: day)
+                            } else {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.clear)
+                                    .frame(width: 32, height: 32)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Legend
+            HStack(spacing: 4) {
+                Text("Less").font(.caption2).foregroundStyle(.secondary)
+                ForEach(0..<5) { i in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(appAccent.color.opacity(Double(i) * 0.25 + 0.05))
+                        .frame(width: 10, height: 10)
+                }
+                Text("More").font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(.top, 10)
+        }
+    }
+    
+    @ViewBuilder
+    private func calendarCell(day: CalendarDayInfo) -> some View {
+        let isSelected = selectedDate != nil && Calendar.current.isDate(day.date, inSameDayAs: selectedDate!)
+        let isToday = Calendar.current.isDateInToday(day.date)
+        
+        RoundedRectangle(cornerRadius: 3)
+            .fill(day.items.isEmpty ? Color.secondary.opacity(0.1) : appAccent.color.opacity(day.intensity * 0.8 + 0.2))
+            .frame(width: 32, height: 32)
+            .overlay {
+                if isToday {
+                    Circle()
+                        .fill(Color.primary)
+                        .frame(width: 6, height: 6)
+                }
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(Color.primary, lineWidth: 1.5)
+                        .padding(-2)
+                }
+            }
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3)) {
+                    if isSelected {
+                        selectedDate = nil
+                    } else {
+                        selectedDate = day.date
+                    }
+                }
+            }
+            .help("\(day.date.formatted(date: .abbreviated, time: .omitted)): \(day.items.count) releases")
+    }
+    
+    // MARK: - Detail Components
+    
+    @ViewBuilder
+    private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
+                .font(.system(size: 12, weight: .black))
+                .foregroundStyle(appAccent.color)
+                .kerning(2)
+            
+            Text(isAllMonth ? date.formatted(.dateTime.month(.wide).year()) : "\(count) Releases")
+                .font(.system(size: 34, weight: .black, design: .rounded))
+            
+            if isAllMonth {
+                Text("\(count) total releases this month")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func emptyDayView(date: Date, isAllMonth: Bool = false) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "calendar.badge.minus")
+                .font(.system(size: 50))
+                .foregroundStyle(.secondary.opacity(0.3))
+            
+            Text(isAllMonth ? "No releases tracked for this month." : "No premieres or episodes tracked for this day.")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 300)
+    }
+    
+    @ViewBuilder
+    private func releasesList(items: [CalendarReleaseItem]) -> some View {
+        let columns = [GridItem(.adaptive(minimum: 160), spacing: 25)]
+        
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+            ForEach(items) { item in
+                releaseThumbnail(item: item)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func allMonthReleasesList(data: CalendarResult) -> some View {
+        let groupedByDay = Dictionary(grouping: data.allItems) { 
+            Calendar.current.startOfDay(for: $0.date)
+        }
+        let sortedDays = groupedByDay.keys.sorted()
+        
+        VStack(alignment: .leading, spacing: 40) {
+            ForEach(sortedDays, id: \.self) { day in
+                VStack(alignment: .leading, spacing: 15) {
+                    HStack {
+                        Text(day.formatted(.dateTime.day().month()))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                        Rectangle()
+                            .fill(.secondary.opacity(0.2))
+                            .frame(height: 1)
+                    }
+                    
+                    releasesList(items: groupedByDay[day] ?? [])
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MediaThumbnailView(metadata: item.metadata, mode: .grid)
+            
+            Text(item.releaseContext)
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(appAccent.color.opacity(0.15))
+                .foregroundStyle(appAccent.color)
+                .clipShape(Capsule())
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}

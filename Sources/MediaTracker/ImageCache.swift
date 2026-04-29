@@ -1,6 +1,7 @@
 import SwiftUI
 import CryptoKit
 import Combine
+import UniformTypeIdentifiers
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage
@@ -10,7 +11,7 @@ struct ImageContainer: @unchecked Sendable {
 actor DiskIOActor {
     static let shared = DiskIOActor()
     private var activeCount = 0
-    private let maxConcurrent = 3
+    private let maxConcurrent = 6 // Increased from 3 to 6
 
     func run<T>(_ work: @Sendable () async throws -> T) async rethrows -> T {
         while activeCount >= maxConcurrent {
@@ -31,7 +32,7 @@ class ImageCache {
     private let memoryCache = NSCache<NSString, CGImage>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
-    private let maxDiskCacheSize: Int64 = 150 * 1024 * 1024 // 150MB
+    private let maxDiskCacheSize: Int64 = 500 * 1024 * 1024 // Increased to 500MB
     
     // Notification for broadcast updates
     let updates = PassthroughSubject<String, Never>()
@@ -58,7 +59,9 @@ class ImageCache {
             try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         }
         
-        memoryCache.countLimit = 60
+        // Cost-based memory limit (approx 256MB for thumbnails - safe for 8GB+ Macs)
+        memoryCache.totalCostLimit = 256 * 1024 * 1024
+        memoryCache.countLimit = 300 // Higher count limit for small thumbnails
         // Phase 1 Optimization: Asynchronous Disk Indexing (M1 Startup Fix)
         Task.detached(priority: .background) {
             let fm = FileManager.default
@@ -87,15 +90,14 @@ class ImageCache {
     /// macOS 26 Tahoe inspired Memory Compaction
     @MainActor
     private func performMemoryCompaction(level: MemoryPressureLevel) {
-        let limit: Int
         switch level {
         case .warning:
-            limit = 50
-            // Prune only oldest 50%
-            self.memoryCache.countLimit = limit
+            // Prune to 40MB
+            self.memoryCache.totalCostLimit = 40 * 1024 * 1024
+            self.memoryCache.countLimit = 50
         case .critical:
-            limit = 10
-            self.memoryCache.countLimit = limit
+            self.memoryCache.totalCostLimit = 10 * 1024 * 1024
+            self.memoryCache.countLimit = 10
             self.memoryCache.removeAllObjects()
             self.urlToKeys.removeAll()
             // Force a sync to disk for any pending metadata
@@ -218,7 +220,7 @@ class ImageCache {
         let fileURL = cacheDirectory.appendingPathComponent(diskFileName)
         
         if let container = await loadFromDisk(fileURL: fileURL, targetSize: tinySize) {
-            memoryCache.setObject(container.image, forKey: tinyKey as NSString)
+            memoryCache.setObject(container.image, forKey: tinyKey as NSString, cost: cost(for: container.image))
             registerKeyForURL(key, specificKey: tinyKey)
             return container
         }
@@ -259,7 +261,7 @@ class ImageCache {
             if self.diskCacheIndex.contains(diskFileName) {
                 if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
                     if Task.isCancelled { return }
-                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString)
+                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key) 
                     return
@@ -273,15 +275,17 @@ class ImageCache {
                 guard let url = URL(string: key) else { return }
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if Task.isCancelled { return }
-                guard let nsImage = NSImage(data: data) else { return }
                 
-                await self.save(image: nsImage, data: data, forKey: key, targetSize: targetSize, alwaysPreserveAlpha: alwaysPreserveAlpha)
+                // Phase 3 Optimization: Directly work with CGImageSource to avoid NSImage overhead
+                guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else { return }
+                
+                await self.save(imageSource: imageSource, data: data, forKey: key, targetSize: targetSize, alwaysPreserveAlpha: alwaysPreserveAlpha)
                 
                 if Task.isCancelled { return }
 
                 // Re-load decoded version after save to verify
                 if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
-                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString)
+                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key)
                 }
@@ -307,6 +311,10 @@ class ImageCache {
         urlToKeys[url]?.insert(specificKey)
     }
 
+    private func cost(for image: CGImage) -> Int {
+        return image.bytesPerRow * image.height
+    }
+
     func ping(url: String) {
         updates.send(url)
     }
@@ -328,87 +336,53 @@ class ImageCache {
         }
     }
     
-    func save(image: NSImage, data: Data? = nil, forKey key: String, targetSize: CGSize? = nil, alwaysPreserveAlpha: Bool = false) async {
-        let rawData = data
+    func save(imageSource: CGImageSource, data: Data? = nil, forKey key: String, targetSize: CGSize? = nil, alwaysPreserveAlpha: Bool = false) async {
+        guard let rawData = data else { return }
         let diskFileName = fileName(for: key, size: targetSize)
         let diskCacheDir = cacheDirectory
         let screenScale = self.screenScale
-        
-        // Only decode for memory cache if we don't have a CGImage yet
-        let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         let tinyProxyFileName = fileName(for: key, size: CGSize(width: 50, height: 75))
         
         await Task.detached(priority: .background) {
             let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
             
-            // Phase 3 Optimization: Downsample before saving to disk to save space and I/O
-            if let targetSize = targetSize, let data = rawData {
-                let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-                if let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) {
-                    let maxDimension = max(targetSize.width, targetSize.height) * screenScale
-                    let downsampleOptions = [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceShouldCacheImmediately: true,
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceThumbnailMaxPixelSize: maxDimension
-                    ] as CFDictionary
+            // Re-create imageSource inside task to avoid capturing main-actor isolated object
+            guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
+            
+            // Phase 3 Optimization: Downsample and encode using CGImageDestination (Platform Agnostic)
+            if let targetSize = targetSize {
+                let maxDimension = max(targetSize.width, targetSize.height) * screenScale
+                let downsampleOptions = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceShouldCacheImmediately: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxDimension
+                ] as CFDictionary
+                
+                if let downsampledCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, downsampleOptions) {
+                    let hasAlpha = downsampledCG.alphaInfo != .none && downsampledCG.alphaInfo != .noneSkipLast && downsampledCG.alphaInfo != .noneSkipFirst
+                    let usePNG = alwaysPreserveAlpha || hasAlpha
                     
-                    if let downsampledCG = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
-                        let bitmap = NSBitmapImageRep(cgImage: downsampledCG)
-                        let hasAlpha = downsampledCG.alphaInfo != .none && downsampledCG.alphaInfo != .noneSkipLast && downsampledCG.alphaInfo != .noneSkipFirst
-                        let usePNG = alwaysPreserveAlpha || hasAlpha
-                        
-                        let dataToWrite = usePNG ? bitmap.representation(using: .png, properties: [:]) : bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
-                        try? dataToWrite?.write(to: fileURL)
-                    } else {
-                        try? data.write(to: fileURL)
-                    }
+                    Self.writeToDiskStatic(image: downsampledCG, to: fileURL, usePNG: usePNG)
                 } else {
-                    try? data.write(to: fileURL)
+                    try? rawData.write(to: fileURL)
                 }
-            } else if let data = rawData, targetSize == nil {
-                // PASS-THROUGH: Write raw data directly if available and no resizing needed
-                try? data.write(to: fileURL)
-            } else if let cg = cgImage {
-                // Resize or re-encode if necessary
-                let bitmap = NSBitmapImageRep(cgImage: cg)
-                
-                // If it's a logo or we explicitly want to preserve alpha, use PNG. Otherwise JPEG.
-                let hasAlpha = cg.alphaInfo != .none && cg.alphaInfo != .noneSkipLast && cg.alphaInfo != .noneSkipFirst
-                let usePNG = alwaysPreserveAlpha || hasAlpha
-                
-                let dataToWrite: Data?
-                if usePNG {
-                    dataToWrite = bitmap.representation(using: .png, properties: [:])
-                } else {
-                    dataToWrite = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
-                }
-                
-                try? dataToWrite?.write(to: fileURL)
+            } else {
+                try? rawData.write(to: fileURL)
             }
             
             // Save tiny proxy (Always downsampled)
-            if let cg = cgImage {
+            let tinyMaxDim: CGFloat = 75 * screenScale
+            let tinyOptions = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: tinyMaxDim
+            ] as CFDictionary
+            
+            if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
                 let proxyURL = diskCacheDir.appendingPathComponent(tinyProxyFileName)
-                let tinySize = NSSize(width: 50, height: 75)
-                let tinyImage = NSImage(size: tinySize)
-                tinyImage.lockFocus()
-                NSImage(cgImage: cg, size: .zero).draw(in: NSRect(origin: .zero, size: tinySize))
-                tinyImage.unlockFocus()
-                if let tinyTiff = tinyImage.tiffRepresentation,
-                   let tinyBitmap = NSBitmapImageRep(data: tinyTiff) {
-                    
-                    let hasAlpha = cg.alphaInfo != .none && cg.alphaInfo != .noneSkipLast && cg.alphaInfo != .noneSkipFirst
-                    let usePNG = alwaysPreserveAlpha || hasAlpha
-                    
-                    let tinyData: Data?
-                    if usePNG {
-                        tinyData = tinyBitmap.representation(using: .png, properties: [:])
-                    } else {
-                        tinyData = tinyBitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.4])
-                    }
-                    try? tinyData?.write(to: proxyURL)
-                }
+                Self.writeToDiskStatic(image: tinyCG, to: proxyURL, usePNG: false)
                 
                 await MainActor.run {
                     _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
@@ -419,6 +393,19 @@ class ImageCache {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
             }
         }.value
+    }
+    
+    private static nonisolated func writeToDiskStatic(image: CGImage, to url: URL, usePNG: Bool) {
+        let type = usePNG ? UTType.png.identifier : UTType.jpeg.identifier
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type as CFString, 1, nil) else { return }
+        
+        if usePNG {
+            CGImageDestinationAddImage(destination, image, nil)
+        } else {
+            let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+            CGImageDestinationAddImage(destination, image, properties)
+        }
+        CGImageDestinationFinalize(destination)
     }
     
     nonisolated func pruneDiskCacheIfNeeded() async {
@@ -474,8 +461,8 @@ class ImageCache {
             }
             
             // Fallback for missing targetSize or failed downsample
-            guard let image = NSImage(data: data),
-                  let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
             return ImageContainer(image: cgImage)
         }
     }
