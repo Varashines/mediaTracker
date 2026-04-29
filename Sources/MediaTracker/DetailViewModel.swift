@@ -41,18 +41,19 @@ class DetailViewModel {
         
         // Extraction logic
         if let posterURL = item.posterURL, let url = URL(string: posterURL) {
-            Task {
+            Task { [weak self] in
                 // Try to get from cache first
                 if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: .thumbMedium) {
                     let extracted = ColorExtractor.dominantColor(from: container.image)
                     let hex = extracted.toHex()
                     
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        self.themeColor = extracted
-                        self.item.themeColorHex = hex
-                        // No need to explicitly save, SwiftData handles it or it will be saved on refresh
+                    await MainActor.run { [weak self] in
+                        guard let self = self else { return }
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            self.themeColor = extracted
+                            self.item.themeColorHex = hex
+                        }
                     }
-                    return
                 }
             }
         }
@@ -85,12 +86,12 @@ class DetailViewModel {
         isRefreshing = true
         let rawID = item.id
 
-        Task {
+        Task { [weak self] in
             let backgroundService = BackgroundDataService(modelContainer: context.container)
             let success = await backgroundService.refreshSingleItem(id: rawID, force: force)
 
-            await MainActor.run {
-                guard self.item.modelContext != nil, !self.item.isDeleted else { return }
+            await MainActor.run { [weak self] in
+                guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
                 if success {
                     self.refreshLocalItem()
                 }
@@ -133,13 +134,13 @@ class DetailViewModel {
             let seasonIDs = tv.seasons.map { $0.persistentModelID }
             let tmdbID = tv.tmdbID
             
-            Task {
+            Task { [weak self] in
                 for seasonID in seasonIDs {
-                    await fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID)
+                    await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: true)
                 }
                 
-                await MainActor.run {
-                    guard self.item.modelContext != nil, !self.item.isDeleted else { return }
+                await MainActor.run { [weak self] in
+                    guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
                     if let tv = self.item.tvShowDetails {
                         for season in tv.seasons {
                             for episode in season.episodes {
@@ -155,8 +156,18 @@ class DetailViewModel {
             }
         }
     }
+
+    func fetchEpisodes(for season: TVSeason) {
+        guard item.modelContext != nil, !item.isDeleted, let tv = item.tvShowDetails else { return }
+        let seasonID = season.persistentModelID
+        let tmdbID = tv.tmdbID
+        
+        Task { [weak self] in
+            await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: false)
+        }
+    }
     
-    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, tmdbID: Int) async {
+    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, tmdbID: Int, markAsWatched: Bool) async {
         if let tv = self.item.tvShowDetails, 
            let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }),
            season.episodes.isEmpty {
@@ -168,14 +179,14 @@ class DetailViewModel {
                         let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime)
                         newEpisode.season = season
                         season.episodes.append(newEpisode)
-                        newEpisode.isWatched = true
+                        newEpisode.isWatched = markAsWatched
                     }
                     self.item.tvShowDetails?.recalculateCachedProperties()
                     self.item.updateSearchableText()
                     self.checkOverallCompletion()
                 }
             } catch {
-                print("❌ Error fetching episodes in markAllAsWatched: \(error)")
+                print("❌ Error fetching episodes: \(error)")
             }
         }
     }

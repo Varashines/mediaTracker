@@ -135,8 +135,8 @@ struct DetailView: View {
                                         onWatchedToggle: {
                                             viewModel.checkOverallCompletion()
                                         },
-                                        onSeasonSelected: { _ in
-                                            // Removed aggressive force refresh here to prevent destructive cast churn
+                                        onSeasonSelected: { season in
+                                            viewModel.fetchEpisodes(for: season)
                                         })
                                 }
                             }

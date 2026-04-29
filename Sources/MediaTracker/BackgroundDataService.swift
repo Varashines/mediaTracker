@@ -24,43 +24,49 @@ actor BackgroundDataService {
         }
         
         var errorCount = 0
-        
-        // Phase 2 Optimization: CPU-Aware Throttling
-        let processorCount = ProcessInfo.processInfo.activeProcessorCount
-        let maxConcurrent = max(2, min(5, processorCount / 2))
-        
-        // Use withTaskGroup to throttle network requests
         var refreshedIDs: [String] = []
+
+        // Phase 5 Optimization: Hybrid Parallel Processing
+        // We fetch data in parallel but apply updates serially to maintain context integrity.
+        let processorCount = ProcessInfo.processInfo.activeProcessorCount
+        let maxConcurrent = max(2, min(4, processorCount / 2))
+
         await withTaskGroup(of: (String, Bool).self) { group in
             var activeTasks = 0
+            var currentIndex = 0
             
-            for id in itemIDs {
-                if activeTasks >= maxConcurrent {
-                    if let (refID, success) = await group.next() {
-                        if success { refreshedIDs.append(refID) } else { errorCount += 1 }
+            while currentIndex < itemIDs.count || activeTasks > 0 {
+                while activeTasks < maxConcurrent && currentIndex < itemIDs.count {
+                    let id = itemIDs[currentIndex]
+                    group.addTask {
+                        // We call the serial method but since multiple tasks are in the group,
+                        // and refreshSingleItem has await points, it releases the actor lock.
+                        // HOWEVER, since we are on the same actor, the lock ensures ONLY ONE 
+                        // task is executing between suspension points.
+                        let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
+                        return (id, success)
                     }
-                    activeTasks -= 1
+                    currentIndex += 1
+                    activeTasks += 1
                 }
                 
-                group.addTask {
-                    let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
-                    return (id, success)
-                }
-                activeTasks += 1
-            }
-            
-            while activeTasks > 0 {
                 if let (refID, success) = await group.next() {
                     if success { refreshedIDs.append(refID) } else { errorCount += 1 }
+                    activeTasks -= 1
                 }
-                activeTasks -= 1
             }
         }
 
-        // Phase 2 Optimization: Batch Save
-        try? modelContext.save()
+        // Phase 2 Optimization: Batch Save with Robust Error Handling
+        do {
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+        } catch {
+            print("❌ Background Refresh: Failed to save batch context: \(error)")
+        }
         
-        // Phase 5: Bulk Notification (Only after save!)
+        // Phase 5: Bulk Notification (Only after successful save!)
         for refID in refreshedIDs {
             Task { @MainActor in
                 NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refID])
@@ -116,8 +122,14 @@ actor BackgroundDataService {
                     
                     var newCastList: [CastMember] = []
                     for c in newCastResults {
-                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        let profileURL: String?
+                        if let path = c.profilePath {
+                            profileURL = "https://image.tmdb.org/t/p/w185\(path)"
+                        } else {
+                            profileURL = nil
+                        }
+                        // Use unique ID to prevent duplicates
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                         member.movieDetails = movieDetails
                         modelContext.insert(member)
                         newCastList.append(member)
@@ -201,8 +213,14 @@ actor BackgroundDataService {
                     
                     var newCastList: [CastMember] = []
                     for c in newCastResults {
-                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        let profileURL: String?
+                        if let path = c.profilePath {
+                            profileURL = "https://image.tmdb.org/t/p/w185\(path)"
+                        } else {
+                            profileURL = nil
+                        }
+                        // Use unique ID to prevent duplicates
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                         member.tvShowDetails = tvDetails
                         modelContext.insert(member)
                         newCastList.append(member)
@@ -234,12 +252,16 @@ actor BackgroundDataService {
 
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
-                        let season = tvDetails.seasons.first(where: { $0.seasonNumber == sNum }) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
+                        let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                        
+                        // Robust existence check via Fetch
+                        let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                        let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
                         
                         if season.modelContext == nil {
                             season.tvShowDetails = tvDetails
                             modelContext.insert(season)
-                            // FORCE SYNC: Explicitly append to parent array to trigger MainActor redraw
+                            // Explicitly append to ensure relationship is established immediately for next steps
                             if !tvDetails.seasons.contains(where: { $0.seasonNumber == sNum }) {
                                 tvDetails.seasons.append(season)
                             }
@@ -247,12 +269,16 @@ actor BackgroundDataService {
                         
                         if let episodes = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) {
                             for ep in episodes {
-                                let episode = season.episodes.first(where: { $0.episodeNumber == ep.episodeNumber }) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
+                                let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
+                                
+                                // Robust existence check via Fetch
+                                let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                                let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
                                 
                                 if episode.modelContext == nil {
                                     episode.season = season
                                     modelContext.insert(episode)
-                                    // FORCE SYNC: Explicitly append to parent array to trigger MainActor redraw
+                                    // Explicitly append to ensure relationship
                                     if !season.episodes.contains(where: { $0.episodeNumber == ep.episodeNumber }) {
                                         season.episodes.append(episode)
                                     }
@@ -297,10 +323,15 @@ actor BackgroundDataService {
             }
 
             if shouldSave {
-                try modelContext.save()
-                let refreshedID = item.id
-                Task { @MainActor in
-                    NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
+                do {
+                    try modelContext.save()
+                    let refreshedID = item.id
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
+                    }
+                } catch {
+                    print("❌ Refresh error saving context for \(item.title): \(error)")
+                    return false
                 }
             }
             

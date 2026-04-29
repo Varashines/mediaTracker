@@ -77,7 +77,9 @@ struct MainLibraryView: View {
                                             Spacer(minLength: 10)
                                             ForEach(homeContinueWatching) { metadata in
                                                 if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
+                                                    Button {
+                                                        onSelectHero(metadata)
+                                                    } label: {
                                                         MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
                                                     }
                                                     .buttonStyle(.interactive)
@@ -145,7 +147,9 @@ struct MainLibraryView: View {
                                             Spacer(minLength: 16)
                                             ForEach(recommendations) { metadata in
                                                 if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
+                                                    Button {
+                                                        onSelectHero(metadata)
+                                                    } label: {
                                                         HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
                                                     }
                                                     .buttonStyle(.interactive)
@@ -212,7 +216,9 @@ struct MainLibraryView: View {
                                 HStack(alignment: .top, spacing: 20) {
                                     ForEach(featuredCarouselItems) { metadata in
                                         if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                            NavigationLink(value: item) {
+                                            Button {
+                                                onSelectHero(metadata)
+                                            } label: {
                                                 MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
                                                     .id(metadata.versionHash)
                                             }

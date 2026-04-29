@@ -57,8 +57,6 @@ class MediaViewModel {
     var selectedNetworks: [String]? = nil
     var selectedLanguage: String? = nil
     var isBatchRefreshing: Bool = false
-    var lastDiscoveryCalculationHash: Int = 0
-    var gridResetID: UUID = UUID()
     var isInitialLoading: Bool = true  // Track first load
     var discoveryRefreshTrigger: Int = 0  // NEW: Trigger for Discovery Hub refresh
 
@@ -178,6 +176,10 @@ struct ContentView: View {
                     viewModel.groupedItems = result.grouped
                     viewModel.isInitialLoading = false
 
+                    // Update Mood Theme based on current visible content
+                    let moodColors = result.displayed.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
+                    themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
+
                     // If we just loaded "All" category, also extract colors for Sidebar
                     if category == "Discover" || category == "All" {
                         // Extract network colors in background
@@ -288,7 +290,11 @@ struct ContentView: View {
                 selectedNetworks: viewModel.selectedNetworks,
                 namespace: posterNamespace,
                 isFastScrolling: $viewModel.isFastScrolling,
-                onSelectHero: { _ in },
+                onSelectHero: { metadata in
+                    if let item = modelContext.model(for: metadata.id) as? MediaItem {
+                        viewModel.navigationPath.append(item)
+                    }
+                },
                 onNetworkSelected: { networks in
                     onNetworkSelected(networks)
                 },
@@ -341,6 +347,12 @@ struct ContentView: View {
                     )
                     .onSubmit(of: .search) {
                         viewModel.searchSubmitTrigger += 1
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+                        updateDisplayedItems(delay: 0)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+                        updateDisplayedItems(delay: 0)
                     }
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
@@ -522,56 +534,70 @@ struct FilteredLibraryGridView: View {
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @Environment(\.modelContext) private var modelContext
 
-    @State private var items: [MediaItem] = []
+    @State private var items: [MediaThumbnailMetadata] = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // SectionHeader(title: filter.name, icon: filter.type == .studio ? "tv" : (filter.type == .genre ? "film" : "character.bubble"), iconColor: appAccent.color)
-
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
-                    ForEach(items) { item in
-                        NavigationLink(value: item) {
-                            MediaThumbnailView(
-                                item: item, mode: .grid, namespace: namespace,
-                                isFastScrolling: isFastScrolling)
+                    ForEach(items) { metadata in
+                        if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
+                            NavigationLink(value: item) {
+                                MediaThumbnailView(
+                                    metadata: metadata, mode: .grid, namespace: namespace,
+                                    isFastScrolling: isFastScrolling)
+                            }
+                            .buttonStyle(.interactive)
                         }
-                        .buttonStyle(.interactive)
                     }
                 }
             }
             .padding(30)
         }
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
+        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+            fetchItems()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+            fetchItems()
+        }
         .task {
             fetchItems()
         }
     }
 
     private func fetchItems() {
-        let descriptor = FetchDescriptor<MediaItem>()
-        if let all = try? modelContext.fetch(descriptor) {
-            withAnimation {
-                self.items = all.filter { item in
-                    switch filter.type {
-                    case .studio:
-                        let targets = filter.sourceNames ?? [filter.name]
-                        let normalizedTargets = targets.map {
-                            $0.lowercased().trimmingCharacters(in: .whitespaces)
-                        }
-                        if let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(
-                            in: .whitespaces)
-                        {
-                            return normalizedTargets.contains(itemNet)
-                        }
-                        return false
-                    case .genre:
-                        return item.cachedGenres.contains(filter.name)
-                    case .language:
-                        return item.cachedLanguage == filter.name
+        Task {
+            let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+            var network: [String]? = nil
+            var language: String? = nil
+            var genre: String? = nil
+            
+            switch filter.type {
+            case .studio: network = filter.sourceNames ?? [filter.name]
+            case .genre: genre = filter.name
+            case .language: language = filter.name
+            }
+            
+            do {
+                let result = try await filterActor.filterAndSort(
+                    category: "All",
+                    searchText: "",
+                    sortOrder: .alphabetical,
+                    network: network,
+                    language: language,
+                    genre: genre,
+                    limit: 1000,
+                    offset: 0
+                )
+                await MainActor.run {
+                    withAnimation {
+                        self.items = result.displayed
                     }
-                }.sorted { $0.title < $1.title }
+                }
+            } catch {
+                print("Error fetching filtered items: \(error)")
             }
         }
     }

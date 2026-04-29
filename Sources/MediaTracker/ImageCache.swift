@@ -36,7 +36,7 @@ class ImageCache {
     // Notification for broadcast updates
     let updates = PassthroughSubject<String, Never>()
     
-    // Task de-duplication registry - NOW TRACKING BASE URL
+    // Task de-duplication registry - NOW TRACKING URL + SIZE
     private var activeTasks: [String: Task<Void, Never>] = [:]
     
     // Reverse lookup to find ANY size of an image URL in memory
@@ -226,9 +226,10 @@ class ImageCache {
         return nil
     }
 
-    func cancel(forKey key: String) {
-        activeTasks[key]?.cancel()
-        activeTasks[key] = nil
+    func cancel(forKey key: String, targetSize: CGSize? = nil) {
+        let fullKey = generateCacheKey(key: key, size: targetSize)
+        activeTasks[fullKey]?.cancel()
+        activeTasks[fullKey] = nil
     }
 
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
@@ -238,8 +239,8 @@ class ImageCache {
             return ImageContainer(image: image)
         }
         
-        // 2. Coalesce tasks by the BASE URL to prevent duplicate downloads
-        if let existingTask = activeTasks[key] {
+        // 2. Coalesce tasks by the SPECIFIC key (URL + Size) to prevent duplicate downloads
+        if let existingTask = activeTasks[specificKey] {
             await existingTask.value
             // Re-check memory after shared task finishes
             if let image = memoryCache.object(forKey: specificKey as NSString) {
@@ -291,9 +292,9 @@ class ImageCache {
             }
         }
         
-        activeTasks[key] = task
+        activeTasks[specificKey] = task
         await task.value
-        activeTasks[key] = nil
+        activeTasks[specificKey] = nil
         
         if let image = memoryCache.object(forKey: specificKey as NSString) {
             return ImageContainer(image: image)
@@ -420,9 +421,9 @@ class ImageCache {
         }.value
     }
     
-    func pruneDiskCacheIfNeeded() async {
+    nonisolated func pruneDiskCacheIfNeeded() async {
         let resourceKeys: [URLResourceKey] = [.fileSizeKey, .contentAccessDateKey]
-        guard let files = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: resourceKeys, options: []) else { return }
+        guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: resourceKeys, options: []) else { return }
         
         var totalSize: Int64 = 0
         var fileInfos: [(url: URL, size: Int64, date: Date)] = []
@@ -439,7 +440,7 @@ class ImageCache {
             var currentSize = totalSize
             for file in sortedFiles {
                 if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
-                try? fileManager.removeItem(at: file.url)
+                try? FileManager.default.removeItem(at: file.url)
                 currentSize -= file.size
                 
                 let fileName = file.url.lastPathComponent
@@ -548,7 +549,7 @@ struct CachedImage<Placeholder: View>: View {
         }
         .onDisappear {
             if let url = url {
-                ImageCache.shared.cancel(forKey: url.absoluteString)
+                ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
             }
         }
         .task(id: url) {

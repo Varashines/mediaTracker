@@ -1,21 +1,12 @@
 import Foundation
 
 struct DateUtils {
-    private static let yearMonthDayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-    
-    private static let fullDateTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter
-    }()
-
     static func parseDate(_ dateString: String?) -> Date? {
         guard let dateString = dateString else { return nil }
-        return yearMonthDayFormatter.date(from: dateString)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.date(from: dateString)
     }
     
     static func formatRuntime(_ minutes: Int?) -> String {

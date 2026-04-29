@@ -215,7 +215,6 @@ struct SmartBadgeView: View {
         }
     }
 
-    @ViewBuilder
     private func statusUI(
         isUpcoming: Bool,
         state: MediaState?,
@@ -226,36 +225,33 @@ struct SmartBadgeView: View {
     ) -> some View {
         let currentState = state ?? .wishlist
 
-        if currentState == .completed {
-            EmptyView()
-        } else {
-            // 1. Determine Availability
-            let badge = badgeText ?? ""
-            let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
+        // 1. Determine Availability
+        let badge = badgeText ?? ""
+        let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
 
-            // 2. Determine Display Label
-            let displayLabel = nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
+        // 2. Determine Display Label
+        let displayLabel = nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
 
-            // 3. Determine Icon
-            let icon = isAvailable ? "play.fill" : (isUpcoming ? "sparkles" : currentState.iconName)
+        // 3. Determine Icon
+        let icon = isAvailable ? "play.fill" : (isUpcoming ? "sparkles" : currentState.iconName)
 
-            // 4. Pill Logic
-            let isInProgress = (currentState == .active || currentState == .rewatching)
-            let hasEpisodeStats = nextEpisodeLabel != nil
-            let showFullPill = (isUpcoming && hasEpisodeStats) || (!isUpcoming && isInProgress)
+        // 4. Pill Logic
+        let isInProgress = (currentState == .active || currentState == .rewatching)
+        let hasEpisodeStats = nextEpisodeLabel != nil
+        let showFullPill = (isUpcoming && hasEpisodeStats) || (!isUpcoming && isInProgress)
 
-            // 5. Progress Bar
-            let showProgressBar = !isUpcoming && isInProgress
+        // 5. Progress Bar
+        let showProgressBar = !isUpcoming && isInProgress
 
-            StatusBadgePrimitive(
-                label: displayLabel,
-                systemImage: icon,
-                accentColor: isAvailable ? appAccent.color : .primary,
-                isSolid: isAvailable,
-                progress: showProgressBar ? progress : nil,
-                isCompact: !showFullPill
-            )
-        }
+        return StatusBadgePrimitive(
+            label: displayLabel,
+            systemImage: icon,
+            accentColor: isAvailable ? appAccent.color : .primary,
+            isSolid: isAvailable,
+            progress: showProgressBar ? progress : nil,
+            isCompact: !showFullPill
+        )
+        .opacity(currentState == .completed ? 0 : 1)
     }
 
 }
@@ -572,6 +568,8 @@ struct ThemeBackground: ViewModifier {
                             let color = NetworkThemeManager.shared.color(for: network)
                         {
                             color.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                        } else {
+                            AppThemeCoordinator.shared.categoryMoodColor.opacity(colorScheme == .dark ? 0.35 : 0.25)
                         }
                         
                         // Optimized Static Ambience (Replaces energy-heavy Metal shader)

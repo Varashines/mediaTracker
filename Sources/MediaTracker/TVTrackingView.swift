@@ -275,7 +275,7 @@ private struct SeasonSection: View {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
                         season.episodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }),
-                        id: \.episodeNumber
+                        id: \.persistentModelID
                     ) { ep in
                         EpisodeCube(episode: ep, themeColor: themeColor) {
                             onWatchedToggle()
@@ -326,11 +326,10 @@ private struct EpisodeCube: View {
 
                     Spacer()
 
-                    if episode.isWatched {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
-                            .font(.caption)
-                    }
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                        .font(.caption)
+                        .opacity(episode.isWatched ? 1 : 0)
                 }
 
                 Text(episode.name.isEmpty ? "TBA" : episode.name)

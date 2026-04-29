@@ -140,7 +140,7 @@ struct DiscoveryFilter: Hashable, Codable {
 }
 
 struct SimpleCastMember: Codable, Identifiable {
-    var id: String { "\(name)_\(characterName)" }
+    let id: String
     let name: String
     let characterName: String
     let profileURL: String?
@@ -261,9 +261,9 @@ final class MediaItem {
 
     var displayCast: [SimpleCastMember] {
         if let movie = movieDetails, !movie.cast.isEmpty {
-            return movie.cast.map { SimpleCastMember(name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+            return movie.cast.map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
         } else if let tv = tvShowDetails, !tv.cast.isEmpty {
-            return tv.cast.map { SimpleCastMember(name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+            return tv.cast.map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
         }
         return []
     }
@@ -550,6 +550,7 @@ final class TVShowDetails {
 
 @Model
 final class CastMember {
+    var uniqueID: String?
     var name: String
     var characterName: String
     var profileURL: String?
@@ -557,11 +558,16 @@ final class CastMember {
     var movieDetails: MovieDetails?
     var tvShowDetails: TVShowDetails?
 
-    init(name: String, characterName: String, profileURL: String? = nil, order: Int = 0) {
+    init(name: String, characterName: String, profileURL: String? = nil, order: Int = 0, mediaID: String? = nil) {
         self.name = name
         self.characterName = characterName
         self.profileURL = profileURL
         self.order = order
+        if let mID = mediaID {
+            self.uniqueID = "\(mID)_\(name)"
+        } else {
+            self.uniqueID = UUID().uuidString
+        }
     }
 }
 

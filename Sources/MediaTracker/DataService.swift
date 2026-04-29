@@ -324,11 +324,6 @@ actor DiscoverySyncService {
         let descriptor = FetchDescriptor<MediaItem>()
         guard let items = try? modelContext.fetch(descriptor) else { return }
         
-        // 1. Clear existing aggregates
-        try? modelContext.delete(model: NetworkEntity.self)
-        try? modelContext.delete(model: GenreEntity.self)
-        try? modelContext.delete(model: LanguageEntity.self)
-        
         // Studio Aliases
         let rules = parseAliases()
         var sourceToTarget: [String: String] = [:]
@@ -343,9 +338,9 @@ actor DiscoverySyncService {
             }
         }
         
-        var networks: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
-        var genres: [String: Int] = [:]
-        var languages: [String: Int] = [:]
+        var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
+        var genreCounts: [String: Int] = [:]
+        var languageCounts: [String: Int] = [:]
         
         for item in items {
             // Count Networks
@@ -353,7 +348,7 @@ actor DiscoverySyncService {
                 let name = sourceToTarget[originalName] ?? originalName
                 let preferredSource = targetToLogoSource[name]
                 
-                let current = networks[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                let current = networkCounts[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
                 var newLogo = current.logo
                 var newPriority = current.priority
                 var newSources = current.sources
@@ -361,44 +356,70 @@ actor DiscoverySyncService {
                 
                 if let itemLogo = item.cachedNetworkLogoPath {
                     if let pref = preferredSource, originalName == pref {
-                        // User's specific pick! Highest priority.
                         newLogo = itemLogo
                         newPriority = 100
                     } else if newLogo == nil || (originalName == name && newPriority < 50) {
-                        // Prefer logo of the target name itself, or fallback to first available
                         newLogo = itemLogo
                         newPriority = (originalName == name) ? 50 : 10
                     }
                 }
                 
-                networks[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
+                networkCounts[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
             }
             
             // Count Genres
             for genre in item.cachedGenres {
-                genres[genre, default: 0] += 1
+                genreCounts[genre, default: 0] += 1
             }
             
             // Count Languages
             if let lang = item.cachedLanguage {
-                languages[lang, default: 0] += 1
+                languageCounts[lang, default: 0] += 1
             }
         }
         
-        // 2. Persist Discovery Entities
-        for (name, data) in networks {
-            modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources))
+        // 2. Incremental Sync: Update existing, insert new, delete orphaned
+        let existingNetworks = (try? modelContext.fetch(FetchDescriptor<NetworkEntity>())) ?? []
+        for (name, data) in networkCounts {
+            if let existing = existingNetworks.first(where: { $0.name == name }) {
+                existing.count = data.count
+                existing.logoPath = data.logo
+                existing.sourceNames = data.sources
+            } else {
+                modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources))
+            }
         }
-        for (name, count) in genres {
-            modelContext.insert(GenreEntity(name: name, count: count))
+        for entity in existingNetworks where networkCounts[entity.name] == nil {
+            modelContext.delete(entity)
         }
-        for (code, count) in languages {
-            modelContext.insert(LanguageEntity(code: code, count: count))
+
+        let existingGenres = (try? modelContext.fetch(FetchDescriptor<GenreEntity>())) ?? []
+        for (name, count) in genreCounts {
+            if let existing = existingGenres.first(where: { $0.name == name }) {
+                existing.count = count
+            } else {
+                modelContext.insert(GenreEntity(name: name, count: count))
+            }
+        }
+        for entity in existingGenres where genreCounts[entity.name] == nil {
+            modelContext.delete(entity)
+        }
+
+        let existingLanguages = (try? modelContext.fetch(FetchDescriptor<LanguageEntity>())) ?? []
+        for (code, count) in languageCounts {
+            if let existing = existingLanguages.first(where: { $0.code == code }) {
+                existing.count = count
+            } else {
+                modelContext.insert(LanguageEntity(code: code, count: count))
+            }
+        }
+        for entity in existingLanguages where languageCounts[entity.code] == nil {
+            modelContext.delete(entity)
         }
         
         try? modelContext.save()
         
-        // 3. Extract missing colors (background task)
+        // 3. Extract missing colors
         await extractMissingColors()
     }
 

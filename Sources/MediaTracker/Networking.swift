@@ -20,7 +20,11 @@ actor APIClient {
     
     private var cacheFolder: URL {
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        let folder = paths[0].appendingPathComponent("api_details_cache")
+        guard let base = paths.first else {
+            // Fallback to temporary directory if application support is unavailable
+            return FileManager.default.temporaryDirectory.appendingPathComponent("api_details_cache")
+        }
+        let folder = base.appendingPathComponent("api_details_cache")
         if !FileManager.default.fileExists(atPath: folder.path) {
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         }

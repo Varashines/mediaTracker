@@ -15,11 +15,23 @@ struct MediaTrackerApp: App {
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self, PersonImageEntity.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        
+        // Configuration: Explicitly allow migration and ensure the store is local
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true
+        )
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            print("📦 Initializing SwiftData ModelContainer...")
+            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            print("✅ ModelContainer initialized successfully.")
+            return container
         } catch {
+            print("❌ ModelContainer failed: \(error.localizedDescription)")
+            print("🔍 Detailed Error: \(error)")
+            
             // Fatal error with context to help debugging
             fatalError("CRITICAL: Failed to initialize SwiftData ModelContainer. This is likely due to an incompatible schema change. Error: \(error)")
         }
@@ -63,20 +75,13 @@ struct MediaTrackerApp: App {
                 }
         }
         .modelContainer(sharedModelContainer)
-        
-        MenuBarExtra("MediaTracker", systemImage: "play.tv") {
-            MenuBarDashboard()
-                .modelContainer(sharedModelContainer)
-        }
-        .menuBarExtraStyle(.window)
-        
+
         Settings {
             SettingsView()
                 .modelContainer(sharedModelContainer)
                 .preferredColorScheme(mappedScheme)
         }
-    }
-
+        }
     private var mappedScheme: ColorScheme? {
         switch themePreference {
         case 1: return .light

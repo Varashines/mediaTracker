@@ -189,10 +189,9 @@ struct MediaThumbnailView: View {
             posterLayer
                 .blur(radius: isHovered ? 15 : 0)
             
-            if isHovered {
-                Rectangle()
-                    .fill(.ultraThinMaterial.opacity(0.6))
-            }
+            Rectangle()
+                .fill(.ultraThinMaterial.opacity(0.6))
+                .opacity(isHovered ? 1 : 0)
             
             // Smart Badge (Top Leading)
             VStack {
@@ -341,6 +340,9 @@ struct MediaThumbnailView: View {
             item.lastInteractionDate = Date()
             Task { @MainActor in
                 item.checkOverallCompletion()
+                item.syncCachedProperties()
+                try? item.modelContext?.save()
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
             }
         }
     }
@@ -420,6 +422,9 @@ struct MediaThumbnailView: View {
                             item.state = .completed
                             item.lastUpdated = Date()
                             item.lastInteractionDate = Date()
+                            item.syncCachedProperties()
+                            try? modelContext.save()
+                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                         }
                     }
                 } label: {
@@ -437,6 +442,9 @@ struct MediaThumbnailView: View {
                             item.lastUpdated = Date()
                             item.lastInteractionDate = Date()
                             item.lastStateChangeDate = Date()
+                            item.syncCachedProperties()
+                            try? modelContext.save()
+                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                         }
                     }
                 }

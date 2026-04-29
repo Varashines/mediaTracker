@@ -20,29 +20,7 @@ struct SearchView: View {
 
     @State private var movieResults: [MediaSearchResult] = []
     @State private var tvResults: [MediaSearchResult] = []
-
-    private var filteredLocalResults: [MediaItem] {
-        if searchText.isEmpty { return [] }
-        
-        let processedSearchText = searchText.lowercased()
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: ":", with: "")
-        
-        let searchTokens = processedSearchText.split(separator: " ").map(String.init)
-        return existingItems.filter { item in
-            guard !item.isDeleted else { return false }
-            let target = item.searchableText
-            let matchesText = searchTokens.allSatisfy { target.contains($0) }
-            
-            let matchesType: Bool
-            switch selectedType {
-            case .all: matchesType = true
-            case .movie: matchesType = item.type == .movie
-            case .tvShow: matchesType = item.type == .tvShow
-            }
-            return matchesText && matchesType
-        }
-    }
+    @State private var filteredLocalResults: [MediaThumbnailMetadata] = []
 
     @State private var isSearching = false
     @State private var isOfflineResultsOnly = false
@@ -148,12 +126,14 @@ struct SearchView: View {
 
                             let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
-                                ForEach(filteredLocalResults) { item in
-                                    MediaThumbnailView(item: item, mode: .grid, showTypeBadge: true) {
-                                        isSearchActive = false
-                                        onSelectLocal?(item)
+                                ForEach(filteredLocalResults) { metadata in
+                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
+                                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
+                                            isSearchActive = false
+                                            onSelectLocal?(item)
+                                        }
+                                        .id("local_\(metadata.id)")
                                     }
-                                    .id("local_\(item.id)")
                                 }
                             }
                             .padding(.horizontal, 30)
@@ -201,6 +181,10 @@ struct SearchView: View {
                 searchTask = Task { await performSearch() }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+            searchTask?.cancel()
+            searchTask = Task { await performSearch() }
+        }
         .alert("Search Error", isPresented: $showError, presenting: errorMessage) { _ in
             Button("OK") { errorMessage = nil }
         } message: { message in
@@ -218,6 +202,7 @@ struct SearchView: View {
         guard !searchText.isEmpty else {
             movieResults = []
             tvResults = []
+            filteredLocalResults = []
             isOfflineResultsOnly = false
             return
         }
@@ -229,39 +214,57 @@ struct SearchView: View {
         isOfflineResultsOnly = false
         
         let currentSearch = searchText
+        let currentSelectedType = selectedType
+        let container = modelContext.container
 
         do {
-            var movies: [MediaSearchResult] = []
-            var tv: [MediaSearchResult] = []
+            // Parallel Search: Local + Web
+            async let localSearch: [MediaThumbnailMetadata] = {
+                let filterActor = MediaFilterActor(modelContainer: container)
+                let category: String?
+                switch currentSelectedType {
+                case .all: category = "All"
+                case .movie: category = "Movie"
+                case .tvShow: category = "TV Show"
+                }
+                let result = try? await filterActor.filterAndSort(
+                    category: category,
+                    searchText: currentSearch,
+                    sortOrder: .alphabetical,
+                    network: nil,
+                    language: nil,
+                    limit: 50,
+                    offset: 0
+                )
+                return result?.displayed ?? []
+            }()
 
-            if selectedType == .all || selectedType == .movie {
-                movies = try await APIClient.shared.searchMovies(query: currentSearch)
-            }
+            async let webMovies: [MediaSearchResult] = {
+                if currentSelectedType == .all || currentSelectedType == .movie {
+                    return (try? await APIClient.shared.searchMovies(query: currentSearch)) ?? []
+                }
+                return []
+            }()
 
-            if selectedType == .all || selectedType == .tvShow {
-                tv = try await APIClient.shared.searchTVShows(query: currentSearch)
-            }
+            async let webTV: [MediaSearchResult] = {
+                if currentSelectedType == .all || currentSelectedType == .tvShow {
+                    return (try? await APIClient.shared.searchTVShows(query: currentSearch)) ?? []
+                }
+                return []
+            }()
+
+            let (local, movies, tv) = await (localSearch, webMovies, webTV)
 
             if Task.isCancelled { return }
 
             await MainActor.run {
+                self.filteredLocalResults = local
                 self.movieResults = movies
                 self.tvResults = tv
                 self.isSearching = false
                 self.isOfflineResultsOnly = false
                 withAnimation {
                     self.resultsCount += 1
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.isSearching = false
-                let nsError = error as NSError
-                if nsError.domain == NSURLErrorDomain || (error is URLError) {
-                    self.isOfflineResultsOnly = true
-                } else if self.filteredLocalResults.isEmpty {
-                    self.errorMessage = error.localizedDescription
-                    self.showError = true
                 }
             }
         }
@@ -321,7 +324,7 @@ struct SearchView: View {
                     
                     movieDetails.cast = details.cast.map { c in
                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: uniqueID)
                         member.movieDetails = movieDetails
                         return member
                     }
@@ -330,7 +333,7 @@ struct SearchView: View {
             } else if result.type == .tvShow, let tmdbID = Int(result.id) {
                 let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
                 if let details = details {
-                    // High-res upgrades on initial add
+                    // ... (high-res upgrades)
                     if let poster = details.posterPath {
                         item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
                     }
@@ -339,6 +342,7 @@ struct SearchView: View {
                     }
 
                     let tvDetails = TVShowDetails(tmdbID: tmdbID)
+                    // ... (mapping)
                     tvDetails.status = await StringPool.shared.intern(details.status)
                     tvDetails.network = await StringPool.shared.intern(details.network)
                     tvDetails.networkLogoPath = details.networkLogoPath
@@ -352,7 +356,7 @@ struct SearchView: View {
                     
                     tvDetails.cast = details.cast.map { c in
                         let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
-                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order)
+                        let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: uniqueID)
                         member.tvShowDetails = tvDetails
                         return member
                     }
