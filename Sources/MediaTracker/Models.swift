@@ -261,9 +261,13 @@ final class MediaItem {
 
     var displayCast: [SimpleCastMember] {
         if let movie = movieDetails, !movie.cast.isEmpty {
-            return movie.cast.map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+            return movie.cast
+                .sorted { $0.order < $1.order }
+                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
         } else if let tv = tvShowDetails, !tv.cast.isEmpty {
-            return tv.cast.map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+            return tv.cast
+                .sorted { $0.order < $1.order }
+                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
         }
         return []
     }

@@ -52,27 +52,39 @@ actor MaintenanceService {
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
                     tv.item = item
+                    
+                    // First, deduplicate Seasons at the relationship level
+                    let seasons = tv.seasons
+                    let groupedSeasons = Dictionary(grouping: seasons, by: { $0.seasonNumber })
+                    for (num, duplicates) in groupedSeasons where duplicates.count > 1 {
+                        print("🔍 Maintenance: Found \(duplicates.count) duplicate seasons for S\(num)")
+                        let sorted = duplicates.sorted { ($0.episodes.count) > ($1.episodes.count) }
+                        for i in 1..<sorted.count { modelContext.delete(sorted[i]) }
+                    }
+                    
                     for season in tv.seasons {
                         if season.uniqueID == nil {
                             season.uniqueID = "\(tmdbID)_\(season.seasonNumber)"
                         }
                         season.tvShowDetails = tv
                         
+                        // Deduplicate Episodes within the season
+                        let episodes = season.episodes
+                        let groupedEpisodes = Dictionary(grouping: episodes, by: { $0.episodeNumber })
+                        for (num, duplicates) in groupedEpisodes where duplicates.count > 1 {
+                            print("🔍 Maintenance: Found \(duplicates.count) duplicate episodes for S\(season.seasonNumber) E\(num)")
+                            let sorted = duplicates.sorted { 
+                                if $0.isWatched != $1.isWatched { return $0.isWatched }
+                                return ($0.airDate ?? "").count > ($1.airDate ?? "").count 
+                            }
+                            for i in 1..<sorted.count { modelContext.delete(sorted[i]) }
+                        }
+
                         for episode in season.episodes {
                             if episode.uniqueID == nil {
                                 episode.uniqueID = "\(tmdbID)_\(season.seasonNumber)_\(episode.episodeNumber)"
                             }
                             episode.season = season
-                        }
-                        
-                        // 3. Remove duplicate episodes within the same season
-                        let grouped = Dictionary(grouping: season.episodes, by: { $0.episodeNumber })
-                        for (_, eps) in grouped where eps.count > 1 {
-                            // Keep the one with the most data
-                            let sorted = eps.sorted { ($0.airDate ?? "").count > ($1.airDate ?? "").count }
-                            for i in 1..<sorted.count {
-                                modelContext.delete(sorted[i])
-                            }
                         }
                         
                         // Phase 3 Optimization: Populate Persistent Dates

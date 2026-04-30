@@ -8,8 +8,11 @@ struct ReleaseCalendarView: View {
     var viewModel: MediaViewModel
     
     @State private var calendarData: CalendarResult?
-    @State private var selectedDate: Date? // nil = All Month
-    @State private var currentDisplayMonth: Date = Calendar.current.startOfDay(for: Date())
+    @State private var selectedDate: Date? = Calendar.current.startOfDay(for: Date())
+    @State private var currentDisplayMonth: Date = {
+        let calendar = Calendar.current
+        return calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+    }()
     @State private var isLoading = true
     
     var body: some View {
@@ -112,7 +115,10 @@ struct ReleaseCalendarView: View {
     }
     
     private func changeMonth(by value: Int) {
-        if let newMonth = Calendar.current.date(byAdding: .month, value: value, to: currentDisplayMonth) {
+        if let newDate = Calendar.current.date(byAdding: .month, value: value, to: currentDisplayMonth) {
+            let calendar = Calendar.current
+            let newMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: newDate)) ?? newDate
+            
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 currentDisplayMonth = newMonth
                 selectedDate = nil // Reset to All Month view when navigating
@@ -135,13 +141,26 @@ struct ReleaseCalendarView: View {
         }
 
         isLoading = true
+        
+        // SAFETY TIMEOUT: Ensure loading indicator clears even if background task is slow/blocked
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            await MainActor.run {
+                if self.isLoading {
+                    print("⚠️ Calendar: Loading took too long. Clearing spinner.")
+                    self.isLoading = false
+                }
+            }
+        }
+
         Task {
             let actor = MediaFilterActor(modelContainer: modelContext.container)
             do {
                 let result = try await actor.fetchCalendarData(for: startOfMonth)
                 await MainActor.run {
                     viewModel.calendarCache[startOfMonth] = result
-                    if currentDisplayMonth == startOfMonth {
+                    // RELIABILITY: Only update if the user hasn't moved to another month during fetch
+                    if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.calendarData = result
                         self.isLoading = false
                     }
@@ -149,7 +168,11 @@ struct ReleaseCalendarView: View {
                 }
             } catch {
                 print("❌ Calendar fetch error: \(error)")
-                await MainActor.run { self.isLoading = false }
+                await MainActor.run { 
+                    if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
+                        self.isLoading = false 
+                    }
+                }
             }
         }
     }

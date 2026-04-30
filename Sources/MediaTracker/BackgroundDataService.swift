@@ -280,9 +280,6 @@ actor BackgroundDataService {
                     if season.modelContext == nil {
                         season.tvShowDetails = tvDetails
                         modelContext.insert(season)
-                        if !tvDetails.seasons.contains(where: { $0.seasonNumber == sNum }) {
-                            tvDetails.seasons.append(season)
-                        }
                     }
                     
                     if let episodes = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) {
@@ -294,14 +291,12 @@ actor BackgroundDataService {
                             if episode.modelContext == nil {
                                 episode.season = season
                                 modelContext.insert(episode)
-                                if !season.episodes.contains(where: { $0.episodeNumber == ep.episodeNumber }) {
-                                    season.episodes.append(episode)
-                                }
                             } else {
                                 episode.name = ep.name
                                 episode.overview = ep.overview
                                 episode.airDate = ep.airDate
                                 episode.runtime = ep.runtime
+                                episode.updateAirDateValue()
                             }
                         }
                     }

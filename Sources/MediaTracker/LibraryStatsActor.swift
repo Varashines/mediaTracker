@@ -1,34 +1,38 @@
 import Foundation
 import SwiftData
 
+struct VisualPersonStat: Sendable {
+    let name: String
+    let profileURL: String?
+    let score: Double
+    let count: Int
+}
+
 struct LibraryStats: Sendable {
     let totalWatchTimeMinutes: Int
-    
+
     let totalMovies: Int
     let completedMovies: Int
-    
+
     let totalTVShows: Int
     let completedTVShows: Int
-    
+
     let totalEpisodesWatched: Int
-    
-    // Volume-based (Top 5)
-    let topGenres: [(name: String, count: Int)]
-    let topNetworks: [(name: String, count: Int)]
-    let topActors: [(name: String, count: Int)]
-    let topCreators: [(name: String, count: Int)]
-    
-    // Taste-based (Top 5)
+
+    // Genre DNA (for Radar Chart)
+    let genreDNA: [(name: String, percentage: Double)]
+
+    // Visual Hall of Fame (Highest Rated, min 5 titles)
+    let topRatedActors: [VisualPersonStat]
+    let topRatedCreators: [VisualPersonStat]
     let topRatedGenres: [(name: String, score: Double)]
     let topRatedNetworks: [(name: String, score: Double)]
-    let topRatedActors: [(name: String, score: Double)]
-    let topRatedCreators: [(name: String, score: Double)]
     let topRatedLanguages: [(name: String, score: Double)]
-    
+
     let lovedCount: Int
     let likedCount: Int
     let dislikedCount: Int
-    
+
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
         totalMovies: 0,
@@ -36,14 +40,11 @@ struct LibraryStats: Sendable {
         totalTVShows: 0,
         completedTVShows: 0,
         totalEpisodesWatched: 0,
-        topGenres: [],
-        topNetworks: [],
-        topActors: [],
-        topCreators: [],
-        topRatedGenres: [],
-        topRatedNetworks: [],
+        genreDNA: [],
         topRatedActors: [],
         topRatedCreators: [],
+        topRatedGenres: [],
+        topRatedNetworks: [],
         topRatedLanguages: [],
         lovedCount: 0,
         likedCount: 0,
@@ -55,7 +56,7 @@ struct LibraryStats: Sendable {
 actor LibraryStatsActor {
     @MainActor private static var cachedStats: LibraryStats?
     @MainActor private static var lastCalculation: Date?
-    private let cacheTTL: TimeInterval = 3600 // 1 hour
+    private let cacheTTL: TimeInterval = 3600  // 1 hour
 
     func fetchStats() async -> LibraryStats {
         // Check cache
@@ -75,28 +76,28 @@ actor LibraryStatsActor {
         var tvCount = 0
         var tvCompleted = 0
         var epWatched = 0
-        
-        var genreCounts: [String: Int] = [:]
-        var networkCounts: [String: Int] = [:]
-        var actorCounts: [String: Int] = [:]
-        var creatorCounts: [String: Int] = [:]
-        
+
         var loved = 0
         var liked = 0
         var disliked = 0
-        
+
         // Taste Affinity Helpers
         struct CategoryStats {
             var loved = 0
             var liked = 0
             var disliked = 0
             var total = 0
-            func affinity(cutoff: Int = 3) -> Double {
-                guard total >= cutoff else { return -1.0 } // Mark as ineligible
-                return Double(3 * loved + 1 * liked - 2 * disliked) / Double(3 * total)
+            var profileURL: String? = nil
+
+            var ratedCount: Int { loved + liked + disliked }
+
+            func affinity(cutoff: Int = 5) -> Double {
+                guard ratedCount >= cutoff else { return -1.0 }
+                let score = Double(3 * loved + 1 * liked - 2 * disliked) / Double(3 * ratedCount)
+                return max(0, score)
             }
         }
-        
+
         var genreTaste: [String: CategoryStats] = [:]
         var networkTaste: [String: CategoryStats] = [:]
         var actorTaste: [String: CategoryStats] = [:]
@@ -106,7 +107,7 @@ actor LibraryStatsActor {
         for item in allItems {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
-            
+
             // Taste counts
             switch tasteValue {
             case "Love": loved += 1
@@ -114,15 +115,20 @@ actor LibraryStatsActor {
             case "Dislike": disliked += 1
             default: break
             }
-            
+
             // Helper for taste stats
-            let updateTaste: (inout CategoryStats) -> Void = { stats in
+            let updateTaste: (inout CategoryStats, String?) -> Void = { stats, pURL in
                 stats.total += 1
-                if tasteValue == "Love" { stats.loved += 1 }
-                else if tasteValue == "Like" { stats.liked += 1 }
-                else if tasteValue == "Dislike" { stats.disliked += 1 }
+                if tasteValue == "Love" {
+                    stats.loved += 1
+                } else if tasteValue == "Like" {
+                    stats.liked += 1
+                } else if tasteValue == "Dislike" {
+                    stats.disliked += 1
+                }
+                if let pURL = pURL { stats.profileURL = pURL }
             }
-            
+
             // Stats per type
             if item.type == .movie {
                 movieCount += 1
@@ -130,63 +136,93 @@ actor LibraryStatsActor {
                     movieCompleted += 1
                     watchTime += item.movieDetails?.runtime ?? 0
                 }
-                
+
                 if let creators = item.movieDetails?.creators {
-                    for c in creators { 
-                        creatorCounts[c, default: 0] += 1
-                        if tasteValue != "None" { updateTaste(&creatorTaste[c, default: CategoryStats()]) }
+                    for c in creators {
+                        updateTaste(&creatorTaste[c, default: CategoryStats()], nil)
                     }
                 }
             } else if item.type == .tvShow {
                 tvCount += 1
                 if isCompleted { tvCompleted += 1 }
-                
+
                 if let tvDetails = item.tvShowDetails {
-                    let watchedEpisodes = tvDetails.seasons.flatMap { $0.episodes }.filter { $0.isWatched }
+                    let watchedEpisodes = tvDetails.seasons.flatMap { $0.episodes }.filter {
+                        $0.isWatched
+                    }
                     epWatched += watchedEpisodes.count
                     watchTime += watchedEpisodes.reduce(0) { $0 + ($1.runtime ?? 0) }
-                    
-                    for c in tvDetails.creators { 
-                        creatorCounts[c, default: 0] += 1 
-                        if tasteValue != "None" { updateTaste(&creatorTaste[c, default: CategoryStats()]) }
+
+                    for c in tvDetails.creators {
+                        updateTaste(&creatorTaste[c, default: CategoryStats()], nil)
                     }
                 }
             }
-            
-            // Common traits
-            if item.stateValue != "Wishlist" {
+
+            // Common traits (Volume & Quality)
+            // Fix: Include any item that has been rated, even if it's in the Wishlist
+            if item.stateValue != "Wishlist" || tasteValue != "None" {
                 for g in item.cachedGenres {
-                    genreCounts[g, default: 0] += 1
-                    if tasteValue != "None" { updateTaste(&genreTaste[g, default: CategoryStats()]) }
+                    updateTaste(&genreTaste[g, default: CategoryStats()], nil)
                 }
                 if let n = item.cachedNetwork {
-                    networkCounts[n, default: 0] += 1
-                    if tasteValue != "None" { updateTaste(&networkTaste[n, default: CategoryStats()]) }
+                    updateTaste(&networkTaste[n, default: CategoryStats()], nil)
                 }
                 if let lang = item.cachedLanguage {
-                    if tasteValue != "None" { updateTaste(&languageTaste[lang, default: CategoryStats()]) }
+                    updateTaste(&languageTaste[lang, default: CategoryStats()], nil)
                 }
-                
-                for actor in item.displayCast.prefix(5) {
-                    actorCounts[actor.name, default: 0] += 1
-                    if tasteValue != "None" { updateTaste(&actorTaste[actor.name, default: CategoryStats()]) }
+
+                // Fix: Increase prefix to 15 to catch main supporting actors in ensemble casts
+                for actor in item.displayCast.prefix(8) {
+                    updateTaste(&actorTaste[actor.name, default: CategoryStats()], actor.profileURL)
                 }
             }
         }
 
-        // Processing Volume-based (Top 5)
-        let sortedGenres = genreCounts.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }.prefix(5)
-        let sortedNetworks = networkCounts.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }.prefix(5)
-        let sortedActors = actorCounts.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }.prefix(5)
-        let sortedCreators = creatorCounts.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }.prefix(5)
-        
-        // Processing Taste-based (Top 5)
+        // 1. Process Genre DNA (Taste-based, strict 5 rated title bar)
+        let genreDNA = genreTaste.map { name, stats in
+            (name, stats.affinity(cutoff: 5))
+        }
+        .filter { $0.1 >= 0 }
+        .sorted { $0.1 > $1.1 }
+        .prefix(8)
+
+        // 2. Process Taste-based Rankings (Strict 5 Rated Title Bar)
         let mapTaste: ([String: CategoryStats]) -> [(String, Double)] = { stats in
-            stats.map { ($0.key, $0.value.affinity()) }
-                .filter { $0.1 >= 0 } // Filter out those below cutoff
+            stats.map { ($0.key, $0.value.affinity(cutoff: 5)) }
+                .filter { $0.1 >= 0 }
                 .sorted { $0.1 > $1.1 }
-                .prefix(5)
+                .prefix(10)
                 .map { $0 }
+        }
+
+        // 3. Visual Stats Resolution (Top Actors/Creators)
+        let topActors = actorTaste.map { name, val in (name, val) }
+            .filter { $0.1.affinity(cutoff: 5) >= 0 }
+            .sorted { $0.1.affinity(cutoff: 5) > $1.1.affinity(cutoff: 5) }
+            .prefix(10)
+
+        var visualActors: [VisualPersonStat] = []
+        for (name, val) in topActors {
+            let image = await resolvePersonImage(for: name, currentURL: val.profileURL)
+            visualActors.append(
+                VisualPersonStat(
+                    name: name, profileURL: image, score: val.affinity(cutoff: 5), count: val.total)
+            )
+        }
+
+        let topCreators = creatorTaste.map { name, val in (name, val) }
+            .filter { $0.1.affinity(cutoff: 5) >= 0 }
+            .sorted { $0.1.affinity(cutoff: 5) > $1.1.affinity(cutoff: 5) }
+            .prefix(10)
+
+        var visualCreators: [VisualPersonStat] = []
+        for (name, val) in topCreators {
+            let image = await resolvePersonImage(for: name, currentURL: val.profileURL)
+            visualCreators.append(
+                VisualPersonStat(
+                    name: name, profileURL: image, score: val.affinity(cutoff: 5), count: val.total)
+            )
         }
 
         let result = LibraryStats(
@@ -196,15 +232,14 @@ actor LibraryStatsActor {
             totalTVShows: tvCount,
             completedTVShows: tvCompleted,
             totalEpisodesWatched: epWatched,
-            topGenres: Array(sortedGenres),
-            topNetworks: Array(sortedNetworks),
-            topActors: Array(sortedActors),
-            topCreators: Array(sortedCreators),
+            genreDNA: Array(genreDNA),
+            topRatedActors: visualActors,
+            topRatedCreators: visualCreators,
             topRatedGenres: mapTaste(genreTaste),
             topRatedNetworks: mapTaste(networkTaste),
-            topRatedActors: mapTaste(actorTaste),
-            topRatedCreators: mapTaste(creatorTaste),
-            topRatedLanguages: mapTaste(languageTaste).map { (LanguageUtils.languageName(for: $0.0), $0.1) },
+            topRatedLanguages: mapTaste(languageTaste).map {
+                (LanguageUtils.languageName(for: $0.0), $0.1)
+            },
             lovedCount: loved,
             likedCount: liked,
             dislikedCount: disliked
@@ -214,7 +249,28 @@ actor LibraryStatsActor {
             Self.cachedStats = result
             Self.lastCalculation = Date()
         }
-        
+
         return result
+    }
+
+    private func resolvePersonImage(for name: String, currentURL: String?) async -> String? {
+        if let current = currentURL { return current }
+
+        // 1. Check local Cache Entity
+        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
+            predicate: #Predicate { $0.name == name })
+        if let cached = try? modelContext.fetch(cacheDescriptor).first {
+            return cached.profileURL
+        }
+
+        // 2. On-Demand API Search
+        if let path = try? await APIClient.shared.searchPerson(query: name) {
+            let fullURL = "https://image.tmdb.org/t/p/w185\(path)"
+            modelContext.insert(PersonImageEntity(name: name, profileURL: fullURL))
+            try? modelContext.save()
+            return fullURL
+        }
+
+        return nil
     }
 }

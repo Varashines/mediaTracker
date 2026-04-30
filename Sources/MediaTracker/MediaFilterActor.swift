@@ -186,7 +186,7 @@ actor MediaFilterActor {
             // Try to find the associated MediaItem (the show)
             var item = firstEp.season?.tvShowDetails?.item
             if item == nil, let showID = firstEp.showID {
-                let idStr = String(showID)
+                let idStr = "tv_\(showID)"
                 let desc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == idStr })
                 item = try? modelContext.fetch(desc).first
             }
@@ -401,10 +401,24 @@ actor MediaFilterActor {
                 .sorted { $0.0 < $1.0 }
         }
 
+        // 3. Fetch Recently Added (Actually Recently Interacted/Watched)
+        // We fetch this independently to ensure it's always sorted by interaction date
+        // regardless of the main list's sort order.
+        var recentAddedItems: [MediaThumbnailMetadata] = []
+        if category != "Home" {
+            var recentDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue != "Wishlist" })
+            recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+            recentDesc.fetchLimit = 15
+            
+            if let recentItems = try? modelContext.fetch(recentDesc) {
+                recentAddedItems = recentItems.filter { !$0.isDeleted }.prefix(10).map { toMetadata($0) }
+            }
+        }
+
         return PaginatedResult(
             displayed: results.map { toMetadata($0) },
             featuredUpcoming: featuredUpcoming,
-            recentlyAdded: results.prefix(10).map { toMetadata($0) },
+            recentlyAdded: recentAddedItems,
             homeContinueWatching: homeContinueWatching,
             grouped: finalGroupedItems,
             totalCount: totalCount
@@ -412,9 +426,24 @@ actor MediaFilterActor {
     }
 
     private func healMissingDates() async {
-        let episodes = (try? modelContext.fetch(FetchDescriptor<TVEpisode>())) ?? []
-        for ep in episodes where ep.airDateValue == nil {
-            ep.updateAirDateValue()
+        let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
+        let episodes = (try? modelContext.fetch(descriptor)) ?? []
+        
+        if !episodes.isEmpty {
+            print("🔍 Calendar: Background date healing starting for \(episodes.count) episodes...")
+            // Process in small batches and yield the actor to allow UI-critical fetches to run
+            let batchSize = 50
+            for i in stride(from: 0, to: episodes.count, by: batchSize) {
+                let end = min(i + batchSize, episodes.count)
+                let batch = episodes[i..<end]
+                
+                for episode in batch {
+                    episode.updateAirDateValue()
+                }
+                
+                try? modelContext.save()
+                await Task.yield()
+            }
         }
         
         let movies = (try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "Movie" }))) ?? []
