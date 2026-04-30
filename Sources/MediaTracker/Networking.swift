@@ -98,11 +98,28 @@ actor APIClient {
     }
 
     // MARK: - Generic Search
-    private func searchTMDB<T: Codable & TMDBMedia>(path: String, query: String) async throws -> [T] {
-        let url = try tmdbURL(path: path, queryItems: [
+    private func parseQueryAndYear(from text: String) -> (query: String, year: String?) {
+        let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        if parts.count > 1, let lastPart = parts.last, lastPart.count == 4, Int(lastPart) != nil {
+            let query = parts.dropLast().joined(separator: ", ")
+            return (query, lastPart)
+        }
+        return (text, nil)
+    }
+
+    private func searchTMDB<T: Codable & TMDBMedia>(path: String, query: String, year: String? = nil) async throws -> [T] {
+        var queryItems = [
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "include_adult", value: "false")
-        ])
+        ]
+        
+        if let year = year {
+            // TMDB uses different keys for year based on search type
+            let yearKey = path.contains("movie") ? "primary_release_year" : "first_air_date_year"
+            queryItems.append(URLQueryItem(name: yearKey, value: year))
+        }
+        
+        let url = try tmdbURL(path: path, queryItems: queryItems)
         let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<T>.self, from: data)
@@ -110,7 +127,9 @@ actor APIClient {
     }
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
-        let cacheKey = "search_movie_\(query)"
+        let (cleanQuery, year) = parseQueryAndYear(from: query)
+        let cacheKey = "search_movie_\(query)" // Use raw query for unique cache per year filter
+        
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
         }
@@ -123,7 +142,7 @@ actor APIClient {
             return results
         }
         
-        let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: query)
+        let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: cleanQuery, year: year)
         let final = results.map { $0.toSearchResult() }
         
         if let encoded = try? JSONEncoder().encode(final) {
@@ -136,7 +155,9 @@ actor APIClient {
     }
     
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
-        let cacheKey = "search_tv_\(query)"
+        let (cleanQuery, year) = parseQueryAndYear(from: query)
+        let cacheKey = "search_tv_\(query)" // Use raw query for unique cache per year filter
+        
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
         }
@@ -149,7 +170,7 @@ actor APIClient {
             return results
         }
 
-        let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: query)
+        let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: cleanQuery, year: year)
         let final = results.map { $0.toSearchResult() }
         
         if let encoded = try? JSONEncoder().encode(final) {
