@@ -331,6 +331,9 @@ struct ContentView: View {
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
                         updateDisplayedItems(delay: 0)
                     }
+                    .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
+                        updateDisplayedItems(delay: 0)
+                    }
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             if !isSearchActive && isSortable {

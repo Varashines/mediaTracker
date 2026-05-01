@@ -163,22 +163,13 @@ final class NetworkEntity {
     var logoPath: String?
     var count: Int = 0
     var themeColorHex: String?
-    var sourceNamesData: Data? = nil
+    var sourceNames: [String] = []
 
-    var sourceNames: [String]? {
-        get {
-            guard let data = sourceNamesData else { return nil }
-            return try? JSONDecoder().decode([String].self, from: data)
-        }
-        set {
-            sourceNamesData = try? JSONEncoder().encode(newValue)
-        }
-    }
-
-    init(name: String, logoPath: String?, count: Int = 1, sourceNames: [String]? = nil) {
+    init(name: String, logoPath: String? = nil, count: Int = 0, themeColorHex: String? = nil, sourceNames: [String] = []) {
         self.name = name
         self.logoPath = logoPath
         self.count = count
+        self.themeColorHex = themeColorHex
         self.sourceNames = sourceNames
     }
 }
@@ -188,7 +179,7 @@ final class GenreEntity {
     var name: String
     var count: Int = 0
 
-    init(name: String, count: Int = 1) {
+    init(name: String, count: Int = 0) {
         self.name = name
         self.count = count
     }
@@ -199,56 +190,38 @@ final class LanguageEntity {
     var code: String
     var count: Int = 0
 
-    init(code: String, count: Int = 1) {
+    init(code: String, count: Int = 0) {
         self.code = code
         self.count = count
     }
 }
 
-extension Notification.Name {
-    static let mediaStateChanged = Notification.Name("mediaStateChanged")
-    static let tasteWeightsChanged = Notification.Name("tasteWeightsChanged")
-    static let mediaItemRefreshed = Notification.Name("mediaItemRefreshed")
-}
-
 @Model
-final class MediaItem {
-    @Attribute(.unique) var id: String
+final class MediaItem: Identifiable {
+    var id: String
     var title: String
     var overview: String
     var posterURL: String?
     var backdropURL: String?
     var releaseDate: Date?
-    var lastUpdated: Date?
-    var lastInteractionDate: Date?
-    var lastStateChangeDate: Date = Date()
-    var dateAdded: Date = Date()
-    var remainingEpisodesCount: Int?
-    
-    var tasteValue: String = "None"
-    var stateValue: String = "Wishlist"
     var typeValue: String = "Movie"
-
-    @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?
-    @Relationship(deleteRule: .cascade, inverse: \TVShowDetails.item) var tvShowDetails: TVShowDetails?
-
-    var state: MediaState? {
-        get { MediaState(rawValue: stateValue) }
-        set { stateValue = newValue?.rawValue ?? "Wishlist" }
-    }
+    var stateValue: String = "Wishlist"
+    var tasteValue: String = "None"
+    var themeColorHex: String?
+    var lastInteractionDate: Date?
+    var lastStateChangeDate: Date?
+    var dateAdded: Date?
+    var lastUpdated: Date?
+    var isDeleted: Bool = false
     
-    var type: MediaType? {
-        get { MediaType(rawValue: typeValue) }
-        set { typeValue = newValue?.rawValue ?? "Movie" }
-    }
-
+    // Cached values for filtering/grid
     var cachedGenres: [String] = []
+    var cachedLanguage: String?
     var cachedNetwork: String?
     var cachedNetworkLogoPath: String?
-    var cachedLanguage: String?
     var cachedNextAiringDate: Date?
-    var themeColorHex: String?
-    
+    var remainingEpisodesCount: Int?
+
     var storedSmartBadgeLabel: String?
     var storedSmartBadgeIcon: String?
     var storedSmartBadgeIsSparkle: Bool = false
@@ -258,18 +231,10 @@ final class MediaItem {
     var storedWatchProgressLabel: String?
     var storedProgress: Double?
     var searchableText: String = ""
+    var storedCast: [SimpleCastMember] = []
 
     var displayCast: [SimpleCastMember] {
-        if let movie = movieDetails, !movie.cast.isEmpty {
-            return movie.cast
-                .sorted { $0.order < $1.order }
-                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
-        } else if let tv = tvShowDetails, !tv.cast.isEmpty {
-            return tv.cast
-                .sorted { $0.order < $1.order }
-                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
-        }
-        return []
+        return storedCast
     }
 
     init(id: String, title: String, overview: String, posterURL: String? = nil, backdropURL: String? = nil, releaseDate: Date? = nil, type: MediaType? = .movie) {
@@ -280,16 +245,25 @@ final class MediaItem {
         self.backdropURL = backdropURL
         self.releaseDate = releaseDate
         self.typeValue = type?.rawValue ?? "Movie"
-        self.lastUpdated = Date()
         self.lastInteractionDate = Date()
         self.lastStateChangeDate = Date()
         self.dateAdded = Date()
-        self.updateSearchableText()
     }
 
+    var type: MediaType? {
+        get { MediaType(rawValue: typeValue) }
+        set { typeValue = newValue?.rawValue ?? "Movie" }
+    }
+
+    var state: MediaState? {
+        get { MediaState(rawValue: stateValue) }
+        set { stateValue = newValue?.rawValue ?? "Wishlist" }
+    }
+
+    var movieDetails: MovieDetails?
+    var tvShowDetails: TVShowDetails?
+    
     static func availableStates(for type: MediaType, progress: Double?) -> [MediaState] {
-        if type == .movie { return MediaState.allCases }
-        
         let progressVal = progress ?? 0
         if progressVal >= 1.0 {
             return [.completed, .rewatching]
@@ -298,32 +272,8 @@ final class MediaItem {
         }
         return MediaState.allCases
     }
-
-    func checkOverallCompletion() {
-        if type == .tvShow, let details = tvShowDetails {
-            let allEpisodes = details.seasons.filter { $0.seasonNumber > 0 }.flatMap { $0.episodes }
-            if allEpisodes.isEmpty { return }
-
-            let watchedCount = allEpisodes.filter { $0.isWatched }.count
-            let progress = Double(watchedCount) / Double(allEpisodes.count)
-            let currentState = state ?? .wishlist
-            let now = Date()
-
-            if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
-                self.state = .completed
-                self.lastStateChangeDate = now
-            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                self.state = .active
-                self.lastStateChangeDate = now
-            } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                self.state = .wishlist
-                self.lastStateChangeDate = now
-            }
-        }
-    }
 }
 
-// MARK: - MediaItem Business Logic
 extension MediaItem {
     var isUpcoming: Bool {
         guard let date = cachedNextAiringDate else { return false }
@@ -365,9 +315,34 @@ extension MediaItem {
         self.searchableText = text.lowercased()
     }
 
+    func checkOverallCompletion() {
+        if type == .tvShow, let tv = tvShowDetails {
+            let episodes = tv.seasons.flatMap { $0.episodes }
+            if !episodes.isEmpty && episodes.allSatisfy({ $0.isWatched }) {
+                if state != .completed && state != .rewatching {
+                    state = .completed
+                    lastStateChangeDate = Date()
+                }
+            }
+        }
+    }
+
     func syncCachedProperties() {
         let now = Date()
         let currentState = state ?? .wishlist
+
+        // Sync Cast Cache
+        if let movie = movieDetails, !movie.cast.isEmpty {
+            self.storedCast = movie.cast
+                .sorted { $0.order < $1.order }
+                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+        } else if let tv = tvShowDetails, !tv.cast.isEmpty {
+            self.storedCast = tv.cast
+                .sorted { $0.order < $1.order }
+                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+        } else {
+            self.storedCast = []
+        }
 
         if type == .movie, let movie = movieDetails {
             self.cachedGenres = movie.genres
@@ -380,9 +355,40 @@ extension MediaItem {
             self.cachedNetworkLogoPath = tv.networkLogoPath
 
             let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
-            let allEpisodes = relevantSeasons.flatMap { $0.episodes }
+            
+            // Single-pass optimization: Calculate counts and find first unwatched in one loop
+            var totalCount = 0
+            var watchedCount = 0
+            var airedCount = 0
+            var firstUnwatched: TVEpisode? = nil
+            var firstUnwatchedSeasonEpisodes: [TVEpisode] = []
+            
+            // Sort seasons for deterministic processing
+            let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
+            
+            for season in sortedSeasons {
+                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                let hadFirstUnwatched = firstUnwatched != nil
+                
+                for ep in sortedEpisodes {
+                    totalCount += 1
+                    if ep.isWatched {
+                        watchedCount += 1
+                    } else if firstUnwatched == nil {
+                        firstUnwatched = ep
+                    }
+                    
+                    if (ep.airDateAsDate ?? .distantFuture) <= now {
+                        airedCount += 1
+                    }
+                }
+                
+                if !hadFirstUnwatched && firstUnwatched != nil {
+                    firstUnwatchedSeasonEpisodes = sortedEpisodes
+                }
+            }
 
-            if allEpisodes.isEmpty {
+            if totalCount == 0 {
                 self.storedProgress = 0
                 self.storedWatchProgressLabel = nil
                 self.storedNextEpisodeLabel = nil
@@ -393,13 +399,11 @@ extension MediaItem {
                 return
             }
 
-            let watched = allEpisodes.filter { $0.isWatched }
-            let aired = allEpisodes.filter { ($0.airDateAsDate ?? .distantFuture) <= now }
-            let remaining = aired.count - watched.count
+            let remaining = airedCount - watchedCount
             self.remainingEpisodesCount = max(0, remaining)
             tv.remainingEpisodesCount = max(0, remaining)
 
-            let progress = Double(watched.count) / Double(allEpisodes.count)
+            let progress = Double(watchedCount) / Double(totalCount)
 
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
                 self.state = .completed
@@ -413,19 +417,14 @@ extension MediaItem {
             }
 
             self.storedProgress = progress
-            self.storedWatchProgressLabel = "\(watched.count)/\(allEpisodes.count) EP"
+            self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
 
-            let unwatched = allEpisodes.filter { !$0.isWatched }.sorted { e1, e2 in
-                if e1.seasonNumber != e2.seasonNumber { return e1.seasonNumber < e2.seasonNumber }
-                return e1.episodeNumber < e2.episodeNumber
-            }
+            if let next = firstUnwatched {
+                self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
 
-            if let firstUnwatched = unwatched.first {
-                self.storedNextEpisodeLabel = "S\(firstUnwatched.seasonNumber) E\(firstUnwatched.episodeNumber)"
-                self.cachedNextAiringDate = firstUnwatched.airDateAsDate ?? tv.nextEpisodeDate
-
-                let currentSNum = firstUnwatched.seasonNumber
-                let seasonUnwatched = unwatched.filter { $0.seasonNumber == currentSNum }
+                // Optimized Binge Drop logic (using pre-captured episodes)
+                let seasonUnwatched = firstUnwatchedSeasonEpisodes.filter { !$0.isWatched }
 
                 if seasonUnwatched.count > 1 {
                     let firstDate = seasonUnwatched[0].airDate
@@ -434,8 +433,8 @@ extension MediaItem {
 
                     if isSameDate, let date = airDateAsDate {
                         let daysDiff = date.timeIntervalSince(now) / 86400
-                        // Binge drop if within 5 days in past OR next 7 days in future
-                        self.storedIsBingeDrop = (daysDiff >= -5 && daysDiff <= 7)
+                        // Only show BINGE DROP if it has already released (past 5 days)
+                        self.storedIsBingeDrop = (daysDiff >= -5 && daysDiff <= 0)
                     } else {
                         self.storedIsBingeDrop = false
                     }
@@ -443,43 +442,47 @@ extension MediaItem {
                     self.storedIsBingeDrop = false
                 }
 
-                let airDate = firstUnwatched.airDateAsDate
+                let airDate = next.airDateAsDate
+                let timeToAir = airDate?.timeIntervalSinceNow ?? .infinity
+                
+                // NEW: Released within last 48 hours (negative diff)
+                let isRecentlyAired = timeToAir <= 0 && timeToAir >= -172800
+                
+                // SOON: Releasing within next 48 hours
+                let isUpcomingSoon = timeToAir > 0 && timeToAir <= 172800
+                
                 let isAvailable = (airDate != nil) && (airDate! <= now)
-                let isUpcomingSoon = (airDate != nil) && (airDate! > now && airDate! <= now.addingTimeInterval(86400 * 2))
-                let isRecentlyAired = isAvailable && airDate! > now.addingTimeInterval(-86400 * 2)
-                let isPremiereDateValid = (airDate != nil) && (Calendar.current.isDateInToday(airDate!) || airDate! > now)
+                
+                // Tighten windows: Must be released in last 14 days OR airing within 48h
+                let isRecentlyReleasedWindow = airDate != nil && airDate! >= now.addingTimeInterval(-86400 * 14)
+                let isPremiereDateValid = isRecentlyReleasedWindow || isUpcomingSoon
 
                 // PECKING ORDER START
-                if firstUnwatched.episodeNumber == 1 && isPremiereDateValid {
-                    if firstUnwatched.seasonNumber == 1 {
-                        self.storedSmartBadgeLabel = "SERIES PREMIERE"
-                        self.storedSmartBadgeIcon = "star.square.fill"
-                    } else {
-                        self.storedSmartBadgeLabel = "SEASON PREMIERE"
-                        self.storedSmartBadgeIcon = "play.square.stack.fill"
-                    }
+                if isRecentlyAired {
+                    self.storedSmartBadgeLabel = "NEW"
+                    self.storedSmartBadgeIcon = "sparkles"
+                    self.storedSmartBadgeIsSparkle = true
+                } else if isUpcomingSoon {
+                    self.storedSmartBadgeLabel = "SOON"
+                    self.storedSmartBadgeIcon = "clock.badge.fill"
+                    self.storedSmartBadgeIsSparkle = false
+                } else if next.episodeNumber == 1 && isPremiereDateValid {
+                    self.storedSmartBadgeLabel = next.seasonNumber == 1 ? "SERIES PREMIERE" : "SEASON PREMIERE"
+                    self.storedSmartBadgeIcon = next.seasonNumber == 1 ? "star.square.fill" : "play.square.stack.fill"
                     self.storedSmartBadgeIsSparkle = true
                 } else if self.storedIsBingeDrop {
                     self.storedSmartBadgeLabel = "BINGE DROP"
                     self.storedSmartBadgeIcon = "sparkles.tv"
                     self.storedSmartBadgeIsSparkle = true
-                } else if let season = firstUnwatched.season, firstUnwatched.episodeNumber == season.episodeCount {
+                } else if let season = next.season, next.episodeNumber == season.episodeCount, isRecentlyReleasedWindow {
                     self.storedSmartBadgeLabel = "FINALE"
                     self.storedSmartBadgeIcon = "flag.checkered"
                     self.storedSmartBadgeIsSparkle = true
-                } else if isUpcomingSoon {
-                    self.storedSmartBadgeLabel = "SOON"
-                    self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if isRecentlyAired {
-                    self.storedSmartBadgeLabel = "STREAMING"
-                    self.storedSmartBadgeIcon = "play.fill"
-                    self.storedSmartBadgeIsSparkle = true
                 } else if isAvailable && (tv.numberOfSeasons ?? 0) >= 1 && 
                         (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
-                        progress >= 0.3 && (self.remainingEpisodesCount ?? 0) > 1 {
+                        progress >= 0.3 && (self.remainingEpisodesCount ?? 0) > 5 {
                     self.storedSmartBadgeLabel = "BINGE"
-                    self.storedSmartBadgeIcon = "sparkles.tv"
+                    self.storedSmartBadgeIcon = "play.square.stack.fill"
                     self.storedSmartBadgeIsSparkle = false
                 } else {
                     self.storedSmartBadgeLabel = nil
@@ -497,26 +500,32 @@ extension MediaItem {
             let isEnded = tvShowDetails?.status?.lowercased().contains("ended") ?? false || tvShowDetails?.status?.lowercased().contains("canceled") ?? false
 
             if let airDate = cachedNextAiringDate {
-                if airDate > now && airDate <= now.addingTimeInterval(86400 * 2) {
+                let timeToAir = airDate.timeIntervalSinceNow
+                if timeToAir > 0 && timeToAir <= 172800 {
                     self.storedSmartBadgeLabel = "SOON"
                     self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if airDate <= now && airDate > now.addingTimeInterval(-86400 * 2) && !isEnded {
-                    self.storedSmartBadgeLabel = "STREAMING"
-                    self.storedSmartBadgeIcon = "play.fill"
+                    self.storedSmartBadgeIsSparkle = false
+                } else if timeToAir <= 0 && timeToAir >= -172800 && !isEnded {
+                    self.storedSmartBadgeLabel = "NEW"
+                    self.storedSmartBadgeIcon = "sparkles"
                     self.storedSmartBadgeIsSparkle = true
                 }
             }
             
             if self.storedSmartBadgeLabel == nil, let release = releaseDate {
-                if release > now && release <= now.addingTimeInterval(86400 * 2) {
+                let timeToRelease = release.timeIntervalSinceNow
+                if timeToRelease > 0 && timeToRelease <= 172800 {
                     self.storedSmartBadgeLabel = "SOON"
                     self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if release <= now && release > now.addingTimeInterval(-86400 * 7) {
+                    self.storedSmartBadgeIsSparkle = false
+                } else if timeToRelease <= 0 && timeToRelease >= -172800 {
                     self.storedSmartBadgeLabel = "NEW"
                     self.storedSmartBadgeIcon = "sparkles"
                     self.storedSmartBadgeIsSparkle = true
+                } else if timeToRelease <= 0 && timeToRelease > -604800 {
+                    self.storedSmartBadgeLabel = "RECENT"
+                    self.storedSmartBadgeIcon = "star.fill"
+                    self.storedSmartBadgeIsSparkle = false
                 }
             }
         }
@@ -571,6 +580,31 @@ final class TVShowDetails {
     }
     
     func recalculateCachedProperties(triggerSync: Bool = true) {
+        // Phase 5: UI Maintenance - Deduplicate ghosts in inverse relationships
+        if let tv = self.item?.tvShowDetails {
+            // Prune duplicate seasons
+            let groupedSeasons = Dictionary(grouping: tv.seasons, by: { $0.seasonNumber })
+            for (num, duplicates) in groupedSeasons where duplicates.count > 1 {
+                print("🔍 Recalculate: Found \(duplicates.count) ghosts for Season \(num)")
+                let sorted = duplicates.sorted { $0.episodes.count > $1.episodes.count }
+                for i in 1..<sorted.count {
+                    tv.seasons.removeAll { $0.persistentModelID == sorted[i].persistentModelID }
+                }
+            }
+            
+            // Prune duplicate episodes
+            for season in tv.seasons {
+                let groupedEps = Dictionary(grouping: season.episodes, by: { $0.episodeNumber })
+                for (num, duplicates) in groupedEps where duplicates.count > 1 {
+                    print("🔍 Recalculate: Found \(duplicates.count) ghosts for S\(season.seasonNumber) E\(num)")
+                    let sorted = duplicates.sorted { $0.isWatched && !$1.isWatched }
+                    for i in 1..<sorted.count {
+                        season.episodes.removeAll { $0.persistentModelID == sorted[i].persistentModelID }
+                    }
+                }
+            }
+        }
+        
         if triggerSync { item?.syncCachedProperties() }
     }
 }
@@ -678,4 +712,10 @@ final class PersonImageEntity {
         self.name = name
         self.profileURL = profileURL
     }
+}
+
+extension Notification.Name {
+    static let mediaItemRefreshed = Notification.Name("mediaItemRefreshed")
+    static let mediaItemsBulkRefreshed = Notification.Name("mediaItemsBulkRefreshed")
+    static let mediaStateChanged = Notification.Name("mediaStateChanged")
 }

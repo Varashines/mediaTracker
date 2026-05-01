@@ -177,7 +177,6 @@ struct DetailView: View {
                 }
                 .onDisappear {
                     isAppeared = false
-                    ImageCache.shared.clearMemoryCache()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) {
                     notification in

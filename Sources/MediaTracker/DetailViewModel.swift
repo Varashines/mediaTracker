@@ -135,8 +135,13 @@ class DetailViewModel {
             let tmdbID = tv.tmdbID
             
             Task { [weak self] in
-                for seasonID in seasonIDs {
-                    await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: true)
+                // Concurrent fetching of missing episodes
+                await withTaskGroup(of: Void.self) { group in
+                    for seasonID in seasonIDs {
+                        group.addTask {
+                            await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: true)
+                        }
+                    }
                 }
                 
                 await MainActor.run { [weak self] in
@@ -176,10 +181,20 @@ class DetailViewModel {
                 await MainActor.run {
                     guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                     for ep in episodes {
-                        let newEpisode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime)
-                        newEpisode.season = season
-                        season.episodes.append(newEpisode)
-                        newEpisode.isWatched = markAsWatched
+                        let epUniqueID = "\(tmdbID)_\(season.seasonNumber)_\(ep.episodeNumber)"
+                        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                        let existingEpisode = try? self.item.modelContext?.fetch(eDescriptor).first
+                        
+                        let episode = existingEpisode ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime, showID: tmdbID)
+                        
+                        if episode.modelContext == nil {
+                            episode.season = season
+                            self.item.modelContext?.insert(episode)
+                        } else if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
+                            season.episodes.append(episode)
+                        }
+                        
+                        episode.isWatched = markAsWatched
                     }
                     self.item.tvShowDetails?.recalculateCachedProperties()
                     self.item.updateSearchableText()

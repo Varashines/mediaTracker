@@ -39,6 +39,9 @@ struct InsightsView: View {
 
     private func refreshData() {
         Task {
+            // Allow navigation transition to finish smoothly
+            try? await Task.sleep(for: .milliseconds(300))
+            
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             let result = await actor.fetchStats()
             await MainActor.run {
@@ -282,20 +285,22 @@ struct RadarChartView: View {
     let data: [(name: String, percentage: Double)]
     let accentColor: Color
     
+    @State private var isVisible = false
+    
     var body: some View {
         GeometryReader { geo in
             let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
             let radius = min(geo.size.width, geo.size.height) / 2 * 0.7
             
             ZStack {
-                // Background Rings
+                // Background Rings (Slightly darker lines)
                 ForEach(1...4, id: \.self) { i in
                     Circle()
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
                         .frame(width: radius * 2 * (Double(i) / 4), height: radius * 2 * (Double(i) / 4))
                 }
                 
-                // Axis lines
+                // Axis lines (Slightly darker lines)
                 ForEach(0..<data.count, id: \.self) { i in
                     let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
                     Path { path in
@@ -305,7 +310,7 @@ struct RadarChartView: View {
                             y: center.y + CGFloat(sin(angle)) * radius
                         ))
                     }
-                    .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
                     
                     // Labels
                     let labelPos = CGPoint(
@@ -318,36 +323,48 @@ struct RadarChartView: View {
                         .position(labelPos)
                 }
                 
-                // Data Shape
-                Path { path in
-                    for i in 0..<data.count {
-                        let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                        let val = data[i].percentage // Use affinity score directly (0-1)
-                        let point = CGPoint(
-                            x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                            y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
-                        )
-                        if i == 0 { path.move(to: point) }
-                        else { path.addLine(to: point) }
+                // Data Shape Group
+                ZStack {
+                    // Basic Fill
+                    Path { path in
+                        for i in 0..<data.count {
+                            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
+                            let val = data[i].percentage
+                            let point = CGPoint(
+                                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
+                                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
+                            )
+                            if i == 0 { path.move(to: point) }
+                            else { path.addLine(to: point) }
+                        }
+                        path.closeSubpath()
                     }
-                    path.closeSubpath()
-                }
-                .fill(accentColor.opacity(0.2))
-                
-                Path { path in
-                    for i in 0..<data.count {
-                        let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                        let val = data[i].percentage
-                        let point = CGPoint(
-                            x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                            y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
-                        )
-                        if i == 0 { path.move(to: point) }
-                        else { path.addLine(to: point) }
+                    .fill(accentColor.opacity(0.2))
+                    
+                    // Basic Stroke
+                    Path { path in
+                        for i in 0..<data.count {
+                            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
+                            let val = data[i].percentage
+                            let point = CGPoint(
+                                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
+                                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
+                            )
+                            if i == 0 { path.move(to: point) }
+                            else { path.addLine(to: point) }
+                        }
+                        path.closeSubpath()
                     }
-                    path.closeSubpath()
+                    .stroke(accentColor, style: StrokeStyle(lineWidth: 3, lineJoin: .round))
                 }
-                .stroke(accentColor, lineWidth: 3)
+                .scaleEffect(isVisible ? 1.0 : 0.01)
+                .opacity(isVisible ? 1.0 : 0.0)
+                .animation(.spring(response: 0.6, dampingFraction: 0.6, blendDuration: 0), value: isVisible)
+            }
+            .onAppear {
+                withAnimation {
+                    isVisible = true
+                }
             }
         }
     }

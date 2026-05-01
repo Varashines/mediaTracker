@@ -76,11 +76,9 @@ struct LiquidGlassModifier: ViewModifier {
 
                         // Glow & Fill Progress
                         if let progress = progress {
-                            GeometryReader { geo in
-                                Capsule()
-                                    .fill(foreground.opacity(0.15))
-                                    .frame(width: geo.size.width * CGFloat(min(max(progress, 0), 1)))
-                            }
+                            Capsule()
+                                .fill(foreground.opacity(0.15))
+                                .scaleEffect(x: CGFloat(min(max(progress, 0), 1)), anchor: .leading)
                         }
                     }
                 }
@@ -97,16 +95,15 @@ struct LiquidGlassModifier: ViewModifier {
             .overlay(alignment: .bottom) {
                 // Glowing bottom line for progress
                 if let progress = progress, !isAsleep {
-                    GeometryReader { geo in
-                        VStack {
-                            Spacer()
-                            Capsule()
-                                .fill(foreground.opacity(0.8))
-                                .frame(width: geo.size.width * CGFloat(min(max(progress, 0), 1)), height: 1.5)
-                                .shadow(color: foreground.opacity(0.5), radius: 2, x: 0, y: 0)
-                                .padding(.horizontal, 4)
-                                .padding(.bottom, 1)
-                        }
+                    VStack {
+                        Spacer()
+                        Capsule()
+                            .fill(foreground.opacity(0.8))
+                            .frame(height: 1.5)
+                            .scaleEffect(x: CGFloat(min(max(progress, 0), 1)), anchor: .leading)
+                            .shadow(color: foreground.opacity(0.5), radius: 2, x: 0, y: 0)
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 1)
                     }
                 }
             }

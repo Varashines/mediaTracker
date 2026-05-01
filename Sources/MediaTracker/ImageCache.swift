@@ -62,15 +62,11 @@ class ImageCache {
         // Cost-based memory limit (approx 256MB for thumbnails - safe for 8GB+ Macs)
         memoryCache.totalCostLimit = 256 * 1024 * 1024
         memoryCache.countLimit = 300 // Higher count limit for small thumbnails
-        // Phase 1 Optimization: Asynchronous Disk Indexing (M1 Startup Fix)
-        Task.detached(priority: .background) {
-            let fm = FileManager.default
-            if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
-                let fileNames = Set(files.map { $0.lastPathComponent })
-                await MainActor.run {
-                    ImageCache.shared.diskCacheIndex = fileNames
-                }
-            }
+        // Phase 1 Optimization: Synchronous Disk Indexing to prevent early-load race conditions
+        let fm = FileManager.default
+        if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
+            let fileNames = Set(files.map { $0.lastPathComponent })
+            self.diskCacheIndex = fileNames
         }
         
         // Dynamic Resource Management
@@ -360,7 +356,8 @@ class ImageCache {
                 ] as CFDictionary
                 
                 if let downsampledCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, downsampleOptions) {
-                    let hasAlpha = downsampledCG.alphaInfo != .none && downsampledCG.alphaInfo != .noneSkipLast && downsampledCG.alphaInfo != .noneSkipFirst
+                    let alpha = downsampledCG.alphaInfo
+                    let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
                     let usePNG = alwaysPreserveAlpha || hasAlpha
                     
                     Self.writeToDiskStatic(image: downsampledCG, to: fileURL, usePNG: usePNG)
@@ -382,7 +379,9 @@ class ImageCache {
             
             if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
                 let proxyURL = diskCacheDir.appendingPathComponent(tinyProxyFileName)
-                Self.writeToDiskStatic(image: tinyCG, to: proxyURL, usePNG: false)
+                let alpha = tinyCG.alphaInfo
+                let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
+                Self.writeToDiskStatic(image: tinyCG, to: proxyURL, usePNG: alwaysPreserveAlpha || hasAlpha)
                 
                 await MainActor.run {
                     _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)

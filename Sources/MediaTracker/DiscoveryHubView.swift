@@ -106,12 +106,6 @@ struct DiscoveryHubView: View {
                 return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
             }
 
-            // Selective Cache Clearing for Logos
-            if force {
-                let logoURLs = nets.compactMap { $0.logoPath }.map { "https://image.tmdb.org/t/p/w300\($0)" }
-                await ImageCache.shared.clearCache(forURLs: logoURLs)
-            }
-
             await MainActor.run {
                 withAnimation(.smooth(duration: 0.5)) {
                     self.viewModel.lastDiscoveryRefresh = Date()
@@ -159,7 +153,6 @@ struct DiscoveryCard: View {
     let action: () -> Void
     
     @State private var isHovered = false
-    @State private var isAppeared = false
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
@@ -203,13 +196,6 @@ struct DiscoveryCard: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.03 : 1.0)
-        .opacity(isAppeared ? 1 : 0)
-        .onAppear {
-            let delay = Double.random(in: 0...0.15)
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(delay)) {
-                isAppeared = true
-            }
-        }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -217,11 +203,11 @@ struct DiscoveryCard: View {
     @ViewBuilder
     private var logoContent: some View {
         ZStack {
-            if let logo = node.logoPath {
-                CachedImage(url: URL(string: "https://image.tmdb.org/t/p/w300\(logo)"), targetSize: CGSize(width: 360, height: 180), alwaysPreserveAlpha: true) {
+            if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
+                CachedImage(url: url, targetSize: CGSize(width: 120, height: 60), alwaysPreserveAlpha: true) {
                     _ in
                 } placeholder: {
-                    ProgressView().controlSize(.small)
+                    Color.secondary.opacity(0.1)
                 }
                 .aspectRatio(contentMode: .fit)
                 .frame(width: isHovered ? 90 : 120, height: isHovered ? 45 : 60)

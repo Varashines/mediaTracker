@@ -280,20 +280,23 @@ struct SearchView: View {
         if DataService.shared.isProcessing(id: uniqueID) { return }
         DataService.shared.startProcessing(id: uniqueID)
 
-        Task {
-            defer { DataService.shared.stopProcessing(id: uniqueID) }
+        let container = modelContext.container
+        Task.detached(priority: .userInitiated) {
+            defer { Task { @MainActor in DataService.shared.stopProcessing(id: uniqueID) } }
 
-            // Uniqueness Check
+            // 1. Background uniqueness check
+            let backgroundContext = ModelContext(container)
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-            if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
+            if let existing = try? backgroundContext.fetch(descriptor).first, !existing.isDeleted {
                 await MainActor.run {
-                    AppErrorState.shared.surfaceError("Title already in Library", systemImage: "info.circle.fill")
+                    AppErrorState.shared.showToast("Title already in Library", systemImage: "info.circle.fill", type: .info)
                     isSearchActive = false
                     onSelectLocal?(existing)
                 }
                 return
             }
 
+            // 2. Heavy details fetch & processing
             let releaseDate = result.releaseDate != nil ? DateUtils.parseDate(result.releaseDate) : nil
             let item = MediaItem(
                 id: uniqueID, title: result.title, overview: result.overview,
@@ -301,17 +304,10 @@ struct SearchView: View {
             item.dateAdded = Date()
 
             if result.type == .movie, let tmdbID = Int(result.id) {
-                let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
-                if let details = details {
+                if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID) {
                     item.releaseDate = DateUtils.parseDate(details.releaseDate)
-                    
-                    // High-res upgrades on initial add
-                    if let poster = details.posterPath {
-                        item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                    }
-                    if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-                    }
+                    item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+                    item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
 
                     let movieDetails = MovieDetails(tmdbID: tmdbID)
                     movieDetails.item = item
@@ -320,10 +316,9 @@ struct SearchView: View {
                     movieDetails.voteAverage = details.voteAverage
                     movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
                     movieDetails.creators = details.directors.map { $0.name }
-
                     
                     movieDetails.cast = details.cast.map { c in
-                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                        let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                         let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: uniqueID)
                         member.movieDetails = movieDetails
                         return member
@@ -331,18 +326,11 @@ struct SearchView: View {
                     item.movieDetails = movieDetails
                 }
             } else if result.type == .tvShow, let tmdbID = Int(result.id) {
-                let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
-                if let details = details {
-                    // ... (high-res upgrades)
-                    if let poster = details.posterPath {
-                        item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-                    }
-                    if let backdrop = details.backdropPath {
-                        item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-                    }
+                if let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID) {
+                    item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+                    item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
 
                     let tvDetails = TVShowDetails(tmdbID: tmdbID)
-                    // ... (mapping)
                     tvDetails.status = await StringPool.shared.intern(details.status)
                     tvDetails.network = await StringPool.shared.intern(details.network)
                     tvDetails.networkLogoPath = details.networkLogoPath
@@ -355,7 +343,7 @@ struct SearchView: View {
                     tvDetails.item = item
                     
                     tvDetails.cast = details.cast.map { c in
-                        let profileURL = c.profilePath != nil ? "https://image.tmdb.org/t/p/w185\(c.profilePath!)" : nil
+                        let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                         let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: uniqueID)
                         member.tvShowDetails = tvDetails
                         return member
@@ -367,35 +355,48 @@ struct SearchView: View {
                             episodeCount: season.episode_count, airDate: season.air_date,
                             showID: tmdbID)
                     }
-                    tvDetails.tvMazeID = details.tvdbID
+                    
+                    // CRITICAL FIX: Proper TVMaze ID Lookup
+                    if let tvdbID = details.tvdbID {
+                        tvDetails.tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
+                    }
+                    
                     item.tvShowDetails = tvDetails
                     
                     // Trigger immediate background sync for episodes
-                    DataService.shared.refreshMetadata(for: [item], modelContext: modelContext, skipDelay: true)
+                    let freshItemID = item.id
+                    Task { @MainActor in
+                        let desc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == freshItemID })
+                        if let mainItem = try? modelContext.fetch(desc).first {
+                            DataService.shared.refreshMetadata(for: [mainItem], modelContext: modelContext, skipDelay: true)
+                        }
+                    }
                 }
             }
 
             item.updateSearchableText()
             item.syncCachedProperties()
 
-            modelContext.insert(item)
-            try? modelContext.save()
+            backgroundContext.insert(item)
+            try? backgroundContext.save()
             
             // Sync Discovery Entities
-            let itemID = item.persistentModelID
-            let container = modelContext.container
+            let itemPersistentID = item.persistentModelID
             Task.detached {
                 let sync = DiscoverySyncService(modelContainer: container)
                 let actorContext = ModelContext(container)
-                if let fetchedItem = actorContext.model(for: itemID) as? MediaItem {
+                if let fetchedItem = actorContext.model(for: itemPersistentID) as? MediaItem {
                     await sync.updateItemAdded(fetchedItem)
                 }
             }
             
-            // Navigate to the newly added item's detail view
             await MainActor.run {
                 isSearchActive = false
-                onSelectLocal?(item)
+                // Note: onSelectLocal expects the MainActor version of the model
+                let desc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == uniqueID })
+                if let mainItem = try? modelContext.fetch(desc).first {
+                    onSelectLocal?(mainItem)
+                }
             }
         }
     }

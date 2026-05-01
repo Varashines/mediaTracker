@@ -287,13 +287,16 @@ private struct SeasonSection: View {
     }
 
     private func toggleSeasonWatchedStatus() {
+        let targetStatus = !isAllWatched
         withAnimation {
-            let targetStatus = !isAllWatched
             for episode in season.episodes {
                 episode.isWatched = targetStatus
             }
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             onWatchedToggle()
+        }
+        
+        Task { @MainActor in
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
         }
     }
 }
@@ -309,8 +312,12 @@ private struct EpisodeCube: View {
             withAnimation(.spring(duration: 0.2)) {
                 episode.isWatched.toggle()
                 FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
-                episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
                 onToggle()
+            }
+            
+            // Detach heavy recalculation to prevent UI stutter
+            Task { @MainActor in
+                episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             }
         } label: {
             VStack(alignment: .leading, spacing: 6) {

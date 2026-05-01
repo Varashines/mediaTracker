@@ -1,15 +1,18 @@
 import Foundation
+import UniformTypeIdentifiers
 
 enum APIError: Error, LocalizedError {
     case missingApiKey(String)
     case invalidResponse
     case requestFailed(Int)
+    case rateLimited
     
     var errorDescription: String? {
         switch self {
         case .missingApiKey(let service): return "\(service) API Key is missing. Please check Settings."
         case .invalidResponse: return "Received an invalid response from the server."
         case .requestFailed(let code): return "Request failed with status code: \(code)"
+        case .rateLimited: return "Rate limit exceeded. Retrying..."
         }
     }
 }
@@ -108,22 +111,24 @@ actor APIClient {
     }
 
     private func searchTMDB<T: Codable & TMDBMedia>(path: String, query: String, year: String? = nil) async throws -> [T] {
-        var queryItems = [
-            URLQueryItem(name: "query", value: query),
-            URLQueryItem(name: "include_adult", value: "false")
-        ]
-        
-        if let year = year {
-            // TMDB uses different keys for year based on search type
-            let yearKey = path.contains("movie") ? "primary_release_year" : "first_air_date_year"
-            queryItems.append(URLQueryItem(name: yearKey, value: year))
+        return try await executeWithRetry {
+            var queryItems = [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "include_adult", value: "false")
+            ]
+            
+            if let year = year {
+                // TMDB uses different keys for year based on search type
+                let yearKey = path.contains("movie") ? "primary_release_year" : "first_air_date_year"
+                queryItems.append(URLQueryItem(name: yearKey, value: year))
+            }
+            
+            let url = try self.tmdbURL(path: path, queryItems: queryItems)
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let decoded = try self.decoder.decode(TMDBGenericResponse<T>.self, from: data)
+            return decoded.results
         }
-        
-        let url = try tmdbURL(path: path, queryItems: queryItems)
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let decoded = try decoder.decode(TMDBGenericResponse<T>.self, from: data)
-        return decoded.results
     }
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
@@ -191,13 +196,15 @@ actor APIClient {
             return processMovieDetails(details)
         }
 
-        let url = try tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        
-        saveToCache(data: data, forKey: cacheKey)
-        let details = try decoder.decode(TMDBMovieDetailsResponse.self, from: data)
-        return processMovieDetails(details)
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            
+            self.saveToCache(data: data, forKey: cacheKey)
+            let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
+            return self.processMovieDetails(details)
+        }
     }
 
     private func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
@@ -241,13 +248,15 @@ actor APIClient {
             return processTVDetails(d)
         }
 
-        let url = try tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        
-        saveToCache(data: data, forKey: cacheKey)
-        let d = try decoder.decode(TMDBTVDetailsResponse.self, from: data)
-        return processTVDetails(d)
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            
+            self.saveToCache(data: data, forKey: cacheKey)
+            let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
+            return self.processTVDetails(d)
+        }
     }
 
     private func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
@@ -286,58 +295,88 @@ actor APIClient {
         return "w780"
     }
 
+    static func tmdbImageURL(path: String?, size: String = "w780") -> String? {
+        guard let path = path else { return nil }
+        return "https://image.tmdb.org/t/p/\(size)\(path)"
+    }
+
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
-        let url = try tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let decoded = try decoder.decode(TMDBSeasonResponse.self, from: data)
-        return decoded.episodes.map { 
-            TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
+            return decoded.episodes.map { 
+                TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
+            }
         }
     }
 
     func searchPerson(query: String) async throws -> String? {
-        let url = try tmdbURL(path: "/search/person", queryItems: [
-            URLQueryItem(name: "query", value: query),
-            URLQueryItem(name: "include_adult", value: "false")
-        ])
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let decoded = try decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
-        return decoded.results.first?.profile_path
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/search/person", queryItems: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "include_adult", value: "false")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
+            return decoded.results.first?.profile_path
+        }
     }
 
     // MARK: - TVMaze Integration
     func lookupTVMazeID(tvdbID: Int) async throws -> Int? {
-        var components = URLComponents(string: "https://api.tvmaze.com/lookup/shows")
-        components?.queryItems = [URLQueryItem(name: "thetvdb", value: String(tvdbID))]
-        guard let url = components?.url else { throw URLError(.badURL) }
-        let (data, response) = try await session.data(from: url)
-        if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-            let show = try decoder.decode(TVMazeShowLookupResponse.self, from: data)
-            return show.id
+        return try await executeWithRetry {
+            var components = URLComponents(string: "https://api.tvmaze.com/lookup/shows")
+            components?.queryItems = [URLQueryItem(name: "thetvdb", value: String(tvdbID))]
+            guard let url = components?.url else { throw URLError(.badURL) }
+            let (data, response) = try await self.session.data(from: url)
+            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                let show = try self.decoder.decode(TVMazeShowLookupResponse.self, from: data)
+                return show.id
+            }
+            return nil
         }
-        return nil
     }
 
     func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?) {
-        let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        let r = try decoder.decode(TVMazeResponse.self, from: data)
-        return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name)
+        return try await executeWithRetry {
+            let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let r = try self.decoder.decode(TVMazeResponse.self, from: data)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name)
+        }
     }
 
     func fetchTVMazeEpisodes(tvMazeID: Int) async throws -> [TVMazeEpisode] {
-        let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes")!
-        let (data, response) = try await session.data(from: url)
-        try validateResponse(response)
-        return try decoder.decode([TVMazeEpisode].self, from: data)
+        return try await executeWithRetry {
+            let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes")!
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            return try self.decoder.decode([TVMazeEpisode].self, from: data)
+        }
     }
 
+    private func executeWithRetry<T>(maxAttempts: Int = 3, request: () async throws -> T) async throws -> T {
+        var attempts = 0
+        while attempts < maxAttempts {
+            do {
+                return try await request()
+            } catch APIError.rateLimited {
+                attempts += 1
+                if attempts >= maxAttempts { throw APIError.rateLimited }
+                let delay = pow(2.0, Double(attempts))
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+        }
+        return try await request()
+    }
     
     private func validateResponse(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        if http.statusCode == 429 { throw APIError.rateLimited }
         if !(200...299).contains(http.statusCode) { throw APIError.requestFailed(http.statusCode) }
     }
 }
@@ -373,7 +412,7 @@ extension TMDBMedia {
             id: String(id),
             title: displayTitle,
             overview: overview,
-            posterURL: poster_path != nil ? "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster_path!)" : nil,
+            posterURL: APIClient.tmdbImageURL(path: poster_path),
             releaseDate: releaseDateString,
             genres: Array(genreList),
             type: mediaType,

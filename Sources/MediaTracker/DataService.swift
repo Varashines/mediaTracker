@@ -18,9 +18,9 @@ struct MediaItemData: Codable {
 
 @ModelActor
 actor MaintenanceService {
-    func performLibraryHeal() async {
+    func performLibraryHeal() async throws {
         let descriptor = FetchDescriptor<MediaItem>()
-        let items = (try? modelContext.fetch(descriptor)) ?? []
+        let items = try modelContext.fetch(descriptor)
         
         // 0. Deduplicate MediaItems (Ensures no two items share the same TMDB ID)
         let groupedItems = Dictionary(grouping: items, by: { $0.id })
@@ -39,7 +39,7 @@ actor MaintenanceService {
         }
         
         // Fetch fresh list after deduplication
-        let sanitizedItems = (try? modelContext.fetch(descriptor)) ?? []
+        let sanitizedItems = try modelContext.fetch(descriptor)
         
         for item in sanitizedItems {
             // 1. Migrate legacy IDs to prefixed format (prevents Movie/TV collisions)
@@ -54,12 +54,15 @@ actor MaintenanceService {
                     tv.item = item
                     
                     // First, deduplicate Seasons at the relationship level
-                    let seasons = tv.seasons
-                    let groupedSeasons = Dictionary(grouping: seasons, by: { $0.seasonNumber })
+                    let groupedSeasons = Dictionary(grouping: tv.seasons, by: { $0.seasonNumber })
                     for (num, duplicates) in groupedSeasons where duplicates.count > 1 {
                         print("🔍 Maintenance: Found \(duplicates.count) duplicate seasons for S\(num)")
                         let sorted = duplicates.sorted { ($0.episodes.count) > ($1.episodes.count) }
-                        for i in 1..<sorted.count { modelContext.delete(sorted[i]) }
+                        for i in 1..<sorted.count { 
+                            let duplicate = sorted[i]
+                            tv.seasons.removeAll { $0.persistentModelID == duplicate.persistentModelID }
+                            modelContext.delete(duplicate) 
+                        }
                     }
                     
                     for season in tv.seasons {
@@ -69,15 +72,18 @@ actor MaintenanceService {
                         season.tvShowDetails = tv
                         
                         // Deduplicate Episodes within the season
-                        let episodes = season.episodes
-                        let groupedEpisodes = Dictionary(grouping: episodes, by: { $0.episodeNumber })
+                        let groupedEpisodes = Dictionary(grouping: season.episodes, by: { $0.episodeNumber })
                         for (num, duplicates) in groupedEpisodes where duplicates.count > 1 {
                             print("🔍 Maintenance: Found \(duplicates.count) duplicate episodes for S\(season.seasonNumber) E\(num)")
                             let sorted = duplicates.sorted { 
                                 if $0.isWatched != $1.isWatched { return $0.isWatched }
                                 return ($0.airDate ?? "").count > ($1.airDate ?? "").count 
                             }
-                            for i in 1..<sorted.count { modelContext.delete(sorted[i]) }
+                            for i in 1..<sorted.count { 
+                                let duplicate = sorted[i]
+                                season.episodes.removeAll { $0.persistentModelID == duplicate.persistentModelID }
+                                modelContext.delete(duplicate) 
+                            }
                         }
 
                         for episode in season.episodes {
@@ -117,8 +123,23 @@ actor MaintenanceService {
             item.updateSearchableText()
         }
         
+        // 3. Final Badge Sync pass and Cache Purge for Logos
+        let finalItems = (try? modelContext.fetch(descriptor)) ?? []
+        var logoURLs: [String] = []
+        for item in finalItems {
+            item.syncCachedProperties()
+            if let logo = item.cachedNetworkLogoPath, let url = APIClient.tmdbImageURL(path: logo, size: "w300") {
+                logoURLs.append(url)
+            }
+        }
+        
+        // Asynchronously clear logo cache so they regenerate with proper alpha
+        if !logoURLs.isEmpty {
+            await ImageCache.shared.clearCache(forURLs: logoURLs)
+        }
+        
         try? modelContext.save()
-        print("✅ Maintenance: Library heal complete.")
+        print("✅ Maintenance: Library heal, badge refresh, and logo cache optimization complete.")
     }
 }
 
@@ -184,10 +205,38 @@ class DataService {
         
         let service = MaintenanceService(modelContainer: modelContext.container)
         Task {
-            await service.performLibraryHeal()
-            await MainActor.run {
-                self.isRunningMaintenance = false
-                self.showMaintenanceComplete = true
+            do {
+                try await service.performLibraryHeal()
+                await MainActor.run {
+                    self.isRunningMaintenance = false
+                    self.showMaintenanceComplete = true
+                    AppErrorState.shared.showToast("Library repair complete.", systemImage: "checkmark.circle.fill", type: .success)
+                }
+            } catch {
+                await MainActor.run {
+                    self.isRunningMaintenance = false
+                    AppErrorState.shared.surfaceError("Library repair failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func refreshAllBadges(modelContext: ModelContext) {
+        AppErrorState.shared.showToast("Recalculating badges...", systemImage: "sparkles", type: .info)
+        
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<MediaItem>()
+            if let items = try? context.fetch(descriptor) {
+                for item in items {
+                    item.syncCachedProperties()
+                }
+                try? context.save()
+                
+                await MainActor.run {
+                    AppErrorState.shared.showToast("All badges updated.", systemImage: "checkmark.circle.fill", type: .success)
+                }
             }
         }
     }
@@ -199,7 +248,7 @@ class DataService {
                 title: item.title,
                 type: item.type?.rawValue ?? "Movie",
                 state: item.state?.rawValue ?? "Wishlist",
-                dateAdded: item.dateAdded,
+                dateAdded: item.dateAdded ?? Date(),
                 taste: item.tasteValue
             )
         }
@@ -312,9 +361,19 @@ actor DiscoverySyncService {
         let sources: Set<String>
         let preferredLogoSource: String?
     }
+    
+    @MainActor private static var cachedRules: [AliasRule]?
+    @MainActor private static var cachedAliasString: String?
 
-    private func parseAliases() -> [AliasRule] {
+    private func parseAliases() async -> [AliasRule] {
         let aliasString = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
+        
+        // Cache check
+        let (cached, str) = await MainActor.run { (Self.cachedRules, Self.cachedAliasString) }
+        if str == aliasString, let rules = cached {
+            return rules
+        }
+
         let lines = aliasString.components(separatedBy: .newlines)
         var rules: [AliasRule] = []
         
@@ -336,65 +395,85 @@ actor DiscoverySyncService {
             
             rules.append(AliasRule(target: target, sources: Set(sources), preferredLogoSource: preferredLogoSource))
         }
+        
+        let finalRules = rules
+        await MainActor.run {
+            Self.cachedRules = finalRules
+            Self.cachedAliasString = aliasString
+        }
+        
         return rules
     }
 
     func syncLibrary(force: Bool) async {
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let items = try? modelContext.fetch(descriptor) else { return }
-        
-        // Studio Aliases
-        let rules = parseAliases()
-        var sourceToTarget: [String: String] = [:]
-        var targetToLogoSource: [String: String] = [:]
-        
-        for rule in rules {
-            for source in rule.sources {
-                sourceToTarget[source] = rule.target
-            }
-            if let pref = rule.preferredLogoSource {
-                targetToLogoSource[rule.target] = pref
-            }
-        }
-        
+        // Phase 5 Optimization: Batched Processing to prevent memory spikes
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
         
-        for item in items {
-            // Count Networks
-            if item.type == .tvShow, let originalName = item.cachedNetwork {
-                let name = sourceToTarget[originalName] ?? originalName
-                let preferredSource = targetToLogoSource[name]
-                
-                let current = networkCounts[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
-                var newLogo = current.logo
-                var newPriority = current.priority
-                var newSources = current.sources
-                if !newSources.contains(originalName) { newSources.append(originalName) }
-                
-                if let itemLogo = item.cachedNetworkLogoPath {
-                    if let pref = preferredSource, originalName == pref {
-                        newLogo = itemLogo
-                        newPriority = 100
-                    } else if newLogo == nil || (originalName == name && newPriority < 50) {
-                        newLogo = itemLogo
-                        newPriority = (originalName == name) ? 50 : 10
+        let batchSize = 500
+        var offset = 0
+        
+        while true {
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.fetchLimit = batchSize
+            descriptor.fetchOffset = offset
+            
+            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
+            
+            // Studio Aliases (Cached internally in parseAliases)
+            let rules = await parseAliases()
+            var sourceToTarget: [String: String] = [:]
+            var targetToLogoSource: [String: String] = [:]
+            
+            for rule in rules {
+                for source in rule.sources {
+                    sourceToTarget[source] = rule.target
+                }
+                if let pref = rule.preferredLogoSource {
+                    targetToLogoSource[rule.target] = pref
+                }
+            }
+            
+            for item in items {
+                // Count Networks
+                if item.type == .tvShow, let originalName = item.cachedNetwork {
+                    let name = sourceToTarget[originalName] ?? originalName
+                    let preferredSource = targetToLogoSource[name]
+                    
+                    let current = networkCounts[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                    var newLogo = current.logo
+                    var newPriority = current.priority
+                    var newSources = current.sources
+                    if !newSources.contains(originalName) { newSources.append(originalName) }
+                    
+                    if let itemLogo = item.cachedNetworkLogoPath {
+                        if let pref = preferredSource, originalName == pref {
+                            newLogo = itemLogo
+                            newPriority = 100
+                        } else if newLogo == nil || (originalName == name && newPriority < 50) {
+                            newLogo = itemLogo
+                            newPriority = (originalName == name) ? 50 : 10
+                        }
                     }
+                    
+                    networkCounts[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
                 }
                 
-                networkCounts[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
+                // Count Genres
+                for genre in item.cachedGenres {
+                    genreCounts[genre, default: 0] += 1
+                }
+                
+                // Count Languages
+                if let lang = item.cachedLanguage {
+                    languageCounts[lang, default: 0] += 1
+                }
             }
             
-            // Count Genres
-            for genre in item.cachedGenres {
-                genreCounts[genre, default: 0] += 1
-            }
-            
-            // Count Languages
-            if let lang = item.cachedLanguage {
-                languageCounts[lang, default: 0] += 1
-            }
+            offset += batchSize
+            // Clear context objects to free memory
+            modelContext.processPendingChanges()
         }
         
         // 2. Incremental Sync: Update existing, insert new, delete orphaned
@@ -444,7 +523,7 @@ actor DiscoverySyncService {
 
     func updateItemAdded(_ item: MediaItem) async {
         // Studio Aliases
-        let rules = parseAliases()
+        let rules = await parseAliases()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {
@@ -463,7 +542,6 @@ actor DiscoverySyncService {
             }
         }
         
-        // ... (rest of function unchanged)
         for genre in item.cachedGenres {
             let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
             if let existing = try? modelContext.fetch(descriptor).first {
@@ -491,7 +569,7 @@ actor DiscoverySyncService {
 
     func updateItemDeleted(network: String?, genres: [String], language: String?) async {
         // Studio Aliases
-        let rules = parseAliases()
+        let rules = await parseAliases()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {
@@ -540,7 +618,9 @@ actor DiscoverySyncService {
                 continue
             }
             
-            guard let logo = network.logoPath, let url = URL(string: "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(logo)") else { continue }
+            guard let logo = network.logoPath, 
+                  let urlString = APIClient.tmdbImageURL(path: logo, size: "w92"),
+                  let url = URL(string: urlString) else { continue }
             
             if let (data, _) = try? await URLSession.shared.data(from: url) {
                 // Phase 3 Optimization: Low-memory color extraction from raw data

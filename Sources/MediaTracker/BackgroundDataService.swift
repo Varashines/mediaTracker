@@ -26,34 +26,15 @@ actor BackgroundDataService {
         var errorCount = 0
         var refreshedIDs: [String] = []
 
-        // Phase 5 Optimization: Hybrid Parallel Processing
-        // We fetch data in parallel but apply updates serially to maintain context integrity.
-        let processorCount = ProcessInfo.processInfo.activeProcessorCount
-        let maxConcurrent = max(2, min(4, processorCount / 2))
-
-        await withTaskGroup(of: (String, Bool).self) { group in
-            var activeTasks = 0
-            var currentIndex = 0
-            
-            while currentIndex < itemIDs.count || activeTasks > 0 {
-                while activeTasks < maxConcurrent && currentIndex < itemIDs.count {
-                    let id = itemIDs[currentIndex]
-                    group.addTask {
-                        // We call the serial method but since multiple tasks are in the group,
-                        // and refreshSingleItem has await points, it releases the actor lock.
-                        // HOWEVER, since we are on the same actor, the lock ensures ONLY ONE 
-                        // task is executing between suspension points.
-                        let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
-                        return (id, success)
-                    }
-                    currentIndex += 1
-                    activeTasks += 1
-                }
-                
-                if let (refID, success) = await group.next() {
-                    if success { refreshedIDs.append(refID) } else { errorCount += 1 }
-                    activeTasks -= 1
-                }
+        // Phase 5 Optimization: Serial Processing for Context Integrity
+        // While fetching in parallel is possible, applying updates to the same ModelContext
+        // from multiple tasks within a TaskGroup is unsafe. We serialize updates to guarantee integrity.
+        for id in itemIDs {
+            let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
+            if success {
+                refreshedIDs.append(id)
+            } else {
+                errorCount += 1
             }
         }
 
@@ -66,10 +47,11 @@ actor BackgroundDataService {
             print("❌ Background Refresh: Failed to save batch context: \(error)")
         }
         
-        // Phase 5: Bulk Notification (Only after successful save!)
-        for refID in refreshedIDs {
+        // Phase 5: Bulk Notification
+        if !refreshedIDs.isEmpty {
+            let ids = refreshedIDs
             Task { @MainActor in
-                NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refID])
+                NotificationCenter.default.post(name: .mediaItemsBulkRefreshed, object: nil, userInfo: ["ids": ids])
             }
         }
         
@@ -137,12 +119,8 @@ actor BackgroundDataService {
             let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
             
-            if let poster = details.posterPath {
-                item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-            }
-            if let backdrop = details.backdropPath {
-                item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-            }
+            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
             
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
             movieDetails.item = item
@@ -165,7 +143,7 @@ actor BackgroundDataService {
                 
                 var newCastList: [CastMember] = []
                 for c in newCastResults {
-                    let profileURL = c.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                    let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                     let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                     member.movieDetails = movieDetails
                     modelContext.insert(member)
@@ -211,12 +189,8 @@ actor BackgroundDataService {
                 item.releaseDate = newDate
             }
             
-            if let poster = details.posterPath {
-                item.posterURL = "https://image.tmdb.org/t/p/\(APIClient.shared.idealThumbnailSize)\(poster)"
-            }
-            if let backdrop = details.backdropPath {
-                item.backdropURL = "https://image.tmdb.org/t/p/w1280\(backdrop)"
-            }
+            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
             
             var tvMazeID = tvDetails.tvMazeID
             if let tvdbID = details.tvdbID, tvMazeID == nil {
@@ -242,7 +216,7 @@ actor BackgroundDataService {
                 
                 var newCastList: [CastMember] = []
                 for c in newCastResults {
-                    let profileURL = c.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                    let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                     let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                     member.tvShowDetails = tvDetails
                     modelContext.insert(member)

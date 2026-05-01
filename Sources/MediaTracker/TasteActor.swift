@@ -88,9 +88,9 @@ actor TasteActor {
             return url
         }
 
-        // 3. On-Demand API Search
+        // 2. On-Demand API Search
         if let path = try? await APIClient.shared.searchPerson(query: name) {
-            let fullURL = "https://image.tmdb.org/t/p/w185\(path)"
+            let fullURL = APIClient.tmdbImageURL(path: path, size: "w185") ?? ""
             modelContext.insert(PersonImageEntity(name: name, profileURL: fullURL))
             try? modelContext.save()
             return fullURL
@@ -113,18 +113,12 @@ actor TasteActor {
             return cached
         }
 
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let allItems = try? modelContext.fetch(descriptor) else {
-            return ([:], [:], [:], [:], [:])
-        }
-
         struct CategoryStats {
             var loved = 0
             var liked = 0
             var disliked = 0
             var total = 0
             func affinity(cutoff: Int = 5) -> Double {
-                // CUTOFF: Customizable threshold
                 guard total >= cutoff else { return 0 }
                 return Double(3 * loved + 1 * liked - 2 * disliked) / Double(3 * total)
             }
@@ -136,37 +130,51 @@ actor TasteActor {
         var creatorStats: [String: CategoryStats] = [:]
         var languageStats: [String: CategoryStats] = [:]
 
-        let ratedItems = allItems.filter { $0.tasteValue != "None" }
+        // Phase 5 Optimization: Batched Processing to prevent memory spikes
+        let batchSize = 500
+        var offset = 0
+        
+        while true {
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.fetchLimit = batchSize
+            descriptor.fetchOffset = offset
+            
+            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
+            
+            let ratedItems = items.filter { $0.tasteValue != "None" }
 
-        for item in ratedItems {
-            let taste = item.tasteValue
-            let update: (inout CategoryStats) -> Void = { stats in
-                stats.total += 1
-                if taste == "Love" {
-                    stats.loved += 1
-                } else if taste == "Like" {
-                    stats.liked += 1
-                } else if taste == "Dislike" {
-                    stats.disliked += 1
+            for item in ratedItems {
+                let taste = item.tasteValue
+                let update: (inout CategoryStats) -> Void = { stats in
+                    stats.total += 1
+                    if taste == "Love" {
+                        stats.loved += 1
+                    } else if taste == "Like" {
+                        stats.liked += 1
+                    } else if taste == "Dislike" {
+                        stats.disliked += 1
+                    }
                 }
-            }
-            for g in item.cachedGenres { update(&genreStats[g, default: CategoryStats()]) }
-            if let n = item.cachedNetwork { update(&networkStats[n, default: CategoryStats()]) }
-            if let l = item.cachedLanguage { update(&languageStats[l, default: CategoryStats()]) }
+                for g in item.cachedGenres { update(&genreStats[g, default: CategoryStats()]) }
+                if let n = item.cachedNetwork { update(&networkStats[n, default: CategoryStats()]) }
+                if let l = item.cachedLanguage { update(&languageStats[l, default: CategoryStats()]) }
 
-            let cast =
-                (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name }
-                    ?? [])
-            for actor in cast { update(&castStats[actor, default: CategoryStats()]) }
-            let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
-            for creator in creators { update(&creatorStats[creator, default: CategoryStats()]) }
+                let cast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
+                for actor in cast { update(&castStats[actor, default: CategoryStats()]) }
+                let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
+                for creator in creators { update(&creatorStats[creator, default: CategoryStats()]) }
+            }
+            
+            offset += batchSize
+            // Clear context objects to free memory
+            modelContext.processPendingChanges()
         }
 
         let result = (
             genreStats.mapValues { $0.affinity(cutoff: 5) },
             networkStats.mapValues { $0.affinity(cutoff: 5) },
-            castStats.mapValues { $0.affinity(cutoff: 5) },  // Increased to 5
-            creatorStats.mapValues { $0.affinity(cutoff: 3) },  // Increased to 3
+            castStats.mapValues { $0.affinity(cutoff: 5) },
+            creatorStats.mapValues { $0.affinity(cutoff: 3) },
             languageStats.mapValues { $0.affinity(cutoff: 5) }
         )
 

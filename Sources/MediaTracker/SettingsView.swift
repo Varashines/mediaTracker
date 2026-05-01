@@ -280,17 +280,26 @@ struct SettingsView: View {
                 Divider()
                 
                 SettingsRow(title: "Maintenance", subtitle: "Repair database and purge duplicates.") {
-                    Button {
-                        DataService.shared.runMaintenance(modelContext: modelContext)
-                    } label: {
-                        if DataService.shared.isRunningMaintenance {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Start Repair")
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Button {
+                            DataService.shared.runMaintenance(modelContext: modelContext)
+                        } label: {
+                            if DataService.shared.isRunningMaintenance {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Text("Start Repair")
+                            }
                         }
+                        .buttonStyle(.bordered)
+                        .disabled(DataService.shared.isRunningMaintenance)
+                        
+                        Button {
+                            DataService.shared.refreshAllBadges(modelContext: modelContext)
+                        } label: {
+                            Text("Recalculate Badges")
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(DataService.shared.isRunningMaintenance)
                 }
             }
 
@@ -299,7 +308,7 @@ struct SettingsView: View {
                     Button("Purge Everything") {
                         ImageCache.shared.clearFullCache()
                         FeedbackManager.shared.trigger(.removeFromLibrary)
-                        AppErrorState.shared.surfaceError("Image Cache Cleared", systemImage: "photo.fill")
+                        AppErrorState.shared.showToast("Image Cache Cleared", systemImage: "photo.fill", type: .success)
                     }
                     .buttonStyle(.bordered)
                     .foregroundStyle(.red)

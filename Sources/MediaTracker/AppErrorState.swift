@@ -5,18 +5,35 @@ import Observation
 class AppErrorState {
     static let shared = AppErrorState()
     
-    var currentError: AppError?
+    var currentToast: ToastInfo?
     var showToast: Bool = false
     
-    struct AppError: Identifiable {
+    enum ToastType {
+        case error, success, info
+        
+        var color: Color {
+            switch self {
+            case .error: return .red
+            case .success: return .green
+            case .info: return .blue
+            }
+        }
+    }
+    
+    struct ToastInfo: Identifiable {
         let id = UUID()
         let message: String
         let systemImage: String
+        let type: ToastType
     }
     
     func surfaceError(_ message: String, systemImage: String = "exclamationmark.triangle.fill") {
-        self.currentError = AppError(message: message, systemImage: systemImage)
-        withAnimation {
+        showToast(message, systemImage: systemImage, type: .error)
+    }
+    
+    func showToast(_ message: String, systemImage: String, type: ToastType = .info) {
+        self.currentToast = ToastInfo(message: message, systemImage: systemImage, type: type)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             self.showToast = true
         }
         
@@ -39,13 +56,13 @@ struct ToastOverlay: ViewModifier {
         ZStack {
             content
             
-            if let error = errorState.currentError, errorState.showToast {
+            if let toast = errorState.currentToast, errorState.showToast {
                 VStack {
                     Spacer()
                     HStack(spacing: 12) {
-                        Image(systemName: error.systemImage)
-                            .foregroundStyle(.red)
-                        Text(error.message)
+                        Image(systemName: toast.systemImage)
+                            .foregroundStyle(toast.type.color)
+                        Text(toast.message)
                             .font(.system(size: 13, weight: .medium))
                     }
                     .padding(.horizontal, 16)
