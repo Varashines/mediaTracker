@@ -11,10 +11,10 @@ struct MediaHeaderView: View {
 
     var body: some View {
         if item.modelContext != nil && !item.isDeleted {
-            HStack(alignment: .center, spacing: 30) {
+            HStack(alignment: .top, spacing: 35) {
                 PosterView(item: item, themeColor: themeColor, namespace: namespace)
                 
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 24) {
                     TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
                     
                     if item.isUpcoming, let badgeText = item.detailBadgeText {
@@ -27,18 +27,23 @@ struct MediaHeaderView: View {
                                 .foregroundStyle(isAvailable ? .white : .yellow)
                             
                             Text(badgeText)
-                                .font(.headline)
+                                .font(.system(size: 16, weight: .black, design: .rounded))
                         }
-                        .liquidGlassPill(
-                            accentColor: isAvailable ? Color.semanticGreen(for: colorScheme) : themeColor,
-                            isSolid: isAvailable
-                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(isAvailable ? Color.semanticGreen(for: colorScheme) : themeColor.opacity(0.15))
+                        .clipShape(Capsule())
+                        .overlay {
+                            if !isAvailable {
+                                Capsule().stroke(themeColor.opacity(0.3), lineWidth: 1)
+                            }
+                        }
                         .padding(.top, 4)
                     }
                     
                     MetadataSection(item: item, themeColor: themeColor)
                     
-                    OverviewSection(overview: item.overview)
+                    OverviewSection(overview: item.overview, themeColor: themeColor)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -6,39 +6,38 @@ struct MetadataSection: View {
     let themeColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let movie = item.movieDetails {
-                HStack(spacing: 8) {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                if let movie = item.movieDetails {
                     if let date = item.releaseDate {
-                        MetadataLine(label: "Release Date", value: date.formatted(date: .long, time: .omitted), themeColor: themeColor)
+                        MetadataLine(icon: "calendar", value: date.formatted(.dateTime.year().month().day()), themeColor: themeColor)
                     }
                     if let lang = movie.originalLanguage {
-                        MetadataLine(label: "Language", value: lang, themeColor: themeColor, isLanguage: true)
+                        MetadataLine(icon: "globe", value: lang, themeColor: themeColor, isLanguage: true)
+                    }
+                    MetadataLine(icon: "clock", value: DateUtils.formatRuntime(movie.runtime), themeColor: themeColor)
+                    if !movie.genres.isEmpty {
+                        MetadataLine(icon: "tag.fill", value: movie.genres.joined(separator: ", "), themeColor: themeColor)
                     }
                 }
-                HStack(spacing: 8) {
-                    MetadataLine(label: "Genres", value: movie.genres.joined(separator: ", "), themeColor: themeColor)
-                    MetadataLine(label: "Runtime", value: DateUtils.formatRuntime(movie.runtime), themeColor: themeColor)
-                }
-            }
 
-            if let tv = item.tvShowDetails {
-                HStack(spacing: 8) {
-                    MetadataLine(label: "Status", value: tv.status, themeColor: themeColor)
-                    MetadataLine(label: "Network", value: tv.network, themeColor: themeColor)
-                    if let lang = tv.originalLanguage {
-                        MetadataLine(label: "Language", value: lang, themeColor: themeColor, isLanguage: true)
+                if let tv = item.tvShowDetails {
+                    MetadataLine(icon: "info.circle.fill", value: tv.status, themeColor: themeColor)
+                    if let net = tv.network {
+                        MetadataLine(icon: "tv", value: net, themeColor: themeColor)
                     }
-                }
-                HStack(spacing: 8) {
-                    MetadataLine(label: "Genres", value: tv.genres.joined(separator: ", "), themeColor: themeColor)
+                    if let lang = tv.originalLanguage {
+                        MetadataLine(icon: "globe", value: lang, themeColor: themeColor, isLanguage: true)
+                    }
+                    if !tv.genres.isEmpty {
+                        MetadataLine(icon: "tag.fill", value: tv.genres.joined(separator: ", "), themeColor: themeColor)
+                    }
                     if let s = tv.numberOfSeasons, let e = tv.numberOfEpisodes {
-                        let sLabel = s == 1 ? "Season" : "Seasons"
-                        let eLabel = e == 1 ? "Episode" : "Episodes"
-                        MetadataLine(label: "Library", value: "\(s) \(sLabel), \(e) \(eLabel)", themeColor: themeColor)
+                        MetadataLine(icon: "rectangle.stack.fill", value: "\(s) Seasons, \(e) Episodes", themeColor: themeColor)
                     }
                 }
             }
+            .padding(.vertical, 4)
         }
     }
 }

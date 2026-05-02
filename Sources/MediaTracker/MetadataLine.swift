@@ -1,22 +1,29 @@
 import SwiftUI
 
 struct MetadataLine: View {
-    let label: String
+    let icon: String?
     let value: String?
     let themeColor: Color
     var isLanguage: Bool = false
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
         if let value = value, !value.isEmpty {
-            HStack(spacing: 4) {
-                Text("\(label):")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(themeColor.readableAccent(colorScheme: colorScheme))
+                }
+                
                 Text(displayValue)
                     .foregroundStyle(.primary)
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .padding(.horizontal, 4)
             .minimumScaleFactor(0.9)
-            .liquidGlassPill(accentColor: themeColor.opacity(0.12), isSolid: false)
+            .liquidGlassPill(accentColor: themeColor.opacity(0.15), isSolid: false)
         }
     }
     

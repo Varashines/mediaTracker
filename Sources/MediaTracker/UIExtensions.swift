@@ -71,4 +71,24 @@ extension Color {
         let brightness: Double = colorScheme == .dark ? 0.95 : 0.8
         return Color(hue: randomHue, saturation: saturation, brightness: brightness)
     }
+
+    /// Returns a version of the color that is optimized for small UI elements (icons/labels).
+    /// It boosts brightness on dark backgrounds and maintains saturation.
+    func readableAccent(colorScheme: ColorScheme) -> Color {
+        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        if colorScheme == .dark {
+            // On dark backgrounds, ensure brightness is at least 0.85 and saturation is healthy
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.5)), brightness: Double(max(brightness, 0.9)))
+        } else {
+            // On light backgrounds, ensure it's deep enough (darkened)
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.7)), brightness: Double(min(brightness, 0.5)))
+        }
+    }
 }

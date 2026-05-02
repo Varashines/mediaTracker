@@ -10,10 +10,12 @@ struct TitleSection: View {
 
     var body: some View {
         if item.modelContext != nil && !item.isDeleted {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
                     let titleView = Text(item.title)
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 44, weight: .black, design: .rounded))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                     
                     if let ns = namespace {
                         titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
@@ -24,32 +26,49 @@ struct TitleSection: View {
                     // Creators/Directors Row
                     let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
                     if !creators.isEmpty {
-                        Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, -2)
+                        HStack(spacing: 6) {
+                            Image(systemName: item.type == .movie ? "film.fill" : "app.badge.checkmark.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(themeColor.readableAccent(colorScheme: colorScheme))
+                            
+                            Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 2)
                     }
                 }
 
                 HStack(spacing: 12) {
-                    Text(item.type?.rawValue ?? "")
-                        .font(.subheadline.weight(.semibold))
-                        .liquidGlassPill(accentColor: themeColor)
+                    let accent = themeColor.readableAccent(colorScheme: colorScheme)
+                    HStack(spacing: 8) {
+                        Text(item.type?.rawValue.uppercased() ?? "")
+                            .font(.system(size: 10, weight: .black))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(accent.opacity(0.15))
+                            .clipShape(Capsule())
+                            .foregroundStyle(accent)
 
-                    if item.isUpcoming {
-                        let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
-                        let badge = Text(isStreaming ? "Now Streaming" : "Upcoming")
-                            .font(.subheadline.weight(.bold))
-                            .liquidGlassPill(accentColor: isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
-                        
-                        if let ns = namespace {
-                            badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
-                        } else {
-                            badge
+                        if item.isUpcoming {
+                            let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
+                            let badge = Text(isStreaming ? "NOW STREAMING" : "UPCOMING")
+                                .font(.system(size: 10, weight: .black))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(isStreaming ? Color.semanticGreen(for: colorScheme).opacity(0.15) : Color.orange.opacity(0.15))
+                                .clipShape(Capsule())
+                                .foregroundStyle(isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
+                            
+                            if let ns = namespace {
+                                badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
+                            } else {
+                                badge
+                            }
                         }
                     }
 
-                    Spacer().frame(width: 10)
+                    Divider().frame(height: 20)
 
                     StatusPicker(item: item, onChange: onStatusChange)
                 }

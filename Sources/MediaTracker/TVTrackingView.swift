@@ -134,64 +134,47 @@ private struct SeasonTab: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            let accent = themeColor.readableAccent(colorScheme: colorScheme)
+            HStack(spacing: 8) {
                 Text("Season \(season.seasonNumber)")
+                
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption2)
+                        .foregroundStyle(Color.semanticGreen(for: colorScheme))
                 }
             }
-            .font(.system(.subheadline, weight: isSelected ? .bold : .medium))
-            .padding(.horizontal, 20)
-            .padding(.vertical, 2)
-            .foregroundStyle(.primary)
+            .font(.system(size: 13, weight: isSelected ? .black : .bold, design: .rounded))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(themeColor.opacity(colorScheme == .dark ? 0.3 : 0.15))
-                }
-            }
-            .liquidGlassPill(
-                accentColor: isSelected ? themeColor : (isFullyWatched ? Color.semanticGreen(for: colorScheme) : .primary.opacity(0.12)),
-                isSolid: false // Keep it glass!
-            )
-            .overlay {
-                // Persistent Green Border for Completed Seasons (Selected or Not)
-                if isFullyWatched {
+                        .fill(accent.opacity(colorScheme == .dark ? 0.3 : 0.15))
+                } else {
                     Capsule()
-                        .stroke(Color.semanticGreen(for: colorScheme).opacity(0.8), lineWidth: 1.5)
-                        .padding(0.5)
+                        .fill(Color.primary.opacity(0.05))
                 }
             }
-            .overlay(
-                progressOverlay
-                    .padding(0.5) // Align with border
-            )
-            .scaleEffect(isSelected ? 1.05 : 1.0) // Proportional stretch on selection
-            .shadow(
-                color: isSelected ? themeColor.opacity(0.2) : .black.opacity(0.03),
-                radius: isSelected ? 4 : 2, x: 0, y: 2)
+            .overlay {
+                if isOngoing {
+                    Capsule()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.semanticGreen(for: colorScheme), lineWidth: 2)
+                } else if isFullyWatched {
+                    Capsule()
+                        .stroke(Color.semanticGreen(for: colorScheme).opacity(0.5), lineWidth: 1)
+                } else if isSelected {
+                    Capsule()
+                        .stroke(accent.opacity(0.5), lineWidth: 1)
+                }
+            }
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .scaleEffect(isSelected ? 1.05 : 1.0)
         }
-        .buttonStyle(.interactive(feedback: nil))
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.3), value: isSelected)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: progress)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
-    }
-
-    private var borderColor: Color {
-        if isSelected { return isFullyWatched ? themeColor : .indigo }
-        if isFullyWatched { return Color.semanticGreen(for: colorScheme).opacity(0.8) }
-        return Color.primary.opacity(0.08)  // Neutral base track
-    }
-
-    @ViewBuilder
-    private var progressOverlay: some View {
-        if isOngoing {
-            Capsule()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    Color.semanticGreen(for: colorScheme),
-                    lineWidth: TVTrackingConstants.strokeWidth + 0.5) // Slightly thicker to be visible
-        }
     }
 }
 
@@ -210,22 +193,25 @@ private struct SeasonSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Season \(season.seasonNumber)")
-                            .font(.headline)
+                            .font(.system(size: 20, weight: .black, design: .rounded))
+                        
                         if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
-                            Text("(\(parsed.formatted(.dateTime.year())))")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            Text(parsed.formatted(.dateTime.year()))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(.tertiary)
                         }
                     }
+                    
                     if season.episodeCount > 0 {
-                        Text("\(season.episodeCount) episodes")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        Text("\(season.episodeCount) EPISODES")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.secondary)
+                            .kerning(1)
                     }
                 }
 
@@ -234,35 +220,22 @@ private struct SeasonSection: View {
                 Button {
                     toggleSeasonWatchedStatus()
                 } label: {
-                    Label(
-                        isAllWatched ? "Clear Season" : "Mark Season Watched",
-                        systemImage: isAllWatched ? "xmark.circle" : "checkmark.circle"
-                    )
-                    .font(.caption.bold())
-                    .foregroundStyle(isAllWatched ? .secondary : .primary)
+                    let accent = themeColor.readableAccent(colorScheme: colorScheme)
+                    HStack(spacing: 6) {
+                        Image(systemName: isAllWatched ? "arrow.counterclockwise" : "checkmark.seal.fill")
+                        Text(isAllWatched ? "Reset" : "Mark All")
+                    }
+                    .font(.system(size: 11, weight: .black))
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background {
-                        if isAllWatched {
-                            Color.secondary.opacity(0.1)
-                        } else {
-                            themeColor.opacity(colorScheme == .dark ? 0.35 : 0.15)
-                                .background(.ultraThinMaterial)
-                        }
-                    }
+                    .padding(.vertical, 6)
+                    .background(isAllWatched ? Color.primary.opacity(0.05) : accent.opacity(0.15))
+                    .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
-                    .overlay {
-                        if !isAllWatched {
-                            Capsule()
-                                .stroke(
-                                    themeColor.opacity(colorScheme == .dark ? 0.5 : 0.3),
-                                    lineWidth: 0.5)
-                        }
-                    }
                 }
-                .buttonStyle(.interactive(feedback: nil))
+                .buttonStyle(.plain)
                 .disabled(season.episodes.isEmpty)
             }
+            .padding(.horizontal, 4)
 
             if season.episodes.isEmpty {
                 ContentUnavailableView(
@@ -322,84 +295,56 @@ private struct EpisodeCube: View {
                 }
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            let accent = themeColor.readableAccent(colorScheme: colorScheme)
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     Text("E\(episode.episodeNumber)")
-                        .font(.system(.caption, design: .monospaced))
-                        .fontWeight(.bold)
-                        .liquidGlassPill(
-                            accentColor: badgeStrokeColor,
-                            isSolid: episode.isWatched,
-                            foregroundColor: badgeForegroundColor
-                        )
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(episode.isWatched ? Color.semanticGreen(for: colorScheme) : accent.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .foregroundStyle(episode.isWatched ? .white : accent)
 
                     Spacer()
 
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.semanticGreen(for: colorScheme))
-                        .font(.caption)
-                        .opacity(episode.isWatched ? 1 : 0)
+                    if episode.isWatched {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                            .font(.system(size: 14))
+                    }
                 }
 
-                Text(episode.name.isEmpty ? "TBA" : episode.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(height: 36, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(height: 34, alignment: .topLeading)
+                        .foregroundStyle(.primary)
 
-                Spacer(minLength: 4)
-
-                HStack {
                     if let date = episode.airDateAsDate {
                         Text(date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if let runtime = episode.runtime, runtime > 0 {
-                        Text("\(runtime)m")
-                            .font(.system(size: 10))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                Spacer(minLength: 0)
             }
-            .padding(12)
+            .padding(14)
             .frame(maxWidth: .infinity, minHeight: 110)
             .background(
-                RoundedRectangle(cornerRadius: TVTrackingConstants.cardCornerRadius)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: TVTrackingConstants.cardCornerRadius)
-                            .stroke(
-                                episode.isWatched
-                                    ? Color.green.opacity(0.3) : Color.primary.opacity(0.05),
-                                lineWidth: 1)
-                    )
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(episode.isWatched ? Color.semanticGreen(for: colorScheme).opacity(0.3) : Color.primary.opacity(0.06), lineWidth: 1.5)
+            }
+            .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 3)
         }
         .buttonStyle(.interactive(feedback: nil))
-    }
-
-    private var badgeForegroundColor: Color {
-        if episode.isWatched { return .white }
-        return .secondary
-    }
-
-    private var badgeBackgroundColor: Color {
-        if episode.isWatched {
-            return Color.semanticGreen(for: colorScheme)
-        } else {
-            return Color.secondary.opacity(0.12)
-        }
-    }
-
-    private var badgeStrokeColor: Color {
-        if episode.isWatched {
-            return Color.semanticGreen(for: colorScheme)
-        } else {
-            return Color.primary.opacity(0.08)
-        }
     }
 }
 

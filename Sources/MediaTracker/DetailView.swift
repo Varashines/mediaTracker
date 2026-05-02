@@ -127,38 +127,9 @@ struct DetailView: View {
 
     @ViewBuilder
     private var castAndTrackingSection: some View {
-        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            if !viewModel.item.displayCast.isEmpty {
-                Divider()
-
-                DisclosureGroup(isExpanded: $isCastExpanded) {
-                    CastSectionViewNew(
-                        cast: viewModel.item.displayCast,
-                        themeColor: viewModel.themeColor
-                    ) { actorName in
-                        onSearchActor?(actorName)
-                    }
-                    .padding(.top, AppTheme.Spacing.tiny)
-                } label: {
-                    HStack {
-                        Text("Cast")
-                            .font(.title3.bold())
-                        Spacer()
-                        Text("\(viewModel.item.displayCast.count)")
-                            .font(.caption.bold())
-                            .padding(.horizontal, AppTheme.Spacing.tiny)
-                            .padding(.vertical, 2)
-                            .background(viewModel.themeColor.opacity(0.2))
-                            .clipShape(Capsule())
-                    }
-                }
-                .disclosureGroupStyle(CustomDisclosureStyle(buttonColor: viewModel.themeColor))
-                .padding(.horizontal, AppTheme.Spacing.tiny)
-            }
-
+        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            // 1. TV TRACKING (Highest Priority for Series)
             if let tv = viewModel.item.tvShowDetails {
-                Divider()
-
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     HStack {
                         Image(systemName: "play.tv.fill")
@@ -175,8 +146,34 @@ struct DetailView: View {
                         onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
                     )
                 }
+                Divider().padding(.vertical, AppTheme.Spacing.small)
             }
-            Divider()
+
+            // 2. TOP CAST (High Priority for Both)
+            if !viewModel.item.displayCast.isEmpty {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        Text("Top Cast")
+                            .font(.title3.bold())
+                        Spacer()
+                        Text("\(viewModel.item.displayCast.count)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, AppTheme.Spacing.tiny)
+                            .padding(.vertical, 2)
+                            .background(viewModel.themeColor.opacity(0.2))
+                            .clipShape(Capsule())
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.tiny)
+
+                    CastSectionViewNew(
+                        cast: viewModel.item.displayCast,
+                        themeColor: viewModel.themeColor
+                    ) { actorName in
+                        onSearchActor?(actorName)
+                    }
+                }
+                Divider().padding(.vertical, AppTheme.Spacing.small)
+            }
         }
     }
 
