@@ -42,7 +42,10 @@ class MediaViewModel {
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
-    
+
+    /// Phase 2 Optimization: O(1) lookup for existing items during search
+    var libraryTMDBIDs: Set<String> = []
+
     // Phase 3: Calendar Cache & Buffer
     var calendarCache: [Date: CalendarResult] = [:]
 
@@ -137,6 +140,8 @@ struct ContentView: View {
                     limit: limit,
                     offset: 0
                 )
+                
+                let allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
 
                 if Task.isCancelled { return }
 
@@ -147,6 +152,7 @@ struct ContentView: View {
                     viewModel.recentlyAddedItems = result.recentlyAdded
                     viewModel.homeContinueWatchingItems = result.homeContinueWatching
                     viewModel.groupedItems = result.grouped
+                    viewModel.libraryTMDBIDs = allIDs
                     viewModel.isInitialLoading = false
 
                     // Update Mood Theme based on current visible content
@@ -313,6 +319,17 @@ struct ContentView: View {
                             updateDisplayedItems()
                         }
                     }
+                    .navigationDestination(for: PersistentIdentifier.self) { id in
+                        if let item = modelContext.model(for: id) as? MediaItem {
+                            DetailView(item: item, namespace: posterNamespace) { actorName in
+                                viewModel.selectedCategory = "All"
+                                viewModel.searchText = actorName
+                                viewModel.navigationPath = NavigationPath()
+                                isSearchActive = true
+                                updateDisplayedItems()
+                            }
+                        }
+                    }
                     .navigationDestination(for: DiscoveryFilter.self) { filter in
                         FilteredLibraryGridView(
                             filter: filter, namespace: posterNamespace,
@@ -361,16 +378,15 @@ struct ContentView: View {
                                 "5", modifiers: .command)
 
                             Button("") { isSearchActive = true }
-                                .keyboardShortcut("f", modifiers: .command)
-                        }
-                        .opacity(0)
-                    }
-            }
-            .sleepModeSupport()
-        }
-        .appBackground(
-            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory
-        )  // Apply to the whole NavigationSplitView
+                               .keyboardShortcut("f", modifiers: .command)
+                            }
+                            .opacity(0)
+                            }
+                            }
+                            }
+                            .appBackground(
+                            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory
+                            )  // Apply to the whole NavigationSplitView
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
         .task {
@@ -409,7 +425,7 @@ struct ContentView: View {
                     .fill(isSyncHovered ? Color.primary.opacity(0.1) : Color.clear)
                     .frame(width: 32, height: 32)
 
-                if viewModel.isBatchRefreshing {
+                if DataService.shared.isRefreshing {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: "arrow.clockwise")
@@ -424,7 +440,7 @@ struct ContentView: View {
             }
         }
         .help("Sync Library")
-        .disabled(viewModel.isBatchRefreshing)
+        .disabled(DataService.shared.isRefreshing)
     }
 
     @ViewBuilder
@@ -487,23 +503,12 @@ struct ContentView: View {
     }
 
     private func performLibrarySync() {
-        guard !viewModel.isBatchRefreshing else { return }
+        guard !DataService.shared.isRefreshing else { return }
 
         let descriptor = FetchDescriptor<MediaItem>()
         guard let items = try? modelContext.fetch(descriptor) else { return }
 
-        viewModel.isBatchRefreshing = true
-
         DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
-
-        // Listen for batch completion
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            await MainActor.run {
-                viewModel.isBatchRefreshing = false
-                updateDisplayedItems()
-            }
-        }
     }
 }
 

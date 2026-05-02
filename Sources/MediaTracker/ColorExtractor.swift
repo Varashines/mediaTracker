@@ -2,13 +2,10 @@ import AppKit
 import SwiftUI
 import ImageIO
 
-@MainActor
-class ColorExtractor {
+/// Phase 2 Optimization: Off-thread Color Extraction
+enum ColorExtractor {
     /// Extracts the dominant color using high-performance ImageIO thumbnails to minimize memory pressure.
-    static func dominantColor(from url: URL) -> Color {
-        // LOCKDOWN: Skip pixel processing if hibernating
-        if SleepManager.shared.isAsleep { return .accentColor }
-
+    static func dominantColor(from url: URL) async -> Color {
         let options: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -21,10 +18,10 @@ class ColorExtractor {
             return .accentColor
         }
         
-        return dominantColor(from: cgImage)
+        return await dominantColor(from: cgImage)
     }
 
-    static func dominantColor(from data: Data) -> Color {
+    static func dominantColor(from data: Data) async -> Color {
         let options: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -37,17 +34,17 @@ class ColorExtractor {
             return .accentColor
         }
         
-        return dominantColor(from: cgImage)
+        return await dominantColor(from: cgImage)
     }
 
-    static func dominantColor(from image: NSImage) -> Color {
+    static func dominantColor(from image: NSImage) async -> Color {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return .accentColor
         }
-        return dominantColor(from: cgImage)
+        return await dominantColor(from: cgImage)
     }
 
-    static func dominantColor(from cgImage: CGImage) -> Color {
+    static func dominantColor(from cgImage: CGImage) async -> Color {
         // Sample every pixel of the small 40x40 thumbnail
         let width = cgImage.width
         let height = cgImage.height

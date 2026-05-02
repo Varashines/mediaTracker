@@ -1,6 +1,33 @@
 import Foundation
 import SwiftData
 
+/// Phase 1: Data Integrity - Global coordinator to prevent duplicate sync tasks for the same TMDB ID.
+actor SyncCoordinator {
+    static let shared = SyncCoordinator()
+    private var inFlightSyncs: [Int: Task<Bool, Error>] = [:]
+
+    func performSync(tmdbID: Int, operation: @Sendable @escaping () async throws -> Bool) async throws -> Bool {
+        if let existingTask = inFlightSyncs[tmdbID] {
+            return try await existingTask.value
+        }
+
+        let task = Task {
+            try await operation()
+        }
+
+        inFlightSyncs[tmdbID] = task
+        
+        do {
+            let result = try await task.value
+            inFlightSyncs[tmdbID] = nil
+            return result
+        } catch {
+            inFlightSyncs[tmdbID] = nil
+            throw error
+        }
+    }
+}
+
 /// A background actor for heavy SwiftData operations and throttled networking.
 @ModelActor
 actor BackgroundDataService {
@@ -15,6 +42,38 @@ actor BackgroundDataService {
             return true
         }
         return false
+    }
+
+    func importLibraryData(backup: LibraryBackup) async -> Int {
+        let descriptor = FetchDescriptor<MediaItem>()
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
+        
+        var importedCount = 0
+        for itemData in backup.items {
+            let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
+            let uniqueID = "\(typePrefix)_\(itemData.id.split(separator: "_").last ?? itemData.id[...])"
+            let key = "\(uniqueID)_\(itemData.type)"
+            
+            if !existingKeys.contains(key) {
+                let item = MediaItem(
+                    id: uniqueID,
+                    title: itemData.title,
+                    overview: "",
+                    posterURL: nil,
+                    releaseDate: nil,
+                    type: MediaType(rawValue: itemData.type) ?? .movie
+                )
+                item.state = MediaState(rawValue: itemData.state) ?? .wishlist
+                item.dateAdded = itemData.dateAdded
+                item.tasteValue = itemData.taste ?? "None"
+                modelContext.insert(item)
+                importedCount += 1
+            }
+        }
+        
+        try? modelContext.save()
+        return importedCount
     }
 
     func refreshMetadata(for itemIDs: [String], metadataOnly: Bool = false, force: Bool = false) async {
@@ -66,13 +125,18 @@ actor BackgroundDataService {
         guard let tmdbID = Int(tmdbIDString) else { return false }
 
         do {
-            let success: Bool
-            if item.type == .movie {
-                success = await refreshMovie(item: item, tmdbID: tmdbID)
-            } else if item.type == .tvShow {
-                success = await refreshTVShow(item: item, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
-            } else {
-                success = false
+            let itemType = item.type
+            // Phase 1: Wrap the entire refresh logic in the SyncCoordinator to prevent race conditions.
+            let success = try await SyncCoordinator.shared.performSync(tmdbID: tmdbID) {
+                let success: Bool
+                if itemType == .movie {
+                    success = await self.refreshMovie(id: id, tmdbID: tmdbID)
+                } else if itemType == .tvShow {
+                    success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
+                } else {
+                    success = false
+                }
+                return success
             }
             
             if !success { return false }
@@ -114,7 +178,33 @@ actor BackgroundDataService {
         }
     }
 
-    private func refreshMovie(item: MediaItem, tmdbID: Int) async -> Bool {
+    func markAllEpisodesAsWatched(itemID: String) async {
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
+        guard let item = try? modelContext.fetch(descriptor).first,
+              let tv = item.tvShowDetails else { return }
+        
+        for season in tv.seasons {
+            for episode in season.episodes {
+                episode.isWatched = true
+            }
+        }
+        
+        item.lastInteractionDate = Date()
+        item.syncCachedProperties()
+        item.updateSearchableText()
+        item.checkOverallCompletion()
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("❌ Background: Failed to save markAllAsWatched: \(error)")
+        }
+    }
+
+    private func refreshMovie(id: String, tmdbID: Int) async -> Bool {
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
+        guard let item = try? modelContext.fetch(descriptor).first else { return false }
+        
         do {
             let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
@@ -160,7 +250,10 @@ actor BackgroundDataService {
         }
     }
 
-    private func refreshTVShow(item: MediaItem, tmdbID: Int, metadataOnly: Bool, force: Bool) async -> Bool {
+    private func refreshTVShow(id: String, tmdbID: Int, metadataOnly: Bool = false, force: Bool = false) async -> Bool {
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
+        guard let item = try? modelContext.fetch(descriptor).first else { return false }
+
         do {
             let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)

@@ -62,11 +62,16 @@ class ImageCache {
         // Cost-based memory limit (approx 256MB for thumbnails - safe for 8GB+ Macs)
         memoryCache.totalCostLimit = 256 * 1024 * 1024
         memoryCache.countLimit = 300 // Higher count limit for small thumbnails
-        // Phase 1 Optimization: Synchronous Disk Indexing to prevent early-load race conditions
-        let fm = FileManager.default
-        if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
-            let fileNames = Set(files.map { $0.lastPathComponent })
-            self.diskCacheIndex = fileNames
+        
+        // Phase 2 Optimization: Asynchronous Disk Indexing
+        Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
+                let fileNames = Set(files.map { $0.lastPathComponent })
+                await MainActor.run {
+                    ImageCache.shared.diskCacheIndex = fileNames
+                }
+            }
         }
         
         // Dynamic Resource Management
@@ -478,6 +483,7 @@ struct CachedImage<Placeholder: View>: View {
     var themeColor: Color? = nil
     var isFastScrolling: Bool = false
     var alwaysPreserveAlpha: Bool = false
+    var accessibilityLabel: String? = nil
     var onImageLoaded: ((CGImage) -> Void)? = nil
     @ViewBuilder let placeholder: Placeholder
     
@@ -486,13 +492,14 @@ struct CachedImage<Placeholder: View>: View {
     @State private var isLoading = false
     @State private var broadcastCancellable: AnyCancellable?
 
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
         self.targetSize = targetSize
         self.priority = priority
         self.themeColor = themeColor
         self.isFastScrolling = isFastScrolling
         self.alwaysPreserveAlpha = alwaysPreserveAlpha
+        self.accessibilityLabel = accessibilityLabel
         self.onImageLoaded = onImageLoaded
         self.placeholder = placeholder()
         
@@ -512,11 +519,11 @@ struct CachedImage<Placeholder: View>: View {
             if SleepManager.shared.isAsleep || (isFastScrolling && image == nil && fuzzyMatch == nil) {
                 staticPlaceholder
             } else if let finalImage = image {
-                Image(finalImage, scale: 1.0, label: Text(""))
+                Image(finalImage, scale: 1.0, label: Text(accessibilityLabel ?? "Poster"))
                     .resizable()
                     .transition(.opacity)
             } else if let lowRes = fuzzyMatch {
-                Image(lowRes, scale: 1.0, label: Text(""))
+                Image(lowRes, scale: 1.0, label: Text(accessibilityLabel ?? "Loading Poster"))
                     .resizable()
                     .blur(radius: 4)
                     .transition(.opacity)

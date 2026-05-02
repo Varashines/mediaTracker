@@ -55,13 +55,10 @@ struct MainLibraryView: View {
 
     var body: some View {
         GeometryReader { mainGeo in
-            let availableWidth = mainGeo.size.width
-            let itemWidth: CGFloat = 160
-            let spacing: CGFloat = 20
-            let horizontalPadding: CGFloat = 30
-            let usableWidth = availableWidth - (horizontalPadding * 2)
-            let columnsCount = max(2, Int(usableWidth / (itemWidth + spacing)))
-            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnsCount)
+            let spacing: CGFloat = 24
+            let columns = [
+                GridItem(.adaptive(minimum: 160, maximum: 200), spacing: spacing)
+            ]
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
@@ -81,14 +78,12 @@ struct MainLibraryView: View {
                                         HStack(spacing: 20) {
                                             Spacer(minLength: 10)
                                             ForEach(homeContinueWatching) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    Button {
-                                                        onSelectHero(metadata)
-                                                    } label: {
-                                                        MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                    }
-                                                    .buttonStyle(.interactive)
+                                                Button {
+                                                    onSelectHero(metadata)
+                                                } label: {
+                                                    MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
                                                 }
+                                                .buttonStyle(.interactive)
                                             }
                                             Spacer(minLength: 10)
                                         }
@@ -152,14 +147,12 @@ struct MainLibraryView: View {
                                         HStack(spacing: 24) {
                                             Spacer(minLength: 16)
                                             ForEach(recommendations) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    Button {
-                                                        onSelectHero(metadata)
-                                                    } label: {
-                                                        HomeHeroCard(metadata: metadata, item: item, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                    }
-                                                    .buttonStyle(.interactive)
+                                                Button {
+                                                    onSelectHero(metadata)
+                                                } label: {
+                                                    HomeHeroCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling)
                                                 }
+                                                .buttonStyle(.interactive)
                                             }
                                             Spacer(minLength: 16)
                                         }
@@ -225,15 +218,13 @@ struct MainLibraryView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: 20) {
                                     ForEach(featuredCarouselItems) { metadata in
-                                        if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                            Button {
-                                                onSelectHero(metadata)
-                                            } label: {
-                                                MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                    .id(metadata.versionHash)
-                                            }
-                                            .buttonStyle(.interactive)
+                                        Button {
+                                            onSelectHero(metadata)
+                                        } label: {
+                                            MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
+                                                .id(metadata.versionHash)
                                         }
+                                        .buttonStyle(.interactive)
                                     }
                                 }
                                 .padding(.horizontal, 30)
@@ -320,12 +311,10 @@ struct MainLibraryView: View {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 20) {
                                             ForEach(recentlyAdded) { metadata in
-                                                if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                    NavigationLink(value: item) {
-                                                        MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling).id(metadata.versionHash)
-                                                    }
-                                                    .buttonStyle(.interactive)
+                                                NavigationLink(value: metadata.id) {
+                                                    MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling).id(metadata.versionHash)
                                                 }
+                                                .buttonStyle(.interactive)
                                             }
                                         }
                                         .padding(.horizontal, 30)
@@ -344,21 +333,18 @@ struct MainLibraryView: View {
                                     
                                     ForEach(baseItems.indices, id: \.self) { idx in
                                         let metadata = baseItems[idx]
-                                        if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                            NavigationLink(value: item) {
-                                                MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
-                                                    .id(metadata.versionHash)
-                                                    .entranceStagger(index: idx)
-                                                    .onAppear {
-                                                        let lastID = items.last?.id
-                                                        if metadata.id == lastID {
-                                                            onLoadMore()
-                                                        }
+                                        NavigationLink(value: metadata.id) {
+                                            MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                                .id(metadata.versionHash)
+                                                .entranceStagger(index: idx)
+                                                .onAppear {
+                                                    let lastID = items.last?.id
+                                                    if metadata.id == lastID {
+                                                        onLoadMore()
                                                     }
-                                            }
-                                            .buttonStyle(.interactive)
-                                            .draggable(item.id)
+                                                }
                                         }
+                                        .buttonStyle(.interactive)
                                     }
                                 }
                                 .padding(.horizontal, 30)
@@ -377,14 +363,12 @@ struct MainLibraryView: View {
                                             
                                             LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                                                 ForEach(groupMetadatas) { metadata in
-                                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                                        NavigationLink(value: item) {
-                                                            MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling)
-                                                                .id(metadata.versionHash)
-                                                                .entranceStagger(index: 0)
-                                                        }
-                                                        .buttonStyle(.interactive)
+                                                    NavigationLink(value: metadata.id) {
+                                                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling)
+                                                            .id(metadata.versionHash)
+                                                            .entranceStagger(index: 0)
                                                     }
+                                                    .buttonStyle(.interactive)
                                                 }
                                             }
                                             .padding(.horizontal, 30)

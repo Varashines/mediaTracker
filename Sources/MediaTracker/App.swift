@@ -67,6 +67,8 @@ struct MediaTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(\.sleepManager, SleepManager.shared)
+                .sleepModeSupport()
                 .preferredColorScheme(mappedScheme)
                 .appErrorToast(state: errorState)
                 .onAppear { applyTheme(themePreference) }

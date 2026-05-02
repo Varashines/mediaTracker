@@ -3,11 +3,11 @@ import SwiftData
 
 struct HomeHeroCard: View {
     let metadata: MediaThumbnailMetadata
-    let item: MediaItem?
     let namespace: Namespace.ID
     var isFastScrolling: Bool = false
     @State private var isHovered = false
     @Environment(\.modelContext) private var modelContext
+    @State private var item: MediaItem?
     
     var body: some View {
         ZStack(alignment: .leading) {
@@ -99,6 +99,12 @@ struct HomeHeroCard: View {
         .scaleEffect(isHovered ? 1.05 : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onHover { isHovered = $0 }
+        .task {
+            // Phase 2 Optimization: Lazy Load the full item for recommendation context
+            if let fetched = modelContext.model(for: metadata.id) as? MediaItem {
+                self.item = fetched
+            }
+        }
     }
     
     private var recommendationContext: String? {

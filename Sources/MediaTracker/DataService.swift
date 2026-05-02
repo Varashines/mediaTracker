@@ -32,9 +32,49 @@ actor MaintenanceService {
                 if score1 != score2 { return score1 > score2 }
                 return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
             }
-            // Keep the best one, delete the rest
+            
+            // Phase 1: Merge user data into the winner
+            let winner = sorted[0]
             for i in 1..<sorted.count {
-                modelContext.delete(sorted[i])
+                let loser = sorted[i]
+                
+                // Merge State (pick most advanced)
+                let stateOrder: [MediaState] = [.completed, .rewatching, .active, .onHold, .dropped, .wishlist]
+                if let winnerState = winner.state, let loserState = loser.state {
+                    let winnerIndex = stateOrder.firstIndex(of: winnerState) ?? 99
+                    let loserIndex = stateOrder.firstIndex(of: loserState) ?? 99
+                    if loserIndex < winnerIndex {
+                        winner.state = loserState
+                    }
+                }
+                
+                // Merge Taste
+                if winner.tasteValue == "None" && loser.tasteValue != "None" {
+                    winner.tasteValue = loser.tasteValue
+                }
+                
+                // Merge Dates
+                if let loserLID = loser.lastInteractionDate, (winner.lastInteractionDate == nil || loserLID > winner.lastInteractionDate!) {
+                    winner.lastInteractionDate = loserLID
+                }
+                if let loserDA = loser.dateAdded, (winner.dateAdded == nil || loserDA < winner.dateAdded!) {
+                    winner.dateAdded = loserDA
+                }
+                
+                // Deep merge TV episodes if applicable
+                if let winnerTV = winner.tvShowDetails, let loserTV = loser.tvShowDetails {
+                    for loserSeason in loserTV.seasons {
+                        if let winnerSeason = winnerTV.seasons.first(where: { $0.seasonNumber == loserSeason.seasonNumber }) {
+                            for loserEp in loserSeason.episodes {
+                                if loserEp.isWatched, let winnerEp = winnerSeason.episodes.first(where: { $0.episodeNumber == loserEp.episodeNumber }) {
+                                    winnerEp.isWatched = true
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                modelContext.delete(loser)
             }
         }
         
@@ -58,10 +98,18 @@ actor MaintenanceService {
                     for (num, duplicates) in groupedSeasons where duplicates.count > 1 {
                         print("🔍 Maintenance: Found \(duplicates.count) duplicate seasons for S\(num)")
                         let sorted = duplicates.sorted { ($0.episodes.count) > ($1.episodes.count) }
+                        
+                        let winner = sorted[0]
                         for i in 1..<sorted.count { 
-                            let duplicate = sorted[i]
-                            tv.seasons.removeAll { $0.persistentModelID == duplicate.persistentModelID }
-                            modelContext.delete(duplicate) 
+                            let loser = sorted[i]
+                            // Merge episode watch states
+                            for loserEp in loser.episodes {
+                                if loserEp.isWatched, let winnerEp = winner.episodes.first(where: { $0.episodeNumber == loserEp.episodeNumber }) {
+                                    winnerEp.isWatched = true
+                                }
+                            }
+                            tv.seasons.removeAll { $0.persistentModelID == loser.persistentModelID }
+                            modelContext.delete(loser) 
                         }
                     }
                     
@@ -79,10 +127,13 @@ actor MaintenanceService {
                                 if $0.isWatched != $1.isWatched { return $0.isWatched }
                                 return ($0.airDate ?? "").count > ($1.airDate ?? "").count 
                             }
+                            
+                            let winner = sorted[0]
                             for i in 1..<sorted.count { 
-                                let duplicate = sorted[i]
-                                season.episodes.removeAll { $0.persistentModelID == duplicate.persistentModelID }
-                                modelContext.delete(duplicate) 
+                                let loser = sorted[i]
+                                if loser.isWatched { winner.isWatched = true }
+                                season.episodes.removeAll { $0.persistentModelID == loser.persistentModelID }
+                                modelContext.delete(loser) 
                             }
                         }
 
@@ -143,17 +194,17 @@ actor MaintenanceService {
     }
 }
 
-@MainActor
+@MainActor @Observable
 class DataService {
     static let shared = DataService()
-    
+
+    var isRefreshing: Bool = false
     /// Tracks items refreshed during this app session to avoid redundant network calls.
     private var sessionRefreshedItems = Set<String>()
-    
+
     /// Batch Queue for coalescing metadata refresh requests
     private var pendingRefreshIDs = Set<String>()
     private var refreshTask: Task<Void, Never>?
-
     /// Tracks items currently being added to prevent race conditions and duplicates.
     private var itemsInProgress = Set<String>()
 
@@ -182,23 +233,32 @@ class DataService {
         // Phase 4 Optimization: Coalesce into Batch Queue
         pendingRefreshIDs.formUnion(itemIDs)
         refreshTask?.cancel()
+
+        isRefreshing = true
+
         refreshTask = Task {
             // Wait for potential rapid-fire calls to finish (e.g. during an import or scroll)
             if !skipDelay {
                 try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
             }
-            if Task.isCancelled { return }
-            
+            if Task.isCancelled { 
+                await MainActor.run { self.isRefreshing = false }
+                return 
+            }
+
             let idsToProcess = Array(pendingRefreshIDs)
             pendingRefreshIDs.removeAll()
-            
+
             if !idsToProcess.isEmpty {
                 let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
                 await backgroundService.refreshMetadata(for: idsToProcess, metadataOnly: metadataOnly, force: force)
             }
+
+            await MainActor.run {
+                self.isRefreshing = false
+            }
         }
     }
-
     func runMaintenance(modelContext: ModelContext) {
         guard !isRunningMaintenance else { return }
         isRunningMaintenance = true
@@ -278,46 +338,38 @@ class DataService {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        
+
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                do {
-                    let data = try Data(contentsOf: url)
-                    let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
-                    
-                    // Pre-fetch existing to avoid duplicates
-                    let descriptor = FetchDescriptor<MediaItem>()
-                    let existing = (try? modelContext.fetch(descriptor)) ?? []
-                    let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
-                    
-                    for itemData in backup.items {
-                        let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
-                        let uniqueID = "\(typePrefix)_\(itemData.id.split(separator: "_").last ?? itemData.id[...])"
-                        let key = "\(uniqueID)_\(itemData.type)"
-                        
-                        if !existingKeys.contains(key) {
-                            let item = MediaItem(
-                                id: uniqueID,
-                                title: itemData.title,
-                                overview: "",
-                                posterURL: nil,
-                                releaseDate: nil,
-                                type: MediaType(rawValue: itemData.type) ?? .movie
-                            )
-                            item.state = MediaState(rawValue: itemData.state) ?? .wishlist
-                            item.dateAdded = itemData.dateAdded
-                            item.tasteValue = itemData.taste ?? "None"
-                            modelContext.insert(item)
-                            }                    }
-                    try? modelContext.save()
-                    print("✅ Library imported successfully.")
-                } catch {
-                    print("❌ Import error: \(error)")
+                let container = modelContext.container
+
+                // Phase 2 Optimization: Detach from Main Thread
+                Task.detached(priority: .userInitiated) {
+                    do {
+                        // 1. Heavy File I/O
+                        let data = try Data(contentsOf: url)
+
+                        // 2. Heavy Decoding
+                        let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
+
+                        // 3. Hand over to Background Actor for DB Inserts
+                        let backgroundService = BackgroundDataService(modelContainer: container)
+                        let count = await backgroundService.importLibraryData(backup: backup)
+
+                        await MainActor.run {
+                            print("✅ Library imported successfully: \(count) new items.")
+                            AppErrorState.shared.showToast("Imported \(count) items.", systemImage: "tray.and.arrow.down.fill", type: .success)
+                        }
+                    } catch {
+                        print("❌ Import error: \(error)")
+                        await MainActor.run {
+                            AppErrorState.shared.surfaceError("Failed to import library: \(error.localizedDescription)")
+                        }
+                    }
                 }
             }
         }
-    }
-}
+    }}
 
 /// Handles high-priority background actions like those triggered by notifications.
 @ModelActor
@@ -608,27 +660,41 @@ actor DiscoverySyncService {
     private func extractMissingColors() async {
         let descriptor = FetchDescriptor<NetworkEntity>()
         guard let networks = try? modelContext.fetch(descriptor) else { return }
-        
-        for network in networks where network.themeColorHex == nil {
-            let name = network.name
-            // Restore from cache if available
-            let cachedColor = await MainActor.run { NetworkThemeManager.shared.color(for: name) }
-            if let cachedColor = cachedColor {
-                network.themeColorHex = cachedColor.toHex()
-                continue
+
+        let missing = networks.filter { $0.themeColorHex == nil }
+        if missing.isEmpty { return }
+
+        await withTaskGroup(of: (PersistentIdentifier, String?).self) { group in
+            for network in missing {
+                let id = network.persistentModelID
+                let name = network.name
+                let logo = network.logoPath
+
+                group.addTask {
+                    // Restore from cache if available
+                    if let cachedColor = await (MainActor.run { NetworkThemeManager.shared.color(for: name) }) {
+                        return (id, cachedColor.toHex())
+                    }
+
+                    guard let logo = logo,
+                          let urlString = APIClient.tmdbImageURL(path: logo, size: "w92"),
+                          let url = URL(string: urlString) else { return (id, nil) }
+
+                    if let (data, _) = try? await URLSession.shared.data(from: url) {
+                        let color = await ColorExtractor.dominantColor(from: data)
+                        await MainActor.run { NetworkThemeManager.shared.save(color: color, for: name) }
+                        return (id, color.toHex())
+                    }
+                    return (id, nil)
+                }
             }
-            
-            guard let logo = network.logoPath, 
-                  let urlString = APIClient.tmdbImageURL(path: logo, size: "w92"),
-                  let url = URL(string: urlString) else { continue }
-            
-            if let (data, _) = try? await URLSession.shared.data(from: url) {
-                // Phase 3 Optimization: Low-memory color extraction from raw data
-                let color = await ColorExtractor.dominantColor(from: data)
-                network.themeColorHex = color.toHex()
-                await MainActor.run { NetworkThemeManager.shared.save(color: color, for: name) }
+
+            for await (id, hex) in group {
+                if let hex = hex, let network = modelContext.model(for: id) as? NetworkEntity {
+                    network.themeColorHex = hex
+                }
             }
         }
+
         try? modelContext.save()
-    }
-}
+    }}

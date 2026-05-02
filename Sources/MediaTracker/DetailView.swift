@@ -58,7 +58,7 @@ struct DetailView: View {
                 .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                         // Optimized Header Section
                         MediaHeaderView(
                             item: viewModel.item, themeColor: viewModel.themeColor,
@@ -87,7 +87,7 @@ struct DetailView: View {
                             }
                         }
 
-                        LazyVStack(alignment: .leading, spacing: 16) {
+                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                             if !viewModel.item.displayCast.isEmpty {
                                 Divider()
 
@@ -98,7 +98,7 @@ struct DetailView: View {
                                     ) { actorName in
                                         onSearchActor?(actorName)
                                     }
-                                    .padding(.top, 10)
+                                    .padding(.top, AppTheme.Spacing.tiny)
                                 } label: {
                                     HStack {
                                         Text("Cast")
@@ -106,7 +106,7 @@ struct DetailView: View {
                                         Spacer()
                                         Text("\(viewModel.item.displayCast.count)")
                                             .font(.caption.bold())
-                                            .padding(.horizontal, 8)
+                                            .padding(.horizontal, AppTheme.Spacing.tiny)
                                             .padding(.vertical, 2)
                                             .background(viewModel.themeColor.opacity(0.2))
                                             .clipShape(Capsule())
@@ -115,20 +115,20 @@ struct DetailView: View {
                                 .disclosureGroupStyle(
                                     CustomDisclosureStyle(buttonColor: viewModel.themeColor)
                                 )
-                                .padding(.horizontal, 10)
+                                .padding(.horizontal, AppTheme.Spacing.tiny)
                             }
 
                             if let tv = viewModel.item.tvShowDetails {
                                 Divider()
 
-                                VStack(alignment: .leading, spacing: 16) {
+                                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                                     HStack {
                                         Image(systemName: "play.tv.fill")
                                             .foregroundStyle(viewModel.themeColor)
                                         Text("Seasons & Episodes")
                                             .font(.title3.bold())
                                     }
-                                    .padding(.horizontal, 10)
+                                    .padding(.horizontal, AppTheme.Spacing.tiny)
 
                                     TVTrackingView(
                                         tvDetails: tv, themeColor: viewModel.themeColor,
@@ -144,7 +144,7 @@ struct DetailView: View {
                             Divider()
                         }
                     }
-                    .padding(24)
+                    .padding(AppTheme.Spacing.large)
                 }
                 .navigationTitle("Details")
                 .toolbar {

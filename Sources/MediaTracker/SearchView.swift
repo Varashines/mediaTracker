@@ -9,7 +9,6 @@ enum SearchType: String, CaseIterable {
 
 struct SearchView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var existingItems: [MediaItem]
 
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
@@ -29,7 +28,7 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>?
 
     private var allWebResults: [MediaSearchResult] {
-        let lookup = Set(existingItems.map { "\($0.id)" })
+        let lookup = viewModel.libraryTMDBIDs
         var results: [MediaSearchResult] = []
         
         if selectedType == .all || selectedType == .movie {
@@ -127,13 +126,14 @@ struct SearchView: View {
                             let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                                 ForEach(filteredLocalResults) { metadata in
-                                    if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
-                                            isSearchActive = false
+                                    MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
+                                        isSearchActive = false
+                                        // Phase 2 Optimization: Fetch item only on interaction
+                                        if let item = modelContext.model(for: metadata.id) as? MediaItem {
                                             onSelectLocal?(item)
                                         }
-                                        .id("local_\(metadata.id)")
                                     }
+                                    .id("local_\(metadata.id)")
                                 }
                             }
                             .padding(.horizontal, 30)

@@ -44,7 +44,7 @@ class DetailViewModel {
             Task { [weak self] in
                 // Try to get from cache first
                 if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: .thumbMedium) {
-                    let extracted = ColorExtractor.dominantColor(from: container.image)
+                    let extracted = await ColorExtractor.dominantColor(from: container.image)
                     let hex = extracted.toHex()
                     
                     await MainActor.run { [weak self] in
@@ -132,50 +132,50 @@ class DetailViewModel {
         guard item.modelContext != nil, !item.isDeleted else { return }
         if let tv = item.tvShowDetails {
             let seasonIDs = tv.seasons.map { $0.persistentModelID }
-            let tmdbID = tv.tmdbID
+            let itemID = item.id
+            let container = item.modelContext?.container
+            
+            isRefreshing = true // Show loading state during batch update
             
             Task { [weak self] in
                 // Concurrent fetching of missing episodes
                 await withTaskGroup(of: Void.self) { group in
                     for seasonID in seasonIDs {
                         group.addTask {
-                            await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: true)
+                            await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: true)
                         }
                     }
                 }
                 
+                // Perform batch update on background actor
+                if let container = container {
+                    let backgroundService = BackgroundDataService(modelContainer: container)
+                    await backgroundService.markAllEpisodesAsWatched(itemID: itemID)
+                }
+                
                 await MainActor.run { [weak self] in
                     guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
-                    if let tv = self.item.tvShowDetails {
-                        for season in tv.seasons {
-                            for episode in season.episodes {
-                                episode.isWatched = true
-                            }
-                        }
-                        self.item.lastInteractionDate = Date()
-                        tv.recalculateCachedProperties()
-                        self.item.updateSearchableText()
-                        self.checkOverallCompletion()
-                    }
+                    self.refreshLocalItem()
+                    self.isRefreshing = false
                 }
             }
         }
     }
 
     func fetchEpisodes(for season: TVSeason) {
-        guard item.modelContext != nil, !item.isDeleted, let tv = item.tvShowDetails else { return }
+        guard item.modelContext != nil, !item.isDeleted else { return }
         let seasonID = season.persistentModelID
-        let tmdbID = tv.tmdbID
         
         Task { [weak self] in
-            await self?.fetchEpisodesIfNeeded(for: seasonID, tmdbID: tmdbID, markAsWatched: false)
+            await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: false)
         }
     }
     
-    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, tmdbID: Int, markAsWatched: Bool) async {
+    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool) async {
         if let tv = self.item.tvShowDetails, 
            let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }),
            season.episodes.isEmpty {
+            let tmdbID = tv.tmdbID
             do {
                 let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
                 await MainActor.run {

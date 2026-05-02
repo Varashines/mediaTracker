@@ -1,6 +1,26 @@
 import SwiftUI
 import SwiftData
 
+/// Phase 4: UI Standardization - Centralized Design System
+struct AppTheme {
+    struct Spacing {
+        static let micro: CGFloat = 4
+        static let tiny: CGFloat = 8
+        static let small: CGFloat = 12
+        static let medium: CGFloat = 16
+        static let large: CGFloat = 24
+        static let xLarge: CGFloat = 32
+        static let section: CGFloat = 40
+    }
+    
+    struct Radius {
+        static let small: CGFloat = 8
+        static let medium: CGFloat = 12
+        static let large: CGFloat = 20
+        static let card: CGFloat = 24
+    }
+}
+
 struct StatusBadgePrimitive: View {
     let label: String
     let systemImage: String
@@ -648,8 +668,12 @@ class NetworkThemeManager {
     }
     
     private func saveToDisk() {
-        if let encoded = try? JSONEncoder().encode(themeMap) {
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+        let snapshot = themeMap
+        let key = storageKey
+        Task.detached(priority: .background) {
+            if let encoded = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(encoded, forKey: key)
+            }
         }
     }
 }

@@ -254,27 +254,35 @@ actor LibraryStatsActor {
 
     // Move CategoryStats inside scope helper if needed, or pass fields
     private func resolvePeopleImages(people: [PersonInput]) async -> [VisualPersonStat] {
-        await withTaskGroup(of: VisualPersonStat.self) { group in
-            for input in people {
-                group.addTask {
-                    let image = await self.resolvePersonImage(for: input.name, currentURL: input.stats.profileURL)
-                    return VisualPersonStat(
-                        name: input.name, 
-                        profileURL: image, 
-                        score: input.stats.affinity(cutoff: 5), 
-                        count: input.stats.total
-                    )
+        var results: [VisualPersonStat] = []
+
+        // Phase 5 Logic Fix: Throttle concurrent API calls to prevent 429 Rate Limiting
+        let chunkSize = 5
+        for i in stride(from: 0, to: people.count, by: chunkSize) {
+            let end = min(i + chunkSize, people.count)
+            let chunk = people[i..<end]
+
+            await withTaskGroup(of: VisualPersonStat.self) { group in
+                for input in chunk {
+                    group.addTask {
+                        let image = await self.resolvePersonImage(for: input.name, currentURL: input.stats.profileURL)
+                        return VisualPersonStat(
+                            name: input.name,
+                            profileURL: image,
+                            score: input.stats.affinity(cutoff: 5),
+                            count: input.stats.total
+                        )
+                    }
+                }
+
+                for await stat in group {
+                    results.append(stat)
                 }
             }
-            
-            var results: [VisualPersonStat] = []
-            for await stat in group {
-                results.append(stat)
-            }
-            return results.sorted { $0.score > $1.score }
         }
-    }
 
+        return results.sorted { $0.score > $1.score }
+    }
     private func resolvePersonImage(for name: String, currentURL: String?) async -> String? {
         if let current = currentURL { return current }
 

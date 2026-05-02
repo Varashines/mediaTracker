@@ -52,17 +52,10 @@ class SleepManager {
         withAnimation(.easeInOut(duration: 1.0)) {
             isAsleep = true
         }
-        purgeCaches()
+        // Phase 4 Optimization: Removed aggressive manual cache purging.
+        // We now trust NSCache's native response to system memory pressure warnings.
         purgeDataCache?()
-        print("💤 App entered sleep mode due to inactivity. Caches and Context purged.")
-    }
-    
-    private func purgeCaches() {
-        // 1. Clear URLCache (Networking)
-        URLCache.shared.removeAllCachedResponses()
-        
-        // 2. Clear ImageCache (Memory part)
-        ImageCache.shared.clearMemoryCache()
+        print("💤 App entered sleep mode due to inactivity. UI interactions throttled.")
     }
     
     private func setupInteractionMonitor() {
@@ -81,8 +74,22 @@ class SleepManager {
     }
 }
 
+// Phase 4: Environment Injection for Decoupling
+private struct SleepManagerKey: EnvironmentKey {
+    static var defaultValue: SleepManager {
+        MainActor.assumeIsolated { SleepManager.shared }
+    }
+}
+
+extension EnvironmentValues {
+    var sleepManager: SleepManager {
+        get { self[SleepManagerKey.self] }
+        set { self[SleepManagerKey.self] = newValue }
+    }
+}
+
 struct SleepOverlayModifier: ViewModifier {
-    @Bindable var sleepManager = SleepManager.shared
+    @Environment(\.sleepManager) var sleepManager
     
     func body(content: Content) -> some View {
         ZStack {

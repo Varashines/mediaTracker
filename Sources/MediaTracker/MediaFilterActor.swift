@@ -262,36 +262,40 @@ actor MediaFilterActor {
         var basePredicate: Predicate<MediaItem>? = nil
         
         let targetLanguage = language?.isEmpty == false ? language : nil
+        let targetNetwork = (network?.count == 1) ? network?.first : nil
 
         if let category = category {
             let tLang = targetLanguage
+            let tNet = targetNetwork
             switch category {
             case "Upcoming": 
-                basePredicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "InProgress": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Watchlist": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Loved": 
-                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Completed": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Archive": 
-                basePredicate = #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Disliked": 
-                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             case "Binge": 
-                basePredicate = #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) }
+                basePredicate = #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
             default:
                 if let type = MediaType(rawValue: category) {
                     let typeString = type.rawValue
-                    basePredicate = #Predicate<MediaItem> { $0.typeValue == typeString && (tLang == nil || $0.cachedLanguage == tLang) }
+                    basePredicate = #Predicate<MediaItem> { $0.typeValue == typeString && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
                 } else {
-                    basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) }
+                    basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
                 }
             }
         } else {
-            basePredicate = #Predicate<MediaItem> { (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
+            let tLang = targetLanguage
+            let tNet = targetNetwork
+            basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
         }
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
@@ -308,7 +312,7 @@ actor MediaFilterActor {
         }
         
         // Pagination only if no complex Swift-level filters
-        let hasComplexFilters = !processedSearch.isEmpty || !(network?.isEmpty ?? true) || (genre != nil && !genre!.isEmpty)
+        let hasComplexFilters = !processedSearch.isEmpty || (network != nil && network!.count > 1) || (genre != nil && !genre!.isEmpty)
         
         if !hasComplexFilters && groupBy == .none {
             descriptor.fetchLimit = limit
@@ -318,7 +322,7 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement (For complex filters SQLite can't handle efficiently yet)
-        if let nets = network, !nets.isEmpty {
+        if let nets = network, nets.count > 1 {
             let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
             results = results.filter { item in
                 guard let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) else { return false }
@@ -341,6 +345,13 @@ actor MediaFilterActor {
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
                          (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
+                         
+        // Phase 5 Logic Fix: Apply pagination manually if we bypassed SwiftData fetch limits
+        if hasComplexFilters && groupBy == .none {
+            let start = min(offset, results.count)
+            let end = min(start + limit, results.count)
+            results = Array(results[start..<end])
+        }
 
         var featuredUpcoming: [MediaThumbnailMetadata] = []
         var homeContinueWatching: [MediaThumbnailMetadata] = []
@@ -349,7 +360,7 @@ actor MediaFilterActor {
         if let category = category {
             if category == "Home" {
                 let homePredicate = #Predicate<MediaItem> { item in
-                    item.stateValue != "Completed" && item.tasteValue != "Dislike"
+                    (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
                 }
                 var homeDesc = FetchDescriptor<MediaItem>(predicate: homePredicate)
                 homeDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
@@ -360,6 +371,7 @@ actor MediaFilterActor {
                 // Refine Home logic in Swift to avoid complex predicate compiler errors
                 let activeItems = homeResults.filter { item in
                     let isActive = item.stateValue == "Active"
+                    let isWishlist = item.stateValue == "Wishlist"
                     
                     let date = item.cachedNextAiringDate ?? .distantPast
                     let isFuture = date > now
@@ -369,7 +381,7 @@ actor MediaFilterActor {
                     let isStreaming = badge == "NEW"
                     let isRecent = isStreaming || badge == "BINGE DROP"
                     
-                    return (isActive && !isFuture) || isRecent
+                    return ((isActive || isWishlist) && !isFuture) || isRecent
                 }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
                     let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
                     let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
@@ -480,6 +492,12 @@ actor MediaFilterActor {
         
         try? modelContext.save()
         print("✅ Calendar: Background date healing completed.")
+    }
+
+    func allLibraryTMDBIDs() throws -> Set<String> {
+        let descriptor = FetchDescriptor<MediaItem>()
+        let items = try modelContext.fetch(descriptor)
+        return Set(items.map { $0.id })
     }
 
     private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {

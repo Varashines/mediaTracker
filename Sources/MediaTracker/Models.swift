@@ -6,24 +6,21 @@ import SwiftUI
 // While currently internal to Models.swift, it ensures unique string instances for common metadata.
 actor StringPool {
     static let shared = StringPool()
-    private var pool: Set<String> = []
-    private let maxPoolSize = 5000
+    private let cache = NSCache<NSString, NSString>()
 
-    private init() {
-        NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: nil) { _ in
-            Task { await StringPool.shared.clear() }
-        }
-    }
+    private init() {}
 
     func intern(_ string: String?) -> String? {
         guard let string = string, !string.isEmpty else { return nil }
-        if let existing = pool.first(where: { $0 == string }) { return existing }
-        if pool.count >= maxPoolSize { pool.removeAll() }
-        pool.insert(string)
+        let key = string as NSString
+        if let existing = cache.object(forKey: key) {
+            return existing as String
+        }
+        cache.setObject(key, forKey: key)
         return string
     }
 
-    func clear() { pool.removeAll() }
+    func clear() { cache.removeAllObjects() }
 }
 
 enum MediaState: String, Codable, CaseIterable {
@@ -36,12 +33,12 @@ enum MediaState: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .wishlist: return "Watchlist"
-        case .active: return "In Progress"
-        case .onHold: return "On Hold"
-        case .dropped: return "Dropped"
-        case .rewatching: return "Re-watching"
-        case .completed: return "Completed"
+        case .wishlist: return String(localized: "Watchlist")
+        case .active: return String(localized: "In Progress")
+        case .onHold: return String(localized: "On Hold")
+        case .dropped: return String(localized: "Dropped")
+        case .rewatching: return String(localized: "Re-watching")
+        case .completed: return String(localized: "Completed")
         }
     }
 
@@ -63,8 +60,8 @@ enum MediaType: String, Codable, CaseIterable {
 
     var pluralName: String {
         switch self {
-        case .movie: return "Movies"
-        case .tvShow: return "TV Shows"
+        case .movie: return String(localized: "Movies")
+        case .tvShow: return String(localized: "TV Shows")
         }
     }
 }
@@ -327,6 +324,8 @@ extension MediaItem {
     }
 
     func syncCachedProperties() {
+        // Phase 4 Optimization: Avoid relationship faulting cascades during sync
+        // If details aren't loaded, don't force a sync unless explicitly requested.
         let now = Date()
         let currentState = state ?? .wishlist
 
@@ -339,8 +338,6 @@ extension MediaItem {
             self.storedCast = tv.cast
                 .sorted { $0.order < $1.order }
                 .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
-        } else {
-            self.storedCast = []
         }
 
         if type == .movie, let movie = movieDetails {
@@ -353,71 +350,123 @@ extension MediaItem {
             self.cachedNetwork = tv.network
             self.cachedNetworkLogoPath = tv.networkLogoPath
 
-            let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
-            
-            // Single-pass optimization: Calculate counts and find first unwatched in one loop
-            var totalCount = 0
-            var watchedCount = 0
-            var airedCount = 0
-            var firstUnwatched: TVEpisode? = nil
-            
-            // Sort seasons for deterministic processing
-            let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
-            
-            for season in sortedSeasons {
-                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+            // Phase 2 Optimization: Use Denormalized Counts if available
+            if tv.totalEpisodesCount > 0 {
+                let totalCount = tv.totalEpisodesCount
+                let watchedCount = tv.watchedEpisodesCount
                 
-                for ep in sortedEpisodes {
-                    totalCount += 1
-                    if ep.isWatched {
-                        watchedCount += 1
-                    } else if firstUnwatched == nil {
-                        firstUnwatched = ep
-                    }
+                // Calculate progress O(1)
+                let progress = Double(watchedCount) / Double(totalCount)
+                if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
+                    self.state = .completed
+                    self.lastStateChangeDate = now
+                } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+                    self.state = .active
+                    self.lastStateChangeDate = now
+                }
+
+                self.storedProgress = progress
+                self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
+                
+                // We still need to find the NEXT episode, which requires some iteration
+                // but we only do it if the show is active.
+                if currentState == .active || currentState == .wishlist {
+                    // Optimized finding of next episode
+                    let firstUnwatched = tv.seasons
+                        .sorted { $0.seasonNumber < $1.seasonNumber }
+                        .flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
+                        .first { !$0.isWatched }
                     
-                    if (ep.airDateAsDate ?? .distantFuture) <= now {
-                        airedCount += 1
+                    if let next = firstUnwatched {
+                        self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                        self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                    } else {
+                        self.storedNextEpisodeLabel = nil
+                        self.cachedNextAiringDate = tv.nextEpisodeDate
                     }
                 }
+                
+                // Phase 2 Optimization: Update badges even on early exit
+                if let result = BadgeEngine.calculateBadge(for: self) {
+                    self.storedSmartBadgeLabel = result.label
+                    self.storedSmartBadgeIcon = result.icon
+                    self.storedSmartBadgeIsSparkle = result.isSparkle
+                } else {
+                    self.storedSmartBadgeLabel = nil
+                    self.storedSmartBadgeIcon = nil
+                    self.storedSmartBadgeIsSparkle = false
+                }
+                
+                self.storedIsUpcoming = isUpcoming
+                updateSearchableText()
+                return // EXIT EARLY - Optimization Success
             }
 
-            if totalCount == 0 {
-                self.storedProgress = 0
-                self.storedWatchProgressLabel = nil
-                self.storedNextEpisodeLabel = nil
-                self.cachedNextAiringDate = tv.nextEpisodeDate
-                self.storedSmartBadgeLabel = nil
-                self.remainingEpisodesCount = 0
-                tv.remainingEpisodesCount = 0
-                return
-            }
+            // Fallback for legacy data or first-load
+            let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
+            if !relevantSeasons.isEmpty {
+                // Single-pass optimization: Calculate counts and find first unwatched in one loop
+                var totalCount = 0
+                var watchedCount = 0
+                var airedCount = 0
+                var firstUnwatched: TVEpisode? = nil
+                
+                // Sort seasons for deterministic processing
+                let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
+                
+                for season in sortedSeasons {
+                    let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                    
+                    for ep in sortedEpisodes {
+                        totalCount += 1
+                        if ep.isWatched {
+                            watchedCount += 1
+                        } else if firstUnwatched == nil {
+                            firstUnwatched = ep
+                        }
+                        
+                        if (ep.airDateAsDate ?? .distantFuture) <= now {
+                            airedCount += 1
+                        }
+                    }
+                }
 
-            let remaining = airedCount - watchedCount
-            self.remainingEpisodesCount = max(0, remaining)
-            tv.remainingEpisodesCount = max(0, remaining)
+                if totalCount == 0 {
+                    self.storedProgress = 0
+                    self.storedWatchProgressLabel = nil
+                    self.storedNextEpisodeLabel = nil
+                    self.cachedNextAiringDate = tv.nextEpisodeDate
+                    self.storedSmartBadgeLabel = nil
+                    self.remainingEpisodesCount = 0
+                    tv.remainingEpisodesCount = 0
+                } else {
+                    let remaining = airedCount - watchedCount
+                    self.remainingEpisodesCount = max(0, remaining)
+                    tv.remainingEpisodesCount = max(0, remaining)
 
-            let progress = Double(watchedCount) / Double(totalCount)
+                    let progress = Double(watchedCount) / Double(totalCount)
+                    if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
+                        self.state = .completed
+                        self.lastStateChangeDate = now
+                    } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+                        self.state = .active
+                        self.lastStateChangeDate = now
+                    } else if progress == 0 && (currentState == .active || currentState == .completed) {
+                        self.state = .wishlist
+                        self.lastStateChangeDate = now
+                    }
 
-            if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
-                self.state = .completed
-                self.lastStateChangeDate = now
-            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                self.state = .active
-                self.lastStateChangeDate = now
-            } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                self.state = .wishlist
-                self.lastStateChangeDate = now
-            }
+                    self.storedProgress = progress
+                    self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
 
-            self.storedProgress = progress
-            self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
-
-            if let next = firstUnwatched {
-                self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
-                self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-            } else {
-                self.storedNextEpisodeLabel = nil
-                self.cachedNextAiringDate = tv.nextEpisodeDate
+                    if let next = firstUnwatched {
+                        self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                        self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                    } else {
+                        self.storedNextEpisodeLabel = nil
+                        self.cachedNextAiringDate = tv.nextEpisodeDate
+                    }
+                }
             }
         }
 
@@ -473,12 +522,29 @@ final class TVShowDetails {
     var nextSeasonNumber: Int?
     var nextEpisodeTime: String?
 
+    /// Phase 2 Optimization: Denormalized counts for O(1) progress tracking
+    var totalEpisodesCount: Int = 0
+    var watchedEpisodesCount: Int = 0
+
     @Relationship(deleteRule: .cascade, inverse: \TVSeason.tvShowDetails) var seasons: [TVSeason] = []
     @Relationship(deleteRule: .cascade, inverse: \CastMember.tvShowDetails) var cast: [CastMember] = []
     var item: MediaItem?
 
     init(tmdbID: Int) {
         self.tmdbID = tmdbID
+    }
+
+    func refreshCounts() {
+        var total = 0
+        var watched = 0
+        for season in seasons where season.seasonNumber > 0 {
+            for episode in season.episodes {
+                total += 1
+                if episode.isWatched { watched += 1 }
+            }
+        }
+        self.totalEpisodesCount = total
+        self.watchedEpisodesCount = watched
     }
     
     func recalculateCachedProperties(triggerSync: Bool = true) {
@@ -490,7 +556,9 @@ final class TVShowDetails {
                 print("🔍 Recalculate: Found \(duplicates.count) ghosts for Season \(num)")
                 let sorted = duplicates.sorted { $0.episodes.count > $1.episodes.count }
                 for i in 1..<sorted.count {
-                    tv.seasons.removeAll { $0.persistentModelID == sorted[i].persistentModelID }
+                    let loser = sorted[i]
+                    tv.seasons.removeAll { $0.persistentModelID == loser.persistentModelID }
+                    self.item?.modelContext?.delete(loser)
                 }
             }
             
@@ -501,11 +569,15 @@ final class TVShowDetails {
                     print("🔍 Recalculate: Found \(duplicates.count) ghosts for S\(season.seasonNumber) E\(num)")
                     let sorted = duplicates.sorted { $0.isWatched && !$1.isWatched }
                     for i in 1..<sorted.count {
-                        season.episodes.removeAll { $0.persistentModelID == sorted[i].persistentModelID }
+                        let loser = sorted[i]
+                        season.episodes.removeAll { $0.persistentModelID == loser.persistentModelID }
+                        self.item?.modelContext?.delete(loser)
                     }
                 }
             }
         }
+        
+        refreshCounts()
         
         if triggerSync { item?.syncCachedProperties() }
     }
@@ -573,7 +645,13 @@ final class TVEpisode {
     }
     var airDateValue: Date?
     var runtime: Int?
-    var isWatched: Bool = false
+    var isWatched: Bool = false {
+        didSet {
+            if oldValue != isWatched {
+                season?.tvShowDetails?.watchedEpisodesCount += (isWatched ? 1 : -1)
+            }
+        }
+    }
     var showID: Int?
     var uniqueID: String? = nil
     var season: TVSeason?

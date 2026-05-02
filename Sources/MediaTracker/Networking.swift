@@ -72,11 +72,15 @@ actor APIClient {
     private func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
         let key = tmdbApiKey
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
+        
+        let region = Locale.current.region?.identifier ?? "US"
+        let language = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
         var items = [
             URLQueryItem(name: "api_key", value: key),
-            URLQueryItem(name: "language", value: "en-US"),
-            URLQueryItem(name: "region", value: "IN")
+            URLQueryItem(name: "language", value: language),
+            URLQueryItem(name: "region", value: region)
         ]
         items.append(contentsOf: queryItems)
         components?.queryItems = items
@@ -216,11 +220,13 @@ actor APIClient {
             CastMemberResult(name: $0.name, character: "Director", profilePath: $0.profile_path, order: -1)
         } ?? []
         
-        // Find a better release date (Prioritizing India regional data)
+        // Phase 3: Dynamic release date prioritization
         var finalReleaseDate = details.release_date
+        let region = Locale.current.region?.identifier ?? "US"
+        
         if let releaseDates = details.release_dates?.results {
-            if let india = releaseDates.first(where: { $0.iso_3166_1 == "IN" }),
-               let localDate = india.release_dates.first {
+            if let local = releaseDates.first(where: { $0.iso_3166_1 == region }),
+               let localDate = local.release_dates.first {
                 finalReleaseDate = localDate.release_date.prefix(10).description
             } else if let us = releaseDates.first(where: { $0.iso_3166_1 == "US" }),
                     let theatrical = us.release_dates.first(where: { $0.type == 3 }) {
@@ -332,11 +338,11 @@ actor APIClient {
             components?.queryItems = [URLQueryItem(name: "thetvdb", value: String(tvdbID))]
             guard let url = components?.url else { throw URLError(.badURL) }
             let (data, response) = try await self.session.data(from: url)
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                let show = try self.decoder.decode(TVMazeShowLookupResponse.self, from: data)
-                return show.id
-            }
-            return nil
+            
+            try self.validateResponse(response)
+            
+            let show = try self.decoder.decode(TVMazeShowLookupResponse.self, from: data)
+            return show.id
         }
     }
 
@@ -362,6 +368,7 @@ actor APIClient {
     private func executeWithRetry<T>(maxAttempts: Int = 3, request: () async throws -> T) async throws -> T {
         var attempts = 0
         while attempts < maxAttempts {
+            try Task.checkCancellation()
             do {
                 return try await request()
             } catch APIError.rateLimited {
@@ -369,6 +376,16 @@ actor APIClient {
                 if attempts >= maxAttempts { throw APIError.rateLimited }
                 let delay = pow(2.0, Double(attempts))
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                try Task.checkCancellation()
+            } catch {
+                // If it's a generic request failure, don't retry unless it's a timeout or network loss
+                if let urlError = error as? URLError, (urlError.code == .timedOut || urlError.code == .notConnectedToInternet) {
+                    attempts += 1
+                    if attempts >= maxAttempts { throw error }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    continue
+                }
+                throw error
             }
         }
         return try await request()
