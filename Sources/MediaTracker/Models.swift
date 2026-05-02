@@ -226,7 +226,6 @@ final class MediaItem: Identifiable {
     var storedSmartBadgeIcon: String?
     var storedSmartBadgeIsSparkle: Bool = false
     var storedIsUpcoming: Bool = false
-    var storedIsBingeDrop: Bool = false
     var storedNextEpisodeLabel: String?
     var storedWatchProgressLabel: String?
     var storedProgress: Double?
@@ -361,14 +360,12 @@ extension MediaItem {
             var watchedCount = 0
             var airedCount = 0
             var firstUnwatched: TVEpisode? = nil
-            var firstUnwatchedSeasonEpisodes: [TVEpisode] = []
             
             // Sort seasons for deterministic processing
             let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
             
             for season in sortedSeasons {
                 let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-                let hadFirstUnwatched = firstUnwatched != nil
                 
                 for ep in sortedEpisodes {
                     totalCount += 1
@@ -381,10 +378,6 @@ extension MediaItem {
                     if (ep.airDateAsDate ?? .distantFuture) <= now {
                         airedCount += 1
                     }
-                }
-                
-                if !hadFirstUnwatched && firstUnwatched != nil {
-                    firstUnwatchedSeasonEpisodes = sortedEpisodes
                 }
             }
 
@@ -422,112 +415,21 @@ extension MediaItem {
             if let next = firstUnwatched {
                 self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
                 self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-
-                // Optimized Binge Drop logic (using pre-captured episodes)
-                let seasonUnwatched = firstUnwatchedSeasonEpisodes.filter { !$0.isWatched }
-
-                if seasonUnwatched.count > 1 {
-                    let firstDate = seasonUnwatched[0].airDate
-                    let isSameDate = seasonUnwatched.allSatisfy { $0.airDate == firstDate && $0.airDate != nil }
-                    let airDateAsDate = seasonUnwatched[0].airDateAsDate
-
-                    if isSameDate, let date = airDateAsDate {
-                        let daysDiff = date.timeIntervalSince(now) / 86400
-                        // Only show BINGE DROP if it has already released (past 5 days)
-                        self.storedIsBingeDrop = (daysDiff >= -5 && daysDiff <= 0)
-                    } else {
-                        self.storedIsBingeDrop = false
-                    }
-                } else {
-                    self.storedIsBingeDrop = false
-                }
-
-                let airDate = next.airDateAsDate
-                let timeToAir = airDate?.timeIntervalSinceNow ?? .infinity
-                
-                // NEW: Released within last 48 hours (negative diff)
-                let isRecentlyAired = timeToAir <= 0 && timeToAir >= -172800
-                
-                // SOON: Releasing within next 48 hours
-                let isUpcomingSoon = timeToAir > 0 && timeToAir <= 172800
-                
-                let isAvailable = (airDate != nil) && (airDate! <= now)
-                
-                // Tighten windows: Must be released in last 14 days OR airing within 48h
-                let isRecentlyReleasedWindow = airDate != nil && airDate! >= now.addingTimeInterval(-86400 * 14)
-                let isPremiereDateValid = isRecentlyReleasedWindow || isUpcomingSoon
-
-                // PECKING ORDER START
-                if isRecentlyAired {
-                    self.storedSmartBadgeLabel = "NEW"
-                    self.storedSmartBadgeIcon = "sparkles"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if isUpcomingSoon {
-                    self.storedSmartBadgeLabel = "SOON"
-                    self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = false
-                } else if next.episodeNumber == 1 && isPremiereDateValid {
-                    self.storedSmartBadgeLabel = next.seasonNumber == 1 ? "SERIES PREMIERE" : "SEASON PREMIERE"
-                    self.storedSmartBadgeIcon = next.seasonNumber == 1 ? "star.square.fill" : "play.square.stack.fill"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if self.storedIsBingeDrop {
-                    self.storedSmartBadgeLabel = "BINGE DROP"
-                    self.storedSmartBadgeIcon = "sparkles.tv"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if let season = next.season, next.episodeNumber == season.episodeCount, isRecentlyReleasedWindow {
-                    self.storedSmartBadgeLabel = "FINALE"
-                    self.storedSmartBadgeIcon = "flag.checkered"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if isAvailable && (tv.numberOfSeasons ?? 0) >= 1 && 
-                        (tasteValue == "Like" || tasteValue == "Love" || currentState == .wishlist) &&
-                        progress >= 0.3 && (self.remainingEpisodesCount ?? 0) > 5 {
-                    self.storedSmartBadgeLabel = "BINGE"
-                    self.storedSmartBadgeIcon = "play.square.stack.fill"
-                    self.storedSmartBadgeIsSparkle = false
-                } else {
-                    self.storedSmartBadgeLabel = nil
-                }
-                // PECKING ORDER END
             } else {
                 self.storedNextEpisodeLabel = nil
                 self.cachedNextAiringDate = tv.nextEpisodeDate
-                self.storedSmartBadgeLabel = nil
-                self.storedIsBingeDrop = false
             }
         }
 
-        if self.storedSmartBadgeLabel == nil {
-            let isEnded = tvShowDetails?.status?.lowercased().contains("ended") ?? false || tvShowDetails?.status?.lowercased().contains("canceled") ?? false
-
-            if let airDate = cachedNextAiringDate {
-                let timeToAir = airDate.timeIntervalSinceNow
-                if timeToAir > 0 && timeToAir <= 172800 {
-                    self.storedSmartBadgeLabel = "SOON"
-                    self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = false
-                } else if timeToAir <= 0 && timeToAir >= -172800 && !isEnded {
-                    self.storedSmartBadgeLabel = "NEW"
-                    self.storedSmartBadgeIcon = "sparkles"
-                    self.storedSmartBadgeIsSparkle = true
-                }
-            }
-            
-            if self.storedSmartBadgeLabel == nil, let release = releaseDate {
-                let timeToRelease = release.timeIntervalSinceNow
-                if timeToRelease > 0 && timeToRelease <= 172800 {
-                    self.storedSmartBadgeLabel = "SOON"
-                    self.storedSmartBadgeIcon = "clock.badge.fill"
-                    self.storedSmartBadgeIsSparkle = false
-                } else if timeToRelease <= 0 && timeToRelease >= -172800 {
-                    self.storedSmartBadgeLabel = "NEW"
-                    self.storedSmartBadgeIcon = "sparkles"
-                    self.storedSmartBadgeIsSparkle = true
-                } else if timeToRelease <= 0 && timeToRelease > -604800 {
-                    self.storedSmartBadgeLabel = "RECENT"
-                    self.storedSmartBadgeIcon = "star.fill"
-                    self.storedSmartBadgeIsSparkle = false
-                }
-            }
+        // Phase 1 Modularization: Use Centralized Badge Engine
+        if let result = BadgeEngine.calculateBadge(for: self) {
+            self.storedSmartBadgeLabel = result.label
+            self.storedSmartBadgeIcon = result.icon
+            self.storedSmartBadgeIsSparkle = result.isSparkle
+        } else {
+            self.storedSmartBadgeLabel = nil
+            self.storedSmartBadgeIcon = nil
+            self.storedSmartBadgeIsSparkle = false
         }
 
         self.storedIsUpcoming = isUpcoming

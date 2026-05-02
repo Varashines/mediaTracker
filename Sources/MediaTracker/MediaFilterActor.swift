@@ -264,21 +264,30 @@ actor MediaFilterActor {
         let targetLanguage = language?.isEmpty == false ? language : nil
 
         if let category = category {
+            let tLang = targetLanguage
             switch category {
-            case "Upcoming": basePredicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "InProgress": basePredicate = #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Watchlist": basePredicate = #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Loved": basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Completed": basePredicate = #Predicate<MediaItem> { $0.stateValue == "Completed" && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Archive": basePredicate = #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Disliked": basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
-            case "Binge": basePredicate = #Predicate<MediaItem> { ($0.storedIsBingeDrop == true || $0.storedSmartBadgeLabel == "BINGE") && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
+            case "Upcoming": 
+                basePredicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "InProgress": 
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Watchlist": 
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Loved": 
+                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Completed": 
+                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Archive": 
+                basePredicate = #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Disliked": 
+                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) }
+            case "Binge": 
+                basePredicate = #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) }
             default:
                 if let type = MediaType(rawValue: category) {
                     let typeString = type.rawValue
-                    basePredicate = #Predicate<MediaItem> { $0.typeValue == typeString && (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
+                    basePredicate = #Predicate<MediaItem> { $0.typeValue == typeString && (tLang == nil || $0.cachedLanguage == tLang) }
                 } else {
-                    basePredicate = #Predicate<MediaItem> { (targetLanguage == nil || $0.cachedLanguage == targetLanguage) }
+                    basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) }
                 }
             }
         } else {
@@ -355,12 +364,13 @@ actor MediaFilterActor {
                     let date = item.cachedNextAiringDate ?? .distantPast
                     let isFuture = date > now
                     
-                    // Recently released: > today - 2 days && <= today (Handled by NEW badge)
-                    let isStreaming = item.storedSmartBadgeLabel == "NEW"
-                    let isRecent = isStreaming || item.storedIsBingeDrop == true
+                    // Recently released: Handle by badge labels
+                    let badge = item.storedSmartBadgeLabel
+                    let isStreaming = badge == "NEW"
+                    let isRecent = isStreaming || badge == "BINGE DROP"
                     
                     return (isActive && !isFuture) || isRecent
-                }.sorted { itemA, itemB in
+                }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
                     let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
                     let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
                     
@@ -368,8 +378,10 @@ actor MediaFilterActor {
                         return isAStreaming
                     }
                     
-                    let isABinge = itemA.storedIsBingeDrop == true
-                    let isBBinge = itemB.storedIsBingeDrop == true
+                    let badgeA = itemA.storedSmartBadgeLabel
+                    let badgeB = itemB.storedSmartBadgeLabel
+                    let isABinge = badgeA == "BINGE DROP"
+                    let isBBinge = badgeB == "BINGE DROP"
                     
                     if isABinge != isBBinge {
                         return isABinge

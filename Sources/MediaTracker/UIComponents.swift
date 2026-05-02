@@ -182,6 +182,25 @@ struct SmartBadgeView: View {
     private func intelligentBadge(label: String, icon: String, isSparkle: Bool, remaining: Int? = nil) -> some View {
         let isBinge = label == "BINGE"
         
+        let badgeBackground: AnyShapeStyle = {
+            switch label {
+            case "NEW":
+                return AnyShapeStyle(appAccent.color.gradient)
+            case "SOON":
+                return AnyShapeStyle(Color.orange.gradient)
+            case "SERIES PREMIERE", "SEASON PREMIERE":
+                return AnyShapeStyle(Color.mint.gradient)
+            case "FINALE":
+                return AnyShapeStyle(Color.black.gradient)
+            case "BINGE", "BINGE DROP":
+                return AnyShapeStyle(appAccent.color.opacity(0.8).gradient)
+            case "RECENT":
+                return AnyShapeStyle(Color.blue.gradient)
+            default:
+                return AnyShapeStyle(Color.secondary.opacity(0.8).gradient)
+            }
+        }()
+
         HStack(spacing: 4) {
             Image(systemName: icon)
             
@@ -200,12 +219,15 @@ struct SmartBadgeView: View {
         .font(.system(size: 9, weight: .black))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(isBinge ? appAccent.color.gradient : (isSparkle ? appAccent.color.gradient : Color.secondary.opacity(0.8).gradient))
+        .background(badgeBackground)
         .foregroundStyle(.white)
         .clipShape(Capsule())
-        .shadow(color: isBinge ? appAccent.color.opacity(0.4) : .black.opacity(0.1), radius: isBinge ? 6 : 3, y: 2)
+        .shadow(color: isSparkle ? appAccent.color.opacity(0.4) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
         .overlay {
-            if isBinge {
+            if label == "FINALE" {
+                Capsule()
+                    .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+            } else if isSparkle {
                 Capsule()
                     .stroke(.white.opacity(0.3), lineWidth: 1)
             }
