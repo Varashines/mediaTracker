@@ -154,7 +154,7 @@ struct ReleaseCalendarView: View {
         }
 
         Task {
-            let actor = MediaFilterActor(modelContainer: modelContext.container)
+            let actor = CalendarFilterActor(modelContainer: modelContext.container)
             do {
                 let result = try await actor.fetchCalendarData(for: startOfMonth)
                 await MainActor.run {
@@ -189,7 +189,7 @@ struct ReleaseCalendarView: View {
             guard viewModel.calendarCache[date] == nil else { continue }
             
             Task.detached(priority: .background) {
-                let actor = MediaFilterActor(modelContainer: container)
+                let actor = CalendarFilterActor(modelContainer: container)
                 if let result = try? await actor.fetchCalendarData(for: date) {
                     await MainActor.run {
                         viewModel.calendarCache[date] = result

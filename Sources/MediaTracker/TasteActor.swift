@@ -32,28 +32,8 @@ actor TasteActor {
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
 
-        // Use rich enrichment for Top 10 people
-        var creatorResults: [(name: String, affinity: Double, imageURL: String?)] = []
-        let topCreators = profile.creator.map { ($0.key, $0.value) }
-            .filter { $0.1 > 0 }
-            .sorted { $0.1 > $1.1 }
-            .prefix(10)
-
-        for (name, affinity) in topCreators {
-            let image = await resolvePersonImage(for: name)
-            creatorResults.append((name, affinity, image))
-        }
-
-        var castResults: [(name: String, affinity: Double, imageURL: String?)] = []
-        let topCast = profile.cast.map { ($0.key, $0.value) }
-            .filter { $0.1 > 0 }
-            .sorted { $0.1 > $1.1 }
-            .prefix(10)
-
-        for (name, affinity) in topCast {
-            let image = await resolvePersonImage(for: name)
-            castResults.append((name, affinity, image))
-        }
+        let creatorResults = await resolveAffinities(profile.creator, cutoff: 0)
+        let castResults = await resolveAffinities(profile.cast, cutoff: 0)
 
         let sortedLangs = profile.language.map {
             (LanguageUtils.languageName(for: $0.key), $0.value)
@@ -67,6 +47,20 @@ actor TasteActor {
             castAffinities: castResults,
             languageAffinities: sortedLangs
         )
+    }
+
+    private func resolveAffinities(_ map: [String: Double], cutoff: Double) async -> [(name: String, affinity: Double, imageURL: String?)] {
+        let top = map.map { ($0.key, $0.value) }
+            .filter { $0.1 > cutoff }
+            .sorted { $0.1 > $1.1 }
+            .prefix(10)
+
+        var results: [(name: String, affinity: Double, imageURL: String?)] = []
+        for (name, affinity) in top {
+            let image = await resolvePersonImage(for: name)
+            results.append((name, affinity, image))
+        }
+        return results
     }
 
     private func resolvePersonImage(for name: String) async -> String? {
@@ -103,86 +97,96 @@ actor TasteActor {
         genre: [String: Double], network: [String: Double], cast: [String: Double],
         creator: [String: Double], language: [String: Double]
     ) {
-        // LOCKDOWN: Skip heavy calculations if the app is hibernating
-        if await SleepManager.shared.isAsleep {
-            return ([:], [:], [:], [:], [:])
-        }
+        if await SleepManager.shared.isAsleep { return ([:], [:], [:], [:], [:]) }
 
         let (cached, last) = await MainActor.run { (Self.cachedAffinityMap, Self.lastAffinityCalculation) }
         if let cached = cached, let last = last, Date().timeIntervalSince(last) < affinityCacheTTL {
             return cached
         }
 
-        struct CategoryStats {
-            var loved = 0
-            var liked = 0
-            var disliked = 0
-            var total = 0
-            func affinity(cutoff: Int = 5) -> Double {
-                guard total >= cutoff else { return 0 }
-                return Double(3 * loved + 1 * liked - 2 * disliked) / Double(3 * total)
-            }
-        }
+        var accumulators = AffinityAccumulators()
 
-        var genreStats: [String: CategoryStats] = [:]
-        var networkStats: [String: CategoryStats] = [:]
-        var castStats: [String: CategoryStats] = [:]
-        var creatorStats: [String: CategoryStats] = [:]
-        var languageStats: [String: CategoryStats] = [:]
-
-        // Phase 5 Optimization: Batched Processing to prevent memory spikes
         let batchSize = 500
         var offset = 0
-        
         while true {
             var descriptor = FetchDescriptor<MediaItem>()
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
-            
-            let ratedItems = items.filter { $0.tasteValue != "None" }
-
-            for item in ratedItems {
-                let taste = item.tasteValue
-                let update: (inout CategoryStats) -> Void = { stats in
-                    stats.total += 1
-                    if taste == "Love" {
-                        stats.loved += 1
-                    } else if taste == "Like" {
-                        stats.liked += 1
-                    } else if taste == "Dislike" {
-                        stats.disliked += 1
-                    }
-                }
-                for g in item.cachedGenres { update(&genreStats[g, default: CategoryStats()]) }
-                if let n = item.cachedNetwork { update(&networkStats[n, default: CategoryStats()]) }
-                if let l = item.cachedLanguage { update(&languageStats[l, default: CategoryStats()]) }
-
-                let cast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
-                for actor in cast { update(&castStats[actor, default: CategoryStats()]) }
-                let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
-                for creator in creators { update(&creatorStats[creator, default: CategoryStats()]) }
-            }
+            accumulateBatch(items, into: &accumulators)
             
             offset += batchSize
-            // Clear context objects to free memory
             modelContext.processPendingChanges()
         }
 
-        let result = (
-            genreStats.mapValues { $0.affinity(cutoff: 5) },
-            networkStats.mapValues { $0.affinity(cutoff: 5) },
-            castStats.mapValues { $0.affinity(cutoff: 5) },
-            creatorStats.mapValues { $0.affinity(cutoff: 3) },
-            languageStats.mapValues { $0.affinity(cutoff: 5) }
-        )
+        let result = finalizeAffinities(accumulators)
 
         await MainActor.run {
             Self.cachedAffinityMap = result
             Self.lastAffinityCalculation = Date()
         }
         return result
+    }
+
+    private struct CategoryStats {
+        var loved = 0
+        var liked = 0
+        var disliked = 0
+        var total = 0
+        func affinity(cutoff: Int = 5) -> Double {
+            guard total >= cutoff else { return 0 }
+            let lovedWeight = Double(3 * loved)
+            let likedWeight = Double(liked)
+            let dislikedWeight = Double(2 * disliked)
+            let totalWeight = Double(3 * total)
+            return (lovedWeight + likedWeight - dislikedWeight) / totalWeight
+        }
+    }
+
+    private struct AffinityAccumulators {
+        var genreStats: [String: CategoryStats] = [:]
+        var networkStats: [String: CategoryStats] = [:]
+        var castStats: [String: CategoryStats] = [:]
+        var creatorStats: [String: CategoryStats] = [:]
+        var languageStats: [String: CategoryStats] = [:]
+    }
+
+    private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators) {
+        let ratedItems = items.filter { $0.tasteValue != "None" }
+
+        for item in ratedItems {
+            let taste = item.tasteValue
+            let update: (inout [String: CategoryStats], String) -> Void = { map, key in
+                var s = map[key, default: CategoryStats()]
+                s.total += 1
+                if taste == "Love" { s.loved += 1 }
+                else if taste == "Like" { s.liked += 1 }
+                else if taste == "Dislike" { s.disliked += 1 }
+                map[key] = s
+            }
+            for g in item.cachedGenres { update(&acc.genreStats, g) }
+            if let n = item.cachedNetwork { update(&acc.networkStats, n) }
+            if let l = item.cachedLanguage { update(&acc.languageStats, l) }
+
+            let cast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
+            for actor in cast { update(&acc.castStats, actor) }
+            let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
+            for creator in creators { update(&acc.creatorStats, creator) }
+        }
+    }
+
+    private func finalizeAffinities(_ acc: AffinityAccumulators) -> (
+        genre: [String: Double], network: [String: Double], cast: [String: Double],
+        creator: [String: Double], language: [String: Double]
+    ) {
+        return (
+            acc.genreStats.mapValues { $0.affinity(cutoff: 5) },
+            acc.networkStats.mapValues { $0.affinity(cutoff: 5) },
+            acc.castStats.mapValues { $0.affinity(cutoff: 5) },
+            acc.creatorStats.mapValues { $0.affinity(cutoff: 3) },
+            acc.languageStats.mapValues { $0.affinity(cutoff: 5) }
+        )
     }
 
     func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {

@@ -66,28 +66,37 @@ struct MediaTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.sleepManager, SleepManager.shared)
-                .sleepModeSupport()
-                .preferredColorScheme(mappedScheme)
-                .appErrorToast(state: errorState)
-                .onAppear { applyTheme(themePreference) }
-                .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
-                .onChange(of: scenePhase) { _, newValue in
-                    if newValue == .background {
-                        // Phase 3 Optimization: Snapshot preparation for M1 8GB
-                        ImageCache.shared.clearMemoryCache()
-                    }
-                }
+            appMainContent
         }
         .modelContainer(sharedModelContainer)
 
         Settings {
-            SettingsView()
-                .modelContainer(sharedModelContainer)
-                .preferredColorScheme(mappedScheme)
+            settingsContent
         }
-        }
+    }
+
+    @ViewBuilder
+    private var appMainContent: some View {
+        ContentView()
+            .environment(\.sleepManager, SleepManager.shared)
+            .sleepModeSupport()
+            .preferredColorScheme(mappedScheme)
+            .appErrorToast(state: errorState)
+            .onAppear { applyTheme(themePreference) }
+            .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+            .onChange(of: scenePhase) { _, newValue in
+                if newValue == .background {
+                    ImageCache.shared.clearMemoryCache()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var settingsContent: some View {
+        SettingsView()
+            .modelContainer(sharedModelContainer)
+            .preferredColorScheme(mappedScheme)
+    }
     private var mappedScheme: ColorScheme? {
         switch themePreference {
         case 1: return .light

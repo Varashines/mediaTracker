@@ -1,87 +1,6 @@
 import SwiftData
 import SwiftUI
 
-@Observable
-class MediaViewModel {
-    var selectedCategory: String? = "Home"
-    var searchText: String = ""
-    var navigationPath = NavigationPath()
-    var searchSubmitTrigger: Int = 0
-
-    // Per-category view settings
-    var categorySortOrders: [String: SortOrder] = [:]
-    var categoryGroupBys: [String: GroupBy] = [:]
-
-    var currentSortOrder: SortOrder {
-        let cat = selectedCategory ?? "All"
-        return categorySortOrders[cat] ?? .alphabetical
-    }
-
-    var currentGroupBy: GroupBy {
-        let cat = selectedCategory ?? "All"
-        return categoryGroupBys[cat] ?? .none
-    }
-
-    var selectedNetworks: [String]? = nil
-    var selectedLanguage: String? = nil
-    var isBatchRefreshing: Bool = false
-    var isInitialLoading: Bool = true  // Track first load
-    var discoveryRefreshTrigger: Int = 0  // NEW: Trigger for Discovery Hub refresh
-
-    // Pagination State
-    var totalItemCount: Int = 0
-    var currentOffset: Int = 0
-    let pageSize: Int = 50
-    var isLoadingMore: Bool = false
-    var isFastScrolling: Bool = false
-
-    // Process Data (Main Actor Cache) - NOW USING LIGHTWEIGHT METADATA
-    var displayedItems: [MediaThumbnailMetadata] = []
-    var recentlyAddedItems: [MediaThumbnailMetadata] = []
-    var homeContinueWatchingItems: [MediaThumbnailMetadata] = []
-    var groupedItems: [(String, [MediaThumbnailMetadata])] = []
-    var recommendations: [MediaThumbnailMetadata] = []
-    var featuredUpcomingItems: [MediaThumbnailMetadata] = []
-
-    /// Phase 2 Optimization: O(1) lookup for existing items during search
-    var libraryTMDBIDs: Set<String> = []
-
-    // Phase 3: Calendar Cache & Buffer
-    var calendarCache: [Date: CalendarResult] = [:]
-
-    // Discovery Cache
-    var cachedNetworks: [DiscoveryNode] = []
-    var cachedGenres: [DiscoveryNode] = []
-    var cachedLanguages: [DiscoveryNode] = []
-    var forYouRecommendations: [MediaThumbnailMetadata] = []
-    var lastDiscoveryRefresh: Date?
-
-    func navigationTitle(for category: String?) -> String {
-        if let networks = selectedNetworks, let first = networks.first {
-            return networks.count == 1 ? first : "Merged Studios"
-        }
-        if let lang = selectedLanguage {
-            return Locale.current.localizedString(forLanguageCode: lang) ?? lang.uppercased()
-        }
-        if let cat = category, let type = MediaType(rawValue: cat) {
-            return type.pluralName
-        }
-        if category == "Home" { return "Home" }
-        if category == "InProgress" { return "In Progress" }
-        if category == "Watchlist" { return "Watchlist" }
-        if category == "Loved" { return "Loved" }
-        if category == "Completed" { return "Completed" }
-        if category == "Archive" { return "Archive" }
-        if category == "Disliked" { return "Disliked" }
-        if category == "Binge" { return "Binge" }
-        if category == "Upcoming" { return "Release Calendar" }
-        if category == "Discover" { return "Discovery Hub" }
-        if category == "Insights" { return "Statistics" }
-        if category == "All" { return "Library" }
-        return category ?? "Library"
-    }
-}
-
 struct ContentView: View {
     @Namespace private var posterNamespace
     @Environment(\.modelContext) private var modelContext
@@ -89,7 +8,7 @@ struct ContentView: View {
     @State private var viewModel = MediaViewModel()
     @State private var themeCoordinator = AppThemeCoordinator.shared
     @State private var isSearchActive = false
-    @State private var sidebarSelection: String? = "Home"
+    @State private var sidebarSelection: NavigationCategory? = .home
     @State private var selectedHeroItem: MediaItem? = nil
     @State private var isSyncHovered = false
 
@@ -116,7 +35,7 @@ struct ContentView: View {
             let groupBy = viewModel.currentGroupBy
 
             // Optimization: Skip heavy data load if moving to Discovery Hub
-            if category == "Discover" { return }
+            if category == .discover { return }
 
             // Reset pagination for new filter/sort
             await MainActor.run {
@@ -160,7 +79,7 @@ struct ContentView: View {
                     themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
 
                     // If we just loaded "All" category, also extract colors for Sidebar
-                    if category == "Discover" || category == "All" {
+                    if category == .discover || category == .all {
                         // Extract network colors in background
                         let container = modelContext.container
                         Task.detached(priority: .background) {
@@ -171,7 +90,7 @@ struct ContentView: View {
                 }
 
                 // Async Recommendation Calculation (Only for Home view)
-                if category == "Home" {
+                if category == .home {
                     // Spread the load: Wait 2 seconds before heavy taste analytics
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                     if Task.isCancelled { return }
@@ -249,14 +168,14 @@ struct ContentView: View {
             ) { item in
                 viewModel.navigationPath.append(item)
             }
-        } else if viewModel.selectedCategory == "Discover" {
+        } else if viewModel.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
-        } else if viewModel.selectedCategory == "Upcoming" {
+        } else if viewModel.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel)
                 .transition(.asymmetric(insertion: .opacity, removal: .opacity))
-        } else if viewModel.selectedCategory == "Insights" {
+        } else if viewModel.selectedCategory == .insights {
             InsightsView()
         } else {
             MainLibraryView(
@@ -267,7 +186,7 @@ struct ContentView: View {
                 groupedItems: viewModel.groupedItems,
                 recommendations: viewModel.recommendations,
                 selectedCategory: viewModel.selectedCategory,
-                showingUpcomingOnly: viewModel.selectedCategory == "Upcoming",
+                showingUpcomingOnly: viewModel.selectedCategory == .upcoming,
                 searchText: viewModel.searchText,
                 selectedNetworks: viewModel.selectedNetworks,
                 namespace: posterNamespace,
@@ -296,11 +215,13 @@ struct ContentView: View {
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
-                    viewModel.selectedCategory = newValue
-                    viewModel.selectedNetworks = nil
-                    viewModel.selectedLanguage = nil
-                    viewModel.isInitialLoading = true  // Reset loading state for category switch
-                    updateDisplayedItems()
+                    if let category = newValue {
+                        viewModel.selectedCategory = category
+                        viewModel.selectedNetworks = nil
+                        viewModel.selectedLanguage = nil
+                        viewModel.isInitialLoading = true  // Reset loading state for category switch
+                        updateDisplayedItems()
+                    }
                 }
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
@@ -312,7 +233,7 @@ struct ContentView: View {
                     )
                     .navigationDestination(for: MediaItem.self) { item in
                         DetailView(item: item, namespace: posterNamespace) { actorName in
-                            viewModel.selectedCategory = "All"  // Switch to All to check all titles
+                            viewModel.selectedCategory = .all  // Switch to All to check all titles
                             viewModel.searchText = actorName
                             viewModel.navigationPath = NavigationPath()  // CLEAR NAVIGATION STACK
                             isSearchActive = true  // ACTIVATE SEARCH VIEW
@@ -322,7 +243,7 @@ struct ContentView: View {
                     .navigationDestination(for: PersistentIdentifier.self) { id in
                         if let item = modelContext.model(for: id) as? MediaItem {
                             DetailView(item: item, namespace: posterNamespace) { actorName in
-                                viewModel.selectedCategory = "All"
+                                viewModel.selectedCategory = .all
                                 viewModel.searchText = actorName
                                 viewModel.navigationPath = NavigationPath()
                                 isSearchActive = true
@@ -343,13 +264,13 @@ struct ContentView: View {
                         viewModel.searchSubmitTrigger += 1
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-                        updateDisplayedItems(delay: 0)
+                        updateDisplayedItems(delay: 150_000_000)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-                        updateDisplayedItems(delay: 0)
+                        updateDisplayedItems(delay: 150_000_000)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
-                        updateDisplayedItems(delay: 0)
+                        updateDisplayedItems(delay: 150_000_000)
                     }
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
@@ -366,15 +287,15 @@ struct ContentView: View {
                     }
                     .background {
                         Group {
-                            Button("") { viewModel.selectedCategory = "Home" }.keyboardShortcut(
+                            Button("") { sidebarSelection = .home }.keyboardShortcut(
                                 "1", modifiers: .command)
-                            Button("") { viewModel.selectedCategory = "Upcoming" }.keyboardShortcut(
+                            Button("") { sidebarSelection = .upcoming }.keyboardShortcut(
                                 "2", modifiers: .command)
-                            Button("") { viewModel.selectedCategory = "InProgress" }
+                            Button("") { sidebarSelection = .inProgress }
                                 .keyboardShortcut("3", modifiers: .command)
-                            Button("") { viewModel.selectedCategory = "Watchlist" }
+                            Button("") { sidebarSelection = .watchlist }
                                 .keyboardShortcut("4", modifiers: .command)
-                            Button("") { viewModel.selectedCategory = "All" }.keyboardShortcut(
+                            Button("") { sidebarSelection = .all }.keyboardShortcut(
                                 "5", modifiers: .command)
 
                             Button("") { isSearchActive = true }
@@ -385,7 +306,7 @@ struct ContentView: View {
                             }
                             }
                             .appBackground(
-                            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory
+                            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory.rawValue
                             )  // Apply to the whole NavigationSplitView
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
@@ -413,7 +334,7 @@ struct ContentView: View {
     @ViewBuilder
     private var refreshButton: some View {
         Button {
-            if viewModel.selectedCategory == "Discover" {
+            if viewModel.selectedCategory == .discover {
                 ImageCache.shared.clearFullCache()
                 viewModel.discoveryRefreshTrigger += 1
             } else {
@@ -445,7 +366,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var displaySettingsMenu: some View {
-        let cat = viewModel.selectedCategory ?? "All"
+        let cat = viewModel.selectedCategory
 
         Menu {
             Picker(
@@ -485,20 +406,18 @@ struct ContentView: View {
     }
 
     private var currentMediaType: MediaType? {
-        guard let cat = viewModel.selectedCategory else { return nil }
-        return MediaType(rawValue: cat)
+        return MediaType(rawValue: viewModel.selectedCategory.rawValue)
     }
 
     private var isSortable: Bool {
-        guard let cat = viewModel.selectedCategory else { return false }
-        if cat == "Discover" || cat == "Insights" { return false }
-        return cat == "All" || cat == "InProgress" || cat == "Watchlist" || cat == "Loved"
-            || cat == "Completed" || cat == "Binge" || MediaType(rawValue: cat) != nil
+        let cat = viewModel.selectedCategory
+        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming { return false }
+        return true
     }
 
     private var isRefreshable: Bool {
-        guard let cat = viewModel.selectedCategory else { return false }
-        if cat == "Insights" || cat == "Home" { return false }
+        let cat = viewModel.selectedCategory
+        if cat == .insights || cat == .home { return false }
         return true
     }
 
@@ -509,81 +428,5 @@ struct ContentView: View {
         guard let items = try? modelContext.fetch(descriptor) else { return }
 
         DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
-    }
-}
-
-struct FilteredLibraryGridView: View {
-    let filter: DiscoveryFilter
-    let namespace: Namespace.ID
-    @Binding var isFastScrolling: Bool
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @Environment(\.modelContext) private var modelContext
-
-    @State private var items: [MediaThumbnailMetadata] = []
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
-                    ForEach(items) { metadata in
-                        if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                            NavigationLink(value: item) {
-                                MediaThumbnailView(
-                                    metadata: metadata, mode: .grid, namespace: namespace,
-                                    isFastScrolling: isFastScrolling)
-                            }
-                            .buttonStyle(.interactive)
-                        }
-                    }
-                }
-            }
-            .padding(30)
-        }
-        .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
-        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-            fetchItems()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-            fetchItems()
-        }
-        .task {
-            fetchItems()
-        }
-    }
-
-    private func fetchItems() {
-        Task {
-            let filterActor = MediaFilterActor(modelContainer: modelContext.container)
-            var network: [String]? = nil
-            var language: String? = nil
-            var genre: String? = nil
-            
-            switch filter.type {
-            case .studio: network = filter.sourceNames ?? [filter.name]
-            case .genre: genre = filter.name
-            case .language: language = filter.name
-            }
-            
-            do {
-                let result = try await filterActor.filterAndSort(
-                    category: "All",
-                    searchText: "",
-                    sortOrder: .alphabetical,
-                    network: network,
-                    language: language,
-                    genre: genre,
-                    limit: 1000,
-                    offset: 0
-                )
-                await MainActor.run {
-                    withAnimation {
-                        self.items = result.displayed
-                    }
-                }
-            } catch {
-                print("Error fetching filtered items: \(error)")
-            }
-        }
     }
 }

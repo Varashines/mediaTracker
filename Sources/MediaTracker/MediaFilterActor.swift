@@ -64,187 +64,10 @@ struct PaginatedResult: Sendable {
     let totalCount: Int
 }
 
-struct CalendarReleaseItem: Sendable, Identifiable {
-    var id: PersistentIdentifier { metadata.id }
-    let metadata: MediaThumbnailMetadata
-    let releaseContext: String
-    let date: Date
-}
-
-struct CalendarDayInfo: Sendable, Identifiable {
-    var id: Date { date }
-    let date: Date
-    let items: [CalendarReleaseItem]
-    let intensity: Double // 0.0 to 1.0
-}
-
-struct CalendarResult: Sendable {
-    let days: [Date: CalendarDayInfo]
-    let allItems: [CalendarReleaseItem]
-    let startDate: Date
-    let endDate: Date
-}
-
 @ModelActor
 actor MediaFilterActor {
-    func fetchCalendarData(for month: Date) throws -> CalendarResult {
-        let calendar = Calendar.current
-        
-        // Calculate month bounds
-        let components = calendar.dateComponents([.year, .month], from: month)
-        guard let startDate = calendar.date(from: components),
-              let endDate = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startDate) else {
-            return CalendarResult(days: [:], allItems: [], startDate: month, endDate: month)
-        }
-        
-        let startOfDay = calendar.startOfDay(for: startDate)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: endDate))?.addingTimeInterval(-1) ?? endDate
-        
-        let fallbackPast = Date.distantPast
-        let fallbackFuture = Date.distantFuture
-
-        // 1. Fetch Movies with air dates in range
-        let moviePredicate = #Predicate<MediaItem> { item in
-            item.typeValue == "Movie" && item.cachedNextAiringDate != nil &&
-            (item.cachedNextAiringDate ?? fallbackPast) >= startOfDay && (item.cachedNextAiringDate ?? fallbackFuture) <= endOfDay
-        }
-        let movieDesc = FetchDescriptor<MediaItem>(predicate: moviePredicate)
-        var movies = try modelContext.fetch(movieDesc)
-
-        // Add fallback for unindexed movies (where cachedNextAiringDate is nil but releaseDate is in range)
-        let unindexedMoviePredicate = #Predicate<MediaItem> { item in
-            item.typeValue == "Movie" && item.cachedNextAiringDate == nil
-        }
-        let unindexedMovies = (try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: unindexedMoviePredicate))) ?? []
-        if !unindexedMovies.isEmpty {
-            let matchedMovies = unindexedMovies.filter { movie in
-                guard let date = movie.releaseDate else { return false }
-                return date >= startOfDay && date <= endOfDay
-            }
-            movies.append(contentsOf: matchedMovies)
-        }
-
-        // 2. Fetch TV Episodes in range using persistent airDateValue
-        let episodePredicate = #Predicate<TVEpisode> { ep in
-            ep.airDateValue != nil && (ep.airDateValue ?? fallbackPast) >= startOfDay && (ep.airDateValue ?? fallbackFuture) <= endOfDay
-        }
-        let epDesc = FetchDescriptor<TVEpisode>(predicate: episodePredicate)
-        var episodesInRange = try modelContext.fetch(epDesc)
-        
-        // 3. Fallback for unindexed episodes
-        // If we found nothing but have unindexed episodes, perform an in-memory scan for this range.
-        let unindexedPredicate = #Predicate<TVEpisode> { ep in ep.airDateValue == nil }
-        let unindexedEpisodes = (try? modelContext.fetch(FetchDescriptor<TVEpisode>(predicate: unindexedPredicate))) ?? []
-        
-        if !unindexedEpisodes.isEmpty {
-            let matchedUnindexed = unindexedEpisodes.filter { ep in
-                guard let date = ep.airDateAsDate else { return false }
-                return date >= startOfDay && date <= endOfDay
-            }
-            if !matchedUnindexed.isEmpty {
-                episodesInRange.append(contentsOf: matchedUnindexed)
-            }
-            
-            // Trigger background heal to fix these for next time
-            Task.detached(priority: .background) {
-                await self.healMissingDates()
-            }
-        }
-        
-        // 4. Process and Group
-        var dailyItems: [Date: [CalendarReleaseItem]] = [:]
-        var allProcessedItems: [CalendarReleaseItem] = []
-        
-        // Add Movies
-        for movie in movies {
-            let date = movie.cachedNextAiringDate ?? movie.releaseDate ?? .distantPast
-            if date != .distantPast {
-                let day = calendar.startOfDay(for: date)
-                let item = CalendarReleaseItem(
-                    metadata: toMetadata(movie),
-                    releaseContext: "Movie Premiere",
-                    date: date
-                )
-                dailyItems[day, default: []].append(item)
-                allProcessedItems.append(item)
-            }
-        }
-        
-        // Group TV Episodes by Day and Show
-        let groupedByDayAndShow = Dictionary(grouping: episodesInRange) { ep -> String in
-            let day = calendar.startOfDay(for: ep.airDateAsDate ?? .distantPast)
-            let showID = ep.season?.tvShowDetails?.item?.id ?? (ep.showID != nil ? String(ep.showID!) : UUID().uuidString)
-            return "\(day.timeIntervalSince1970)_\(showID)"
-        }
-        
-        for (_, episodes) in groupedByDayAndShow {
-            guard let firstEp = episodes.first,
-                  let airDate = firstEp.airDateAsDate else { continue }
-            
-            let day = calendar.startOfDay(for: airDate)
-            
-            // Try to find the associated MediaItem (the show)
-            var item = firstEp.season?.tvShowDetails?.item
-            if item == nil, let showID = firstEp.showID {
-                let idStr = "tv_\(showID)"
-                let desc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == idStr })
-                item = try? modelContext.fetch(desc).first
-            }
-            
-            guard let foundItem = item else {
-                print("⚠️ Calendar: Skipping episodes for unknown show ID \(firstEp.showID ?? 0)")
-                continue
-            }
-            
-            let season = firstEp.seasonNumber
-            let sortedEpisodes = episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-            
-            var context = ""
-            if sortedEpisodes.count > 3 {
-                context = "Season \(season)"
-            } else {
-                let epLabels = sortedEpisodes.map { "E\($0.episodeNumber)" }.joined(separator: ", ")
-                context = "S\(season) \(epLabels)"
-            }
-            
-            let releaseItem = CalendarReleaseItem(
-                metadata: toMetadata(foundItem),
-                releaseContext: context,
-                date: airDate
-            )
-            dailyItems[day, default: []].append(releaseItem)
-            allProcessedItems.append(releaseItem)
-        }
-        
-        // 4. Finalize Day Infos
-        var dayInfos: [Date: CalendarDayInfo] = [:]
-        let maxPerDay = Double(dailyItems.values.map { $0.count }.max() ?? 1)
-        
-        var currentDate = startOfDay
-        while currentDate <= endOfDay {
-            let items = dailyItems[currentDate] ?? []
-            let intensity = maxPerDay > 0 ? Double(items.count) / maxPerDay : 0
-            
-            dayInfos[currentDate] = CalendarDayInfo(
-                date: currentDate,
-                items: items,
-                intensity: intensity
-            )
-            
-            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
-            currentDate = nextDate
-        }
-        
-        return CalendarResult(
-            days: dayInfos,
-            allItems: allProcessedItems.sorted { $0.date < $1.date },
-            startDate: startOfDay,
-            endDate: endOfDay
-        )
-    }
-
     func filterAndSort(
-        category: String?,
+        category: NavigationCategory,
         searchText: String,
         sortOrder: SortOrder,
         network: [String]?,
@@ -259,57 +82,10 @@ actor MediaFilterActor {
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
         
         // 1. Optimized Predicate (Compiler Friendly)
-        var basePredicate: Predicate<MediaItem>? = nil
-        
-        let targetLanguage = language?.isEmpty == false ? language : nil
-        let targetNetwork = (network?.count == 1) ? network?.first : nil
-
-        if let category = category {
-            let tLang = targetLanguage
-            let tNet = targetNetwork
-            switch category {
-            case "Upcoming": 
-                basePredicate = #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "InProgress": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Watchlist": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Loved": 
-                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Completed": 
-                basePredicate = #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Archive": 
-                basePredicate = #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Disliked": 
-                basePredicate = #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            case "Binge": 
-                basePredicate = #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-            default:
-                if let type = MediaType(rawValue: category) {
-                    let typeString = type.rawValue
-                    basePredicate = #Predicate<MediaItem> { $0.typeValue == typeString && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-                } else {
-                    basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-                }
-            }
-        } else {
-            let tLang = targetLanguage
-            let tNet = targetNetwork
-            basePredicate = #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
-        }
+        let basePredicate = buildBasePredicate(category: category, language: language, network: network)
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
-        
-        if category == "Upcoming" {
-            // For Upcoming category, we always want chronologically forward (soonest first)
-            descriptor.sortBy = [SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward)]
-        } else {
-            switch sortOrder {
-            case .alphabetical: descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
-            case .newestRelease: descriptor.sortBy = [SortDescriptor<MediaItem>(\.releaseDate, order: .reverse)]
-            case .recentlyAdded: descriptor.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
-            }
-        }
+        applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder)
         
         // Pagination only if no complex Swift-level filters
         let hasComplexFilters = !processedSearch.isEmpty || (network != nil && network!.count > 1) || (genre != nil && !genre!.isEmpty)
@@ -321,32 +97,13 @@ actor MediaFilterActor {
         
         var results = try modelContext.fetch(descriptor)
         
-        // 2. Swift-Level Refinement (For complex filters SQLite can't handle efficiently yet)
-        if let nets = network, nets.count > 1 {
-            let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
-            results = results.filter { item in
-                guard let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) else { return false }
-                return normalizedNets.contains(itemNet)
-            }
-        }
-        
-        if let g = genre, !g.isEmpty {
-            results = results.filter { $0.cachedGenres.contains(g) }
-        }
-
-        if !processedSearch.isEmpty {
-            let tokens = processedSearch.split(separator: " ").map(String.init)
-            results = results.filter { item in
-                let target = item.searchableText
-                return tokens.allSatisfy { target.contains($0) }
-            }
-        }
+        // 2. Swift-Level Refinement
+        results = refineResults(results, network: network, genre: genre, searchText: processedSearch)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
                          (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
                          
-        // Phase 5 Logic Fix: Apply pagination manually if we bypassed SwiftData fetch limits
         if hasComplexFilters && groupBy == .none {
             let start = min(offset, results.count)
             let end = min(start + limit, results.count)
@@ -354,144 +111,197 @@ actor MediaFilterActor {
         }
 
         var featuredUpcoming: [MediaThumbnailMetadata] = []
-        var homeContinueWatching: [MediaThumbnailMetadata] = []
         
         // 3. Specialized Logic
-        if let category = category {
-            if category == "Home" {
-                let homePredicate = #Predicate<MediaItem> { item in
-                    (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
-                }
-                var homeDesc = FetchDescriptor<MediaItem>(predicate: homePredicate)
-                homeDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-                homeDesc.fetchLimit = 100 // Fetch a reasonable chunk for Home
-                
-                let homeResults = try modelContext.fetch(homeDesc)
-                
-                // Refine Home logic in Swift to avoid complex predicate compiler errors
-                let activeItems = homeResults.filter { item in
-                    let isActive = item.stateValue == "Active"
-                    let isWishlist = item.stateValue == "Wishlist"
-                    
-                    let date = item.cachedNextAiringDate ?? .distantPast
-                    let isFuture = date > now
-                    
-                    // Recently released: Handle by badge labels
-                    let badge = item.storedSmartBadgeLabel
-                    let isStreaming = badge == "NEW"
-                    let isRecent = isStreaming || badge == "BINGE DROP"
-                    
-                    return ((isActive || isWishlist) && !isFuture) || isRecent
-                }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
-                    let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
-                    let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
-                    
-                    if isAStreaming != isBStreaming {
-                        return isAStreaming
-                    }
-                    
-                    let badgeA = itemA.storedSmartBadgeLabel
-                    let badgeB = itemB.storedSmartBadgeLabel
-                    let isABinge = badgeA == "BINGE DROP"
-                    let isBBinge = badgeB == "BINGE DROP"
-                    
-                    if isABinge != isBBinge {
-                        return isABinge
-                    }
-                    
-                    return (itemA.lastInteractionDate ?? .distantPast) > (itemB.lastInteractionDate ?? .distantPast)
-                }
-                
-                homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
-                
-                let comingSoonItems = homeResults.filter { item in
-                    let airDate = item.cachedNextAiringDate ?? .distantPast
-                    return airDate > now
-                }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
-                
-                return PaginatedResult(
-                    displayed: [], 
-                    featuredUpcoming: [], 
-                    recentlyAdded: [], 
-                    homeContinueWatching: homeContinueWatching,
-                    grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })], 
-                    totalCount: totalCount
-                )
-            } else if category == "Upcoming" {
-                featuredUpcoming = results.prefix(15).map { toMetadata($0) }
-                results = Array(results.dropFirst(results.count > 15 ? 15 : 0))
-            }
+        if category == .home {
+            let homeResult = try processHomeCategory(now: now, totalCount: totalCount)
+            return homeResult
+        } else if category == .upcoming {
+            featuredUpcoming = results.prefix(15).map { toMetadata($0) }
+            results = Array(results.dropFirst(results.count > 15 ? 15 : 0))
         }
 
         // 4. Grouping Logic
-        var finalGroupedItems: [(String, [MediaThumbnailMetadata])] = []
-        if groupBy != .none {
-            let dict = Dictionary(grouping: results) { item -> String in
-                switch groupBy {
-                case .genre: return item.cachedGenres.first ?? "Uncategorized"
-                case .language: return item.cachedLanguage ?? "Unknown"
-                case .network: return item.cachedNetwork ?? "Unknown"
-                case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
-                case .category: return item.stateValue
-                case .none: return ""
-                }
-            }
-            finalGroupedItems = dict.map { ($0.key, $0.value.map { toMetadata($0) }) }
-                .sorted { $0.0 < $1.0 }
-        }
+        let finalGroupedItems = groupResults(results, groupBy: groupBy)
 
-        // 3. Fetch Recently Added (Actually Recently Interacted/Watched)
-        // We fetch this independently to ensure it's always sorted by interaction date
-        // regardless of the main list's sort order.
-        var recentAddedItems: [MediaThumbnailMetadata] = []
-        if category != "Home" {
-            var recentDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue != "Wishlist" })
-            recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-            recentDesc.fetchLimit = 15
-            
-            if let recentItems = try? modelContext.fetch(recentDesc) {
-                recentAddedItems = recentItems.filter { !$0.isDeleted }.prefix(10).map { toMetadata($0) }
-            }
-        }
+        // 5. Fetch Recently Added
+        let recentAddedItems = fetchRecentlyAdded(category: category)
 
         return PaginatedResult(
             displayed: results.map { toMetadata($0) },
             featuredUpcoming: featuredUpcoming,
             recentlyAdded: recentAddedItems,
-            homeContinueWatching: homeContinueWatching,
+            homeContinueWatching: [],
             grouped: finalGroupedItems,
             totalCount: totalCount
         )
     }
 
-    private func healMissingDates() async {
-        let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
-        let episodes = (try? modelContext.fetch(descriptor)) ?? []
-        
-        if !episodes.isEmpty {
-            print("🔍 Calendar: Background date healing starting for \(episodes.count) episodes...")
-            // Process in small batches and yield the actor to allow UI-critical fetches to run
-            let batchSize = 50
-            for i in stride(from: 0, to: episodes.count, by: batchSize) {
-                let end = min(i + batchSize, episodes.count)
-                let batch = episodes[i..<end]
-                
-                for episode in batch {
-                    episode.updateAirDateValue()
-                }
-                
-                try? modelContext.save()
-                await Task.yield()
+    private func buildBasePredicate(category: NavigationCategory, language: String?, network: [String]?) -> Predicate<MediaItem> {
+        let tLang = language?.isEmpty == false ? language : nil
+        let tNet = (network?.count == 1) ? network?.first : nil
+
+        switch category {
+        case .upcoming: return buildUpcomingPredicate(tLang: tLang, tNet: tNet)
+        case .inProgress: return buildInProgressPredicate(tLang: tLang, tNet: tNet)
+        case .watchlist: return buildWatchlistPredicate(tLang: tLang, tNet: tNet)
+        case .loved: return buildLovedPredicate(tLang: tLang, tNet: tNet)
+        case .completed: return buildCompletedPredicate(tLang: tLang, tNet: tNet)
+        case .archive: return buildArchivePredicate(tLang: tLang, tNet: tNet)
+        case .disliked: return buildDislikedPredicate(tLang: tLang, tNet: tNet)
+        case .binge: return buildBingePredicate(tLang: tLang, tNet: tNet)
+        case .movie, .tvShow: return buildTypePredicate(type: category.rawValue, tLang: tLang, tNet: tNet)
+        default: return buildDefaultPredicate(tLang: tLang, tNet: tNet)
+        }
+    }
+
+    private func buildUpcomingPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildInProgressPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildWatchlistPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildLovedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildCompletedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildArchivePredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildDislikedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildBingePredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildTypePredicate(type: String, tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.typeValue == type && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func buildDefaultPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    }
+
+    private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder) {
+        if category == .upcoming {
+            descriptor.sortBy = [SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward)]
+        } else {
+            switch sortOrder {
+            case .alphabetical: descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
+            case .newestRelease: descriptor.sortBy = [SortDescriptor<MediaItem>(\.releaseDate, order: .reverse)]
+            case .recentlyAdded: descriptor.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
+            }
+        }
+    }
+
+    private func refineResults(_ results: [MediaItem], network: [String]?, genre: String?, searchText: String) -> [MediaItem] {
+        var refined = results
+        if let nets = network, nets.count > 1 {
+            let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
+            refined = refined.filter { item in
+                guard let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) else { return false }
+                return normalizedNets.contains(itemNet)
             }
         }
         
-        let movies = (try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "Movie" }))) ?? []
-        for movie in movies {
-            movie.syncCachedProperties()
+        if let g = genre, !g.isEmpty {
+            refined = refined.filter { $0.cachedGenres.contains(g) }
+        }
+
+        if !searchText.isEmpty {
+            let tokens = searchText.split(separator: " ").map(String.init)
+            refined = refined.filter { item in
+                let target = item.searchableText
+                return tokens.allSatisfy { target.contains($0) }
+            }
+        }
+        return refined
+    }
+
+    private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
+        let homePredicate = #Predicate<MediaItem> { item in
+            (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
+        }
+        var homeDesc = FetchDescriptor<MediaItem>(predicate: homePredicate)
+        homeDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        homeDesc.fetchLimit = 100
+        
+        let homeResults = try modelContext.fetch(homeDesc)
+        
+        let activeItems = homeResults.filter { item in
+            if item.releaseDate == nil && item.cachedNextAiringDate == nil { return false }
+            let isActive = item.stateValue == "Active"
+            let isWishlist = item.stateValue == "Wishlist"
+            let date = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
+            let isFuture = date > now
+            let badge = item.storedSmartBadgeLabel
+            let isRecent = badge == "NEW" || badge == "BINGE DROP"
+            return ((isActive || isWishlist) && !isFuture) || isRecent
+        }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
+            let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
+            let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
+            if isAStreaming != isBStreaming { return isAStreaming }
+            let isABinge = itemA.storedSmartBadgeLabel == "BINGE DROP"
+            let isBBinge = itemB.storedSmartBadgeLabel == "BINGE DROP"
+            if isABinge != isBBinge { return isABinge }
+            return (itemA.lastInteractionDate ?? .distantPast) > (itemB.lastInteractionDate ?? .distantPast)
         }
         
-        try? modelContext.save()
-        print("✅ Calendar: Background date healing completed.")
+        let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
+        
+        let comingSoonItems = homeResults.filter { item in
+            let airDate = item.cachedNextAiringDate ?? .distantPast
+            return airDate > now
+        }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
+        
+        return PaginatedResult(
+            displayed: [], 
+            featuredUpcoming: [], 
+            recentlyAdded: [], 
+            homeContinueWatching: homeContinueWatching,
+            grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })], 
+            totalCount: totalCount
+        )
+    }
+
+    private func groupResults(_ results: [MediaItem], groupBy: GroupBy) -> [(String, [MediaThumbnailMetadata])] {
+        if groupBy == .none { return [] }
+        let dict = Dictionary(grouping: results) { item -> String in
+            switch groupBy {
+            case .genre: return item.cachedGenres.first ?? "Uncategorized"
+            case .language: return item.cachedLanguage ?? "Unknown"
+            case .network: return item.cachedNetwork ?? "Unknown"
+            case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
+            case .category: return item.stateValue
+            case .none: return ""
+            }
+        }
+        return dict.map { ($0.key, $0.value.map { toMetadata($0) }) }.sorted { $0.0 < $1.0 }
+    }
+
+    private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
+        if category == .home { return [] }
+        var recentDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue != "Wishlist" })
+        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        recentDesc.fetchLimit = 15
+        
+        if let recentItems = try? modelContext.fetch(recentDesc) {
+            return recentItems.filter { !$0.isDeleted }.prefix(10).map { toMetadata($0) }
+        }
+        return []
     }
 
     func allLibraryTMDBIDs() throws -> Set<String> {

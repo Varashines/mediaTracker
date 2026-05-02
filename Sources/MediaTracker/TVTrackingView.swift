@@ -312,12 +312,14 @@ private struct EpisodeCube: View {
             withAnimation(.spring(duration: 0.2)) {
                 episode.isWatched.toggle()
                 FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
-                onToggle()
             }
             
-            // Detach heavy recalculation to prevent UI stutter
+            // Detach recalculation but ensure onToggle happens AFTER sync
             Task { @MainActor in
                 episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+                withAnimation(.spring(duration: 0.2)) {
+                    onToggle()
+                }
             }
         } label: {
             VStack(alignment: .leading, spacing: 6) {

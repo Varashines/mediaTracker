@@ -16,6 +16,12 @@ let package = Package(
             path: "Sources/MediaTracker",
             resources: [
                 .process("Resources")
+            ],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-Xfrontend", "-warn-long-expression-type-checking=100",
+                    "-Xfrontend", "-warn-long-function-bodies=100"
+                ])
             ]
         ),
         .testTarget(

@@ -14,17 +14,7 @@ struct InsightsView: View {
                 if isLoading {
                     loadingView
                 } else if let stats = stats {
-                    // 1. CINEMA DNA: Radar Hero
-                    cinemaDNASection(stats: stats)
-                    
-                    // 2. THE HALL OF FAME: Visual Rankings
-                    hallOfFameSection(stats: stats)
-                    
-                    // 3. THE PRODUCTION DECK: Horizontal Quality Rows
-                    productionDeckSection(stats: stats)
-                    
-                    // 4. CORE MASTERY: Surgical Metrics
-                    masterySection(stats: stats)
+                    mainContent(stats: stats)
                 }
             }
             .padding(.horizontal, 60)
@@ -35,6 +25,21 @@ struct InsightsView: View {
         .onAppear {
             refreshData()
         }
+    }
+
+    @ViewBuilder
+    private func mainContent(stats: LibraryStats) -> some View {
+        // 1. CINEMA DNA: Radar Hero
+        cinemaDNASection(stats: stats)
+        
+        // 2. THE HALL OF FAME: Visual Rankings
+        hallOfFameSection(stats: stats)
+        
+        // 3. THE PRODUCTION DECK: Horizontal Quality Rows
+        productionDeckSection(stats: stats)
+        
+        // 4. CORE MASTERY: Surgical Metrics
+        masterySection(stats: stats)
     }
 
     private func refreshData() {
@@ -58,39 +63,48 @@ struct InsightsView: View {
     @ViewBuilder
     private func cinemaDNASection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 40) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("CINEMA DNA")
-                    .font(.system(size: 14, weight: .black))
-                    .foregroundStyle(appAccent.color)
-                    .kerning(5)
-                
-                Text("Your Cinematic Profile")
-                    .font(.system(size: 56, weight: .black, design: .rounded))
-            }
+            dnaHeader
             
             HStack(spacing: 80) {
                 RadarChartView(data: stats.genreDNA, accentColor: appAccent.color)
                     .frame(width: 450, height: 450)
                 
-                VStack(alignment: .leading, spacing: 40) {
-                    let topGenre = stats.topRatedGenres.first?.0 ?? "Cinema"
-                    let topActor = stats.topRatedActors.first?.name ?? "Great Talent"
-                    
-                    Text("An expert in ") + 
-                    Text(topGenre).foregroundColor(appAccent.color) +
-                    Text(", driven by the performances of ") +
-                    Text(topActor).foregroundColor(appAccent.color) +
-                    Text(".")
-                    
-                    VStack(alignment: .leading, spacing: 20) {
-                        metricSimple(label: "TOTAL WATCH TIME", value: formatWatchTimeSimple(minutes: stats.totalWatchTimeMinutes))
-                        metricSimple(label: "COLLECTION SIZE", value: "\(stats.totalMovies + stats.totalTVShows) TITLES")
-                    }
-                }
-                .font(.system(size: 32, weight: .black, design: .rounded))
-                .lineSpacing(6)
+                dnaDescription(stats: stats)
             }
         }
+    }
+
+    private var dnaHeader: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("CINEMA DNA")
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(appAccent.color)
+                .kerning(5)
+            
+            Text("Your Cinematic Profile")
+                .font(.system(size: 56, weight: .black, design: .rounded))
+        }
+    }
+
+    @ViewBuilder
+    private func dnaDescription(stats: LibraryStats) -> some View {
+        VStack(alignment: .leading, spacing: 40) {
+            let topGenre = stats.topRatedGenres.first?.0 ?? "Cinema"
+            let topActor = stats.topRatedActors.first?.name ?? "Great Talent"
+            
+            Text("An expert in ") + 
+            Text(topGenre).foregroundColor(appAccent.color) +
+            Text(", driven by the performances of ") +
+            Text(topActor).foregroundColor(appAccent.color) +
+            Text(".")
+            
+            VStack(alignment: .leading, spacing: 20) {
+                metricSimple(label: "TOTAL WATCH TIME", value: formatWatchTimeSimple(minutes: stats.totalWatchTimeMinutes))
+                metricSimple(label: "COLLECTION SIZE", value: "\(stats.totalMovies + stats.totalTVShows) TITLES")
+            }
+        }
+        .font(.system(size: 32, weight: .black, design: .rounded))
+        .lineSpacing(6)
     }
 
     @ViewBuilder
@@ -293,79 +307,95 @@ struct RadarChartView: View {
             let radius = min(geo.size.width, geo.size.height) / 2 * 0.7
             
             ZStack {
-                // Background Rings (Slightly darker lines)
-                ForEach(1...4, id: \.self) { i in
-                    Circle()
-                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                        .frame(width: radius * 2 * (Double(i) / 4), height: radius * 2 * (Double(i) / 4))
-                }
-                
-                // Axis lines (Slightly darker lines)
-                ForEach(0..<data.count, id: \.self) { i in
-                    let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                    Path { path in
-                        path.move(to: center)
-                        path.addLine(to: CGPoint(
-                            x: center.x + CGFloat(cos(angle)) * radius,
-                            y: center.y + CGFloat(sin(angle)) * radius
-                        ))
-                    }
-                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                    
-                    // Labels
-                    let labelPos = CGPoint(
-                        x: center.x + CGFloat(cos(angle)) * (radius + 40),
-                        y: center.y + CGFloat(sin(angle)) * (radius + 20)
-                    )
-                    Text(data[i].name.uppercased())
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(.secondary)
-                        .position(labelPos)
-                }
-                
-                // Data Shape Group
-                ZStack {
-                    // Basic Fill
-                    Path { path in
-                        for i in 0..<data.count {
-                            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                            let val = data[i].percentage
-                            let point = CGPoint(
-                                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
-                            )
-                            if i == 0 { path.move(to: point) }
-                            else { path.addLine(to: point) }
-                        }
-                        path.closeSubpath()
-                    }
-                    .fill(accentColor.opacity(0.2))
-                    
-                    // Basic Stroke
-                    Path { path in
-                        for i in 0..<data.count {
-                            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                            let val = data[i].percentage
-                            let point = CGPoint(
-                                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
-                            )
-                            if i == 0 { path.move(to: point) }
-                            else { path.addLine(to: point) }
-                        }
-                        path.closeSubpath()
-                    }
-                    .stroke(accentColor, style: StrokeStyle(lineWidth: 3, lineJoin: .round))
-                }
-                .scaleEffect(isVisible ? 1.0 : 0.01)
-                .opacity(isVisible ? 1.0 : 0.0)
-                .animation(.spring(response: 0.6, dampingFraction: 0.6, blendDuration: 0), value: isVisible)
+                backgroundRings(radius: radius)
+                axisLines(center: center, radius: radius)
+                dataShape(center: center, radius: radius)
             }
             .onAppear {
-                withAnimation {
-                    isVisible = true
-                }
+                withAnimation { isVisible = true }
             }
         }
+    }
+
+    @ViewBuilder
+    private func backgroundRings(radius: CGFloat) -> some View {
+        ForEach(1...4, id: \.self) { i in
+            Circle()
+                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                .frame(width: radius * 2 * (Double(i) / 4), height: radius * 2 * (Double(i) / 4))
+        }
+    }
+
+    @ViewBuilder
+    private func axisLines(center: CGPoint, radius: CGFloat) -> some View {
+        ForEach(0..<data.count, id: \.self) { i in
+            RadarAxisLine(i: i, count: data.count, name: data[i].name, center: center, radius: radius)
+        }
+    }
+    @ViewBuilder
+    private func dataShape(center: CGPoint, radius: CGFloat) -> some View {
+        ZStack {
+            RadarShape(data: data, center: center, radius: radius, isVisible: isVisible)
+                .fill(accentColor.opacity(0.2))
+            
+            RadarShape(data: data, center: center, radius: radius, isVisible: isVisible)
+                .stroke(accentColor, style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+        }
+        .scaleEffect(isVisible ? 1.0 : 0.01)
+        .opacity(isVisible ? 1.0 : 0.0)
+        .animation(.spring(response: 0.6, dampingFraction: 0.6, blendDuration: 0), value: isVisible)
+    }
+}
+
+private struct RadarAxisLine: View {
+    let i: Int
+    let count: Int
+    let name: String
+    let center: CGPoint
+    let radius: CGFloat
+    
+    var body: some View {
+        let angle = (Double(i) / Double(count)) * 2 * .pi - .pi / 2
+        
+        Path { path in
+            path.move(to: center)
+            path.addLine(to: CGPoint(
+                x: center.x + CGFloat(cos(angle)) * radius,
+                y: center.y + CGFloat(sin(angle)) * radius
+            ))
+        }
+        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+        
+        let labelPos = CGPoint(
+            x: center.x + CGFloat(cos(angle)) * (radius + 40),
+            y: center.y + CGFloat(sin(angle)) * (radius + 20)
+        )
+        Text(name.uppercased())
+            .font(.system(size: 9, weight: .black))
+            .foregroundStyle(.secondary)
+            .position(labelPos)
+    }
+}
+
+private struct RadarShape: Shape {
+    let data: [(name: String, percentage: Double)]
+    let center: CGPoint
+    let radius: CGFloat
+    let isVisible: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for i in 0..<data.count {
+            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
+            let val = isVisible ? data[i].percentage : 0
+            let point = CGPoint(
+                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
+                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
+            )
+            if i == 0 { path.move(to: point) }
+            else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
     }
 }

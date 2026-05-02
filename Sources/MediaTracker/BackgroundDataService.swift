@@ -44,6 +44,32 @@ actor BackgroundDataService {
         return false
     }
 
+    func createNewMediaItem(uniqueID: String, tmdbID: Int, type: MediaType, title: String, overview: String, posterURL: String?, releaseDateString: String?) async -> (id: PersistentIdentifier?, isExisting: Bool) {
+        // 1. Background uniqueness check
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
+        if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
+            return (existing.persistentModelID, true)
+        }
+
+        // 2. Create the item
+        let releaseDate = releaseDateString != nil ? DateUtils.parseDate(releaseDateString) : nil
+        let item = MediaItem(
+            id: uniqueID, title: title, overview: overview,
+            posterURL: posterURL, releaseDate: releaseDate, type: type)
+        item.dateAdded = Date()
+        modelContext.insert(item)
+
+        // 3. Fetch full details immediately
+        if type == .movie {
+            _ = await self.refreshMovie(id: uniqueID, tmdbID: tmdbID)
+        } else if type == .tvShow {
+            _ = await self.refreshTVShow(id: uniqueID, tmdbID: tmdbID)
+        }
+        
+        try? modelContext.save()
+        return (item.persistentModelID, false)
+    }
+
     func importLibraryData(backup: LibraryBackup) async -> Int {
         let descriptor = FetchDescriptor<MediaItem>()
         let existing = (try? modelContext.fetch(descriptor)) ?? []
@@ -320,15 +346,15 @@ actor BackgroundDataService {
 
             if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
             tvDetails.item = item
+            tvDetails.status = await StringPool.shared.intern(details.status)
+            tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
+            tvDetails.network = await StringPool.shared.intern(details.network)
             tvDetails.voteAverage = details.voteAverage
             tvDetails.genres = details.genres
-            tvDetails.network = await StringPool.shared.intern(details.network)
             tvDetails.networkLogoPath = details.networkLogoPath
-            tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
-            tvDetails.status = await StringPool.shared.intern(details.status)
-            tvDetails.creators = details.creators.map { $0.name }
             tvDetails.numberOfSeasons = details.seasonsCount
             tvDetails.numberOfEpisodes = details.episodesCount
+            tvDetails.creators = details.creators.map { $0.name }
             tvDetails.tvMazeID = tvMazeID
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber

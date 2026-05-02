@@ -2,7 +2,7 @@ import SwiftUI
 
 @MainActor
 struct SidebarNavigation: View, Equatable {
-    @Binding var selection: String?
+    @Binding var selection: NavigationCategory?
 
     nonisolated static func == (lhs: SidebarNavigation, rhs: SidebarNavigation) -> Bool {
         return lhs._selection.wrappedValue == rhs._selection.wrappedValue
@@ -11,62 +11,53 @@ struct SidebarNavigation: View, Equatable {
     var body: some View {
         List(selection: $selection) {
             Group {
-                Label("Home", systemImage: "house.fill")
-                    .tag("Home")
+                Label(NavigationCategory.home.title, systemImage: NavigationCategory.home.icon)
+                    .tag(NavigationCategory.home)
 
-                Label("Release Calendar", systemImage: "calendar")
-                    .tag("Upcoming")
+                Label(NavigationCategory.upcoming.title, systemImage: NavigationCategory.upcoming.icon)
+                    .tag(NavigationCategory.upcoming)
 
-                Label("In Progress", systemImage: "play.circle")
-                    .tag("InProgress")
+                Label(NavigationCategory.inProgress.title, systemImage: NavigationCategory.inProgress.icon)
+                    .tag(NavigationCategory.inProgress)
 
-                Label("Watchlist", systemImage: "list.bullet.rectangle")
-                    .tag("Watchlist")
+                Label(NavigationCategory.watchlist.title, systemImage: NavigationCategory.watchlist.icon)
+                    .tag(NavigationCategory.watchlist)
 
-                Label("Library", systemImage: "tray.full")
-                    .tag("All")
+                Label(NavigationCategory.all.title, systemImage: NavigationCategory.all.icon)
+                    .tag(NavigationCategory.all)
             }
             .padding(.vertical, 4)
 
             Section("Smart Folders") {
-                Label("Loved", systemImage: "heart.fill")
-                    .tag("Loved")
-                Label("Completed", systemImage: "checkmark.circle.fill")
-                    .tag("Completed")
-                Label("Archive", systemImage: "archivebox")
-                    .tag("Archive")
-                Label("Disliked", systemImage: "hand.thumbsdown.fill")
-                    .tag("Disliked")
-                Label("Binge", systemImage: "rectangle.stack.fill")
-                    .tag("Binge")
+                Label(NavigationCategory.loved.title, systemImage: NavigationCategory.loved.icon)
+                    .tag(NavigationCategory.loved)
+                Label(NavigationCategory.completed.title, systemImage: NavigationCategory.completed.icon)
+                    .tag(NavigationCategory.completed)
+                Label(NavigationCategory.archive.title, systemImage: NavigationCategory.archive.icon)
+                    .tag(NavigationCategory.archive)
+                Label(NavigationCategory.disliked.title, systemImage: NavigationCategory.disliked.icon)
+                    .tag(NavigationCategory.disliked)
+                Label(NavigationCategory.binge.title, systemImage: NavigationCategory.binge.icon)
+                    .tag(NavigationCategory.binge)
             }
             .padding(.vertical, 4)
             
             Section("Explore") {
-                Label("Discovery Hub", systemImage: "sparkles.tv")
-                    .tag("Discover")
+                Label(NavigationCategory.discover.title, systemImage: NavigationCategory.discover.icon)
+                    .tag(NavigationCategory.discover)
                 
-                Label("Statistics", systemImage: "chart.bar.fill")
-                    .tag("Insights")
+                Label(NavigationCategory.insights.title, systemImage: NavigationCategory.insights.icon)
+                    .tag(NavigationCategory.insights)
             }
             .padding(.vertical, 4)
             
             Section("Categories") {
-                ForEach(MediaType.allCases, id: \.self) { type in
-                    let name = type.pluralName
-                    let img = icon(for: type)
-                    Label(name, systemImage: img)
-                        .tag(type.rawValue)
+                ForEach([NavigationCategory.movie, NavigationCategory.tvShow], id: \.self) { cat in
+                    Label(cat.title, systemImage: cat.icon)
+                        .tag(cat)
                 }
             }
             .padding(.vertical, 4)
-        }
-    }
-
-    private func icon(for type: MediaType) -> String {
-        switch type {
-        case .movie: return "film"
-        case .tvShow: return "tv"
         }
     }
 }

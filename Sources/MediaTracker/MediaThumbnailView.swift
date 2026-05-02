@@ -175,11 +175,29 @@ struct MediaThumbnailView: View {
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
         .contextMenu {
             if !isRemoved, let id = capturedID {
                 libraryContextMenu(for: id, type: capturedType, state: capturedState, progress: capturedProgress)
             }
         }
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [title]
+        parts.append(type.rawValue)
+        
+        if isUpcoming, let badge = gridBadgeText {
+            parts.append("Releases on \(badge)")
+        } else {
+            parts.append(safeState.displayName)
+            if let progress = watchProgress {
+                parts.append(progress)
+            }
+        }
+        
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

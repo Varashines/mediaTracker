@@ -28,164 +28,178 @@ struct DetailView: View {
             if isDeleted || viewModel.item.modelContext == nil || viewModel.item.isDeleted {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
-                // Liquid Glass Foundation Background
-                ZStack {
-                    if themeStyle == .brand {
-                        appAccent.brandBackground(for: colorScheme)
-                            .ignoresSafeArea()
-                    } else {
-                        Color(NSColor.windowBackgroundColor)
-                            .ignoresSafeArea()
-                    }
+                contentOverlay
+            }
+        }
+    }
 
-                    viewModel.themeColor
-                        .opacity(isAppeared ? (colorScheme == .dark ? 0.4 : 0.25) : 0)
-                        .blur(radius: isAppeared ? 120 : 80)
-                        .scaleEffect(isAppeared ? 1.1 : 0.9)
-                        .ignoresSafeArea()
+    @ViewBuilder
+    private var contentOverlay: some View {
+        backgroundLayer
+            .animation(.spring(response: 0.8, dampingFraction: 0.85), value: isAppeared)
+            .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
 
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            viewModel.themeColor.opacity(
-                                isAppeared ? (colorScheme == .dark ? 0.3 : 0.2) : 0), .clear,
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                headerSection
+                tmdbWarningSection
+                castAndTrackingSection
+            }
+            .padding(AppTheme.Spacing.large)
+        }
+        .navigationTitle("Details")
+        .toolbar { detailToolbar }
+        .onAppear {
+            viewModel.refreshData()
+            withAnimation(.spring(response: 1.0, dampingFraction: 0.85).delay(0.1)) {
+                isAppeared = true
+            }
+        }
+        .onDisappear { isAppeared = false }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { notification in
+            if let id = notification.userInfo?["id"] as? String, id == viewModel.item.id {
+                viewModel.refreshLocalItem()
+            }
+        }
+        .tint(viewModel.themeColor)
+        .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
+    }
+
+    @ViewBuilder
+    private var backgroundLayer: some View {
+        ZStack {
+            if themeStyle == .brand {
+                appAccent.brandBackground(for: colorScheme)
                     .ignoresSafeArea()
-                }
-                .animation(.spring(response: 0.8, dampingFraction: 0.85), value: isAppeared)
-                .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
+            } else {
+                Color(NSColor.windowBackgroundColor)
+                    .ignoresSafeArea()
+            }
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                        // Optimized Header Section
-                        MediaHeaderView(
-                            item: viewModel.item, themeColor: viewModel.themeColor,
-                            namespace: namespace
-                        ) { newState in
-                            if newState == .completed {
-                                viewModel.markAllAsWatched()
-                            }
-                        }
-                        .onAppear {
-                            viewModel.updateThemeColor()
-                            viewModel.refreshData()
-                        }
+            viewModel.themeColor
+                .opacity(isAppeared ? (colorScheme == .dark ? 0.4 : 0.25) : 0)
+                .blur(radius: isAppeared ? 120 : 80)
+                .scaleEffect(isAppeared ? 1.1 : 0.9)
+                .ignoresSafeArea()
 
-                        if (viewModel.item.type == .movie
-                            && viewModel.item.movieDetails?.genres.isEmpty != false)
-                            || (viewModel.item.type == .tvShow
-                                && viewModel.item.tvShowDetails?.status == nil)
-                        {
-                            if !APIClient.shared.isTMDBConfigured {
-                                Text(
-                                    "Please add your TMDB API Key in Settings to see more details."
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-                        }
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    viewModel.themeColor.opacity(isAppeared ? (colorScheme == .dark ? 0.3 : 0.2) : 0),
+                    .clear
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        }
+    }
 
-                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                            if !viewModel.item.displayCast.isEmpty {
-                                Divider()
+    @ViewBuilder
+    private var headerSection: some View {
+        MediaHeaderView(
+            item: viewModel.item,
+            themeColor: viewModel.themeColor,
+            namespace: namespace
+        ) { newState in
+            if newState == .completed {
+                viewModel.markAllAsWatched()
+            }
+        }
+        .onAppear {
+            viewModel.updateThemeColor()
+            viewModel.refreshData()
+        }
+    }
 
-                                DisclosureGroup(isExpanded: $isCastExpanded) {
-                                    CastSectionViewNew(
-                                        cast: viewModel.item.displayCast,
-                                        themeColor: viewModel.themeColor
-                                    ) { actorName in
-                                        onSearchActor?(actorName)
-                                    }
-                                    .padding(.top, AppTheme.Spacing.tiny)
-                                } label: {
-                                    HStack {
-                                        Text("Cast")
-                                            .font(.title3.bold())
-                                        Spacer()
-                                        Text("\(viewModel.item.displayCast.count)")
-                                            .font(.caption.bold())
-                                            .padding(.horizontal, AppTheme.Spacing.tiny)
-                                            .padding(.vertical, 2)
-                                            .background(viewModel.themeColor.opacity(0.2))
-                                            .clipShape(Capsule())
-                                    }
-                                }
-                                .disclosureGroupStyle(
-                                    CustomDisclosureStyle(buttonColor: viewModel.themeColor)
-                                )
-                                .padding(.horizontal, AppTheme.Spacing.tiny)
-                            }
+    @ViewBuilder
+    private var tmdbWarningSection: some View {
+        let hasNoGenres = viewModel.item.type == .movie && viewModel.item.movieDetails?.genres.isEmpty != false
+        let hasNoStatus = viewModel.item.type == .tvShow && viewModel.item.tvShowDetails?.status == nil
+        
+        if hasNoGenres || hasNoStatus {
+            if !APIClient.shared.isTMDBConfigured {
+                Text("Please add your TMDB API Key in Settings to see more details.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
 
-                            if let tv = viewModel.item.tvShowDetails {
-                                Divider()
+    @ViewBuilder
+    private var castAndTrackingSection: some View {
+        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            if !viewModel.item.displayCast.isEmpty {
+                Divider()
 
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                                    HStack {
-                                        Image(systemName: "play.tv.fill")
-                                            .foregroundStyle(viewModel.themeColor)
-                                        Text("Seasons & Episodes")
-                                            .font(.title3.bold())
-                                    }
-                                    .padding(.horizontal, AppTheme.Spacing.tiny)
-
-                                    TVTrackingView(
-                                        tvDetails: tv, themeColor: viewModel.themeColor,
-                                        onWatchedToggle: {
-                                            viewModel.checkOverallCompletion()
-                                        },
-                                        onSeasonSelected: { season in
-                                            viewModel.fetchEpisodes(for: season)
-                                        })
-                                }
-                            }
-
-                            Divider()
-                        }
+                DisclosureGroup(isExpanded: $isCastExpanded) {
+                    CastSectionViewNew(
+                        cast: viewModel.item.displayCast,
+                        themeColor: viewModel.themeColor
+                    ) { actorName in
+                        onSearchActor?(actorName)
                     }
-                    .padding(AppTheme.Spacing.large)
-                }
-                .navigationTitle("Details")
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        HStack(spacing: 16) {
-                            Button {
-                                viewModel.refreshData(force: true)
-                            } label: {
-                                if viewModel.isRefreshing {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Label("Refresh", systemImage: "arrow.clockwise")
-                                }
-                            }
-                            .disabled(viewModel.isRefreshing)
-
-                            Button(role: .destructive) {
-                                deleteItem()
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                        }
+                    .padding(.top, AppTheme.Spacing.tiny)
+                } label: {
+                    HStack {
+                        Text("Cast")
+                            .font(.title3.bold())
+                        Spacer()
+                        Text("\(viewModel.item.displayCast.count)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, AppTheme.Spacing.tiny)
+                            .padding(.vertical, 2)
+                            .background(viewModel.themeColor.opacity(0.2))
+                            .clipShape(Capsule())
                     }
                 }
-                .onAppear {
-                    viewModel.refreshData()
-                    withAnimation(.spring(response: 1.0, dampingFraction: 0.85).delay(0.1)) {
-                        isAppeared = true
+                .disclosureGroupStyle(CustomDisclosureStyle(buttonColor: viewModel.themeColor))
+                .padding(.horizontal, AppTheme.Spacing.tiny)
+            }
+
+            if let tv = viewModel.item.tvShowDetails {
+                Divider()
+
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        Image(systemName: "play.tv.fill")
+                            .foregroundStyle(viewModel.themeColor)
+                        Text("Seasons & Episodes")
+                            .font(.title3.bold())
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.tiny)
+
+                    TVTrackingView(
+                        tvDetails: tv,
+                        themeColor: viewModel.themeColor,
+                        onWatchedToggle: { viewModel.checkOverallCompletion() },
+                        onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
+                    )
+                }
+            }
+            Divider()
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var detailToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            HStack(spacing: 16) {
+                Button {
+                    viewModel.refreshData(force: true)
+                } label: {
+                    if viewModel.isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 }
-                .onDisappear {
-                    isAppeared = false
+                .disabled(viewModel.isRefreshing)
+
+                Button(role: .destructive) {
+                    deleteItem()
+                } label: {
+                    Label("Remove", systemImage: "trash")
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) {
-                    notification in
-                    if let id = notification.userInfo?["id"] as? String, id == viewModel.item.id {
-                        viewModel.refreshLocalItem()
-                    }
-                }
-                .tint(viewModel.themeColor)
-                .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
             }
         }
     }
