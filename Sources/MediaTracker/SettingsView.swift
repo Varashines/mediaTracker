@@ -15,263 +15,229 @@ struct SettingsView: View {
     @AppStorage("audio_enabled") private var audioEnabled = true
     
     @Environment(\.colorScheme) var colorScheme
-    @State private var activeTab: SettingsTab = .general
+    @State private var containerWidth: CGFloat = 0
 
-    enum SettingsTab: String, CaseIterable, Identifiable {
-        case general = "General"
-        case appearance = "Appearance"
-        case library = "Library"
-        case discovery = "Discovery"
-        
-        var id: String { self.rawValue }
-        var icon: String {
-            switch self {
-            case .general: return "gearshape"
-            case .appearance: return "paintpalette"
-            case .library: return "tray.full"
-            case .discovery: return "sparkles.tv"
-            }
-        }
-    }
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // "Spacey" Centered Top Navigation
-            VStack(spacing: 20) {
-                HStack(spacing: 32) {
-                    ForEach(SettingsTab.allCases) { tab in
-                        Button {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                activeTab = tab
-                            }
-                            FeedbackManager.shared.trigger(.click)
-                        } label: {
-                            VStack(spacing: 6) {
-                                let isSelected = activeTab == tab
-                                Image(systemName: tab.icon)
-                                    .font(.system(size: 20, weight: isSelected ? .bold : .medium))
-                                    .frame(width: 44, height: 44)
-                                    .background(
-                                        Circle()
-                                            .fill(isSelected ? appAccent.color.opacity(0.1) : Color.clear)
-                                    )
-                                    .foregroundStyle(isSelected ? appAccent.color : .secondary)
-                                    .scaleEffect(isSelected ? 1.1 : 1.0)
-                                
-                                Text(tab.rawValue)
-                                    .font(.system(size: 11, weight: isSelected ? .black : .semibold))
-                                    .foregroundStyle(isSelected ? .primary : .secondary)
-                                    .kerning(0.5)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.top, 24)
-                
-                // Active Header
-                VStack(spacing: 4) {
-                    Text(activeTab.rawValue)
-                        .font(.system(size: 24, weight: .black))
-                    Text(subtitle(for: activeTab))
-                        .font(.system(size: 13))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 40) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Settings")
+                        .font(.system(size: 34, weight: .black, design: .rounded))
+                    Text("Configure your MediaTracker experience across device and library.")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .id(activeTab) // Trigger transition on tab change
-            }
-            .padding(.bottom, 24)
-            .frame(maxWidth: .infinity)
-            .background(.ultraThinMaterial)
-            
-            Divider()
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    switch activeTab {
-                    case .general:
-                        generalSettings
-                    case .appearance:
-                        appearanceSettings
-                    case .library:
-                        librarySettings
-                    case .discovery:
-                        discoverySettings
-                    }
-                    
-                    // Footer Info
-                    VStack(spacing: 6) {
-                        Text("MediaTracker v2.7.0")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.tertiary)
-                        Text("Spacey, Profesh, and Cute.")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
-                }
-                .padding(40)
-            }
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-        }
-        .frame(width: 600, height: 700)
-        .fontDesign(.rounded)
-    }
-
-    private func subtitle(for tab: SettingsTab) -> String {
-        switch tab {
-        case .general: return "Core behavior and interaction settings."
-        case .appearance: return "Personalize your visual experience."
-        case .library: return "Data management and API connectivity."
-        case .discovery: return "Fine-tune your browsing filters."
-        }
-    }
-    
-    // MARK: - Sections
-    
-    private var generalSettings: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SettingsSection(title: "Interactions") {
-                SettingsRow(title: "Haptic Feedback", subtitle: "Tactile clicks on supported trackpads.") {
-                    Toggle("", isOn: $hapticsEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
+                .padding(.horizontal, 40)
+                .padding(.top, 40)
                 
-                Divider()
-                
-                SettingsRow(title: "Audio Feedback", subtitle: "Play subtle sounds for key actions.") {
-                    Toggle("", isOn: $audioEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-            }
-            
-            SettingsSection(title: "System") {
-                SettingsRow(title: "Notifications", subtitle: "Manage system-level alert permissions.") {
-                    Button("Open Preferences...") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-                            NSWorkspace.shared.open(url)
+                // Dashboard Bento Layout (Masonry)
+                Group {
+                    if containerWidth > 850 {
+                        HStack(alignment: .top, spacing: 32) {
+                            VStack(spacing: 32) {
+                                appearanceCard
+                                connectivityCard
+                                dataMaintenanceCard
+                            }
+                            .frame(maxWidth: .infinity)
+                            
+                            VStack(spacing: 32) {
+                                generalCard
+                                discoveryCard
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        VStack(spacing: 32) {
+                            appearanceCard
+                            generalCard
+                            connectivityCard
+                            discoveryCard
+                            dataMaintenanceCard
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
-            }
-        }
-    }
-
-    private var appearanceSettings: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SettingsSection(title: "Customization") {
-                SettingsRow(title: "Accent Color", subtitle: "Your app's personality hue.") {
-                    HStack(spacing: 12) {
-                        ForEach(AppAccent.allCases) { accent in
-                            Circle()
-                                .fill(accent.color)
-                                .frame(width: 20, height: 20)
-                                .overlay {
-                                    if appAccent == accent {
-                                        Circle()
-                                            .stroke(Color.primary, lineWidth: 2)
-                                            .frame(width: 30, height: 30)
-                                    }
-                                }
-                                .onTapGesture { 
-                                    appAccent = accent 
-                                    FeedbackManager.shared.trigger(.click)
-                                }
-                        }
-                    }
-                    .frame(height: 34)
-                }
+                .padding(.horizontal, 40)
                 
-                Divider()
-                
-                SettingsRow(title: "Glass Material", subtitle: "Enable dynamic transparency effects.") {
-                    Toggle("", isOn: Binding(
-                        get: { themeStyle == .brand },
-                        set: { themeStyle = $0 ? .brand : .standard }
-                    ))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                }
-
-                Divider()
-
-                SettingsRow(title: "UI Theme", subtitle: "Switch between light and dark modes.") {
-                    Picker("", selection: $themePreference) {
-                        Text("Auto").tag(0)
-                        Text("Light").tag(1)
-                        Text("Dark").tag(2)
-                    }
-                    .labelsHidden()
-                    .frame(width: 100)
-                }
-            }
-        }
-    }
-    
-    private var discoverySettings: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            SettingsSection(title: "Studio Aliases") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Merge multiple studios into one and pick an icon.")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    
-                    StudioAliasManagerView()
-                    
-                    Text("Changes apply after the next Discovery refresh.")
+                // Footer
+                VStack(spacing: 6) {
+                    Text("MediaTracker v\(appVersion)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                    Text("Designed with ❤️ for cinematic tracking.")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.tertiary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 20)
+                .padding(.bottom, 60)
+            }
+            .frame(maxWidth: 1200) // Optimal width for readability
+            .frame(maxWidth: .infinity)
+        }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { containerWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
+            }
+        }
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
+        .fontDesign(.rounded)
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.0.0"
+    }
+
+    // MARK: - Cards
+    
+    private var appearanceCard: some View {
+        SettingsCard(title: "Appearance", icon: "paintpalette.fill", color: .pink) {
+            SettingsRow(title: "Accent Color", subtitle: "Hue personality.") {
+                HStack(spacing: 8) {
+                    ForEach(AppAccent.allCases) { accent in
+                        Circle()
+                            .fill(accent.color)
+                            .frame(width: 18, height: 18)
+                            .overlay {
+                                if appAccent == accent {
+                                    Circle()
+                                        .stroke(Color.primary, lineWidth: 1.5)
+                                        .frame(width: 26, height: 26)
+                                }
+                            }
+                            .onTapGesture { 
+                                withAnimation(.spring(response: 0.3)) { appAccent = accent }
+                                FeedbackManager.shared.trigger(.click)
+                            }
+                    }
+                }
+                .frame(height: 26)
+            }
+            
+            Divider()
+            
+            SettingsRow(title: "Glass Material", subtitle: "Transparency effects.") {
+                Toggle("", isOn: Binding(
+                    get: { themeStyle == .brand },
+                    set: { themeStyle = $0 ? .brand : .standard }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
             }
 
-            SettingsSection(title: "Content Filtering") {
+            Divider()
+
+            SettingsRow(title: "UI Theme", subtitle: "System mode.") {
+                Picker("", selection: $themePreference) {
+                    Text("Auto").tag(0)
+                    Text("Light").tag(1)
+                    Text("Dark").tag(2)
+                }
+                .labelsHidden()
+                .frame(width: 90)
+            }
+        }
+    }
+    
+    private var generalCard: some View {
+        SettingsCard(title: "General", icon: "gearshape.fill", color: .gray) {
+            SettingsRow(title: "Haptic Feedback", subtitle: "Tactile clicks.") {
+                Toggle("", isOn: $hapticsEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            
+            Divider()
+            
+            SettingsRow(title: "Audio Feedback", subtitle: "Action sounds.") {
+                Toggle("", isOn: $audioEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            
+            Divider()
+            
+            SettingsRow(title: "Notifications", subtitle: "Alert permissions.") {
+                Button("Open Preferences") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+    
+    private var connectivityCard: some View {
+        SettingsCard(title: "Connectivity", icon: "network", color: .blue) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TMDB API Key")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Required for movie and series metadata.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
+                        Label("Get Key", systemImage: "key.fill")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                }
+                
+                SecureField("Enter Key", text: $tmdbApiKey)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .background(Color.primary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .font(.system(size: 11, design: .monospaced))
+            }
+        }
+    }
+    
+    private var discoveryCard: some View {
+        SettingsCard(title: "Discovery", icon: "sparkles.tv.fill", color: .orange) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Studio Aliases")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Merge multiple studios into one.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                
+                StudioAliasManagerView()
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Content Filtering")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Manage hidden or restricted tags.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                
                 DiscoveryManagementView()
             }
         }
     }
     
-    private var librarySettings: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SettingsSection(title: "Connectivity") {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("TMDB API Key")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Required for movie and series metadata.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
-                            Label("Get Key", systemImage: "key.fill")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                    }
-                    
-                    SecureField("Enter Key", text: $tmdbApiKey)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(Color.primary.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .font(.system(size: 12, design: .monospaced))
-                }
-            }
-            
-            SettingsSection(title: "Data Management") {
-                SettingsRow(title: "Backup & Portability", subtitle: "Export or import your library data.") {
-                    HStack(spacing: 12) {
+    private var dataMaintenanceCard: some View {
+        SettingsCard(title: "Data & Maintenance", icon: "wrench.and.screwdriver.fill", color: .green) {
+            VStack(alignment: .leading, spacing: 18) {
+                SettingsRow(title: "Library Backup", subtitle: "Export or import JSON.") {
+                    HStack(spacing: 8) {
                         Button { DataService.shared.exportLibrary(items: allItems) } label: {
-                            Label("Export", systemImage: "square.and.arrow.up")
+                            Image(systemName: "square.and.arrow.up").font(.system(size: 12))
                         }
                         Button { DataService.shared.importLibrary(modelContext: modelContext) } label: {
-                            Label("Import", systemImage: "square.and.arrow.down")
+                            Image(systemName: "square.and.arrow.down").font(.system(size: 12))
                         }
                     }
                     .buttonStyle(.bordered)
@@ -279,41 +245,23 @@ struct SettingsView: View {
                 
                 Divider()
                 
-                SettingsRow(title: "Maintenance", subtitle: "Repair database and purge duplicates.") {
-                    VStack(alignment: .trailing, spacing: 8) {
-                        Button {
-                            DataService.shared.runMaintenance(modelContext: modelContext)
-                        } label: {
-                            if DataService.shared.isRunningMaintenance {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Text("Start Repair")
-                            }
+                SettingsRow(title: "Database Repair", subtitle: "Heal relationships.") {
+                    Button {
+                        DataService.shared.runMaintenance(modelContext: modelContext)
+                    } label: {
+                        if DataService.shared.isRunningMaintenance {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Start Repair")
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(DataService.shared.isRunningMaintenance)
-                        
-                        Button {
-                            DataService.shared.refreshAllBadges(modelContext: modelContext)
-                        } label: {
-                            Text("Recalculate Badges")
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button {
-                            URLCache.shared.removeAllCachedResponses()
-                            FeedbackManager.shared.trigger(.removeFromLibrary)
-                            AppErrorState.shared.showToast("Network Cache Cleared", systemImage: "wifi.circle.fill", type: .success)
-                        } label: {
-                            Text("Clear Network Cache")
-                        }
-                        .buttonStyle(.bordered)
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(DataService.shared.isRunningMaintenance)
                 }
-            }
-
-            SettingsSection(title: "Image Cache") {
-                SettingsRow(title: "Storage Cleanup", subtitle: "Force a full refresh of all posters.") {
+                
+                Divider()
+                
+                SettingsRow(title: "Image Cache", subtitle: "Full purge.") {
                     Button("Purge Everything") {
                         ImageCache.shared.clearFullCache()
                         FeedbackManager.shared.trigger(.removeFromLibrary)
@@ -322,42 +270,59 @@ struct SettingsView: View {
                     .buttonStyle(.bordered)
                     .foregroundStyle(.red)
                 }
+                
+                Divider()
+                
+                SettingsRow(title: "Network Cache", subtitle: "Clear responses.") {
+                    Button("Clear Cache") {
+                        URLCache.shared.removeAllCachedResponses()
+                        FeedbackManager.shared.trigger(.removeFromLibrary)
+                        AppErrorState.shared.showToast("Network Cache Cleared", systemImage: "wifi.circle.fill", type: .success)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }
 }
 
-// MARK: - Reusable Components
+// MARK: - Components
 
-struct SettingsSection<Content: View>: View {
+struct SettingsCard<Content: View>: View {
     let title: String
-    let content: Content
-    
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
+    let icon: String
+    let color: Color
+    @ViewBuilder let content: Content
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .black))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 8)
-                .kerning(1.5)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(color.gradient)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                Text(title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+            }
+            .padding(20)
             
-            VStack(alignment: .leading, spacing: 18) {
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 20) {
                 content
             }
-            .padding(24)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.02), radius: 10, x: 0, y: 5)
+            .padding(20)
         }
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.03), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -374,17 +339,17 @@ struct SettingsRow<Content: View>: View {
     
     var body: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
             }
-            Spacer(minLength: 40)
+            Spacer(minLength: 20)
             content
         }
     }

@@ -20,6 +20,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case insights = "Insights"
     case movie = "Movie"
     case tvShow = "TV Show"
+    case settings = "Settings"
 
     var id: String { self.rawValue }
 
@@ -39,6 +40,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .insights: return "Statistics"
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
+        case .settings: return "Settings"
         }
     }
 
@@ -58,6 +60,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .insights: return "chart.bar.fill"
         case .movie: return "film"
         case .tvShow: return "tv"
+        case .settings: return "gearshape.fill"
         }
     }
 }

@@ -34,8 +34,8 @@ struct ContentView: View {
             let language = viewModel.selectedLanguage
             let groupBy = viewModel.currentGroupBy
 
-            // Optimization: Skip heavy data load if moving to Discovery Hub
-            if category == .discover { return }
+            // Optimization: Skip heavy data load if moving to Discovery Hub or Settings
+            if category == .discover || category == .settings { return }
 
             // Reset pagination for new filter/sort
             await MainActor.run {
@@ -177,6 +177,8 @@ struct ContentView: View {
                 .transition(.asymmetric(insertion: .opacity, removal: .opacity))
         } else if viewModel.selectedCategory == .insights {
             InsightsView()
+        } else if viewModel.selectedCategory == .settings {
+            SettingsView()
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -289,14 +291,19 @@ struct ContentView: View {
                         Group {
                             Button("") { sidebarSelection = .home }.keyboardShortcut(
                                 "1", modifiers: .command)
-                            Button("") { sidebarSelection = .upcoming }.keyboardShortcut(
+                            Button("") { sidebarSelection = .discover }.keyboardShortcut(
                                 "2", modifiers: .command)
-                            Button("") { sidebarSelection = .inProgress }
-                                .keyboardShortcut("3", modifiers: .command)
-                            Button("") { sidebarSelection = .watchlist }
-                                .keyboardShortcut("4", modifiers: .command)
+                            Button("") { sidebarSelection = .upcoming }.keyboardShortcut(
+                                "3", modifiers: .command)
                             Button("") { sidebarSelection = .all }.keyboardShortcut(
+                                "4", modifiers: .command)
+                            Button("") { sidebarSelection = .movie }.keyboardShortcut(
                                 "5", modifiers: .command)
+                            Button("") { sidebarSelection = .tvShow }.keyboardShortcut(
+                                "6", modifiers: .command)
+                            
+                            Button("") { sidebarSelection = .settings }.keyboardShortcut(
+                                ",", modifiers: .command)
 
                             Button("") { isSearchActive = true }
                                .keyboardShortcut("f", modifiers: .command)
@@ -411,13 +418,13 @@ struct ContentView: View {
 
     private var isSortable: Bool {
         let cat = viewModel.selectedCategory
-        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming { return false }
+        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming || cat == .settings { return false }
         return true
     }
 
     private var isRefreshable: Bool {
         let cat = viewModel.selectedCategory
-        if cat == .insights || cat == .home { return false }
+        if cat == .insights || cat == .home || cat == .settings { return false }
         return true
     }
 
