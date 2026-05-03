@@ -138,11 +138,14 @@ class DetailViewModel {
             isRefreshing = true // Show loading state during batch update
             
             Task { [weak self] in
+                guard let self = self else { return }
+                
                 // Concurrent fetching of missing episodes
                 await withTaskGroup(of: Void.self) { group in
                     for seasonID in seasonIDs {
                         group.addTask {
-                            await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: true)
+                            // Capture self as a non-isolated reference if possible, or use a non-isolated helper
+                            await self.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: true)
                         }
                     }
                 }
