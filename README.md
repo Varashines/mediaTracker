@@ -16,6 +16,11 @@ MediaTracker has evolved from a simple database into an intelligent media hub. E
     - The app's background now dynamically averages the colors of visible media to create a soft, atmospheric "Category Mood" that shifts as you browse.
 - **The "Repair Library" Tool:** 
     - A dedicated maintenance utility in Settings that assigns unique identifiers to legacy data, cleans up duplicates, and purges orphaned crew records to keep your database healthy.
+- **Redesigned Cinematic Details:**
+    - A completely overhauled Media Detail view with integrated "Liquid Glass" effects, dynamic color extraction from posters, and a more intuitive layout for seasons, episodes, and cast.
+- **Advanced Performance Guardrails:**
+    - **Memory Pressure Monitoring:** Real-time monitoring that automatically scales down cache usage during heavy system load.
+    - **Scroll Velocity Tracking:** Intelligent UI adjustments based on scroll speed to maintain perfect fluid motion even in large libraries.
 
 ## 🚀 Key Functional Features
 
