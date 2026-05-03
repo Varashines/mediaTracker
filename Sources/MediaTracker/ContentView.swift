@@ -70,6 +70,7 @@ struct ContentView: View {
                     viewModel.featuredUpcomingItems = result.featuredUpcoming
                     viewModel.recentlyAddedItems = result.recentlyAdded
                     viewModel.homeContinueWatchingItems = result.homeContinueWatching
+                    viewModel.spotlightHero = result.spotlightHero
                     viewModel.groupedItems = result.grouped
                     viewModel.libraryTMDBIDs = allIDs
                     viewModel.isInitialLoading = false
@@ -201,6 +202,11 @@ struct ContentView: View {
                 onNetworkSelected: { networks in
                     onNetworkSelected(networks)
                 },
+                onCategorySelected: { category in
+                    withAnimation {
+                        sidebarSelection = category
+                    }
+                },
                 onLoadMore: {
                     loadMoreItems()
                 },
@@ -324,6 +330,13 @@ struct ContentView: View {
     }
 
     private func navigate(to metadata: MediaThumbnailMetadata) {
+        if metadata.title == "Start Your Journey" {
+            withAnimation {
+                sidebarSelection = .discover
+            }
+            return
+        }
+
         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
             if let item = modelContext.model(for: metadata.id) as? MediaItem {
                 viewModel.navigationPath.append(item)

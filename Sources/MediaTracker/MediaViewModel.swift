@@ -37,6 +37,7 @@ class MediaViewModel {
     var displayedItems: [MediaThumbnailMetadata] = []
     var recentlyAddedItems: [MediaThumbnailMetadata] = []
     var homeContinueWatchingItems: [MediaThumbnailMetadata] = []
+    var spotlightHero: MediaThumbnailMetadata? = nil
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []

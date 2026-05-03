@@ -16,6 +16,7 @@ struct MainLibraryView: View {
     @Binding var isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onNetworkSelected: ([String]) -> Void
+    let onCategorySelected: (NavigationCategory) -> Void
     let onLoadMore: () -> Void
     var viewModel: MediaViewModel
 
@@ -42,9 +43,19 @@ struct MainLibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                        ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero)
-                            .padding(.bottom, 20)
+                        // 1. CINEMATIC SPOTLIGHT (Priority Hero)
+                        if let hero = viewModel.spotlightHero {
+                            SpotlightHeroView(metadata: hero, onSelect: onSelectHero, isFastScrolling: isFastScrolling)
+                                .padding(.top, 10)
+                        }
 
+                        // 2. CONTINUE WATCHING
+                        ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero) {
+                            onCategorySelected(.discover)
+                        }
+                        .padding(.bottom, 20)
+
+                        // 3. FOR YOU (Recommendations)
                         ForYouCarousel(items: recommendations, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero)
                             .padding(.bottom, 20)
                     }

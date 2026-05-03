@@ -43,8 +43,13 @@ struct ReleaseCalendarView: View {
             
             // 2. RIGHT PANE: Release Details
             ScrollView {
-                VStack(alignment: .leading, spacing: 25) {
+                VStack(alignment: .leading, spacing: 35) {
                     if let data = calendarData {
+                        // NEW: WEEK FOCUS (Immediate temporal discovery)
+                        weekFocusRow(data: data)
+                        
+                        Divider().padding(.vertical, 10)
+
                         if let date = selectedDate, let dayInfo = data.days[date] {
                             // Specific Day View
                             headerSection(date: date, count: dayInfo.items.count)
@@ -268,22 +273,78 @@ struct ReleaseCalendarView: View {
     }
     
     @ViewBuilder
+    private func weekFocusRow(data: CalendarResult) -> some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let next7Days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        
+        VStack(alignment: .leading, spacing: 15) {
+            Text("NEXT 7 DAYS")
+                .font(.system(size: 10, weight: .black))
+                .kerning(1.5)
+                .foregroundStyle(.secondary)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(next7Days, id: \.self) { date in
+                        let dayInfo = data.days[date]
+                        let isSelected = selectedDate != nil && calendar.isDate(date, inSameDayAs: selectedDate!)
+                        
+                        Button {
+                            withAnimation(.spring(response: 0.3)) { selectedDate = date }
+                        } label: {
+                            VStack(spacing: 8) {
+                                Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(isSelected ? .white : .secondary)
+                                
+                                Text(date.formatted(.dateTime.day()))
+                                    .font(.system(size: 18, weight: .black, design: .rounded))
+                                    .foregroundStyle(isSelected ? .white : .primary)
+                                
+                                if let info = dayInfo, !info.items.isEmpty {
+                                    Circle()
+                                        .fill(isSelected ? .white : appAccent.color)
+                                        .frame(width: 4, height: 4)
+                                }
+                            }
+                            .frame(width: 50, height: 75)
+                            .background {
+                                if isSelected {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(appAccent.color.gradient)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.primary.opacity(0.05))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
     private func calendarCell(day: CalendarDayInfo) -> some View {
         let isSelected = selectedDate != nil && Calendar.current.isDate(day.date, inSameDayAs: selectedDate!)
         let isToday = Calendar.current.isDateInToday(day.date)
+        let accent = appAccent.color.readableAccent(colorScheme: .dark) // Use high-contrast accent for heatmap
         
-        RoundedRectangle(cornerRadius: 3)
-            .fill(day.items.isEmpty ? Color.secondary.opacity(0.1) : appAccent.color.opacity(day.intensity * 0.8 + 0.2))
+        RoundedRectangle(cornerRadius: 4)
+            .fill(day.items.isEmpty ? Color.secondary.opacity(0.1) : accent.opacity(day.intensity * 0.7 + 0.3))
             .frame(width: 32, height: 32)
             .overlay {
                 if isToday {
                     Circle()
-                        .fill(Color.primary)
-                        .frame(width: 6, height: 6)
+                        .fill(Color.white)
+                        .frame(width: 4, height: 4)
+                        .offset(y: 10)
                 }
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(Color.primary, lineWidth: 1.5)
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.white, lineWidth: 2)
                         .padding(-2)
                 }
             }
@@ -304,13 +365,14 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            let accent = appAccent.color.readableAccent(colorScheme: .dark)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
                 .font(.system(size: 12, weight: .black))
-                .foregroundStyle(appAccent.color)
+                .foregroundStyle(accent)
                 .kerning(2)
             
             Text(isAllMonth ? date.formatted(.dateTime.month(.wide).year()) : "\(count) Releases")
-                .font(.system(size: 34, weight: .black, design: .rounded))
+                .font(.system(size: 44, weight: .black, design: .rounded))
             
             if isAllMonth {
                 Text("\(count) total releases this month")

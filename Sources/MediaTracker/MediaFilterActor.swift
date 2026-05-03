@@ -50,8 +50,31 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
         self.smartBadgeIcon = item.storedSmartBadgeIcon
         self.isSparkleBadge = item.storedSmartBadgeIsSparkle
         self.remainingCount = item.remainingEpisodesCount
-        self.genres = item.cachedGenres
         self.recommendationReason = recommendationReason
+        self.genres = item.cachedGenres
+    }
+
+    init(id: PersistentIdentifier, title: String, overview: String) {
+        self.id = id
+        self.title = title
+        self.overview = overview
+        self.posterURL = nil
+        self.backdropURL = nil
+        self.releaseDate = nil
+        self.type = .movie
+        self.state = .wishlist
+        self.themeColorHex = nil
+        self.progress = nil
+        self.watchProgress = nil
+        self.nextEpisodeToWatchLabel = nil
+        self.isUpcoming = false
+        self.badgeText = nil
+        self.smartBadgeLabel = nil
+        self.smartBadgeIcon = nil
+        self.isSparkleBadge = false
+        self.remainingCount = nil
+        self.genres = []
+        self.recommendationReason = nil
     }
 }
 
@@ -60,6 +83,7 @@ struct PaginatedResult: Sendable {
     let featuredUpcoming: [MediaThumbnailMetadata]
     let recentlyAdded: [MediaThumbnailMetadata]
     let homeContinueWatching: [MediaThumbnailMetadata]
+    let spotlightHero: MediaThumbnailMetadata?
     let grouped: [(String, [MediaThumbnailMetadata])]
     let totalCount: Int
 }
@@ -132,6 +156,7 @@ actor MediaFilterActor {
             featuredUpcoming: featuredUpcoming,
             recentlyAdded: recentAddedItems,
             homeContinueWatching: [],
+            spotlightHero: nil,
             grouped: finalGroupedItems,
             totalCount: totalCount
         )
@@ -260,6 +285,9 @@ actor MediaFilterActor {
             return (itemA.lastInteractionDate ?? .distantPast) > (itemB.lastInteractionDate ?? .distantPast)
         }
         
+        // Find Spotlight Hero: Most recently interacted "Active" item
+        let spotlight = activeItems.first { $0.stateValue == "Active" }
+        
         let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
         
         let comingSoonItems = homeResults.filter { item in
@@ -272,6 +300,7 @@ actor MediaFilterActor {
             featuredUpcoming: [], 
             recentlyAdded: [], 
             homeContinueWatching: homeContinueWatching,
+            spotlightHero: spotlight.map { toMetadata($0) },
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })], 
             totalCount: totalCount
         )

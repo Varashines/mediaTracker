@@ -253,6 +253,26 @@ struct MediaThumbnailView: View {
                 appAccent: appAccent
             )
             
+            // Progress Bar (Bottom Edge, Hero Mode Only)
+            if mode == .hero, let progress = safeProgress, progress > 0 && progress < 1.0 {
+                VStack {
+                    Spacer()
+                    let accent = (item?.themeColorHex.flatMap { Color(hex: $0) } ?? appAccent.color).readableAccent(colorScheme: colorScheme)
+                    
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(.black.opacity(0.3))
+                            .frame(height: 3)
+                        
+                        Rectangle()
+                            .fill(accent)
+                            .frame(width: width * CGFloat(progress), height: 3)
+                            .shadow(color: accent.opacity(0.5), radius: 4, x: 0, y: 0)
+                    }
+                }
+                .opacity(isHovered ? 0 : 1)
+            }
+            
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
                 ThumbnailSearchOverlay(

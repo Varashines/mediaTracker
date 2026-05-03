@@ -6,6 +6,7 @@ struct ContinueWatchingCarousel: View {
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
+    var onDiscoverySpotlight: (() -> Void)? = nil
     
     @State private var scrollProgress: Double = 0
     @State private var contentWidth: CGFloat = 0
@@ -62,16 +63,43 @@ struct ContinueWatchingCarousel: View {
                 }
                 .scrollClipDisabled()
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(0..<6, id: \.self) { _ in
-                            MediaThumbnailPlaceholder(mode: .hero)
+                // Discovery Spotlight Empty State
+                Button {
+                    onDiscoverySpotlight?()
+                } label: {
+                    HStack(spacing: 24) {
+                        Image(systemName: "sparkles.tv.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white)
+                            .frame(width: 80, height: 80)
+                            .background(Color.accentColor.gradient)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Ready to start watching?")
+                                .font(.headline.bold())
+                                .foregroundStyle(.primary)
+                            Text("Explore the Discovery Hub to find your next favorite show.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.tertiary)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 15)
+                    .padding(24)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                    }
                 }
-                .scrollClipDisabled()
+                .buttonStyle(.plain)
+                .padding(.horizontal, 30)
+                .padding(.vertical, 15)
             }
         }
     }
