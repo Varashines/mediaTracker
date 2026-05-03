@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class CastMember {
     var uniqueID: String?
+    var mediaID: String?
     var name: String
     var characterName: String
     var profileURL: String?
@@ -16,6 +17,7 @@ final class CastMember {
         self.characterName = characterName
         self.profileURL = profileURL
         self.order = order
+        self.mediaID = mediaID
         if let mID = mediaID {
             self.uniqueID = "\(mID)_\(name)"
         } else {

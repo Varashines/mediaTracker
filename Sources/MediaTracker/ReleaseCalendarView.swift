@@ -187,7 +187,10 @@ struct ReleaseCalendarView: View {
         let adjacentDates = [
             calendar.date(byAdding: .month, value: -1, to: month),
             calendar.date(byAdding: .month, value: 1, to: month)
-        ].compactMap { $0 }.map { calendar.date(from: calendar.dateComponents([.year, .month], from: $0))! }
+        ].compactMap { date -> Date? in
+            guard let date = date else { return nil }
+            return calendar.date(from: calendar.dateComponents([.year, .month], from: date))
+        }
 
         let container = modelContext.container
         for date in adjacentDates {
@@ -288,10 +291,9 @@ struct ReleaseCalendarView: View {
                 HStack(spacing: 16) {
                     ForEach(next7Days, id: \.self) { date in
                         let dayInfo = data.days[date]
-                        let isSelected = selectedDate != nil && calendar.isDate(date, inSameDayAs: selectedDate!)
-                        
-                        Button {
-                            withAnimation(.spring(response: 0.3)) { selectedDate = date }
+                        let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
+
+                        Button {                            withAnimation(.spring(response: 0.3)) { selectedDate = date }
                         } label: {
                             VStack(spacing: 8) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
@@ -328,7 +330,7 @@ struct ReleaseCalendarView: View {
     
     @ViewBuilder
     private func calendarCell(day: CalendarDayInfo) -> some View {
-        let isSelected = selectedDate != nil && Calendar.current.isDate(day.date, inSameDayAs: selectedDate!)
+        let isSelected = selectedDate.map { Calendar.current.isDate(day.date, inSameDayAs: $0) } ?? false
         let isToday = Calendar.current.isDateInToday(day.date)
         let accent = appAccent.color.readableAccent(colorScheme: .dark) // Use high-contrast accent for heatmap
         

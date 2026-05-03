@@ -16,184 +16,6 @@ struct MediaItemData: Codable {
     let taste: String?
 }
 
-@ModelActor
-actor MaintenanceService {
-    func performLibraryHeal() async throws {
-        let descriptor = FetchDescriptor<MediaItem>()
-        let items = try modelContext.fetch(descriptor)
-        
-        // 0. Deduplicate MediaItems (Ensures no two items share the same TMDB ID)
-        let groupedItems = Dictionary(grouping: items, by: { $0.id })
-        for (id, duplicates) in groupedItems where duplicates.count > 1 {
-            print("🔍 Maintenance: Found \(duplicates.count) duplicates for ID \(id)")
-            let sorted = duplicates.sorted { 
-                let score1 = ($0.posterURL != nil ? 2 : 0) + ($0.tvShowDetails != nil ? 5 : 0)
-                let score2 = ($1.posterURL != nil ? 2 : 0) + ($1.tvShowDetails != nil ? 5 : 0)
-                if score1 != score2 { return score1 > score2 }
-                return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
-            }
-            
-            // Phase 1: Merge user data into the winner
-            let winner = sorted[0]
-            for i in 1..<sorted.count {
-                let loser = sorted[i]
-                
-                // Merge State (pick most advanced)
-                let stateOrder: [MediaState] = [.completed, .rewatching, .active, .onHold, .dropped, .wishlist]
-                if let winnerState = winner.state, let loserState = loser.state {
-                    let winnerIndex = stateOrder.firstIndex(of: winnerState) ?? 99
-                    let loserIndex = stateOrder.firstIndex(of: loserState) ?? 99
-                    if loserIndex < winnerIndex {
-                        winner.state = loserState
-                    }
-                }
-                
-                // Merge Taste
-                if winner.tasteValue == "None" && loser.tasteValue != "None" {
-                    winner.tasteValue = loser.tasteValue
-                }
-                
-                // Merge Dates
-                if let loserLID = loser.lastInteractionDate, (winner.lastInteractionDate == nil || loserLID > winner.lastInteractionDate!) {
-                    winner.lastInteractionDate = loserLID
-                }
-                if let loserDA = loser.dateAdded, (winner.dateAdded == nil || loserDA < winner.dateAdded!) {
-                    winner.dateAdded = loserDA
-                }
-                
-                // Deep merge TV episodes if applicable
-                if let winnerTV = winner.tvShowDetails, let loserTV = loser.tvShowDetails {
-                    for loserSeason in loserTV.seasons {
-                        if let winnerSeason = winnerTV.seasons.first(where: { $0.seasonNumber == loserSeason.seasonNumber }) {
-                            for loserEp in loserSeason.episodes {
-                                if loserEp.isWatched, let winnerEp = winnerSeason.episodes.first(where: { $0.episodeNumber == loserEp.episodeNumber }) {
-                                    winnerEp.isWatched = true
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                modelContext.delete(loser)
-            }
-        }
-        
-        // Fetch fresh list after deduplication
-        let sanitizedItems = try modelContext.fetch(descriptor)
-        
-        for item in sanitizedItems {
-            // 1. Migrate legacy IDs to prefixed format (prevents Movie/TV collisions)
-            if !item.id.contains("_") {
-                let typePrefix = item.type == .movie ? "movie" : "tv"
-                item.id = "\(typePrefix)_\(item.id)"
-            }
-
-            // 2. Assign uniqueIDs to episodes
-            if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
-                if let tv = item.tvShowDetails {
-                    tv.item = item
-                    
-                    // First, deduplicate Seasons at the relationship level
-                    let groupedSeasons = Dictionary(grouping: tv.seasons, by: { $0.seasonNumber })
-                    for (num, duplicates) in groupedSeasons where duplicates.count > 1 {
-                        print("🔍 Maintenance: Found \(duplicates.count) duplicate seasons for S\(num)")
-                        let sorted = duplicates.sorted { ($0.episodes.count) > ($1.episodes.count) }
-                        
-                        let winner = sorted[0]
-                        for i in 1..<sorted.count { 
-                            let loser = sorted[i]
-                            // Merge episode watch states
-                            for loserEp in loser.episodes {
-                                if loserEp.isWatched, let winnerEp = winner.episodes.first(where: { $0.episodeNumber == loserEp.episodeNumber }) {
-                                    winnerEp.isWatched = true
-                                }
-                            }
-                            tv.seasons.removeAll { $0.persistentModelID == loser.persistentModelID }
-                            modelContext.delete(loser) 
-                        }
-                    }
-                    
-                    for season in tv.seasons {
-                        if season.uniqueID == nil {
-                            season.uniqueID = "\(tmdbID)_\(season.seasonNumber)"
-                        }
-                        season.tvShowDetails = tv
-                        
-                        // Deduplicate Episodes within the season
-                        let groupedEpisodes = Dictionary(grouping: season.episodes, by: { $0.episodeNumber })
-                        for (num, duplicates) in groupedEpisodes where duplicates.count > 1 {
-                            print("🔍 Maintenance: Found \(duplicates.count) duplicate episodes for S\(season.seasonNumber) E\(num)")
-                            let sorted = duplicates.sorted { 
-                                if $0.isWatched != $1.isWatched { return $0.isWatched }
-                                return ($0.airDate ?? "").count > ($1.airDate ?? "").count 
-                            }
-                            
-                            let winner = sorted[0]
-                            for i in 1..<sorted.count { 
-                                let loser = sorted[i]
-                                if loser.isWatched { winner.isWatched = true }
-                                season.episodes.removeAll { $0.persistentModelID == loser.persistentModelID }
-                                modelContext.delete(loser) 
-                            }
-                        }
-
-                        for episode in season.episodes {
-                            if episode.uniqueID == nil {
-                                episode.uniqueID = "\(tmdbID)_\(season.seasonNumber)_\(episode.episodeNumber)"
-                            }
-                            episode.season = season
-                        }
-                        
-                        // Phase 3 Optimization: Populate Persistent Dates
-                        for episode in season.episodes {
-                            if episode.airDateValue == nil {
-                                episode.updateAirDateValue()
-                            }
-                        }
-                    }
-                    
-                    // 4. Purge legacy Crew cards
-                    for member in tv.cast {
-                        if member.characterName == "Creator" || member.characterName == "Director" {
-                            modelContext.delete(member)
-                        }
-                    }
-                    
-                    tv.recalculateCachedProperties(triggerSync: true)
-                }
-                
-                if let movie = item.movieDetails {
-                    for member in movie.cast {
-                        if member.characterName == "Creator" || member.characterName == "Director" {
-                            modelContext.delete(member)
-                        }
-                    }
-                }
-            }
-            item.syncCachedProperties()
-            item.updateSearchableText()
-        }
-        
-        // 3. Final Badge Sync pass and Cache Purge for Logos
-        let finalItems = (try? modelContext.fetch(descriptor)) ?? []
-        var logoURLs: [String] = []
-        for item in finalItems {
-            item.syncCachedProperties()
-            if let logo = item.cachedNetworkLogoPath, let url = APIClient.tmdbImageURL(path: logo, size: "w300") {
-                logoURLs.append(url)
-            }
-        }
-        
-        // Asynchronously clear logo cache so they regenerate with proper alpha
-        if !logoURLs.isEmpty {
-            await ImageCache.shared.clearCache(forURLs: logoURLs)
-        }
-        
-        try? modelContext.save()
-        print("✅ Maintenance: Library heal, badge refresh, and logo cache optimization complete.")
-    }
-}
-
 @MainActor @Observable
 class DataService {
     static let shared = DataService()
@@ -259,23 +81,28 @@ class DataService {
             }
         }
     }
-    func runMaintenance(modelContext: ModelContext) {
+    func runMaintenance(modelContext: ModelContext, silent: Bool = false) {
         guard !isRunningMaintenance else { return }
         isRunningMaintenance = true
         
-        let service = MaintenanceService(modelContainer: modelContext.container)
-        Task {
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            let service = MaintenanceService(modelContainer: container)
             do {
                 try await service.performLibraryHeal()
                 await MainActor.run {
                     self.isRunningMaintenance = false
                     self.showMaintenanceComplete = true
-                    AppErrorState.shared.showToast("Library repair complete.", systemImage: "checkmark.circle.fill", type: .success)
+                    if !silent {
+                        AppErrorState.shared.showToast("Library repair complete.", systemImage: "checkmark.circle.fill", type: .success)
+                    }
                 }
             } catch {
                 await MainActor.run {
                     self.isRunningMaintenance = false
-                    AppErrorState.shared.surfaceError("Library repair failed: \(error.localizedDescription)")
+                    if !silent {
+                        AppErrorState.shared.surfaceError("Library repair failed: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -297,6 +124,27 @@ class DataService {
                 await MainActor.run {
                     AppErrorState.shared.showToast("All badges updated.", systemImage: "checkmark.circle.fill", type: .success)
                 }
+            }
+        }
+    }
+
+    func clearDatabase(modelContext: ModelContext) {
+        Task { @MainActor in
+            do {
+                try modelContext.delete(model: MediaItem.self)
+                try modelContext.delete(model: NetworkEntity.self)
+                try modelContext.delete(model: GenreEntity.self)
+                try modelContext.delete(model: LanguageEntity.self)
+                try modelContext.save()
+                
+                // Clear caches as well
+                ImageCache.shared.clearFullCache()
+                URLCache.shared.removeAllCachedResponses()
+                
+                AppErrorState.shared.showToast("Database cleared successfully.", systemImage: "trash", type: .success)
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            } catch {
+                AppErrorState.shared.surfaceError("Failed to clear database: \(error.localizedDescription)")
             }
         }
     }
@@ -343,358 +191,35 @@ class DataService {
             if response == .OK, let url = panel.url {
                 let container = modelContext.container
 
-                // Phase 2 Optimization: Detach from Main Thread
-                Task.detached(priority: .userInitiated) {
+                Task {
                     do {
-                        // 1. Heavy File I/O
-                        let data = try Data(contentsOf: url)
+                        // 1. Offload Heavy File I/O and Decoding
+                        let backup = try await Task.detached(priority: .userInitiated) {
+                            let data = try Data(contentsOf: url)
+                            return try JSONDecoder().decode(LibraryBackup.self, from: data)
+                        }.value
 
-                        // 2. Heavy Decoding
-                        let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
-
-                        // 3. Hand over to Background Actor for DB Inserts
+                        // 2. Hand over to Background Actor for DB Inserts
                         let backgroundService = BackgroundDataService(modelContainer: container)
                         let count = await backgroundService.importLibraryData(backup: backup)
 
-                        await MainActor.run {
-                            print("✅ Library imported successfully: \(count) new items.")
-                            AppErrorState.shared.showToast("Imported \(count) items.", systemImage: "tray.and.arrow.down.fill", type: .success)
+                        print("✅ Library imported successfully: \(count) new items.")
+                        AppErrorState.shared.showToast("Imported \(count) items.", systemImage: "tray.and.arrow.down.fill", type: .success)
+                        
+                        // Automatically start fetching metadata for everything in the library
+                        let descriptor = FetchDescriptor<MediaItem>()
+                        if let allItems = try? modelContext.fetch(descriptor) {
+                            self.refreshMetadata(for: allItems, modelContext: modelContext, force: true)
                         }
+                        
+                        // Run a silent repair to catch any duplicates from the import
+                        self.runMaintenance(modelContext: modelContext, silent: true)
                     } catch {
                         print("❌ Import error: \(error)")
-                        await MainActor.run {
-                            AppErrorState.shared.surfaceError("Failed to import library: \(error.localizedDescription)")
-                        }
+                        AppErrorState.shared.surfaceError("Failed to import library: \(error.localizedDescription)")
                     }
                 }
             }
-        }
-    }}
-
-/// Handles high-priority background actions like those triggered by notifications.
-@ModelActor
-actor BackgroundActionService {
-    func markAsWatched(itemID: String, type: String, season: Int? = nil, episode: Int? = nil) throws {
-        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == itemID })
-        guard let item = try modelContext.fetch(descriptor).first else { return }
-        
-        if type == "movie" {
-            item.state = .completed
-            item.lastStateChangeDate = Date()
-            item.lastInteractionDate = Date()
-        } else if type == "tvShow", let s = season, let e = episode {
-            // Find specific episode
-            if let tvDetails = item.tvShowDetails {
-                for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
-                    for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
-                        episodeObj.isWatched = true
-                        item.lastInteractionDate = Date()
-                        break
-                    }
-                }
-            }
-        }
-        
-        item.syncCachedProperties()
-        item.updateSearchableText()
-        try modelContext.save()
-        
-        // Notify UI
-        Task { @MainActor in
-            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
         }
     }
 }
-
-@ModelActor
-actor DiscoverySyncService {
-    private struct AliasRule {
-        let target: String
-        let sources: Set<String>
-        let preferredLogoSource: String?
-    }
-    
-    @MainActor private static var cachedRules: [AliasRule]?
-    @MainActor private static var cachedAliasString: String?
-
-    private func parseAliases() async -> [AliasRule] {
-        let aliasString = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
-        
-        // Cache check
-        let (cached, str) = await MainActor.run { (Self.cachedRules, Self.cachedAliasString) }
-        if str == aliasString, let rules = cached {
-            return rules
-        }
-
-        let lines = aliasString.components(separatedBy: .newlines)
-        var rules: [AliasRule] = []
-        
-        for line in lines where line.contains("=") {
-            let mainParts = line.components(separatedBy: "|")
-            let aliasPart = mainParts[0]
-            let logoPart = mainParts.count > 1 ? mainParts[1] : nil
-            
-            let sides = aliasPart.components(separatedBy: "=")
-            guard sides.count >= 2 else { continue }
-            
-            let target = sides[0].trimmingCharacters(in: .whitespaces)
-            let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            
-            var preferredLogoSource: String? = nil
-            if let logoStr = logoPart, logoStr.contains("Logo:") {
-                preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
-            }
-            
-            rules.append(AliasRule(target: target, sources: Set(sources), preferredLogoSource: preferredLogoSource))
-        }
-        
-        let finalRules = rules
-        await MainActor.run {
-            Self.cachedRules = finalRules
-            Self.cachedAliasString = aliasString
-        }
-        
-        return rules
-    }
-
-    func syncLibrary(force: Bool) async {
-        // Phase 5 Optimization: Batched Processing to prevent memory spikes
-        var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
-        var genreCounts: [String: Int] = [:]
-        var languageCounts: [String: Int] = [:]
-        
-        let batchSize = 500
-        var offset = 0
-        
-        while true {
-            var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.fetchLimit = batchSize
-            descriptor.fetchOffset = offset
-            
-            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
-            
-            // Studio Aliases (Cached internally in parseAliases)
-            let rules = await parseAliases()
-            var sourceToTarget: [String: String] = [:]
-            var targetToLogoSource: [String: String] = [:]
-            
-            for rule in rules {
-                for source in rule.sources {
-                    sourceToTarget[source] = rule.target
-                }
-                if let pref = rule.preferredLogoSource {
-                    targetToLogoSource[rule.target] = pref
-                }
-            }
-            
-            for item in items {
-                // Count Networks
-                if item.type == .tvShow, let originalName = item.cachedNetwork {
-                    let name = sourceToTarget[originalName] ?? originalName
-                    let preferredSource = targetToLogoSource[name]
-                    
-                    let current = networkCounts[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
-                    var newLogo = current.logo
-                    var newPriority = current.priority
-                    var newSources = current.sources
-                    if !newSources.contains(originalName) { newSources.append(originalName) }
-                    
-                    if let itemLogo = item.cachedNetworkLogoPath {
-                        if let pref = preferredSource, originalName == pref {
-                            newLogo = itemLogo
-                            newPriority = 100
-                        } else if newLogo == nil || (originalName == name && newPriority < 50) {
-                            newLogo = itemLogo
-                            newPriority = (originalName == name) ? 50 : 10
-                        }
-                    }
-                    
-                    networkCounts[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
-                }
-                
-                // Count Genres
-                for genre in item.cachedGenres {
-                    genreCounts[genre, default: 0] += 1
-                }
-                
-                // Count Languages
-                if let lang = item.cachedLanguage {
-                    languageCounts[lang, default: 0] += 1
-                }
-            }
-            
-            offset += batchSize
-            // Clear context objects to free memory
-            modelContext.processPendingChanges()
-        }
-        
-        // 2. Incremental Sync: Update existing, insert new, delete orphaned
-        let existingNetworks = (try? modelContext.fetch(FetchDescriptor<NetworkEntity>())) ?? []
-        for (name, data) in networkCounts {
-            if let existing = existingNetworks.first(where: { $0.name == name }) {
-                existing.count = data.count
-                existing.logoPath = data.logo
-                existing.sourceNames = data.sources
-            } else {
-                modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources))
-            }
-        }
-        for entity in existingNetworks where networkCounts[entity.name] == nil {
-            modelContext.delete(entity)
-        }
-
-        let existingGenres = (try? modelContext.fetch(FetchDescriptor<GenreEntity>())) ?? []
-        for (name, count) in genreCounts {
-            if let existing = existingGenres.first(where: { $0.name == name }) {
-                existing.count = count
-            } else {
-                modelContext.insert(GenreEntity(name: name, count: count))
-            }
-        }
-        for entity in existingGenres where genreCounts[entity.name] == nil {
-            modelContext.delete(entity)
-        }
-
-        let existingLanguages = (try? modelContext.fetch(FetchDescriptor<LanguageEntity>())) ?? []
-        for (code, count) in languageCounts {
-            if let existing = existingLanguages.first(where: { $0.code == code }) {
-                existing.count = count
-            } else {
-                modelContext.insert(LanguageEntity(code: code, count: count))
-            }
-        }
-        for entity in existingLanguages where languageCounts[entity.code] == nil {
-            modelContext.delete(entity)
-        }
-        
-        try? modelContext.save()
-        
-        // 3. Extract missing colors
-        await extractMissingColors()
-    }
-
-    func updateItemAdded(_ item: MediaItem) async {
-        // Studio Aliases
-        let rules = await parseAliases()
-        var sourceToTarget: [String: String] = [:]
-        for rule in rules {
-            for source in rule.sources {
-                sourceToTarget[source] = rule.target
-            }
-        }
-
-        // Incremental Network update
-        if item.type == .tvShow, let originalName = item.cachedNetwork {
-            let name = sourceToTarget[originalName] ?? originalName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(NetworkEntity(name: name, logoPath: item.cachedNetworkLogoPath, count: 1))
-            }
-        }
-        
-        for genre in item.cachedGenres {
-            let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(GenreEntity(name: genre, count: 1))
-            }
-        }
-        
-        // Incremental Language update
-        if let lang = item.cachedLanguage {
-            let descriptor = FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(LanguageEntity(code: lang, count: 1))
-            }
-        }
-        
-        try? modelContext.save()
-        
-        // Ensure colors are updated for the new network
-        await extractMissingColors()
-    }
-
-    func updateItemDeleted(network: String?, genres: [String], language: String?) async {
-        // Studio Aliases
-        let rules = await parseAliases()
-        var sourceToTarget: [String: String] = [:]
-        for rule in rules {
-            for source in rule.sources {
-                sourceToTarget[source] = rule.target
-            }
-        }
-
-        if let originalName = network {
-            let name = sourceToTarget[originalName] ?? originalName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        
-        for genre in genres {
-            let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        
-        if let lang = language {
-            let descriptor = FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        
-        try? modelContext.save()
-    }
-
-    private func extractMissingColors() async {
-        let descriptor = FetchDescriptor<NetworkEntity>()
-        guard let networks = try? modelContext.fetch(descriptor) else { return }
-
-        let missing = networks.filter { $0.themeColorHex == nil }
-        if missing.isEmpty { return }
-
-        await withTaskGroup(of: (PersistentIdentifier, String?).self) { group in
-            for network in missing {
-                let id = network.persistentModelID
-                let name = network.name
-                let logo = network.logoPath
-
-                group.addTask {
-                    // Restore from cache if available
-                    if let cachedColor = await (MainActor.run { NetworkThemeManager.shared.color(for: name) }) {
-                        return (id, cachedColor.toHex())
-                    }
-
-                    guard let logo = logo,
-                          let urlString = APIClient.tmdbImageURL(path: logo, size: "w92"),
-                          let url = URL(string: urlString) else { return (id, nil) }
-
-                    if let (data, _) = try? await URLSession.shared.data(from: url) {
-                        let color = await ColorExtractor.dominantColor(from: data)
-                        await MainActor.run { NetworkThemeManager.shared.save(color: color, for: name) }
-                        return (id, color.toHex())
-                    }
-                    return (id, nil)
-                }
-            }
-
-            for await (id, hex) in group {
-                if let hex = hex, let network = modelContext.model(for: id) as? NetworkEntity {
-                    network.themeColorHex = hex
-                }
-            }
-        }
-
-        try? modelContext.save()
-    }}

@@ -86,19 +86,26 @@ actor APIClient {
     }
 
     // MARK: - Disk Cache Helpers
-    private nonisolated func getCachedData(forKey key: String) -> Data? {
+    private func getCachedData(forKey key: String) async -> Data? {
         let fileURL = cacheFolder.appendingPathComponent(key)
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
-              let modificationDate = attributes[.modificationDate] as? Date,
-              Date().timeIntervalSince(modificationDate) < (7 * 86400) else { // 7 day cache
-            return nil
+        
+        return await FileIOActor.shared.run {
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+                  let modificationDate = attributes[.modificationDate] as? Date,
+                  Date().timeIntervalSince(modificationDate) < (7 * 86400) else { // 7 day cache
+                return nil
+            }
+            return try? Data(contentsOf: fileURL)
         }
-        return try? Data(contentsOf: fileURL)
     }
 
     private nonisolated func saveToCache(data: Data, forKey key: String) {
         let fileURL = cacheFolder.appendingPathComponent(key)
-        try? data.write(to: fileURL)
+        Task.detached(priority: .background) {
+            await FileIOActor.shared.run {
+                try? data.write(to: fileURL, options: .atomic)
+            }
+        }
     }
 
     // MARK: - Generic Search
@@ -141,7 +148,7 @@ actor APIClient {
         }
         
         // Phase 3: Disk Cache check for searches
-        if let cachedData = getCachedData(forKey: "\(cacheKey).json"),
+        if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
            let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
@@ -169,7 +176,7 @@ actor APIClient {
         }
 
         // Phase 3: Disk Cache check for searches
-        if let cachedData = getCachedData(forKey: "\(cacheKey).json"),
+        if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
            let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
@@ -192,7 +199,7 @@ actor APIClient {
 
     func fetchMovieDetails(tmdbID: Int) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        if let cachedData = getCachedData(forKey: cacheKey),
+        if let cachedData = await getCachedData(forKey: cacheKey),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
         }
@@ -209,8 +216,8 @@ actor APIClient {
     }
 
     private nonisolated func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
-        let cast = details.credits?.cast.prefix(15).map { 
-            CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
+        let cast = details.credits?.cast.prefix(30).map { 
+            CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
         } ?? []
         
         let directors = details.credits?.crew?.filter { $0.job == "Director" }.map { 
@@ -238,6 +245,7 @@ actor APIClient {
             releaseDate: finalReleaseDate, 
             backdropPath: details.backdrop_path, 
             posterPath: details.poster_path, 
+            overview: details.overview,
             originalLanguage: details.original_language, 
             cast: Array(cast), 
             directors: directors
@@ -246,13 +254,13 @@ actor APIClient {
 
     func fetchTVDetails(tmdbID: Int) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
-        if let cachedData = getCachedData(forKey: cacheKey),
+        if let cachedData = await getCachedData(forKey: cacheKey),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             return processTVDetails(d)
         }
 
         return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits")])
+            let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits")])
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             
@@ -263,9 +271,21 @@ actor APIClient {
     }
 
     private nonisolated func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
-        let cast = d.credits?.cast.prefix(15).map { 
-            CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
-        } ?? []
+        let cast: [CastMemberResult]
+        
+        if let aggregate = d.aggregate_credits {
+            // Sort by episode count descending to ensure leads (like Steve Carell) appear first
+            let sortedAggregate = aggregate.cast.sorted { $0.total_episode_count > $1.total_episode_count }
+            cast = sortedAggregate.prefix(30).map { member in
+                let character = member.roles.first?.character ?? "Unknown"
+                return CastMemberResult(name: member.name, character: character, profilePath: member.profile_path, order: member.order)
+            }
+        } else {
+            cast = d.credits?.cast.prefix(30).map { 
+                CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
+            } ?? []
+        }
+        
         let creators = d.created_by?.map { 
             CastMemberResult(name: $0.name, character: "Creator", profilePath: $0.profile_path, order: -1)
         } ?? []
@@ -279,6 +299,7 @@ actor APIClient {
             genres: d.genres.map { $0.name },
             backdropPath: d.backdrop_path,
             posterPath: d.poster_path,
+            overview: d.overview,
             network: network?.name,
             networkLogoPath: network?.logo_path,
             originalLanguage: d.original_language,
@@ -362,7 +383,7 @@ actor APIClient {
         }
     }
 
-    private func executeWithRetry<T: Sendable>(maxAttempts: Int = 3, request: @Sendable () async throws -> T) async throws -> T {
+    private func executeWithRetry<T: Sendable>(maxAttempts: Int = 5, request: @Sendable () async throws -> T) async throws -> T {
         var attempts = 0
         while attempts < maxAttempts {
             try Task.checkCancellation()

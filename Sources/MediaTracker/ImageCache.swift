@@ -7,22 +7,6 @@ struct ImageContainer: @unchecked Sendable {
     let image: CGImage
 }
 
-@globalActor
-actor DiskIOActor {
-    static let shared = DiskIOActor()
-    private var activeCount = 0
-    private let maxConcurrent = 6 // Increased from 3 to 6
-
-    func run<T: Sendable>(_ work: @Sendable () async throws -> T) async rethrows -> T {
-        while activeCount >= maxConcurrent {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        activeCount += 1
-        defer { activeCount -= 1 }
-        return try await work()
-    }
-}
-
 @MainActor
 @Observable
 class ImageCache {
@@ -444,7 +428,7 @@ class ImageCache {
 
     private func loadFromDisk(fileURL: URL, targetSize: CGSize?) async -> ImageContainer? {
         let screenScale = self.screenScale
-        return await DiskIOActor.shared.run {
+        return await FileIOActor.shared.run {
             guard let data = try? Data(contentsOf: fileURL) else { return nil }
             
             if let targetSize = targetSize {

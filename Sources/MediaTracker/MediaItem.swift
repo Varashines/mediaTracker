@@ -115,11 +115,20 @@ extension MediaItem {
 
     func updateSearchableText() {
         var text = "\(title) \(overview)"
-        if let movie = movieDetails {
-            text += " \(movie.genres.joined(separator: " ")) \(movie.creators.joined(separator: " ")) \(movie.cast.map { $0.name }.joined(separator: " "))"
-        } else if let tv = tvShowDetails {
-            text += " \(tv.genres.joined(separator: " ")) \(tv.creators.joined(separator: " ")) \(tv.cast.map { $0.name }.joined(separator: " ")) \(tv.network ?? "")"
+        
+        // Phase 4 Optimization: Use cached properties to avoid relationship faulting
+        if !cachedGenres.isEmpty {
+            text += " \(cachedGenres.joined(separator: " "))"
         }
+        
+        if !storedCast.isEmpty {
+            text += " \(storedCast.map { $0.name }.joined(separator: " "))"
+        }
+        
+        if let network = cachedNetwork {
+            text += " \(network)"
+        }
+        
         self.searchableText = text.lowercased()
     }
 

@@ -49,16 +49,6 @@ struct MediaTrackerApp: App {
         let cacheSizeDisk = 500 * 1024 * 1024
         let cache = URLCache(memoryCapacity: cacheSizeMemory, diskCapacity: cacheSizeDisk, directory: nil)
         URLCache.shared = cache
-        
-        let container = sharedModelContainer
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("ForceSwiftDataSave"), object: nil, queue: .main) { _ in
-            // Trigger a manual save of the container to prevent data loss during purge
-            // Note: SwiftData usually autosaves, but under extreme pressure we force it.
-            print("💾 Force saving SwiftData due to memory pressure...")
-            Task { @MainActor in
-                try? container.mainContext.save()
-            }
-        }
     }
     
     @Environment(\.scenePhase) private var scenePhase

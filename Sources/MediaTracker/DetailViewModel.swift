@@ -131,6 +131,17 @@ class DetailViewModel {
     func markAllAsWatched() {
         guard item.modelContext != nil, !item.isDeleted else { return }
         if let tv = item.tvShowDetails {
+            // Instant UI Update: Mark all CURRENTLY LOADED episodes as watched on MainActor
+            for season in tv.seasons {
+                for episode in season.episodes {
+                    episode.isWatched = true
+                }
+            }
+            
+            // Heal/Sync check before batch marking
+            let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
+            guard Int(tmdbIDString) != nil else { return }
+            
             let seasonIDs = tv.seasons.map { $0.persistentModelID }
             let itemID = item.id
             let container = item.modelContext?.container
@@ -140,17 +151,16 @@ class DetailViewModel {
             Task { [weak self] in
                 guard let self = self else { return }
                 
-                // Concurrent fetching of missing episodes
+                // Concurrent fetching of missing episodes and re-linking
                 await withTaskGroup(of: Void.self) { group in
                     for seasonID in seasonIDs {
                         group.addTask {
-                            // Capture self as a non-isolated reference if possible, or use a non-isolated helper
                             await self.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: true)
                         }
                     }
                 }
                 
-                // Perform batch update on background actor
+                // Perform batch update on background actor (handles orphaned/unloaded episodes)
                 if let container = container {
                     let backgroundService = BackgroundDataService(modelContainer: container)
                     await backgroundService.markAllEpisodesAsWatched(itemID: itemID)
@@ -175,37 +185,65 @@ class DetailViewModel {
     }
     
     private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool) async {
-        if let tv = self.item.tvShowDetails, 
-           let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }),
-           season.episodes.isEmpty {
-            let tmdbID = tv.tmdbID
-            do {
-                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
+        guard let tv = self.item.tvShowDetails,
+              let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
+        
+        // Skip if already has episodes and not forcing
+        if !season.episodes.isEmpty { return }
+        
+        let tmdbID = tv.tmdbID
+        let seasonNumber = season.seasonNumber
+        let syncKey = "fetch_episodes_\(tmdbID)_\(seasonNumber)"
+        
+        do {
+            try await SyncCoordinator.shared.perform(key: syncKey) {
+                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber)
+                
                 await MainActor.run {
                     guard self.item.modelContext != nil, !self.item.isDeleted else { return }
+                    // Re-fetch season in MainActor context
+                    guard let currentSeason = self.item.tvShowDetails?.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
+                    
                     for ep in episodes {
-                        let epUniqueID = "\(tmdbID)_\(season.seasonNumber)_\(ep.episodeNumber)"
+                        let epUniqueID = "\(tmdbID)_\(seasonNumber)_\(ep.episodeNumber)"
+                        
+                        // Robust deduplication check: Check both the persistent store and the current season's relationship
                         let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
                         let existingEpisode = try? self.item.modelContext?.fetch(eDescriptor).first
                         
-                        let episode = existingEpisode ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: season.seasonNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime, showID: tmdbID)
+                        let episode = existingEpisode ?? TVEpisode(
+                            episodeNumber: ep.episodeNumber,
+                            seasonNumber: seasonNumber,
+                            name: ep.name ?? "Episode \(ep.episodeNumber)",
+                            overview: ep.overview ?? "",
+                            airDate: ep.airDate,
+                            airstamp: nil,
+                            runtime: ep.runtime,
+                            showID: tmdbID
+                        )
                         
                         if episode.modelContext == nil {
-                            episode.season = season
+                            episode.season = currentSeason
                             self.item.modelContext?.insert(episode)
-                        } else if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
-                            season.episodes.append(episode)
+                        } else if episode.season?.persistentModelID != currentSeason.persistentModelID {
+                            episode.season = currentSeason
+                        }
+                        
+                        // Ensure it's in the season's episodes array if not already (for relationship integrity)
+                        if !currentSeason.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
+                            currentSeason.episodes.append(episode)
                         }
                         
                         episode.isWatched = markAsWatched
                     }
+                    
                     self.item.tvShowDetails?.recalculateCachedProperties()
                     self.item.updateSearchableText()
                     self.checkOverallCompletion()
                 }
-            } catch {
-                print("❌ Error fetching episodes: \(error)")
             }
+        } catch {
+            print("❌ Error fetching episodes: \(error)")
         }
     }
     

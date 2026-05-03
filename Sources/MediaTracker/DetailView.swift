@@ -99,12 +99,14 @@ struct DetailView: View {
         MediaHeaderView(
             item: viewModel.item,
             themeColor: viewModel.themeColor,
-            namespace: namespace
-        ) { newState in
-            if newState == .completed {
-                viewModel.markAllAsWatched()
+            viewModel: viewModel,
+            namespace: namespace,
+            onStatusChange: { newState in
+                if newState == .completed {
+                    viewModel.markAllAsWatched()
+                }
             }
-        }
+        )
         .onAppear {
             viewModel.updateThemeColor()
             viewModel.refreshData()
@@ -220,14 +222,18 @@ struct DetailView: View {
         // Use a slightly longer delay to ensure dismissal completes before deletion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
-            modelContext.delete(itemToDelete)
-            try? modelContext.save()
-            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-
+            
             let container = modelContext.container
             Task.detached {
+                let backgroundService = BackgroundDataService(modelContainer: container)
+                await backgroundService.deleteMediaItem(id: itemID)
+                
                 let sync = DiscoverySyncService(modelContainer: container)
                 await sync.updateItemDeleted(network: network, genres: genres, language: lang)
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                }
             }
         }
     }

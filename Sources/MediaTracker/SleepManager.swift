@@ -27,7 +27,9 @@ class SleepManager {
     }
 
     private func checkIdleState() {
-        guard !isAsleep else { return }
+        let preventSleep = UserDefaults.standard.bool(forKey: "prevent_sleep_mode")
+        guard !isAsleep && !preventSleep else { return }
+        
         if Date().timeIntervalSince(lastInteractionDate) >= idleThreshold {
             enterSleepMode()
         }

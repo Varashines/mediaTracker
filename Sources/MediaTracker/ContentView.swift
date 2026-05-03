@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @Namespace private var posterNamespace
@@ -14,19 +15,12 @@ struct ContentView: View {
 
     @State private var updateTask: Task<Void, Never>?
 
-    private func updateDisplayedItems(delay: UInt64 = 150_000_000) {
+    private func performUpdate() {
         // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
-        // Zero-Jitter Sequencing: If we just switched categories, give the transition
-        // a moment to breathe before building the new grid items.
-        let executionDelay = delay
-
         updateTask?.cancel()
         updateTask = Task {
-            try? await Task.sleep(nanoseconds: executionDelay)
-            if Task.isCancelled { return }
-
             let currentSearchText = viewModel.searchText
             let category = viewModel.selectedCategory
             let sortOrder = viewModel.currentSortOrder
@@ -165,10 +159,12 @@ struct ContentView: View {
                 isSearchActive: $isSearchActive,
                 submitTrigger: viewModel.searchSubmitTrigger,
                 initialType: currentMediaType,
-                viewModel: viewModel
-            ) { item in
-                viewModel.navigationPath.append(item)
-            }
+                viewModel: viewModel,
+                onSelectLocal: { item in
+                    viewModel.navigationPath.append(item.persistentModelID)
+                },
+                modelContainer: modelContext.container
+            )
         } else if viewModel.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
@@ -228,7 +224,7 @@ struct ContentView: View {
                         viewModel.selectedNetworks = nil
                         viewModel.selectedLanguage = nil
                         viewModel.isInitialLoading = true  // Reset loading state for category switch
-                        updateDisplayedItems()
+                        viewModel.filterSubject.send()
                     }
                 }
         } detail: {
@@ -245,7 +241,7 @@ struct ContentView: View {
                             viewModel.searchText = actorName
                             viewModel.navigationPath = NavigationPath()  // CLEAR NAVIGATION STACK
                             isSearchActive = true  // ACTIVATE SEARCH VIEW
-                            updateDisplayedItems()
+                            viewModel.filterSubject.send()
                         }
                     }
                     .navigationDestination(for: PersistentIdentifier.self) { id in
@@ -255,7 +251,7 @@ struct ContentView: View {
                                 viewModel.searchText = actorName
                                 viewModel.navigationPath = NavigationPath()
                                 isSearchActive = true
-                                updateDisplayedItems()
+                                viewModel.filterSubject.send()
                             }
                         }
                     }
@@ -272,13 +268,16 @@ struct ContentView: View {
                         viewModel.searchSubmitTrigger += 1
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-                        updateDisplayedItems(delay: 150_000_000)
+                        viewModel.filterSubject.send()
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-                        updateDisplayedItems(delay: 150_000_000)
+                        viewModel.filterSubject.send()
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
-                        updateDisplayedItems(delay: 150_000_000)
+                        viewModel.filterSubject.send()
+                    }
+                    .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(150), scheduler: RunLoop.main)) { _ in
+                        performUpdate()
                     }
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
@@ -324,8 +323,25 @@ struct ContentView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
         .task {
-            // Trigger initial data load
-            updateDisplayedItems()
+            // Trigger initial data load directly to ensure it isn't dropped by the Combine subject
+            performUpdate()
+            checkAndRepairMissingMetadata()
+            
+            // Phase 5: Automatic Library Heal on startup
+            DataService.shared.runMaintenance(modelContext: modelContext, silent: true)
+        }
+    }
+
+    private func checkAndRepairMissingMetadata() {
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.overview == "" || $0.posterURL == nil || $0.lastUpdated == nil })
+            if let missingItems = try? context.fetch(descriptor), !missingItems.isEmpty {
+                await MainActor.run {
+                    DataService.shared.refreshMetadata(for: missingItems, modelContext: modelContext, force: true)
+                }
+            }
         }
     }
 
@@ -347,7 +363,7 @@ struct ContentView: View {
     private func onNetworkSelected(_ networks: [String]) {
         withAnimation {
             viewModel.selectedNetworks = networks.isEmpty ? nil : networks
-            updateDisplayedItems()
+            viewModel.filterSubject.send()
         }
     }
 
@@ -395,7 +411,7 @@ struct ContentView: View {
                     get: { viewModel.currentSortOrder },
                     set: {
                         viewModel.categorySortOrders[cat] = $0
-                        updateDisplayedItems()
+                        viewModel.filterSubject.send()
                     }
                 )
             ) {
@@ -411,7 +427,7 @@ struct ContentView: View {
                     get: { viewModel.currentGroupBy },
                     set: {
                         viewModel.categoryGroupBys[cat] = $0
-                        updateDisplayedItems()
+                        viewModel.filterSubject.send()
                     }
                 )
             ) {

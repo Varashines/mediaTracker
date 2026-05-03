@@ -1,8 +1,10 @@
 import SwiftData
 import SwiftUI
+import Combine
 
 @Observable
 class MediaViewModel {
+    let filterSubject = PassthroughSubject<Void, Never>()
     var selectedCategory: NavigationCategory = .home
     var searchText: String = ""
     var navigationPath = NavigationPath()

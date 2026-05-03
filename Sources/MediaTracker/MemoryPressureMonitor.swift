@@ -29,7 +29,6 @@ class MemoryPressureMonitor {
             logger.error("Critical memory pressure! Purging all non-essential memory.")
             // Phase 3: Immediate context clearing for 8GB RAM preservation
             NotificationCenter.default.post(name: .memoryPressureCritical, object: nil)
-            NotificationCenter.default.post(name: NSNotification.Name("ForceSwiftDataSave"), object: nil)
         default:
             break
         }

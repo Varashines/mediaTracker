@@ -105,6 +105,7 @@ struct TMDBGenreMap {
 // MARK: - Detailed Responses
 struct TMDBMovieDetailsResponse: Codable {
     let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, backdrop_path: String?, poster_path: String?
+    let overview: String?
     let original_language: String?
     let credits: TMDBCreditsResponse?
     let release_dates: TMDBReleaseDatesResponse?
@@ -126,10 +127,29 @@ struct TMDBReleaseDateDetail: Codable {
 
 struct TMDBTVDetailsResponse: Codable {
     let number_of_seasons: Int, number_of_episodes: Int, status: String, vote_average: Double?, genres: [TMDBGenre], backdrop_path: String?, poster_path: String?
+    let overview: String?
     let original_language: String?
     let networks: [TMDBNetwork]?
     let created_by: [TMDBPerson]?
-    let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?
+    let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?, aggregate_credits: TMDBAggregateCreditsResponse?
+}
+
+struct TMDBAggregateCreditsResponse: Codable {
+    let cast: [TMDBAggregateCastMember]
+    let crew: [TMDBMovieCrewMember]?
+}
+
+struct TMDBAggregateCastMember: Codable {
+    let name: String
+    let roles: [TMDBRole]
+    let profile_path: String?
+    let order: Int
+    let total_episode_count: Int
+}
+
+struct TMDBRole: Codable {
+    let character: String?
+    let episode_count: Int
 }
 
 struct TMDBPerson: Codable {
@@ -149,22 +169,22 @@ struct TMDBCreditsResponse: Codable {
 
 struct TMDBMovieCrewMember: Codable {
     let name: String
-    let job: String
+    let job: String?
     let profile_path: String?
 }
 
 struct TMDBMovieCastMember: Codable {
     let name: String
-    let character: String
+    let character: String?
     let profile_path: String?
     let order: Int
 }
 
 struct TMDBExternalIDs: Codable { let tvdb_id: Int? }
 struct TMDBNextEpisode: Codable { let air_date: String?, episode_number: Int?, season_number: Int? }
-struct TMDBSeasonBrief: Codable { let season_number: Int, name: String, episode_count: Int, air_date: String? }
+struct TMDBSeasonBrief: Codable { let season_number: Int, name: String?, episode_count: Int, air_date: String? }
 struct TMDBSeasonResponse: Codable { let episodes: [TMDBEpisodeBrief] }
-struct TMDBEpisodeBrief: Codable { let episode_number: Int, name: String, overview: String, air_date: String?, runtime: Int? }
+struct TMDBEpisodeBrief: Codable { let episode_number: Int, name: String?, overview: String?, air_date: String?, runtime: Int? }
 struct TMDBGenre: Codable { let name: String }
 
 // MARK: - TVMaze Responses
@@ -177,7 +197,7 @@ struct TVMazeNetwork: Codable { let name: String?, country: TVMazeCountry? }
 struct TVMazeWebChannel: Codable { let name: String?, country: TVMazeCountry? }
 struct TVMazeCountry: Codable { let timezone: String? }
 struct TVMazeEmbedded: Codable { let nextepisode: TVMazeEpisode? }
-struct TVMazeEpisode: Codable { let season: Int?, number: Int?, name: String, airdate: String, airtime: String, airstamp: String? }
+struct TVMazeEpisode: Codable { let season: Int?, number: Int?, name: String?, airdate: String, airtime: String, airstamp: String? }
 
 // MARK: - Client Result Wrappers
 struct CastMemberResult: Codable {
@@ -187,7 +207,7 @@ struct CastMemberResult: Codable {
     let order: Int
 }
 
-struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String, overview: String, airDate: String?, runtime: Int? }
+struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String?, overview: String?, airDate: String?, runtime: Int? }
 
 struct TMDBPersonSearchEntry: Codable {
     let profile_path: String?
@@ -200,6 +220,7 @@ struct MovieDetailsResult {
     let releaseDate: String?
     let backdropPath: String?
     let posterPath: String?
+    let overview: String?
     let originalLanguage: String?
     let cast: [CastMemberResult]
     let directors: [CastMemberResult]
@@ -213,6 +234,7 @@ struct TVDetailsResult {
     let genres: [String]
     let backdropPath: String?
     let posterPath: String?
+    let overview: String?
     let network: String?
     let networkLogoPath: String?
     let originalLanguage: String?

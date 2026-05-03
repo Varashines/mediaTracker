@@ -13,9 +13,11 @@ struct SettingsView: View {
     // Feedback Switches
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
+    @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
     
     @Environment(\.colorScheme) var colorScheme
     @State private var containerWidth: CGFloat = 0
+    @State private var showClearDatabaseConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -159,6 +161,14 @@ struct SettingsView: View {
             }
             
             Divider()
+
+            SettingsRow(title: "Prevent Sleep Mode", subtitle: "Keep background sync active.") {
+                Toggle("", isOn: $preventSleepMode)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            
+            Divider()
             
             SettingsRow(title: "Notifications", subtitle: "Alert permissions.") {
                 Button("Open Preferences") {
@@ -280,6 +290,29 @@ struct SettingsView: View {
                         AppErrorState.shared.showToast("Network Cache Cleared", systemImage: "wifi.circle.fill", type: .success)
                     }
                     .buttonStyle(.bordered)
+                }
+                
+                Divider()
+                
+                SettingsRow(title: "Reset Everything", subtitle: "Clear all data.") {
+                    Button("Clear Database") {
+                        showClearDatabaseConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(.red)
+                }
+                .confirmationDialog(
+                    "Are you absolutely sure?",
+                    isPresented: $showClearDatabaseConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete All Library Data", role: .destructive) {
+                        DataService.shared.clearDatabase(modelContext: modelContext)
+                        FeedbackManager.shared.trigger(.removeFromLibrary)
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("This will permanently delete all your tracked movies, TV shows, and custom settings. This action cannot be undone.")
                 }
             }
         }
