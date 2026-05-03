@@ -1,4 +1,4 @@
-# MediaTracker 🍿📺 [v5.0.0]
+# MediaTracker 🍿📺 [v5.0.1]
 
 MediaTracker is a premium, native macOS application designed for media enthusiasts who demand both aesthetic perfection and functional precision. Built with **SwiftUI** and **SwiftData**, it offers an immersive, "Liquid Glass" experience for tracking your movies and TV shows, staying synchronized with global release schedules, and exploring your collection with unprecedented intelligence.
 
