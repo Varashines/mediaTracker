@@ -21,10 +21,9 @@ actor APIClient {
     static let shared = APIClient()
     private let decoder = JSONDecoder()
     
-    private var cacheFolder: URL {
+    private nonisolated var cacheFolder: URL {
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         guard let base = paths.first else {
-            // Fallback to temporary directory if application support is unavailable
             return FileManager.default.temporaryDirectory.appendingPathComponent("api_details_cache")
         }
         let folder = base.appendingPathComponent("api_details_cache")
@@ -36,9 +35,7 @@ actor APIClient {
     
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.requestCachePolicy = .useProtocolCachePolicy // This handles ETags/304 automatically
-        
-        // Phase 3 Enhancement: Substantially larger URLCache (64MB RAM, 256MB Disk)
+        config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(
             memoryCapacity: 64 * 1024 * 1024,
             diskCapacity: 256 * 1024 * 1024,
@@ -52,7 +49,7 @@ actor APIClient {
     private var lastSearchTime: [String: Date] = [:]
     private let cacheExpiry: TimeInterval = 300 // 5 minutes
     
-    private var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
+    private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
 
     init() {
         NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
@@ -69,7 +66,7 @@ actor APIClient {
         UserDefaults.standard.string(forKey: "tmdb_api_key")?.isEmpty == false
     }
     
-    private func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+    private nonisolated func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
         let key = tmdbApiKey
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         
@@ -89,7 +86,7 @@ actor APIClient {
     }
 
     // MARK: - Disk Cache Helpers
-    private func getCachedData(forKey key: String) -> Data? {
+    private nonisolated func getCachedData(forKey key: String) -> Data? {
         let fileURL = cacheFolder.appendingPathComponent(key)
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let modificationDate = attributes[.modificationDate] as? Date,
@@ -99,7 +96,7 @@ actor APIClient {
         return try? Data(contentsOf: fileURL)
     }
 
-    private func saveToCache(data: Data, forKey key: String) {
+    private nonisolated func saveToCache(data: Data, forKey key: String) {
         let fileURL = cacheFolder.appendingPathComponent(key)
         try? data.write(to: fileURL)
     }
@@ -114,7 +111,7 @@ actor APIClient {
         return (text, nil)
     }
 
-    private func searchTMDB<T: Codable & TMDBMedia>(path: String, query: String, year: String? = nil) async throws -> [T] {
+    private func searchTMDB<T: Codable & TMDBMedia & Sendable>(path: String, query: String, year: String? = nil) async throws -> [T] {
         return try await executeWithRetry {
             var queryItems = [
                 URLQueryItem(name: "query", value: query),
@@ -211,7 +208,7 @@ actor APIClient {
         }
     }
 
-    private func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
+    private nonisolated func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
         let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -265,7 +262,7 @@ actor APIClient {
         }
     }
 
-    private func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
+    private nonisolated func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
         let cast = d.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character, profilePath: $0.profile_path, order: $0.order)
         } ?? []
@@ -365,7 +362,7 @@ actor APIClient {
         }
     }
 
-    private func executeWithRetry<T>(maxAttempts: Int = 3, request: () async throws -> T) async throws -> T {
+    private func executeWithRetry<T: Sendable>(maxAttempts: Int = 3, request: @Sendable () async throws -> T) async throws -> T {
         var attempts = 0
         while attempts < maxAttempts {
             try Task.checkCancellation()
@@ -391,7 +388,7 @@ actor APIClient {
         return try await request()
     }
     
-    private func validateResponse(_ response: URLResponse) throws {
+    private nonisolated func validateResponse(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         if http.statusCode == 429 { throw APIError.rateLimited }
         if !(200...299).contains(http.statusCode) { throw APIError.requestFailed(http.statusCode) }

@@ -106,13 +106,13 @@ actor MediaFilterActor {
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
         
         // 1. Optimized Predicate (Compiler Friendly)
-        let basePredicate = buildBasePredicate(category: category, language: language, network: network)
+        let basePredicate = buildBasePredicate(category: category)
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder)
         
         // Pagination only if no complex Swift-level filters
-        let hasComplexFilters = !processedSearch.isEmpty || (network != nil && network!.count > 1) || (genre != nil && !genre!.isEmpty)
+        let hasComplexFilters = !processedSearch.isEmpty || (network != nil && !network!.isEmpty) || (language != nil && !language!.isEmpty) || (genre != nil && !genre!.isEmpty)
         
         if !hasComplexFilters && groupBy == .none {
             descriptor.fetchLimit = limit
@@ -122,7 +122,7 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement
-        results = refineResults(results, network: network, genre: genre, searchText: processedSearch)
+        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
@@ -162,62 +162,59 @@ actor MediaFilterActor {
         )
     }
 
-    private func buildBasePredicate(category: NavigationCategory, language: String?, network: [String]?) -> Predicate<MediaItem> {
-        let tLang = language?.isEmpty == false ? language : nil
-        let tNet = (network?.count == 1) ? network?.first : nil
-
+    private func buildBasePredicate(category: NavigationCategory) -> Predicate<MediaItem> {
         switch category {
-        case .upcoming: return buildUpcomingPredicate(tLang: tLang, tNet: tNet)
-        case .inProgress: return buildInProgressPredicate(tLang: tLang, tNet: tNet)
-        case .watchlist: return buildWatchlistPredicate(tLang: tLang, tNet: tNet)
-        case .loved: return buildLovedPredicate(tLang: tLang, tNet: tNet)
-        case .completed: return buildCompletedPredicate(tLang: tLang, tNet: tNet)
-        case .archive: return buildArchivePredicate(tLang: tLang, tNet: tNet)
-        case .disliked: return buildDislikedPredicate(tLang: tLang, tNet: tNet)
-        case .binge: return buildBingePredicate(tLang: tLang, tNet: tNet)
-        case .movie, .tvShow: return buildTypePredicate(type: category.rawValue, tLang: tLang, tNet: tNet)
-        default: return buildDefaultPredicate(tLang: tLang, tNet: tNet)
+        case .upcoming: return buildUpcomingPredicate()
+        case .inProgress: return buildInProgressPredicate()
+        case .watchlist: return buildWatchlistPredicate()
+        case .loved: return buildLovedPredicate()
+        case .completed: return buildCompletedPredicate()
+        case .archive: return buildArchivePredicate()
+        case .disliked: return buildDislikedPredicate()
+        case .binge: return buildBingePredicate()
+        case .movie, .tvShow: return buildTypePredicate(type: category.rawValue)
+        default: return buildDefaultPredicate()
         }
     }
 
-    private func buildUpcomingPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.storedIsUpcoming == true && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildUpcomingPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.storedIsUpcoming == true }
     }
 
-    private func buildInProgressPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildInProgressPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false }
     }
 
-    private func buildWatchlistPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildWatchlistPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false }
     }
 
-    private func buildLovedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.tasteValue == "Love" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildLovedPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.tasteValue == "Love" }
     }
 
-    private func buildCompletedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Completed" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildCompletedPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "Completed" }
     }
 
-    private func buildArchivePredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildArchivePredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching" }
     }
 
-    private func buildDislikedPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.tasteValue == "Dislike" && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildDislikedPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.tasteValue == "Dislike" }
     }
 
-    private func buildBingePredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildBingePredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE" }
     }
 
-    private func buildTypePredicate(type: String, tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.typeValue == type && (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildTypePredicate(type: String) -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { $0.typeValue == type }
     }
 
-    private func buildDefaultPredicate(tLang: String?, tNet: String?) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { (tLang == nil || $0.cachedLanguage == tLang) && (tNet == nil || $0.cachedNetwork == tNet) }
+    private func buildDefaultPredicate() -> Predicate<MediaItem> {
+        #Predicate<MediaItem> { _ in true }
     }
 
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder) {
@@ -232,14 +229,19 @@ actor MediaFilterActor {
         }
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, genre: String?, searchText: String) -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String) -> [MediaItem] {
         var refined = results
-        if let nets = network, nets.count > 1 {
+        
+        if let nets = network, !nets.isEmpty {
             let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
             refined = refined.filter { item in
                 guard let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) else { return false }
                 return normalizedNets.contains(itemNet)
             }
+        }
+        
+        if let lang = language, !lang.isEmpty {
+            refined = refined.filter { $0.cachedLanguage == lang }
         }
         
         if let g = genre, !g.isEmpty {

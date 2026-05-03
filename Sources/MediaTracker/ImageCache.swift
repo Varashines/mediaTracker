@@ -13,7 +13,7 @@ actor DiskIOActor {
     private var activeCount = 0
     private let maxConcurrent = 6 // Increased from 3 to 6
 
-    func run<T>(_ work: @Sendable () async throws -> T) async rethrows -> T {
+    func run<T: Sendable>(_ work: @Sendable () async throws -> T) async rethrows -> T {
         while activeCount >= maxConcurrent {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
