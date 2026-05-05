@@ -21,6 +21,7 @@ final class MediaItem: Identifiable {
     
     // Cached values for filtering/grid
     var cachedGenres: [String] = []
+    var cachedCreators: [String] = []
     var cachedLanguage: String?
     var cachedNetwork: String?
     var cachedNetworkLogoPath: String?
@@ -216,6 +217,7 @@ extension MediaItem {
     private func syncMovieProperties() {
         guard let movie = movieDetails else { return }
         self.cachedGenres = movie.genres
+        self.cachedCreators = movie.creators
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
     }
@@ -223,6 +225,7 @@ extension MediaItem {
     private func syncTVProperties(now: Date, currentState: MediaState) {
         guard let tv = tvShowDetails else { return }
         self.cachedGenres = tv.genres
+        self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
         self.cachedNetwork = tv.network
         self.cachedNetworkLogoPath = tv.networkLogoPath

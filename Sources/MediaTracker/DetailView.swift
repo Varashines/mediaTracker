@@ -12,6 +12,8 @@ struct DetailView: View {
     @State private var isAppeared = false
     @State private var isDeleted = false
     @State private var isCastExpanded = false
+    @State private var showHeavyContent = false
+    @State private var breathingTrigger = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -40,7 +42,7 @@ struct DetailView: View {
             .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
 
         ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 headerSection
                 tmdbWarningSection
                 castAndTrackingSection
@@ -53,6 +55,19 @@ struct DetailView: View {
             viewModel.refreshData()
             withAnimation(.spring(response: 1.0, dampingFraction: 0.85).delay(0.1)) {
                 isAppeared = true
+            }
+            
+            // Phase 2: Navigation Animation Deferral
+            Task {
+                try? await Task.sleep(nanoseconds: 250_000_000) // 0.25s delay
+                withAnimation(.easeOut(duration: 0.4)) {
+                    showHeavyContent = true
+                }
+            }
+            
+            // Phase 3: Breathing Ambient Glow
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
+                breathingTrigger.toggle()
             }
         }
         .onDisappear { isAppeared = false }
@@ -76,20 +91,31 @@ struct DetailView: View {
                     .ignoresSafeArea()
             }
 
-            viewModel.themeColor
-                .opacity(isAppeared ? (colorScheme == .dark ? 0.4 : 0.25) : 0)
-                .blur(radius: isAppeared ? 120 : 80)
-                .scaleEffect(isAppeared ? 1.1 : 0.9)
-                .ignoresSafeArea()
-
-            LinearGradient(
+            // Phase 3: Breathing Ambient Glow (Optimized Radial Gradient)
+            let color = viewModel.themeColor
+            
+            RadialGradient(
                 gradient: Gradient(colors: [
-                    viewModel.themeColor.opacity(isAppeared ? (colorScheme == .dark ? 0.3 : 0.2) : 0),
-                    .clear
+                    color.opacity(isAppeared ? (colorScheme == .dark ? 0.35 : 0.2) : 0),
+                    Color.clear
                 ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                center: .topLeading,
+                startRadius: 0,
+                endRadius: breathingTrigger ? 800 : 600
             )
+            .saturation(1.3)
+            .ignoresSafeArea()
+            
+            RadialGradient(
+                gradient: Gradient(colors: [
+                    color.opacity(isAppeared ? (colorScheme == .dark ? 0.25 : 0.15) : 0),
+                    Color.clear
+                ]),
+                center: .bottomTrailing,
+                startRadius: 0,
+                endRadius: breathingTrigger ? 700 : 500
+            )
+            .saturation(1.3)
             .ignoresSafeArea()
         }
     }
@@ -115,10 +141,10 @@ struct DetailView: View {
 
     @ViewBuilder
     private var tmdbWarningSection: some View {
-        let hasNoGenres = viewModel.item.type == .movie && viewModel.item.movieDetails?.genres.isEmpty != false
-        let hasNoStatus = viewModel.item.type == .tvShow && viewModel.item.tvShowDetails?.status == nil
+        let hasNoGenres = viewModel.item.type == .movie && viewModel.item.cachedGenres.isEmpty
+        let hasNoNetwork = viewModel.item.type == .tvShow && viewModel.item.cachedNetwork == nil
         
-        if hasNoGenres || hasNoStatus {
+        if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
                 Text("Please add your TMDB API Key in Settings to see more details.")
                     .font(.caption)
@@ -130,51 +156,68 @@ struct DetailView: View {
     @ViewBuilder
     private var castAndTrackingSection: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            // 1. TV TRACKING (Highest Priority for Series)
-            if let tv = viewModel.item.tvShowDetails {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    HStack {
-                        Image(systemName: "play.tv.fill")
-                            .foregroundStyle(viewModel.themeColor)
-                        Text("Seasons & Episodes")
-                            .font(.title3.bold())
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.tiny)
+            if showHeavyContent {
+                // 1. TV TRACKING (Highest Priority for Series)
+                if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                        HStack {
+                            Image(systemName: "play.tv.fill")
+                                .foregroundStyle(viewModel.themeColor)
+                            Text("Seasons & Episodes")
+                                .font(.title3.bold())
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.tiny)
 
-                    TVTrackingView(
-                        tvDetails: tv,
-                        themeColor: viewModel.themeColor,
-                        onWatchedToggle: { viewModel.checkOverallCompletion() },
-                        onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
-                    )
+                        TVTrackingView(
+                            tvDetails: tv,
+                            themeColor: viewModel.themeColor,
+                            isRefreshing: viewModel.isRefreshing,
+                            onWatchedToggle: { viewModel.checkOverallCompletion() },
+                            onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
+                        )
+
+                    }
+                    Divider().padding(.vertical, AppTheme.Spacing.small)
                 }
-                Divider().padding(.vertical, AppTheme.Spacing.small)
-            }
 
-            // 2. TOP CAST (High Priority for Both)
-            if !viewModel.item.displayCast.isEmpty {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    HStack {
-                        Text("Top Cast")
-                            .font(.title3.bold())
-                        Spacer()
-                        Text("\(viewModel.item.displayCast.count)")
-                            .font(.caption.bold())
-                            .padding(.horizontal, AppTheme.Spacing.tiny)
-                            .padding(.vertical, 2)
-                            .background(viewModel.themeColor.opacity(0.2))
-                            .clipShape(Capsule())
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.tiny)
+                // 2. TOP CAST (High Priority for Both)
+                if !viewModel.item.displayCast.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                        HStack {
+                            Text("Top Cast")
+                                .font(.title3.bold())
+                            Spacer()
+                            Text("\(viewModel.item.displayCast.count)")
+                                .font(.caption.bold())
+                                .padding(.horizontal, AppTheme.Spacing.tiny)
+                                .padding(.vertical, 2)
+                                .background(viewModel.themeColor.opacity(0.2))
+                                .clipShape(Capsule())
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.tiny)
 
-                    CastSectionViewNew(
-                        cast: viewModel.item.displayCast,
-                        themeColor: viewModel.themeColor
-                    ) { actorName in
-                        onSearchActor?(actorName)
+                        CastSectionViewNew(
+                            cast: viewModel.item.displayCast,
+                            themeColor: viewModel.themeColor
+                        ) { actorName in
+                            onSearchActor?(actorName)
+                        }
                     }
+                    Divider().padding(.vertical, AppTheme.Spacing.small)
                 }
-                Divider().padding(.vertical, AppTheme.Spacing.small)
+            } else {
+                // SKELETON LOADER (Perceived Speed)
+                VStack(alignment: .leading, spacing: 30) {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.05))
+                        .frame(height: 150)
+                    
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.05))
+                        .frame(height: 120)
+                }
+                .padding(.top, 20)
+                .shimmering()
             }
         }
     }

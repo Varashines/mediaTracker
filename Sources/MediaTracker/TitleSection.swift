@@ -24,7 +24,7 @@ struct TitleSection: View {
                     }
                     
                     // Creators/Directors Row
-                    let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
+                    let creators = item.cachedCreators
                     if !creators.isEmpty {
                         HStack(spacing: 6) {
                             Image(systemName: item.type == .movie ? "film.fill" : "app.badge.checkmark.fill")

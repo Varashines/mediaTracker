@@ -184,8 +184,12 @@ class DetailViewModel {
         guard item.modelContext != nil, !item.isDeleted else { return }
         let seasonID = season.persistentModelID
         
+        isRefreshing = true
         Task { [weak self] in
             await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: false)
+            await MainActor.run { [weak self] in
+                self?.isRefreshing = false
+            }
         }
     }
     
@@ -194,7 +198,7 @@ class DetailViewModel {
               let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
         
         // Skip if already has episodes and not forcing
-        if !season.episodes.isEmpty { return }
+        if season.totalEpisodesCount > 0 { return }
         
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
@@ -249,23 +253,46 @@ class DetailViewModel {
             }
         } catch {
             print("❌ Error fetching episodes: \(error)")
+            await MainActor.run {
+                AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")
+            }
         }
     }
     
+    private var saveTask: Task<Void, Never>?
+
     func checkOverallCompletion() {
         guard item.modelContext != nil, !item.isDeleted else { return }
+        
+        // 1. Instant Optimistic UI Update
         withAnimation {
             item.checkOverallCompletion()
-            item.tvShowDetails?.recalculateCachedProperties() // Fallback to ensure counts are fresh
-            item.syncCachedProperties() // Explicitly fix denormalization gap
             item.lastStateChangeDate = Date() // Trigger grid refresh
             item.lastInteractionDate = Date() // Bump to top of Continue Watching
-
-            // EXPLICIT SAVE: Ensure all background actors see the latest state before the notification is sent.
-            try? item.modelContext?.save()            
-            // Sync Discovery Entities
-            let itemID = item.persistentModelID
-            let container = item.modelContext?.container
+            
+            // Broadcast the change so the Main Page also updates its badge immediately
+            if let posterURL = item.posterURL {
+                ImageCache.shared.ping(url: posterURL)
+            }
+        }
+        
+        // 2. Debounce the heavy database sync and global broadcast
+        saveTask?.cancel()
+        let itemID = item.persistentModelID
+        let container = item.modelContext?.container
+        
+        saveTask = Task { @MainActor [weak self] in
+            // Wait 0.5s to see if the user taps another episode
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if Task.isCancelled { return }
+            
+            guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
+            
+            self.item.tvShowDetails?.recalculateCachedProperties()
+            self.item.syncCachedProperties()
+            
+            try? self.item.modelContext?.save()
+            
             Task.detached {
                 if let container = container {
                     let sync = DiscoverySyncService(modelContainer: container)
@@ -276,13 +303,7 @@ class DetailViewModel {
                 }
             }
             
-            // Phase 1: Global Pulse
             NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-            
-            // Broadcast the change so the Main Page also updates its badge
-            if let posterURL = item.posterURL {
-                ImageCache.shared.ping(url: posterURL)
-            }
         }
     }
 }

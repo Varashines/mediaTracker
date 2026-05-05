@@ -16,14 +16,12 @@ struct FilteredLibraryGridView: View {
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                     ForEach(items) { metadata in
-                        if let item = modelContext.model(for: metadata.id) as? MediaItem, !item.isDeleted {
-                            NavigationLink(value: item) {
-                                MediaThumbnailView(
-                                    metadata: metadata, mode: .grid, namespace: namespace,
-                                    isFastScrolling: isFastScrolling)
-                            }
-                            .buttonStyle(.interactive)
+                        NavigationLink(value: metadata.id) {
+                            MediaThumbnailView(
+                                metadata: metadata, mode: .grid, namespace: namespace,
+                                isFastScrolling: isFastScrolling)
                         }
+                        .buttonStyle(.interactive)
                     }
                 }
             }

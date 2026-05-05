@@ -9,12 +9,15 @@ struct PosterView: View {
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
-                // 1. Aurora Glow Background
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(themeColor.opacity(0.5))
-                    .frame(width: 220, height: 330)
-                    .blur(radius: 50)
-                    .offset(y: 10)
+                // 1. Aurora Glow Background (Optimized Gradient instead of Dynamic Blur)
+                RadialGradient(
+                    colors: [themeColor.opacity(0.4), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 150
+                )
+                .frame(width: 220, height: 330)
+                .offset(y: 10)
                 
                 let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .critical, themeColor: themeColor) { _ in
                     } placeholder: {
@@ -43,6 +46,13 @@ struct PosterView: View {
                         .padding(12)
                 }
             }
+            .scrollTransition { content, phase in
+                content
+                    .opacity(phase.isIdentity ? 1 : 0.8)
+                    .scaleEffect(phase.isIdentity ? 1 : 0.95)
+                    .offset(y: phase.value * -150)
+            }
+            .drawingGroup() // Rasterize complex shadow/glow stack
             .zIndex(1)
             .layoutPriority(1)
         }

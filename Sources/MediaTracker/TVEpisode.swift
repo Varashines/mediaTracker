@@ -22,6 +22,7 @@ final class TVEpisode {
     var isWatched: Bool = false {
         didSet {
             if oldValue != isWatched {
+                season?.watchedEpisodesCount += (isWatched ? 1 : -1)
                 season?.tvShowDetails?.watchedEpisodesCount += (isWatched ? 1 : -1)
             }
         }

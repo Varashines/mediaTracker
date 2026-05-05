@@ -78,8 +78,6 @@ actor MaintenanceService {
             // 2. Assign uniqueIDs to episodes and Heal Relationships
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
-                    tv.item = item
-                    
                     // First, deduplicate Seasons at the relationship level
                     let groupedSeasons = Dictionary(grouping: tv.seasons, by: { $0.seasonNumber })
                     for (num, duplicates) in groupedSeasons where duplicates.count > 1 {

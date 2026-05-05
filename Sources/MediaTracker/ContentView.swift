@@ -326,9 +326,6 @@ struct ContentView: View {
             // Trigger initial data load directly to ensure it isn't dropped by the Combine subject
             performUpdate()
             checkAndRepairMissingMetadata()
-            
-            // Phase 5: Automatic Library Heal on startup
-            DataService.shared.runMaintenance(modelContext: modelContext, silent: true)
         }
     }
 

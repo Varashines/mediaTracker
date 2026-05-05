@@ -12,6 +12,10 @@ final class TVSeason {
     var tvShowDetails: TVShowDetails?
     @Relationship(deleteRule: .cascade, inverse: \TVEpisode.season) var episodes: [TVEpisode] = []
 
+    /// Denormalized counts for O(1) UI performance
+    var watchedEpisodesCount: Int = 0
+    var totalEpisodesCount: Int = 0
+
     init(seasonNumber: Int, name: String, episodeCount: Int, airDate: String? = nil, showID: Int? = nil) {
         self.seasonNumber = seasonNumber
         self.name = name
@@ -19,5 +23,10 @@ final class TVSeason {
         self.airDate = airDate
         self.showID = showID
         if let showID = showID { self.uniqueID = "\(showID)_\(seasonNumber)" }
+    }
+
+    func refreshCounts() {
+        self.totalEpisodesCount = episodes.count
+        self.watchedEpisodesCount = episodes.filter { $0.isWatched }.count
     }
 }

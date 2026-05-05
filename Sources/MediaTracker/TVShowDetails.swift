@@ -36,10 +36,12 @@ final class TVShowDetails {
     func refreshCounts() {
         var total = 0
         var watched = 0
-        for season in seasons where season.seasonNumber > 0 {
-            for episode in season.episodes {
-                total += 1
-                if episode.isWatched { watched += 1 }
+        for season in seasons {
+            season.refreshCounts()
+            // Progress bar and overall counts typically exclude Specials (S0)
+            if season.seasonNumber > 0 {
+                total += season.totalEpisodesCount
+                watched += season.watchedEpisodesCount
             }
         }
         self.totalEpisodesCount = total

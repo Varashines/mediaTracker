@@ -17,6 +17,12 @@ struct CastSectionViewNew: View {
                     }
                     .offset(x: isVisible ? 0 : 20)
                     .opacity(isVisible ? 1 : 0)
+                    .scrollTransition(axis: .horizontal) { content, phase in
+                        content
+                            .opacity(phase.isIdentity ? 1 : 0.6)
+                            .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                            .offset(y: phase.isIdentity ? 0 : 5)
+                    }
                 }
             }
             .padding(.horizontal, 10)

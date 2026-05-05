@@ -92,3 +92,37 @@ extension Color {
         }
     }
 }
+
+// MARK: - Shimmering Effect
+extension View {
+    func shimmering() -> some View {
+        modifier(ShimmeringModifier())
+    }
+}
+
+struct ShimmeringModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geo in
+                    let width = geo.size.width
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.15), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: width * 2)
+                    .offset(x: -width + (width * 2 * phase))
+                    .rotationEffect(.degrees(30))
+                }
+                .mask(content)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}

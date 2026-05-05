@@ -20,6 +20,7 @@ extension Color {
 struct TVTrackingView: View {
     @Bindable var tvDetails: TVShowDetails
     var themeColor: Color
+    var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
 
@@ -68,9 +69,17 @@ struct TVTrackingView: View {
                 {
                     SeasonSection(
                         season: selectedSeason, themeColor: themeColor,
-                        onWatchedToggle: onWatchedToggle
+                        isRefreshing: isRefreshing,
+                        onWatchedToggle: onWatchedToggle,
+                        onSeasonSelected: onSeasonSelected
                     )
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .onAppear {
+                        autoFetchIfNeeded(season: selectedSeason)
+                    }
+                    .onChange(of: selectedNumber) { _, _ in
+                        autoFetchIfNeeded(season: selectedSeason)
+                    }
                 }
             }
         }
@@ -90,23 +99,41 @@ struct TVTrackingView: View {
             let currentSeason = tvDetails.seasons.first(where: {
                 $0.seasonNumber == selectedSeasonNumber
             })
-            if selectedSeasonNumber == nil || (currentSeason?.episodes.isEmpty ?? true) {
+            if selectedSeasonNumber == nil || (currentSeason?.totalEpisodesCount == 0) {
                 selectInitialSeason()
             }
         }
     }
 
+    private func autoFetchIfNeeded(season: TVSeason) {
+        if season.totalEpisodesCount == 0 && season.episodeCount > 0 && !isRefreshing {
+            onSeasonSelected?(season)
+        }
+    }
+
     private func selectInitialSeason() {
-        // 1. Find the first season with unwatched episodes
-        if let firstUnwatched = sortedSeasons.first(where: { season in
-            season.episodes.contains(where: { !$0.isWatched })
+        // 1. Prioritize non-zero seasons that have unwatched episodes
+        let activeSeasons = sortedSeasons.filter { $0.seasonNumber > 0 }
+        
+        if let firstUnwatched = activeSeasons.first(where: { season in
+            season.watchedEpisodesCount < season.totalEpisodesCount
         }) {
             selectedSeasonNumber = firstUnwatched.seasonNumber
             onSeasonSelected?(firstUnwatched)
-        } else if let last = sortedSeasons.last {
-            // 2. Default to the last season if all are watched
-            selectedSeasonNumber = last.seasonNumber
-            onSeasonSelected?(last)
+            return
+        }
+        
+        // 2. If all non-zero seasons are watched, pick the last non-zero season
+        if let lastActive = activeSeasons.last {
+            selectedSeasonNumber = lastActive.seasonNumber
+            onSeasonSelected?(lastActive)
+            return
+        }
+        
+        // 3. Fallback to Specials (Season 0) only if it's the only one available
+        if let specials = sortedSeasons.first(where: { $0.seasonNumber == 0 }) {
+            selectedSeasonNumber = 0
+            onSeasonSelected?(specials)
         }
     }
 }
@@ -120,9 +147,9 @@ private struct SeasonTab: View {
     @Environment(\.colorScheme) var colorScheme
 
     private var progress: Double {
-        let total = season.episodes.count
+        let total = season.totalEpisodesCount
         guard total > 0 else { return 0 }
-        let watched = season.episodes.filter { $0.isWatched }.count
+        let watched = season.watchedEpisodesCount
         return Double(watched) / Double(total)
     }
 
@@ -183,7 +210,9 @@ private struct SeasonTab: View {
 private struct SeasonSection: View {
     @Bindable var season: TVSeason
     var themeColor: Color
+    var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
+    var onSeasonSelected: ((TVSeason) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     private let columns = [
@@ -191,7 +220,7 @@ private struct SeasonSection: View {
     ]
 
     private var isAllWatched: Bool {
-        !season.episodes.isEmpty && season.episodes.allSatisfy { $0.isWatched }
+        season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
     }
 
     var body: some View {
@@ -237,17 +266,38 @@ private struct SeasonSection: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(season.episodes.isEmpty)
+                .disabled(season.totalEpisodesCount == 0)
             }
             .padding(.horizontal, 4)
 
-            if season.episodes.isEmpty {
-                ContentUnavailableView(
-                    "No episodes", systemImage: "sparkles.tv",
-                    description: Text("Episode data is not available for this season.")
-                )
+            if season.totalEpisodesCount == 0 {
+                VStack(spacing: 20) {
+                    ContentUnavailableView(
+                        "No episodes loaded", systemImage: "sparkles.tv",
+                        description: Text(season.episodeCount > 0 
+                                          ? "This season has \(season.episodeCount) episodes according to metadata." 
+                                          : "Episode data is not available for this season.")
+                    )
+                    
+                    if season.episodeCount > 0 {
+                        Button {
+                            onSeasonSelected?(season)
+                        } label: {
+                            if isRefreshing {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Fetch Episodes", systemImage: "arrow.down.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(themeColor)
+                        .controlSize(.regular)
+                        .disabled(isRefreshing)
+                    }
+                }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .padding(.vertical, 30)
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
@@ -351,10 +401,8 @@ private struct EpisodeCube: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 80)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
-            )
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
@@ -365,6 +413,13 @@ private struct EpisodeCube: View {
             .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 3)
         }
         .buttonStyle(.interactive(feedback: nil))
+        .drawingGroup() // Rasterize for silky scrolling
+        .scrollTransition { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0.7)
+                .scaleEffect(phase.isIdentity ? 1 : 0.92)
+                .blur(radius: phase.isIdentity ? 0 : 2)
+        }
     }
 }
 

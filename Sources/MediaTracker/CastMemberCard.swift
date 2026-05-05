@@ -28,6 +28,7 @@ struct CastMemberCardNew: View {
         .overlay(borderOverlay)
         .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: 12))
+        .drawingGroup() // Optimize rendering for many cards
     }
 
     @ViewBuilder
@@ -73,7 +74,7 @@ struct CastMemberCardNew: View {
     }
 
     private var backgroundView: some View {
-        colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+        AnyView(Rectangle().fill(.thinMaterial))
     }
 
     private var borderOverlay: some View {
