@@ -300,8 +300,12 @@ actor BackgroundDataService {
             if hasChanged || movieDetails.cast.isEmpty {
                 movieDetails.cast.forEach { modelContext.delete($0) }
                 
+                var seen = Set<String>()
                 var newCastList: [CastMember] = []
                 for c in newCastResults {
+                    if seen.contains(c.name) { continue }
+                    seen.insert(c.name)
+                    
                     let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                     let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                     member.movieDetails = movieDetails
@@ -351,12 +355,16 @@ actor BackgroundDataService {
                 }
             }
 
-            // Update Cast (Always replace to ensure aggregate data and 30-member limit)
+            // Update Cast (Always replace to ensure aggregate data and 10-member limit)
             let newCastResults = details.cast
             tvDetails.cast.forEach { modelContext.delete($0) }
             
+            var seen = Set<String>()
             var newCastList: [CastMember] = []
             for c in newCastResults {
+                if seen.contains(c.name) { continue }
+                seen.insert(c.name)
+                
                 let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                 let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                 member.tvShowDetails = tvDetails

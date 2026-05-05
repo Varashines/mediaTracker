@@ -8,7 +8,7 @@ final class TVSeason {
     var episodeCount: Int
     var airDate: String?
     var showID: Int?
-    var uniqueID: String?
+    @Attribute(.unique) var uniqueID: String?
     var tvShowDetails: TVShowDetails?
     @Relationship(deleteRule: .cascade, inverse: \TVEpisode.season) var episodes: [TVEpisode] = []
 

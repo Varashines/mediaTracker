@@ -107,9 +107,14 @@ class DetailViewModel {
         // FORCE RELOAD: Access the collections to trigger a merge of background data.
         if let tv = item.tvShowDetails {
             _ = tv.seasons.count
+            _ = tv.cast.count // Force cast merge
             for s in tv.seasons {
                 _ = s.episodes.count
             }
+        }
+        
+        if let movie = item.movieDetails {
+            _ = movie.cast.count // Force cast merge
         }
 
         item.syncCachedProperties()

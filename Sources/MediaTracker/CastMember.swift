@@ -19,7 +19,7 @@ final class CastMember {
         self.order = order
         self.mediaID = mediaID
         if let mID = mediaID {
-            self.uniqueID = "\(mID)_\(name)"
+            self.uniqueID = "\(mID)_\(name)_\(characterName)"
         } else {
             self.uniqueID = UUID().uuidString
         }

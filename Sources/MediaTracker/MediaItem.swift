@@ -174,14 +174,42 @@ extension MediaItem {
     }
 
     private func syncCastCache() {
-        if let movie = movieDetails, !movie.cast.isEmpty {
-            self.storedCast = movie.cast
-                .sorted { $0.order < $1.order }
-                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
-        } else if let tv = tvShowDetails, !tv.cast.isEmpty {
-            self.storedCast = tv.cast
-                .sorted { $0.order < $1.order }
-                .map { SimpleCastMember(id: $0.uniqueID ?? UUID().uuidString, name: $0.name, characterName: $0.characterName, profileURL: $0.profileURL, order: $0.order) }
+        guard let context = modelContext else { return }
+        
+        // Defensive: Use direct fetch instead of relationship to avoid "ghost objects" during background merges
+        let currentID = self.id
+        let descriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.mediaID == currentID })
+        
+        do {
+            let castMembers = try context.fetch(descriptor)
+            if !castMembers.isEmpty {
+                // Phase 5: Strict Deduplication by Name + Character
+                var seen = Set<String>()
+                var uniqueList: [SimpleCastMember] = []
+                
+                let sortedRaw = castMembers
+                    .filter { $0.characterName != "Creator" && $0.characterName != "Director" }
+                    .sorted { $0.order < $1.order }
+                
+                for member in sortedRaw {
+                    let key = "\(member.name)|\(member.characterName)"
+                    if !seen.contains(key) {
+                        seen.insert(key)
+                        uniqueList.append(SimpleCastMember(
+                            id: member.uniqueID ?? UUID().uuidString,
+                            name: member.name,
+                            characterName: member.characterName,
+                            profileURL: member.profileURL,
+                            order: member.order
+                        ))
+                    }
+                    if uniqueList.count >= 10 { break }
+                }
+                
+                self.storedCast = uniqueList
+            }
+        } catch {
+            print("🔍 syncCastCache: Fetch failed: \(error)")
         }
     }
 
@@ -220,9 +248,9 @@ extension MediaItem {
             if currentState == .active || currentState == .wishlist {
                 // Optimized firstUnwatched search (stops at first match)
                 var firstUnwatched: TVEpisode? = nil
-                let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+                let sortedSeasons = tv.seasons.filter { !$0.isDeleted }.sorted { $0.seasonNumber < $1.seasonNumber }
                 for season in sortedSeasons {
-                    let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                    let sortedEpisodes = season.episodes.filter { !$0.isDeleted }.sorted { $0.episodeNumber < $1.episodeNumber }
                     if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
                         firstUnwatched = next
                         break
@@ -241,7 +269,7 @@ extension MediaItem {
         }
 
         // Fallback for legacy data or first-load
-        let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
+        let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 && !$0.isDeleted }
         if !relevantSeasons.isEmpty {
             var totalCount = 0
             var watchedCount = 0
@@ -250,7 +278,7 @@ extension MediaItem {
             let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
             
             for season in sortedSeasons {
-                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                let sortedEpisodes = season.episodes.filter { !$0.isDeleted }.sorted { $0.episodeNumber < $1.episodeNumber }
                 for ep in sortedEpisodes {
                     totalCount += 1
                     if ep.isWatched { watchedCount += 1 } 

@@ -27,7 +27,7 @@ final class TVEpisode {
         }
     }
     var showID: Int?
-    var uniqueID: String? = nil
+    @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
     
     var airDateAsDate: Date? {
