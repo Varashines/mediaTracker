@@ -43,19 +43,14 @@ struct MainLibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                        // 1. CINEMATIC SPOTLIGHT (Priority Hero)
-                        if let hero = viewModel.spotlightHero {
-                            SpotlightHeroView(metadata: hero, onSelect: onSelectHero, isFastScrolling: isFastScrolling)
-                                .padding(.top, 10)
-                        }
-
-                        // 2. CONTINUE WATCHING
+                        // 1. CONTINUE WATCHING
                         ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero) {
                             onCategorySelected(.discover)
                         }
+                        .padding(.top, 10)
                         .padding(.bottom, 20)
 
-                        // 3. FOR YOU (Recommendations)
+                        // 2. FOR YOU (Recommendations)
                         ForYouCarousel(items: recommendations, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero)
                             .padding(.bottom, 20)
                     }

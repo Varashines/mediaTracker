@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UserNotifications
 
 @ModelActor
 actor BackgroundDataService {
@@ -191,6 +192,10 @@ actor BackgroundDataService {
             
             // Phase 5: Notification Scheduling
             if item.type == .movie {
+                // Clear old notifications before scheduling updated ones
+                let identifier = "movie-\(item.id)"
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(identifier)-day1", "\(identifier)-day2"])
+                
                 await NotificationManager.shared.scheduleMovieNotification(
                     id: item.id, 
                     title: item.title, 
@@ -198,6 +203,10 @@ actor BackgroundDataService {
                     posterURL: item.posterURL
                 )
             } else if item.type == .tvShow, let tv = item.tvShowDetails {
+                // Clear old notifications before scheduling updated ones
+                let identifier = "tv-\(item.id)"
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(identifier)-day1", "\(identifier)-day2"])
+                
                 await NotificationManager.shared.scheduleTVNotification(
                     id: item.id, 
                     title: item.title, 

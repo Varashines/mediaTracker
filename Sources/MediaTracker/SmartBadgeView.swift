@@ -62,22 +62,25 @@ struct SmartBadgeView: View {
     private func intelligentBadge(label: String, icon: String, isSparkle: Bool, remaining: Int? = nil) -> some View {
         let isBinge = label == "BINGE"
         
-        let badgeBackground: AnyShapeStyle = {
+        let badgeConfig: (bg: Color, fg: Color) = {
             switch label {
-            case "NEW":
-                return AnyShapeStyle(appAccent.color.gradient)
-            case "SOON":
-                return AnyShapeStyle(Color.orange.gradient)
-            case "SERIES PREMIERE", "SEASON PREMIERE":
-                return AnyShapeStyle(Color.mint.gradient)
-            case "FINALE":
-                return AnyShapeStyle(Color.black.gradient)
+            case "SERIES PREMIERE", "SEASON PREMIERE", "FINALE":
+                // Milestones: Electric Purple
+                return (Color(red: 0.4, green: 0.3, blue: 0.9), .white)
             case "BINGE", "BINGE DROP":
-                return AnyShapeStyle(appAccent.color.opacity(0.8).gradient)
+                // Binge: Teal/Mint
+                return (Color(red: 0.0, green: 0.6, blue: 0.5), .white)
+            case "NEW", "SOON":
+                // Release: Solar Orange
+                return (Color.orange, .white)
+            case "CATCH UP":
+                // Engagement: Slate Blue
+                return (Color(red: 0.3, green: 0.4, blue: 0.6), .white)
             case "RECENT":
-                return AnyShapeStyle(Color.blue.gradient)
+                // Fallback: Translucent Gray
+                return (Color.secondary.opacity(0.8), .white)
             default:
-                return AnyShapeStyle(Color.secondary.opacity(0.8).gradient)
+                return (Color.secondary.opacity(0.8), .white)
             }
         }()
 
@@ -99,15 +102,12 @@ struct SmartBadgeView: View {
         .font(.system(size: 9, weight: .black))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(badgeBackground)
-        .foregroundStyle(.white)
+        .background(badgeConfig.bg.gradient)
+        .foregroundStyle(badgeConfig.fg)
         .clipShape(Capsule())
-        .shadow(color: isSparkle ? appAccent.color.opacity(0.4) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
+        .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
         .overlay {
-            if label == "FINALE" {
-                Capsule()
-                    .stroke(Color.orange.opacity(0.5), lineWidth: 1)
-            } else if isSparkle {
+            if isSparkle {
                 Capsule()
                     .stroke(.white.opacity(0.3), lineWidth: 1)
             }

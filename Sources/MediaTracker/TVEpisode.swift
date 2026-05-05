@@ -17,6 +17,7 @@ final class TVEpisode {
             updateAirDateValue()
         }
     }
+    // Restored for SwiftData Predicate support
     var airDateValue: Date?
     var runtime: Int?
     var isWatched: Bool = false {
@@ -31,12 +32,27 @@ final class TVEpisode {
     @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
     
+    // UI property: Uses the persistent airDateValue if accurate, or recalculates
     var airDateAsDate: Date? {
-        airDateValue ?? DateUtils.parseEpisodeDate(airDate, time: nil, airstamp: airstamp, timezone: season?.tvShowDetails?.timezone, serviceName: season?.tvShowDetails?.network, for: season?.tvShowDetails)
+        airDateValue ?? DateUtils.parseEpisodeDate(
+            airDate, 
+            time: nil, 
+            airstamp: airstamp, 
+            timezone: season?.tvShowDetails?.timezone, 
+            serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork, 
+            for: season?.tvShowDetails
+        )
     }
 
     func updateAirDateValue() {
-        self.airDateValue = DateUtils.parseEpisodeDate(airDate, time: nil, airstamp: airstamp, timezone: season?.tvShowDetails?.timezone, serviceName: season?.tvShowDetails?.network, for: season?.tvShowDetails)
+        self.airDateValue = DateUtils.parseEpisodeDate(
+            airDate, 
+            time: nil, 
+            airstamp: airstamp, 
+            timezone: season?.tvShowDetails?.timezone, 
+            serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork, 
+            for: season?.tvShowDetails
+        )
     }
     
     init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, airstamp: String? = nil, runtime: Int? = nil, isWatched: Bool = false, showID: Int? = nil) {
@@ -54,6 +70,7 @@ final class TVEpisode {
         } else {
             self.uniqueID = UUID().uuidString
         }
-        updateAirDateValue()
+        // Note: airDateValue may still be 00:00 here if network is unknown during init.
+        // It gets healed by MaintenanceService or recalculated by airDateAsDate property.
     }
 }

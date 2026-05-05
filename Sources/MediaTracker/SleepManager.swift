@@ -38,7 +38,7 @@ class SleepManager {
     func resetTimer() {
         lastInteractionDate = Date()
         if isAsleep {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            withAnimation(.smooth) {
                 isAsleep = false
             }
             print("🌅 App woke up from sleep mode.")

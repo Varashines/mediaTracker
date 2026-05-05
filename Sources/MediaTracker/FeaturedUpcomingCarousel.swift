@@ -55,7 +55,7 @@ struct FeaturedUpcomingCarousel: View {
                 guard let minX = dict[scrollSpace] else { return }
                 let maxScroll = max(1, contentWidth - containerWidth)
                 let currentScroll = max(0, -minX)
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.85)) {
+                withAnimation(.smooth) {
                     scrollProgress = min(1.0, currentScroll / maxScroll)
                 }
             }

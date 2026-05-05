@@ -160,13 +160,9 @@ struct DetailView: View {
                 // 1. TV TRACKING (Highest Priority for Series)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                        HStack {
-                            Image(systemName: "play.tv.fill")
-                                .foregroundStyle(viewModel.themeColor)
-                            Text("Seasons & Episodes")
-                                .font(.title3.bold())
-                        }
-                        .padding(.horizontal, AppTheme.Spacing.tiny)
+                        Text("Seasons & Episodes")
+                            .font(.title3.bold())
+                            .padding(.horizontal, AppTheme.Spacing.tiny)
 
                         TVTrackingView(
                             tvDetails: tv,

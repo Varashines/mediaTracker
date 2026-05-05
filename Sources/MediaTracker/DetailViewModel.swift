@@ -9,8 +9,8 @@ class DetailViewModel {
     
     init(item: MediaItem) {
         self.item = item
-        // Initial pre-warm for cached data
-        prewarmCast()
+        // Initial pre-warm for cached data removed to speed up transitions.
+        // Will be triggered lazily if needed.
     }
     
     var needsUpdate: Bool {
@@ -104,24 +104,12 @@ class DetailViewModel {
         guard !item.isDeleted else { return }
         
         // SwiftData automatically propagates background saves to the main context.
-        // FORCE RELOAD: Access the collections to trigger a merge of background data.
-        if let tv = item.tvShowDetails {
-            _ = tv.seasons.count
-            _ = tv.cast.count // Force cast merge
-            for s in tv.seasons {
-                _ = s.episodes.count
-            }
-        }
+        // We rely on lazy-loading for relationships (seasons, cast, episodes) to keep transitions fast.
         
-        if let movie = item.movieDetails {
-            _ = movie.cast.count // Force cast merge
-        }
-
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
         
         updateThemeColor()
-        self.prewarmCast()
     }
 
     private func prewarmCast() {

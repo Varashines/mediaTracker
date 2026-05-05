@@ -29,7 +29,7 @@ struct CastSectionViewNew: View {
             .padding(.bottom, 15)
         }
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            withAnimation(.smooth) {
                 isVisible = true
             }
         }

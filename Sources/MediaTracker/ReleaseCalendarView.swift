@@ -94,7 +94,7 @@ struct ReleaseCalendarView: View {
             Spacer()
             
             Button {
-                withAnimation(.spring(response: 0.3)) {
+                withAnimation(.smooth) {
                     selectedDate = nil
                 }
             } label: {
@@ -124,7 +124,7 @@ struct ReleaseCalendarView: View {
             let calendar = Calendar.current
             let newMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: newDate)) ?? newDate
             
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.smooth) {
                 currentDisplayMonth = newMonth
                 selectedDate = nil // Reset to All Month view when navigating
             }
@@ -293,7 +293,7 @@ struct ReleaseCalendarView: View {
                         let dayInfo = data.days[date]
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
 
-                        Button {                            withAnimation(.spring(response: 0.3)) { selectedDate = date }
+                        Button {                            withAnimation(.smooth) { selectedDate = date }
                         } label: {
                             VStack(spacing: 8) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
@@ -351,7 +351,7 @@ struct ReleaseCalendarView: View {
                 }
             }
             .onTapGesture {
-                withAnimation(.spring(response: 0.3)) {
+                withAnimation(.smooth) {
                     if isSelected {
                         selectedDate = nil
                     } else {

@@ -41,7 +41,7 @@ struct TitleSection: View {
 
                 HStack(spacing: 12) {
                     let accent = themeColor.readableAccent(colorScheme: colorScheme)
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text(item.type?.rawValue.uppercased() ?? "")
                             .font(.system(size: 10, weight: .black))
                             .padding(.horizontal, 8)
@@ -50,21 +50,19 @@ struct TitleSection: View {
                             .clipShape(Capsule())
                             .foregroundStyle(accent)
 
-                        if item.isUpcoming {
+                        if item.isUpcoming, let dateText = item.detailBadgeText {
                             let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
-                            let badge = Text(isStreaming ? "NOW STREAMING" : "UPCOMING")
-                                .font(.system(size: 10, weight: .black))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(isStreaming ? Color.semanticGreen(for: colorScheme).opacity(0.15) : Color.orange.opacity(0.15))
-                                .clipShape(Capsule())
-                                .foregroundStyle(isStreaming ? Color.semanticGreen(for: colorScheme) : .orange)
-                            
-                            if let ns = namespace {
-                                badge.matchedGeometryEffect(id: "badge_\(item.id)", in: ns)
-                            } else {
-                                badge
+                            HStack(spacing: 4) {
+                                Image(systemName: isStreaming ? "play.fill" : "calendar")
+                                    .font(.system(size: 8, weight: .black))
+                                Text(dateText.uppercased())
+                                    .font(.system(size: 10, weight: .black))
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(isStreaming ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                            .clipShape(Capsule())
+                            .foregroundStyle(isStreaming ? .green : .orange)
                         }
                     }
 

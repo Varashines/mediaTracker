@@ -111,7 +111,7 @@ struct SettingsView: View {
                                 }
                             }
                             .onTapGesture { 
-                                withAnimation(.spring(response: 0.3)) { appAccent = accent }
+                                withAnimation(.smooth) { appAccent = accent }
                                 FeedbackManager.shared.trigger(.click)
                             }
                     }

@@ -37,7 +37,7 @@ struct TasteToggle: View {
     
     private func setTaste(_ val: String) {
         guard item.modelContext != nil && !item.isDeleted else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.smooth) {
             if item.tasteValue == val {
                 item.tasteValue = "None"
                 FeedbackManager.shared.trigger(.click)

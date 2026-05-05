@@ -43,9 +43,9 @@ class ImageCache {
             try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         }
         
-        // Cost-based memory limit (approx 256MB for thumbnails - safe for 8GB+ Macs)
-        memoryCache.totalCostLimit = 256 * 1024 * 1024
-        memoryCache.countLimit = 300 // Higher count limit for small thumbnails
+        // Cost-based memory limit (approx 128MB for thumbnails - safer for all systems)
+        memoryCache.totalCostLimit = 128 * 1024 * 1024
+        memoryCache.countLimit = 150 // Reasonable count limit for small thumbnails
         
         // Phase 2 Optimization: Asynchronous Disk Indexing
         Task.detached(priority: .userInitiated) {

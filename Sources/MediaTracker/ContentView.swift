@@ -350,7 +350,7 @@ struct ContentView: View {
             return
         }
 
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+        withAnimation(.smooth) {
             if let item = modelContext.model(for: metadata.id) as? MediaItem {
                 viewModel.navigationPath.append(item)
             }

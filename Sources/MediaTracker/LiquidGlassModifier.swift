@@ -18,70 +18,51 @@ struct LiquidGlassModifier: ViewModifier {
         let isLight = accentColor.isLightColor
         let isAsleep = SleepManager.shared.isAsleep
 
-        // If solid, always white. If frosted, use primary (adaptive black/white).
         let defaultForeground = isSolid ? Color.white : .primary
         let foreground = foregroundColor ?? defaultForeground
+        let tintOpacity = isSolid ? 0.9 : (isLight ? 0.2 : 0.3)
 
-        // If solid, high opacity. If frosted, subtle tint.
-        let tintOpacity = isSolid ? 1.0 : (isLight ? 0.35 : 0.5)
-
-        return
-            content
+        return content
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .foregroundStyle(foreground)
             .background {
                 if isAsleep {
-                    // FLAT BACKGROUND DURING SLEEP
                     Capsule()
-                        .fill(isSolid ? accentColor : Color.gray.opacity(0.2))
+                        .fill(isSolid ? accentColor : Color.gray.opacity(0.15))
                 } else {
                     ZStack(alignment: .leading) {
                         if isSolid {
                             Capsule()
                                 .fill(accentColor.opacity(tintOpacity))
                         } else {
-                            ZStack {
-                                Capsule()
-                                    .fill(.ultraThickMaterial)
-                                Capsule()
-                                    .fill(accentColor.opacity(tintOpacity))
-                            }
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule()
+                                        .fill(accentColor.opacity(tintOpacity))
+                                }
                         }
 
-                        // Glow & Fill Progress
                         if let progress = progress {
                             Capsule()
-                                .fill(foreground.opacity(0.15))
-                                .scaleEffect(x: CGFloat(min(max(progress, 0), 1)), anchor: .leading)
+                                .fill(foreground.opacity(0.1))
+                                .scaleEffect(x: CGFloat(clampedProgress(progress)), anchor: .leading)
                         }
                     }
                 }
             }
             .clipShape(Capsule())
             .overlay {
-                // Subtle stroke for definition
                 if !isAsleep {
                     Capsule()
-                        .stroke(
-                            accentColor.opacity(isSolid ? 1.0 : (isLight ? 0.7 : 0.5)), lineWidth: 0.5)
+                        .stroke(accentColor.opacity(0.3), lineWidth: 0.5)
                 }
             }
-            .overlay(alignment: .bottom) {
-                // Glowing bottom line for progress
-                if let progress = progress, !isAsleep {
-                    VStack {
-                        Spacer()
-                        Capsule()
-                            .fill(foreground.opacity(0.8))
-                            .frame(height: 1.5)
-                            .scaleEffect(x: CGFloat(min(max(progress, 0), 1)), anchor: .leading)
-                            .shadow(color: foreground.opacity(0.5), radius: 2, x: 0, y: 0)
-                            .padding(.horizontal, 4)
-                            .padding(.bottom, 1)
-                    }
-                }
-            }
+    }
+
+    private func clampedProgress(_ val: Double) -> Double {
+        return min(max(val, 0), 1)
     }
 }
 

@@ -8,7 +8,7 @@ struct StatusPicker: View {
     var body: some View {
         if item.modelContext != nil && !item.isDeleted {
             HStack(spacing: 6) {
-                Text("Status:")
+                Text("Watch State:")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 

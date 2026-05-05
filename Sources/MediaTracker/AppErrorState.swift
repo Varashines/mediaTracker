@@ -33,7 +33,7 @@ class AppErrorState {
     
     func showToast(_ message: String, systemImage: String, type: ToastType = .info) {
         self.currentToast = ToastInfo(message: message, systemImage: systemImage, type: type)
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        withAnimation(.smooth) {
             self.showToast = true
         }
         

@@ -50,7 +50,7 @@ struct InsightsView: View {
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             let result = await actor.fetchStats()
             await MainActor.run {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
+                withAnimation(.smooth) {
                     self.stats = result
                     self.isLoading = false
                 }

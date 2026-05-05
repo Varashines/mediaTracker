@@ -50,7 +50,7 @@ struct TVTrackingView: View {
                                 isSelected: selectedSeasonNumber == season.seasonNumber,
                                 themeColor: themeColor
                             ) {
-                                withAnimation(.spring(duration: 0.3)) {
+                                withAnimation(.smooth) {
                                     selectedSeasonNumber = season.seasonNumber
                                 }
                                 onSeasonSelected?(season)
@@ -336,7 +336,7 @@ private struct EpisodeCube: View {
 
     var body: some View {
         Button {
-            withAnimation(.spring(duration: 0.2)) {
+            withAnimation(.smooth) {
                 episode.isWatched.toggle()
                 FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
             }
@@ -344,7 +344,7 @@ private struct EpisodeCube: View {
             // Detach recalculation but ensure onToggle happens AFTER sync
             Task { @MainActor in
                 episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
-                withAnimation(.spring(duration: 0.2)) {
+                withAnimation(.smooth) {
                     onToggle()
                 }
             }
