@@ -11,50 +11,57 @@ actor DiscoverySyncService {
     }
     
     @MainActor private static var cachedRules: [AliasRule]?
-    @MainActor private static var cachedAliasString: String?
 
-    private func parseAliases() async -> [AliasRule] {
-        let aliasString = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
-        
-        // Cache check
-        let (cached, str) = await MainActor.run { (Self.cachedRules, Self.cachedAliasString) }
-        if str == aliasString, let rules = cached {
-            return rules
+    private func fetchAliasRules() async -> [AliasRule] {
+        // Simple cache check to avoid redundant fetches in the same sync loop
+        if let cached = await MainActor.run(body: { Self.cachedRules }) {
+            return cached
         }
 
-        let lines = aliasString.components(separatedBy: .newlines)
-        var rules: [AliasRule] = []
+        let descriptor = FetchDescriptor<StudioAliasEntity>()
+        let entities = (try? modelContext.fetch(descriptor)) ?? []
         
+        // One-time migration check
+        if entities.isEmpty {
+            let legacy = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
+            if !legacy.isEmpty {
+                let rules = migrateLegacyAliases(legacy)
+                for rule in rules {
+                    modelContext.insert(StudioAliasEntity(target: rule.target, sources: Array(rule.sources), preferredLogoSource: rule.preferredLogoSource))
+                }
+                try? modelContext.save()
+                return rules
+            }
+        }
+
+        let rules = entities.map { AliasRule(target: $0.target, sources: Set($0.sources), preferredLogoSource: $0.preferredLogoSource) }
+        await MainActor.run { Self.cachedRules = rules }
+        return rules
+    }
+
+    private func migrateLegacyAliases(_ legacy: String) -> [AliasRule] {
+        let lines = legacy.components(separatedBy: .newlines)
+        var rules: [AliasRule] = []
         for line in lines where line.contains("=") {
             let mainParts = line.components(separatedBy: "|")
             let aliasPart = mainParts[0]
             let logoPart = mainParts.count > 1 ? mainParts[1] : nil
-            
             let sides = aliasPart.components(separatedBy: "=")
             guard sides.count >= 2 else { continue }
-            
             let target = sides[0].trimmingCharacters(in: .whitespaces)
             let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            
             var preferredLogoSource: String? = nil
             if let logoStr = logoPart, logoStr.contains("Logo:") {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
             }
-            
             rules.append(AliasRule(target: target, sources: Set(sources), preferredLogoSource: preferredLogoSource))
         }
-        
-        let finalRules = rules
-        await MainActor.run {
-            Self.cachedRules = finalRules
-            Self.cachedAliasString = aliasString
-        }
-        
-        return finalRules
+        return rules
     }
 
     func syncLibrary(force: Bool) async {
-        // Phase 5 Optimization: Batched Processing to prevent memory spikes
+        // Clear cache at start of sync
+        await MainActor.run { Self.cachedRules = nil }
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
@@ -69,8 +76,8 @@ actor DiscoverySyncService {
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
 
-            // Studio Aliases (Cached internally in parseAliases)
-            let rules = await parseAliases()
+            // Studio Aliases (Cached internally in fetchAliasRules)
+            let rules = await fetchAliasRules()
             var sourceToTarget: [String: String] = [:]
             var targetToLogoSource: [String: String] = [:]
             
@@ -171,7 +178,7 @@ actor DiscoverySyncService {
 
     func updateItemAdded(_ item: MediaItem) async {
         // Studio Aliases
-        let rules = await parseAliases()
+        let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {
@@ -217,7 +224,7 @@ actor DiscoverySyncService {
 
     func updateItemDeleted(network: String?, genres: [String], language: String?) async {
         // Studio Aliases
-        let rules = await parseAliases()
+        let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {

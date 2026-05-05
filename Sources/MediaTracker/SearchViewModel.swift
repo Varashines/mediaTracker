@@ -41,29 +41,27 @@ class SearchViewModel {
         isSearching = true
         isOfflineResultsOnly = false
         
-        let container = modelContainer
+        // 1. Try Cache First
+        if let cached = fetchCachedResults(query: text, type: selectedType) {
+            self.movieResults = cached.filter { $0.type == .movie }
+            self.tvResults = cached.filter { $0.type == .tvShow }
+            
+            // Also need local search results even if cache exists
+            let local = await performLocalSearch(text: text, selectedType: selectedType)
+            self.filteredLocalResults = local
+            
+            self.isSearching = false
+            self.isOfflineResultsOnly = true // Mark as offline if we didn't hit network yet
+            
+            // If cache is very fresh (e.g. < 5 mins), skip network. Otherwise, continue in background.
+            if let first = aliasSearchTimestamp[text], Date().timeIntervalSince(first) < 300 {
+                return 
+            }
+        }
 
         do {
             // Parallel Search: Local + Web
-            async let localSearch: [MediaThumbnailMetadata] = {
-                let filterActor = MediaFilterActor(modelContainer: container)
-                let category: NavigationCategory
-                switch selectedType {
-                case .all: category = .all
-                case .movie: category = .movie
-                case .tvShow: category = .tvShow
-                }
-                let result = try? await filterActor.filterAndSort(
-                    category: category,
-                    searchText: text,
-                    sortOrder: .alphabetical,
-                    network: nil,
-                    language: nil,
-                    limit: 50,
-                    offset: 0
-                )
-                return result?.displayed ?? []
-            }()
+            async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
 
             async let webMovies: [MediaSearchResult] = {
                 if selectedType == .all || selectedType == .movie {
@@ -88,6 +86,63 @@ class SearchViewModel {
             self.tvResults = tv
             self.isSearching = false
             self.isOfflineResultsOnly = false
+            
+            // 2. Save to Cache
+            saveToCache(query: text, type: selectedType, results: movies + tv)
+        }
+    }
+
+    private func performLocalSearch(text: String, selectedType: SearchType) async -> [MediaThumbnailMetadata] {
+        let category: NavigationCategory
+        switch selectedType {
+        case .all: category = .all
+        case .movie: category = .movie
+        case .tvShow: category = .tvShow
+        }
+        let filterActor = MediaFilterActor(modelContainer: modelContainer)
+        let result = try? await filterActor.filterAndSort(
+            category: category,
+            searchText: text,
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil,
+            limit: 50,
+            offset: 0
+        )
+        return result?.displayed ?? []
+    }
+
+    private var aliasSearchTimestamp: [String: Date] = [:]
+
+    private func fetchCachedResults(query: String, type: SearchType) -> [MediaSearchResult]? {
+        let key = "\(type.rawValue)_\(query)"
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<SearchCacheEntity>(predicate: #Predicate { $0.key == key })
+        
+        if let cache = try? context.fetch(descriptor).first {
+            // Check expiry (24 hours)
+            if Date().timeIntervalSince(cache.timestamp) < (24 * 3600) {
+                aliasSearchTimestamp[query] = cache.timestamp
+                return try? JSONDecoder().decode([MediaSearchResult].self, from: cache.resultsData)
+            }
+        }
+        return nil
+    }
+
+    private func saveToCache(query: String, type: SearchType, results: [MediaSearchResult]) {
+        let context = ModelContext(modelContainer)
+        let key = "\(type.rawValue)_\(query)"
+        
+        // Use background task to not block UI
+        Task.detached(priority: .background) { [context, key, query, type, results] in
+            // Remove old if exists
+            try? context.delete(model: SearchCacheEntity.self, where: #Predicate { $0.key == key })
+            
+            if let data = try? JSONEncoder().encode(results) {
+                let cache = SearchCacheEntity(query: query, type: type.rawValue, resultsData: data)
+                context.insert(cache)
+                try? context.save()
+            }
         }
     }
 

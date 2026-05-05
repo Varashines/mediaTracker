@@ -41,6 +41,36 @@ final class LanguageEntity {
 }
 
 @Model
+final class StudioAliasEntity {
+    @Attribute(.unique) var target: String
+    var sources: [String] = []
+    var preferredLogoSource: String?
+
+    init(target: String, sources: [String] = [], preferredLogoSource: String? = nil) {
+        self.target = target
+        self.sources = sources
+        self.preferredLogoSource = preferredLogoSource
+    }
+}
+
+@Model
+final class SearchCacheEntity {
+    @Attribute(.unique) var key: String // "type_query"
+    var query: String
+    var type: String
+    var resultsData: Data
+    var timestamp: Date
+
+    init(query: String, type: String, resultsData: Data, timestamp: Date = Date()) {
+        self.query = query
+        self.type = type
+        self.key = "\(type)_\(query)"
+        self.resultsData = resultsData
+        self.timestamp = timestamp
+    }
+}
+
+@Model
 final class PersonImageEntity {
     var name: String
     var profileURL: String?

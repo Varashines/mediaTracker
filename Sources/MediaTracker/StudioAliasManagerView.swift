@@ -4,19 +4,12 @@ import SwiftData
 struct StudioAliasManagerView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [MediaItem]
-    @AppStorage("studio_aliases") private var studioAliases = ""
+    @Query(sort: \StudioAliasEntity.target) private var aliasEntities: [StudioAliasEntity]
+    @AppStorage("studio_aliases") private var legacyAliases = ""
     
-    @State private var groups: [AliasGroup] = []
     @State private var availableNetworks: [String] = []
     @State private var showingAddGroup = false
     @State private var newGroupName = ""
-    
-    struct AliasGroup: Identifiable {
-        let id = UUID()
-        var target: String
-        var sources: Set<String>
-        var preferredLogo: String?
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -25,18 +18,18 @@ struct StudioAliasManagerView: View {
         }
         .onAppear { 
             calculateNetworks()
-            load()
+            migrateIfNeeded()
         }
     }
 
     @ViewBuilder
     private var groupListSection: some View {
         VStack(spacing: 12) {
-            if groups.isEmpty {
+            if aliasEntities.isEmpty {
                 emptyGroupsView
             } else {
-                ForEach($groups) { $group in
-                    groupRow(group: $group)
+                ForEach(aliasEntities) { entity in
+                    groupRow(entity: entity)
                 }
             }
         }
@@ -56,11 +49,11 @@ struct StudioAliasManagerView: View {
     }
 
     @ViewBuilder
-    private func groupRow(group: Binding<AliasGroup>) -> some View {
+    private func groupRow(entity: StudioAliasEntity) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            groupHeader(group: group)
-            sourcePicker(group: group)
-            logoPicker(group: group)
+            groupHeader(entity: entity)
+            sourcePicker(entity: entity)
+            logoPicker(entity: entity)
         }
         .padding(16)
         .background(Color.primary.opacity(0.03))
@@ -68,14 +61,14 @@ struct StudioAliasManagerView: View {
     }
 
     @ViewBuilder
-    private func groupHeader(group: Binding<AliasGroup>) -> some View {
+    private func groupHeader(entity: StudioAliasEntity) -> some View {
         HStack {
-            Text(group.wrappedValue.target)
+            Text(entity.target)
                 .font(.system(size: 14, weight: .bold))
             Spacer()
             Button { 
-                groups.removeAll { $0.id == group.id }
-                save()
+                modelContext.delete(entity)
+                try? modelContext.save()
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
@@ -86,19 +79,19 @@ struct StudioAliasManagerView: View {
     }
 
     @ViewBuilder
-    private func sourcePicker(group: Binding<AliasGroup>) -> some View {
+    private func sourcePicker(entity: StudioAliasEntity) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(availableNetworks, id: \.self) { net in
-                    let isSelected = group.wrappedValue.sources.contains(net)
+                    let isSelected = entity.sources.contains(net)
                     Button {
                         if isSelected {
-                            group.wrappedValue.sources.remove(net)
-                            if group.wrappedValue.preferredLogo == net { group.wrappedValue.preferredLogo = nil }
+                            entity.sources.removeAll { $0 == net }
+                            if entity.preferredLogoSource == net { entity.preferredLogoSource = nil }
                         } else {
-                            group.wrappedValue.sources.insert(net)
+                            entity.sources.append(net)
                         }
-                        save()
+                        try? modelContext.save()
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         Text(net)
@@ -120,18 +113,18 @@ struct StudioAliasManagerView: View {
     }
 
     @ViewBuilder
-    private func logoPicker(group: Binding<AliasGroup>) -> some View {
-        if !group.wrappedValue.sources.isEmpty {
+    private func logoPicker(entity: StudioAliasEntity) -> some View {
+        if !entity.sources.isEmpty {
             HStack(spacing: 10) {
                 Text("Logo Source:")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 
-                ForEach(Array(group.wrappedValue.sources).sorted(), id: \.self) { src in
-                    let isLogo = group.wrappedValue.preferredLogo == src
+                ForEach(entity.sources.sorted(), id: \.self) { src in
+                    let isLogo = entity.preferredLogoSource == src
                     Button {
-                        group.wrappedValue.preferredLogo = src
-                        save()
+                        entity.preferredLogoSource = src
+                        try? modelContext.save()
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         HStack(spacing: 4) {
@@ -161,10 +154,11 @@ struct StudioAliasManagerView: View {
                 
                 Button("Create") {
                     if !newGroupName.isEmpty {
-                        groups.append(AliasGroup(target: newGroupName, sources: [], preferredLogo: nil))
+                        let newEntity = StudioAliasEntity(target: newGroupName)
+                        modelContext.insert(newEntity)
+                        try? modelContext.save()
                         newGroupName = ""
                         showingAddGroup = false
-                        save()
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -192,11 +186,11 @@ struct StudioAliasManagerView: View {
         let allNets = items.compactMap { $0.cachedNetwork }
         availableNetworks = Array(Set(allNets)).sorted()
     }
-    
-    private func load() {
-        let lines = studioAliases.components(separatedBy: .newlines)
-        var parsed: [AliasGroup] = []
+
+    private func migrateIfNeeded() {
+        guard aliasEntities.isEmpty && !legacyAliases.isEmpty else { return }
         
+        let lines = legacyAliases.components(separatedBy: .newlines)
         for line in lines where line.contains("=") {
             let mainParts = line.components(separatedBy: "|")
             let aliasPart = mainParts[0]
@@ -213,21 +207,9 @@ struct StudioAliasManagerView: View {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
             }
             
-            parsed.append(AliasGroup(target: target, sources: Set(sources), preferredLogo: preferredLogoSource))
+            modelContext.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
         }
-        self.groups = parsed
-    }
-    
-    private func save() {
-        var output = ""
-        for group in groups {
-            let sourcesStr = Array(group.sources).sorted().joined(separator: ", ")
-            var line = "\(group.target) = \(sourcesStr)"
-            if let logo = group.preferredLogo {
-                line += " | Logo: \(logo)"
-            }
-            output += line + "\n"
-        }
-        studioAliases = output.trimmingCharacters(in: .newlines)
+        try? modelContext.save()
+        legacyAliases = ""
     }
 }

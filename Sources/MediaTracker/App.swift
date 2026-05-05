@@ -13,7 +13,8 @@ struct MediaTrackerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
-            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, PersonImageEntity.self
+            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, PersonImageEntity.self,
+            StudioAliasEntity.self, SearchCacheEntity.self
         ])
         
         // Configuration: Explicitly allow migration and ensure the store is local
@@ -43,6 +44,9 @@ struct MediaTrackerApp: App {
         
         // Hand off container for background actions
         NotificationManager.shared.setModelContainer(sharedModelContainer)
+        
+        // Initialize Theme Cache
+        NetworkThemeManager.shared.setup(with: sharedModelContainer)
         
         // Configure a lightweight cache for images (10MB memory, 500MB disk)
         let cacheSizeMemory = 10 * 1024 * 1024
