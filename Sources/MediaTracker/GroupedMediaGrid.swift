@@ -23,7 +23,7 @@ struct GroupedMediaGrid: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(groupMetadatas) { metadata in
                             NavigationLink(value: metadata.id) {
-                                MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling)
+                                MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling, selectedCollectionID: viewModel.selectedCollectionID)
                                     .id(metadata.versionHash)
                                     .entranceStagger(index: 0)
                             }

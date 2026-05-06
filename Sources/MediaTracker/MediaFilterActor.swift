@@ -3,6 +3,7 @@ import SwiftData
 
 struct MediaThumbnailMetadata: Sendable, Identifiable {
     let id: PersistentIdentifier
+    let itemID: String
     let title: String
     let posterURL: String?
     let backdropURL: String?
@@ -33,6 +34,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
 
     init(item: MediaItem, recommendationReason: String? = nil) {
         self.id = item.persistentModelID
+        self.itemID = item.id
         self.title = item.title
         self.posterURL = item.posterURL
         self.backdropURL = item.backdropURL
@@ -56,6 +58,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
 
     init(id: PersistentIdentifier, title: String, overview: String) {
         self.id = id
+        self.itemID = ""
         self.title = title
         self.overview = overview
         self.posterURL = nil
@@ -98,6 +101,7 @@ actor MediaFilterActor {
         language: String?,
         genre: String? = nil,
         groupBy: GroupBy = .none,
+        collectionID: UUID? = nil,
         limit: Int = 40,
         offset: Int = 0
     ) throws -> PaginatedResult {
@@ -106,7 +110,13 @@ actor MediaFilterActor {
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
         
         // 1. Optimized Predicate (Compiler Friendly)
-        let basePredicate = buildBasePredicate(category: category)
+        var basePredicate = buildBasePredicate(category: category)
+        
+        if let cid = collectionID {
+             basePredicate = #Predicate<MediaItem> { item in
+                 item.collections?.contains { $0.id == cid } ?? false
+             }
+        }
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder)
@@ -121,7 +131,7 @@ actor MediaFilterActor {
         
         var results = try modelContext.fetch(descriptor)
         
-        // 2. Swift-Level Refinement
+        // 2. Swift-Level Refinement (Filter/Search)
         results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
@@ -140,13 +150,13 @@ actor MediaFilterActor {
         if category == .home {
             let homeResult = try processHomeCategory(now: now, totalCount: totalCount)
             return homeResult
-        } else if category == .upcoming {
+        } else if category == .upcoming && collectionID == nil {
             featuredUpcoming = results.prefix(15).map { toMetadata($0) }
             results = Array(results.dropFirst(results.count > 15 ? 15 : 0))
         }
 
         // 4. Grouping Logic
-        let finalGroupedItems = groupResults(results, groupBy: groupBy)
+        let finalGroupedItems = groupResults(results, groupBy: groupBy, collectionID: collectionID)
 
         // 5. Fetch Recently Added
         let recentAddedItems = fetchRecentlyAdded(category: category)
@@ -160,6 +170,17 @@ actor MediaFilterActor {
             grouped: finalGroupedItems,
             totalCount: totalCount
         )
+    }
+
+    private func sortResults(_ results: inout [MediaItem], category: NavigationCategory, sortOrder: SortOrder) {
+        switch sortOrder {
+        case .alphabetical:
+            results.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
+        case .newestRelease:
+            results.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
+        case .recentlyAdded:
+            results.sort { ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast) }
+        }
     }
 
     private func buildBasePredicate(category: NavigationCategory) -> Predicate<MediaItem> {
@@ -308,8 +329,17 @@ actor MediaFilterActor {
         )
     }
 
-    private func groupResults(_ results: [MediaItem], groupBy: GroupBy) -> [(String, [MediaThumbnailMetadata])] {
+    private func groupResults(_ results: [MediaItem], groupBy: GroupBy, collectionID: UUID? = nil) -> [(String, [MediaThumbnailMetadata])] {
         if groupBy == .none { return [] }
+        
+        var completedIDs: Set<String> = []
+        if let cid = collectionID {
+            let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
+            if let collection = try? modelContext.fetch(colDescriptor).first {
+                completedIDs = Set(collection.completedItemIDs)
+            }
+        }
+
         let dict = Dictionary(grouping: results) { item -> String in
             switch groupBy {
             case .genre: return item.cachedGenres.first ?? "Uncategorized"
@@ -317,10 +347,22 @@ actor MediaFilterActor {
             case .network: return item.cachedNetwork ?? "Unknown"
             case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
             case .category: return item.stateValue
+            case .kanban: return completedIDs.contains(item.id) ? "Watched" : "To Watch"
             case .none: return ""
             }
         }
-        return dict.map { ($0.key, $0.value.map { toMetadata($0) }) }.sorted { $0.0 < $1.0 }
+        
+        let grouped = dict.map { ($0.key, $0.value.map { toMetadata($0) }) }
+        
+        if groupBy == .kanban {
+            return grouped.sorted { a, b in
+                if a.0 == "To Watch" { return true }
+                if b.0 == "To Watch" { return false }
+                return a.0 < b.0
+            }
+        }
+        
+        return grouped.sorted { $0.0 < $1.0 }
     }
 
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {

@@ -14,6 +14,7 @@ struct DetailView: View {
     @State private var isCastExpanded = false
     @State private var showHeavyContent = false
     @State private var breathingTrigger = false
+    @State private var showingCollectionPicker = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -71,6 +72,9 @@ struct DetailView: View {
             }
         }
         .onDisappear { isAppeared = false }
+        .sheet(isPresented: $showingCollectionPicker) {
+            CollectionPickerView(item: viewModel.item)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { notification in
             if let id = notification.userInfo?["id"] as? String, id == viewModel.item.id {
                 viewModel.refreshLocalItem()
@@ -222,6 +226,13 @@ struct DetailView: View {
     private var detailToolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             HStack(spacing: 16) {
+                Button {
+                    showingCollectionPicker = true
+                } label: {
+                    Label("Add to Collection", systemImage: "folder.badge.plus")
+                }
+                .help("Add to Collection")
+
                 Button {
                     viewModel.refreshData(force: true)
                 } label: {

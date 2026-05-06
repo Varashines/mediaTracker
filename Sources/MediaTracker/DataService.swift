@@ -135,6 +135,7 @@ class DataService {
                 try modelContext.delete(model: NetworkEntity.self)
                 try modelContext.delete(model: GenreEntity.self)
                 try modelContext.delete(model: LanguageEntity.self)
+                try modelContext.delete(model: MediaCollection.self)
                 try modelContext.save()
                 
                 // Clear caches as well

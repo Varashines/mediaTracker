@@ -14,7 +14,7 @@ struct MediaTrackerApp: App {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self
+            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self
         ])
         
         // Configuration: Explicitly allow migration and ensure the store is local

@@ -21,6 +21,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case movie = "Movie"
     case tvShow = "TV Show"
     case settings = "Settings"
+    case collectionsHub = "Collections Hub"
 
     var id: String { self.rawValue }
 
@@ -41,6 +42,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
         case .settings: return "Settings"
+        case .collectionsHub: return "My Collections"
         }
     }
 
@@ -61,6 +63,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .movie: return "film"
         case .tvShow: return "tv"
         case .settings: return "gearshape.fill"
+        case .collectionsHub: return "folder.badge.plus"
         }
     }
 }
@@ -211,6 +214,7 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
     case network = "Network"
     case year = "Year"
     case category = "Category"
+    case kanban = "Collection Progress"
 
     var id: String { self.rawValue }
 
@@ -222,6 +226,7 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
         case .network: return "tv"
         case .year: return "calendar.badge.clock"
         case .category: return "folder"
+        case .kanban: return "checklist"
         }
     }
 }

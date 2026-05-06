@@ -34,6 +34,15 @@ class MediaViewModel {
     let pageSize: Int = 50
     var isLoadingMore: Bool = false
     var isFastScrolling: Bool = false
+    var selectedCollectionID: UUID? = nil {
+        didSet {
+            if selectedCollectionID != nil {
+                categoryGroupBys[selectedCategory] = .kanban
+            } else if categoryGroupBys[selectedCategory] == .kanban {
+                categoryGroupBys[selectedCategory] = GroupBy.none
+            }
+        }
+    }
 
     // Process Data (Main Actor Cache) - NOW USING LIGHTWEIGHT METADATA
     var displayedItems: [MediaThumbnailMetadata] = []

@@ -60,7 +60,7 @@ struct MainLibraryView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 15) {
-                        LibraryHeaderView(selectedCategory: selectedCategory, selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage, isMainSection: isMainSection, appAccent: appAccent, onNetworkSelected: onNetworkSelected)
+                        LibraryHeaderView(selectedCategory: selectedCategory, selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage, isMainSection: isMainSection, appAccent: appAccent, onNetworkSelected: onNetworkSelected, viewModel: viewModel)
                         
                         if items.isEmpty && groupedItems.isEmpty {
                             if viewModel.isInitialLoading {
@@ -78,7 +78,7 @@ struct MainLibraryView: View {
                             }
 
                             if viewModel.currentGroupBy == .none && selectedCategory != .home {
-                                MainMediaGrid(items: items, featuredCount: showingUpcomingOnly ? featuredCarouselItems.count : 0, showingUpcomingOnly: showingUpcomingOnly, isCategoryPage: isCategoryPage, namespace: namespace, isFastScrolling: isFastScrolling, onLoadMore: onLoadMore, columns: columns)
+                                MainMediaGrid(items: items, featuredCount: showingUpcomingOnly ? featuredCarouselItems.count : 0, showingUpcomingOnly: showingUpcomingOnly, isCategoryPage: isCategoryPage, namespace: namespace, isFastScrolling: isFastScrolling, selectedCollectionID: viewModel.selectedCollectionID, onLoadMore: onLoadMore, columns: columns)
                             } else {
                                 GroupedMediaGrid(groupedItems: groupedItems, selectedCategoryRef: selectedCategory, showingUpcomingOnly: showingUpcomingOnly, viewModel: viewModel, namespace: namespace, isFastScrolling: isFastScrolling, columns: columns)
                             }

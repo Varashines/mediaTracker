@@ -43,6 +43,8 @@ struct SidebarNavigation: View, Equatable {
             .padding(.vertical, 4)
 
             Section("Collections") {
+                Label(NavigationCategory.collectionsHub.title, systemImage: NavigationCategory.collectionsHub.icon)
+                    .tag(NavigationCategory.collectionsHub)
                 Label(NavigationCategory.loved.title, systemImage: NavigationCategory.loved.icon)
                     .tag(NavigationCategory.loved)
                 Label(NavigationCategory.binge.title, systemImage: NavigationCategory.binge.icon)

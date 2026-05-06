@@ -12,15 +12,15 @@ struct OverviewSection: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(themeColor.readableAccent(colorScheme: colorScheme))
                     .frame(width: 4, height: 18)
-                
+
                 Text("SYNOPSIS")
                     .font(.system(size: 13, weight: .black))
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
             }
-            
+
             Text(overview)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
                 .lineSpacing(6)
                 .foregroundStyle(.primary.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true)

@@ -37,6 +37,8 @@ final class MediaItem: Identifiable {
     var storedProgress: Double?
     var searchableText: String = ""
     var storedCast: [SimpleCastMember] = []
+    
+    var collections: [MediaCollection]?
 
     var displayCast: [SimpleCastMember] {
         return storedCast

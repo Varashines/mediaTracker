@@ -5,7 +5,7 @@ import SwiftData
 final class MediaFilterActorTests: XCTestCase {
     @MainActor
     func testHomeContinueWatchingSorting() async throws {
-        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self])
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
@@ -18,12 +18,14 @@ final class MediaFilterActorTests: XCTestCase {
         item1.stateValue = "Active"
         item1.storedSmartBadgeLabel = "STREAMING"
         item1.lastInteractionDate = Date().addingTimeInterval(-1000)
+        item1.releaseDate = Date().addingTimeInterval(-100000)
         context.insert(item1)
         
         // 2. Active, NOT STREAMING, newer interaction
         let item2 = MediaItem(id: "2", title: "Active New", overview: "", type: .tvShow)
         item2.stateValue = "Active"
         item2.lastInteractionDate = Date()
+        item2.releaseDate = Date().addingTimeInterval(-200000)
         context.insert(item2)
         
         // 3. Active, STREAMING, newest interaction
@@ -31,12 +33,13 @@ final class MediaFilterActorTests: XCTestCase {
         item3.stateValue = "Active"
         item3.storedSmartBadgeLabel = "STREAMING"
         item3.lastInteractionDate = Date().addingTimeInterval(1000)
+        item3.releaseDate = Date().addingTimeInterval(-300000)
         context.insert(item3)
         
         try context.save()
         
         let result = try await actor.filterAndSort(
-            category: "Home",
+            category: .home,
             searchText: "",
             sortOrder: .alphabetical,
             network: nil,
@@ -59,12 +62,12 @@ final class MediaFilterActorTests: XCTestCase {
 
     @MainActor
     func testFetchCalendarDataLazyLoading() async throws {
-        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self])
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
         
-        let actor = MediaFilterActor(modelContainer: container)
+        let actor = CalendarFilterActor(modelContainer: container)
         
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -99,11 +102,11 @@ final class MediaFilterActorTests: XCTestCase {
 
     @MainActor
     func testEpisodeGrouping() async throws {
-        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self])
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
-        let actor = MediaFilterActor(modelContainer: container)
+        let actor = CalendarFilterActor(modelContainer: container)
         
         let calendar = Calendar.current
         let firstOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!

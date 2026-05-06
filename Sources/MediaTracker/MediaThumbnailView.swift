@@ -8,6 +8,7 @@ struct MediaThumbnailView: View {
 
     // 1. Immutable Captured Snapshot
     private let capturedID: PersistentIdentifier?
+    private let capturedItemID: String
     private let capturedTitle: String
     private let capturedPosterURL: String?
     private let capturedType: MediaType
@@ -38,14 +39,20 @@ struct MediaThumbnailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @Query private var allCollections: [MediaCollection]
+    
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
+    
+    // Inject selectedCollectionID if needed
+    var selectedCollectionID: UUID? = nil
 
     init(
         item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, action: (() -> Void)? = nil
+        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, 
+        selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
     ) {
         self.item = item
         self.metadata = nil
@@ -56,10 +63,12 @@ struct MediaThumbnailView: View {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.selectedCollectionID = selectedCollectionID
         self.action = action
         
         // IMMEDIATE CAPTURE - This prevents crashes if item is deleted later
         self.capturedID = item.persistentModelID
+        self.capturedItemID = item.id
         self.capturedTitle = item.title
         self.capturedPosterURL = item.posterURL
         self.capturedType = item.type ?? .movie
@@ -75,7 +84,8 @@ struct MediaThumbnailView: View {
     
     init(
         metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, action: (() -> Void)? = nil
+        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
     ) {
         self.item = nil
         self.metadata = metadata
@@ -86,9 +96,11 @@ struct MediaThumbnailView: View {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.selectedCollectionID = selectedCollectionID
         self.action = action
         
         self.capturedID = metadata.id
+        self.capturedItemID = metadata.itemID
         self.capturedTitle = metadata.title
         self.capturedPosterURL = metadata.posterURL
         self.capturedType = metadata.type ?? .movie
@@ -113,6 +125,7 @@ struct MediaThumbnailView: View {
         self.staggerIndex = nil
         
         self.capturedID = nil
+        self.capturedItemID = ""
         self.capturedTitle = result.title
         self.capturedPosterURL = result.posterURL
         self.capturedType = result.type
@@ -239,6 +252,26 @@ struct MediaThumbnailView: View {
             .padding(8)
             .opacity(isHovered ? 0 : 1)
             
+            // Collection Status Badge (Top Trailing)
+            if let collectionID = selectedCollectionID, 
+               let collection = allCollections.first(where: { $0.id == collectionID }),
+               collection.completedItemIDs.contains(capturedItemID) {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(appAccent.color)
+                            .clipShape(Circle())
+                            .shadow(radius: 2)
+                    }
+                    Spacer()
+                }
+                .padding(8)
+                .opacity(isHovered ? 0 : 1)
+            }
+            
             // 2. SHADOW GALLERY: The Reveal (Centered)
             ThumbnailHoverOverlay(
                 title: title,
@@ -347,6 +380,31 @@ struct MediaThumbnailView: View {
 
     @ViewBuilder
     private func libraryContextMenu(for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?) -> some View {
+        if let collectionID = selectedCollectionID, 
+           let collection = allCollections.first(where: { $0.id == collectionID }) {
+            
+            let itemIDString = capturedItemID
+            let isSeenInCollection = collection.completedItemIDs.contains(itemIDString)
+            
+            Section("Collection Actions") {
+                Button {
+                    withAnimation {
+                        if isSeenInCollection {
+                            collection.completedItemIDs.removeAll { $0 == itemIDString }
+                        } else {
+                            collection.completedItemIDs.append(itemIDString)
+                        }
+                        try? modelContext.save()
+                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    }
+                } label: {
+                    Label(isSeenInCollection ? "Mark as To Watch" : "Mark as Watched", 
+                          systemImage: isSeenInCollection ? "circle" : "checkmark.circle.fill")
+                }
+            }
+            Divider()
+        }
+
         Section("Quick Actions") {
             if type == .tvShow {
                 Button {

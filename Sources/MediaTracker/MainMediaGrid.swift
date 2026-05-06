@@ -8,6 +8,7 @@ struct MainMediaGrid: View {
     let isCategoryPage: Bool
     let namespace: Namespace.ID
     let isFastScrolling: Bool
+    let selectedCollectionID: UUID?
     let onLoadMore: () -> Void
     let columns: [GridItem]
     
@@ -18,7 +19,7 @@ struct MainMediaGrid: View {
             ForEach(baseItems.indices, id: \.self) { idx in
                 let metadata = baseItems[idx]
                 NavigationLink(value: metadata.id) {
-                    MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling)
+                    MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: !isCategoryPage, isUpcomingSection: showingUpcomingOnly, namespace: namespace, staggerIndex: idx, isFastScrolling: isFastScrolling, selectedCollectionID: selectedCollectionID)
                         .id(metadata.versionHash)
                         .entranceStagger(index: idx)
                         .onAppear {

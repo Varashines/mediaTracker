@@ -27,9 +27,10 @@ struct ContentView: View {
             let networks = viewModel.selectedNetworks
             let language = viewModel.selectedLanguage
             let groupBy = viewModel.currentGroupBy
+            let collectionID = viewModel.selectedCollectionID
 
             // Optimization: Skip heavy data load if moving to Discovery Hub or Settings
-            if category == .discover || category == .settings { return }
+            if category == .discover || category == .settings || (category == .collectionsHub && collectionID == nil) { return }
 
             // Reset pagination for new filter/sort
             await MainActor.run {
@@ -50,6 +51,7 @@ struct ContentView: View {
                     network: networks,
                     language: language,
                     groupBy: groupBy,
+                    collectionID: collectionID,
                     limit: limit,
                     offset: 0
                 )
@@ -135,6 +137,7 @@ struct ContentView: View {
                     network: networks,
                     language: language,
                     groupBy: groupBy,
+                    collectionID: viewModel.selectedCollectionID,
                     limit: limit,
                     offset: nextOffset
                 )
@@ -176,6 +179,8 @@ struct ContentView: View {
             InsightsView()
         } else if viewModel.selectedCategory == .settings {
             SettingsView()
+        } else if viewModel.selectedCategory == .collectionsHub && viewModel.selectedCollectionID == nil {
+            CollectionsManagementView(viewModel: viewModel)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -224,6 +229,12 @@ struct ContentView: View {
                         viewModel.selectedNetworks = nil
                         viewModel.selectedLanguage = nil
                         viewModel.isInitialLoading = true  // Reset loading state for category switch
+                        
+                        // Fix: Clear collection state when navigating away
+                        if category != .collectionsHub {
+                            viewModel.selectedCollectionID = nil
+                        }
+                        
                         viewModel.filterSubject.send()
                     }
                 }
@@ -412,7 +423,7 @@ struct ContentView: View {
                     }
                 )
             ) {
-                ForEach(SortOrder.allCases) { order in
+                ForEach(SortOrder.allCases, id: \.self) { order in
                     Label(order.rawValue, systemImage: order.icon)
                         .tag(order)
                 }
@@ -428,7 +439,7 @@ struct ContentView: View {
                     }
                 )
             ) {
-                ForEach(GroupBy.allCases) { group in
+                ForEach(GroupBy.allCases, id: \.self) { group in
                     Label(group.rawValue, systemImage: group.icon)
                         .tag(group)
                 }
