@@ -7,6 +7,7 @@ final class MediaCollection: Identifiable {
     var name: String
     var systemImage: String
     var completedItemIDs: [String] = []
+    var notes: String? = ""
     
     @Relationship(inverse: \MediaItem.collections)
     var items: [MediaItem]

@@ -220,7 +220,7 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarNavigation(selection: $sidebarSelection)
                 .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)  // Allow appBackground to show through sidebar
+                .scrollContentBackground(.hidden)
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
@@ -228,9 +228,8 @@ struct ContentView: View {
                         viewModel.selectedCategory = category
                         viewModel.selectedNetworks = nil
                         viewModel.selectedLanguage = nil
-                        viewModel.isInitialLoading = true  // Reset loading state for category switch
+                        viewModel.isInitialLoading = true
                         
-                        // Fix: Clear collection state when navigating away
                         if category != .collectionsHub {
                             viewModel.selectedCollectionID = nil
                         }
@@ -240,120 +239,129 @@ struct ContentView: View {
                 }
         } detail: {
             NavigationStack(path: $viewModel.navigationPath) {
-                mainContent
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
-                    .navigationTitle(
-                        isSearchActive
-                            ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
-                    )
-                    .navigationDestination(for: MediaItem.self) { item in
+                ZStack {
+                    mainContent
+                    
+                    if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
+                        NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .zIndex(100)
+                    }
+                }
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+                .navigationTitle(
+                    isSearchActive
+                        ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
+                )
+                .navigationDestination(for: MediaItem.self) { item in
+                    DetailView(item: item, namespace: posterNamespace) { actorName in
+                        viewModel.selectedCategory = .all
+                        viewModel.searchText = actorName
+                        viewModel.navigationPath = NavigationPath()
+                        isSearchActive = true
+                        viewModel.filterSubject.send()
+                    }
+                }
+                .navigationDestination(for: PersistentIdentifier.self) { id in
+                    if let item = modelContext.model(for: id) as? MediaItem {
                         DetailView(item: item, namespace: posterNamespace) { actorName in
-                            viewModel.selectedCategory = .all  // Switch to All to check all titles
+                            viewModel.selectedCategory = .all
                             viewModel.searchText = actorName
-                            viewModel.navigationPath = NavigationPath()  // CLEAR NAVIGATION STACK
-                            isSearchActive = true  // ACTIVATE SEARCH VIEW
+                            viewModel.navigationPath = NavigationPath()
+                            isSearchActive = true
                             viewModel.filterSubject.send()
                         }
                     }
-                    .navigationDestination(for: PersistentIdentifier.self) { id in
-                        if let item = modelContext.model(for: id) as? MediaItem {
-                            DetailView(item: item, namespace: posterNamespace) { actorName in
-                                viewModel.selectedCategory = .all
-                                viewModel.searchText = actorName
-                                viewModel.navigationPath = NavigationPath()
-                                isSearchActive = true
-                                viewModel.filterSubject.send()
-                            }
-                        }
-                    }
-                    .navigationDestination(for: DiscoveryFilter.self) { filter in
-                        FilteredLibraryGridView(
-                            filter: filter, namespace: posterNamespace,
-                            isFastScrolling: $viewModel.isFastScrolling)
-                    }
-                    .searchable(
-                        text: $viewModel.searchText, isPresented: $isSearchActive,
-                        placement: .automatic, prompt: "Search movies & shows"
-                    )
-                    .onSubmit(of: .search) {
-                        viewModel.searchSubmitTrigger += 1
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-                        viewModel.filterSubject.send()
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-                        viewModel.filterSubject.send()
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
-                        viewModel.filterSubject.send()
-                    }
-                    .task(id: viewModel.searchText) {
-                        // Debounced search trigger via Combine subject
-                        viewModel.filterSubject.send()
-                    }
-                    .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
-                        performUpdate()
-                    }
-                    .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            if viewModel.selectedCollectionID != nil && !isSearchActive {
+                }
+                .navigationDestination(for: DiscoveryFilter.self) { filter in
+                    FilteredLibraryGridView(
+                        filter: filter, namespace: posterNamespace,
+                        isFastScrolling: $viewModel.isFastScrolling)
+                }
+                .searchable(
+                    text: $viewModel.searchText, isPresented: $isSearchActive,
+                    placement: .automatic, prompt: "Search movies & shows"
+                )
+                .onSubmit(of: .search) {
+                    viewModel.searchSubmitTrigger += 1
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+                    viewModel.filterSubject.send()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+                    viewModel.filterSubject.send()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
+                    viewModel.filterSubject.send()
+                }
+                .task(id: viewModel.searchText) {
+                    viewModel.filterSubject.send()
+                }
+                .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
+                    performUpdate()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        if viewModel.selectedCollectionID != nil && !isSearchActive {
+                            HStack(spacing: 4) {
                                 Button {
                                     withAnimation {
                                         viewModel.selectedCollectionID = nil
-                                        viewModel.filterSubject.send()
                                     }
+                                    viewModel.filterSubject.send()
                                 } label: {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 14, weight: .bold))
                                 }
                                 .help("Back to Collections")
-                            }
-                        }
-
-                        ToolbarItem(placement: .primaryAction) {
-                            if !isSearchActive && isSortable {
-                                displaySettingsMenu
-                            }
-                        }
-
-                        ToolbarItem(placement: .primaryAction) {
-                            if !isSearchActive && isRefreshable {
-                                refreshButton
+                                
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        viewModel.showingNoteOverlay.toggle()
+                                    }
+                                } label: {
+                                    let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
+                                    let hasNote = !viewModel.currentCollectionNote.isEmpty
+                                    Image(systemName: icon)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(hasNote ? Color.blue : Color.secondary)
+                                }
+                                .help("Collection Notes")
                             }
                         }
                     }
-                    .background {
-                        Group {
-                            Button("") { sidebarSelection = .home }.keyboardShortcut(
-                                "1", modifiers: .command)
-                            Button("") { sidebarSelection = .discover }.keyboardShortcut(
-                                "2", modifiers: .command)
-                            Button("") { sidebarSelection = .upcoming }.keyboardShortcut(
-                                "3", modifiers: .command)
-                            Button("") { sidebarSelection = .all }.keyboardShortcut(
-                                "4", modifiers: .command)
-                            Button("") { sidebarSelection = .movie }.keyboardShortcut(
-                                "5", modifiers: .command)
-                            Button("") { sidebarSelection = .tvShow }.keyboardShortcut(
-                                "6", modifiers: .command)
-                            
-                            Button("") { sidebarSelection = .settings }.keyboardShortcut(
-                                ",", modifiers: .command)
 
-                            Button("") { isSearchActive = true }
-                               .keyboardShortcut("f", modifiers: .command)
-                            }
-                            .opacity(0)
-                            }
-                            }
-                            }
-                            .appBackground(
-                            network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory.rawValue
-                            )  // Apply to the whole NavigationSplitView
+                    ToolbarItem(placement: .primaryAction) {
+                        if !isSearchActive && isSortable {
+                            displaySettingsMenu
+                        }
+                    }
+
+                    ToolbarItem(placement: .primaryAction) {
+                        if !isSearchActive && isRefreshable {
+                            refreshButton
+                        }
+                    }
+                }
+                .background {
+                    Group {
+                        Button("") { sidebarSelection = .home }.keyboardShortcut("1", modifiers: .command)
+                        Button("") { sidebarSelection = .discover }.keyboardShortcut("2", modifiers: .command)
+                        Button("") { sidebarSelection = .upcoming }.keyboardShortcut("3", modifiers: .command)
+                        Button("") { sidebarSelection = .all }.keyboardShortcut("4", modifiers: .command)
+                        Button("") { sidebarSelection = .movie }.keyboardShortcut("5", modifiers: .command)
+                        Button("") { sidebarSelection = .tvShow }.keyboardShortcut("6", modifiers: .command)
+                        Button("") { sidebarSelection = .settings }.keyboardShortcut(",", modifiers: .command)
+                        Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+                    }
+                    .opacity(0)
+                }
+            }
+        }
+        .appBackground(network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory.rawValue)
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
         .task {
-            // Trigger initial data load directly to ensure it isn't dropped by the Combine subject
             performUpdate()
             checkAndRepairMissingMetadata()
         }
@@ -432,9 +440,7 @@ struct ContentView: View {
         let cat = viewModel.selectedCategory
 
         Menu {
-            Picker(
-                "Sort By",
-                selection: Binding(
+            Picker("Sort By", selection: Binding(
                     get: { viewModel.currentSortOrder },
                     set: {
                         viewModel.categorySortOrders[cat] = $0
@@ -448,9 +454,7 @@ struct ContentView: View {
                 }
             }
 
-            Picker(
-                "Group By",
-                selection: Binding(
+            Picker("Group By", selection: Binding(
                     get: { viewModel.currentGroupBy },
                     set: {
                         viewModel.categoryGroupBys[cat] = $0

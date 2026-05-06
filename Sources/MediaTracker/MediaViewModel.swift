@@ -45,6 +45,8 @@ class MediaViewModel {
         }
     }
     var selectedCollectionName: String? = nil
+    var showingNoteOverlay: Bool = false
+    var currentCollectionNote: String = ""
 
     // Process Data (Main Actor Cache) - NOW USING LIGHTWEIGHT METADATA
     var displayedItems: [MediaThumbnailMetadata] = []
