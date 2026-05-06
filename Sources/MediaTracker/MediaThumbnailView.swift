@@ -39,20 +39,20 @@ struct MediaThumbnailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @Query private var allCollections: [MediaCollection]
     
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
     
-    // Inject selectedCollectionID if needed
+    // Performance optimization: Status passed from parent to avoid @Query in every thumbnail
+    var isCompletedInCollection: Bool = false
     var selectedCollectionID: UUID? = nil
 
     init(
         item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, 
-        selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
+        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
     ) {
         self.item = item
         self.metadata = nil
@@ -63,6 +63,7 @@ struct MediaThumbnailView: View {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
         
@@ -85,7 +86,7 @@ struct MediaThumbnailView: View {
     init(
         metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
-        selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
+        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
     ) {
         self.item = nil
         self.metadata = metadata
@@ -96,6 +97,7 @@ struct MediaThumbnailView: View {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
         
@@ -253,9 +255,7 @@ struct MediaThumbnailView: View {
             .opacity(isHovered ? 0 : 1)
             
             // Collection Status Badge (Top Trailing)
-            if let collectionID = selectedCollectionID, 
-               let collection = allCollections.first(where: { $0.id == collectionID }),
-               collection.completedItemIDs.contains(capturedItemID) {
+            if isCompletedInCollection {
                 VStack {
                     HStack {
                         Spacer()
@@ -380,22 +380,23 @@ struct MediaThumbnailView: View {
 
     @ViewBuilder
     private func libraryContextMenu(for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?) -> some View {
-        if let collectionID = selectedCollectionID, 
-           let collection = allCollections.first(where: { $0.id == collectionID }) {
-            
+        if let collectionID = selectedCollectionID {
             let itemIDString = capturedItemID
-            let isSeenInCollection = collection.completedItemIDs.contains(itemIDString)
+            let isSeenInCollection = isCompletedInCollection
             
             Section("Collection Actions") {
                 Button {
-                    withAnimation {
-                        if isSeenInCollection {
-                            collection.completedItemIDs.removeAll { $0 == itemIDString }
-                        } else {
-                            collection.completedItemIDs.append(itemIDString)
+                    Task { @MainActor in
+                        let descriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == collectionID })
+                        if let collection = try? modelContext.fetch(descriptor).first {
+                            if isSeenInCollection {
+                                collection.completedItemIDs.removeAll { $0 == itemIDString }
+                            } else {
+                                collection.completedItemIDs.append(itemIDString)
+                            }
+                            try? modelContext.save()
+                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                         }
-                        try? modelContext.save()
-                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                     }
                 } label: {
                     Label(isSeenInCollection ? "Mark as To Watch" : "Mark as Watched", 

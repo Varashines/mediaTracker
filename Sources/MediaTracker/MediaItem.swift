@@ -26,6 +26,7 @@ final class MediaItem: Identifiable {
     var cachedNetwork: String?
     var cachedNetworkLogoPath: String?
     var cachedNextAiringDate: Date?
+    var cachedRuntime: Int?
     var remainingEpisodesCount: Int?
 
     var storedSmartBadgeLabel: String?
@@ -222,6 +223,7 @@ extension MediaItem {
         self.cachedCreators = movie.creators
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
+        self.cachedRuntime = movie.runtime
     }
 
     private func syncTVProperties(now: Date, currentState: MediaState) {
@@ -231,6 +233,9 @@ extension MediaItem {
         self.cachedLanguage = tv.originalLanguage
         self.cachedNetwork = tv.network
         self.cachedNetworkLogoPath = tv.networkLogoPath
+        
+        let watchedEpisodes = tv.seasons.flatMap { $0.episodes }.filter { $0.isWatched }
+        self.cachedRuntime = watchedEpisodes.reduce(0) { $0 + ($1.runtime ?? 0) }
 
         // Phase 2 Optimization: Use Denormalized Counts if available
         if tv.totalEpisodesCount > 0 {

@@ -19,16 +19,16 @@ struct ContentView: View {
         // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
+        let currentSearchText = viewModel.searchText
+        let category = viewModel.selectedCategory
+        let sortOrder = viewModel.currentSortOrder
+        let networks = viewModel.selectedNetworks
+        let language = viewModel.selectedLanguage
+        let groupBy = viewModel.currentGroupBy
+        let collectionID = viewModel.selectedCollectionID
+
         updateTask?.cancel()
         updateTask = Task {
-            let currentSearchText = viewModel.searchText
-            let category = viewModel.selectedCategory
-            let sortOrder = viewModel.currentSortOrder
-            let networks = viewModel.selectedNetworks
-            let language = viewModel.selectedLanguage
-            let groupBy = viewModel.currentGroupBy
-            let collectionID = viewModel.selectedCollectionID
-
             // Optimization: Skip heavy data load if moving to Discovery Hub or Settings
             if category == .discover || category == .settings || (category == .collectionsHub && collectionID == nil) { return }
 
@@ -287,10 +287,29 @@ struct ContentView: View {
                     .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
                         viewModel.filterSubject.send()
                     }
-                    .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(150), scheduler: RunLoop.main)) { _ in
+                    .task(id: viewModel.searchText) {
+                        // Debounced search trigger via Combine subject
+                        viewModel.filterSubject.send()
+                    }
+                    .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
                         performUpdate()
                     }
                     .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            if viewModel.selectedCollectionID != nil && !isSearchActive {
+                                Button {
+                                    withAnimation {
+                                        viewModel.selectedCollectionID = nil
+                                        viewModel.filterSubject.send()
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                                .help("Back to Collections")
+                            }
+                        }
+
                         ToolbarItem(placement: .primaryAction) {
                             if !isSearchActive && isSortable {
                                 displaySettingsMenu

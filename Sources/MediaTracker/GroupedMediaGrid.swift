@@ -9,6 +9,16 @@ struct GroupedMediaGrid: View {
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let columns: [GridItem]
+    
+    @Query private var collections: [MediaCollection]
+    
+    private var completedIDs: Set<String> {
+        if let cid = viewModel.selectedCollectionID,
+           let collection = collections.first(where: { $0.id == cid }) {
+            return Set(collection.completedItemIDs)
+        }
+        return []
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 60) {
@@ -23,9 +33,18 @@ struct GroupedMediaGrid: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(groupMetadatas) { metadata in
                             NavigationLink(value: metadata.id) {
-                                MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: viewModel.currentGroupBy != .category, isUpcomingSection: showingUpcomingOnly, namespace: namespace, isFastScrolling: isFastScrolling, selectedCollectionID: viewModel.selectedCollectionID)
-                                    .id(metadata.versionHash)
-                                    .entranceStagger(index: 0)
+                                MediaThumbnailView(
+                                    metadata: metadata, 
+                                    mode: .grid, 
+                                    showTypeBadge: viewModel.currentGroupBy != .category, 
+                                    isUpcomingSection: showingUpcomingOnly, 
+                                    namespace: namespace, 
+                                    isFastScrolling: isFastScrolling, 
+                                    isCompletedInCollection: completedIDs.contains(metadata.itemID),
+                                    selectedCollectionID: viewModel.selectedCollectionID
+                                )
+                                .id(metadata.versionHash)
+                                .entranceStagger(index: 0)
                             }
                             .buttonStyle(.interactive)
                         }

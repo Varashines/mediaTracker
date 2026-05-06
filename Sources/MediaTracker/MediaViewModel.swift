@@ -40,9 +40,11 @@ class MediaViewModel {
                 categoryGroupBys[selectedCategory] = .kanban
             } else if categoryGroupBys[selectedCategory] == .kanban {
                 categoryGroupBys[selectedCategory] = GroupBy.none
+                selectedCollectionName = nil // Clear name when leaving collection
             }
         }
     }
+    var selectedCollectionName: String? = nil
 
     // Process Data (Main Actor Cache) - NOW USING LIGHTWEIGHT METADATA
     var displayedItems: [MediaThumbnailMetadata] = []
@@ -67,6 +69,10 @@ class MediaViewModel {
     var lastDiscoveryRefresh: Date?
 
     func navigationTitle(for category: NavigationCategory) -> String {
+        if let colName = selectedCollectionName {
+            return colName
+        }
+        
         if let networks = selectedNetworks, let first = networks.first {
             return networks.count == 1 ? first : "Merged Studios"
         }

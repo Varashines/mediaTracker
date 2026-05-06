@@ -243,10 +243,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 SettingsRow(title: "Library Backup", subtitle: "Export or import JSON.") {
                     HStack(spacing: 8) {
-                        Button { DataService.shared.exportLibrary(items: allItems) } label: {
+                        Button { LibraryImportExportService.shared.exportLibrary(items: allItems) } label: {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 12))
                         }
-                        Button { DataService.shared.importLibrary(modelContext: modelContext) } label: {
+                        Button { LibraryImportExportService.shared.importLibrary(modelContext: modelContext) } label: {
                             Image(systemName: "square.and.arrow.down").font(.system(size: 12))
                         }
                     }

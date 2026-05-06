@@ -12,8 +12,8 @@ actor MaintenanceService {
         for (id, duplicates) in groupedItems where duplicates.count > 1 {
             print("🔍 Maintenance: Found \(duplicates.count) duplicates for ID \(id)")
             let sorted = duplicates.sorted { 
-                let score1 = ($0.posterURL != nil ? 2 : 0) + ($0.tvShowDetails != nil ? 5 : 0)
-                let score2 = ($1.posterURL != nil ? 2 : 0) + ($1.tvShowDetails != nil ? 5 : 0)
+                let score1 = ($0.posterURL != nil ? 2 : 0) + ($0.type == .tvShow ? 5 : 0)
+                let score2 = ($1.posterURL != nil ? 2 : 0) + ($1.type == .tvShow ? 5 : 0)
                 if score1 != score2 { return score1 > score2 }
                 return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
             }

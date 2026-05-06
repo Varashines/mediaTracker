@@ -116,13 +116,13 @@ struct HomeHeroCard: View {
         guard let item = item, item.modelContext != nil, !item.isDeleted else { return nil }
         
         // Priority 1: Creators/Directors
-        let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators) ?? []
+        let creators = item.cachedCreators
         if let firstCreator = creators.first {
             return "\(item.type == .movie ? "Directed by" : "Created by") \(firstCreator)"
         }
         
         // Priority 2: Leading Cast
-        let cast = (item.movieDetails?.cast ?? item.tvShowDetails?.cast) ?? []
+        let cast = item.storedCast
         if let firstActor = cast.sorted(by: { $0.order < $1.order }).first {
             return "Starring \(firstActor.name)"
         }

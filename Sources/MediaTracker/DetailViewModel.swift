@@ -71,7 +71,8 @@ class DetailViewModel {
         // Skip if item is deleted or app is in sleep mode
         guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
 
-        let hasData = item.movieDetails != nil || (item.type == .tvShow && (item.tvShowDetails != nil && item.tvShowDetails?.status != nil))
+        // Use lastUpdated as a proxy for "has fetched details" to avoid relationship faulting
+        let hasData = item.lastUpdated != nil
         
         // Session Throttling
         if !force && DataService.shared.hasRefreshedThisSession(id: item.id) {
@@ -114,7 +115,7 @@ class DetailViewModel {
 
     private func prewarmCast() {
         guard item.modelContext != nil, !item.isDeleted else { return }
-        let cast = (item.movieDetails?.cast ?? item.tvShowDetails?.cast) ?? []
+        let cast = item.storedCast
         let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {
             ImageCache.shared.prewarmImages(urls: urls, targetSize: CGSize(width: 120, height: 180), priority: .low)

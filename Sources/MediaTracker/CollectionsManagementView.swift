@@ -11,7 +11,6 @@ struct CollectionsManagementView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 HStack {
-                    SectionHeader(title: "My Collections", icon: "folder.badge.plus", iconColor: .blue)
                     Spacer()
                     Button {
                         showingCreateSheet = true
@@ -26,6 +25,7 @@ struct CollectionsManagementView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
+                .padding(.top, 10)
                 
                 if collections.isEmpty {
                     VStack(spacing: 20) {
@@ -46,6 +46,7 @@ struct CollectionsManagementView: View {
                         ForEach(collections) { collection in
                             CollectionCard(collection: collection) {
                                 withAnimation {
+                                    viewModel.selectedCollectionName = collection.name
                                     viewModel.selectedCollectionID = collection.id
                                     viewModel.filterSubject.send()
                                 }
@@ -55,7 +56,7 @@ struct CollectionsManagementView: View {
                     .padding(.horizontal, 24)
                 }
             }
-            .padding(.vertical, 30)
+            .padding(.vertical, 10)
         }
         .sheet(isPresented: $showingCreateSheet) {
             CreateCollectionSheet()

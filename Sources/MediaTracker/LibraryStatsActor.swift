@@ -174,26 +174,20 @@ actor LibraryStatsActor {
                 stats.movieCount += 1
                 if isCompleted {
                     stats.movieCompleted += 1
-                    stats.watchTime += item.movieDetails?.runtime ?? 0
                 }
+                stats.watchTime += item.cachedRuntime ?? 0
 
-                if let creators = item.movieDetails?.creators {
-                    for c in creators {
-                        updateTaste(&taste.creatorTaste, c, nil)
-                    }
+                for c in item.cachedCreators {
+                    updateTaste(&taste.creatorTaste, c, nil)
                 }
             } else if item.type == .tvShow {
                 stats.tvCount += 1
                 if isCompleted { stats.tvCompleted += 1 }
+                
+                stats.watchTime += item.cachedRuntime ?? 0
 
-                if let tvDetails = item.tvShowDetails {
-                    let watchedEpisodes = tvDetails.seasons.flatMap { $0.episodes }.filter { $0.isWatched }
-                    stats.epWatched += watchedEpisodes.count
-                    stats.watchTime += watchedEpisodes.reduce(0) { $0 + ($1.runtime ?? 0) }
-
-                    for c in tvDetails.creators {
-                        updateTaste(&taste.creatorTaste, c, nil)
-                    }
+                for c in item.cachedCreators {
+                    updateTaste(&taste.creatorTaste, c, nil)
                 }
             }
 
