@@ -44,7 +44,9 @@ struct MainLibraryView: View {
                 VStack(alignment: .leading, spacing: 30) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
                         // 1. CONTINUE WATCHING
-                        ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero) {
+                        ContinueWatchingCarousel(namespace: namespace, isFastScrolling: isFastScrolling, onSelect: { item in
+                            onSelectHero(MediaThumbnailMetadata(item: item))
+                        }) {
                             onCategorySelected(.discover)
                         }
                         .padding(.top, 10)

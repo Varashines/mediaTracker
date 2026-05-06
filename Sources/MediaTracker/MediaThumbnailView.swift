@@ -360,8 +360,9 @@ struct MediaThumbnailView: View {
             Task { @MainActor in
                 item.checkOverallCompletion()
                 item.syncCachedProperties()
-                try? item.modelContext?.save()
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                if let context = item.modelContext {
+                    SaveCoordinator.shared.requestSave(context)
+                }
             }
         }
     }
@@ -394,8 +395,8 @@ struct MediaThumbnailView: View {
                             } else {
                                 collection.completedItemIDs.append(itemIDString)
                             }
-                            try? modelContext.save()
-                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                            SaveCoordinator.shared.requestSave(modelContext)
+            
                         }
                     }
                 } label: {
@@ -425,8 +426,8 @@ struct MediaThumbnailView: View {
                             item.lastUpdated = Date()
                             item.lastInteractionDate = Date()
                             item.syncCachedProperties()
-                            try? modelContext.save()
-                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                            SaveCoordinator.shared.requestSave(modelContext)
+            
                         }
                     }
                 } label: {
@@ -445,8 +446,8 @@ struct MediaThumbnailView: View {
                             item.lastInteractionDate = Date()
                             item.lastStateChangeDate = Date()
                             item.syncCachedProperties()
-                            try? modelContext.save()
-                            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                            SaveCoordinator.shared.requestSave(modelContext)
+            
                         }
                     }
                 }
@@ -463,7 +464,7 @@ struct MediaThumbnailView: View {
                 let id = item.id
                 NotificationManager.shared.cancelNotification(id: id, type: type)
                 modelContext.delete(item)
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+
             }
         } label: {
             Label("Remove", systemImage: "trash")

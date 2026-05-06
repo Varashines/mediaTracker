@@ -31,7 +31,8 @@ struct GroupedMediaGrid: View {
                     )
                     
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                        ForEach(groupMetadatas) { metadata in
+                        let groupArray = Array(groupMetadatas.enumerated())
+                        ForEach(groupArray, id: \.element.id) { idx, metadata in
                             NavigationLink(value: metadata.id) {
                                 MediaThumbnailView(
                                     metadata: metadata, 
@@ -45,6 +46,23 @@ struct GroupedMediaGrid: View {
                                 )
                                 .id(metadata.versionHash)
                                 .entranceStagger(index: 0)
+                                .onAppear {
+                                    // Phase 4 Optimization: Predictive Prefetching
+                                    if isFastScrolling {
+                                        let prefetchCount = 8
+                                        if idx + 1 < groupArray.count {
+                                            let endIdx = min(idx + 1 + prefetchCount, groupArray.count)
+                                            let urlsToPrefetch = groupArray[idx + 1..<endIdx]
+                                                .map { $0.element }
+                                                .compactMap { $0.posterURL }
+                                                .compactMap { URL(string: $0) }
+                                            
+                                            if !urlsToPrefetch.isEmpty {
+                                                ImageCache.shared.prewarmImages(urls: urlsToPrefetch, targetSize: CGSize(width: 160, height: 240), priority: .low)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             .buttonStyle(.interactive)
                         }

@@ -57,6 +57,12 @@ actor LibraryStatsActor {
     @MainActor private static var cachedStats: LibraryStats?
     @MainActor private static var lastCalculation: Date?
     private let cacheTTL: TimeInterval = 3600  // 1 hour
+    
+    @MainActor
+    static func clearCache() {
+        cachedStats = nil
+        lastCalculation = nil
+    }
 
     // Taste Affinity Helpers
     struct CategoryStats: Sendable {
@@ -174,8 +180,8 @@ actor LibraryStatsActor {
                 stats.movieCount += 1
                 if isCompleted {
                     stats.movieCompleted += 1
+                    stats.watchTime += item.cachedRuntime ?? 0
                 }
-                stats.watchTime += item.cachedRuntime ?? 0
 
                 for c in item.cachedCreators {
                     updateTaste(&taste.creatorTaste, c, nil)
@@ -185,6 +191,7 @@ actor LibraryStatsActor {
                 if isCompleted { stats.tvCompleted += 1 }
                 
                 stats.watchTime += item.cachedRuntime ?? 0
+                stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
 
                 for c in item.cachedCreators {
                     updateTaste(&taste.creatorTaste, c, nil)

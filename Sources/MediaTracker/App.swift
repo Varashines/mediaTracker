@@ -48,6 +48,9 @@ struct MediaTrackerApp: App {
         // Initialize Theme Cache
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
         
+        // Schedule Background Tasks
+        BackgroundTaskManager.shared.start(container: sharedModelContainer)
+        
         // Configure a lightweight cache for images (10MB memory, 500MB disk)
         let cacheSizeMemory = 10 * 1024 * 1024
         let cacheSizeDisk = 500 * 1024 * 1024

@@ -2,18 +2,55 @@ import SwiftUI
 import SwiftData
 
 struct ContinueWatchingCarousel: View {
-    let items: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
     let isFastScrolling: Bool
-    let onSelect: (MediaThumbnailMetadata) -> Void
-    var onDiscoverySpotlight: (() -> Void)? = nil
+    let onSelect: (MediaItem) -> Void
+    var onDiscoverySpotlight: (() -> Void)?
+    
+    @Query private var activeItems: [MediaItem]
+    
+    init(namespace: Namespace.ID, isFastScrolling: Bool, onSelect: @escaping (MediaItem) -> Void, onDiscoverySpotlight: (() -> Void)? = nil) {
+        self.namespace = namespace
+        self.isFastScrolling = isFastScrolling
+        self.onSelect = onSelect
+        self.onDiscoverySpotlight = onDiscoverySpotlight
+        
+        let predicate = #Predicate<MediaItem> { item in
+            (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
+        }
+        self._activeItems = Query(filter: predicate, sort: \.lastInteractionDate, order: .reverse)
+    }
     
     @State private var scrollProgress: Double = 0
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     private let scrollSpace = "CW_Scroll"
+    
+    private var displayItems: [MediaItem] {
+        let now = Date()
+        let filtered = activeItems.filter { item in
+            if item.releaseDate == nil && item.cachedNextAiringDate == nil { return false }
+            let isActive = item.stateValue == "Active"
+            let isWishlist = item.stateValue == "Wishlist"
+            let date = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
+            let isFuture = date > now
+            let badge = item.storedSmartBadgeLabel
+            let isRecent = badge == "NEW" || badge == "BINGE DROP"
+            return ((isActive || isWishlist) && !isFuture) || isRecent
+        }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
+            let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
+            let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
+            if isAStreaming != isBStreaming { return isAStreaming }
+            let isABinge = itemA.storedSmartBadgeLabel == "BINGE DROP"
+            let isBBinge = itemB.storedSmartBadgeLabel == "BINGE DROP"
+            if isABinge != isBBinge { return isABinge }
+            return (itemA.lastInteractionDate ?? .distantPast) > (itemB.lastInteractionDate ?? .distantPast)
+        }
+        return Array(filtered.prefix(20))
+    }
 
     var body: some View {
+        let items = displayItems
         VStack(alignment: .leading, spacing: 10) {
             SectionHeader(
                 title: "Continue Watching", 
@@ -26,9 +63,9 @@ struct ContinueWatchingCarousel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 20) {
                         Spacer(minLength: 10)
-                        ForEach(items) { metadata in
-                            Button { onSelect(metadata) } label: {
-                                MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
+                        ForEach(items) { item in
+                            Button { onSelect(item) } label: {
+                                MediaThumbnailView(item: item, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
                             }
                             .buttonStyle(.interactive)
                         }

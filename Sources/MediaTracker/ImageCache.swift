@@ -2,6 +2,7 @@ import SwiftUI
 import CryptoKit
 import Combine
 import UniformTypeIdentifiers
+import SwiftData
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage
@@ -14,9 +15,7 @@ class ImageCache {
     
     // Performance: Prioritize small memory cache for 8GB M1 Macs
     private let memoryCache = NSCache<NSString, CGImage>()
-    private let fileManager = FileManager.default
-    private let cacheDirectory: URL
-    private let maxDiskCacheSize: Int64 = 500 * 1024 * 1024 // Increased to 500MB
+    private let maxDiskCacheSize: Int64 = 500 * 1024 * 1024 // 500MB
     
     // Notification for broadcast updates
     let updates = PassthroughSubject<String, Never>()
@@ -32,28 +31,33 @@ class ImageCache {
 
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
+    
+    private let dbContainer: ModelContainer
 
     private init() {
-        let paths = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
-        let basePath = paths.first ?? fileManager.temporaryDirectory
-        let cacheDir = basePath.appendingPathComponent("mediatracker_images")
-        self.cacheDirectory = cacheDir
+        // Cost-based memory limit (increased to 256MB for smoother grid scrolling)
+        memoryCache.totalCostLimit = 256 * 1024 * 1024
+        memoryCache.countLimit = 1000 // Allow more small thumbnails in memory
         
-        if !fileManager.fileExists(atPath: cacheDir.path) {
-            try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        // Initialize SwiftData SQLite DB for images
+        let schema = Schema([ImageCacheEntity.self])
+        let cacheURL = URL.applicationSupportDirectory.appendingPathComponent("ImageCacheStore.sqlite")
+        let config = ModelConfiguration(schema: schema, url: cacheURL, allowsSave: true)
+        do {
+            self.dbContainer = try ModelContainer(for: schema, configurations: [config])
+        } catch {
+            fatalError("CRITICAL: Failed to initialize ImageCache ModelContainer. Error: \(error)")
         }
         
-        // Cost-based memory limit (approx 128MB for thumbnails - safer for all systems)
-        memoryCache.totalCostLimit = 128 * 1024 * 1024
-        memoryCache.countLimit = 150 // Reasonable count limit for small thumbnails
-        
         // Phase 2 Optimization: Asynchronous Disk Indexing
+        let container = self.dbContainer
         Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
-                let fileNames = Set(files.map { $0.lastPathComponent })
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<ImageCacheEntity>()
+            if let entities = try? context.fetch(descriptor) {
+                let keys = Set(entities.map { $0.id })
                 await MainActor.run {
-                    ImageCache.shared.diskCacheIndex = fileNames
+                    ImageCache.shared.diskCacheIndex = keys
                 }
             }
         }
@@ -102,13 +106,11 @@ class ImageCache {
     func clearFullCache() {
         clearMemoryCache()
         
-        // Purge disk
+        let container = self.dbContainer
         Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            let files = (try? fm.contentsOfDirectory(at: self.cacheDirectory, includingPropertiesForKeys: nil)) ?? []
-            for file in files {
-                try? fm.removeItem(at: file)
-            }
+            let context = ModelContext(container)
+            try? context.delete(model: ImageCacheEntity.self)
+            try? context.save()
             
             await MainActor.run {
                 self.diskCacheIndex.removeAll()
@@ -135,17 +137,21 @@ class ImageCache {
         if hashes.isEmpty { return }
 
         // 2. Disk Clear
+        let container = self.dbContainer
         Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            let files = (try? fm.contentsOfDirectory(at: self.cacheDirectory, includingPropertiesForKeys: nil)) ?? []
-            for file in files {
-                let fileName = file.lastPathComponent
-                if hashes.contains(where: { fileName.hasPrefix($0) }) {
-                    try? fm.removeItem(at: file)
-                    await MainActor.run {
-                        _ = ImageCache.shared.diskCacheIndex.remove(fileName)
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<ImageCacheEntity>()
+            if let entities = try? context.fetch(descriptor) {
+                for entity in entities {
+                    if hashes.contains(where: { entity.id.hasPrefix($0) }) {
+                        let id = entity.id
+                        context.delete(entity)
+                        await MainActor.run {
+                            _ = ImageCache.shared.diskCacheIndex.remove(id)
+                        }
                     }
                 }
+                try? context.save()
             }
             
             await MainActor.run {
@@ -184,9 +190,9 @@ class ImageCache {
     private func fileName(for key: String, size: CGSize?) -> String {
         let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
         if let size = size {
-            return "\(hash)_\(Int(size.width))_\(Int(size.height)).jpg"
+            return "\(hash)_\(Int(size.width))_\(Int(size.height))"
         }
-        return "\(hash).jpg"
+        return "\(hash)"
     }
 
     func getTinyProxy(forKey key: String) async -> ImageContainer? {
@@ -202,9 +208,7 @@ class ImageCache {
         let diskFileName = fileName(for: key, size: tinySize)
         guard diskCacheIndex.contains(diskFileName) else { return nil }
         
-        let fileURL = cacheDirectory.appendingPathComponent(diskFileName)
-        
-        if let container = await loadFromDisk(fileURL: fileURL, targetSize: tinySize) {
+        if let container = await loadFromDisk(diskFileName: diskFileName, targetSize: tinySize) {
             memoryCache.setObject(container.image, forKey: tinyKey as NSString, cost: cost(for: container.image))
             registerKeyForURL(key, specificKey: tinyKey)
             return container
@@ -240,11 +244,10 @@ class ImageCache {
         let task = Task { [weak self] in
             guard let self = self else { return }
             let diskFileName = self.fileName(for: key, size: targetSize)
-            let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
             
             // Try disk (Optimized via Index)
             if self.diskCacheIndex.contains(diskFileName) {
-                if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
+                if let container = await self.loadFromDisk(diskFileName: diskFileName, targetSize: targetSize) {
                     if Task.isCancelled { return }
                     self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
@@ -269,7 +272,7 @@ class ImageCache {
                 if Task.isCancelled { return }
 
                 // Re-load decoded version after save to verify
-                if let container = await self.loadFromDisk(fileURL: fileURL, targetSize: targetSize) {
+                if let container = await self.loadFromDisk(diskFileName: diskFileName, targetSize: targetSize) {
                     self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key)
@@ -324,12 +327,12 @@ class ImageCache {
     func save(imageSource: CGImageSource, data: Data? = nil, forKey key: String, targetSize: CGSize? = nil, alwaysPreserveAlpha: Bool = false) async {
         guard let rawData = data else { return }
         let diskFileName = fileName(for: key, size: targetSize)
-        let diskCacheDir = cacheDirectory
         let screenScale = self.screenScale
         let tinyProxyFileName = fileName(for: key, size: CGSize(width: 50, height: 75))
+        let container = self.dbContainer
         
         await Task.detached(priority: .background) {
-            let fileURL = diskCacheDir.appendingPathComponent(diskFileName)
+            let context = ModelContext(container)
             
             // Re-create imageSource inside task to avoid capturing main-actor isolated object
             guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
@@ -349,12 +352,17 @@ class ImageCache {
                     let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
                     let usePNG = alwaysPreserveAlpha || hasAlpha
                     
-                    Self.writeToDiskStatic(image: downsampledCG, to: fileURL, usePNG: usePNG)
+                    if let savedData = Self.writeToDataStatic(image: downsampledCG, usePNG: usePNG) {
+                        let entity = ImageCacheEntity(id: diskFileName, data: savedData, accessDate: Date(), size: Int64(savedData.count))
+                        context.insert(entity)
+                    }
                 } else {
-                    try? rawData.write(to: fileURL)
+                    let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
+                    context.insert(entity)
                 }
             } else {
-                try? rawData.write(to: fileURL)
+                let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
+                context.insert(entity)
             }
             
             // Save tiny proxy (Always downsampled)
@@ -367,15 +375,18 @@ class ImageCache {
             ] as CFDictionary
             
             if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
-                let proxyURL = diskCacheDir.appendingPathComponent(tinyProxyFileName)
                 let alpha = tinyCG.alphaInfo
                 let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
-                Self.writeToDiskStatic(image: tinyCG, to: proxyURL, usePNG: alwaysPreserveAlpha || hasAlpha)
-                
-                await MainActor.run {
-                    _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
+                if let proxyData = Self.writeToDataStatic(image: tinyCG, usePNG: alwaysPreserveAlpha || hasAlpha) {
+                    let entity = ImageCacheEntity(id: tinyProxyFileName, data: proxyData, accessDate: Date(), size: Int64(proxyData.count))
+                    context.insert(entity)
+                    await MainActor.run {
+                        _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
+                    }
                 }
             }
+
+            try? context.save()
 
             await MainActor.run {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
@@ -383,9 +394,10 @@ class ImageCache {
         }.value
     }
     
-    private static nonisolated func writeToDiskStatic(image: CGImage, to url: URL, usePNG: Bool) {
+    private static nonisolated func writeToDataStatic(image: CGImage, usePNG: Bool) -> Data? {
         let type = usePNG ? UTType.png.identifier : UTType.jpeg.identifier
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type as CFString, 1, nil) else { return }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, type as CFString, 1, nil) else { return nil }
         
         if usePNG {
             CGImageDestinationAddImage(destination, image, nil)
@@ -394,42 +406,51 @@ class ImageCache {
             CGImageDestinationAddImage(destination, image, properties)
         }
         CGImageDestinationFinalize(destination)
+        return data as Data
     }
     
     nonisolated func pruneDiskCacheIfNeeded() async {
-        let resourceKeys: [URLResourceKey] = [.fileSizeKey, .contentAccessDateKey]
-        guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: resourceKeys, options: []) else { return }
-        
-        var totalSize: Int64 = 0
-        var fileInfos: [(url: URL, size: Int64, date: Date)] = []
-        for fileURL in files {
-            let values = try? fileURL.resourceValues(forKeys: Set(resourceKeys))
-            let size = Int64(values?.fileSize ?? 0)
-            let date = values?.contentAccessDate ?? Date.distantPast
-            totalSize += size
-            fileInfos.append((fileURL, size, date))
-        }
-        
-        if totalSize > maxDiskCacheSize {
-            let sortedFiles = fileInfos.sorted(by: { $0.date < $1.date })
-            var currentSize = totalSize
-            for file in sortedFiles {
-                if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
-                try? FileManager.default.removeItem(at: file.url)
-                currentSize -= file.size
-                
-                let fileName = file.url.lastPathComponent
-                await MainActor.run {
-                    _ = ImageCache.shared.diskCacheIndex.remove(fileName)
-                }
+        let container = self.dbContainer
+        let maxDiskCacheSize = self.maxDiskCacheSize
+        await Task.detached(priority: .background) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<ImageCacheEntity>()
+            guard let entities = try? context.fetch(descriptor) else { return }
+            
+            var totalSize: Int64 = 0
+            for entity in entities {
+                totalSize += entity.size
             }
-        }
+            
+            if totalSize > maxDiskCacheSize {
+                let sortedEntities = entities.sorted(by: { $0.accessDate < $1.accessDate })
+                var currentSize = totalSize
+                for entity in sortedEntities {
+                    if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
+                    let id = entity.id
+                    context.delete(entity)
+                    currentSize -= entity.size
+                    
+                    await MainActor.run {
+                        _ = ImageCache.shared.diskCacheIndex.remove(id)
+                    }
+                }
+                try? context.save()
+            }
+        }.value
     }
 
-    private func loadFromDisk(fileURL: URL, targetSize: CGSize?) async -> ImageContainer? {
+    private func loadFromDisk(diskFileName: String, targetSize: CGSize?) async -> ImageContainer? {
         let screenScale = self.screenScale
-        return await FileIOActor.shared.run {
-            guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        let container = self.dbContainer
+        return await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<ImageCacheEntity>(predicate: #Predicate { $0.id == diskFileName })
+            guard let entity = try? context.fetch(descriptor).first else { return nil }
+            
+            entity.accessDate = Date()
+            try? context.save()
+            let data = entity.data
             
             if let targetSize = targetSize {
                 let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
@@ -452,7 +473,7 @@ class ImageCache {
             guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
                   let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
             return ImageContainer(image: cgImage)
-        }
+        }.value
     }
 
     enum ImagePriority {

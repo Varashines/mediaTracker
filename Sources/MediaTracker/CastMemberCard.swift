@@ -23,19 +23,18 @@ struct CastMemberCardNew: View {
             textSection
         }
         .frame(width: 200, height: 90)
-        .background(backgroundView)
+        .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(borderOverlay)
         .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: 12))
-        .drawingGroup() // Optimize rendering for many cards
     }
 
     @ViewBuilder
     private var imageSection: some View {
         Group {
             if let urlString = member.profileURL, let url = URL(string: urlString) {
-                CachedImage(url: url, targetSize: CGSize(width: 120, height: 180), priority: .low, themeColor: themeColor) { _ in
+                CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .low, themeColor: themeColor) { _ in
                 } placeholder: {
                     ProgressView().controlSize(.small)
                 }
@@ -71,10 +70,6 @@ struct CastMemberCardNew: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: 140, alignment: .leading)
-    }
-
-    private var backgroundView: some View {
-        AnyView(Rectangle().fill(.thinMaterial))
     }
 
     private var borderOverlay: some View {

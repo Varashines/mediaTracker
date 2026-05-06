@@ -51,7 +51,8 @@ actor BackgroundDataService {
         var importedCount = 0
         for itemData in backup.items {
             let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
-            let uniqueID = "\(typePrefix)_\(itemData.id.split(separator: "_").last ?? itemData.id[...])"
+            let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
+            let uniqueID = "\(typePrefix)_\(tmdbIDPart)"
             let key = "\(uniqueID)_\(itemData.type)"
             
             if !existingKeys.contains(key) {
@@ -68,6 +69,31 @@ actor BackgroundDataService {
                 item.tasteValue = itemData.taste ?? "None"
                 modelContext.insert(item)
                 importedCount += 1
+
+                // Restore Episode Progress
+                if item.type == .tvShow, let watchedIDs = itemData.watchedEpisodeIDs, let tmdbID = Int(tmdbIDPart) {
+                    for epID in watchedIDs {
+                        // epID format: "tmdbID_season_episode"
+                        let parts = epID.split(separator: "_")
+                        if parts.count == 3, 
+                           let sNum = Int(parts[1]), 
+                           let eNum = Int(parts[2]) {
+                            
+                            let stubEpisode = TVEpisode(
+                                episodeNumber: eNum, 
+                                seasonNumber: sNum, 
+                                name: "Episode \(eNum)", 
+                                overview: "", 
+                                airDate: nil, 
+                                runtime: nil, 
+                                showID: tmdbID
+                            )
+                            stubEpisode.isWatched = true
+                            modelContext.insert(stubEpisode)
+                            // The background sync will later link these to seasons and details via uniqueID
+                        }
+                    }
+                }
             }
         }
         
@@ -358,10 +384,19 @@ actor BackgroundDataService {
                 tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
             }
             
+            var mazeEpisodes: [TVMazeEpisode] = []
             if let mID = tvMazeID {
-                if let (episode, timezone, service) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID), let schedule = episode {
-                    tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                if let (episode, timezone, service, airtime) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
+                    tvDetails.timezone = timezone
+                    tvDetails.nextEpisodeTime = airtime
+                    
+                    if let schedule = episode {
+                        tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                    }
                 }
+                
+                // Fetch ALL episodes from TVMaze for exact airstamps
+                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
             }
 
             // Update Cast (Always replace to ensure aggregate data and 10-member limit)
@@ -420,7 +455,11 @@ actor BackgroundDataService {
                         let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
                         let epName = ep.name ?? "Episode \(ep.episodeNumber)"
                         let epOverview = ep.overview ?? ""
-                        let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, runtime: ep.runtime, showID: tmdbID)
+                        
+                        // Try to find matching TVMaze episode for high-precision airstamp
+                        let matchingMaze = mazeEpisodes.first { $0.season == sNum && $0.number == ep.episodeNumber }
+                        
+                        let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
                         episode.showID = tmdbID
                         
                         if episode.modelContext == nil || episode.season?.persistentModelID != season.persistentModelID {
@@ -430,6 +469,7 @@ actor BackgroundDataService {
                             episode.name = epName
                             episode.overview = epOverview
                             episode.airDate = ep.airDate
+                            episode.airstamp = matchingMaze?.airstamp
                             episode.runtime = ep.runtime
                             episode.updateAirDateValue()
                         }

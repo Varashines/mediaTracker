@@ -19,6 +19,9 @@ struct ContentView: View {
         // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
+        // Automatically heal stale "Coming Soon" items before sorting
+        checkAndRepairStaleMetadata()
+
         let currentSearchText = viewModel.searchText
         let category = viewModel.selectedCategory
         let sortOrder = viewModel.currentSortOrder
@@ -286,12 +289,15 @@ struct ContentView: View {
                     viewModel.searchSubmitTrigger += 1
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+                    LibraryStatsActor.clearCache()
                     viewModel.filterSubject.send()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+                    LibraryStatsActor.clearCache()
                     viewModel.filterSubject.send()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
+                    LibraryStatsActor.clearCache()
                     viewModel.filterSubject.send()
                 }
                 .task(id: viewModel.searchText) {
@@ -364,6 +370,29 @@ struct ContentView: View {
         .task {
             performUpdate()
             checkAndRepairMissingMetadata()
+            checkAndRepairStaleMetadata()
+        }
+    }
+
+    private func checkAndRepairStaleMetadata() {
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            let context = ModelContext(container)
+            let now = Date()
+            // Look for items currently marked as upcoming or with a badge that might be stale
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.storedIsUpcoming == true && $0.cachedNextAiringDate != nil && $0.cachedNextAiringDate! < now })
+            
+            if let staleItems = try? context.fetch(descriptor), !staleItems.isEmpty {
+                print("♻️ Auto-healing \(staleItems.count) stale items...")
+                for item in staleItems {
+                    item.syncCachedProperties()
+                }
+                try? context.save()
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                }
+            }
         }
     }
 
@@ -371,10 +400,14 @@ struct ContentView: View {
         let container = modelContext.container
         Task.detached(priority: .background) {
             let context = ModelContext(container)
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.overview == "" || $0.posterURL == nil || $0.lastUpdated == nil })
-            if let missingItems = try? context.fetch(descriptor), !missingItems.isEmpty {
-                await MainActor.run {
-                    DataService.shared.refreshMetadata(for: missingItems, modelContext: modelContext, force: true)
+            // Fetch all and filter in memory to avoid complex Predicate compiler timeouts
+            let descriptor = FetchDescriptor<MediaItem>()
+            if let allItems = try? context.fetch(descriptor) {
+                let missingItems = allItems.filter { $0.overview == "" || $0.posterURL == nil || $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
+                if !missingItems.isEmpty {
+                    await MainActor.run {
+                        DataService.shared.refreshMetadata(for: missingItems, modelContext: modelContext, force: true)
+                    }
                 }
             }
         }

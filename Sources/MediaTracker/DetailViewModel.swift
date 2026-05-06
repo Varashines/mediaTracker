@@ -280,7 +280,9 @@ class DetailViewModel {
             self.item.tvShowDetails?.recalculateCachedProperties()
             self.item.syncCachedProperties()
             
-            try? self.item.modelContext?.save()
+            if let context = self.item.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
             
             Task.detached {
                 if let container = container {
@@ -292,7 +294,7 @@ class DetailViewModel {
                 }
             }
             
-            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+
         }
     }
 }

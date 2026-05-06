@@ -95,7 +95,7 @@ struct DetailView: View {
                     .ignoresSafeArea()
             }
 
-            // Phase 3: Breathing Ambient Glow (Optimized Radial Gradient)
+            // Phase 3: Breathing Ambient Glow (Optimized Opacity Animation)
             let color = viewModel.themeColor
             
             RadialGradient(
@@ -105,8 +105,9 @@ struct DetailView: View {
                 ]),
                 center: .topLeading,
                 startRadius: 0,
-                endRadius: breathingTrigger ? 800 : 600
+                endRadius: 800
             )
+            .opacity(breathingTrigger ? 1.0 : 0.6)
             .saturation(1.3)
             .ignoresSafeArea()
             
@@ -117,8 +118,9 @@ struct DetailView: View {
                 ]),
                 center: .bottomTrailing,
                 startRadius: 0,
-                endRadius: breathingTrigger ? 700 : 500
+                endRadius: 700
             )
+            .opacity(breathingTrigger ? 0.8 : 0.5)
             .saturation(1.3)
             .ignoresSafeArea()
         }
@@ -137,10 +139,6 @@ struct DetailView: View {
                 }
             }
         )
-        .onAppear {
-            viewModel.updateThemeColor()
-            viewModel.refreshData()
-        }
     }
 
     @ViewBuilder

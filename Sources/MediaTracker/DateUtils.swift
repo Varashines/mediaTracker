@@ -52,9 +52,10 @@ struct DateUtils {
         let service = (serviceName ?? show?.network ?? "").lowercased()
         
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         var finalDate: Date? = nil
 
-        // 2. Data-Driven Streaming Overrides
+        // 2. Data-Driven Streaming Overrides (Preserve existing strict rules)
         if let rule = StreamingServiceRule.defaults.first(where: { rule in
             rule.patterns.contains(where: { service.contains($0) })
         }) {
@@ -66,20 +67,22 @@ struct DateUtils {
         }
 
         if finalDate == nil {
-            // 3. Fallback: Trust high-precision ISO airstamp if available
+            // 3. Fallback: Trust high-precision ISO airstamp if available from the database
             if let airstamp = airstamp, let date = isoFormatter.date(from: airstamp) {
                 finalDate = date
-            } else if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
-                // 4. Manual fallback to provided timezone
+            } 
+            // 4. Use provided timezone and show-level schedule
+            else if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
                 formatter.dateFormat = "yyyy-MM-dd HH:mm"
                 formatter.timeZone = tz
                 let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
                 finalDate = formatter.date(from: "\(dateString) \(timeToUse)")
-            } else {
-                // 5. Final raw date fallback
-                let dateOnlyFormatter = DateFormatter()
-                dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
-                finalDate = dateOnlyFormatter.date(from: dateString)
+            } 
+            // 5. Smart Fallback for TMDB dates without time: Assume US Network (8 PM ET)
+            else {
+                formatter.dateFormat = "yyyy-MM-dd HH:mm"
+                formatter.timeZone = TimeZone(identifier: "America/New_York")
+                finalDate = formatter.date(from: "\(dateString) 20:00")
             }
         }
 

@@ -246,9 +246,20 @@ struct SettingsView: View {
                         Button { LibraryImportExportService.shared.exportLibrary(items: allItems) } label: {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 12))
                         }
+                        .help("Export Manual Backup")
+                        
                         Button { LibraryImportExportService.shared.importLibrary(modelContext: modelContext) } label: {
                             Image(systemName: "square.and.arrow.down").font(.system(size: 12))
                         }
+                        .help("Import Backup")
+                        
+                        Button {
+                            let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Image(systemName: "folder.fill").font(.system(size: 12))
+                        }
+                        .help("Open Auto-Backups Folder")
                     }
                     .buttonStyle(.bordered)
                 }

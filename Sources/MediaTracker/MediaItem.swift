@@ -27,6 +27,7 @@ final class MediaItem: Identifiable {
     var cachedNetworkLogoPath: String?
     var cachedNextAiringDate: Date?
     var cachedRuntime: Int?
+    var cachedWatchedEpisodeCount: Int?
     var remainingEpisodesCount: Int?
 
     var storedSmartBadgeLabel: String?
@@ -228,6 +229,17 @@ extension MediaItem {
 
     private func syncTVProperties(now: Date, currentState: MediaState) {
         guard let tv = tvShowDetails else { return }
+        
+        // Force consistency: If series is marked as Completed, all episodes MUST be watched.
+        if currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
+            for season in tv.seasons {
+                for ep in season.episodes where !ep.isWatched {
+                    ep.isWatched = true
+                }
+            }
+            tv.refreshCounts()
+        }
+
         self.cachedGenres = tv.genres
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
@@ -241,6 +253,7 @@ extension MediaItem {
         if tv.totalEpisodesCount > 0 {
             let totalCount = tv.totalEpisodesCount
             let watchedCount = tv.watchedEpisodesCount
+            self.cachedWatchedEpisodeCount = watchedCount
             
             // Calculate progress O(1)
             let progress = Double(watchedCount) / Double(totalCount)

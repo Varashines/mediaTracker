@@ -401,7 +401,7 @@ private struct EpisodeCube: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 80)
-            .background(.ultraThinMaterial)
+            .background(Color.primary.opacity(0.05))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -413,13 +413,6 @@ private struct EpisodeCube: View {
             .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 3)
         }
         .buttonStyle(.interactive(feedback: nil))
-        .drawingGroup() // Rasterize for silky scrolling
-        .scrollTransition { content, phase in
-            content
-                .opacity(phase.isIdentity ? 1 : 0.7)
-                .scaleEffect(phase.isIdentity ? 1 : 0.92)
-                .blur(radius: phase.isIdentity ? 0 : 2)
-        }
     }
 }
 

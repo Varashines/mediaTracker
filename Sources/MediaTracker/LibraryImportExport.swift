@@ -14,6 +14,7 @@ struct MediaItemData: Codable {
     let state: String
     let dateAdded: Date
     let taste: String?
+    let watchedEpisodeIDs: [String]?
 }
 
 @MainActor
@@ -23,13 +24,21 @@ class LibraryImportExportService {
 
     func exportLibrary(items: [MediaItem]) {
         let exportItems = items.map { item in
-            MediaItemData(
+            var watchedIDs: [String]? = nil
+            if item.type == .tvShow, let tv = item.tvShowDetails {
+                watchedIDs = tv.seasons.flatMap { $0.episodes }
+                    .filter { $0.isWatched }
+                    .map { $0.uniqueID ?? "" }
+            }
+
+            return MediaItemData(
                 id: item.id,
                 title: item.title,
                 type: item.type?.rawValue ?? "Movie",
                 state: item.state?.rawValue ?? "Wishlist",
                 dateAdded: item.dateAdded ?? Date(),
-                taste: item.tasteValue
+                taste: item.tasteValue,
+                watchedEpisodeIDs: watchedIDs
             )
         }
         
@@ -51,6 +60,70 @@ class LibraryImportExportService {
                     print("❌ Export error: \(error)")
                 }
             }
+        }
+    }
+
+    func automatedBackup(items: [MediaItem]) async {
+        let exportItems = items.map { item in
+            var watchedIDs: [String]? = nil
+            if item.type == .tvShow, let tv = item.tvShowDetails {
+                watchedIDs = tv.seasons.flatMap { $0.episodes }
+                    .filter { $0.isWatched }
+                    .map { $0.uniqueID ?? "" }
+            }
+
+            return MediaItemData(
+                id: item.id,
+                title: item.title,
+                type: item.type?.rawValue ?? "Movie",
+                state: item.state?.rawValue ?? "Wishlist",
+                dateAdded: item.dateAdded ?? Date(),
+                taste: item.tasteValue,
+                watchedEpisodeIDs: watchedIDs
+            )
+        }
+        
+        let backup = LibraryBackup(items: exportItems)
+        
+        let fm = FileManager.default
+        let backupDir = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+        
+        do {
+            if !fm.fileExists(atPath: backupDir.path) {
+                try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
+            }
+            
+            // Format: MediaTracker_Auto_yyyy-MM-dd_HH-mm-ss.json
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+            let fileName = "MediaTracker_Auto_\(formatter.string(from: Date())).json"
+            let fileURL = backupDir.appendingPathComponent(fileName)
+            
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(backup)
+            try data.write(to: fileURL)
+            print("✅ Automated backup saved to \(fileName)")
+            
+            // Enforce rolling limit (keep last 20)
+            let files = try fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey])
+            var fileInfos = files.compactMap { url -> (URL, Date)? in
+                guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                      let creationDate = attrs[.creationDate] as? Date else { return nil }
+                return (url, creationDate)
+            }
+            
+            if fileInfos.count > 20 {
+                // Sort oldest first
+                fileInfos.sort { $0.1 < $1.1 }
+                let itemsToRemove = fileInfos.prefix(fileInfos.count - 20)
+                for item in itemsToRemove {
+                    try? fm.removeItem(at: item.0)
+                    print("🗑️ Removed old automated backup: \(item.0.lastPathComponent)")
+                }
+            }
+            
+        } catch {
+            print("❌ Automated backup failed: \(error)")
         }
     }
 

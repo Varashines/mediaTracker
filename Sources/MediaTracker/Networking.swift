@@ -364,13 +364,13 @@ actor APIClient {
         }
     }
 
-    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?) {
+    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?) {
         return try await executeWithRetry {
             let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let r = try self.decoder.decode(TVMazeResponse.self, from: data)
-            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
         }
     }
 
