@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
+    @AppStorage("auto_mark_episodes_watched") private var autoMarkEpisodesWatched = true
     
     @Environment(\.colorScheme) var colorScheme
     @State private var containerWidth: CGFloat = 0
@@ -164,6 +165,14 @@ struct SettingsView: View {
 
             SettingsRow(title: "Prevent Sleep Mode", subtitle: "Keep background sync active.") {
                 Toggle("", isOn: $preventSleepMode)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            
+            Divider()
+
+            SettingsRow(title: "Auto-Mark Completed", subtitle: "Mark episodes watched on completion.") {
+                Toggle("", isOn: $autoMarkEpisodesWatched)
                     .toggleStyle(.switch)
                     .labelsHidden()
             }

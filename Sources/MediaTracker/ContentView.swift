@@ -6,12 +6,15 @@ struct ContentView: View {
     @Namespace private var posterNamespace
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Query private var collections: [MediaCollection]
     @State private var viewModel = MediaViewModel()
     @State private var themeCoordinator = AppThemeCoordinator.shared
     @State private var isSearchActive = false
-    @State private var sidebarSelection: NavigationCategory? = .home
+    @State private var sidebarSelection: SidebarItem? = .category(.home)
     @State private var selectedHeroItem: MediaItem? = nil
     @State private var isSyncHovered = false
+    @State private var showingBulkManager = false
+
 
     @State private var updateTask: Task<Void, Never>?
 
@@ -183,7 +186,7 @@ struct ContentView: View {
         } else if viewModel.selectedCategory == .settings {
             SettingsView()
         } else if viewModel.selectedCategory == .collectionsHub && viewModel.selectedCollectionID == nil {
-            CollectionsManagementView(viewModel: viewModel)
+            CollectionsManagementView(viewModel: viewModel, sidebarSelection: $sidebarSelection)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -208,7 +211,7 @@ struct ContentView: View {
                 },
                 onCategorySelected: { category in
                     withAnimation {
-                        sidebarSelection = category
+                        sidebarSelection = .category(category)
                     }
                 },
                 onLoadMore: {
@@ -227,14 +230,22 @@ struct ContentView: View {
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
-                    if let category = newValue {
-                        viewModel.selectedCategory = category
-                        viewModel.selectedNetworks = nil
-                        viewModel.selectedLanguage = nil
-                        viewModel.isInitialLoading = true
-                        
-                        if category != .collectionsHub {
-                            viewModel.selectedCollectionID = nil
+                    if let selection = newValue {
+                        switch selection {
+                        case .category(let category):
+                            viewModel.selectedCategory = category
+                            viewModel.selectedNetworks = nil
+                            viewModel.selectedLanguage = nil
+                            viewModel.isInitialLoading = true
+                            
+                            if category != .collectionsHub {
+                                viewModel.selectedCollectionID = nil
+                            }
+                        case .collection(let id, let name, _):
+                            viewModel.selectedCategory = .collectionsHub
+                            viewModel.selectedCollectionID = id
+                            viewModel.selectedCollectionName = name
+                            viewModel.isInitialLoading = true
                         }
                         
                         viewModel.filterSubject.send()
@@ -333,6 +344,14 @@ struct ContentView: View {
                                         .foregroundStyle(hasNote ? Color.blue : Color.secondary)
                                 }
                                 .help("Collection Notes")
+
+                                Button {
+                                    showingBulkManager = true
+                                } label: {
+                                    Image(systemName: "plus.square.on.square")
+                                        .font(.system(size: 14))
+                                }
+                                .help("Manage Items")
                             }
                         }
                     }
@@ -351,13 +370,13 @@ struct ContentView: View {
                 }
                 .background {
                     Group {
-                        Button("") { sidebarSelection = .home }.keyboardShortcut("1", modifiers: .command)
-                        Button("") { sidebarSelection = .discover }.keyboardShortcut("2", modifiers: .command)
-                        Button("") { sidebarSelection = .upcoming }.keyboardShortcut("3", modifiers: .command)
-                        Button("") { sidebarSelection = .all }.keyboardShortcut("4", modifiers: .command)
-                        Button("") { sidebarSelection = .movie }.keyboardShortcut("5", modifiers: .command)
-                        Button("") { sidebarSelection = .tvShow }.keyboardShortcut("6", modifiers: .command)
-                        Button("") { sidebarSelection = .settings }.keyboardShortcut(",", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.settings) }.keyboardShortcut(",", modifiers: .command)
                         Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     }
                     .opacity(0)
@@ -367,6 +386,12 @@ struct ContentView: View {
         .appBackground(network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory.rawValue)
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
+        .sheet(isPresented: $showingBulkManager) {
+            if let collectionID = viewModel.selectedCollectionID,
+               let collection = collections.first(where: { $0.id == collectionID }) {
+                BulkCollectionManagerView(collection: collection)
+            }
+        }
         .task {
             performUpdate()
             checkAndRepairMissingMetadata()
@@ -416,7 +441,7 @@ struct ContentView: View {
     private func navigate(to metadata: MediaThumbnailMetadata) {
         if metadata.title == "Start Your Journey" {
             withAnimation {
-                sidebarSelection = .discover
+                sidebarSelection = .category(.discover)
             }
             return
         }

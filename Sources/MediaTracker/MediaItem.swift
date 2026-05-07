@@ -230,8 +230,9 @@ extension MediaItem {
     private func syncTVProperties(now: Date, currentState: MediaState) {
         guard let tv = tvShowDetails else { return }
         
-        // Force consistency: If series is marked as Completed, all episodes MUST be watched.
-        if currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
+        // Force consistency: If series is marked as Completed, all episodes MUST be watched (if enabled).
+        let autoMark = UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched")
+        if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
             for season in tv.seasons {
                 for ep in season.episodes where !ep.isWatched {
                     ep.isWatched = true

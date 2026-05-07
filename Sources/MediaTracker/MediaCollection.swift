@@ -8,6 +8,7 @@ final class MediaCollection: Identifiable {
     var systemImage: String
     var completedItemIDs: [String] = []
     var notes: String? = ""
+    var isPinned: Bool = false
     
     @Relationship(inverse: \MediaItem.collections)
     var items: [MediaItem]
