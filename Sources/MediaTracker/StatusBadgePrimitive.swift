@@ -10,6 +10,9 @@ struct StatusBadgePrimitive: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
+        let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
+        let bgAccent = accentColor.luminousAccent(colorScheme: colorScheme)
+        
         HStack(spacing: isCompact ? 0 : 4) {
             Image(systemName: systemImage)
                 .font(.system(size: isCompact ? 11 : 10, weight: .bold))
@@ -20,6 +23,7 @@ struct StatusBadgePrimitive: View {
                     .lineLimit(1)
             }
         }
-        .liquidGlassPill(accentColor: accentColor, isSolid: isSolid, progress: progress)
+        .foregroundStyle(isSolid ? .white : contrastColor)
+        .liquidGlassPill(accentColor: bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4), isSolid: isSolid, progress: progress)
     }
 }

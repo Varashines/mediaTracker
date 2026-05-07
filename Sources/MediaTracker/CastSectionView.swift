@@ -22,6 +22,7 @@ struct CastSectionViewNew: View {
             .padding(.horizontal, 10)
             .padding(.bottom, 15)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .onAppear {
             withAnimation(.smooth) {
                 isVisible = true

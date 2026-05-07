@@ -36,6 +36,7 @@ struct ReleaseCalendarView: View {
                 }
                 .padding(.horizontal, 30)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .frame(width: 320)
             .background(Color.secondary.opacity(0.05))
             
@@ -71,6 +72,7 @@ struct ReleaseCalendarView: View {
                 }
                 .padding(40)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .frame(maxWidth: .infinity)
         }
         .onAppear {
@@ -325,6 +327,7 @@ struct ReleaseCalendarView: View {
                     }
                 }
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
     }
     
@@ -332,7 +335,7 @@ struct ReleaseCalendarView: View {
     private func calendarCell(day: CalendarDayInfo) -> some View {
         let isSelected = selectedDate.map { Calendar.current.isDate(day.date, inSameDayAs: $0) } ?? false
         let isToday = Calendar.current.isDateInToday(day.date)
-        let accent = appAccent.color.readableAccent(colorScheme: .dark) // Use high-contrast accent for heatmap
+        let accent = appAccent.color.highContrastAccent(colorScheme: .dark) // Use high-contrast accent for heatmap
         
         RoundedRectangle(cornerRadius: 4)
             .fill(day.items.isEmpty ? Color.secondary.opacity(0.1) : accent.opacity(day.intensity * 0.7 + 0.3))
@@ -367,7 +370,7 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            let accent = appAccent.color.readableAccent(colorScheme: .dark)
+            let accent = appAccent.color.highContrastAccent(colorScheme: .dark)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
                 .font(.system(size: 12, weight: .black))
                 .foregroundStyle(accent)

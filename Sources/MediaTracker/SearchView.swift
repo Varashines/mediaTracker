@@ -150,6 +150,7 @@ struct SearchView: View {
             }
             .padding(.vertical, 30)
         }
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     @ViewBuilder

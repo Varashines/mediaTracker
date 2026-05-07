@@ -44,6 +44,7 @@ struct DiscoveryHubView: View {
             // Essential: Prevent clipping during scaling
             .scrollTargetLayout()
         }
+        .scrollBounceBehavior(.basedOnSize)
         .onAppear { refreshData(force: false) }
         .refreshable { 
             refreshData(force: true) 
@@ -165,6 +166,8 @@ struct DiscoveryCard: View {
 
     var body: some View {
         Button(action: action) {
+            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+            
             ZStack {
                 // Main Layer
                 Group {
@@ -173,18 +176,18 @@ struct DiscoveryCard: View {
                             .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .stroke(themeColor.opacity(isHovered ? 0.6 : 0.15), lineWidth: isHovered ? 2 : 1)
+                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.25), lineWidth: isHovered ? 2 : 1)
                             }
                     } else {
                         Capsule()
                             .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
                             .overlay {
                                 Capsule()
-                                    .stroke(themeColor.opacity(isHovered ? 0.6 : 0.15), lineWidth: isHovered ? 2 : 1)
+                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.25), lineWidth: isHovered ? 2 : 1)
                             }
                     }
                 }
-                .shadow(color: themeColor.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
+                .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
                 
                 if style == .logo {
                     logoContent

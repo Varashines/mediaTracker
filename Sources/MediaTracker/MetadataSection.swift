@@ -44,5 +44,6 @@ struct MetadataSection: View {
             }
             .padding(.vertical, 4)
         }
+        .scrollBounceBehavior(.basedOnSize)
     }
 }

@@ -21,6 +21,7 @@ struct InsightsView: View {
             .padding(.vertical, 100)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .scrollClipDisabled()
         .onAppear {
             refreshData()
@@ -159,6 +160,7 @@ struct InsightsView: View {
                         }
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollClipDisabled()
             }
         }

@@ -33,6 +33,7 @@ struct CollectionPickerView: View {
                     }
                     .padding(.horizontal, 4)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
             
             Button("Done") {

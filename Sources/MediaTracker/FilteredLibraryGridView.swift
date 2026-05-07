@@ -27,6 +27,7 @@ struct FilteredLibraryGridView: View {
             }
             .padding(30)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
         .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
             fetchItems()

@@ -23,7 +23,7 @@ struct MainLibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @State private var visibleCount = 40
-    @State private var scrollTimer: Timer?
+    @State private var scrollTask: Task<Void, Never>?
     
     var isCategoryPage: Bool {
         return selectedCategory == .movie || selectedCategory == .tvShow
@@ -88,12 +88,13 @@ struct MainLibraryView: View {
                     }
                 }
                 .padding(.vertical, 20)
-                .background { ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTimer: $scrollTimer) }
+                .background { ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask) }
             }
+            .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
             .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
                 if isAsleep {
-                    scrollTimer?.invalidate()
+                    scrollTask?.cancel()
                     isFastScrolling = false
                 }
             }

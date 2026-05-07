@@ -10,7 +10,7 @@ struct OverviewSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(themeColor.readableAccent(colorScheme: colorScheme))
+                    .fill(themeColor.highContrastAccent(colorScheme: colorScheme))
                     .frame(width: 4, height: 18)
 
                 Text("SYNOPSIS")

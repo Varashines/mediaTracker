@@ -60,6 +60,7 @@ struct TVTrackingView: View {
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
                 }
+                .scrollBounceBehavior(.basedOnSize)
 
                 // Focused Episode Grid
                 if let selectedNumber = selectedSeasonNumber,
@@ -163,7 +164,8 @@ private struct SeasonTab: View {
 
     var body: some View {
         Button(action: action) {
-            let accent = themeColor.readableAccent(colorScheme: colorScheme)
+            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+            let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
             HStack(spacing: 8) {
                 Text("Season \(season.seasonNumber)")
 
@@ -179,7 +181,7 @@ private struct SeasonTab: View {
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(accent.opacity(colorScheme == .dark ? 0.3 : 0.15))
+                        .fill(bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4))
                 } else {
                     Capsule()
                         .fill(Color.primary.opacity(0.05))
@@ -195,10 +197,10 @@ private struct SeasonTab: View {
                         .stroke(Color.semanticGreen(for: colorScheme).opacity(0.5), lineWidth: 1)
                 } else if isSelected {
                     Capsule()
-                        .stroke(accent.opacity(0.5), lineWidth: 1)
+                        .stroke(accent.opacity(0.3), lineWidth: 1)
                 }
             }
-            .foregroundStyle(isSelected ? .primary : .secondary)
+            .foregroundStyle(isSelected ? accent : .secondary)
             .scaleEffect(isSelected ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
@@ -251,7 +253,7 @@ private struct SeasonSection: View {
                 Button {
                     toggleSeasonWatchedStatus()
                 } label: {
-                    let accent = themeColor.readableAccent(colorScheme: colorScheme)
+                    let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
                     HStack(spacing: 6) {
                         Image(
                             systemName: isAllWatched
@@ -261,7 +263,7 @@ private struct SeasonSection: View {
                     .font(.system(size: 11, weight: .black))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(isAllWatched ? Color.primary.opacity(0.05) : accent.opacity(0.15))
+                    .background(isAllWatched ? Color.primary.opacity(0.05) : accent.opacity(colorScheme == .dark ? 0.15 : 0.12))
                     .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
                 }
@@ -291,7 +293,7 @@ private struct SeasonSection: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(themeColor)
+                        .tint(themeColor.highContrastAccent(colorScheme: colorScheme))
                         .controlSize(.regular)
                         .disabled(isRefreshing)
                     }
@@ -349,7 +351,7 @@ private struct EpisodeCube: View {
                 }
             }
         } label: {
-            let accent = themeColor.readableAccent(colorScheme: colorScheme)
+            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     Text("E\(episode.episodeNumber)")
@@ -358,7 +360,7 @@ private struct EpisodeCube: View {
                         .padding(.vertical, 3)
                         .background(
                             episode.isWatched
-                                ? Color.semanticGreen(for: colorScheme) : accent.opacity(0.15)
+                                ? Color.semanticGreen(for: colorScheme) : accent.opacity(colorScheme == .dark ? 0.15 : 0.1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                         .foregroundStyle(episode.isWatched ? .white : accent)

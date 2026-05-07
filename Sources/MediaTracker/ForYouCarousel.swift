@@ -44,6 +44,7 @@ struct ForYouCarousel: View {
                         }
                     )
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .coordinateSpace(name: scrollSpace)
                 .background(
                     GeometryReader { geo in
@@ -56,9 +57,7 @@ struct ForYouCarousel: View {
                     if let minX = dict[scrollSpace] {
                         let maxScroll = max(1, contentWidth - containerWidth)
                         let currentScroll = max(0, -minX)
-                        withAnimation(.smooth) {
-                            scrollProgress = min(1.0, currentScroll / maxScroll)
-                        }
+                        scrollProgress = min(1.0, currentScroll / maxScroll)
                     }
                 }
                 .scrollClipDisabled()
@@ -72,6 +71,7 @@ struct ForYouCarousel: View {
                     .padding(.horizontal, 30)
                     .padding(.vertical, 20)
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollClipDisabled()
             }
         }

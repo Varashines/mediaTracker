@@ -9,8 +9,8 @@ struct EntranceStaggerModifier: ViewModifier {
             .offset(y: isAppeared ? 0 : 20)
             .opacity(isAppeared ? 1 : 0)
             .onAppear {
-                let delay = Double(index % 24) * 0.03
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.78).delay(delay)) {
+                let delay = Double(index % 12) * 0.02
+                withAnimation(.smooth(duration: 0.4).delay(delay)) {
                     isAppeared = true
                 }
             }

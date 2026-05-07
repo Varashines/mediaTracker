@@ -7,10 +7,17 @@ class DetailViewModel {
     var isRefreshing = false
     var themeColor: Color = Color.secondary.opacity(0.1)
     
+    // Phase 5 Performance: Cache scheme-aware colors to avoid per-frame math in MeshGradient
+    var vibrantThemeColor: Color = .clear
+    var contrastThemeColor: Color = .clear
+    var warmThemeColor: Color = .clear
+    var coolThemeColor: Color = .clear
+    
     init(item: MediaItem) {
         self.item = item
         // Initial pre-warm for cached data removed to speed up transitions.
         // Will be triggered lazily if needed.
+        updateThemeColor()
     }
     
     var needsUpdate: Bool {
@@ -36,6 +43,7 @@ class DetailViewModel {
 
         if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
             self.themeColor = cachedColor
+            self.recalculateVibrantPalette()
             return
         }
         
@@ -52,6 +60,7 @@ class DetailViewModel {
                         withAnimation(.easeInOut(duration: 0.5)) {
                             self.themeColor = extracted
                             self.item.themeColorHex = hex
+                            self.recalculateVibrantPalette()
                         }
                     }
                 }
@@ -64,12 +73,28 @@ class DetailViewModel {
         
         withAnimation {
             self.themeColor = appAccent.color
+            self.recalculateVibrantPalette()
         }
+    }
+
+    private func recalculateVibrantPalette() {
+        // Phase 5 Performance: Calculate scheme-aware colors once per theme update
+        // Use the current system appearance as a baseline for the initial calculation
+        let isDark = NSApp.effectiveAppearance.name == .darkAqua
+        let scheme: ColorScheme = isDark ? .dark : .light
+        
+        self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
+        self.contrastThemeColor = themeColor.highContrastAccent(colorScheme: scheme)
+        self.warmThemeColor = vibrantThemeColor.hueShift(by: 0.05)
+        self.coolThemeColor = vibrantThemeColor.hueShift(by: -0.05)
     }
     
     func refreshData(force: Bool = false) {
         // Skip if item is deleted or app is in sleep mode
         guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
+
+        // Phase 5: Proactive Theme Sync - ensure theme is updated even if data sync is throttled
+        updateThemeColor()
 
         // Use lastUpdated as a proxy for "has fetched details" to avoid relationship faulting
         let hasData = item.lastUpdated != nil
@@ -185,6 +210,9 @@ class DetailViewModel {
     private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool) async {
         guard let tv = self.item.tvShowDetails,
               let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
+        
+        // Phase 5: Resiliency Check - Skip fetching if the season brief says there are no episodes
+        if season.episodeCount == 0 { return }
         
         // Skip if already has episodes and not forcing
         if season.totalEpisodesCount > 0 { return }

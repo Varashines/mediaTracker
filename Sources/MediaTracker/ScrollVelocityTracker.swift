@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ScrollVelocityTracker: View {
     @Binding var isFastScrolling: Bool
-    @Binding var scrollTimer: Timer?
+    @Binding var scrollTask: Task<Void, Never>?
     
     var body: some View {
         GeometryReader { geo in
@@ -14,9 +14,12 @@ struct ScrollVelocityTracker: View {
                         isFastScrolling = true
                     }
                     
-                    scrollTimer?.invalidate()
-                    scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        Task { @MainActor in
+                    scrollTask?.cancel()
+                    scrollTask = Task {
+                        try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
+                        guard !Task.isCancelled else { return }
+                        
+                        await MainActor.run {
                             withAnimation(.smooth) {
                                 isFastScrolling = false
                             }

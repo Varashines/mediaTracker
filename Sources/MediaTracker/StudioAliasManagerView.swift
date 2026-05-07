@@ -110,6 +110,7 @@ struct StudioAliasManagerView: View {
                 }
             }
         }
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     @ViewBuilder

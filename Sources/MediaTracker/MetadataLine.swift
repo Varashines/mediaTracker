@@ -14,7 +14,7 @@ struct MetadataLine: View {
                 if let icon = icon {
                     Image(systemName: icon)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(themeColor.readableAccent(colorScheme: colorScheme))
+                        .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
                 }
                 
                 Text(displayValue)
@@ -23,7 +23,7 @@ struct MetadataLine: View {
             .font(.system(size: 12, weight: .bold, design: .rounded))
             .padding(.horizontal, 4)
             .minimumScaleFactor(0.9)
-            .liquidGlassPill(accentColor: themeColor.opacity(0.15), isSolid: false)
+            .liquidGlassPill(accentColor: themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.15 : 0.4), isSolid: false)
         }
     }
     

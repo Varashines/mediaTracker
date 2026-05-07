@@ -74,7 +74,8 @@ extension Color {
 
     /// Returns a version of the color that is optimized for small UI elements (icons/labels).
     /// It boosts brightness on dark backgrounds and maintains saturation.
-    func readableAccent(colorScheme: ColorScheme) -> Color {
+    /// Returns a version of the color optimized for background washes and gradients.
+    func luminousAccent(colorScheme: ColorScheme) -> Color {
         guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
         
         var hue: CGFloat = 0
@@ -84,12 +85,44 @@ extension Color {
         nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         
         if colorScheme == .dark {
-            // On dark backgrounds, ensure brightness is at least 0.85 and saturation is healthy
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.5)), brightness: Double(max(brightness, 0.9)))
+            // Phase 5 Refinement: Moodier, less neon.
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.3)), brightness: Double(max(min(brightness, 0.75), 0.6)))
         } else {
-            // On light backgrounds, ensure it's deep enough (darkened)
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.7)), brightness: Double(min(brightness, 0.5)))
+            // Phase 5 Refinement: Airy, luminous wash.
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.4)), brightness: Double(max(brightness, 0.98)))
         }
+    }
+
+    /// Returns a version of the color optimized for text, icons, and small UI elements.
+    func highContrastAccent(colorScheme: ColorScheme) -> Color {
+        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        if colorScheme == .dark {
+            // On dark backgrounds, ensure brightness is at least 0.9 and saturation is healthy
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.6)), brightness: Double(max(brightness, 0.9)))
+        } else {
+            // On light backgrounds, ensure it's deep enough (darkened) for high readability
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.8)), brightness: Double(min(brightness, 0.45)))
+        }
+    }
+
+    /// Returns a color with a slight hue shift for organic gradients.
+    func hueShift(by amount: Double) -> Color {
+        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        nsc.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        
+        var newHue = h + CGFloat(amount)
+        if newHue > 1.0 { newHue -= 1.0 }
+        if newHue < 0.0 { newHue += 1.0 }
+        
+        return Color(hue: Double(newHue), saturation: Double(s), brightness: Double(b))
     }
 }
 

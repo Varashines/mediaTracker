@@ -74,5 +74,6 @@ struct SidebarNavigation: View, Equatable {
             }
             .padding(.vertical, 4)
         }
+        .scrollBounceBehavior(.basedOnSize)
     }
 }

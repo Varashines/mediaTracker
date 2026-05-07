@@ -20,6 +20,7 @@ struct RecentlyAddedRow: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 15)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
         }
         .compositingGroup()

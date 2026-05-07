@@ -389,6 +389,7 @@ struct CreateCollectionSheet: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .frame(height: 140)
             }
             

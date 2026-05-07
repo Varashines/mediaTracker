@@ -290,7 +290,7 @@ struct MediaThumbnailView: View {
             if mode == .hero, let progress = safeProgress, progress > 0 && progress < 1.0 {
                 VStack {
                     Spacer()
-                    let accent = (item?.themeColorHex.flatMap { Color(hex: $0) } ?? appAccent.color).readableAccent(colorScheme: colorScheme)
+                    let accent = (item?.themeColorHex.flatMap { Color(hex: $0) } ?? appAccent.color).highContrastAccent(colorScheme: colorScheme)
                     
                     ZStack(alignment: .leading) {
                         Rectangle()
@@ -376,7 +376,7 @@ struct MediaThumbnailView: View {
             }
         }
         .font(.system(size: 9, weight: .bold))
-        .liquidGlassPill(accentColor: appAccent.color, isSolid: false)
+        .liquidGlassPill(accentColor: appAccent.color.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.2 : 0.4), isSolid: false)
     }
 
     @ViewBuilder

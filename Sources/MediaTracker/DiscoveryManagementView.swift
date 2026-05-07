@@ -58,6 +58,7 @@ struct DiscoveryManagementView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
                     .frame(height: 44)
                 } else if !networkSearchText.isEmpty {
                     Text("No matching networks found.")

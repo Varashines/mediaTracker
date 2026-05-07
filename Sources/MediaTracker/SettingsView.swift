@@ -79,6 +79,7 @@ struct SettingsView: View {
             .frame(maxWidth: 1200) // Optimal width for readability
             .frame(maxWidth: .infinity)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background {
             GeometryReader { geo in
                 Color.clear

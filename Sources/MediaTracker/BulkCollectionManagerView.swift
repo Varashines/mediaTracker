@@ -56,6 +56,7 @@ struct BulkCollectionManagerView: View {
                     }
                     .padding(24)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

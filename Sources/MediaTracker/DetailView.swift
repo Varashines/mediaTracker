@@ -13,7 +13,6 @@ struct DetailView: View {
     @State private var isDeleted = false
     @State private var isCastExpanded = false
     @State private var showHeavyContent = false
-    @State private var breathingTrigger = false
     @State private var showingCollectionPicker = false
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -50,6 +49,7 @@ struct DetailView: View {
             }
             .padding(AppTheme.Spacing.large)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .navigationTitle("Details")
         .toolbar { detailToolbar }
         .onAppear {
@@ -65,11 +65,6 @@ struct DetailView: View {
                     showHeavyContent = true
                 }
             }
-            
-            // Phase 3: Breathing Ambient Glow
-            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
-                breathingTrigger.toggle()
-            }
         }
         .onDisappear { isAppeared = false }
         .sheet(isPresented: $showingCollectionPicker) {
@@ -80,8 +75,13 @@ struct DetailView: View {
                 viewModel.refreshLocalItem()
             }
         }
-        .tint(viewModel.themeColor)
-        .appBackground(tint: viewModel.themeColor, disableBrandBackground: true)
+        .tint(viewModel.contrastThemeColor)
+        .appBackground(
+            tint: viewModel.vibrantThemeColor, 
+            warmTint: viewModel.warmThemeColor, 
+            coolTint: viewModel.coolThemeColor, 
+            disableBrandBackground: true
+        )
     }
 
     @ViewBuilder
@@ -94,9 +94,8 @@ struct DetailView: View {
                 Color(NSColor.windowBackgroundColor)
                     .ignoresSafeArea()
             }
-
             // Phase 3: Breathing Ambient Glow (Optimized Opacity Animation)
-            let color = viewModel.themeColor
+            let color = viewModel.vibrantThemeColor
             
             RadialGradient(
                 gradient: Gradient(colors: [
@@ -107,8 +106,6 @@ struct DetailView: View {
                 startRadius: 0,
                 endRadius: 800
             )
-            .opacity(breathingTrigger ? 1.0 : 0.6)
-            .saturation(1.3)
             .ignoresSafeArea()
             
             RadialGradient(
@@ -120,11 +117,10 @@ struct DetailView: View {
                 startRadius: 0,
                 endRadius: 700
             )
-            .opacity(breathingTrigger ? 0.8 : 0.5)
             .saturation(1.3)
             .ignoresSafeArea()
-        }
-    }
+}
+}
 
     @ViewBuilder
     private var headerSection: some View {

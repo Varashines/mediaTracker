@@ -71,7 +71,10 @@ actor APIClient {
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         
         let region = Locale.current.region?.identifier ?? "US"
-        let language = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        
+        // Phase 5 Improvement: Robust locale construction for TMDB
+        let languageCode = Locale.current.language.languageCode?.identifier ?? "en"
+        let language = "\(languageCode)-\(region)"
         
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
         var items = [
@@ -325,14 +328,22 @@ actor APIClient {
     }
 
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
-        return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
-            let (data, response) = try await self.session.data(from: url)
-            try self.validateResponse(response)
-            let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
-            return decoded.episodes.map { 
-                TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
+        do {
+            return try await executeWithRetry {
+                let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
+                let (data, response) = try await self.session.data(from: url)
+                try self.validateResponse(response)
+                let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
+                return decoded.episodes.map { 
+                    TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
+                }
             }
+        } catch APIError.requestFailed(let code) where code == 404 {
+            // TMDB often 404s for Season 0 (Specials) if it's listed in the brief but has no episodes yet.
+            print("ℹ️ Season details not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.")
+            return []
+        } catch {
+            throw error
         }
     }
 

@@ -82,6 +82,7 @@ struct ContinueWatchingCarousel: View {
                         }
                     )
                 }
+                .scrollBounceBehavior(.basedOnSize)
                 .coordinateSpace(name: scrollSpace)
                 .background(
                     GeometryReader { geo in
@@ -94,9 +95,7 @@ struct ContinueWatchingCarousel: View {
                     guard let minX = dict[scrollSpace] else { return }
                     let maxScroll = max(1, contentWidth - containerWidth)
                     let currentScroll = max(0, -minX)
-                    withAnimation(.smooth) {
-                        scrollProgress = min(1.0, currentScroll / maxScroll)
-                    }
+                    scrollProgress = min(1.0, currentScroll / maxScroll)
                 }
                 .scrollClipDisabled()
             } else {

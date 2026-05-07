@@ -29,7 +29,7 @@ struct TitleSection: View {
                         HStack(spacing: 6) {
                             Image(systemName: item.type == .movie ? "film.fill" : "app.badge.checkmark.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(themeColor.readableAccent(colorScheme: colorScheme))
+                                .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
                             
                             Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
                                 .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -40,13 +40,14 @@ struct TitleSection: View {
                 }
 
                 HStack(spacing: 12) {
-                    let accent = themeColor.readableAccent(colorScheme: colorScheme)
+                    let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+                    let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
                     HStack(spacing: 6) {
                         Text(item.type?.rawValue.uppercased() ?? "")
                             .font(.system(size: 10, weight: .black))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(accent.opacity(0.15))
+                            .background(bgAccent.opacity(colorScheme == .dark ? 0.15 : 0.4))
                             .clipShape(Capsule())
                             .foregroundStyle(accent)
 

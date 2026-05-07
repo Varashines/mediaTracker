@@ -18,6 +18,7 @@ struct CastMemberCardNew: View {
 
     @ViewBuilder
     private var cardContent: some View {
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         HStack(spacing: 0) {
             imageSection
             textSection
@@ -25,8 +26,8 @@ struct CastMemberCardNew: View {
         .frame(width: 200, height: 90)
         .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(borderOverlay)
-        .shadow(color: themeColor.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
+        .overlay(borderOverlay(accent: accent))
+        .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -72,8 +73,8 @@ struct CastMemberCardNew: View {
         .frame(width: 140, alignment: .leading)
     }
 
-    private var borderOverlay: some View {
+    private func borderOverlay(accent: Color) -> some View {
         RoundedRectangle(cornerRadius: 12)
-            .stroke(themeColor.opacity(colorScheme == .dark ? 0.4 : 0.2), lineWidth: 1.0)
+            .stroke(accent.opacity(colorScheme == .dark ? 0.4 : 0.25), lineWidth: 1.0)
     }
 }
