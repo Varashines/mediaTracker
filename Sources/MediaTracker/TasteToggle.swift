@@ -6,7 +6,7 @@ struct TasteToggle: View {
     let themeColor: Color
     
     var body: some View {
-        if item.modelContext != nil && !item.isDeleted {
+        if item.modelContext != nil {
             HStack(spacing: 12) {
                 TastePill(
                     label: "Love",
@@ -36,7 +36,7 @@ struct TasteToggle: View {
     }
     
     private func setTaste(_ val: String) {
-        guard item.modelContext != nil && !item.isDeleted else { return }
+        guard item.modelContext != nil else { return }
         withAnimation(.smooth) {
             if item.tasteValue == val {
                 item.tasteValue = "None"

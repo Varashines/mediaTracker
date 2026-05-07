@@ -105,8 +105,7 @@ struct ContentView: View {
                         // Find metadata for these IDs
                         self.viewModel.recommendations = recs.compactMap {
                             (id, reason) -> MediaThumbnailMetadata? in
-                            guard let item = modelContext.model(for: id) as? MediaItem,
-                                !item.isDeleted
+                            guard let item = modelContext.model(for: id) as? MediaItem
                             else { return nil }
                             return MediaThumbnailMetadata(item: item, recommendationReason: reason)
                         }

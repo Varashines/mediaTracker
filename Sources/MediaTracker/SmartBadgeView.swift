@@ -40,7 +40,7 @@ struct SmartBadgeView: View {
                     progress: metadata.progress
                 )
             }
-        } else if let item = item, item.modelContext != nil, !item.isDeleted {
+        } else if let item = item, item.modelContext != nil {
             if let label = item.storedSmartBadgeLabel, let icon = item.storedSmartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle, remaining: item.remainingEpisodesCount)
             } else if item.type == .movie {

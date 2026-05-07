@@ -20,7 +20,7 @@ actor BackgroundDataService {
     func createNewMediaItem(uniqueID: String, tmdbID: Int, type: MediaType, title: String, overview: String, posterURL: String?, releaseDateString: String?) async -> (id: PersistentIdentifier?, isExisting: Bool) {
         // 1. Background uniqueness check
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-        if let existing = try? modelContext.fetch(descriptor).first, !existing.isDeleted {
+        if let existing = try? modelContext.fetch(descriptor).first {
             return (existing.persistentModelID, true)
         }
 

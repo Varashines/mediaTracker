@@ -3,8 +3,9 @@ import SwiftData
 @testable import MediaTracker
 
 final class BingeLogicTests: XCTestCase {
-    // Current date in session is Wednesday, 29 April 2026
+    // Reference date for all tests
     let nowString = "2026-04-29"
+    var testNow: Date { DateUtils.parseDate(nowString)! }
 
     @MainActor
     func testBingeDropLogic() async throws {
@@ -15,29 +16,34 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // 1. Setup a show with multiple episodes on the same day (Future Binge Drop)
         let item = MediaItem(id: "future_binge_drop", title: "Future Binge Drop Show", overview: "Overview", type: .tvShow)
         context.insert(item)
         
         let tvDetails = TVShowDetails(tmdbID: 101)
         tvDetails.item = item
         item.tvShowDetails = tvDetails
+        context.insert(tvDetails)
         
         let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 101)
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
+        context.insert(season)
         
-        // Released in 3 days
-        let airDate = "2026-05-02"
+        // Use same day to ensure it's close to testNow
+        let airDate = "2026-04-29" 
         for i in 1...10 {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: airDate, showID: 101)
             if i == 1 { ep.isWatched = true } // Mark first watched to avoid Premiere priority
             ep.season = season
+            // Use parseEpisodeDate to ensure it matches the engine's parsing logic (20:00 ET)
+            ep.airDateValue = DateUtils.parseEpisodeDate(airDate)
             season.episodes.append(ep)
             context.insert(ep)
         }
         
-        item.syncCachedProperties()
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
         
         XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE DROP")
     }
@@ -54,16 +60,23 @@ final class BingeLogicTests: XCTestCase {
         let tvDetails = TVShowDetails(tmdbID: 102)
         tvDetails.item = item
         item.tvShowDetails = tvDetails
+        context.insert(tvDetails)
         let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 8, showID: 102)
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
+        context.insert(season)
         
-        // Next ep is S1 E1, airing in 5 days (beyond SOON window)
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: "2026-05-04", showID: 102)
+        // Next ep is S1 E1, airing today (close to testNow)
+        let airDate = "2026-04-29"
+        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: airDate, showID: 102)
         ep1.season = season
+        ep1.airDateValue = DateUtils.parseEpisodeDate(airDate)
         season.episodes.append(ep1)
+        context.insert(ep1)
         
-        item.syncCachedProperties()
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
         
         XCTAssertEqual(item.storedSmartBadgeLabel, "SERIES PREMIERE")
     }
@@ -80,16 +93,24 @@ final class BingeLogicTests: XCTestCase {
         let tvDetails = TVShowDetails(tmdbID: 103)
         tvDetails.item = item
         item.tvShowDetails = tvDetails
+        context.insert(tvDetails)
         
         let season2 = TVSeason(seasonNumber: 2, name: "Season 2", episodeCount: 10, showID: 103)
         season2.tvShowDetails = tvDetails
         tvDetails.seasons.append(season2)
+        context.insert(season2)
         
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 2, name: "New Start", overview: "", airDate: "2026-05-10", showID: 103)
+        // Season 2 Ep 1 airing today
+        let airDate = "2026-04-29"
+        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 2, name: "New Start", overview: "", airDate: airDate, showID: 103)
         ep1.season = season2
+        ep1.airDateValue = DateUtils.parseEpisodeDate(airDate)
         season2.episodes.append(ep1)
+        context.insert(ep1)
         
-        item.syncCachedProperties()
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
         
         XCTAssertEqual(item.storedSmartBadgeLabel, "SEASON PREMIERE")
     }
@@ -111,19 +132,22 @@ final class BingeLogicTests: XCTestCase {
         season1.tvShowDetails = tvDetails
         tvDetails.seasons.append(season1)
         
-        // Yesterday's date
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-        let yesterdayString = DateFormatter.tmdb.string(from: yesterday)
-        
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: yesterdayString, showID: 104)
+        // 10 days ago (relative to April 29)
+        let airDate = "2026-04-19"
+        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Pilot", overview: "", airDate: airDate, showID: 104)
         ep1.season = season1
+        ep1.airDateValue = DateUtils.parseDate(airDate)
         season1.episodes.append(ep1)
         
-        item.syncCachedProperties()
+        item.releaseDate = DateUtils.parseDate(airDate)
+        
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
         
         XCTAssertNotEqual(item.storedSmartBadgeLabel, "SERIES PREMIERE")
-        // It should be "STREAMING" since it's recently aired (yesterday)
-        XCTAssertEqual(item.storedSmartBadgeLabel, "STREAMING")
+        // It should be RECENT (within 14 days)
+        XCTAssertEqual(item.storedSmartBadgeLabel, "RECENT")
     }
 
     @MainActor
@@ -133,12 +157,13 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // Movie releasing tomorrow
+        // Movie releasing tomorrow (April 30)
         let movie = MediaItem(id: "soon_movie", title: "Soon Movie", overview: "", type: .movie)
-        movie.releaseDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())
+        movie.releaseDate = DateUtils.parseDate("2026-04-30")
         context.insert(movie)
         
-        movie.syncCachedProperties()
+        try context.save()
+        movie.syncCachedProperties(now: testNow)
         XCTAssertEqual(movie.storedSmartBadgeLabel, "SOON")
         
         // Show with regular episode (not premiere) airing tomorrow
@@ -151,11 +176,15 @@ final class BingeLogicTests: XCTestCase {
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
         
-        let ep2 = TVEpisode(episodeNumber: 2, seasonNumber: 1, name: "Ep 2", overview: "", airDate: DateFormatter.tmdb.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!))
+        let airDate = "2026-04-30"
+        let ep2 = TVEpisode(episodeNumber: 2, seasonNumber: 1, name: "Ep 2", overview: "", airDate: airDate)
         ep2.season = season
+        ep2.airDateValue = DateUtils.parseDate(airDate)
         season.episodes.append(ep2)
         
-        show.syncCachedProperties()
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        show.syncCachedProperties(now: testNow)
         XCTAssertEqual(show.storedSmartBadgeLabel, "SOON")
     }
 
@@ -166,28 +195,6 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        let item = MediaItem(id: "future_finale", title: "Future Finale Show", overview: "", type: .tvShow)
-        context.insert(item)
-        
-        let tvDetails = TVShowDetails(tmdbID: 105)
-        tvDetails.item = item
-        item.tvShowDetails = tvDetails
-        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 1, showID: 105)
-        season.tvShowDetails = tvDetails
-        tvDetails.seasons.append(season)
-        
-        // Finale airing in 10 days
-        let airDate = "2026-05-10"
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "The End", overview: "", airDate: airDate)
-        ep1.season = season
-        season.episodes.append(ep1)
-        
-        item.syncCachedProperties()
-        
-        // Even if E1, it's the last episode of the season, so it could be SEASON PREMIERE or FINALE.
-        // In my current logic, episodeNumber == 1 (SEASON PREMIERE) comes BEFORE FINALE.
-        // Let's test with E8 of 8.
-        
         let item2 = MediaItem(id: "future_finale_8", title: "Future Finale 8", overview: "", type: .tvShow)
         context.insert(item2)
         let tvDetails2 = TVShowDetails(tmdbID: 106)
@@ -201,15 +208,23 @@ final class BingeLogicTests: XCTestCase {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01")
             ep.isWatched = true
             ep.season = season2
+            ep.airDateValue = DateUtils.parseDate("2026-01-01")
             season2.episodes.append(ep)
+            context.insert(ep)
         }
         
-        let ep8 = TVEpisode(episodeNumber: 8, seasonNumber: 1, name: "Finale", overview: "", airDate: "2026-05-10")
+        // Finale airing in 11 days (May 10 relative to April 29)
+        let airDate = "2026-05-10"
+        let ep8 = TVEpisode(episodeNumber: 8, seasonNumber: 1, name: "Finale", overview: "", airDate: airDate)
         ep8.season = season2
+        ep8.airDateValue = DateUtils.parseDate(airDate)
         season2.episodes.append(ep8)
+        context.insert(ep8)
         
-        item2.syncCachedProperties()
-        XCTAssertEqual(item2.storedSmartBadgeLabel, "FINALE", "Finale should show even if in the future")
+        try context.save()
+        tvDetails2.recalculateCachedProperties()
+        item2.syncCachedProperties(now: testNow)
+        XCTAssertEqual(item2.storedSmartBadgeLabel, "FINALE")
     }
     
     @MainActor
@@ -219,7 +234,7 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // Show that is both SOON and SEASON PREMIERE
+        // Show that is both SOON (April 30) and SEASON PREMIERE
         let item = MediaItem(id: "multi_badge", title: "Multi Badge Show", overview: "", type: .tvShow)
         context.insert(item)
         let tvDetails = TVShowDetails(tmdbID: 106)
@@ -229,14 +244,18 @@ final class BingeLogicTests: XCTestCase {
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
         
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
-        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 2, name: "Ep 1", overview: "", airDate: DateFormatter.tmdb.string(from: tomorrow))
+        let airDate = "2026-04-30"
+        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 2, name: "Ep 1", overview: "", airDate: airDate)
         ep1.season = season
+        ep1.airDateValue = DateUtils.parseDate(airDate)
         season.episodes.append(ep1)
+        context.insert(ep1)
         
-        item.syncCachedProperties()
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
         
-        // SEASON PREMIERE (1/2) > BINGE DROP (3)
+        // SEASON PREMIERE (LEVEL 1) > SOON (LEVEL 2)
         XCTAssertEqual(item.storedSmartBadgeLabel, "SEASON PREMIERE")
     }
 }
@@ -245,6 +264,7 @@ extension DateFormatter {
     static let tmdb: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
 }

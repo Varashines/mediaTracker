@@ -39,21 +39,8 @@ struct ThumbnailPosterLayer: View {
                     .frame(width: width, height: height)
             }
         }
-
-        if let ns = namespace, !isFastScrolling {
-            let itemIDString: String = {
-                if let id = capturedID { return "\(id)" }
-                return resultID ?? ""
-            }()
-            
-            if !itemIDString.isEmpty {
-                content.matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
-            } else {
-                content
-            }
-        } else {
-            content
-        }
+        
+        content
     }
 }
 

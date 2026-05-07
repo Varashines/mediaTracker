@@ -6,7 +6,7 @@ struct StatusPicker: View {
     var onChange: ((MediaState?) -> Void)?
 
     var body: some View {
-        if item.modelContext != nil && !item.isDeleted {
+        if item.modelContext != nil {
             HStack(spacing: 6) {
                 Text("Watch State:")
                     .font(.subheadline)
@@ -23,8 +23,6 @@ struct StatusPicker: View {
                 .labelsHidden()
                 .onChange(of: item.state) { oldValue, newValue in
                     item.lastUpdated = Date()
-                    item.lastInteractionDate = Date()
-                    item.lastStateChangeDate = Date()
                     onChange?(newValue)
                 }
             }
@@ -32,7 +30,7 @@ struct StatusPicker: View {
     }
     
     private var availableStates: [MediaState] {
-        guard item.modelContext != nil && !item.isDeleted else { return [] }
+        guard item.modelContext != nil else { return [] }
         return MediaItem.availableStates(for: item.type ?? .movie, progress: item.storedProgress)
     }
 }

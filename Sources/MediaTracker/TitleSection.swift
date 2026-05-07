@@ -9,7 +9,7 @@ struct TitleSection: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        if item.modelContext != nil && !item.isDeleted {
+        if item.modelContext != nil {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     let titleView = Text(item.title)

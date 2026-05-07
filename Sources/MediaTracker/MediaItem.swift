@@ -17,7 +17,6 @@ final class MediaItem: Identifiable {
     var lastStateChangeDate: Date?
     var dateAdded: Date?
     var lastUpdated: Date?
-    var isDeleted: Bool = false
     
     // Cached values for filtering/grid
     var cachedGenres: [String] = []
@@ -66,11 +65,27 @@ final class MediaItem: Identifiable {
 
     var taste: TasteValue? {
         get { TasteValue(rawValue: tasteValue) }
-        set { tasteValue = newValue?.rawValue ?? "None" }
+        set { 
+            let old = tasteValue
+            tasteValue = newValue?.rawValue ?? "None"
+            if old != tasteValue {
+                lastInteractionDate = Date()
+                syncCachedProperties()
+            }
+        }
     }
+    
     var state: MediaState? {
         get { MediaState(rawValue: stateValue) }
-        set { stateValue = newValue?.rawValue ?? "Wishlist" }
+        set { 
+            let old = stateValue
+            stateValue = newValue?.rawValue ?? "Wishlist"
+            if old != stateValue {
+                lastInteractionDate = Date()
+                lastStateChangeDate = Date()
+                syncCachedProperties()
+            }
+        }
     }
 
     var movieDetails: MovieDetails?
@@ -83,6 +98,7 @@ final class MediaItem: Identifiable {
         } else if progressVal > 0 {
             return [.active, .onHold, .dropped, .rewatching, .completed]
         }
+        // Wishlist is the default for 0 progress
         return MediaState.allCases
     }
 }
@@ -139,20 +155,18 @@ extension MediaItem {
 
     func checkOverallCompletion() {
         if type == .tvShow, let tv = tvShowDetails {
-            let episodes = tv.seasons.flatMap { $0.episodes }
-            if !episodes.isEmpty && episodes.allSatisfy({ $0.isWatched }) {
+            // Use denormalized counts for O(1) check
+            if tv.totalEpisodesCount > 0 && tv.watchedEpisodesCount >= tv.totalEpisodesCount {
                 if state != .completed && state != .rewatching {
-                    state = .completed
-                    lastStateChangeDate = Date()
+                    self.state = .completed
                 }
             }
         }
     }
 
-    func syncCachedProperties() {
+    func syncCachedProperties(now: Date = Date()) {
         // Phase 4 Optimization: Avoid relationship faulting cascades during sync
         // If details aren't loaded, don't force a sync unless explicitly requested.
-        let now = Date()
         let currentState = state ?? .wishlist
 
         syncCastCache()
@@ -164,7 +178,7 @@ extension MediaItem {
         }
 
         // Phase 1 Modularization: Use Centralized Badge Engine
-        if let result = BadgeEngine.calculateBadge(for: self) {
+        if let result = BadgeEngine.calculateBadge(for: self, now: now) {
             self.storedSmartBadgeLabel = result.label
             self.storedSmartBadgeIcon = result.icon
             self.storedSmartBadgeIsSparkle = result.isSparkle
@@ -174,7 +188,11 @@ extension MediaItem {
             self.storedSmartBadgeIsSparkle = false
         }
 
-        self.storedIsUpcoming = isUpcoming
+        if let airDate = cachedNextAiringDate {
+            self.storedIsUpcoming = airDate > now
+        } else {
+            self.storedIsUpcoming = false
+        }
         updateSearchableText()
     }
 
@@ -272,9 +290,9 @@ extension MediaItem {
             if currentState == .active || currentState == .wishlist {
                 // Optimized firstUnwatched search (stops at first match)
                 var firstUnwatched: TVEpisode? = nil
-                let sortedSeasons = tv.seasons.filter { !$0.isDeleted }.sorted { $0.seasonNumber < $1.seasonNumber }
+                let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
                 for season in sortedSeasons {
-                    let sortedEpisodes = season.episodes.filter { !$0.isDeleted }.sorted { $0.episodeNumber < $1.episodeNumber }
+                    let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
                     if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
                         firstUnwatched = next
                         break
@@ -293,7 +311,7 @@ extension MediaItem {
         }
 
         // Fallback for legacy data or first-load
-        let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 && !$0.isDeleted }
+        let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
         if !relevantSeasons.isEmpty {
             var totalCount = 0
             var watchedCount = 0
@@ -302,7 +320,7 @@ extension MediaItem {
             let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
             
             for season in sortedSeasons {
-                let sortedEpisodes = season.episodes.filter { !$0.isDeleted }.sorted { $0.episodeNumber < $1.episodeNumber }
+                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
                 for ep in sortedEpisodes {
                     totalCount += 1
                     if ep.isWatched { watchedCount += 1 } 

@@ -39,7 +39,7 @@ class DetailViewModel {
     
     func updateThemeColor() {
         // Skip if item is deleted or app is in sleep mode
-        guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
+        guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
             self.themeColor = cachedColor
@@ -91,7 +91,7 @@ class DetailViewModel {
     
     func refreshData(force: Bool = false) {
         // Skip if item is deleted or app is in sleep mode
-        guard item.modelContext != nil, !item.isDeleted, !SleepManager.shared.isAsleep else { return }
+        guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         // Phase 5: Proactive Theme Sync - ensure theme is updated even if data sync is throttled
         updateThemeColor()
@@ -117,7 +117,7 @@ class DetailViewModel {
             let success = await backgroundService.refreshSingleItem(id: rawID, force: force)
 
             await MainActor.run { [weak self] in
-                guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
+                guard let self = self, self.item.modelContext != nil else { return }
                 if success {
                     self.refreshLocalItem()
                 }
@@ -127,8 +127,6 @@ class DetailViewModel {
     }
 
     func refreshLocalItem() {
-        guard !item.isDeleted else { return }
-        
         // SwiftData automatically propagates background saves to the main context.
         // We rely on lazy-loading for relationships (seasons, cast, episodes) to keep transitions fast.
         
@@ -139,7 +137,7 @@ class DetailViewModel {
     }
 
     private func prewarmCast() {
-        guard item.modelContext != nil, !item.isDeleted else { return }
+        guard item.modelContext != nil else { return }
         let cast = item.storedCast
         let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {
@@ -148,7 +146,7 @@ class DetailViewModel {
     }
     
     func markAllAsWatched() {
-        guard item.modelContext != nil, !item.isDeleted else { return }
+        guard item.modelContext != nil else { return }
         if let tv = item.tvShowDetails {
             // Instant UI Update: Mark all CURRENTLY LOADED episodes as watched on MainActor
             for season in tv.seasons {
@@ -186,7 +184,7 @@ class DetailViewModel {
                 }
                 
                 await MainActor.run { [weak self] in
-                    guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
+                    guard let self = self, self.item.modelContext != nil else { return }
                     self.refreshLocalItem()
                     self.isRefreshing = false
                 }
@@ -195,7 +193,7 @@ class DetailViewModel {
     }
 
     func fetchEpisodes(for season: TVSeason) {
-        guard item.modelContext != nil, !item.isDeleted else { return }
+        guard item.modelContext != nil else { return }
         let seasonID = season.persistentModelID
         
         isRefreshing = true
@@ -279,7 +277,7 @@ class DetailViewModel {
     private var saveTask: Task<Void, Never>?
 
     func checkOverallCompletion() {
-        guard item.modelContext != nil, !item.isDeleted else { return }
+        guard item.modelContext != nil else { return }
         
         // 1. Instant Optimistic UI Update
         withAnimation {
@@ -303,7 +301,7 @@ class DetailViewModel {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if Task.isCancelled { return }
             
-            guard let self = self, self.item.modelContext != nil, !self.item.isDeleted else { return }
+            guard let self = self, self.item.modelContext != nil else { return }
             
             self.item.tvShowDetails?.recalculateCachedProperties()
             self.item.syncCachedProperties()

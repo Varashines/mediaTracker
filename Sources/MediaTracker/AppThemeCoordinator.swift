@@ -30,7 +30,7 @@ class AppThemeCoordinator {
         // Average the colors and desaturate
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         for color in colors {
-            let nsColor = NSColor(color)
+            guard let nsColor = NSColor(color).usingColorSpace(.sRGB) else { continue }
             r += nsColor.redComponent
             g += nsColor.greenComponent
             b += nsColor.blueComponent

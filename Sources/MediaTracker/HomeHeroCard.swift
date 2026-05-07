@@ -113,7 +113,7 @@ struct HomeHeroCard: View {
             return reason
         }
 
-        guard let item = item, item.modelContext != nil, !item.isDeleted else { return nil }
+        guard let item = item, item.modelContext != nil else { return nil }
         
         // Priority 1: Creators/Directors
         let creators = item.cachedCreators

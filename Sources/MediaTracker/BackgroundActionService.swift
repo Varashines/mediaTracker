@@ -11,15 +11,13 @@ actor BackgroundActionService {
         
         if type == "movie" {
             item.state = .completed
-            item.lastStateChangeDate = Date()
-            item.lastInteractionDate = Date()
         } else if type == "tvShow", let s = season, let e = episode {
             // Find specific episode
             if let tvDetails = item.tvShowDetails {
                 for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
                     for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
                         episodeObj.isWatched = true
-                        item.lastInteractionDate = Date()
+                        item.checkOverallCompletion()
                         break
                     }
                 }

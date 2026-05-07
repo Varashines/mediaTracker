@@ -10,7 +10,7 @@ struct MediaHeaderView: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        if item.modelContext != nil && !item.isDeleted {
+        if item.modelContext != nil {
             HStack(alignment: .top, spacing: 35) {
                 PosterView(item: item, themeColor: themeColor, namespace: namespace)
                 

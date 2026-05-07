@@ -40,6 +40,7 @@ struct MainMediaGrid: View {
                         selectedCollectionID: selectedCollectionID
                     )
                     .id(metadata.versionHash)
+                    .drawingGroup()
                     .entranceStagger(index: idx)
                     .onAppear {
                         if metadata.id == items.last?.id {

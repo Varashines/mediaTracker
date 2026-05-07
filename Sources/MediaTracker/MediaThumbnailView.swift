@@ -217,7 +217,7 @@ struct MediaThumbnailView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        ZStack(alignment: .center) {
+        let posterContent = ZStack(alignment: .center) {
             // 1. Poster Layer
             ThumbnailPosterLayer(
                 posterURL: posterURL,
@@ -227,9 +227,9 @@ struct MediaThumbnailView: View {
                 isFastScrolling: isFastScrolling,
                 width: width,
                 height: height,
-                namespace: namespace,
-                capturedID: capturedID,
-                resultID: result?.id
+                namespace: nil, // Moved to root
+                capturedID: nil,
+                resultID: nil
             )
             .blur(radius: isHovered ? 15 : 0)
             
@@ -305,6 +305,23 @@ struct MediaThumbnailView: View {
                 }
                 .opacity(isHovered ? 0 : 1)
             }
+        }
+
+        let itemIDString: String = {
+            if let id = capturedID { return "\(id)" }
+            return result?.id ?? ""
+        }()
+
+        ZStack {
+            if let ns = namespace, !isFastScrolling && !itemIDString.isEmpty {
+                posterContent
+                    .matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
+                    .background {
+                        Color.clear.matchedGeometryEffect(id: "poster_bg_\(itemIDString)", in: ns)
+                    }
+            } else {
+                posterContent
+            }
             
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
@@ -316,19 +333,8 @@ struct MediaThumbnailView: View {
             }
         }
         .frame(width: width, height: height)
-        .background {
-            if let ns = namespace, !isFastScrolling {
-                let itemIDString: String = {
-                    if let id = capturedID { return "\(id)" }
-                    return "\(result?.id.hashValue ?? 0)"
-                }()
-                
-                if !itemIDString.isEmpty {
-                    Color.clear.matchedGeometryEffect(id: "poster_bg_\(itemIDString)", in: ns)
-                }
-            }
-        }
         .cornerRadius(mode == .hero ? 16 : 12)
+        .drawingGroup() // Rasterize the stack for performance
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 10)
@@ -350,11 +356,15 @@ struct MediaThumbnailView: View {
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {
-        guard item.modelContext != nil && !item.isDeleted, let tv = item.tvShowDetails else { return }
-        let allEpisodes = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-            .flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
+        guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
+        
+        // Optimize: Find first unwatched season first
+        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return }
+        
+        let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
 
-        if let next = allEpisodes.first(where: { !$0.isWatched }) {
+        if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.isWatched = true
             item.lastInteractionDate = Date()
             Task { @MainActor in
@@ -420,14 +430,11 @@ struct MediaThumbnailView: View {
             
             if state != .completed {
                 Button {
-                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                    if let item = modelContext.model(for: itemID) as? MediaItem {
                         withAnimation {
                             item.state = .completed
                             item.lastUpdated = Date()
-                            item.lastInteractionDate = Date()
-                            item.syncCachedProperties()
                             SaveCoordinator.shared.requestSave(modelContext)
-            
                         }
                     }
                 } label: {
@@ -439,15 +446,11 @@ struct MediaThumbnailView: View {
         Section("Status") {
             ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) { targetState in
                 Button(targetState.displayName) {
-                    if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
+                    if let item = modelContext.model(for: itemID) as? MediaItem {
                         withAnimation {
                             item.state = targetState
                             item.lastUpdated = Date()
-                            item.lastInteractionDate = Date()
-                            item.lastStateChangeDate = Date()
-                            item.syncCachedProperties()
                             SaveCoordinator.shared.requestSave(modelContext)
-            
                         }
                     }
                 }

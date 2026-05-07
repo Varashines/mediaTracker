@@ -28,6 +28,7 @@ class ImageCache {
     
     // Phase 3 Optimization: In-Memory Disk Cache Index
     private var diskCacheIndex: Set<String> = []
+    private var activeProxyTasks: Set<String> = []
 
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
@@ -365,33 +366,50 @@ class ImageCache {
                 context.insert(entity)
             }
             
-            // Save tiny proxy (Always downsampled)
-            let tinyMaxDim: CGFloat = 75 * screenScale
-            let tinyOptions = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: tinyMaxDim
-            ] as CFDictionary
-            
-            if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
-                let alpha = tinyCG.alphaInfo
-                let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
-                if let proxyData = Self.writeToDataStatic(image: tinyCG, usePNG: alwaysPreserveAlpha || hasAlpha) {
-                    let entity = ImageCacheEntity(id: tinyProxyFileName, data: proxyData, accessDate: Date(), size: Int64(proxyData.count))
-                    context.insert(entity)
-                    await MainActor.run {
-                        _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
-                    }
-                }
-            }
-
             try? context.save()
 
             await MainActor.run {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
             }
         }.value
+        
+        let shouldSaveProxy = !diskCacheIndex.contains(tinyProxyFileName) && !activeProxyTasks.contains(tinyProxyFileName)
+        
+        if shouldSaveProxy {
+            activeProxyTasks.insert(tinyProxyFileName)
+            
+            await Task.detached(priority: .background) {
+                defer {
+                    Task { @MainActor in
+                        ImageCache.shared.activeProxyTasks.remove(tinyProxyFileName)
+                    }
+                }
+                
+                let context = ModelContext(container)
+                guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
+                
+                let tinyMaxDim: CGFloat = 75 * screenScale
+                let tinyOptions = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceShouldCacheImmediately: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: tinyMaxDim
+                ] as CFDictionary
+                
+                if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
+                    let alpha = tinyCG.alphaInfo
+                    let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
+                    if let proxyData = Self.writeToDataStatic(image: tinyCG, usePNG: alwaysPreserveAlpha || hasAlpha) {
+                        let entity = ImageCacheEntity(id: tinyProxyFileName, data: proxyData, accessDate: Date(), size: Int64(proxyData.count))
+                        context.insert(entity)
+                        try? context.save()
+                        await MainActor.run {
+                            _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
+                        }
+                    }
+                }
+            }.value
+        }
     }
     
     private static nonisolated func writeToDataStatic(image: CGImage, usePNG: Bool) -> Data? {

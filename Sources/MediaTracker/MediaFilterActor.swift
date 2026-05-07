@@ -109,7 +109,7 @@ actor MediaFilterActor {
         let now = Date()
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
         
-        // 1. Optimized Predicate (Compiler Friendly)
+        // 1. Optimized Predicate (Push filters to SQLite)
         var basePredicate = buildBasePredicate(category: category)
         
         if let cid = collectionID {
@@ -121,7 +121,7 @@ actor MediaFilterActor {
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder)
         
-        // Pagination only if no complex Swift-level filters
+        // Optimization: Skip Swift-level refinement if possible
         let hasComplexFilters = !processedSearch.isEmpty || (network != nil && !network!.isEmpty) || (language != nil && !language!.isEmpty) || (genre != nil && !genre!.isEmpty)
         
         if !hasComplexFilters && groupBy == .none {
@@ -131,7 +131,7 @@ actor MediaFilterActor {
         
         var results = try modelContext.fetch(descriptor)
         
-        // 2. Swift-Level Refinement (Filter/Search)
+        // 2. Swift-Level Refinement
         results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
@@ -185,57 +185,28 @@ actor MediaFilterActor {
 
     private func buildBasePredicate(category: NavigationCategory) -> Predicate<MediaItem> {
         switch category {
-        case .upcoming: return buildUpcomingPredicate()
-        case .inProgress: return buildInProgressPredicate()
-        case .watchlist: return buildWatchlistPredicate()
-        case .loved: return buildLovedPredicate()
-        case .completed: return buildCompletedPredicate()
-        case .archive: return buildArchivePredicate()
-        case .disliked: return buildDislikedPredicate()
-        case .binge: return buildBingePredicate()
-        case .movie, .tvShow: return buildTypePredicate(type: category.rawValue)
-        default: return buildDefaultPredicate()
+        case .upcoming:
+            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+        case .inProgress:
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
+        case .watchlist:
+            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
+        case .loved:
+            return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
+        case .completed:
+            return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
+        case .archive:
+            return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
+        case .disliked:
+            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
+        case .binge:
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
+        case .movie, .tvShow:
+            let typeString = category.rawValue
+            return #Predicate<MediaItem> { item in item.typeValue == typeString }
+        default:
+            return #Predicate<MediaItem> { _ in true }
         }
-    }
-
-    private func buildUpcomingPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.storedIsUpcoming == true }
-    }
-
-    private func buildInProgressPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Active" && $0.storedIsUpcoming == false }
-    }
-
-    private func buildWatchlistPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false }
-    }
-
-    private func buildLovedPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.tasteValue == "Love" }
-    }
-
-    private func buildCompletedPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "Completed" }
-    }
-
-    private func buildArchivePredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching" }
-    }
-
-    private func buildDislikedPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.tasteValue == "Dislike" }
-    }
-
-    private func buildBingePredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE" }
-    }
-
-    private func buildTypePredicate(type: String) -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { $0.typeValue == type }
-    }
-
-    private func buildDefaultPredicate() -> Predicate<MediaItem> {
-        #Predicate<MediaItem> { _ in true }
     }
 
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder) {
@@ -368,11 +339,11 @@ actor MediaFilterActor {
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
         if category == .home { return [] }
         var recentDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue != "Wishlist" })
-        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
         recentDesc.fetchLimit = 15
         
         if let recentItems = try? modelContext.fetch(recentDesc) {
-            return recentItems.filter { !$0.isDeleted }.prefix(10).map { toMetadata($0) }
+            return recentItems.prefix(10).map { toMetadata($0) }
         }
         return []
     }

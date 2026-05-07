@@ -27,7 +27,7 @@ struct DetailView: View {
 
     var body: some View {
         ZStack {
-            if isDeleted || viewModel.item.modelContext == nil || viewModel.item.isDeleted {
+            if isDeleted || viewModel.item.modelContext == nil {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
                 contentOverlay

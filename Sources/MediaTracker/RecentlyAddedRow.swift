@@ -12,7 +12,9 @@ struct RecentlyAddedRow: View {
                 HStack(spacing: 20) {
                     ForEach(items) { metadata in
                         NavigationLink(value: metadata.id) {
-                            MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling).id(metadata.versionHash)
+                            MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling)
+                                .id(metadata.versionHash)
+                                .drawingGroup()
                         }
                         .buttonStyle(.interactive)
                     }

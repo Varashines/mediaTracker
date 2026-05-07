@@ -124,7 +124,7 @@ actor MaintenanceService {
                         season.tvShowDetails = tv
                         
                         // Deduplicate Episodes within the season
-                        let validEpisodes = season.episodes.filter { !$0.isDeleted }
+                        let validEpisodes = season.episodes
                         let groupedEpisodes = Dictionary(grouping: validEpisodes, by: { $0.episodeNumber })
                         for (num, duplicates) in groupedEpisodes where duplicates.count > 1 {
                             print("🔍 Maintenance: Found \(duplicates.count) duplicate episodes for S\(season.seasonNumber) E\(num)")
@@ -146,14 +146,14 @@ actor MaintenanceService {
                         let sNum = season.seasonNumber
                         let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID && $0.seasonNumber == sNum })
                         if let allKnownEpisodes = try? modelContext.fetch(eDescriptor) {
-                            for episode in allKnownEpisodes where !episode.isDeleted {
+                            for episode in allKnownEpisodes {
                                 if episode.season?.persistentModelID != season.persistentModelID {
                                     episode.season = season
                                 }
                             }
                         }
 
-                        for episode in season.episodes where !episode.isDeleted {
+                        for episode in season.episodes {
                             episode.showID = tmdbID
                             if episode.uniqueID == nil {
                                 episode.uniqueID = "\(tmdbID)_\(season.seasonNumber)_\(episode.episodeNumber)"
@@ -162,7 +162,7 @@ actor MaintenanceService {
                         }
                         
                         // Phase 3 Optimization: Populate Persistent Dates
-                        for episode in season.episodes where !episode.isDeleted {
+                        for episode in season.episodes {
                             if episode.airDateValue == nil {
                                 episode.updateAirDateValue()
                             }
@@ -170,7 +170,7 @@ actor MaintenanceService {
                     }
                     
                     // 4. Purge legacy Crew cards, Ensure mediaID, and Deduplicate Cast
-                    let validCast = tv.cast.filter { !$0.isDeleted }
+                    let validCast = tv.cast
                     let groupedCast = Dictionary(grouping: validCast, by: { "\($0.name)|\($0.characterName)" })
                     for (_, duplicates) in groupedCast where duplicates.count > 1 {
                         let sorted = duplicates.sorted { ($0.profileURL != nil ? 1 : 0) > ($1.profileURL != nil ? 1 : 0) }
@@ -179,7 +179,7 @@ actor MaintenanceService {
                         }
                     }
 
-                    for member in tv.cast where !member.isDeleted {
+                    for member in tv.cast {
                         member.mediaID = item.id
                         if member.characterName == "Creator" || member.characterName == "Director" {
                             modelContext.delete(member)
@@ -190,7 +190,7 @@ actor MaintenanceService {
                 }
                 
                 if let movie = item.movieDetails {
-                    let validCast = movie.cast.filter { !$0.isDeleted }
+                    let validCast = movie.cast
                     let groupedCast = Dictionary(grouping: validCast, by: { "\($0.name)|\($0.characterName)" })
                     for (_, duplicates) in groupedCast where duplicates.count > 1 {
                         let sorted = duplicates.sorted { ($0.profileURL != nil ? 1 : 0) > ($1.profileURL != nil ? 1 : 0) }
@@ -199,7 +199,7 @@ actor MaintenanceService {
                         }
                     }
 
-                    for member in movie.cast where !member.isDeleted {
+                    for member in movie.cast {
                         member.mediaID = item.id
                         if member.characterName == "Director" {
                             modelContext.delete(member)
@@ -215,7 +215,7 @@ actor MaintenanceService {
         // 3. Final Badge Sync pass and Cache Purge for Logos
         let finalItems = (try? modelContext.fetch(descriptor)) ?? []
         var logoURLs: [String] = []
-        for item in finalItems where !item.isDeleted {
+        for item in finalItems {
             item.syncCachedProperties()
             if let logo = item.cachedNetworkLogoPath, let url = APIClient.tmdbImageURL(path: logo, size: "w300") {
                 logoURLs.append(url)
