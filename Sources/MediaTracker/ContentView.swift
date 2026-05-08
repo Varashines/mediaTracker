@@ -184,6 +184,8 @@ struct ContentView: View {
             InsightsView()
         } else if viewModel.selectedCategory == .settings {
             SettingsView()
+        } else if viewModel.selectedCategory == .smartCollections {
+            SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
         } else if viewModel.selectedCategory == .collectionsHub && viewModel.selectedCollectionID == nil {
             CollectionsManagementView(viewModel: viewModel, sidebarSelection: $sidebarSelection)
         } else {

@@ -132,13 +132,13 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement
-        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch)
+        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch, category: category)
 
-        let totalCount = (hasComplexFilters || groupBy != .none) ? 
+        let totalCount = (hasComplexFilters || groupBy != .none || category == .stalled || category == .releaseRadar) ? 
                          results.count : 
                          (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
                          
-        if hasComplexFilters && groupBy == .none {
+        if (hasComplexFilters || category == .stalled || category == .releaseRadar) && groupBy == .none {
             let start = min(offset, results.count)
             let end = min(start + limit, results.count)
             results = Array(results[start..<end])
@@ -204,6 +204,22 @@ actor MediaFilterActor {
         case .movie, .tvShow:
             let typeString = category.rawValue
             return #Predicate<MediaItem> { item in item.typeValue == typeString }
+        case .quickBites:
+            return #Predicate<MediaItem> { item in 
+                if let runtime = item.cachedRuntime {
+                    return runtime > 0 && runtime < 90
+                } else {
+                    return false
+                }
+            }
+        case .catchUp:
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
+        case .stalled:
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" }
+        case .releaseRadar:
+            // Complex logical ORs in Predicates often cause compiler timeouts.
+            // We'll fetch all and refine in Swift.
+            return #Predicate<MediaItem> { _ in true }
         default:
             return #Predicate<MediaItem> { _ in true }
         }
@@ -221,9 +237,26 @@ actor MediaFilterActor {
         }
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String) -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String, category: NavigationCategory? = nil) -> [MediaItem] {
         var refined = results
         
+        if category == .stalled {
+            let ninetyDaysAgo = Date().addingTimeInterval(-90 * 86400)
+            refined = refined.filter { item in
+                let lastChange = item.lastStateChangeDate ?? .distantPast
+                let lastInter = item.lastInteractionDate ?? .distantPast
+                return lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo
+            }
+        } else if category == .releaseRadar {
+            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "SERIES PREMIERE", "SEASON PREMIERE"]
+            refined = refined.filter { item in
+                if let badge = item.storedSmartBadgeLabel {
+                    return radarBadges.contains(badge)
+                }
+                return false
+            }
+        }
+
         if let nets = network, !nets.isEmpty {
             let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
             refined = refined.filter { item in

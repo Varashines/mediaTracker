@@ -22,6 +22,11 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case tvShow = "TV Show"
     case settings = "Settings"
     case collectionsHub = "Collections Hub"
+    case smartCollections = "Smart Hub"
+    case quickBites = "Quick Bites"
+    case catchUp = "Catch Up"
+    case stalled = "Stalled"
+    case releaseRadar = "Release Radar"
 
     var id: String { self.rawValue }
 
@@ -43,6 +48,11 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .tvShow: return "TV Shows"
         case .settings: return "Settings"
         case .collectionsHub: return "My Collections"
+        case .smartCollections: return "Smart Hub"
+        case .quickBites: return "Quick Bites"
+        case .catchUp: return "Catch Up Priority"
+        case .stalled: return "Stalled / Stale"
+        case .releaseRadar: return "Release Radar"
         }
     }
 
@@ -64,6 +74,11 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .tvShow: return "tv"
         case .settings: return "gearshape.fill"
         case .collectionsHub: return "folder.badge.plus"
+        case .smartCollections: return "sparkles.rectangle.stack"
+        case .quickBites: return "timer"
+        case .catchUp: return "arrow.uturn.right.circle.fill"
+        case .stalled: return "hourglass.bottomhalf.filled"
+        case .releaseRadar: return "sparkles"
         }
     }
 }
