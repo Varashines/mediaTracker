@@ -64,8 +64,9 @@ struct HomeHeroCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 10)
                     .overlay(alignment: .topLeading) {
-                        SmartBadgeView(metadata: metadata)
+                        SmartBadgeView(metadata: metadata, hideEpisodeProgress: true)
                             .padding(8)
+                            .opacity(isHovered ? 0 : 1)
                     }
                 }
                 

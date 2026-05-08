@@ -17,18 +17,6 @@ struct SmartCollectionsHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Smart Hub")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                    
-                    Text("Dynamic collections based on your library activity and release schedules.")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 40)
-                .padding(.top, 40)
-                
                 // Grid of Smart Cards
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 25)], spacing: 25) {
                     ForEach(smartCategories) { category in
@@ -42,6 +30,7 @@ struct SmartCollectionsHubView: View {
                     }
                 }
                 .padding(.horizontal, 40)
+                .padding(.top, 40)
                 
                 Spacer(minLength: 50)
             }

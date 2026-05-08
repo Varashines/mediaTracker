@@ -28,8 +28,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
     
     var formattedMetadata: String {
         let year = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? ""
-        if type == .movie { return year }
-        return "\(year) • \(watchProgress ?? "")"
+        return year
     }
 
     init(item: MediaItem, recommendationReason: String? = nil) {
@@ -122,7 +121,12 @@ actor MediaFilterActor {
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder)
         
         // Optimization: Skip Swift-level refinement if possible
-        let hasComplexFilters = !processedSearch.isEmpty || (network != nil && !network!.isEmpty) || (language != nil && !language!.isEmpty) || (genre != nil && !genre!.isEmpty)
+        let hasComplexFilters = !processedSearch.isEmpty || 
+                               (network != nil && !network!.isEmpty) || 
+                               (language != nil && !language!.isEmpty) || 
+                               (genre != nil && !genre!.isEmpty) ||
+                               category == .releaseRadar ||
+                               category == .stalled
         
         if !hasComplexFilters && groupBy == .none {
             descriptor.fetchLimit = limit
@@ -134,11 +138,11 @@ actor MediaFilterActor {
         // 2. Swift-Level Refinement
         results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch, category: category)
 
-        let totalCount = (hasComplexFilters || groupBy != .none || category == .stalled || category == .releaseRadar) ? 
+        let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
                          (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
                          
-        if (hasComplexFilters || category == .stalled || category == .releaseRadar) && groupBy == .none {
+        if hasComplexFilters && groupBy == .none {
             let start = min(offset, results.count)
             let end = min(start + limit, results.count)
             results = Array(results[start..<end])

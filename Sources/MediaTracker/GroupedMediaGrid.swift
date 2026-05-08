@@ -45,7 +45,6 @@ struct GroupedMediaGrid: View {
                                     selectedCollectionID: viewModel.selectedCollectionID
                                 )
                                 .id(metadata.versionHash)
-                                .drawingGroup()
                                 .entranceStagger(index: 0)
                                 .onAppear {
                                     // Phase 4 Optimization: Predictive Prefetching

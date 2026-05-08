@@ -26,7 +26,33 @@ struct LibraryHeaderView: View {
             SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
                 .padding(.bottom, 10)
         } else if !isCategoryPage && !isMainSection && selectedCategory != .discover {
-            SectionHeader(title: selectedCategory.title, icon: selectedCategory.icon, iconColor: .secondary)
+            HStack(spacing: 16) {
+                if isSmartCategory {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            viewModel?.selectedCategory = .smartCollections
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left.circle.fill")
+                            .font(.system(size: 26, weight: .medium))
+                            .foregroundStyle(appAccent.color.opacity(0.8))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Back to Smart Hub")
+                }
+                
+                SectionHeader(title: selectedCategory.title, icon: selectedCategory.icon, iconColor: .secondary)
+                    .padding(.horizontal, 0) // Remove internal padding when wrapped
+            }
+            .padding(.horizontal, 40)
         }
+    }
+    
+    private var isSmartCategory: Bool {
+        return selectedCategory == .quickBites || 
+               selectedCategory == .catchUp || 
+               selectedCategory == .stalled || 
+               selectedCategory == .releaseRadar
     }
 }

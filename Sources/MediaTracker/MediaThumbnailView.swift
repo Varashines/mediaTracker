@@ -1,7 +1,19 @@
 import SwiftUI
 import SwiftData
 
-struct MediaThumbnailView: View {
+@MainActor
+struct MediaThumbnailView: View, Equatable {
+    nonisolated static func == (lhs: MediaThumbnailView, rhs: MediaThumbnailView) -> Bool {
+        return lhs.capturedID == rhs.capturedID &&
+               lhs.capturedItemID == rhs.capturedItemID &&
+               lhs.capturedTitle == rhs.capturedTitle &&
+               lhs.capturedPosterURL == rhs.capturedPosterURL &&
+               lhs.capturedState == rhs.capturedState &&
+               lhs.capturedProgress == rhs.capturedProgress &&
+               lhs.capturedIsUpcoming == rhs.capturedIsUpcoming &&
+               lhs.isCompletedInCollection == rhs.isCompletedInCollection
+    }
+    
     enum DisplayMode {
         case hero, grid, search
     }
@@ -231,11 +243,10 @@ struct MediaThumbnailView: View {
                 capturedID: nil,
                 resultID: nil
             )
-            .blur(radius: isHovered ? 15 : 0)
+            .blur(radius: isHovered ? 10 : 0)
             
             Rectangle()
-                .fill(.ultraThinMaterial.opacity(0.6))
-                .opacity(isHovered ? 1 : 0)
+                .fill(.black.opacity(isHovered ? 0.7 : 0))
             
             // Smart Badge (Top Leading)
             VStack {
@@ -253,6 +264,8 @@ struct MediaThumbnailView: View {
             }
             .padding(8)
             .opacity(isHovered ? 0 : 1)
+            .scaleEffect(isHovered ? 0.8 : 1.0)
+            .offset(x: isHovered ? -4 : 0, y: isHovered ? -4 : 0)
             
             // Collection Status Badge (Top Trailing)
             if isCompletedInCollection {
@@ -270,6 +283,8 @@ struct MediaThumbnailView: View {
                 }
                 .padding(8)
                 .opacity(isHovered ? 0 : 1)
+                .scaleEffect(isHovered ? 0.8 : 1.0)
+                .offset(x: isHovered ? 4 : 0, y: isHovered ? -4 : 0)
             }
             
             // 2. SHADOW GALLERY: The Reveal (Centered)
@@ -334,7 +349,6 @@ struct MediaThumbnailView: View {
         }
         .frame(width: width, height: height)
         .cornerRadius(mode == .hero ? 16 : 12)
-        .drawingGroup() // Rasterize the stack for performance
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 10)
@@ -353,6 +367,7 @@ struct MediaThumbnailView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .zIndex(isHovered ? 10 : 1)
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {
@@ -472,45 +487,5 @@ struct MediaThumbnailView: View {
         } label: {
             Label("Remove", systemImage: "trash")
         }
-    }
-}
-
-struct MediaThumbnailPlaceholder: View {
-    let mode: MediaThumbnailView.DisplayMode
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var width: CGFloat {
-        switch mode {
-        case .hero: return 200
-        default: return 160
-        }
-    }
-
-    private var height: CGFloat {
-        switch mode {
-        case .hero: return 300
-        default: return 240
-        }
-    }
-    
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
-                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
-                .overlay {
-                    RoundedRectangle(cornerRadius: mode == .hero ? 16 : 12)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                }
-            
-            VStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(height: 12)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-            }
-        }
-        .frame(width: width, height: height)
     }
 }

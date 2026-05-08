@@ -14,7 +14,6 @@ struct RecentlyAddedRow: View {
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling)
                                 .id(metadata.versionHash)
-                                .drawingGroup()
                         }
                         .buttonStyle(.interactive)
                     }

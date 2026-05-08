@@ -5,32 +5,37 @@ struct SmartBadgeView: View {
     let item: MediaItem?
     let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
+    let hideEpisodeProgress: Bool
+    
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
-    init(item: MediaItem) {
+    init(item: MediaItem, hideEpisodeProgress: Bool = false) {
         self.item = item
         self.metadata = nil
         self.result = nil
+        self.hideEpisodeProgress = hideEpisodeProgress
     }
     
-    init(metadata: MediaThumbnailMetadata) {
+    init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false) {
         self.item = nil
         self.metadata = metadata
         self.result = nil
+        self.hideEpisodeProgress = hideEpisodeProgress
     }
 
-    init(result: MediaSearchResult) {
+    init(result: MediaSearchResult, hideEpisodeProgress: Bool = false) {
         self.item = nil
         self.metadata = nil
         self.result = result
+        self.hideEpisodeProgress = hideEpisodeProgress
     }
 
     var body: some View {
         if let metadata = metadata {
             if let label = metadata.smartBadgeLabel, let icon = metadata.smartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: metadata.isSparkleBadge, remaining: metadata.remainingCount)
-            } else if metadata.type == .movie {
+            } else {
                 statusUI(
                     isUpcoming: metadata.isUpcoming,
                     state: metadata.state,
@@ -43,7 +48,7 @@ struct SmartBadgeView: View {
         } else if let item = item, item.modelContext != nil {
             if let label = item.storedSmartBadgeLabel, let icon = item.storedSmartBadgeIcon {
                 intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle, remaining: item.remainingEpisodesCount)
-            } else if item.type == .movie {
+            } else {
                 statusUI(
                     isUpcoming: item.storedIsUpcoming,
                     state: item.state,
@@ -87,7 +92,7 @@ struct SmartBadgeView: View {
         HStack(spacing: 4) {
             Image(systemName: icon)
             
-            if isBinge, let remaining = remaining, remaining > 0 {
+            if isBinge, let remaining = remaining, remaining > 0, !hideEpisodeProgress {
                 HStack(spacing: 4) {
                     Text("BINGE")
                     Text("•")
@@ -129,7 +134,12 @@ struct SmartBadgeView: View {
         let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
 
         // 2. Determine Display Label
-        let displayLabel = nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
+        let displayLabel: String = {
+            if hideEpisodeProgress {
+                return currentState.displayName
+            }
+            return nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
+        }()
 
         // 3. Determine Icon
         let icon = isAvailable ? "play.fill" : (isUpcoming ? "sparkles" : currentState.iconName)
@@ -137,10 +147,10 @@ struct SmartBadgeView: View {
         // 4. Pill Logic
         let isInProgress = (currentState == .active || currentState == .rewatching)
         let hasEpisodeStats = nextEpisodeLabel != nil
-        let showFullPill = (isUpcoming && hasEpisodeStats) || (!isUpcoming && isInProgress)
+        let showFullPill = !hideEpisodeProgress && ((isUpcoming && hasEpisodeStats) || (!isUpcoming && isInProgress))
 
         // 5. Progress Bar
-        let showProgressBar = !isUpcoming && isInProgress
+        let showProgressBar = !hideEpisodeProgress && !isUpcoming && isInProgress
 
         return StatusBadgePrimitive(
             label: displayLabel,
