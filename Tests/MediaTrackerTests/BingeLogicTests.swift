@@ -33,7 +33,7 @@ final class BingeLogicTests: XCTestCase {
         let airDate = "2026-04-29" 
         for i in 1...10 {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: airDate, showID: 101)
-            if i == 1 { ep.isWatched = true } // Mark first watched to avoid Premiere priority
+            if i == 1 { ep.markWatched(true) } // Mark first watched to avoid Premiere priority
             ep.season = season
             // Use parseEpisodeDate to ensure it matches the engine's parsing logic (20:00 ET)
             ep.airDateValue = DateUtils.parseEpisodeDate(airDate)
@@ -206,7 +206,7 @@ final class BingeLogicTests: XCTestCase {
         
         for i in 1...7 {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01")
-            ep.isWatched = true
+            ep.markWatched(true)
             ep.season = season2
             ep.airDateValue = DateUtils.parseDate("2026-01-01")
             season2.episodes.append(ep)
@@ -257,6 +257,47 @@ final class BingeLogicTests: XCTestCase {
         
         // SEASON PREMIERE (LEVEL 1) > SOON (LEVEL 2)
         XCTAssertEqual(item.storedSmartBadgeLabel, "SEASON PREMIERE")
+    }
+
+    @MainActor
+    func testBehavioralBingeLogic() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let item = MediaItem(id: "behavioral_binge", title: "Binge Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tvDetails = TVShowDetails(tmdbID: 107)
+        tvDetails.item = item
+        item.tvShowDetails = tvDetails
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 107)
+        season.tvShowDetails = tvDetails
+        tvDetails.seasons.append(season)
+        
+        // Mark 3 episodes as watched recently
+        for i in 1...3 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01")
+            ep.season = season
+            ep.markWatched(true) // This sets lastWatchedDate = now
+            season.episodes.append(ep)
+            context.insert(ep)
+        }
+        
+        // Add one unwatched episode that aired in the past to avoid "Completed" state
+        let ep4 = TVEpisode(episodeNumber: 4, seasonNumber: 1, name: "Ep 4", overview: "", airDate: "2026-01-01")
+        ep4.season = season
+        ep4.airDateValue = DateUtils.parseDate("2026-01-01")
+        season.episodes.append(ep4)
+        context.insert(ep4)
+        
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
+        
+        // Should show BINGE because 3 episodes were watched recently
+        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE")
+        XCTAssertEqual(item.storedSmartBadgeIcon, "flame.fill")
     }
 }
 

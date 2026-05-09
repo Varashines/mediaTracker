@@ -151,7 +151,7 @@ class DetailViewModel {
             // Instant UI Update: Mark all CURRENTLY LOADED episodes as watched on MainActor
             for season in tv.seasons {
                 for episode in season.episodes {
-                    episode.isWatched = true
+                    episode.markWatched(true)
                 }
             }
             
@@ -187,6 +187,7 @@ class DetailViewModel {
                     guard let self = self, self.item.modelContext != nil else { return }
                     self.refreshLocalItem()
                     self.isRefreshing = false
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                 }
             }
         }

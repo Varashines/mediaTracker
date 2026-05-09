@@ -24,9 +24,4 @@ final class TVSeason {
         self.showID = showID
         if let showID = showID { self.uniqueID = "\(showID)_\(seasonNumber)" }
     }
-
-    func refreshCounts() {
-        self.totalEpisodesCount = episodes.count
-        self.watchedEpisodesCount = episodes.filter { $0.isWatched }.count
-    }
 }

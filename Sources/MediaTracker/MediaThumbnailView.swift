@@ -383,7 +383,7 @@ struct MediaThumbnailView: View, Equatable {
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
 
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
-            next.isWatched = true
+            next.markWatched(true)
             item.lastInteractionDate = Date()
             Task { @MainActor in
                 item.checkOverallCompletion()
@@ -391,6 +391,7 @@ struct MediaThumbnailView: View, Equatable {
                 if let context = item.modelContext {
                     SaveCoordinator.shared.requestSave(context)
                 }
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
             }
         }
     }

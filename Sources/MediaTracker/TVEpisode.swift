@@ -17,20 +17,26 @@ final class TVEpisode {
             updateAirDateValue()
         }
     }
-    // Restored for SwiftData Predicate support
     var airDateValue: Date?
     var runtime: Int?
-    var isWatched: Bool = false {
-        didSet {
-            if oldValue != isWatched {
-                season?.watchedEpisodesCount += (isWatched ? 1 : -1)
-                season?.tvShowDetails?.watchedEpisodesCount += (isWatched ? 1 : -1)
-            }
-        }
-    }
+    var isWatched: Bool = false
+    var lastWatchedDate: Date?
     var showID: Int?
     @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
+
+    func markWatched(_ watched: Bool) {
+        if self.isWatched != watched {
+            self.isWatched = watched
+            if watched {
+                self.lastWatchedDate = Date()
+            } else {
+                self.lastWatchedDate = nil
+            }
+            season?.watchedEpisodesCount += (watched ? 1 : -1)
+            season?.tvShowDetails?.watchedEpisodesCount += (watched ? 1 : -1)
+        }
+    }
     
     // UI property: Uses the persistent airDateValue if accurate, or recalculates
     var airDateAsDate: Date? {

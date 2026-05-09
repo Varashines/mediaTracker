@@ -86,9 +86,9 @@ actor BackgroundDataService {
                                 overview: "", 
                                 airDate: nil, 
                                 runtime: nil, 
+                                isWatched: true,
                                 showID: tmdbID
                             )
-                            stubEpisode.isWatched = true
                             modelContext.insert(stubEpisode)
                             // The background sync will later link these to seasons and details via uniqueID
                         }
@@ -105,46 +105,118 @@ actor BackgroundDataService {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return }
         
-        let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
-        guard let tmdbID = Int(tmdbIDString) else {
-            modelContext.delete(item)
-            try? modelContext.save()
-            return
-        }
-
-        // Deep Purge: Find everything by ID, even if relationships are broken
-        let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.mediaID == id })
-        if let castMembers = try? modelContext.fetch(castDescriptor) {
-            for member in castMembers { modelContext.delete(member) }
-        }
-
-        if item.type == .tvShow {
-            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
-            if let seasons = try? modelContext.fetch(sDescriptor) {
-                for season in seasons { modelContext.delete(season) }
-            }
-            
-            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
-            if let episodes = try? modelContext.fetch(eDescriptor) {
-                for episode in episodes { modelContext.delete(episode) }
-            }
-            
-            if let tv = item.tvShowDetails {
-                modelContext.delete(tv)
-            }
-        } else if item.type == .movie {
-            if let movie = item.movieDetails {
-                modelContext.delete(movie)
-            }
-        }
-
         modelContext.delete(item)
         
         do {
             try modelContext.save()
-            print("🗑️ Deep Purge: Deleted \(id) and all associated records.")
+            print("🗑️ Cascade Deletion: Deleted \(id) and all associated records.")
         } catch {
-            print("❌ Deep Purge: Failed to save deletion: \(error)")
+            print("❌ Cascade Deletion: Failed to save deletion: \(error)")
+        }
+    }
+
+    func clearDatabase() async {
+        do {
+            try modelContext.delete(model: MediaItem.self)
+            try modelContext.delete(model: NetworkEntity.self)
+            try modelContext.delete(model: GenreEntity.self)
+            try modelContext.delete(model: LanguageEntity.self)
+            try modelContext.delete(model: MediaCollection.self)
+            try modelContext.save()
+            
+            // Clear caches as well
+            await ImageCache.shared.clearFullCache()
+            URLCache.shared.removeAllCachedResponses()
+            
+            print("✅ Database cleared successfully.")
+        } catch {
+            print("❌ Failed to clear database: \(error.localizedDescription)")
+        }
+    }
+
+    func performLibraryHeal() async throws {
+        // 1. Repair Orphaned Entities
+        try await repairOrphanedEntities()
+
+        let descriptor = FetchDescriptor<MediaItem>()
+        let items = try modelContext.fetch(descriptor)
+        
+        // 2. Deduplicate and Standardize
+        for item in items {
+            await Task.yield()
+            
+            // Migrate legacy IDs
+            if !item.id.contains("_") {
+                let typePrefix = item.type == .movie ? "movie" : "tv"
+                item.id = "\(typePrefix)_\(item.id)"
+            }
+
+            if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
+                if let tv = item.tvShowDetails {
+                    // Force Watch State Consistency
+                    if item.stateValue == "Completed" {
+                        let episodes = tv.seasons.flatMap { $0.episodes }
+                        for ep in episodes where !ep.isWatched {
+                            ep.isWatched = true
+                        }
+                    }
+
+                    // Standardize Seasons and Episodes
+                    for season in tv.seasons {
+                        season.showID = tmdbID
+                        if season.uniqueID == nil {
+                            season.uniqueID = "\(tmdbID)_\(season.seasonNumber)"
+                        }
+                        
+                        for episode in season.episodes {
+                            episode.showID = tmdbID
+                            if episode.uniqueID == nil {
+                                episode.uniqueID = "\(tmdbID)_\(season.seasonNumber)_\(episode.episodeNumber)"
+                            }
+                            if episode.airDateValue == nil {
+                                episode.updateAirDateValue()
+                            }
+                        }
+                    }
+                    tv.recalculateCachedProperties(triggerSync: true)
+                }
+            }
+            
+            item.syncCachedProperties()
+            item.updateSearchableText()
+        }
+        
+        try modelContext.save()
+        print("✅ Maintenance: Library heal complete.")
+    }
+
+    private func repairOrphanedEntities() async throws {
+        let sDesc = FetchDescriptor<TVSeason>()
+        let allSeasons = try modelContext.fetch(sDesc)
+        let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
+        let allTVDetails = try modelContext.fetch(tvDetailsDesc)
+        let tvMap = Dictionary(uniqueKeysWithValues: allTVDetails.map { ($0.tmdbID, $0) })
+        
+        for season in allSeasons {
+            if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
+                season.tvShowDetails = parent
+            }
+        }
+        
+        let eDesc = FetchDescriptor<TVEpisode>()
+        let allEpisodes = try modelContext.fetch(eDesc)
+        
+        var seasonMap: [Int: [Int: TVSeason]] = [:]
+        for season in allSeasons {
+            guard let showID = season.showID else { continue }
+            if seasonMap[showID] == nil { seasonMap[showID] = [:] }
+            seasonMap[showID]?[season.seasonNumber] = season
+        }
+        
+        for episode in allEpisodes {
+            if episode.season == nil, let showID = episode.showID, let parentSeason = seasonMap[showID]?[episode.seasonNumber] {
+                episode.season = parentSeason
+            }
         }
     }
 
@@ -281,7 +353,7 @@ actor BackgroundDataService {
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
-                            episode.isWatched = true
+                            episode.markWatched(true)
                         }
                     }
                 }

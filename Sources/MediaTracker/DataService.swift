@@ -74,7 +74,7 @@ class DataService {
         
         let container = modelContext.container
         Task.detached(priority: .background) {
-            let service = MaintenanceService(modelContainer: container)
+            let service = BackgroundDataService(modelContainer: container)
             do {
                 try await service.performLibraryHeal()
                 await MainActor.run {
@@ -100,39 +100,24 @@ class DataService {
         
         let container = modelContext.container
         Task.detached(priority: .background) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<MediaItem>()
-            if let items = try? context.fetch(descriptor) {
-                for item in items {
-                    item.syncCachedProperties()
-                }
-                try? context.save()
-                
-                await MainActor.run {
-                    AppErrorState.shared.showToast("All badges updated.", systemImage: "checkmark.circle.fill", type: .success)
-                }
+            let service = BackgroundDataService(modelContainer: container)
+            try? await service.performLibraryHeal()
+            
+            await MainActor.run {
+                AppErrorState.shared.showToast("All badges updated.", systemImage: "checkmark.circle.fill", type: .success)
             }
         }
     }
 
     func clearDatabase(modelContext: ModelContext) {
-        Task { @MainActor in
-            do {
-                try modelContext.delete(model: MediaItem.self)
-                try modelContext.delete(model: NetworkEntity.self)
-                try modelContext.delete(model: GenreEntity.self)
-                try modelContext.delete(model: LanguageEntity.self)
-                try modelContext.delete(model: MediaCollection.self)
-                try modelContext.save()
-                
-                // Clear caches as well
-                ImageCache.shared.clearFullCache()
-                URLCache.shared.removeAllCachedResponses()
-                
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            let service = BackgroundDataService(modelContainer: container)
+            await service.clearDatabase()
+            
+            await MainActor.run {
                 AppErrorState.shared.showToast("Database cleared successfully.", systemImage: "trash", type: .success)
                 NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-            } catch {
-                AppErrorState.shared.surfaceError("Failed to clear database: \(error.localizedDescription)")
             }
         }
     }

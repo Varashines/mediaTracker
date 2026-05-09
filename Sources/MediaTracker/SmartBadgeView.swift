@@ -69,14 +69,31 @@ struct SmartBadgeView: View {
         
         let badgeConfig: (bg: Color, fg: Color) = {
             switch label {
-            case "SERIES PREMIERE", "SEASON PREMIERE", "FINALE":
-                // Milestones: Electric Purple
-                return (Color(red: 0.4, green: 0.3, blue: 0.9), .white)
-            case "BINGE", "BINGE DROP":
-                // Binge: Teal/Mint
-                return (Color(red: 0.0, green: 0.6, blue: 0.5), .white)
-            case "NEW", "SOON":
-                // Release: Solar Orange
+            case "SERIES PREMIERE":
+                // Series Premiere: Electric Purple
+                return (Color(red: 0.5, green: 0.3, blue: 0.9), .white)
+            case "SEASON PREMIERE":
+                // Season Premiere: Vibrant Magenta
+                return (Color(red: 0.9, green: 0.2, blue: 0.5), .white)
+            case "FINALE":
+                // Finale: Deep Gold
+                return (Color(red: 0.9, green: 0.7, blue: 0.1), .white)
+            case "BINGE":
+                if isSparkle {
+                    // Active Binge (Hot Streak): Fiery Red/Orange
+                    return (Color(red: 0.9, green: 0.3, blue: 0.2), .white)
+                } else {
+                    // Backlog Binge (User commitment nudge): Deep Indigo
+                    return (Color(red: 0.3, green: 0.3, blue: 0.8), .white)
+                }
+            case "BINGE DROP":
+                // Binge Drop: Cyan/Mint
+                return (Color(red: 0.1, green: 0.7, blue: 0.6), .white)
+            case "NEW":
+                // New: Bright Green
+                return (Color(red: 0.2, green: 0.8, blue: 0.4), .white)
+            case "SOON":
+                // Soon: Solar Orange
                 return (Color.orange, .white)
             case "CATCH UP":
                 // Engagement: Slate Blue

@@ -16,7 +16,7 @@ actor BackgroundActionService {
             if let tvDetails = item.tvShowDetails {
                 for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
                     for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
-                        episodeObj.isWatched = true
+                        episodeObj.markWatched(true)
                         item.checkOverallCompletion()
                         break
                     }

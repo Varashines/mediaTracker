@@ -84,6 +84,15 @@ extension Color {
         var alpha: CGFloat = 0
         nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         
+        // Prevent grayscale colors (like .primary) from turning red
+        if saturation < 0.05 {
+            if colorScheme == .dark {
+                return Color(white: Double(max(min(brightness, 0.75), 0.6)))
+            } else {
+                return Color(white: Double(max(brightness, 0.98)))
+            }
+        }
+        
         if colorScheme == .dark {
             // Phase 5 Refinement: Moodier, less neon.
             return Color(hue: Double(hue), saturation: Double(max(saturation, 0.3)), brightness: Double(max(min(brightness, 0.75), 0.6)))
@@ -102,6 +111,15 @@ extension Color {
         var brightness: CGFloat = 0
         var alpha: CGFloat = 0
         nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        // Prevent grayscale colors (like .primary) from turning red
+        if saturation < 0.05 {
+            if colorScheme == .dark {
+                return Color(white: Double(max(brightness, 0.9)))
+            } else {
+                return Color(white: Double(min(brightness, 0.45)))
+            }
+        }
         
         if colorScheme == .dark {
             // On dark backgrounds, ensure brightness is at least 0.9 and saturation is healthy

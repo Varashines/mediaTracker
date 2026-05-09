@@ -1,6 +1,14 @@
 import Foundation
 import SwiftData
 
+struct TVProgressResult {
+    let totalCount: Int
+    let watchedCount: Int
+    let remainingCount: Int
+    let firstUnwatched: TVEpisode?
+    let totalRuntime: Int
+}
+
 @Model
 final class TVShowDetails {
     var tmdbID: Int
@@ -33,23 +41,60 @@ final class TVShowDetails {
         self.tmdbID = tmdbID
     }
 
-    func refreshCounts() {
+    func calculateProgress(now: Date = Date()) -> TVProgressResult {
         var total = 0
         var watched = 0
-        for season in seasons {
-            season.refreshCounts()
-            // Progress bar and overall counts typically exclude Specials (S0)
+        var aired = 0
+        var runtime = 0
+        var firstUnwatched: TVEpisode? = nil
+        
+        // Ensure seasons are sorted for consistent traversal
+        let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        
+        for season in sortedSeasons {
+            // Standard progress calculations usually exclude Specials (Season 0)
             if season.seasonNumber > 0 {
-                total += season.totalEpisodesCount
-                watched += season.watchedEpisodesCount
+                // Ensure episodes are sorted
+                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                
+                for ep in sortedEpisodes {
+                    total += 1
+                    if ep.isWatched {
+                        watched += 1
+                        runtime += ep.runtime ?? 0
+                    } else if firstUnwatched == nil {
+                        firstUnwatched = ep
+                    }
+                    
+                    if let airDate = ep.airDateValue, airDate <= now {
+                        aired += 1
+                    }
+                }
             }
         }
+        
+        let remaining = max(0, aired - watched)
+        
+        // Update denormalized properties
         self.totalEpisodesCount = total
         self.watchedEpisodesCount = watched
+        self.remainingEpisodesCount = remaining
+        
+        return TVProgressResult(
+            totalCount: total,
+            watchedCount: watched,
+            remainingCount: remaining,
+            firstUnwatched: firstUnwatched,
+            totalRuntime: runtime
+        )
+    }
+
+    func refreshCounts() {
+        _ = calculateProgress()
     }
     
     func recalculateCachedProperties(triggerSync: Bool = true) {
-        refreshCounts()
+        _ = calculateProgress()
         if triggerSync { item?.syncCachedProperties() }
     }
 }

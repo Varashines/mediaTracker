@@ -319,13 +319,17 @@ private struct SeasonSection: View {
         let targetStatus = !isAllWatched
         withAnimation {
             for episode in season.episodes {
-                episode.isWatched = targetStatus
+                episode.markWatched(targetStatus)
             }
             onWatchedToggle()
         }
 
         Task { @MainActor in
             season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            if let context = season.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
         }
     }
 }
@@ -343,7 +347,7 @@ private struct EpisodeCube: View {
         ZStack(alignment: .bottomTrailing) {
             Button {
                 withAnimation(.smooth) {
-                    episode.isWatched.toggle()
+                    episode.markWatched(!episode.isWatched)
                     FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
                 }
 
@@ -352,6 +356,10 @@ private struct EpisodeCube: View {
                     withAnimation(.smooth) {
                         onToggle()
                     }
+                    if let context = episode.modelContext {
+                        SaveCoordinator.shared.requestSave(context)
+                    }
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 10) {

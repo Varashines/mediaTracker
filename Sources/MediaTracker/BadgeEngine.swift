@@ -67,15 +67,27 @@ struct BadgeEngine {
             }
         }
 
-        // --- LEVEL 3: USER ENGAGEMENT (Backlog Nudges) ---
+        // --- LEVEL 3: USER ENGAGEMENT (Behavioral & Backlog Nudges) ---
         if item.type == .tvShow, let tv = item.tvShowDetails {
-            let unwatchedAiredCount = tv.seasons.flatMap { $0.episodes }
+            let allEpisodes = tv.seasons.flatMap { $0.episodes }
+            
+            // 1. BEHAVIORAL BINGE (New: User is actively binging right now)
+            let fortyEightHoursAgo = now.addingTimeInterval(-172800)
+            let recentlyWatchedCount = allEpisodes.filter { 
+                $0.isWatched && ($0.lastWatchedDate ?? .distantPast) >= fortyEightHoursAgo 
+            }.count
+            
+            if recentlyWatchedCount >= 3 {
+                return BadgeResult(label: "BINGE", icon: "flame.fill", isSparkle: true)
+            }
+
+            let unwatchedAiredCount = allEpisodes
                 .filter { !$0.isWatched && ($0.airDateAsDate ?? .distantFuture) <= now }
                 .count
             
             let isLikedOrLoved = item.taste == .like || item.taste == .love
 
-            // 1. CATCH UP (Selective Nudge)
+            // 2. CATCH UP (Selective Nudge)
             if isLikedOrLoved, let nextAiring = item.cachedNextAiringDate {
                 let daysToAiring = nextAiring.timeIntervalSince(now) / 86400
                 if daysToAiring > 0 && daysToAiring <= 7 && unwatchedAiredCount > 0 {
@@ -83,7 +95,7 @@ struct BadgeEngine {
                 }
             }
 
-            // 2. BINGE (User commitment nudge)
+            // 3. BACKLOG BINGE (Legacy: High progress + backlog)
             if unwatchedAiredCount > 0 && isLikedOrLoved {
                 let totalEpisodes = tv.totalEpisodesCount
                 let watchedEpisodes = tv.watchedEpisodesCount

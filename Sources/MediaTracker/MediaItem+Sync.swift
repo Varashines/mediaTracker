@@ -91,10 +91,9 @@ extension MediaItem {
         if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
             for season in tv.seasons {
                 for ep in season.episodes where !ep.isWatched {
-                    ep.isWatched = true
+                    ep.markWatched(true)
                 }
             }
-            tv.refreshCounts()
         }
 
         self.cachedGenres = tv.genres
@@ -103,17 +102,16 @@ extension MediaItem {
         self.cachedNetwork = tv.network
         self.cachedNetworkLogoPath = tv.networkLogoPath
         
-        let watchedEpisodes = tv.seasons.flatMap { $0.episodes }.filter { $0.isWatched }
-        self.cachedRuntime = watchedEpisodes.reduce(0) { $0 + ($1.runtime ?? 0) }
+        // Use Unified Logic
+        let progressResult = tv.calculateProgress(now: now)
+        self.cachedRuntime = progressResult.totalRuntime
+        self.cachedWatchedEpisodeCount = progressResult.watchedCount
+        self.remainingEpisodesCount = progressResult.remainingCount
 
-        // Phase 2 Optimization: Use Denormalized Counts if available
-        if tv.totalEpisodesCount > 0 {
-            let totalCount = tv.totalEpisodesCount
-            let watchedCount = tv.watchedEpisodesCount
-            self.cachedWatchedEpisodeCount = watchedCount
+        if progressResult.totalCount > 0 {
+            let progress = Double(progressResult.watchedCount) / Double(progressResult.totalCount)
             
-            // Calculate progress O(1)
-            let progress = Double(watchedCount) / Double(totalCount)
+            // Auto-advance State
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
                 self.state = .completed
                 self.lastStateChangeDate = now
@@ -123,85 +121,20 @@ extension MediaItem {
             }
 
             self.storedProgress = progress
-            self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
+            self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
             
-            if currentState == .active || currentState == .wishlist {
-                // Optimized firstUnwatched search (stops at first match)
-                var firstUnwatched: TVEpisode? = nil
-                let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-                for season in sortedSeasons {
-                    let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-                    if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
-                        firstUnwatched = next
-                        break
-                    }
-                }
-                
-                if let next = firstUnwatched {
-                    self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
-                    self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-                } else {
-                    self.storedNextEpisodeLabel = nil
-                    self.cachedNextAiringDate = tv.nextEpisodeDate
-                }
-            }
-            return
-        }
-
-        // Fallback for legacy data or first-load
-        let relevantSeasons = tv.seasons.filter { $0.seasonNumber > 0 }
-        if !relevantSeasons.isEmpty {
-            var totalCount = 0
-            var watchedCount = 0
-            var airedCount = 0
-            var firstUnwatched: TVEpisode? = nil
-            let sortedSeasons = relevantSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
-            
-            for season in sortedSeasons {
-                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-                for ep in sortedEpisodes {
-                    totalCount += 1
-                    if ep.isWatched { watchedCount += 1 } 
-                    else if firstUnwatched == nil { firstUnwatched = ep }
-                    if (ep.airDateAsDate ?? .distantFuture) <= now { airedCount += 1 }
-                }
-            }
-
-            if totalCount == 0 {
-                self.storedProgress = 0
-                self.storedWatchProgressLabel = nil
+            if let next = progressResult.firstUnwatched {
+                self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+            } else {
                 self.storedNextEpisodeLabel = nil
                 self.cachedNextAiringDate = tv.nextEpisodeDate
-                self.remainingEpisodesCount = 0
-                tv.remainingEpisodesCount = 0
-            } else {
-                let remaining = airedCount - watchedCount
-                self.remainingEpisodesCount = max(0, remaining)
-                tv.remainingEpisodesCount = max(0, remaining)
-
-                let progress = Double(watchedCount) / Double(totalCount)
-                if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
-                    self.state = .completed
-                    self.lastStateChangeDate = now
-                } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                    self.state = .active
-                    self.lastStateChangeDate = now
-                } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                    self.state = .wishlist
-                    self.lastStateChangeDate = now
-                }
-
-                self.storedProgress = progress
-                self.storedWatchProgressLabel = "\(watchedCount)/\(totalCount) EP"
-
-                if let next = firstUnwatched {
-                    self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
-                    self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-                } else {
-                    self.storedNextEpisodeLabel = nil
-                    self.cachedNextAiringDate = tv.nextEpisodeDate
-                }
             }
+        } else {
+            self.storedProgress = 0
+            self.storedWatchProgressLabel = nil
+            self.storedNextEpisodeLabel = nil
+            self.cachedNextAiringDate = tv.nextEpisodeDate
         }
     }
 

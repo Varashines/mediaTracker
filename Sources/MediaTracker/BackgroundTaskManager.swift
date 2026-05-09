@@ -115,7 +115,7 @@ class BackgroundTaskManager {
             await syncService.syncLibrary(force: false)
             
             // Run Maintenance/Heal
-            let maintenance = MaintenanceService(modelContainer: container)
+            let maintenance = BackgroundDataService(modelContainer: container)
             try? await maintenance.performLibraryHeal()
         }
     }
