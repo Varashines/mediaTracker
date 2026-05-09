@@ -21,9 +21,6 @@ struct ReleaseCalendarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     VStack(alignment: .leading, spacing: 15) {
-                        Text("Release Activity")
-                            .font(.system(size: 24, weight: .black, design: .rounded))
-                        
                         monthNavigation
                     }
                     .padding(.top, 20)

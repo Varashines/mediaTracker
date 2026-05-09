@@ -1,7 +1,14 @@
 import Foundation
 import SwiftData
 
-struct MediaThumbnailMetadata: Sendable, Identifiable {
+struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
+    static func == (lhs: MediaThumbnailMetadata, rhs: MediaThumbnailMetadata) -> Bool {
+        return lhs.id == rhs.id && 
+               lhs.progress == rhs.progress && 
+               lhs.smartBadgeLabel == rhs.smartBadgeLabel &&
+               lhs.state == rhs.state
+    }
+    
     let id: PersistentIdentifier
     let itemID: String
     let title: String
@@ -267,11 +274,14 @@ actor MediaFilterActor {
             }
         } else if category == .releaseRadar {
             let radarBadges: Set<String> = ["NEW", "BINGE DROP", "SERIES PREMIERE", "SEASON PREMIERE"]
+            let now = Date()
             refined = refined.filter { item in
-                if let badge = item.storedSmartBadgeLabel {
-                    return radarBadges.contains(badge)
-                }
-                return false
+                // 1. Must have a valid radar badge
+                guard let badge = item.storedSmartBadgeLabel, radarBadges.contains(badge) else { return false }
+                
+                // 2. Must have already aired/released (Prevents future hype-badges from appearing in the Radar)
+                let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
+                return airDate <= now
             }
         }
 
@@ -331,15 +341,98 @@ actor MediaFilterActor {
     }
 
     private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
-        let homePredicate = #Predicate<MediaItem> { item in
-            (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
+        // 1. High Priority Fetch: Split into focused fetches to avoid compiler timeouts and starvation
+        
+        // Pass A: Items already marked as "NEW" or "BINGE DROP" (Across entire library)
+        let pStreaming = #Predicate<MediaItem> { item in
+            (item.storedSmartBadgeLabel == "NEW" || item.storedSmartBadgeLabel == "BINGE DROP") &&
+            item.tasteValue != "Dislike"
         }
-        var homeDesc = FetchDescriptor<MediaItem>(predicate: homePredicate)
-        homeDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        homeDesc.fetchLimit = 100
         
-        let homeResults = try modelContext.fetch(homeDesc)
+        // Pass B: Items transitioning from Upcoming to Released (Across entire library)
+        // This ensures items that just aired but haven't been "healed" yet are still fetched.
+        let distantFuture = Date.distantFuture
+        let pTransition = #Predicate<MediaItem> { item in
+            item.storedIsUpcoming == true && (
+                (item.cachedNextAiringDate ?? distantFuture < now) ||
+                (item.releaseDate ?? distantFuture < now)
+            )
+        }
         
+        // Pass C: "Active" items (Currently watching)
+        let pActive = #Predicate<MediaItem> { item in
+            item.stateValue == "Active" && item.tasteValue != "Dislike"
+        }
+        
+        var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
+        descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descStreaming.fetchLimit = 100 // Increased limit
+        
+        var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
+        descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descTransition.fetchLimit = 50
+        
+        var descActive = FetchDescriptor<MediaItem>(predicate: pActive)
+        descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descActive.fetchLimit = 150 // High limit for active tracking
+        
+        let streamingItems = try modelContext.fetch(descStreaming)
+        let transitionItems = try modelContext.fetch(descTransition)
+        let activeItemsRaw = try modelContext.fetch(descActive)
+        
+        // 2. Recent Interaction Fetch: Fill remaining slots with recent Wishlist items
+        let recentPredicate = #Predicate<MediaItem> { item in
+            item.stateValue == "Wishlist" && item.tasteValue != "Dislike"
+        }
+        var recentDesc = FetchDescriptor<MediaItem>(predicate: recentPredicate)
+        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        recentDesc.fetchLimit = 100
+        
+        let recentItems = try modelContext.fetch(recentDesc)
+        
+        // 3. Merge and Deduplicate
+        var homeResultsSet = Set<PersistentIdentifier>()
+        var homeResults: [MediaItem] = []
+        
+        // Priority: Streaming > Transition > Active > Recent
+        for item in (streamingItems + transitionItems + activeItemsRaw + recentItems) {
+            if !homeResultsSet.contains(item.persistentModelID) {
+                homeResultsSet.insert(item.persistentModelID)
+                homeResults.append(item)
+            }
+        }
+        
+        // Proactive Badge Heal: Ensure items crossing boundaries are updated before filtering/sorting
+        // This is critical for the "Transition" items to actually get their "NEW" label.
+        let twoDaysAgo = now.addingTimeInterval(-172800)
+        
+        let staleUpcoming = homeResults.filter { item in
+            item.storedIsUpcoming == true && (
+                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now) ||
+                (item.releaseDate != nil && item.releaseDate! < now)
+            )
+        }
+        
+        let staleSoon = homeResults.filter { item in
+            item.storedSmartBadgeLabel == "SOON" && item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now
+        }
+        
+        let staleNew = homeResults.filter { item in
+            item.storedSmartBadgeLabel == "NEW" && (
+                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < twoDaysAgo) ||
+                (item.releaseDate != nil && item.releaseDate! < twoDaysAgo)
+            )
+        }
+        
+        let allStale = staleUpcoming + staleSoon + staleNew
+        
+        if !allStale.isEmpty {
+            for item in allStale {
+                item.syncCachedProperties(now: now)
+            }
+            try? modelContext.save()
+        }
+
         let activeItems = homeResults.filter { item in
             if item.releaseDate == nil && item.cachedNextAiringDate == nil { return false }
             let isActive = item.stateValue == "Active"
@@ -353,10 +446,20 @@ actor MediaFilterActor {
             let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
             let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
             if isAStreaming != isBStreaming { return isAStreaming }
+            
             let isABinge = itemA.storedSmartBadgeLabel == "BINGE DROP"
             let isBBinge = itemB.storedSmartBadgeLabel == "BINGE DROP"
             if isABinge != isBBinge { return isABinge }
-            return (itemA.lastInteractionDate ?? .distantPast) > (itemB.lastInteractionDate ?? .distantPast)
+            
+            let dateA = itemA.lastInteractionDate ?? .distantPast
+            let dateB = itemB.lastInteractionDate ?? .distantPast
+            
+            if dateA != dateB {
+                return dateA > dateB
+            }
+            
+            // Stable sort fallback
+            return itemA.title < itemB.title
         }
         
         // Find Spotlight Hero: Most recently interacted "Active" item

@@ -82,6 +82,7 @@ struct HomeHeroCard: View {
                         .font(.system(size: 28, weight: .black))
                         .foregroundStyle(.white)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.7)
                         .shadow(color: .black.opacity(0.5), radius: 2)
                     
                     Text(metadata.formattedMetadata)

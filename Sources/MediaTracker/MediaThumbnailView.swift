@@ -229,6 +229,9 @@ struct MediaThumbnailView: View, Equatable {
 
     @ViewBuilder
     private var mainContent: some View {
+        let hasNoPoster = (posterURL == nil || posterURL?.isEmpty == true)
+        let effectiveHover = isHovered || hasNoPoster
+        
         let posterContent = ZStack(alignment: .center) {
             // 1. Poster Layer
             ThumbnailPosterLayer(
@@ -246,7 +249,7 @@ struct MediaThumbnailView: View, Equatable {
             .blur(radius: isHovered ? 10 : 0)
             
             Rectangle()
-                .fill(.black.opacity(isHovered ? 0.7 : 0))
+                .fill(.black.opacity(effectiveHover ? 0.7 : 0))
             
             // Smart Badge (Top Leading)
             VStack {
@@ -296,7 +299,7 @@ struct MediaThumbnailView: View, Equatable {
                 watchProgress: watchProgress,
                 isUpcoming: isUpcoming,
                 gridBadgeText: gridBadgeText,
-                isHovered: isHovered,
+                isHovered: effectiveHover,
                 mode: mode,
                 appAccent: appAccent
             )

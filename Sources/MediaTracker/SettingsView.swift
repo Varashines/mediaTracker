@@ -23,17 +23,6 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Settings")
-                        .font(.system(size: 34, weight: .black, design: .rounded))
-                    Text("Configure your MediaTracker experience across device and library.")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 40)
-                .padding(.top, 40)
-                
                 // Dashboard Bento Layout (Masonry)
                 Group {
                     if containerWidth > 850 {

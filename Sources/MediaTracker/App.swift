@@ -84,6 +84,10 @@ struct MediaTrackerApp: App {
             .onChange(of: scenePhase) { _, newValue in
                 if newValue == .background {
                     ImageCache.shared.clearMemoryCache()
+                } else if newValue == .active {
+                    Task {
+                        await BackgroundTaskManager.shared.refreshStaleBadges()
+                    }
                 }
             }
     }

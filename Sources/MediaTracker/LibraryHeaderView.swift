@@ -8,51 +8,36 @@ struct LibraryHeaderView: View {
     let isMainSection: Bool
     let appAccent: AppAccent
     let onNetworkSelected: ([String]) -> Void
+    let onBack: (() -> Void)?
     var viewModel: MediaViewModel? = nil
     @Query private var collections: [MediaCollection]
     
     var body: some View {
-        if let networks = selectedNetworks, let first = networks.first {
-            let title = networks.count == 1 ? first : "Merged Studios"
-            SectionHeader(title: title, icon: "tv", iconColor: appAccent.color)
-                .overlay(alignment: .trailing) {
-                    Button { withAnimation { onNetworkSelected([]) } } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 40)
-                }
-        } else if selectedCategory == .upcoming {
-            SectionHeader(title: "Queue", icon: "list.bullet.indent", iconColor: .secondary)
-                .padding(.bottom, 10)
-        } else if !isCategoryPage && !isMainSection && selectedCategory != .discover {
-            HStack(spacing: 16) {
-                if isSmartCategory {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            viewModel?.selectedCategory = .smartCollections
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left.circle.fill")
-                            .font(.system(size: 26, weight: .medium))
-                            .foregroundStyle(appAccent.color.opacity(0.8))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Back to Smart Hub")
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            if let networks = selectedNetworks, let first = networks.first {
+                let title = networks.count == 1 ? first : "Merged Studios"
                 
-                SectionHeader(title: selectedCategory.title, icon: selectedCategory.icon, iconColor: .secondary)
-                    .padding(.horizontal, 0) // Remove internal padding when wrapped
+                HStack(spacing: 8) {
+                    Text("Filtered by:")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    
+                    Text(title)
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(appAccent.color)
+                    
+                    Button { withAnimation { onNetworkSelected([]) } } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 40)
         }
-    }
-    
-    private var isSmartCategory: Bool {
-        return selectedCategory == .quickBites || 
-               selectedCategory == .catchUp || 
-               selectedCategory == .stalled || 
-               selectedCategory == .releaseRadar
     }
 }

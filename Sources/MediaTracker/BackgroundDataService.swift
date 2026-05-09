@@ -313,7 +313,7 @@ actor BackgroundDataService {
                 item.overview = newOverview
             }
             
-            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath) ?? item.posterURL
             item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
             
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
@@ -376,7 +376,7 @@ actor BackgroundDataService {
                 item.overview = newOverview
             }
             
-            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
+            item.posterURL = APIClient.tmdbImageURL(path: details.posterPath) ?? item.posterURL
             item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
             
             var tvMazeID = tvDetails.tvMazeID

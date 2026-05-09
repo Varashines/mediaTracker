@@ -16,25 +16,28 @@ final class MediaFilterActorTests: XCTestCase {
         // 1. Active, NEW, older interaction
         let item1 = MediaItem(id: "1", title: "Streaming Old", overview: "", type: .tvShow)
         item1.stateValue = "Active"
-        item1.storedSmartBadgeLabel = "NEW"
-        item1.lastInteractionDate = Date().addingTimeInterval(-1000)
-        item1.releaseDate = Date().addingTimeInterval(-100000)
+        item1.lastInteractionDate = Date().addingTimeInterval(-2000)
+        item1.releaseDate = Date().addingTimeInterval(-100000) // Within 48h (NEW)
         context.insert(item1)
         
         // 2. Active, NOT NEW, newer interaction
         let item2 = MediaItem(id: "2", title: "Active New", overview: "", type: .tvShow)
         item2.stateValue = "Active"
         item2.lastInteractionDate = Date()
-        item2.releaseDate = Date().addingTimeInterval(-200000)
+        item2.releaseDate = Date().addingTimeInterval(-500000) // Older (RECENT)
         context.insert(item2)
         
         // 3. Active, NEW, newest interaction
         let item3 = MediaItem(id: "3", title: "Streaming New", overview: "", type: .tvShow)
         item3.stateValue = "Active"
-        item3.storedSmartBadgeLabel = "NEW"
-        item3.lastInteractionDate = Date().addingTimeInterval(1000)
-        item3.releaseDate = Date().addingTimeInterval(-300000)
+        item3.lastInteractionDate = Date().addingTimeInterval(2000)
+        item3.releaseDate = Date().addingTimeInterval(-50000) // Within 48h (NEW)
         context.insert(item3)
+        
+        // Manual sync to ensure badges are set correctly by BadgeEngine
+        item1.syncCachedProperties()
+        item2.syncCachedProperties()
+        item3.syncCachedProperties()
         
         try context.save()
         
@@ -51,9 +54,9 @@ final class MediaFilterActorTests: XCTestCase {
         XCTAssertEqual(continueWatching.count, 3)
         
         // Expected order:
-        // 1. Item 3 (Streaming, Newest)
-        // 2. Item 1 (Streaming, Older)
-        // 3. Item 2 (Active, Newest)
+        // 1. Item 3 (NEW badge, newest interaction)
+        // 2. Item 1 (NEW badge, older interaction)
+        // 3. Item 2 (No NEW badge, newest interaction)
         
         XCTAssertEqual(continueWatching[0].title, "Streaming New")
         XCTAssertEqual(continueWatching[1].title, "Streaming Old")

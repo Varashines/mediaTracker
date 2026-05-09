@@ -60,12 +60,14 @@ struct CastMemberCardNew: View {
             Text(member.name)
                 .font(.system(size: 13, weight: .bold))
                 .lineLimit(2)
+                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
 
             Text(member.characterName)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
         }
         .padding(.horizontal, 12)

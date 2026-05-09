@@ -34,7 +34,7 @@ struct ThumbnailPosterLayer: View {
                     .overlay {
                         Image(systemName: type == .movie ? "film" : "tv")
                             .font(.system(size: mode == .hero ? 40 : 30))
-                            .foregroundStyle(.secondary.opacity(0.5))
+                            .foregroundStyle(.secondary.opacity(0.2))
                     }
                     .frame(width: width, height: height)
             }

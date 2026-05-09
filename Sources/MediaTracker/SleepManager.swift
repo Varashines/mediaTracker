@@ -7,10 +7,12 @@ class SleepManager {
     static let shared = SleepManager()
     
     var isAsleep: Bool = false
+    var isIdle: Bool = false
     var purgeDataCache: (() -> Void)?
     private var lastInteractionDate: Date = Date()
     private var timer: AnyCancellable?
-    private let idleThreshold: TimeInterval = 120 // 2 minutes
+    private let sleepThreshold: TimeInterval = 120 // 2 minutes
+    private let idleThreshold: TimeInterval = 60 // 1 minute for silent syncs
     
     private init() {
         setupInteractionMonitor()
@@ -19,7 +21,7 @@ class SleepManager {
     
     private func startIdleTimer() {
         timer?.cancel()
-        timer = Timer.publish(every: 10, on: .main, in: .common)
+        timer = Timer.publish(every: 5, on: .main, in: .common) // Increased frequency for more precise idle detection
             .autoconnect()
             .sink { [weak self] _ in
                 self?.checkIdleState()
@@ -27,16 +29,29 @@ class SleepManager {
     }
 
     private func checkIdleState() {
+        let now = Date()
+        let timeSinceInteraction = now.timeIntervalSince(lastInteractionDate)
+
+        // 1. Handle "Idle" (Untouched for 60s, good for background syncs)
+        if !isIdle && timeSinceInteraction >= idleThreshold {
+            isIdle = true
+            print("🕒 App became idle. Background tasks prioritized.")
+        } else if isIdle && timeSinceInteraction < idleThreshold {
+            isIdle = false
+        }
+
+        // 2. Handle "Sleep" (Untouched for 120s, locks UI)
         let preventSleep = UserDefaults.standard.bool(forKey: "prevent_sleep_mode")
         guard !isAsleep && !preventSleep else { return }
         
-        if Date().timeIntervalSince(lastInteractionDate) >= idleThreshold {
+        if timeSinceInteraction >= sleepThreshold {
             enterSleepMode()
         }
     }
     
     func resetTimer() {
         lastInteractionDate = Date()
+        if isIdle { isIdle = false }
         if isAsleep {
             withAnimation(.smooth) {
                 isAsleep = false

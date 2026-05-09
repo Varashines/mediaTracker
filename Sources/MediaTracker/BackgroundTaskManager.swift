@@ -12,8 +12,61 @@ class BackgroundTaskManager {
     private var isScheduled = false
     private var container: ModelContainer?
     
-    private init() {}
+    private var isDripSyncing = false
     
+    private init() {
+        startIdleMonitor()
+    }
+    
+    private func startIdleMonitor() {
+        // Monitor SleepManager for idle states to trigger drip syncing
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            Task { @MainActor in
+                let sleepManager = SleepManager.shared
+                if sleepManager.isIdle && !sleepManager.isAsleep && !self.isDripSyncing {
+                    await self.performDripSync()
+                }
+            }
+        }
+    }
+
+    private func performDripSync() async {
+        guard let container = container else { return }
+        isDripSyncing = true
+        defer { isDripSyncing = false }
+
+        let context = ModelContext(container)
+        let now = Date()
+        let staleThreshold = now.addingTimeInterval(-30 * 86400) // 30 days stale
+
+        // Prioritize "Active" items that are stale
+        let predicate = #Predicate<MediaItem> { item in
+            item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
+        }
+        
+        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
+        descriptor.fetchLimit = 3 // Drip a small amount to keep it silent
+        
+        do {
+            let staleItems = try context.fetch(descriptor)
+            if !staleItems.isEmpty {
+                print("💧 Drip Sync: Refreshing \(staleItems.count) stale active items...")
+                let itemIDs = staleItems.map { $0.id }
+                
+                // Use BackgroundDataService for the heavy lifting
+                let backgroundService = BackgroundDataService(modelContainer: container)
+                await backgroundService.refreshMetadata(for: itemIDs, metadataOnly: false, force: false)
+                
+                // broadcast UI update
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                }
+            }
+        } catch {
+            print("❌ Drip Sync error: \(error)")
+        }
+    }
+
     func start(container: ModelContainer) {
         self.container = container
         guard !isScheduled else { return }
@@ -69,27 +122,44 @@ class BackgroundTaskManager {
     
     /// Scans for items that have crossed a time threshold (e.g. from Upcoming to Recent)
     /// and triggers a badge recalculation so the UI is always accurate.
-    private func refreshStaleBadges() async {
+    func refreshStaleBadges() async {
         guard let container = container else { return }
         let context = ModelContext(container)
         let now = Date()
+        let twoDaysAgo = now.addingTimeInterval(-172800)
         
-        // 1. Target Items in the "Transition Zone"
-        // - storedIsUpcoming is true, but air date is in the past -> should be NEW/RECENT
-        // - smart badge is SOON, but air date is in the past -> should be NEW
-        let transitionPredicate = #Predicate<MediaItem> { item in
-            (item.storedIsUpcoming == true && item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now) ||
-            (item.storedSmartBadgeLabel == "SOON" && item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now)
+        let distantFuture = Date.distantFuture
+        // Phase 5 Performance: Split complex predicates to avoid compiler timeouts
+        // Target 1: Upcoming -> Released (Past air date)
+        let p1 = #Predicate<MediaItem> { item in
+            item.storedIsUpcoming == true && 
+            ((item.cachedNextAiringDate ?? distantFuture < now) ||
+             (item.releaseDate ?? distantFuture < now))
         }
         
-        let descriptor = FetchDescriptor<MediaItem>(predicate: transitionPredicate)
+        // Target 2: SOON -> NEW (Past air date)
+        let p2 = #Predicate<MediaItem> { item in
+            item.storedSmartBadgeLabel == "SOON" && (item.cachedNextAiringDate ?? distantFuture < now)
+        }
+        
+        // Target 3: NEW -> RECENT (Released > 48h ago)
+        let p3 = #Predicate<MediaItem> { item in
+            item.storedSmartBadgeLabel == "NEW" && 
+            ((item.cachedNextAiringDate ?? distantFuture < twoDaysAgo) ||
+             (item.releaseDate ?? distantFuture < twoDaysAgo))
+        }
         
         do {
-            let staleItems = try context.fetch(descriptor)
-            if !staleItems.isEmpty {
-                print("♻️ Startup Healer: Recalculating badges for \(staleItems.count) transition titles...")
-                for item in staleItems {
-                    item.syncCachedProperties()
+            let stale1 = try context.fetch(FetchDescriptor<MediaItem>(predicate: p1))
+            let stale2 = try context.fetch(FetchDescriptor<MediaItem>(predicate: p2))
+            let stale3 = try context.fetch(FetchDescriptor<MediaItem>(predicate: p3))
+            
+            let allStale = stale1 + stale2 + stale3
+            
+            if !allStale.isEmpty {
+                print("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...")
+                for item in allStale {
+                    item.syncCachedProperties(now: now)
                 }
                 try context.save()
                 
@@ -99,7 +169,7 @@ class BackgroundTaskManager {
                 }
             }
         } catch {
-            print("❌ Startup Healer error: \(error)")
+            print("❌ Stale Badge Healer error: \(error)")
         }
     }
 }

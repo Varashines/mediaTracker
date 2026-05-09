@@ -36,7 +36,7 @@ struct ContentView: View {
         updateTask?.cancel()
         updateTask = Task {
             // Optimization: Skip heavy data load if moving to Discovery Hub or Settings
-            if category == .discover || category == .settings || (category == .collectionsHub && collectionID == nil) { return }
+            if category == .discover || category == .settings || (category == .smartHub && collectionID == nil) { return }
 
             // Reset pagination for new filter/sort
             await MainActor.run {
@@ -184,10 +184,8 @@ struct ContentView: View {
             InsightsView()
         } else if viewModel.selectedCategory == .settings {
             SettingsView()
-        } else if viewModel.selectedCategory == .smartCollections {
+        } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
-        } else if viewModel.selectedCategory == .collectionsHub && viewModel.selectedCollectionID == nil {
-            CollectionsManagementView(viewModel: viewModel, sidebarSelection: $sidebarSelection)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -215,6 +213,11 @@ struct ContentView: View {
                         sidebarSelection = .category(category)
                     }
                 },
+                onBack: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        sidebarSelection = .category(.smartHub)
+                    }
+                },
                 onLoadMore: {
                     loadMoreItems()
                 },
@@ -239,11 +242,11 @@ struct ContentView: View {
                             viewModel.selectedLanguage = nil
                             viewModel.isInitialLoading = true
                             
-                            if category != .collectionsHub {
+                            if category != .smartHub {
                                 viewModel.selectedCollectionID = nil
                             }
                         case .collection(let id, let name, _):
-                            viewModel.selectedCategory = .collectionsHub
+                            viewModel.selectedCategory = .smartHub
                             viewModel.selectedCollectionID = id
                             viewModel.selectedCollectionName = name
                             viewModel.isInitialLoading = true
@@ -319,39 +322,52 @@ struct ContentView: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
-                        if viewModel.selectedCollectionID != nil && !isSearchActive {
-                            HStack(spacing: 4) {
+                        if !isSearchActive {
+                            if viewModel.selectedCollectionID != nil {
+                                HStack(spacing: 4) {
+                                    Button {
+                                        withAnimation {
+                                            sidebarSelection = .category(.smartHub)
+                                            viewModel.selectedCollectionID = nil
+                                        }
+                                        viewModel.filterSubject.send()
+                                    } label: {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 14, weight: .bold))
+                                    }
+                                    .help("Go Back")
+                                    
+                                    Button {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            viewModel.showingNoteOverlay.toggle()
+                                        }
+                                    } label: {
+                                        let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
+                                        let hasNote = !viewModel.currentCollectionNote.isEmpty
+                                        Image(systemName: icon)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(hasNote ? Color.blue : Color.secondary)
+                                    }
+                                    .help("Collection Notes")
+
+                                    Button {
+                                        showingBulkManager = true
+                                    } label: {
+                                        Image(systemName: "plus.square.on.square")
+                                            .font(.system(size: 14))
+                                    }
+                                    .help("Manage Items")
+                                }
+                            } else if isSystemSmartCategory {
                                 Button {
                                     withAnimation {
-                                        viewModel.selectedCollectionID = nil
+                                        sidebarSelection = .category(.smartHub)
                                     }
-                                    viewModel.filterSubject.send()
                                 } label: {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 14, weight: .bold))
                                 }
-                                .help("Back to Collections")
-                                
-                                Button {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        viewModel.showingNoteOverlay.toggle()
-                                    }
-                                } label: {
-                                    let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
-                                    let hasNote = !viewModel.currentCollectionNote.isEmpty
-                                    Image(systemName: icon)
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(hasNote ? Color.blue : Color.secondary)
-                                }
-                                .help("Collection Notes")
-
-                                Button {
-                                    showingBulkManager = true
-                                } label: {
-                                    Image(systemName: "plus.square.on.square")
-                                        .font(.system(size: 14))
-                                }
-                                .help("Manage Items")
+                                .help("Back to Smart Hub")
                             }
                         }
                     }
@@ -376,6 +392,7 @@ struct ContentView: View {
                         Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
                         Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
                         Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+                        Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
                         Button("") { sidebarSelection = .category(.settings) }.keyboardShortcut(",", modifiers: .command)
                         Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     }
@@ -544,6 +561,11 @@ struct ContentView: View {
         let cat = viewModel.selectedCategory
         if cat == .insights || cat == .home || cat == .settings { return false }
         return true
+    }
+
+    private var isSystemSmartCategory: Bool {
+        let cat = viewModel.selectedCategory
+        return cat == .releaseRadar || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
     }
 
     private func performLibrarySync() {

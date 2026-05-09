@@ -17,6 +17,7 @@ struct MainLibraryView: View {
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onNetworkSelected: ([String]) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
+    let onBack: (() -> Void)?
     let onLoadMore: () -> Void
     var viewModel: MediaViewModel
 
@@ -44,9 +45,7 @@ struct MainLibraryView: View {
                 VStack(alignment: .leading, spacing: 30) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
                         // 1. CONTINUE WATCHING
-                        ContinueWatchingCarousel(namespace: namespace, isFastScrolling: isFastScrolling, onSelect: { item in
-                            onSelectHero(MediaThumbnailMetadata(item: item))
-                        }) {
+                        ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero) {
                             onCategorySelected(.discover)
                         }
                         .padding(.top, 10)
@@ -62,7 +61,7 @@ struct MainLibraryView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 15) {
-                        LibraryHeaderView(selectedCategory: selectedCategory, selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage, isMainSection: isMainSection, appAccent: appAccent, onNetworkSelected: onNetworkSelected, viewModel: viewModel)
+                        LibraryHeaderView(selectedCategory: selectedCategory, selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage, isMainSection: isMainSection, appAccent: appAccent, onNetworkSelected: onNetworkSelected, onBack: onBack, viewModel: viewModel)
                         
                         if items.isEmpty && groupedItems.isEmpty {
                             if viewModel.isInitialLoading {

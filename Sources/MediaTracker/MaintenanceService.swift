@@ -3,11 +3,58 @@ import SwiftData
 
 @ModelActor
 actor MaintenanceService {
+    private func repairOrphanedEntities() async throws {
+        print("🛠️ Maintenance: Starting Relationship Audit...")
+        
+        // 1. Repair Orphaned Seasons -> TVShowDetails
+        let sDesc = FetchDescriptor<TVSeason>()
+        let allSeasons = try modelContext.fetch(sDesc)
+        let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
+        let allTVDetails = try modelContext.fetch(tvDetailsDesc)
+        let tvMap = Dictionary(uniqueKeysWithValues: allTVDetails.map { ($0.tmdbID, $0) })
+        
+        var seasonFixCount = 0
+        for season in allSeasons {
+            if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
+                season.tvShowDetails = parent
+                seasonFixCount += 1
+            }
+        }
+        
+        // 2. Repair Orphaned Episodes -> TVSeason
+        let eDesc = FetchDescriptor<TVEpisode>()
+        let allEpisodes = try modelContext.fetch(eDesc)
+        
+        // Create a lookup for seasons: [showID: [seasonNumber: TVSeason]]
+        var seasonMap: [Int: [Int: TVSeason]] = [:]
+        for season in allSeasons {
+            guard let showID = season.showID else { continue }
+            if seasonMap[showID] == nil { seasonMap[showID] = [:] }
+            seasonMap[showID]?[season.seasonNumber] = season
+        }
+        
+        var episodeFixCount = 0
+        for episode in allEpisodes {
+            if episode.season == nil, let showID = episode.showID, let parentSeason = seasonMap[showID]?[episode.seasonNumber] {
+                episode.season = parentSeason
+                episodeFixCount += 1
+            }
+        }
+        
+        if seasonFixCount > 0 || episodeFixCount > 0 {
+            try? modelContext.save()
+            print("✅ Maintenance: Repaired \(seasonFixCount) seasons and \(episodeFixCount) episodes.")
+        }
+    }
+
     func performLibraryHeal() async throws {
+        // 0. High-Intensity Relationship Audit: Repair orphaned records across entire DB
+        try await repairOrphanedEntities()
+
         let descriptor = FetchDescriptor<MediaItem>()
         let items = try modelContext.fetch(descriptor)
         
-        // 0. Deduplicate MediaItems (Ensures no two items share the same TMDB ID)
+        // 1. Deduplicate MediaItems (Ensures no two items share the same TMDB ID)
         let groupedItems = Dictionary(grouping: items, by: { $0.id })
         for (id, duplicates) in groupedItems where duplicates.count > 1 {
             print("🔍 Maintenance: Found \(duplicates.count) duplicates for ID \(id)")

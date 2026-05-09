@@ -31,37 +31,14 @@ struct SidebarNavigation: View, Equatable {
                     .tag(SidebarItem.category(.movie))
                 Label(NavigationCategory.tvShow.title, systemImage: NavigationCategory.tvShow.icon)
                     .tag(SidebarItem.category(.tvShow))
-            }
-            .padding(.vertical, 4)
-
-            Section("My Lists") {
-                Label(NavigationCategory.inProgress.title, systemImage: NavigationCategory.inProgress.icon)
-                    .tag(SidebarItem.category(.inProgress))
-                Label(NavigationCategory.watchlist.title, systemImage: NavigationCategory.watchlist.icon)
-                    .tag(SidebarItem.category(.watchlist))
-                Label(NavigationCategory.completed.title, systemImage: NavigationCategory.completed.icon)
-                    .tag(SidebarItem.category(.completed))
-            }
-            .padding(.vertical, 4)
-
-            Section("Collections") {
-                Label(NavigationCategory.smartCollections.title, systemImage: NavigationCategory.smartCollections.icon)
-                    .tag(SidebarItem.category(.smartCollections))
                 
-                Label(NavigationCategory.collectionsHub.title, systemImage: NavigationCategory.collectionsHub.icon)
-                    .tag(SidebarItem.category(.collectionsHub))
-                
+                Label(NavigationCategory.smartHub.title, systemImage: NavigationCategory.smartHub.icon)
+                    .tag(SidebarItem.category(.smartHub))
+
                 ForEach(pinnedCollections) { collection in
                     Label(collection.name, systemImage: collection.systemImage)
                         .tag(SidebarItem.collection(collection.id, name: collection.name, icon: collection.systemImage))
                 }
-                
-                Label(NavigationCategory.loved.title, systemImage: NavigationCategory.loved.icon)
-                    .tag(SidebarItem.category(.loved))
-                Label(NavigationCategory.binge.title, systemImage: NavigationCategory.binge.icon)
-                    .tag(SidebarItem.category(.binge))
-                Label(NavigationCategory.archive.title, systemImage: NavigationCategory.archive.icon)
-                    .tag(SidebarItem.category(.archive))
             }
             .padding(.vertical, 4)
             

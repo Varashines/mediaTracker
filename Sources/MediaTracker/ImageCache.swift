@@ -170,13 +170,30 @@ class ImageCache {
             return ImageContainer(image: exact)
         }
         
-        // 2. Fuzzy match (Any size already in memory for this URL)
+        // 2. Aggressive Match: If we have a larger version in memory, use it as an "exact" match 
+        // to avoid the blur-in transition for slightly different sizes.
         if let keys = urlToKeys[key] {
-            // Prefer largest available
-            let sortedKeys = keys.sorted { $0.count > $1.count }
-            if let bestMatchKey = sortedKeys.first,
-               let bestMatch = memoryCache.object(forKey: bestMatchKey as NSString) {
-                return ImageContainer(image: bestMatch)
+            // Find all available sizes for this URL
+            let matches = keys.compactMap { k -> (String, CGImage)? in
+                guard let img = memoryCache.object(forKey: k as NSString) else { return nil }
+                return (k, img)
+            }
+            
+            // Prefer versions that are EQUAL or LARGER than target
+            if let target = targetSize {
+                let largerMatch = matches.first { (k, img) in
+                    CGFloat(img.width) >= target.width * screenScale && 
+                    CGFloat(img.height) >= target.height * screenScale
+                }
+                if let best = largerMatch {
+                    return ImageContainer(image: best.1)
+                }
+            }
+
+            // Fallback: Return the largest available (even if smaller) for a fuzzy match
+            let sorted = matches.sorted { $0.1.width > $1.1.width }
+            if let best = sorted.first {
+                return ImageContainer(image: best.1)
             }
         }
         
@@ -310,15 +327,27 @@ class ImageCache {
 
     func isExactMatch(image: CGImage, forURL url: String, size: CGSize?) -> Bool {
         let specificKey = generateCacheKey(key: url, size: size)
-        return memoryCache.object(forKey: specificKey as NSString) === image
+        if memoryCache.object(forKey: specificKey as NSString) === image {
+            return true
+        }
+        
+        // Aggressive exact match: if the image we have is actually larger than the target,
+        // we treat it as an exact match to skip the blur.
+        if let target = size {
+            return CGFloat(image.width) >= target.width * screenScale && 
+                   CGFloat(image.height) >= target.height * screenScale
+        }
+        
+        return false
     }
 
     func prewarmImages(urls: [URL], targetSize: CGSize, priority: ImagePriority = .low) {
-        Task {
+        let taskPriority: TaskPriority = priority == .critical ? .userInitiated : .background
+        Task.detached(priority: taskPriority) {
             await withTaskGroup(of: Void.self) { group in
                 for url in urls {
                     group.addTask {
-                        _ = await self.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority)
+                        _ = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority)
                     }
                 }
             }
@@ -548,7 +577,7 @@ struct CachedImage<Placeholder: View>: View {
             } else if let lowRes = fuzzyMatch {
                 Image(lowRes, scale: 1.0, label: Text(accessibilityLabel ?? "Loading Poster"))
                     .resizable()
-                    .blur(radius: 4)
+                    .blur(radius: 2)
                     .transition(.opacity)
             } else {
                 staticPlaceholder

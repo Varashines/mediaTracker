@@ -5,9 +5,22 @@ struct MetadataSection: View {
     let item: MediaItem
     let themeColor: Color
 
+    var voteAverage: Double? {
+        if item.type == .movie {
+            return item.movieDetails?.voteAverage
+        } else {
+            return item.tvShowDetails?.voteAverage
+        }
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Row 1: Core Metadata
             HStack(spacing: 12) {
+                if let rating = voteAverage, rating > 0 {
+                    MetadataLine(icon: "star.fill", value: String(format: "%.1f", rating), themeColor: themeColor)
+                }
+
                 if let date = item.releaseDate {
                     MetadataLine(icon: "calendar", value: date.formatted(.dateTime.year().month().day()), themeColor: themeColor)
                 }
@@ -21,13 +34,14 @@ struct MetadataSection: View {
                         MetadataLine(icon: "clock", value: DateUtils.formatRuntime(movie.runtime), themeColor: themeColor)
                     }
                 } else if item.type == .tvShow {
-                    // TV Specifics: Use cached network and status from metadata if possible
-                    // For now, we still check tvShowDetails for status/episodes but we'll try to minimize it
                     if let tv = item.tvShowDetails {
                         MetadataLine(icon: "info.circle.fill", value: tv.status, themeColor: themeColor)
                     }
                 }
-
+            }
+            
+            // Row 2: Origin & Content
+            HStack(spacing: 12) {
                 if let net = item.cachedNetwork {
                     MetadataLine(icon: "tv", value: net, themeColor: themeColor)
                 }
@@ -42,8 +56,7 @@ struct MetadataSection: View {
                     }
                 }
             }
-            .padding(.vertical, 4)
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(.vertical, 4)
     }
 }

@@ -335,59 +335,65 @@ private struct EpisodeCube: View {
     var themeColor: Color
     var onToggle: () -> Void
     @Environment(\.colorScheme) var colorScheme
+    @State private var showingOverview = false
 
     var body: some View {
-        Button {
-            withAnimation(.smooth) {
-                episode.isWatched.toggle()
-                FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
-            }
-
-            // Detach recalculation but ensure onToggle happens AFTER sync
-            Task { @MainActor in
-                episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+        
+        ZStack(alignment: .bottomTrailing) {
+            Button {
                 withAnimation(.smooth) {
-                    onToggle()
+                    episode.isWatched.toggle()
+                    FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
                 }
-            }
-        } label: {
-            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    Text("E\(episode.episodeNumber)")
-                        .font(.system(size: 10, weight: .black, design: .monospaced))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            episode.isWatched
-                                ? Color.semanticGreen(for: colorScheme) : accent.opacity(colorScheme == .dark ? 0.15 : 0.1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .foregroundStyle(episode.isWatched ? .white : accent)
 
-                    Spacer()
-
-                    if episode.isWatched {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
-                            .font(.system(size: 14))
+                Task { @MainActor in
+                    episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+                    withAnimation(.smooth) {
+                        onToggle()
                     }
                 }
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Header: Episode Label & Watched Status
+                    HStack(alignment: .center) {
+                        Text("E\(episode.episodeNumber)")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                episode.isWatched
+                                    ? Color.semanticGreen(for: colorScheme) 
+                                    : accent.opacity(colorScheme == .dark ? 0.2 : 0.15)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(episode.isWatched ? .white : accent)
 
-                VStack(alignment: .leading, spacing: 2) {
+                        Spacer()
+
+                        if episode.isWatched {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                                .font(.system(size: 15, weight: .bold))
+                                .shadow(color: .black.opacity(0.1), radius: 2)
+                        }
+                    }
+
+                    // Content: Title
                     Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .lineLimit(2)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .lineLimit(2, reservesSpace: true)
                         .multilineTextAlignment(.leading)
-                        .frame(height: 18, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                         .foregroundStyle(.primary)
 
-                    Spacer()
+                    Spacer(minLength: 0)
 
-                    HStack {
+                    // Footer: Date & Runtime
+                    HStack(spacing: 8) {
                         if let date = episode.airDateAsDate {
                             Text(date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -395,26 +401,69 @@ private struct EpisodeCube: View {
 
                         if let runtime = episode.runtime, runtime > 0 {
                             Text("\(runtime)m")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary.opacity(0.8))
+                        }
+                        
+                        // Empty space to prevent overlap with info button
+                        if !episode.overview.isEmpty {
+                            Color.clear.frame(width: 14)
                         }
                     }
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 100)
+                .background(Color.primary.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            episode.isWatched
+                                ? Color.semanticGreen(for: colorScheme).opacity(0.2)
+                                : Color.primary.opacity(0.06), lineWidth: 1.5)
+                }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 80)
-            .background(Color.primary.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        episode.isWatched
-                            ? Color.semanticGreen(for: colorScheme).opacity(0.3)
-                            : Color.primary.opacity(0.06), lineWidth: 1.5)
+            .buttonStyle(.interactive(feedback: nil))
+
+            // Info Button (Integrated into bottom right)
+            if !episode.overview.isEmpty {
+                Button {
+                    showingOverview.toggle()
+                } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(accent.opacity(showingOverview ? 1.0 : 0.4))
+                        .padding(12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingOverview) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("EPISODE \(episode.episodeNumber)")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundStyle(accent.opacity(0.8))
+                                .kerning(1)
+                            
+                            Text(episode.name)
+                                .font(.system(size: 18, weight: .black, design: .rounded))
+                        }
+                        
+                        Divider()
+                        
+                        ScrollView {
+                            Text(episode.overview)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineSpacing(4)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(20)
+                    .frame(width: 320, height: 220)
+                }
             }
-            .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 3)
         }
-        .buttonStyle(.interactive(feedback: nil))
+        .animation(.spring(response: 0.3), value: episode.isWatched)
     }
 }
 
