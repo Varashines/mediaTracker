@@ -18,7 +18,12 @@ struct ContinueWatchingCarousel: View {
         let predicate = #Predicate<MediaItem> { item in
             (item.stateValue == "Active" || item.stateValue == "Wishlist") && item.tasteValue != "Dislike"
         }
-        self._activeItems = Query(filter: predicate, sort: \.lastInteractionDate, order: .reverse)
+        
+        // Optimization: limit the fetch to 40 items to ensure smooth loading while still having enough for filtering
+        // We use 40 instead of 20 because the displayItems property performs additional manual filtering.
+        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
+        descriptor.fetchLimit = 40
+        self._activeItems = Query(descriptor)
     }
     
     @State private var scrollProgress: Double = 0

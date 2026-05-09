@@ -1,88 +1,139 @@
 import SwiftUI
 import Observation
 
-@Observable @MainActor
+@MainActor
+@Observable
 class AppErrorState {
     static let shared = AppErrorState()
     
-    var currentToast: ToastInfo?
-    var showToast: Bool = false
+    var currentToast: Toast?
+    private var dismissTask: Task<Void, Never>?
+    
+    private init() {}
+    
+    struct Toast: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+        let style: ToastStyle
+        let duration: Double
+        
+        static func == (lhs: Toast, rhs: Toast) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
     
     enum ToastType {
-        case error, success, info
+        case info
+        case success
+        case warning
+        case error
+    }
+    
+    enum ToastStyle {
+        case info
+        case success
+        case warning
+        case error
+        
+        var icon: String {
+            switch self {
+            case .info: return "info.circle.fill"
+            case .success: return "checkmark.circle.fill"
+            case .warning: return "exclamationmark.triangle.fill"
+            case .error: return "xmark.octagon.fill"
+            }
+        }
         
         var color: Color {
             switch self {
-            case .error: return .red
-            case .success: return .green
             case .info: return .blue
+            case .success: return .green
+            case .warning: return .orange
+            case .error: return .red
             }
         }
     }
     
-    struct ToastInfo: Identifiable {
-        let id = UUID()
-        let message: String
-        let systemImage: String
-        let type: ToastType
-    }
-    
-    func surfaceError(_ message: String, systemImage: String = "exclamationmark.triangle.fill") {
-        showToast(message, systemImage: systemImage, type: .error)
-    }
-    
-    func showToast(_ message: String, systemImage: String, type: ToastType = .info) {
-        self.currentToast = ToastInfo(message: message, systemImage: systemImage, type: type)
-        withAnimation(.smooth) {
-            self.showToast = true
+    func showToast(_ message: String, systemImage: String? = nil, type: ToastType = .info, duration: Double = 3.5) {
+        dismissTask?.cancel()
+        
+        let style: ToastStyle = {
+            switch type {
+            case .info: return .info
+            case .success: return .success
+            case .warning: return .warning
+            case .error: return .error
+            }
+        }()
+        
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            currentToast = Toast(message: message, style: style, duration: duration)
         }
         
-        Task {
-            // Auto-hide after 4 seconds
-            try? await Task.sleep(nanoseconds: 4 * 1_000_000_000)
+        dismissTask = Task {
+            try? await Task.sleep(for: .seconds(duration))
+            if Task.isCancelled { return }
+            
             await MainActor.run {
-                withAnimation {
-                    self.showToast = false
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    self.currentToast = nil
                 }
             }
         }
     }
-}
-
-struct ToastOverlay: ViewModifier {
-    @Bindable var errorState: AppErrorState
     
-    func body(content: Content) -> some View {
-        ZStack {
-            content
-            
-            if let toast = errorState.currentToast, errorState.showToast {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 12) {
-                        Image(systemName: toast.systemImage)
-                            .foregroundStyle(toast.type.color)
-                        Text(toast.message)
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
-                    .padding(.bottom, 40)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                .ignoresSafeArea()
-                .zIndex(100)
-            }
-        }
+    func surfaceError(_ message: String) {
+        showToast(message, type: .error)
+    }
+    
+    func handleError(_ error: Error, message: String? = nil) {
+        let finalMessage = message ?? error.localizedDescription
+        surfaceError(finalMessage)
+        print("Error caught: \(error)")
     }
 }
 
 extension View {
     func appErrorToast(state: AppErrorState) -> some View {
-        self.modifier(ToastOverlay(errorState: state))
+        ZStack {
+            self
+            
+            VStack {
+                Spacer()
+                if let toast = state.currentToast {
+                    ToastView(toast: toast)
+                        .padding(.bottom, 40)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .zIndex(1000)
+        }
+    }
+}
+
+struct ToastView: View {
+    let toast: AppErrorState.Toast
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: toast.style.icon)
+                .foregroundStyle(toast.style.color)
+                .font(.system(size: 18, weight: .bold))
+            
+            Text(toast.message)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        }
+        .overlay {
+            Capsule()
+                .stroke(toast.style.color.opacity(0.2), lineWidth: 0.5)
+        }
     }
 }

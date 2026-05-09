@@ -2,10 +2,10 @@ import SwiftUI
 import AppKit
 
 extension CGSize {
-    static let thumbSmall = CGSize(width: 160, height: 240)
-    static let thumbMedium = CGSize(width: 320, height: 480)
-    static let thumbLarge = CGSize(width: 600, height: 900)
-    static let backdropLarge = CGSize(width: 1500, height: 840)
+    static let thumbSmall = CGSize(width: 200, height: 300)
+    static let thumbMedium = CGSize(width: 400, height: 600)
+    static let thumbLarge = CGSize(width: 800, height: 1200)
+    static let backdropLarge = CGSize(width: 2000, height: 1125)
 }
 
 extension Color {

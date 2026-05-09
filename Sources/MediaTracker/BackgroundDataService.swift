@@ -314,7 +314,7 @@ actor BackgroundDataService {
             }
             
             item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
-            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
             
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
             movieDetails.item = item
@@ -377,7 +377,7 @@ actor BackgroundDataService {
             }
             
             item.posterURL = APIClient.tmdbImageURL(path: details.posterPath)
-            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
             
             var tvMazeID = tvDetails.tvMazeID
             if let tvdbID = details.tvdbID, tvMazeID == nil {

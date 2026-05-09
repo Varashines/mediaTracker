@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -33,13 +34,16 @@ struct InsightsView: View {
         // 1. CINEMA DNA: Radar Hero
         cinemaDNASection(stats: stats)
         
-        // 2. THE HALL OF FAME: Visual Rankings
+        // 2. ACTIVITY HEATMAP: Watch Time over time
+        activityHeatmapSection(stats: stats)
+        
+        // 3. THE HALL OF FAME: Visual Rankings
         hallOfFameSection(stats: stats)
         
-        // 3. THE PRODUCTION DECK: Horizontal Quality Rows
+        // 4. THE PRODUCTION DECK: Horizontal Quality Rows
         productionDeckSection(stats: stats)
         
-        // 4. CORE MASTERY: Surgical Metrics
+        // 5. CORE MASTERY: Surgical Metrics
         masterySection(stats: stats)
     }
 
@@ -71,6 +75,45 @@ struct InsightsView: View {
                     .frame(width: 450, height: 450)
                 
                 dnaDescription(stats: stats)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func activityHeatmapSection(stats: LibraryStats) -> some View {
+        VStack(alignment: .leading, spacing: 40) {
+            headerMini("WATCH TIME ACTIVITY")
+            
+            if stats.watchTimeHistory.isEmpty {
+                Text("Start watching to see your activity heatmap.")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(stats.watchTimeHistory) { point in
+                    BarMark(
+                        x: .value("Date", point.date, unit: .day),
+                        y: .value("Minutes", point.minutes)
+                    )
+                    .foregroundStyle(appAccent.color.gradient)
+                    .cornerRadius(4)
+                }
+                .frame(height: 200)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let minutes = value.as(Int.self) {
+                                Text("\(minutes)m")
+                            }
+                        }
+                    }
+                }
             }
         }
     }

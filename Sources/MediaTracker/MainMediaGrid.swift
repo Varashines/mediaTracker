@@ -47,16 +47,16 @@ struct MainMediaGrid: View {
                         }
                         
                         // Phase 4 Optimization: Predictive Prefetching
-                        if isFastScrolling {
-                            let prefetchCount = 12 // Look ahead ~2 rows
+                        if !isFastScrolling {
+                            let prefetchCount = 12 // Look ahead ~2-3 rows
                             if idx + 1 < baseItems.count {
                                 let endIdx = min(idx + 1 + prefetchCount, baseItems.count)
-                                let urlsToPrefetch = baseItems[idx + 1..<endIdx]
+                                let urlsToPrefetch = baseItems[idx+1..<endIdx]
                                     .compactMap { $0.posterURL }
                                     .compactMap { URL(string: $0) }
                                 
                                 if !urlsToPrefetch.isEmpty {
-                                    ImageCache.shared.prewarmImages(urls: urlsToPrefetch, targetSize: CGSize(width: 160, height: 240), priority: .low)
+                                    PrefetchManager.shared.prefetch(urls: urlsToPrefetch, targetSize: .thumbSmall)
                                 }
                             }
                         }

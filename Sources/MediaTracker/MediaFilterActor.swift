@@ -36,7 +36,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable {
         self.itemID = item.id
         self.title = item.title
         self.posterURL = item.posterURL
-        self.backdropURL = item.backdropURL
+        self.backdropURL = recommendationReason != nil ? item.backdropURL : nil
         self.overview = item.overview
         self.releaseDate = item.releaseDate
         self.type = item.type
@@ -110,11 +110,20 @@ actor MediaFilterActor {
         
         // 1. Optimized Predicate (Push filters to SQLite)
         var basePredicate = buildBasePredicate(category: category)
+        var smartRules: [SmartRule] = []
         
         if let cid = collectionID {
-             basePredicate = #Predicate<MediaItem> { item in
-                 item.collections?.contains { $0.id == cid } ?? false
-             }
+            // Check if it's a smart collection
+            let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
+            if let collection = try? modelContext.fetch(colDescriptor).first, collection.isSmart {
+                smartRules = collection.smartRules
+                // Smart Collections fetch everything to refine in Swift
+                basePredicate = #Predicate<MediaItem> { _ in true }
+            } else {
+                basePredicate = #Predicate<MediaItem> { item in
+                    item.collections?.contains { $0.id == cid } ?? false
+                }
+            }
         }
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
@@ -126,7 +135,8 @@ actor MediaFilterActor {
                                (language != nil && !language!.isEmpty) || 
                                (genre != nil && !genre!.isEmpty) ||
                                category == .releaseRadar ||
-                               category == .stalled
+                               category == .stalled ||
+                               !smartRules.isEmpty
         
         if !hasComplexFilters && groupBy == .none {
             descriptor.fetchLimit = limit
@@ -136,7 +146,7 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement
-        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch, category: category)
+        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch, category: category, smartRules: smartRules)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
@@ -241,9 +251,13 @@ actor MediaFilterActor {
         }
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String, category: NavigationCategory? = nil) -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
         var refined = results
         
+        if !smartRules.isEmpty {
+            refined = applySmartRules(refined, rules: smartRules)
+        }
+
         if category == .stalled {
             let ninetyDaysAgo = Date().addingTimeInterval(-90 * 86400)
             refined = refined.filter { item in
@@ -285,6 +299,35 @@ actor MediaFilterActor {
             }
         }
         return refined
+    }
+
+    private func applySmartRules(_ items: [MediaItem], rules: [SmartRule]) -> [MediaItem] {
+        items.filter { item in
+            rules.allSatisfy { rule in
+                switch rule {
+                case .genre(let g):
+                    return item.cachedGenres.contains(g)
+                case .releaseYear(let year, let comp):
+                    guard let releaseDate = item.releaseDate else { return false }
+                    let itemYear = Calendar.current.component(.year, from: releaseDate)
+                    switch comp {
+                    case .equals: return itemYear == year
+                    case .after: return itemYear > year
+                    case .before: return itemYear < year
+                    }
+                case .releaseYearRange(let start, let end):
+                    guard let releaseDate = item.releaseDate else { return false }
+                    let itemYear = Calendar.current.component(.year, from: releaseDate)
+                    return itemYear >= start && itemYear <= end
+                case .mediaType(let type):
+                    return item.type == type
+                case .state(let state):
+                    return item.state == state
+                case .taste(let taste):
+                    return item.taste == taste
+                }
+            }
+        }
     }
 
     private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {

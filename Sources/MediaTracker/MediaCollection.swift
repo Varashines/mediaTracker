@@ -10,13 +10,27 @@ final class MediaCollection: Identifiable {
     var notes: String? = ""
     var isPinned: Bool = false
     
+    var isSmart: Bool = false
+    var smartRulesData: Data? // Encoded [SmartRule]
+    
     @Relationship(inverse: \MediaItem.collections)
     var items: [MediaItem]
     
-    init(id: UUID = UUID(), name: String, systemImage: String) {
+    init(id: UUID = UUID(), name: String, systemImage: String, isSmart: Bool = false) {
         self.id = id
         self.name = name
         self.systemImage = systemImage
         self.items = []
+        self.isSmart = isSmart
+    }
+    
+    var smartRules: [SmartRule] {
+        get {
+            guard let data = smartRulesData else { return [] }
+            return (try? JSONDecoder().decode([SmartRule].self, from: data)) ?? []
+        }
+        set {
+            smartRulesData = try? JSONEncoder().encode(newValue)
+        }
     }
 }

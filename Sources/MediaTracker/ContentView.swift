@@ -256,14 +256,13 @@ struct ContentView: View {
             NavigationStack(path: $viewModel.navigationPath) {
                 ZStack {
                     mainContent
-                    
+
                     if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
                         NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
                             .transition(.move(edge: .top).combined(with: .opacity))
                             .zIndex(100)
                     }
-                }
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+                }                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
                 .navigationTitle(
                     isSearchActive
                         ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)

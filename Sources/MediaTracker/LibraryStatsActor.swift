@@ -8,6 +8,12 @@ struct VisualPersonStat: Sendable {
     let count: Int
 }
 
+struct WatchTimePoint: Sendable, Identifiable {
+    let id = UUID()
+    let date: Date
+    let minutes: Int
+}
+
 struct LibraryStats: Sendable {
     let totalWatchTimeMinutes: Int
 
@@ -32,6 +38,8 @@ struct LibraryStats: Sendable {
     let lovedCount: Int
     let likedCount: Int
     let dislikedCount: Int
+    
+    let watchTimeHistory: [WatchTimePoint]
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -48,7 +56,8 @@ struct LibraryStats: Sendable {
         topRatedLanguages: [],
         lovedCount: 0,
         likedCount: 0,
-        dislikedCount: 0
+        dislikedCount: 0,
+        watchTimeHistory: []
     )
 }
 
@@ -137,6 +146,7 @@ actor LibraryStatsActor {
         var loved = 0
         var liked = 0
         var disliked = 0
+        var history: [Date: Int] = [:]
     }
 
     private struct TasteMapsContainer {
@@ -148,6 +158,7 @@ actor LibraryStatsActor {
     }
 
     private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer) {
+        let calendar = Calendar.current
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
@@ -180,7 +191,13 @@ actor LibraryStatsActor {
                 stats.movieCount += 1
                 if isCompleted {
                     stats.movieCompleted += 1
-                    stats.watchTime += item.cachedRuntime ?? 0
+                    let runtime = item.cachedRuntime ?? 0
+                    stats.watchTime += runtime
+                    
+                    if let date = item.lastInteractionDate {
+                        let day = calendar.startOfDay(for: date)
+                        stats.history[day, default: 0] += runtime
+                    }
                 }
 
                 for c in item.cachedCreators {
@@ -190,8 +207,14 @@ actor LibraryStatsActor {
                 stats.tvCount += 1
                 if isCompleted { stats.tvCompleted += 1 }
                 
-                stats.watchTime += item.cachedRuntime ?? 0
+                let runtime = item.cachedRuntime ?? 0
+                stats.watchTime += runtime
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
+                
+                if let date = item.lastInteractionDate {
+                    let day = calendar.startOfDay(for: date)
+                    stats.history[day, default: 0] += runtime
+                }
 
                 for c in item.cachedCreators {
                     updateTaste(&taste.creatorTaste, c, nil)
@@ -257,6 +280,9 @@ actor LibraryStatsActor {
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
+        
+        let history = stats.history.map { WatchTimePoint(date: $0.key, minutes: $0.value) }
+            .sorted { $0.date < $1.date }
 
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
@@ -273,7 +299,8 @@ actor LibraryStatsActor {
             topRatedLanguages: languageRankings,
             lovedCount: stats.loved,
             likedCount: stats.liked,
-            dislikedCount: stats.disliked
+            dislikedCount: stats.disliked,
+            watchTimeHistory: history
         )
     }
 

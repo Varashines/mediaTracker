@@ -420,7 +420,7 @@ class ImageCache {
         if usePNG {
             CGImageDestinationAddImage(destination, image, nil)
         } else {
-            let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+            let properties = [kCGImageDestinationLossyCompressionQuality: 0.90] as CFDictionary
             CGImageDestinationAddImage(destination, image, properties)
         }
         CGImageDestinationFinalize(destination)
