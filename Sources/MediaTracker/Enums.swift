@@ -238,7 +238,6 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
     case network = "Network"
     case year = "Year"
     case category = "Category"
-    case kanban = "Collection Progress"
 
     var id: String { self.rawValue }
 
@@ -250,7 +249,6 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
         case .network: return "tv"
         case .year: return "calendar.badge.clock"
         case .category: return "folder"
-        case .kanban: return "checklist"
         }
     }
 }

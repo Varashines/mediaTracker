@@ -30,6 +30,9 @@ struct ContentView: View {
         let sortOrder = viewModel.currentSortOrder
         let networks = viewModel.selectedNetworks
         let language = viewModel.selectedLanguage
+        let genre = viewModel.selectedGenre
+        let year = viewModel.selectedYear
+        let state = viewModel.selectedState
         let groupBy = viewModel.currentGroupBy
         let collectionID = viewModel.selectedCollectionID
 
@@ -56,6 +59,9 @@ struct ContentView: View {
                     sortOrder: sortOrder,
                     network: networks,
                     language: language,
+                    genre: genre,
+                    year: year,
+                    state: state,
                     groupBy: groupBy,
                     collectionID: collectionID,
                     limit: limit,
@@ -63,6 +69,7 @@ struct ContentView: View {
                 )
                 
                 let allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
+                let metadata = try? await filterActor.fetchLibraryMetadata()
 
                 if Task.isCancelled { return }
 
@@ -76,6 +83,12 @@ struct ContentView: View {
                     viewModel.groupedItems = result.grouped
                     viewModel.libraryTMDBIDs = allIDs
                     viewModel.isInitialLoading = false
+
+                    if let meta = metadata {
+                        viewModel.cachedNetworks = meta.networks
+                        viewModel.cachedGenres = meta.genres
+                        viewModel.cachedLanguages = meta.languages
+                    }
 
                     // Update Mood Theme based on current visible content
                     let moodColors = result.displayed.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
@@ -130,6 +143,9 @@ struct ContentView: View {
             let sortOrder = viewModel.currentSortOrder
             let networks = viewModel.selectedNetworks
             let language = viewModel.selectedLanguage
+            let genre = viewModel.selectedGenre
+            let year = viewModel.selectedYear
+            let state = viewModel.selectedState
             let groupBy = viewModel.currentGroupBy
             let limit = viewModel.pageSize
 
@@ -141,6 +157,9 @@ struct ContentView: View {
                     sortOrder: sortOrder,
                     network: networks,
                     language: language,
+                    genre: genre,
+                    year: year,
+                    state: state,
                     groupBy: groupBy,
                     collectionID: viewModel.selectedCollectionID,
                     limit: limit,
@@ -240,6 +259,9 @@ struct ContentView: View {
                             viewModel.selectedCategory = category
                             viewModel.selectedNetworks = nil
                             viewModel.selectedLanguage = nil
+                            viewModel.selectedGenre = nil
+                            viewModel.selectedYear = nil
+                            viewModel.selectedState = nil
                             viewModel.isInitialLoading = true
                             
                             if category != .smartHub {
@@ -249,6 +271,9 @@ struct ContentView: View {
                             viewModel.selectedCategory = .smartHub
                             viewModel.selectedCollectionID = id
                             viewModel.selectedCollectionName = name
+                            viewModel.selectedGenre = nil
+                            viewModel.selectedYear = nil
+                            viewModel.selectedState = nil
                             viewModel.isInitialLoading = true
                         }
                         
@@ -369,12 +394,6 @@ struct ContentView: View {
                                 }
                                 .help("Back to Smart Hub")
                             }
-                        }
-                    }
-
-                    ToolbarItem(placement: .primaryAction) {
-                        if !isSearchActive && isSortable {
-                            displaySettingsMenu
                         }
                     }
 

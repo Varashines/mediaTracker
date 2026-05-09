@@ -106,6 +106,8 @@ actor MediaFilterActor {
         network: [String]?,
         language: String?,
         genre: String? = nil,
+        year: String? = nil,
+        state: MediaState? = nil,
         groupBy: GroupBy = .none,
         collectionID: UUID? = nil,
         limit: Int = 40,
@@ -141,6 +143,8 @@ actor MediaFilterActor {
                                (network != nil && !network!.isEmpty) || 
                                (language != nil && !language!.isEmpty) || 
                                (genre != nil && !genre!.isEmpty) ||
+                               year != nil ||
+                               state != nil ||
                                category == .releaseRadar ||
                                category == .stalled ||
                                !smartRules.isEmpty
@@ -153,7 +157,7 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement
-        results = refineResults(results, network: network, language: language, genre: genre, searchText: processedSearch, category: category, smartRules: smartRules)
+        results = refineResults(results, network: network, language: language, genre: genre, year: year, state: state, searchText: processedSearch, category: category, smartRules: smartRules)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
@@ -258,7 +262,7 @@ actor MediaFilterActor {
         }
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
         var refined = results
         
         if !smartRules.isEmpty {
@@ -299,6 +303,18 @@ actor MediaFilterActor {
         
         if let g = genre, !g.isEmpty {
             refined = refined.filter { $0.cachedGenres.contains(g) }
+        }
+
+        if let y = year, !y.isEmpty {
+            refined = refined.filter { item in
+                guard let date = item.releaseDate else { return false }
+                let itemYear = Calendar.current.component(.year, from: date)
+                return String(itemYear) == y
+            }
+        }
+
+        if let s = state {
+            refined = refined.filter { $0.state == s }
         }
 
         if !searchText.isEmpty {
@@ -486,14 +502,6 @@ actor MediaFilterActor {
     private func groupResults(_ results: [MediaItem], groupBy: GroupBy, collectionID: UUID? = nil) -> [(String, [MediaThumbnailMetadata])] {
         if groupBy == .none { return [] }
         
-        var completedIDs: Set<String> = []
-        if let cid = collectionID {
-            let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
-            if let collection = try? modelContext.fetch(colDescriptor).first {
-                completedIDs = Set(collection.completedItemIDs)
-            }
-        }
-
         let dict = Dictionary(grouping: results) { item -> String in
             switch groupBy {
             case .genre: return item.cachedGenres.first ?? "Uncategorized"
@@ -501,20 +509,11 @@ actor MediaFilterActor {
             case .network: return item.cachedNetwork ?? "Unknown"
             case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
             case .category: return item.stateValue
-            case .kanban: return completedIDs.contains(item.id) ? "Watched" : "To Watch"
             case .none: return ""
             }
         }
         
         let grouped = dict.map { ($0.key, $0.value.map { toMetadata($0) }) }
-        
-        if groupBy == .kanban {
-            return grouped.sorted { a, b in
-                if a.0 == "To Watch" { return true }
-                if b.0 == "To Watch" { return false }
-                return a.0 < b.0
-            }
-        }
         
         return grouped.sorted { $0.0 < $1.0 }
     }
@@ -535,6 +534,37 @@ actor MediaFilterActor {
         let descriptor = FetchDescriptor<MediaItem>()
         let items = try modelContext.fetch(descriptor)
         return Set(items.map { $0.id })
+    }
+
+    struct LibraryMetadata: Sendable {
+        let networks: [DiscoveryNode]
+        let genres: [DiscoveryNode]
+        let languages: [DiscoveryNode]
+    }
+
+    func fetchLibraryMetadata() throws -> LibraryMetadata {
+        let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
+        let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
+        let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.code, order: .forward)
+        ])
+
+        let nets = (try? modelContext.fetch(netDescriptor)) ?? []
+        let genres = (try? modelContext.fetch(genreDescriptor)) ?? []
+        let langs = (try? modelContext.fetch(langDescriptor)) ?? []
+
+        return LibraryMetadata(
+            networks: nets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) },
+            genres: genres.map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) },
+            languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) }
+        )
     }
 
     private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {

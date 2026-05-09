@@ -24,6 +24,10 @@ class MediaViewModel {
 
     var selectedNetworks: [String]? = nil
     var selectedLanguage: String? = nil
+    var selectedGenre: String? = nil
+    var selectedYear: String? = nil
+    var selectedState: MediaState? = nil
+    
     var isBatchRefreshing: Bool = false
     var isInitialLoading: Bool = true  // Track first load
     var discoveryRefreshTrigger: Int = 0  // NEW: Trigger for Discovery Hub refresh
@@ -36,10 +40,7 @@ class MediaViewModel {
     var isFastScrolling: Bool = false
     var selectedCollectionID: UUID? = nil {
         didSet {
-            if selectedCollectionID != nil {
-                categoryGroupBys[selectedCategory] = .kanban
-            } else if categoryGroupBys[selectedCategory] == .kanban {
-                categoryGroupBys[selectedCategory] = GroupBy.none
+            if selectedCollectionID == nil {
                 selectedCollectionName = nil // Clear name when leaving collection
             }
         }
