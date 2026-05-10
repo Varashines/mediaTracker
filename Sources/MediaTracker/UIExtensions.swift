@@ -95,10 +95,10 @@ extension Color {
         
         if colorScheme == .dark {
             // Phase 5 Refinement: Moodier, less neon.
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.3)), brightness: Double(max(min(brightness, 0.75), 0.6)))
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.3)), brightness: Double(max(min(brightness, 0.85), 0.7)))
         } else {
             // Phase 5 Refinement: Airy, luminous wash.
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.4)), brightness: Double(max(brightness, 0.98)))
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.6)), brightness: Double(max(min(brightness, 0.95), 0.85)))
         }
     }
 
@@ -125,8 +125,8 @@ extension Color {
             // On dark backgrounds, ensure brightness is at least 0.9 and saturation is healthy
             return Color(hue: Double(hue), saturation: Double(max(saturation, 0.6)), brightness: Double(max(brightness, 0.9)))
         } else {
-            // On light backgrounds, ensure it's deep enough (darkened) for high readability
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.8)), brightness: Double(min(brightness, 0.45)))
+            // On light backgrounds, ensure it's punchy enough but bright enough to feel like a color
+            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.7)), brightness: Double(min(brightness, 0.65)))
         }
     }
 

@@ -26,8 +26,12 @@ struct CastMemberCardNew: View {
         .frame(width: 200, height: 90)
         .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
+        }
         .overlay(borderOverlay(accent: accent))
-        .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 

@@ -292,11 +292,18 @@ private struct SmartCollectionCard: View {
             .padding(20)
             .background {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.primary.opacity(isHovered ? (colorScheme == .dark ? 0.06 : 0.04) : (colorScheme == .dark ? 0.03 : 0.015)))
-                    .shadow(color: accentColor.opacity(isHovered ? (colorScheme == .dark ? 0.2 : 0.15) : 0), radius: 15, x: 0, y: 10)
+                    .fill(colorScheme == .dark 
+                          ? Color.primary.opacity(isHovered ? 0.06 : 0.03) 
+                          : Color(NSColor.controlBackgroundColor).opacity(isHovered ? 1.0 : 0.85))
+                    .shadow(color: colorScheme == .dark 
+                            ? accentColor.opacity(isHovered ? 0.2 : 0)
+                            : Color(red: 0, green: 0.1, blue: 0.3).opacity(isHovered ? 0.12 : 0.05), 
+                            radius: isHovered ? 15 : 10, x: 0, y: isHovered ? 10 : 5)
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(accentColor.opacity(isHovered ? 0.4 : 0.1), lineWidth: 1)
+                            .stroke(colorScheme == .dark 
+                                    ? accentColor.opacity(isHovered ? 0.4 : 0.1) 
+                                    : Color(red: 0, green: 0.1, blue: 0.3).opacity(isHovered ? 0.15 : 0.08), lineWidth: 1)
                     }
             }
             .overlay(alignment: .topTrailing) {

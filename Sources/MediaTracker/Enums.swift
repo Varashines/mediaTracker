@@ -202,14 +202,14 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
             }
         } else {
             switch self {
-            case .cosmic: return Color(red: 0.97, green: 0.96, blue: 1.0)
-            case .solar: return Color(red: 1.0, green: 0.98, blue: 0.96)
-            case .ocean: return Color(red: 0.95, green: 0.98, blue: 1.0)
-            case .berry: return Color(red: 1.0, green: 0.96, blue: 0.98)
-            case .minty: return Color(red: 0.96, green: 1.0, blue: 0.98)
-            case .emerald: return Color(red: 0.96, green: 1.0, blue: 0.96)
-            case .candy: return Color(red: 1.0, green: 0.96, blue: 0.99)
-            case .lava: return Color(red: 1.0, green: 0.96, blue: 0.96)
+            case .cosmic: return Color(red: 0.94, green: 0.92, blue: 0.98)
+            case .solar: return Color(red: 0.98, green: 0.95, blue: 0.92)
+            case .ocean: return Color(red: 0.92, green: 0.95, blue: 0.98)
+            case .berry: return Color(red: 0.98, green: 0.92, blue: 0.95)
+            case .minty: return Color(red: 0.93, green: 0.98, blue: 0.96)
+            case .emerald: return Color(red: 0.93, green: 0.98, blue: 0.93)
+            case .candy: return Color(red: 0.98, green: 0.92, blue: 0.97)
+            case .lava: return Color(red: 0.98, green: 0.92, blue: 0.92)
             }
         }
     }

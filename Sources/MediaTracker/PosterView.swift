@@ -39,22 +39,13 @@ struct PosterView: View {
                     }
                 }
                 .frame(width: 240, height: 360)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 15)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.3), radius: 25, x: 0, y: 15)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item)
                         .padding(12)
                 }
             }
-            .scrollTransition { content, phase in
-                content
-                    .opacity(phase.isIdentity ? 1 : 0.8)
-                    .scaleEffect(phase.isIdentity ? 1 : 0.95)
-                    .offset(y: phase.value * -150)
-            }
-            .drawingGroup() // Rasterize complex shadow/glow stack
-            .zIndex(1)
-            .layoutPriority(1)
         }
     }
 }

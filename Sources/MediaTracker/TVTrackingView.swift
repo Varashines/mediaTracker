@@ -383,7 +383,6 @@ private struct EpisodeCube: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(Color.semanticGreen(for: colorScheme))
                                 .font(.system(size: 15, weight: .bold))
-                                .shadow(color: .black.opacity(0.1), radius: 2)
                         }
                     }
 

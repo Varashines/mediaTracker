@@ -32,8 +32,8 @@ struct ThemeBackground: ViewModifier {
 
                         // 2. The Static Nebula (Zero CPU Overload)
                         StaticNebulaView(color: baseColor)
-                            .opacity(colorScheme == .dark ? 0.8 : 0.4)
-                            .saturation(colorScheme == .dark ? 1.2 : 0.8)
+                            .opacity(colorScheme == .dark ? 1.0 : 0.85)
+                            .saturation(colorScheme == .dark ? 1.2 : 1.1)
                     }
                 }
                 .ignoresSafeArea()
@@ -49,7 +49,7 @@ struct StaticNebulaView: View {
         ZStack {
             // Main Atmosphere (Top Right)
             RadialGradient(
-                colors: [color.opacity(0.12), .clear],
+                colors: [color.opacity(0.25), .clear],
                 center: .topTrailing,
                 startRadius: 0,
                 endRadius: 800
@@ -57,13 +57,12 @@ struct StaticNebulaView: View {
             
             // Secondary Bloom (Bottom Left)
             RadialGradient(
-                colors: [color.opacity(0.08), .clear],
+                colors: [color.opacity(0.15), .clear],
                 center: .bottomLeading,
                 startRadius: 0,
                 endRadius: 600
             )
         }
-        .blur(radius: 20)
     }
 }
 
