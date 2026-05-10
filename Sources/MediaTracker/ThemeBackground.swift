@@ -49,29 +49,21 @@ struct StaticNebulaView: View {
         ZStack {
             // Main Atmosphere (Top Right)
             RadialGradient(
-                colors: [color.opacity(0.15), .clear],
+                colors: [color.opacity(0.12), .clear],
                 center: .topTrailing,
                 startRadius: 0,
-                endRadius: 900
+                endRadius: 800
             )
             
             // Secondary Bloom (Bottom Left)
             RadialGradient(
-                colors: [color.opacity(0.1), .clear],
+                colors: [color.opacity(0.08), .clear],
                 center: .bottomLeading,
                 startRadius: 0,
-                endRadius: 700
-            )
-            
-            // Subconscious Accent (Center Left)
-            RadialGradient(
-                colors: [color.opacity(0.05), .clear],
-                center: UnitPoint(x: 0.2, y: 0.5),
-                startRadius: 0,
-                endRadius: 500
+                endRadius: 600
             )
         }
-        .blur(radius: 40)
+        .blur(radius: 20)
     }
 }
 

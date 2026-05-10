@@ -52,10 +52,15 @@ final class TVShowDetails {
         let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
         
         for season in sortedSeasons {
+            // Update individual season denormalized counts
+            let seasonEpisodes = season.episodes
+            season.totalEpisodesCount = seasonEpisodes.count
+            season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
+
             // Standard progress calculations usually exclude Specials (Season 0)
             if season.seasonNumber > 0 {
                 // Ensure episodes are sorted
-                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                let sortedEpisodes = seasonEpisodes.sorted { $0.episodeNumber < $1.episodeNumber }
                 
                 for ep in sortedEpisodes {
                     total += 1

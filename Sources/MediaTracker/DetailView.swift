@@ -86,42 +86,14 @@ struct DetailView: View {
 
     @ViewBuilder
     private var backgroundLayer: some View {
-        ZStack {
-            if themeStyle == .brand {
-                appAccent.brandBackground(for: colorScheme)
-                    .ignoresSafeArea()
-            } else {
-                Color(NSColor.windowBackgroundColor)
-                    .ignoresSafeArea()
-            }
-            // Phase 3: Breathing Ambient Glow (Optimized Opacity Animation)
-            let color = viewModel.vibrantThemeColor
-            
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    color.opacity(isAppeared ? (colorScheme == .dark ? 0.35 : 0.2) : 0),
-                    Color.clear
-                ]),
-                center: .topLeading,
-                startRadius: 0,
-                endRadius: 800
-            )
-            .ignoresSafeArea()
-            
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    color.opacity(isAppeared ? (colorScheme == .dark ? 0.25 : 0.15) : 0),
-                    Color.clear
-                ]),
-                center: .bottomTrailing,
-                startRadius: 0,
-                endRadius: 700
-            )
-            .saturation(1.3)
-            .ignoresSafeArea()
-}
-}
-
+        if themeStyle == .brand {
+            appAccent.brandBackground(for: colorScheme)
+                .ignoresSafeArea()
+        } else {
+            Color(NSColor.windowBackgroundColor)
+                .ignoresSafeArea()
+        }
+    }
     @ViewBuilder
     private var headerSection: some View {
         MediaHeaderView(
@@ -284,7 +256,7 @@ struct ModularSection<Content: View>: View {
             
             content
                 .padding(20)
-                .background(.ultraThinMaterial.opacity(scheme == .dark ? 0.3 : 0.5))
+                .background(Color.primary.opacity(scheme == .dark ? 0.05 : 0.03))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
