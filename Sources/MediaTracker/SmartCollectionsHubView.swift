@@ -7,6 +7,7 @@ struct SmartCollectionsHubView: View {
     
     @Environment(\.modelContext) private var modelContext
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = ""
     
     @State private var counts: [NavigationCategory: Int] = [:]
     @State private var customSmartCounts: [UUID: Int] = [:]
@@ -32,13 +33,16 @@ struct SmartCollectionsHubView: View {
                     .padding(.top, 40)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
+                    let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
                     ForEach(smartCategories) { category in
                         SmartCollectionCard(
                             title: category.title,
                             icon: category.icon,
                             description: description(for: category),
                             count: counts[category] ?? 0,
-                            accentColor: appAccent.color
+                            accentColor: appAccent.color,
+                            isPinned: pinnedList.contains(category.rawValue),
+                            onPinToggle: { togglePinned(category) }
                         ) {
                             selection = .category(category)
                         }
@@ -224,6 +228,16 @@ struct SmartCollectionsHubView: View {
             }
         }
     }
+
+    private func togglePinned(_ category: NavigationCategory) {
+        var pinned = pinnedSystemCategories.split(separator: ",").map(String.init)
+        if let index = pinned.firstIndex(of: category.rawValue) {
+            pinned.remove(at: index)
+        } else {
+            pinned.append(category.rawValue)
+        }
+        pinnedSystemCategories = pinned.joined(separator: ",")
+    }
 }
 
 private struct SmartCollectionCard: View {
@@ -233,6 +247,8 @@ private struct SmartCollectionCard: View {
     let description: String
     let count: Int
     let accentColor: Color
+    var isPinned: Bool = false
+    var onPinToggle: (() -> Void)? = nil
     let action: () -> Void
     
     @State private var isHovered = false
@@ -284,10 +300,22 @@ private struct SmartCollectionCard: View {
                     }
             }
             .overlay(alignment: .topTrailing) {
-                if isHovered, let collection = collection {
-                    actionButtons(for: collection)
+                if isHovered {
+                    if let collection = collection {
+                        actionButtons(for: collection)
+                            .padding(12)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    } else {
+                        // System category pinning
+                        actionButton(icon: isPinned ? "pin.fill" : "pin", color: isPinned ? .blue : .primary) {
+                            onPinToggle?()
+                        }
+                        .padding(4)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
                         .padding(12)
                         .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
             .scaleEffect(isHovered ? 1.02 : 1.0)

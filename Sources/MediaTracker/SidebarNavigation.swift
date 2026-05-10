@@ -2,16 +2,13 @@ import SwiftUI
 import SwiftData
 
 @MainActor
-struct SidebarNavigation: View, Equatable {
+struct SidebarNavigation: View {
     @Binding var selection: SidebarItem?
     @Query(filter: #Predicate<MediaCollection> { $0.isPinned }) private var pinnedCollections: [MediaCollection]
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = ""
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var sidebarNamespace
-
-    nonisolated static func == (lhs: SidebarNavigation, rhs: SidebarNavigation) -> Bool {
-        return lhs._selection.wrappedValue == rhs._selection.wrappedValue
-    }
 
     var body: some View {
         ScrollView {
@@ -30,6 +27,11 @@ struct SidebarNavigation: View, Equatable {
                     sidebarRow(title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon, item: .category(.movie))
                     sidebarRow(title: NavigationCategory.tvShow.title, icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
                     sidebarRow(title: NavigationCategory.smartHub.title, icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
+                    
+                    let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
+                    ForEach(NavigationCategory.allCases.filter { pinnedList.contains($0.rawValue) }) { category in
+                        sidebarRow(title: category.title, icon: category.icon, item: .category(category))
+                    }
                     
                     ForEach(pinnedCollections) { collection in
                         sidebarRow(title: collection.name, icon: collection.systemImage, item: .collection(collection.id, name: collection.name, icon: collection.systemImage))
