@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContinueWatchingCarousel: View {
     let items: [MediaThumbnailMetadata]
@@ -7,28 +7,32 @@ struct ContinueWatchingCarousel: View {
     let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
     var onDiscoverySpotlight: (() -> Void)?
-    
+
     @State private var scrollProgress: Double = 0
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     private let scrollSpace = "CW_Scroll"
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionHeader(
-                title: "Continue Watching", 
-                icon: "play.fill", 
+                title: "Continue Watching",
+                icon: "play.fill",
                 iconColor: .blue,
                 scrollProgress: items.count > 1 ? scrollProgress : nil
             )
-            
+
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 20) {
                         Spacer(minLength: 10)
                         ForEach(items) { metadata in
-                            Button { onSelect(metadata) } label: {
-                                MediaThumbnailView(metadata: metadata, mode: .hero, namespace: namespace, isFastScrolling: isFastScrolling)
+                            Button {
+                                onSelect(metadata)
+                            } label: {
+                                MediaThumbnailView(
+                                    metadata: metadata, mode: .hero, namespace: namespace,
+                                    isFastScrolling: isFastScrolling)
                             }
                             .buttonStyle(.interactive)
                         }
@@ -41,7 +45,9 @@ struct ContinueWatchingCarousel: View {
                             Color.clear
                                 .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
                                 .onAppear { contentWidth = geo.size.width }
-                                .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
+                                .onChange(of: geo.size.width) { _, newValue in
+                                    contentWidth = newValue
+                                }
                         }
                     )
                 }
@@ -51,7 +57,8 @@ struct ContinueWatchingCarousel: View {
                     GeometryReader { geo in
                         Color.clear
                             .onAppear { containerWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
+                            .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue
+                            }
                     }
                 )
                 .onPreferenceChange(ScrollOffsetKey.self) { dict in
@@ -75,7 +82,7 @@ struct ContinueWatchingCarousel: View {
                             .frame(width: 80, height: 80)
                             .background(Color.accentColor.gradient)
                             .clipShape(RoundedRectangle(cornerRadius: 20))
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Ready to start watching?")
                                 .font(.headline.bold())
@@ -84,9 +91,9 @@ struct ContinueWatchingCarousel: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        
+
                         Spacer()
-                        
+
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.tertiary)
                     }
@@ -104,7 +111,7 @@ struct ContinueWatchingCarousel: View {
             }
         }
     }
-    
+
     private func prewarm(items: [MediaThumbnailMetadata]) {
         let urls = items.prefix(10).compactMap { $0.posterURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {

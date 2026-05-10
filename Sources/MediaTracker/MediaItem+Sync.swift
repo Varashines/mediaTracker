@@ -141,9 +141,21 @@ extension MediaItem {
     func checkOverallCompletion() {
         if type == .tvShow, let tv = tvShowDetails {
             // Use denormalized counts for O(1) check
-            if tv.totalEpisodesCount > 0 && tv.watchedEpisodesCount >= tv.totalEpisodesCount {
-                if state != .completed && state != .rewatching {
-                    self.state = .completed
+            if tv.totalEpisodesCount > 0 {
+                if tv.watchedEpisodesCount >= tv.totalEpisodesCount {
+                    if state != .completed && state != .rewatching {
+                        self.state = .completed
+                    }
+                } else if tv.watchedEpisodesCount > 0 {
+                    // Transition to active when a user starts watching
+                    if state == .wishlist {
+                        self.state = .active
+                    }
+                } else if tv.watchedEpisodesCount == 0 {
+                    // Revert to wishlist if they unwatch everything
+                    if state == .active {
+                        self.state = .wishlist
+                    }
                 }
             }
         }

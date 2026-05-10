@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import ServiceManagement
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -17,6 +18,7 @@ struct SettingsView: View {
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
     @AppStorage("auto_mark_episodes_watched") private var autoMarkEpisodesWatched = true
     
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var selectedTab = 0
     @State private var showClearDatabaseConfirmation = false
     @State private var showNotificationDebug = false
@@ -124,7 +126,24 @@ struct SettingsView: View {
                 Divider().opacity(0.3)
                 modernToggle("Audio Feedback", subtitle: "Sound effects on selection.", isOn: $audioEnabled)
                 Divider().opacity(0.3)
-                modernToggle("Launch at Login", subtitle: "Start app automatically.", isOn: .constant(false)) // Placeholder
+                modernToggle("Launch at Login", subtitle: "Start app automatically.", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        do {
+                            if newValue {
+                                if SMAppService.mainApp.status != .enabled {
+                                    try SMAppService.mainApp.register()
+                                }
+                            } else {
+                                if SMAppService.mainApp.status == .enabled {
+                                    try SMAppService.mainApp.unregister()
+                                }
+                            }
+                        } catch {
+                            print("Failed to update launch at login: \(error)")
+                        }
+                        // Refresh state to match reality
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
+                    }
                 Divider().opacity(0.3)
                 modernToggle("Prevent Sleep", subtitle: "Keep background sync active.", isOn: $preventSleepMode)
             }
@@ -224,6 +243,17 @@ struct SettingsView: View {
                     }
                 }
                 Divider().opacity(0.3)
+                modernRow(title: "Auto Backup Location", subtitle: "Where automated backups are saved.") {
+                    Button("Show in Finder") {
+                        let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+                        if !FileManager.default.fileExists(atPath: url.path) {
+                            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                        }
+                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Divider().opacity(0.3)
                 modernRow(title: "Database Repair", subtitle: "Scan and heal relationship integrity.") {
                     Button("Start Repair") { DataService.shared.runMaintenance(modelContext: modelContext) }
                         .buttonStyle(.bordered)
@@ -305,11 +335,16 @@ struct GroupContainer<Content: View>: View {
             content
         }
         .padding(20)
-        .background(Color.primary.opacity(0.03))
+        .background(adaptiveAccent.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.04), lineWidth: 1)
+                .stroke(adaptiveAccent.opacity(0.08), lineWidth: 1)
         }
+    }
+
+    private var adaptiveAccent: Color {
+        @AppStorage("app_accent") var appAccent: AppAccent = .cosmic
+        return appAccent.color(for: .dark) // Use a stable variant for the container math
     }
 }

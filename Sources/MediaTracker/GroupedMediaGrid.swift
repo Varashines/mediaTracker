@@ -21,7 +21,7 @@ struct GroupedMediaGrid: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 60) {
+        LazyVStack(alignment: .leading, spacing: 60) {
             ForEach(groupedItems, id: \.0) { (key, groupMetadatas) in
                 VStack(alignment: .leading, spacing: 25) {
                     SectionHeader(

@@ -293,7 +293,7 @@ private struct SmartCollectionCard: View {
             .background {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(colorScheme == .dark 
-                          ? Color.primary.opacity(isHovered ? 0.06 : 0.03) 
+                          ? accentColor.opacity(isHovered ? 0.08 : 0.04) 
                           : Color(NSColor.controlBackgroundColor).opacity(isHovered ? 1.0 : 0.85))
                     .shadow(color: colorScheme == .dark 
                             ? accentColor.opacity(isHovered ? 0.2 : 0)
@@ -302,7 +302,7 @@ private struct SmartCollectionCard: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .stroke(colorScheme == .dark 
-                                    ? accentColor.opacity(isHovered ? 0.4 : 0.1) 
+                                    ? accentColor.opacity(isHovered ? 0.4 : 0.15) 
                                     : Color(red: 0, green: 0.1, blue: 0.3).opacity(isHovered ? 0.15 : 0.08), lineWidth: 1)
                     }
             }

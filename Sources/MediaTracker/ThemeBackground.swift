@@ -31,9 +31,11 @@ struct ThemeBackground: ViewModifier {
                         }
 
                         // 2. The Static Nebula (Zero CPU Overload)
-                        StaticNebulaView(color: baseColor)
-                            .opacity(colorScheme == .dark ? 1.0 : 0.85)
-                            .saturation(colorScheme == .dark ? 1.2 : 1.1)
+                        if themeStyle == .brand || tintOverride != nil {
+                            StaticNebulaView(color: baseColor)
+                                .opacity(colorScheme == .dark ? 1.0 : 0.85)
+                                .saturation(colorScheme == .dark ? 1.2 : 1.1)
+                        }
                     }
                 }
                 .ignoresSafeArea()

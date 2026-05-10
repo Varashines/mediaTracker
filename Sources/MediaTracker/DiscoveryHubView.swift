@@ -173,21 +173,30 @@ struct DiscoveryCard: View {
                 Group {
                     if style == .logo {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .fill(appAccent.color.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                            .background {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .fill(Color(NSColor.windowBackgroundColor))
+                                    .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
+                            }
                             .overlay {
                                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.25), lineWidth: isHovered ? 2 : 1)
+                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.2), lineWidth: isHovered ? 2 : 1)
                             }
                     } else {
                         Capsule()
-                            .fill(Color.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .fill(appAccent.color.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                            .background {
+                                Capsule()
+                                    .fill(Color(NSColor.windowBackgroundColor))
+                                    .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
+                            }
                             .overlay {
                                 Capsule()
-                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.25), lineWidth: isHovered ? 2 : 1)
+                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.2), lineWidth: isHovered ? 2 : 1)
                             }
                     }
                 }
-                .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
                 
                 if style == .logo {
                     logoContent

@@ -52,9 +52,13 @@ struct NoteOverlayView: View {
                 }
                 .padding(20)
                 .frame(width: 320)
+                .background {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                }
                 .background(.ultraThinMaterial)
                 .cornerRadius(20)
-                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                 .overlay {
                     RoundedRectangle(cornerRadius: 20)
                         .stroke(Color.primary.opacity(0.05), lineWidth: 0.5)

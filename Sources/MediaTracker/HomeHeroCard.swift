@@ -20,8 +20,7 @@ struct HomeHeroCard: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 500, height: 280)
                 .clipped()
-                .blur(radius: isHovered ? 20 : 12)
-                .overlay(Color.black.opacity(isHovered ? 0.6 : 0.45))
+                .overlay(Color.black.opacity(isHovered ? 0.5 : 0.4))
             } else {
                 Rectangle().fill(Color.black.opacity(0.8))
                     .frame(width: 500, height: 280)
@@ -87,7 +86,8 @@ struct HomeHeroCard: View {
                     
                     Text(metadata.formattedMetadata)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.5), radius: 2)
                 }
                 .padding(.trailing, 20)
                 

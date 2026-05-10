@@ -23,17 +23,17 @@ struct ForYouCarousel: View {
             
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 24) {
+                    HStack(spacing: 20) {
                         Spacer(minLength: 16)
                         ForEach(items) { metadata in
                             Button { onSelect(metadata) } label: {
-                                HomeHeroCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling)
+                                ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling)
                             }
                             .buttonStyle(.interactive)
                         }
                         Spacer(minLength: 16)
                     }
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 15)
                     .background(
                         GeometryReader { geo in
                             let minX = geo.frame(in: .named(scrollSpace)).minX
@@ -63,13 +63,15 @@ struct ForYouCarousel: View {
                 .scrollClipDisabled()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 24) {
+                    HStack(spacing: 20) {
                         ForEach(0..<3, id: \.self) { _ in
-                            HomeHeroCardPlaceholder()
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(Color.secondary.opacity(0.1))
+                                .frame(width: 420, height: 200)
                         }
                     }
                     .padding(.horizontal, 30)
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 15)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollClipDisabled()

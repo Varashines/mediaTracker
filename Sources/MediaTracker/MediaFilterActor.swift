@@ -380,6 +380,11 @@ actor MediaFilterActor {
             item.stateValue == "Active" && item.tasteValue != "Dislike"
         }
         
+        // Pass D: "Re-watching" items
+        let pRewatching = #Predicate<MediaItem> { item in
+            item.stateValue == "Re-watching" && item.tasteValue != "Dislike"
+        }
+        
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
         descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descStreaming.fetchLimit = 100 // Increased limit
@@ -392,9 +397,14 @@ actor MediaFilterActor {
         descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descActive.fetchLimit = 150 // High limit for active tracking
         
+        var descRewatching = FetchDescriptor<MediaItem>(predicate: pRewatching)
+        descRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descRewatching.fetchLimit = 50
+        
         let streamingItems = try modelContext.fetch(descStreaming)
         let transitionItems = try modelContext.fetch(descTransition)
         let activeItemsRaw = try modelContext.fetch(descActive)
+        let rewatchingItems = try modelContext.fetch(descRewatching)
         
         // 2. Recent Interaction Fetch: Fill remaining slots with recent Wishlist items
         let recentPredicate = #Predicate<MediaItem> { item in
@@ -410,8 +420,8 @@ actor MediaFilterActor {
         var homeResultsSet = Set<PersistentIdentifier>()
         var homeResults: [MediaItem] = []
         
-        // Priority: Streaming > Transition > Active > Recent
-        for item in (streamingItems + transitionItems + activeItemsRaw + recentItems) {
+        // Priority: Streaming > Transition > Active > Rewatching > Recent
+        for item in (streamingItems + transitionItems + activeItemsRaw + rewatchingItems + recentItems) {
             if !homeResultsSet.contains(item.persistentModelID) {
                 homeResultsSet.insert(item.persistentModelID)
                 homeResults.append(item)
@@ -450,15 +460,39 @@ actor MediaFilterActor {
         }
 
         let activeItems = homeResults.filter { item in
-            if item.releaseDate == nil && item.cachedNextAiringDate == nil { return false }
-            let isActive = item.stateValue == "Active"
-            let isWishlist = item.stateValue == "Wishlist"
-            let date = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
-            let isFuture = date > now
+            // Basic exclusion
+            if item.stateValue == "Completed" || item.stateValue == "Dropped" { return false }
+            if item.storedIsUpcoming { return false }
+            
+            // Exclude if caught up and next airing is in the future
+            let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
+            let nextAirDate = item.cachedNextAiringDate ?? .distantPast
+            if isCaughtUp && nextAirDate > now && item.type == .tvShow {
+                return false
+            }
+
+            // 1. Items already in progress
+            let isCurrentlyWatching = item.stateValue == "Active" || item.stateValue == "Re-watching" || (item.storedProgress ?? 0) > 0
+            if isCurrentlyWatching {
+                return true
+            }
+            
+            // 2. Items that JUST released (NEW or BINGE DROP badges)
             let badge = item.storedSmartBadgeLabel
-            let isRecent = badge == "NEW" || badge == "BINGE DROP"
-            return ((isActive || isWishlist) && !isFuture) || isRecent
+            return badge == "NEW" || badge == "BINGE DROP"
         }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
+            // SORTING: Priority to NEW/BINGE drops first, then currently watching
+            let badgeA = itemA.storedSmartBadgeLabel
+            let isRecentA = badgeA == "NEW" || badgeA == "BINGE DROP"
+            let badgeB = itemB.storedSmartBadgeLabel
+            let isRecentB = badgeB == "NEW" || badgeB == "BINGE DROP"
+            
+            if isRecentA != isRecentB { return isRecentA }
+            
+            let isAActive = itemA.stateValue == "Active" || itemA.stateValue == "Re-watching" || (itemA.storedProgress ?? 0) > 0
+            let isBActive = itemB.stateValue == "Active" || itemB.stateValue == "Re-watching" || (itemB.storedProgress ?? 0) > 0
+            if isAActive != isBActive { return isAActive }
+            
             let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
             let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
             if isAStreaming != isBStreaming { return isAStreaming }

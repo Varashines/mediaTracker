@@ -72,12 +72,12 @@ struct SidebarNavigation: View {
             HStack(spacing: 12) {
                 Image(systemName: iconName)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isSelected ? appAccent.color(for: colorScheme) : .primary.opacity(0.6))
+                    .foregroundStyle(isSelected ? .white : .primary.opacity(0.6))
                     .frame(width: 24)
                 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .foregroundStyle(isSelected ? .white : .secondary)
                 
                 Spacer()
             }
@@ -87,7 +87,7 @@ struct SidebarNavigation: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.05))
+                        .fill(Color.vibrantDarkBlue)
                         .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
                 }
             }

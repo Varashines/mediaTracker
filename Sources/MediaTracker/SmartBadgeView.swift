@@ -6,22 +6,26 @@ struct SmartBadgeView: View {
     let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
     let hideEpisodeProgress: Bool
+    let themeColorOverride: Color?
     
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
-    init(item: MediaItem, hideEpisodeProgress: Bool = false) {
+    init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
         self.item = item
         self.metadata = nil
         self.result = nil
         self.hideEpisodeProgress = hideEpisodeProgress
+        self.themeColorOverride = themeColor
     }
     
-    init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false) {
+    init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
         self.item = nil
         self.metadata = metadata
         self.result = nil
         self.hideEpisodeProgress = hideEpisodeProgress
+        self.themeColorOverride = themeColor
     }
 
     init(result: MediaSearchResult, hideEpisodeProgress: Bool = false) {
@@ -29,6 +33,7 @@ struct SmartBadgeView: View {
         self.metadata = nil
         self.result = result
         self.hideEpisodeProgress = hideEpisodeProgress
+        self.themeColorOverride = nil
     }
 
     var body: some View {
@@ -169,10 +174,17 @@ struct SmartBadgeView: View {
         // 5. Progress Bar
         let showProgressBar = !hideEpisodeProgress && !isUpcoming && isInProgress
 
+        let finalAccent: Color = {
+            if let override = themeColorOverride {
+                return override
+            }
+            return themeStyle == .brand ? appAccent.color : .blue
+        }()
+
         return StatusBadgePrimitive(
             label: displayLabel,
             systemImage: icon,
-            accentColor: isAvailable ? appAccent.color : .primary,
+            accentColor: isAvailable ? finalAccent : .primary,
             isSolid: isAvailable,
             progress: showProgressBar ? progress : nil,
             isCompact: !showFullPill

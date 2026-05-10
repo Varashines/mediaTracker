@@ -10,6 +10,7 @@ extension CGSize {
 
 extension Color {
     static let detailAccent = Color.blue
+    static let vibrantDarkBlue = Color(red: 0.05, green: 0.4, blue: 0.95)
 
     static func semanticGreen(for colorScheme: ColorScheme) -> Color {
         if colorScheme == .dark {
@@ -72,61 +73,57 @@ extension Color {
         return Color(hue: randomHue, saturation: saturation, brightness: brightness)
     }
 
-    /// Returns a version of the color that is optimized for small UI elements (icons/labels).
-    /// It boosts brightness on dark backgrounds and maintains saturation.
     /// Returns a version of the color optimized for background washes and gradients.
     func luminousAccent(colorScheme: ColorScheme) -> Color {
-        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        let o = self.oklch
         
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-        nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        
-        // Prevent grayscale colors (like .primary) from turning red
-        if saturation < 0.05 {
+        // Handle grayscale
+        if o.c < 0.02 {
             if colorScheme == .dark {
-                return Color(white: Double(max(min(brightness, 0.75), 0.6)))
+                return Color(white: max(min(o.l, 0.8), 0.65))
             } else {
-                return Color(white: Double(max(brightness, 0.98)))
+                return Color(white: max(min(o.l, 0.92), 0.82))
             }
         }
         
         if colorScheme == .dark {
-            // Phase 5 Refinement: Moodier, less neon.
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.3)), brightness: Double(max(min(brightness, 0.85), 0.7)))
+            // Phase 5 Refinement: Perceptually uniform moodiness.
+            return Color.fromOKLCH(l: max(min(o.l, 0.8), 0.65), c: max(o.c, 0.15), h: o.h)
         } else {
-            // Phase 5 Refinement: Airy, luminous wash.
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.6)), brightness: Double(max(min(brightness, 0.95), 0.85)))
+            // Phase 5 Refinement: Perceptually uniform airiness.
+            return Color.fromOKLCH(l: max(min(o.l, 0.92), 0.82), c: max(o.c, 0.18), h: o.h)
         }
     }
 
     /// Returns a version of the color optimized for text, icons, and small UI elements.
     func highContrastAccent(colorScheme: ColorScheme) -> Color {
-        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        let o = self.oklch
         
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-        nsc.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        
-        // Prevent grayscale colors (like .primary) from turning red
-        if saturation < 0.05 {
+        // Handle grayscale
+        if o.c < 0.02 {
             if colorScheme == .dark {
-                return Color(white: Double(max(brightness, 0.9)))
+                return Color(white: max(o.l, 0.9))
             } else {
-                return Color(white: Double(min(brightness, 0.45)))
+                return Color(white: min(o.l, 0.45))
             }
         }
         
         if colorScheme == .dark {
-            // On dark backgrounds, ensure brightness is at least 0.9 and saturation is healthy
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.6)), brightness: Double(max(brightness, 0.9)))
+            // On dark backgrounds, ensure perceptual lightness is at least 0.9
+            return Color.fromOKLCH(l: max(o.l, 0.9), c: max(o.c, 0.2), h: o.h)
         } else {
-            // On light backgrounds, ensure it's punchy enough but bright enough to feel like a color
-            return Color(hue: Double(hue), saturation: Double(max(saturation, 0.7)), brightness: Double(min(brightness, 0.65)))
+            // On light backgrounds, ensure it's deep enough for WCAG contrast but highly saturated
+            return Color.fromOKLCH(l: min(o.l, 0.45), c: max(o.c, 0.4), h: o.h)
+        }
+    }
+
+    /// Returns a subtly tinted background color based on the current color using OKLCH.
+    func themedBackground(colorScheme: ColorScheme) -> Color {
+        let o = self.oklch
+        if colorScheme == .dark {
+            return Color.fromOKLCH(l: 0.1, c: 0.04, h: o.h)
+        } else {
+            return Color.fromOKLCH(l: 0.96, c: 0.02, h: o.h)
         }
     }
 
@@ -218,5 +215,73 @@ struct SubSectionHeader: View {
             .font(.system(size: 9, weight: .black))
             .foregroundStyle(.tertiary)
             .tracking(1.5)
+    }
+}
+
+// MARK: - Perceptual Color Math (OKLCH)
+extension Color {
+    struct OKLCH {
+        var l: Double // Lightness (0-1)
+        var c: Double // Chroma (0-0.4)
+        var h: Double // Hue (0-360)
+    }
+
+    var oklch: OKLCH {
+        guard let nsc = NSColor(self).usingColorSpace(.sRGB) else { return OKLCH(l: 0.5, c: 0, h: 0) }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        nsc.getRed(&r, green: &g, blue: &b, alpha: &a)
+
+        // Linear sRGB
+        let lr = r <= 0.04045 ? r / 12.92 : pow((r + 0.055) / 1.055, 2.4)
+        let lg = g <= 0.04045 ? g / 12.92 : pow((g + 0.055) / 1.055, 2.4)
+        let lb = b <= 0.04045 ? b / 12.92 : pow((b + 0.055) / 1.055, 2.4)
+
+        // sRGB to LMS
+        let l_ = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb
+        let m_ = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb
+        let s_ = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb
+
+        let l_s = pow(max(0, l_), 1/3)
+        let m_s = pow(max(0, m_), 1/3)
+        let s_s = pow(max(0, s_), 1/3)
+
+        // LMS to OKLAB
+        let L = 0.2104542553 * l_s + 0.7936177850 * m_s - 0.0040720468 * s_s
+        let a_ = 1.9779984951 * l_s - 2.4285922050 * m_s + 0.4505937099 * s_s
+        let b_ = 0.0259040371 * l_s + 0.7827717662 * m_s - 0.8086757660 * s_s
+
+        // OKLAB to OKLCH
+        let C = sqrt(a_*a_ + b_*b_)
+        var H = atan2(b_, a_) * 180 / .pi
+        if H < 0 { H += 360 }
+
+        return OKLCH(l: Double(L), c: Double(C), h: Double(H))
+    }
+
+    static func fromOKLCH(l: Double, c: Double, h: Double, alpha: Double = 1.0) -> Color {
+        let hr = h * .pi / 180
+        let a_ = c * cos(hr)
+        let b_ = c * sin(hr)
+
+        let l_s = l + 0.3963377774 * a_ + 0.2158037573 * b_
+        let m_s = l - 0.1055613458 * a_ - 0.0638541728 * b_
+        let s_s = l - 0.0894841775 * a_ - 1.2914855480 * b_
+
+        let l_ = l_s * l_s * l_s
+        let m_ = m_s * m_s * m_s
+        let s_ = s_s * s_s * s_s
+
+        let lr = 4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_
+        let lg = -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_
+        let lb = -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_
+
+        func fromLinear(_ c: CGFloat) -> CGFloat {
+            return c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1/2.4) - 0.055
+        }
+
+        return Color(red: Double(max(0, min(1, fromLinear(lr)))),
+                     green: Double(max(0, min(1, fromLinear(lg)))),
+                     blue: Double(max(0, min(1, fromLinear(lb)))),
+                     opacity: alpha)
     }
 }

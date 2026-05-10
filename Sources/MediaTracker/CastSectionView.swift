@@ -10,7 +10,7 @@ struct CastSectionViewNew: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
+            HStack(spacing: 16) {
                 ForEach(cast) { member in
                     CastMemberCardNew(member: member, themeColor: themeColor) {
                         onCastSelected?(member.name)
@@ -20,7 +20,7 @@ struct CastSectionViewNew: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, 15)
+            .padding(.vertical, 12)
         }
         .scrollBounceBehavior(.basedOnSize)
         .onAppear {

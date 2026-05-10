@@ -84,21 +84,20 @@ struct DetailView: View {
         )
     }
 
+    private var effectiveThemeColor: Color {
+        viewModel.themeColor
+    }
+
     @ViewBuilder
     private var backgroundLayer: some View {
-        if themeStyle == .brand {
-            appAccent.brandBackground(for: colorScheme)
-                .ignoresSafeArea()
-        } else {
-            Color(NSColor.windowBackgroundColor)
-                .ignoresSafeArea()
-        }
+        viewModel.themeColor.themedBackground(colorScheme: colorScheme)
+            .ignoresSafeArea()
     }
     @ViewBuilder
     private var headerSection: some View {
         MediaHeaderView(
             item: viewModel.item,
-            themeColor: viewModel.themeColor,
+            themeColor: effectiveThemeColor,
             viewModel: viewModel,
             namespace: namespace,
             onStatusChange: { newState in
@@ -129,10 +128,10 @@ struct DetailView: View {
             if showHeavyContent {
                 // 1. TV TRACKING (Modular Card)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
-                    ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: viewModel.themeColor) {
+                    ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {
                         TVTrackingView(
                             tvDetails: tv,
-                            themeColor: viewModel.themeColor,
+                            themeColor: effectiveThemeColor,
                             isRefreshing: viewModel.isRefreshing,
                             onWatchedToggle: { viewModel.checkOverallCompletion() },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
@@ -143,10 +142,10 @@ struct DetailView: View {
 
                 // 2. TOP CAST (Modular Card)
                 if !viewModel.item.displayCast.isEmpty {
-                    ModularSection(title: "Top Cast", icon: "person.2.fill", color: viewModel.themeColor) {
+                    ModularSection(title: "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
                         CastSectionViewNew(
                             cast: viewModel.item.displayCast,
-                            themeColor: viewModel.themeColor
+                            themeColor: effectiveThemeColor
                         ) { actorName in
                             onSearchActor?(actorName)
                         }
@@ -256,11 +255,11 @@ struct ModularSection<Content: View>: View {
             
             content
                 .padding(20)
-                .background(Color.primary.opacity(scheme == .dark ? 0.05 : 0.03))
+                .background(color.opacity(scheme == .dark ? 0.15 : 0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                        .stroke(color.opacity(0.15), lineWidth: 1)
                 }
         }
     }

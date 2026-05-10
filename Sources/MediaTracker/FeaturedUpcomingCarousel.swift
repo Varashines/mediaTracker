@@ -15,9 +15,9 @@ struct FeaturedUpcomingCarousel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             SectionHeader(
-                title: "Featured",
-                icon: nil,
-                iconColor: .secondary,
+                title: "Coming Soon",
+                icon: "sparkles",
+                iconColor: .yellow,
                 scrollProgress: scrollProgress
             )
             

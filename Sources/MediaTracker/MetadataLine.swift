@@ -7,14 +7,18 @@ struct MetadataLine: View {
     var isLanguage: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     var body: some View {
         if let value = value, !value.isEmpty {
+            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+            let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
+            
             HStack(spacing: 6) {
                 if let icon = icon {
                     Image(systemName: icon)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                        .foregroundStyle(accent)
                 }
                 
                 Text(displayValue)
@@ -23,7 +27,7 @@ struct MetadataLine: View {
             .font(.system(size: 12, weight: .bold, design: .rounded))
             .padding(.horizontal, 4)
             .minimumScaleFactor(0.9)
-            .liquidGlassPill(accentColor: themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.15 : 0.4), isSolid: false)
+            .liquidGlassPill(accentColor: bgAccent.opacity(colorScheme == .dark ? 0.15 : 0.4), isSolid: false)
         }
     }
     

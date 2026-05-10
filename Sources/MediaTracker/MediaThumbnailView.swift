@@ -246,10 +246,17 @@ struct MediaThumbnailView: View, Equatable {
                 capturedID: nil,
                 resultID: nil
             )
-            .blur(radius: isHovered ? 10 : 0)
+            .blur(radius: effectiveHover ? 10 : 0)
             
             Rectangle()
-                .fill(.black.opacity(effectiveHover ? 0.7 : 0))
+                .fill(.black.opacity(effectiveHover ? 0.35 : 0))
+                .overlay {
+                    if effectiveHover {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .opacity(0.8)
+                    }
+                }
             
             // Smart Badge (Top Leading)
             VStack {
@@ -351,7 +358,7 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .cornerRadius(mode == .hero ? 16 : 12)
+        .cornerRadius(mode == .hero ? 16 : 16)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 10)
@@ -370,7 +377,6 @@ struct MediaThumbnailView: View, Equatable {
         .onHover { hovering in
             isHovered = hovering
         }
-        .zIndex(isHovered ? 10 : 1)
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {

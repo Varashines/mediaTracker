@@ -6,6 +6,7 @@ struct CastMemberCardNew: View {
     let themeColor: Color
     var action: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     var body: some View {
         Button {
@@ -24,7 +25,7 @@ struct CastMemberCardNew: View {
             textSection
         }
         .frame(width: 200, height: 90)
-        .background(Color.primary.opacity(0.05))
+        .background(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .background {
             RoundedRectangle(cornerRadius: 12)

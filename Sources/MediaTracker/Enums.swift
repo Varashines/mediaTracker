@@ -146,71 +146,44 @@ enum ThemeStyle: String, Codable, CaseIterable, Identifiable, Sendable {
 
 enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
     case cosmic = "Cosmic"
-    case solar = "Solar"
     case ocean = "Ocean"
-    case berry = "Berry"
-    case minty = "Minty"
     case emerald = "Emerald"
-    case candy = "Candy"
-    case lava = "Lava"
+    case amber = "Amber"
 
     var id: String { self.rawValue }
 
+    private var baseColor: Color {
+        switch self {
+        case .cosmic: return Color(red: 0.35, green: 0.35, blue: 1.0)
+        case .ocean: return Color(red: 0.0, green: 0.5, blue: 1.0)
+        case .emerald: return Color(red: 0.0, green: 0.75, blue: 0.4)
+        case .amber: return Color(red: 1.0, green: 0.55, blue: 0.0)
+        }
+    }
+
     var color: Color {
-        color(for: .dark) // Default fallback
+        color(for: .dark)
     }
 
     func color(for scheme: ColorScheme) -> Color {
+        let o = baseColor.oklch
         if scheme == .dark {
-            // Dark Mode: Desaturated and Slightly Brighter for comfort (Pastel-leaning)
-            switch self {
-            case .cosmic: return Color(red: 0.70, green: 0.60, blue: 1.00)
-            case .solar: return Color(red: 1.00, green: 0.70, blue: 0.50)
-            case .ocean: return Color(red: 0.45, green: 0.70, blue: 1.00)
-            case .berry: return Color(red: 1.00, green: 0.45, blue: 0.65)
-            case .minty: return Color(red: 0.40, green: 1.00, blue: 0.85)
-            case .emerald: return Color(red: 0.50, green: 1.00, blue: 0.70)
-            case .candy: return Color(red: 1.00, green: 0.65, blue: 0.85)
-            case .lava: return Color(red: 1.00, green: 0.50, blue: 0.55)
-            }
+            // Dark Mode: Deep and Vibrant (not pastel)
+            return Color.fromOKLCH(l: 0.65, c: max(o.c, 0.25), h: o.h)
         } else {
-            // Light Mode: Deeper and More Saturated for impact on white backgrounds
-            switch self {
-            case .cosmic: return Color(red: 0.45, green: 0.25, blue: 0.85)
-            case .solar: return Color(red: 0.90, green: 0.35, blue: 0.10)
-            case .ocean: return Color(red: 0.05, green: 0.35, blue: 0.85)
-            case .berry: return Color(red: 0.75, green: 0.05, blue: 0.35)
-            case .minty: return Color(red: 0.00, green: 0.65, blue: 0.45)
-            case .emerald: return Color(red: 0.10, green: 0.55, blue: 0.25)
-            case .candy: return Color(red: 0.90, green: 0.25, blue: 0.60)
-            case .lava: return Color(red: 0.90, green: 0.10, blue: 0.20)
-            }
+            // Light Mode: Punchy and authoritative
+            return Color.fromOKLCH(l: 0.55, c: max(o.c, 0.3), h: o.h)
         }
     }
 
     func brandBackground(for colorScheme: ColorScheme) -> Color {
+        let o = baseColor.oklch
         if colorScheme == .dark {
-            switch self {
-            case .cosmic: return Color(red: 0.12, green: 0.08, blue: 0.25)
-            case .solar: return Color(red: 0.25, green: 0.12, blue: 0.08)
-            case .ocean: return Color(red: 0.05, green: 0.15, blue: 0.28)
-            case .berry: return Color(red: 0.22, green: 0.08, blue: 0.16)
-            case .minty: return Color(red: 0.08, green: 0.22, blue: 0.18)
-            case .emerald: return Color(red: 0.05, green: 0.22, blue: 0.10)
-            case .candy: return Color(red: 0.24, green: 0.10, blue: 0.18)
-            case .lava: return Color(red: 0.25, green: 0.08, blue: 0.10)
-            }
+            // Deep, high-end immersive backgrounds (L ≈ 0.1)
+            return Color.fromOKLCH(l: 0.1, c: 0.04, h: o.h)
         } else {
-            switch self {
-            case .cosmic: return Color(red: 0.94, green: 0.92, blue: 0.98)
-            case .solar: return Color(red: 0.98, green: 0.95, blue: 0.92)
-            case .ocean: return Color(red: 0.92, green: 0.95, blue: 0.98)
-            case .berry: return Color(red: 0.98, green: 0.92, blue: 0.95)
-            case .minty: return Color(red: 0.93, green: 0.98, blue: 0.96)
-            case .emerald: return Color(red: 0.93, green: 0.98, blue: 0.93)
-            case .candy: return Color(red: 0.98, green: 0.92, blue: 0.97)
-            case .lava: return Color(red: 0.98, green: 0.92, blue: 0.92)
-            }
+            // Very subtle, clean tinted backgrounds (L ≈ 0.96)
+            return Color.fromOKLCH(l: 0.96, c: 0.02, h: o.h)
         }
     }
 }

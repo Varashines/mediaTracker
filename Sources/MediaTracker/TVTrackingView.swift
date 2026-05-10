@@ -23,6 +23,8 @@ struct TVTrackingView: View {
     var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
+    
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     @State private var selectedSeasonNumber: Int?
 
@@ -146,6 +148,7 @@ private struct SeasonTab: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     private var progress: Double {
         let total = season.totalEpisodesCount
@@ -184,7 +187,7 @@ private struct SeasonTab: View {
                         .fill(bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4))
                 } else {
                     Capsule()
-                        .fill(Color.primary.opacity(0.05))
+                        .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
                 }
             }
             .overlay {
@@ -216,6 +219,7 @@ private struct SeasonSection: View {
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
@@ -263,7 +267,7 @@ private struct SeasonSection: View {
                     .font(.system(size: 11, weight: .black))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(isAllWatched ? Color.primary.opacity(0.05) : accent.opacity(colorScheme == .dark ? 0.15 : 0.12))
+                    .background(isAllWatched ? themeColor.opacity(colorScheme == .dark ? 0.1 : 0.05) : accent.opacity(colorScheme == .dark ? 0.15 : 0.12))
                     .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
                 }
@@ -339,6 +343,7 @@ private struct EpisodeCube: View {
     var themeColor: Color
     var onToggle: () -> Void
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
     @State private var showingOverview = false
 
     var body: some View {
@@ -420,14 +425,14 @@ private struct EpisodeCube: View {
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, minHeight: 100)
-                .background(Color.primary.opacity(0.04))
+                .background(themeColor.opacity(colorScheme == .dark ? 0.12 : 0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
                             episode.isWatched
                                 ? Color.semanticGreen(for: colorScheme).opacity(0.2)
-                                : Color.primary.opacity(0.06), lineWidth: 1.5)
+                                : themeColor.opacity(0.2), lineWidth: 1.5)
                 }
             }
             .buttonStyle(.interactive(feedback: nil))

@@ -54,7 +54,17 @@ struct MainLibraryView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 20)
 
-                        // 2. FOR YOU (Recommendations)
+                        // 2. COMING SOON (Limited to 10)
+                        let comingSoon = featuredCarouselItems.isEmpty ? (groupedItems.first(where: { $0.0 == "Coming Soon" })?.1 ?? []) : featuredCarouselItems
+                        if !comingSoon.isEmpty {
+                            FeaturedUpcomingCarousel(
+                                items: Array(comingSoon.prefix(10)), namespace: namespace,
+                                isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                            )
+                            .padding(.bottom, 20)
+                        }
+
+                        // 3. FOR YOU (Recommendations)
                         ForYouCarousel(
                             items: recommendations, namespace: namespace,
                             isFastScrolling: isFastScrolling, onSelect: onSelectHero
@@ -70,60 +80,62 @@ struct MainLibraryView: View {
                             isFastScrolling: isFastScrolling, onSelect: onSelectHero)
                     }
 
-                    Section {
-                        VStack(alignment: .leading, spacing: 15) {
-                            if items.isEmpty && groupedItems.isEmpty {
-                                if viewModel.isInitialLoading {
-                                    LoadingGridSkeleton(
-                                        selectedCategory: selectedCategory, columns: columns)
-                                } else {
-                                    LibraryEmptyStateView(category: selectedCategory) {
-                                        withAnimation {
-                                            viewModel.selectedCategory = .discover
+                    if selectedCategory != .home {
+                        Section {
+                            VStack(alignment: .leading, spacing: 15) {
+                                if items.isEmpty && groupedItems.isEmpty {
+                                    if viewModel.isInitialLoading {
+                                        LoadingGridSkeleton(
+                                            selectedCategory: selectedCategory, columns: columns)
+                                    } else {
+                                        LibraryEmptyStateView(category: selectedCategory) {
+                                            withAnimation {
+                                                viewModel.selectedCategory = .discover
+                                            }
                                         }
                                     }
-                                }
-                            } else {
-                                if selectedCategory == .all && searchText.isEmpty
-                                    && selectedNetworks == nil
-                                {
-                                    RecentlyAddedRow(
-                                        items: recentlyAdded, isFastScrolling: isFastScrolling)
-                                }
-
-                                if viewModel.currentGroupBy == .none && selectedCategory != .home {
-                                    MainMediaGrid(
-                                        items: items,
-                                        featuredCount: showingUpcomingOnly
-                                            ? featuredCarouselItems.count : 0,
-                                        showingUpcomingOnly: showingUpcomingOnly,
-                                        isCategoryPage: isCategoryPage, namespace: namespace,
-                                        isFastScrolling: isFastScrolling,
-                                        selectedCollectionID: viewModel.selectedCollectionID,
-                                        onLoadMore: onLoadMore, columns: columns)
                                 } else {
-                                    GroupedMediaGrid(
-                                        groupedItems: groupedItems,
-                                        selectedCategoryRef: selectedCategory,
-                                        showingUpcomingOnly: showingUpcomingOnly,
-                                        viewModel: viewModel, namespace: namespace,
-                                        isFastScrolling: isFastScrolling, columns: columns)
+                                    if selectedCategory == .all && searchText.isEmpty
+                                        && selectedNetworks == nil
+                                    {
+                                        RecentlyAddedRow(
+                                            items: recentlyAdded, isFastScrolling: isFastScrolling)
+                                    }
+
+                                    if viewModel.currentGroupBy == .none {
+                                        MainMediaGrid(
+                                            items: items,
+                                            featuredCount: showingUpcomingOnly
+                                                ? featuredCarouselItems.count : 0,
+                                            showingUpcomingOnly: showingUpcomingOnly,
+                                            isCategoryPage: isCategoryPage, namespace: namespace,
+                                            isFastScrolling: isFastScrolling,
+                                            selectedCollectionID: viewModel.selectedCollectionID,
+                                            onLoadMore: onLoadMore, columns: columns)
+                                    } else {
+                                        GroupedMediaGrid(
+                                            groupedItems: groupedItems,
+                                            selectedCategoryRef: selectedCategory,
+                                            showingUpcomingOnly: showingUpcomingOnly,
+                                            viewModel: viewModel, namespace: namespace,
+                                            isFastScrolling: isFastScrolling, columns: columns)
+                                    }
                                 }
                             }
-                        }
-                    } header: {
-                        VStack(alignment: .leading, spacing: 0) {
-                            LibraryHeaderView(
-                                selectedCategory: selectedCategory,
-                                selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                isMainSection: isMainSection, appAccent: appAccent,
-                                onNetworkSelected: onNetworkSelected, onBack: onBack,
-                                viewModel: viewModel)
+                        } header: {
+                            VStack(alignment: .leading, spacing: 0) {
+                                LibraryHeaderView(
+                                    selectedCategory: selectedCategory,
+                                    selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
+                                    isMainSection: isMainSection, appAccent: appAccent,
+                                    onNetworkSelected: onNetworkSelected, onBack: onBack,
+                                    viewModel: viewModel)
 
-                            if isMainSection && selectedCategory != .home {
-                                LibraryFilterBar(viewModel: viewModel)
-                                    .padding(.top, 5)
-                                    .padding(.bottom, 12)
+                                if isMainSection {
+                                    LibraryFilterBar(viewModel: viewModel)
+                                        .padding(.top, 5)
+                                        .padding(.bottom, 12)
+                                }
                             }
                         }
                     }
