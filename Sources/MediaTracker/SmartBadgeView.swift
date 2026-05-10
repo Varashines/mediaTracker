@@ -111,31 +111,18 @@ struct SmartBadgeView: View {
             }
         }()
 
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             Image(systemName: icon)
-            
-            if isBinge, let remaining = remaining, remaining > 0, !hideEpisodeProgress {
-                HStack(spacing: 4) {
-                    Text("BINGE")
-                    Text("•")
-                        .opacity(0.5)
-                    Text("\(remaining) LEFT")
-                        .font(.system(size: 8, weight: .heavy))
-                }
-            } else {
-                Text(label)
-            }
         }
-        .font(.system(size: 9, weight: .black))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .font(.system(size: 11, weight: .black))
+        .frame(width: 24, height: 24)
         .background(badgeConfig.bg.gradient)
         .foregroundStyle(badgeConfig.fg)
-        .clipShape(Capsule())
+        .clipShape(Circle())
         .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
         .overlay {
             if isSparkle {
-                Capsule()
+                Circle()
                     .stroke(.white.opacity(0.3), lineWidth: 1)
             }
         }

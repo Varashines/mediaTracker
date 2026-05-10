@@ -13,16 +13,11 @@ struct StatusBadgePrimitive: View {
         let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
         let bgAccent = accentColor.luminousAccent(colorScheme: colorScheme)
         
-        HStack(spacing: isCompact ? 0 : 4) {
+        HStack(spacing: 0) {
             Image(systemName: systemImage)
-                .font(.system(size: isCompact ? 11 : 10, weight: .bold))
-            
-            if !isCompact {
-                Text(label)
-                    .font(.system(size: 10, weight: .bold))
-                    .lineLimit(1)
-            }
+                .font(.system(size: 11, weight: .bold))
         }
+        .frame(width: 24, height: 24)
         .foregroundStyle(isSolid ? .white : contrastColor)
         .liquidGlassPill(accentColor: bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4), isSolid: isSolid, progress: progress)
     }

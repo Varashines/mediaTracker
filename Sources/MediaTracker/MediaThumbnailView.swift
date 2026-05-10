@@ -274,7 +274,6 @@ struct MediaThumbnailView: View, Equatable {
             }
             .padding(8)
             .opacity(isHovered ? 0 : 1)
-            .scaleEffect(isHovered ? 0.8 : 1.0)
             .offset(x: isHovered ? -4 : 0, y: isHovered ? -4 : 0)
             
             // Collection Status Badge (Top Trailing)
@@ -293,7 +292,6 @@ struct MediaThumbnailView: View, Equatable {
                 }
                 .padding(8)
                 .opacity(isHovered ? 0 : 1)
-                .scaleEffect(isHovered ? 0.8 : 1.0)
                 .offset(x: isHovered ? 4 : 0, y: isHovered ? -4 : 0)
             }
             
