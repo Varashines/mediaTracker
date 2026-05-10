@@ -96,13 +96,15 @@ struct LibraryFilterBar: View {
             .padding(.vertical, 8)
             .foregroundStyle(active ? appAccent.color(for: colorScheme) : .primary.opacity(0.7))
             .background {
-                if active {
+                ZStack {
                     Capsule()
-                        .fill(appAccent.color(for: colorScheme).opacity(colorScheme == .dark ? 0.12 : 0.1))
-                        .matchedGeometryEffect(id: "filter_active", in: filterNamespace)
-                } else {
-                    Capsule()
-                        .fill(.primary.opacity(0.04))
+                        .fill(.regularMaterial)
+                    
+                    if active {
+                        Capsule()
+                            .fill(appAccent.color(for: colorScheme).opacity(colorScheme == .dark ? 0.15 : 0.12))
+                            .matchedGeometryEffect(id: "filter_active", in: filterNamespace)
+                    }
                 }
             }
             .overlay {

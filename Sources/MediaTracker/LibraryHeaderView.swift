@@ -34,14 +34,7 @@ struct LibraryHeaderView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // 1. PAGE TITLE
-            if isMainSection {
-                PageHeader(pageTitle, subtitle: pageSubtitle, color: appAccent.color)
-                    .padding(.horizontal, 40)
-                    .padding(.top, 10)
-            }
-
-            // 2. FILTER INFO
+            // 1. FILTER INFO
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
                 

@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct MainLibraryView: View {
     let items: [MediaThumbnailMetadata]
@@ -25,7 +25,7 @@ struct MainLibraryView: View {
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @State private var visibleCount = 40
     @State private var scrollTask: Task<Void, Never>?
-    
+
     var isCategoryPage: Bool {
         return selectedCategory == .movie || selectedCategory == .tvShow
     }
@@ -45,26 +45,37 @@ struct MainLibraryView: View {
                 LazyVStack(alignment: .leading, spacing: 30, pinnedViews: [.sectionHeaders]) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
                         // 1. CONTINUE WATCHING
-                        ContinueWatchingCarousel(items: homeContinueWatching, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero) {
+                        ContinueWatchingCarousel(
+                            items: homeContinueWatching, namespace: namespace,
+                            isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                        ) {
                             onCategorySelected(.discover)
                         }
                         .padding(.top, 10)
                         .padding(.bottom, 20)
 
                         // 2. FOR YOU (Recommendations)
-                        ForYouCarousel(items: recommendations, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero)
-                            .padding(.bottom, 20)
+                        ForYouCarousel(
+                            items: recommendations, namespace: namespace,
+                            isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                        )
+                        .padding(.bottom, 20)
                     }
 
-                    if showingUpcomingOnly && searchText.isEmpty && selectedNetworks == nil && !featuredCarouselItems.isEmpty {
-                        FeaturedUpcomingCarousel(items: featuredCarouselItems, namespace: namespace, isFastScrolling: isFastScrolling, onSelect: onSelectHero)
+                    if showingUpcomingOnly && searchText.isEmpty && selectedNetworks == nil
+                        && !featuredCarouselItems.isEmpty
+                    {
+                        FeaturedUpcomingCarousel(
+                            items: featuredCarouselItems, namespace: namespace,
+                            isFastScrolling: isFastScrolling, onSelect: onSelectHero)
                     }
-                    
+
                     Section {
                         VStack(alignment: .leading, spacing: 15) {
                             if items.isEmpty && groupedItems.isEmpty {
                                 if viewModel.isInitialLoading {
-                                    LoadingGridSkeleton(selectedCategory: selectedCategory, columns: columns)
+                                    LoadingGridSkeleton(
+                                        selectedCategory: selectedCategory, columns: columns)
                                 } else {
                                     LibraryEmptyStateView(category: selectedCategory) {
                                         withAnimation {
@@ -73,21 +84,42 @@ struct MainLibraryView: View {
                                     }
                                 }
                             } else {
-                                if selectedCategory == .all && searchText.isEmpty && selectedNetworks == nil {
-                                    RecentlyAddedRow(items: recentlyAdded, isFastScrolling: isFastScrolling)
+                                if selectedCategory == .all && searchText.isEmpty
+                                    && selectedNetworks == nil
+                                {
+                                    RecentlyAddedRow(
+                                        items: recentlyAdded, isFastScrolling: isFastScrolling)
                                 }
 
                                 if viewModel.currentGroupBy == .none && selectedCategory != .home {
-                                    MainMediaGrid(items: items, featuredCount: showingUpcomingOnly ? featuredCarouselItems.count : 0, showingUpcomingOnly: showingUpcomingOnly, isCategoryPage: isCategoryPage, namespace: namespace, isFastScrolling: isFastScrolling, selectedCollectionID: viewModel.selectedCollectionID, onLoadMore: onLoadMore, columns: columns)
+                                    MainMediaGrid(
+                                        items: items,
+                                        featuredCount: showingUpcomingOnly
+                                            ? featuredCarouselItems.count : 0,
+                                        showingUpcomingOnly: showingUpcomingOnly,
+                                        isCategoryPage: isCategoryPage, namespace: namespace,
+                                        isFastScrolling: isFastScrolling,
+                                        selectedCollectionID: viewModel.selectedCollectionID,
+                                        onLoadMore: onLoadMore, columns: columns)
                                 } else {
-                                    GroupedMediaGrid(groupedItems: groupedItems, selectedCategoryRef: selectedCategory, showingUpcomingOnly: showingUpcomingOnly, viewModel: viewModel, namespace: namespace, isFastScrolling: isFastScrolling, columns: columns)
+                                    GroupedMediaGrid(
+                                        groupedItems: groupedItems,
+                                        selectedCategoryRef: selectedCategory,
+                                        showingUpcomingOnly: showingUpcomingOnly,
+                                        viewModel: viewModel, namespace: namespace,
+                                        isFastScrolling: isFastScrolling, columns: columns)
                                 }
                             }
                         }
                     } header: {
                         VStack(alignment: .leading, spacing: 0) {
-                            LibraryHeaderView(selectedCategory: selectedCategory, selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage, isMainSection: isMainSection, appAccent: appAccent, onNetworkSelected: onNetworkSelected, onBack: onBack, viewModel: viewModel)
-                            
+                            LibraryHeaderView(
+                                selectedCategory: selectedCategory,
+                                selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
+                                isMainSection: isMainSection, appAccent: appAccent,
+                                onNetworkSelected: onNetworkSelected, onBack: onBack,
+                                viewModel: viewModel)
+
                             if isMainSection && selectedCategory != .home {
                                 LibraryFilterBar(viewModel: viewModel)
                                     .padding(.top, 5)
@@ -97,7 +129,10 @@ struct MainLibraryView: View {
                     }
                 }
                 .padding(.vertical, 20)
-                .background { ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask) }
+                .background {
+                    ScrollVelocityTracker(
+                        isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+                }
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()

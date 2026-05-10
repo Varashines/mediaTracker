@@ -26,15 +26,10 @@ struct SmartCollectionsHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
-                // 1. PAGE HEADER
-                PageHeader("Smart Hub", subtitle: "Intelligent library automation.", color: appAccent.color)
-                    .padding(.horizontal, 40)
-                    .padding(.top, 40)
-
-                // 2. SYSTEM SMART COLLECTIONS
+                // 1. SYSTEM SMART COLLECTIONS
                 sectionHeaderMini("System Intelligence")
                     .padding(.horizontal, 40)
-                    .padding(.top, 10)
+                    .padding(.top, 40)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
                     ForEach(smartCategories) { category in

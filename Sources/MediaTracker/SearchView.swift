@@ -145,11 +145,6 @@ struct SearchView: View {
     private var resultsScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                if !searchText.isEmpty {
-                    PageHeader("Search Results", subtitle: "Browsing for \"\(searchText)\"", color: .blue)
-                        .padding(.horizontal, 30)
-                }
-                
                 localResultsSection
                 webResultsSection
             }

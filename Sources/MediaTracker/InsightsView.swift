@@ -66,8 +66,6 @@ struct InsightsView: View {
     @ViewBuilder
     private func cinemaDNASection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 40) {
-            dnaHeader
-
             HStack(spacing: 80) {
                 RadarChartView(data: stats.genreDNA, accentColor: appAccent.color)
                     .frame(width: 450, height: 450)
