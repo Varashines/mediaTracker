@@ -6,7 +6,7 @@ import SwiftData
 class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
     
-    private var modelContainer: ModelContainer?
+    var modelContainer: ModelContainer?
     
     override init() {
         super.init()
@@ -49,10 +49,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
     }
     
-    func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) {
+    func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
-        guard let releaseDate = releaseDate, releaseDate > Date() else { return }
+        guard let releaseDate = releaseDate, releaseDate > Date() else { 
+            print("ℹ️ Skipping notification for \(title): Release date is in the past or nil.")
+            return 
+        }
         
+        print("🔔 Scheduling notification for movie: \(title) (\(releaseDate))")
         let identifier = "movie-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -61,19 +65,20 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         content.sound = .default
         content.categoryIdentifier = "MOVIE_RELEASE"
         content.userInfo = ["ITEM_ID": id, "ITEM_TYPE": "movie"]
-        
-        Task {
-            if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
-                content.attachments = [attachment]
-            }
-            finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
+        if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
+            content.attachments = [attachment]
         }
+        await finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
     }
     
-    func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) {
+    func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) async {
         guard isProperlyBundled else { return }
-        guard let nextDate = nextDate, nextDate > Date() else { return }
+        guard let nextDate = nextDate, nextDate > Date() else { 
+            print("ℹ️ Skipping notification for \(title): Next air date is in the past or nil.")
+            return 
+        }
         
+        print("🔔 Scheduling notification for TV show: \(title) (\(nextDate))")
         let identifier = "tv-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -98,15 +103,13 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         content.sound = .default
         
-        Task {
-            if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
-                content.attachments = [attachment]
-            }
-            finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime)
+        if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
+            content.attachments = [attachment]
         }
+        await finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime)
     }
     
-    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil) {
+    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
         
@@ -124,18 +127,39 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         
         // 2. Default fallback: If it's still 00:00 local time, it's likely a date-only object from a generic release.
-        // We use 09:00 AM as a more sensible "day-of" notification time than 13:30.
-        // If DateUtils parsing provided a specific drop time (like 09:30 AM IST for Apple TV+), 
-        // it will already be in dateComponents and we trust it.
         if dateComponents.hour == 0 && dateComponents.minute == 0 {
             dateComponents.hour = 9
             dateComponents.minute = 0
         }
         
         let trigger1 = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        
+        // Phase 6 Critical Fix: Clone the attachment BEFORE handing request1 to the system.
+        // The OS takes ownership of the file and moves it when `center.add` is called.
+        var day2Attachments: [UNNotificationAttachment] = []
+        if let firstAttachment = content.attachments.first {
+            let originalURL = firstAttachment.url
+            let tmpDir = FileManager.default.temporaryDirectory
+            let clonedURL = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")
+            do {
+                if FileManager.default.fileExists(atPath: originalURL.path) {
+                    try FileManager.default.copyItem(at: originalURL, to: clonedURL)
+                    let newAttachment = try UNNotificationAttachment(identifier: UUID().uuidString, url: clonedURL, options: nil)
+                    day2Attachments = [newAttachment]
+                }
+            } catch {
+                print("⚠️ Failed to clone attachment for day2: \(error)")
+            }
+        }
+        
         let request1 = UNNotificationRequest(identifier: "\(identifier)-day1", content: content, trigger: trigger1)
         
-        center.add(request1)
+        do {
+            try await center.add(request1)
+            print("✅ Scheduled \(identifier)-day1")
+        } catch {
+            print("❌ Failed to schedule \(identifier)-day1: \(error.localizedDescription)")
+        }
         
         // Secondary Reminder (Next Day at 9:30 AM)
         if let scheduledDate = calendar.date(from: dateComponents),
@@ -147,11 +171,17 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             guard let secondDayContent = content.mutableCopy() as? UNMutableNotificationContent else { return }
             secondDayContent.title = "Reminder: \(content.title)"
             secondDayContent.body = "In case you missed it: \(content.body)"
+            secondDayContent.attachments = day2Attachments
             
             let trigger2 = UNCalendarNotificationTrigger(dateMatching: date2, repeats: false)
             let request2 = UNNotificationRequest(identifier: "\(identifier)-day2", content: secondDayContent, trigger: trigger2)
             
-            center.add(request2)
+            do {
+                try await center.add(request2)
+                print("✅ Scheduled \(identifier)-day2")
+            } catch {
+                print("❌ Failed to schedule \(identifier)-day2: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -173,6 +203,79 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(baseID)-day1", "\(baseID)-day2"])
     }
 
+    func getPendingNotifications() async -> [UNNotificationRequest] {
+        await UNUserNotificationCenter.current().pendingNotificationRequests()
+    }
+
+    func scheduleAllUpcomingNotifications(onProgress: (@Sendable (String) -> Void)? = nil) async {
+        guard let container = modelContainer else { return }
+        let context = ModelContext(container)
+        
+        let descriptor = FetchDescriptor<MediaItem>()
+        guard let allItems = try? context.fetch(descriptor) else { 
+            onProgress?("❌ Failed to fetch items")
+            return 
+        }
+        
+        let upcomingItems = allItems.filter { $0.isUpcoming }
+            .sorted { 
+                let date1 = $0.cachedNextAiringDate ?? $0.releaseDate ?? .distantPast
+                let date2 = $1.cachedNextAiringDate ?? $1.releaseDate ?? .distantFuture
+                return date1 < date2
+            }
+        
+        onProgress?("🔔 Found \(upcomingItems.count) upcoming items")
+        
+        // System limit is 64 total notifications. We schedule 2 per item.
+        let limit = 32 
+        let itemsToProcess = upcomingItems.prefix(limit)
+        
+        for item in itemsToProcess {
+            onProgress?("⏳ Processing \(item.title)...")
+            
+            // Sequential processing with a small breather for the system daemon
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            
+            if item.type == .movie {
+                await self.scheduleMovieNotification(id: item.id, title: item.title, releaseDate: item.releaseDate, posterURL: item.posterURL)
+            } else if item.type == .tvShow {
+                let tv = item.tvShowDetails
+                await self.scheduleTVNotification(
+                    id: item.id,
+                    title: item.title,
+                    posterURL: item.posterURL,
+                    nextDate: item.cachedNextAiringDate ?? tv?.nextEpisodeDate,
+                    nextEpisodeNumber: tv?.nextEpisodeNumber,
+                    nextSeasonNumber: tv?.nextSeasonNumber,
+                    nextEpisodeTime: tv?.nextEpisodeTime
+                )
+            }
+            onProgress?("✅ Finished \(item.title)")
+        }
+        onProgress?("🏁 Sync Complete")
+    }
+
+    func runNuclearTest() async {
+        guard isProperlyBundled else { return }
+        let center = UNUserNotificationCenter.current()
+        
+        print("☢️ Running Nuclear Test (5 unique alerts)...")
+        for i in 1...5 {
+            let content = UNMutableNotificationContent()
+            content.title = "Nuclear Test #\(i)"
+            content.body = "Random UUID: \(UUID().uuidString)"
+            content.sound = .default
+            
+            // Trigger 1 hour in future (incrementing)
+            let date = Date().addingTimeInterval(TimeInterval(3600 * i))
+            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            
+            let request = UNNotificationRequest(identifier: "nuclear-\(UUID().uuidString)", content: content, trigger: trigger)
+            try? await center.add(request)
+            print("☢️ Added nuclear-\(i)")
+        }
+    }
     
     func sendTestNotification() {
         guard isProperlyBundled else {

@@ -105,8 +105,9 @@ final class MediaItem: Identifiable {
 
 extension MediaItem {
     var isUpcoming: Bool {
-        guard let date = cachedNextAiringDate else { return false }
-        return date > Date()
+        let date = cachedNextAiringDate ?? releaseDate
+        guard let finalDate = date else { return false }
+        return finalDate > Date()
     }
 
     var badgeText: String? {

@@ -187,6 +187,11 @@ actor BackgroundDataService {
         }
         
         try modelContext.save()
+        
+        // Phase 7: Global Notification Resync
+        // After healing metadata and cached properties, ensure the system notification queue is up to date.
+        await NotificationManager.shared.scheduleAllUpcomingNotifications()
+        
         print("✅ Maintenance: Library heal complete.")
     }
 
@@ -451,6 +456,13 @@ actor BackgroundDataService {
             item.posterURL = APIClient.tmdbImageURL(path: details.posterPath) ?? item.posterURL
             item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
             
+            // Initialize next episode fields with TMDB data as baseline
+            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
+            tvDetails.nextSeasonNumber = details.nextSeasonNumber
+            if let tmdbNextDate = details.nextEpisodeDate {
+                tvDetails.nextEpisodeDate = DateUtils.parseDate(tmdbNextDate)
+            }
+            
             var tvMazeID = tvDetails.tvMazeID
             if let tvdbID = details.tvdbID, tvMazeID == nil {
                 tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
@@ -464,6 +476,10 @@ actor BackgroundDataService {
                     
                     if let schedule = episode {
                         tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                        
+                        // Sync episode/season from TVMaze to match the more accurate date
+                        if let sNum = schedule.season { tvDetails.nextSeasonNumber = sNum }
+                        if let eNum = schedule.number { tvDetails.nextEpisodeNumber = eNum }
                     }
                 }
                 
@@ -501,8 +517,6 @@ actor BackgroundDataService {
             tvDetails.numberOfEpisodes = details.episodesCount
             tvDetails.creators = details.creators.map { $0.name }
             tvDetails.tvMazeID = tvMazeID
-            tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
-            tvDetails.nextSeasonNumber = details.nextSeasonNumber
             
             if !metadataOnly {
                 let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)

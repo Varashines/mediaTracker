@@ -20,7 +20,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case insights = "Insights"
     case movie = "Movie"
     case tvShow = "TV Show"
-    case settings = "Settings"
     case smartHub = "Smart Hub"
     case quickBites = "Quick Bites"
     case catchUp = "Catch Up"
@@ -45,7 +44,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .insights: return "Statistics"
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
-        case .settings: return "Settings"
         case .smartHub: return "Smart Hub"
         case .quickBites: return "Quick Bites"
         case .catchUp: return "Catch Up Priority"
@@ -70,7 +68,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .insights: return "chart.bar.fill"
         case .movie: return "film"
         case .tvShow: return "tv"
-        case .settings: return "gearshape.fill"
         case .smartHub: return "sparkles.rectangle.stack"
         case .quickBites: return "timer"
         case .catchUp: return "arrow.uturn.right.circle.fill"
@@ -160,15 +157,34 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
     var id: String { self.rawValue }
 
     var color: Color {
-        switch self {
-        case .cosmic: return Color(red: 0.55, green: 0.35, blue: 0.95)
-        case .solar: return Color(red: 1.00, green: 0.45, blue: 0.20)
-        case .ocean: return Color(red: 0.10, green: 0.45, blue: 0.90) // Darker blue
-        case .berry: return Color(red: 0.85, green: 0.15, blue: 0.45)
-        case .minty: return Color(red: 0.00, green: 0.80, blue: 0.60)
-        case .emerald: return Color(red: 0.15, green: 0.65, blue: 0.35) // Deep green
-        case .candy: return Color(red: 1.00, green: 0.40, blue: 0.70)
-        case .lava: return Color(red: 1.00, green: 0.20, blue: 0.30)
+        color(for: .dark) // Default fallback
+    }
+
+    func color(for scheme: ColorScheme) -> Color {
+        if scheme == .dark {
+            // Dark Mode: Desaturated and Slightly Brighter for comfort (Pastel-leaning)
+            switch self {
+            case .cosmic: return Color(red: 0.70, green: 0.60, blue: 1.00)
+            case .solar: return Color(red: 1.00, green: 0.70, blue: 0.50)
+            case .ocean: return Color(red: 0.45, green: 0.70, blue: 1.00)
+            case .berry: return Color(red: 1.00, green: 0.45, blue: 0.65)
+            case .minty: return Color(red: 0.40, green: 1.00, blue: 0.85)
+            case .emerald: return Color(red: 0.50, green: 1.00, blue: 0.70)
+            case .candy: return Color(red: 1.00, green: 0.65, blue: 0.85)
+            case .lava: return Color(red: 1.00, green: 0.50, blue: 0.55)
+            }
+        } else {
+            // Light Mode: Deeper and More Saturated for impact on white backgrounds
+            switch self {
+            case .cosmic: return Color(red: 0.45, green: 0.25, blue: 0.85)
+            case .solar: return Color(red: 0.90, green: 0.35, blue: 0.10)
+            case .ocean: return Color(red: 0.05, green: 0.35, blue: 0.85)
+            case .berry: return Color(red: 0.75, green: 0.05, blue: 0.35)
+            case .minty: return Color(red: 0.00, green: 0.65, blue: 0.45)
+            case .emerald: return Color(red: 0.10, green: 0.55, blue: 0.25)
+            case .candy: return Color(red: 0.90, green: 0.25, blue: 0.60)
+            case .lava: return Color(red: 0.90, green: 0.10, blue: 0.20)
+            }
         }
     }
 

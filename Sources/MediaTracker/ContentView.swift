@@ -38,8 +38,8 @@ struct ContentView: View {
 
         updateTask?.cancel()
         updateTask = Task {
-            // Optimization: Skip heavy data load if moving to Discovery Hub or Settings
-            if category == .discover || category == .settings || (category == .smartHub && collectionID == nil) { return }
+            // Optimization: Skip heavy data load if moving to Discovery Hub
+            if category == .discover || (category == .smartHub && collectionID == nil) { return }
 
             // Reset pagination for new filter/sort
             await MainActor.run {
@@ -201,8 +201,6 @@ struct ContentView: View {
                 .transition(.asymmetric(insertion: .opacity, removal: .opacity))
         } else if viewModel.selectedCategory == .insights {
             InsightsView()
-        } else if viewModel.selectedCategory == .settings {
-            SettingsView()
         } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
         } else {
@@ -412,7 +410,6 @@ struct ContentView: View {
                         Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
                         Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                         Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.settings) }.keyboardShortcut(",", modifiers: .command)
                         Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     }
                     .opacity(0)
@@ -572,16 +569,15 @@ struct ContentView: View {
 
     private var isSortable: Bool {
         let cat = viewModel.selectedCategory
-        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming || cat == .settings { return false }
+        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming { return false }
         return true
     }
 
     private var isRefreshable: Bool {
         let cat = viewModel.selectedCategory
-        if cat == .insights || cat == .home || cat == .settings { return false }
+        if cat == .insights || cat == .home { return false }
         return true
     }
-
     private var isSystemSmartCategory: Bool {
         let cat = viewModel.selectedCategory
         return cat == .releaseRadar || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive

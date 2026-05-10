@@ -47,12 +47,6 @@ struct SidebarNavigation: View, Equatable {
                     .tag(SidebarItem.category(.insights))
             }
             .padding(.vertical, 4)
-
-            Section("Configuration") {
-                Label(NavigationCategory.settings.title, systemImage: NavigationCategory.settings.icon)
-                    .tag(SidebarItem.category(.settings))
-            }
-            .padding(.vertical, 4)
         }
         .scrollBounceBehavior(.basedOnSize)
     }
