@@ -183,16 +183,32 @@ private struct SeasonTab: View {
                 }
             }
             .overlay {
+                // 1. Base Perimeter Track (Matched Vibrancy & Glow)
+                if !isFullyWatched {
+                    let o = themeColor.oklch
+                    // Boost lightness (0.5) and saturation for high energy
+                    let vibrantBase = Color.fromOKLCH(l: 0.55, c: max(o.c, 0.25), h: o.h)
+                    let baseOpacity = isSelected ? 0.7 : 0.4
+                    Capsule()
+                        .stroke(vibrantBase.opacity(baseOpacity), lineWidth: 2.5)
+                        .shadow(color: vibrantBase.opacity(isSelected ? 0.3 : 0.1), radius: 2)
+                }
+                
+                // 2. Dynamic Success Progress (Semantic Green)
                 if isOngoing {
+                    let green = Color.semanticGreen(for: colorScheme)
                     Capsule()
                         .trim(from: 0, to: progress)
-                        .stroke(Color.semanticGreen(for: colorScheme), lineWidth: 2)
+                        .stroke(
+                            green,
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                        )
+                        .shadow(color: green.opacity(0.3), radius: 2)
                 } else if isFullyWatched {
+                    let green = Color.semanticGreen(for: colorScheme)
                     Capsule()
-                        .stroke(Color.semanticGreen(for: colorScheme).opacity(0.5), lineWidth: 1)
-                } else if isSelected {
-                    Capsule()
-                        .stroke(accent.opacity(0.3), lineWidth: 1)
+                        .stroke(green, lineWidth: 2.5)
+                        .shadow(color: green.opacity(0.2), radius: 2)
                 }
             }
             .foregroundStyle(isSelected ? accent : .secondary)
