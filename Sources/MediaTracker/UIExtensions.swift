@@ -28,6 +28,13 @@ extension Color {
         }
     }
 
+    /// Returns a Color that linearly interpolates from pure blue (progress=0) to pure green (progress=1).
+    static func blueToGreen(progress: Double) -> Color {
+        let p = min(max(progress, 0), 1)
+        // Transition from deep blue to vibrant green
+        return Color(red: 0.0, green: 0.4 + (p * 0.6), blue: 1.0 - (p * 0.6))
+    }
+
     var isLightColor: Bool {
         guard let rgbColor = NSColor(self).usingColorSpace(.sRGB) else { return false }
         var r: CGFloat

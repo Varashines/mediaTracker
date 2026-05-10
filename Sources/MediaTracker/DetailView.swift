@@ -42,12 +42,13 @@ struct DetailView: View {
             .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
 
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                 headerSection
                 tmdbWarningSection
                 castAndTrackingSection
             }
-            .padding(AppTheme.Spacing.large)
+            .padding(.horizontal, AppTheme.Spacing.xLarge)
+            .padding(.vertical, AppTheme.Spacing.section)
         }
         .scrollBounceBehavior(.basedOnSize)
         .navigationTitle("Details")
@@ -243,23 +244,26 @@ struct ModularSection<Content: View>: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 14, weight: .black))
                     .foregroundStyle(color.gradient)
-                Text(title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                Text(title.uppercased())
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .kerning(1.2)
                 Spacer()
             }
-            .padding(.leading, 4)
+            .padding(.leading, 8)
             
             content
-                .padding(20)
-                .background(color.opacity(scheme == .dark ? 0.15 : 0.08))
+                .padding(24)
+                .background(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
+                .background(color.opacity(scheme == .dark ? 0.05 : 0.02))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(color.opacity(0.15), lineWidth: 1)
+                        .stroke(.white.opacity(scheme == .dark ? 0.1 : 0.2), lineWidth: 0.5)
                 }
         }
     }

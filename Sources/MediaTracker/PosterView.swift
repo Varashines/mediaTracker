@@ -9,22 +9,22 @@ struct PosterView: View {
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
-                // 1. Aurora Glow Background (Optimized Gradient instead of Dynamic Blur)
+                // 1. Aurora Glow Background
                 RadialGradient(
-                    colors: [themeColor.opacity(0.4), .clear],
+                    colors: [themeColor.opacity(0.35), .clear],
                     center: .center,
                     startRadius: 0,
-                    endRadius: 150
+                    endRadius: 200
                 )
-                .frame(width: 220, height: 330)
-                .offset(y: 10)
+                .frame(width: 320, height: 450)
+                .offset(y: 20)
                 
                 let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .critical, themeColor: themeColor) { _ in
                     } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
                     }
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 240, height: 360)
+                    .frame(width: 260, height: 390)
                     .clipped()
                 
                 Group {
@@ -38,12 +38,12 @@ struct PosterView: View {
                         content
                     }
                 }
-                .frame(width: 240, height: 360)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: .black.opacity(0.3), radius: 25, x: 0, y: 15)
+                .frame(width: 260, height: 390)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 20)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item, themeColor: themeColor)
-                        .padding(12)
+                        .padding(14)
                 }
             }
         }

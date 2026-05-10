@@ -39,7 +39,7 @@ struct SmartBadgeView: View {
     var body: some View {
         if let metadata = metadata {
             if let label = metadata.smartBadgeLabel, let icon = metadata.smartBadgeIcon {
-                intelligentBadge(label: label, icon: icon, isSparkle: metadata.isSparkleBadge, remaining: metadata.remainingCount)
+                intelligentBadge(label: label, icon: icon, isSparkle: metadata.isSparkleBadge, remaining: metadata.remainingCount, progress: metadata.progress)
             } else {
                 statusUI(
                     isUpcoming: metadata.isUpcoming,
@@ -52,7 +52,7 @@ struct SmartBadgeView: View {
             }
         } else if let item = item, item.modelContext != nil {
             if let label = item.storedSmartBadgeLabel, let icon = item.storedSmartBadgeIcon {
-                intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle, remaining: item.remainingEpisodesCount)
+                intelligentBadge(label: label, icon: icon, isSparkle: item.storedSmartBadgeIsSparkle, remaining: item.remainingEpisodesCount, progress: item.storedProgress)
             } else {
                 statusUI(
                     isUpcoming: item.storedIsUpcoming,
@@ -69,9 +69,7 @@ struct SmartBadgeView: View {
     }
 
     @ViewBuilder
-    private func intelligentBadge(label: String, icon: String, isSparkle: Bool, remaining: Int? = nil) -> some View {
-        let isBinge = label == "BINGE"
-        
+    private func intelligentBadge(label: String, icon: String, isSparkle: Bool, remaining: Int? = nil, progress: Double? = nil) -> some View {
         let badgeConfig: (bg: Color, fg: Color) = {
             switch label {
             case "SERIES PREMIERE":
@@ -111,19 +109,20 @@ struct SmartBadgeView: View {
             }
         }()
 
-        HStack(spacing: 0) {
-            Image(systemName: icon)
-        }
-        .font(.system(size: 11, weight: .black))
-        .frame(width: 24, height: 24)
-        .background(badgeConfig.bg.gradient)
-        .foregroundStyle(badgeConfig.fg)
-        .clipShape(Circle())
+        StatusBadgePrimitive(
+            label: label,
+            systemImage: icon,
+            accentColor: badgeConfig.bg,
+            isSolid: true,
+            progress: progress,
+            isCompact: true
+        )
         .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
         .overlay {
             if isSparkle {
                 Circle()
                     .stroke(.white.opacity(0.3), lineWidth: 1)
+                    .frame(width: 24, height: 24)
             }
         }
     }

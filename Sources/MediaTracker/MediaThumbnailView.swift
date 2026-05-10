@@ -8,17 +8,34 @@ struct MediaThumbnailView: View, Equatable {
                lhs.capturedItemID == rhs.capturedItemID &&
                lhs.capturedTitle == rhs.capturedTitle &&
                lhs.capturedPosterURL == rhs.capturedPosterURL &&
+               lhs.capturedType == rhs.capturedType &&
                lhs.capturedState == rhs.capturedState &&
                lhs.capturedProgress == rhs.capturedProgress &&
+               lhs.isCompletedInCollection == rhs.isCompletedInCollection &&
+               lhs.selectedCollectionID == rhs.selectedCollectionID &&
                lhs.capturedIsUpcoming == rhs.capturedIsUpcoming &&
-               lhs.isCompletedInCollection == rhs.isCompletedInCollection
-    }
-    
-    enum DisplayMode {
-        case hero, grid, search
+               lhs.capturedGridBadgeText == rhs.capturedGridBadgeText
     }
 
-    // 1. Immutable Captured Snapshot
+    enum DisplayMode {
+        case grid
+        case hero
+        case search
+    }
+
+    var item: MediaItem?
+    let metadata: MediaThumbnailMetadata?
+    let result: MediaSearchResult?
+    let mode: DisplayMode
+    var showTypeBadge: Bool = true
+    var isUpcomingSection: Bool = false
+    var isLocalInSearch: Bool = false
+    var namespace: Namespace.ID? = nil
+    var staggerIndex: Int? = nil
+    var isFastScrolling: Bool = false
+    var action: (() -> Void)? = nil
+
+    // Captured values for stability during background updates or deletion
     private let capturedID: PersistentIdentifier?
     private let capturedItemID: String
     private let capturedTitle: String
@@ -32,21 +49,6 @@ struct MediaThumbnailView: View, Equatable {
     private let capturedWatchProgress: String?
     private let capturedIsUpcoming: Bool
     private let capturedGridBadgeText: String?
-    
-    // 2. Reference Layer (Used only if object is valid)
-    let item: MediaItem?
-    let metadata: MediaThumbnailMetadata?
-    let result: MediaSearchResult?
-    
-    // 3. Configuration
-    let mode: DisplayMode
-    var showTypeBadge: Bool = true
-    var isUpcomingSection: Bool = false
-    var isLocalInSearch: Bool = false
-    var action: (() -> Void)? = nil
-    var namespace: Namespace.ID? = nil
-    var staggerIndex: Int? = nil
-    var isFastScrolling: Bool = false
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -56,6 +58,7 @@ struct MediaThumbnailView: View, Equatable {
     @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
+    @State private var mouseLocation: CGPoint = .zero
     
     // Performance optimization: Status passed from parent to avoid @Query in every thumbnail
     var isCompletedInCollection: Bool = false
@@ -246,18 +249,35 @@ struct MediaThumbnailView: View, Equatable {
                 capturedID: nil,
                 resultID: nil
             )
-            .blur(radius: effectiveHover ? 10 : 0)
             
-            Rectangle()
-                .fill(.black.opacity(effectiveHover ? 0.35 : 0))
-                .overlay {
-                    if effectiveHover {
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
-                            .opacity(0.8)
-                    }
-                }
-            
+            // Dynamic Light Highlight (Specular for 3D Tilt)
+            if isHovered {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [.white.opacity(0.15), .clear],
+                            center: UnitPoint(x: mouseLocation.x / width, y: mouseLocation.y / height),
+                            startRadius: 0,
+                            endRadius: 100
+                        )
+                    )
+                    .blendMode(.screen)
+            }
+
+            // 2. Glass Peek Overlay (Bottom sliding tray)
+            GlassPeekOverlay(
+                title: title,
+                year: yearLabel,
+                state: safeState,
+                nextEpisodeLabel: nextEpisodeLabel,
+                watchProgress: watchProgress,
+                isUpcoming: isUpcoming,
+                gridBadgeText: gridBadgeText,
+                isHovered: effectiveHover,
+                mode: mode,
+                appAccent: appAccent
+            )
+
             // Smart Badge (Top Leading)
             VStack {
                 HStack {
@@ -294,40 +314,6 @@ struct MediaThumbnailView: View, Equatable {
                 .opacity(isHovered ? 0 : 1)
                 .offset(x: isHovered ? 4 : 0, y: isHovered ? -4 : 0)
             }
-            
-            // 2. SHADOW GALLERY: The Reveal (Centered)
-            ThumbnailHoverOverlay(
-                title: title,
-                year: yearLabel,
-                state: safeState,
-                nextEpisodeLabel: nextEpisodeLabel,
-                watchProgress: watchProgress,
-                isUpcoming: isUpcoming,
-                gridBadgeText: gridBadgeText,
-                isHovered: effectiveHover,
-                mode: mode,
-                appAccent: appAccent
-            )
-            
-            // Progress Bar (Bottom Edge, Hero Mode Only)
-            if mode == .hero, let progress = safeProgress, progress > 0 && progress < 1.0 {
-                VStack {
-                    Spacer()
-                    let accent = (item?.themeColorHex.flatMap { Color(hex: $0) } ?? appAccent.color).highContrastAccent(colorScheme: colorScheme)
-                    
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(.black.opacity(0.3))
-                            .frame(height: 3)
-                        
-                        Rectangle()
-                            .fill(accent)
-                            .frame(width: width * CGFloat(progress), height: 3)
-                            .shadow(color: accent.opacity(0.5), radius: 4, x: 0, y: 0)
-                    }
-                }
-                .opacity(isHovered ? 0 : 1)
-            }
         }
 
         let itemIDString: String = {
@@ -356,24 +342,30 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .cornerRadius(mode == .hero ? 16 : 16)
+        .cornerRadius(16)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
-        .offset(y: (isAppeared || isFastScrolling) ? 0 : 10)
+        .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         .onAppear {
             if isFastScrolling {
                 isAppeared = true
                 return
             }
-            let delay = Double(staggerIndex ?? 0 % 20) * 0.04
-            withAnimation(.smooth(duration: 0.5).delay(delay)) {
+            let delay = Double(staggerIndex ?? 0 % 15) * 0.05
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(delay)) {
                 isAppeared = true
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isHovered)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                mouseLocation = location
+                isHovered = true
+            case .ended:
+                isHovered = false
+            }
         }
     }
 
@@ -404,8 +396,10 @@ struct MediaThumbnailView: View, Equatable {
     private var typeBadge: some View {
         Group {
             switch type {
-            case .movie: Image(systemName: "film")
-            case .tvShow: Image(systemName: "tv")
+            case .movie:
+                Image(systemName: "film.fill")
+            case .tvShow:
+                Image(systemName: "tv.fill")
             }
         }
         .font(.system(size: 9, weight: .bold))
@@ -431,26 +425,26 @@ struct MediaThumbnailView: View, Equatable {
                             SaveCoordinator.shared.requestSave(modelContext)
             
                         }
+                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                     }
                 } label: {
-                    Label(isSeenInCollection ? "Mark as To Watch" : "Mark as Watched", 
+                    Label(isSeenInCollection ? "Mark as Unseen in Collection" : "Mark as Seen in Collection", 
                           systemImage: isSeenInCollection ? "circle" : "checkmark.circle.fill")
                 }
             }
-            Divider()
         }
 
-        Section("Quick Actions") {
+        Section("Quick Tracking") {
             if type == .tvShow {
                 Button {
                     if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
                         markNextEpisodeAsWatched(for: item)
                     }
                 } label: {
-                    Label("Mark Next Episode Watched", systemImage: "play.fill")
+                    Label("Mark Next Episode Watched", systemImage: "play.circle.fill")
                 }
             }
-            
+
             if state != .completed {
                 Button {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
@@ -461,12 +455,12 @@ struct MediaThumbnailView: View, Equatable {
                         }
                     }
                 } label: {
-                    Label("Quick Complete", systemImage: "checkmark.seal.fill")
+                    Label("Mark as Completed", systemImage: "checkmark.seal.fill")
                 }
             }
         }
-        
-        Section("Status") {
+
+        Section("Set Status") {
             ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) { targetState in
                 Button(targetState.displayName) {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
@@ -479,7 +473,7 @@ struct MediaThumbnailView: View, Equatable {
                 }
             }
         }
-        Divider()
+
         Button(role: .destructive) {
             withAnimation {
                 isRemoved = true

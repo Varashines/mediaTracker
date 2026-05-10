@@ -9,14 +9,6 @@ private enum TVTrackingConstants {
     static let animationDuration: Double = 1.2
 }
 
-extension Color {
-    /// Returns a Color that linearly interpolates from pure blue (progress=0) to pure green (progress=1).
-    static func blueToGreen(progress: Double) -> Color {
-        let p = min(max(progress, 0), 1)
-        return Color(red: 0.0, green: p, blue: 1.0 - p)
-    }
-}
-
 struct TVTrackingView: View {
     @Bindable var tvDetails: TVShowDetails
     var themeColor: Color

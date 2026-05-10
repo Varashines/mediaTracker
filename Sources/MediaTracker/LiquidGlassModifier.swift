@@ -5,14 +5,9 @@ struct LiquidGlassModifier: ViewModifier {
     let isSolid: Bool
     let foregroundColor: Color?
     let progress: Double?
+    var horizontalPadding: CGFloat = 10
+    var verticalPadding: CGFloat = 4
     @Environment(\.colorScheme) var colorScheme
-
-    init(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil) {
-        self.accentColor = accentColor
-        self.isSolid = isSolid
-        self.foregroundColor = foregroundColor
-        self.progress = progress
-    }
 
     func body(content: Content) -> some View {
         let isLight = accentColor.isLightColor
@@ -23,8 +18,8 @@ struct LiquidGlassModifier: ViewModifier {
         let tintOpacity = isSolid ? 0.9 : (isLight ? 0.2 : 0.3)
 
         return content
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .foregroundStyle(foreground)
             .background {
                 if isAsleep {
@@ -42,12 +37,6 @@ struct LiquidGlassModifier: ViewModifier {
                                     Capsule()
                                         .fill(accentColor.opacity(tintOpacity))
                                 }
-                        }
-
-                        if let progress = progress {
-                            Capsule()
-                                .fill(foreground.opacity(0.1))
-                                .scaleEffect(x: CGFloat(clampedProgress(progress)), anchor: .leading)
                         }
                     }
                 }
@@ -67,11 +56,13 @@ struct LiquidGlassModifier: ViewModifier {
 }
 
 extension View {
-    func liquidGlassPill(accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil)
-        -> some View
-    {
+    func liquidGlassPill(
+        accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil,
+        hPadding: CGFloat = 10, vPadding: CGFloat = 4
+    ) -> some View {
         self.modifier(
             LiquidGlassModifier(
-                accentColor: accentColor, isSolid: isSolid, foregroundColor: foregroundColor, progress: progress))
+                accentColor: accentColor, isSolid: isSolid, foregroundColor: foregroundColor, progress: progress,
+                horizontalPadding: hPadding, verticalPadding: vPadding))
     }
 }

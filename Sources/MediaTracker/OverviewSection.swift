@@ -8,11 +8,11 @@ struct OverviewSection: View {
     @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(themeColor.highContrastAccent(colorScheme: colorScheme))
-                    .frame(width: 4, height: 18)
+                Image(systemName: "quote.opening")
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundStyle(themeColor.gradient)
 
                 Text("SYNOPSIS")
                     .font(.system(size: 13, weight: .black))
@@ -21,11 +21,11 @@ struct OverviewSection: View {
             }
 
             Text(overview)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .lineSpacing(6)
-                .foregroundStyle(.primary.opacity(0.8))
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .lineSpacing(8)
+                .foregroundStyle(.primary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 8)
+        .padding(.top, 12)
     }
 }
