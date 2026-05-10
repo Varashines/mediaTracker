@@ -177,3 +177,46 @@ struct ShimmeringModifier: ViewModifier {
             }
     }
 }
+
+// MARK: - Standardized Page Components
+
+struct PageHeader: View {
+    let title: String
+    let subtitle: String?
+    let color: Color
+    
+    init(_ title: String, subtitle: String? = nil, color: Color = .primary) {
+        self.title = title
+        self.subtitle = subtitle
+        self.color = color
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(color.gradient)
+            
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct SubSectionHeader: View {
+    let title: String
+    
+    init(_ title: String) {
+        self.title = title
+    }
+    
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 9, weight: .black))
+            .foregroundStyle(.tertiary)
+            .tracking(1.5)
+    }
+}

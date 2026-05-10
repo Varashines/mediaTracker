@@ -26,10 +26,15 @@ struct SmartCollectionsHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 35) {
-                // 1. SYSTEM SMART COLLECTIONS
-                sectionHeaderMini("System Intelligence")
+                // 1. PAGE HEADER
+                PageHeader("Smart Hub", subtitle: "Intelligent library automation.", color: appAccent.color)
                     .padding(.horizontal, 40)
                     .padding(.top, 40)
+
+                // 2. SYSTEM SMART COLLECTIONS
+                sectionHeaderMini("System Intelligence")
+                    .padding(.horizontal, 40)
+                    .padding(.top, 10)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
                     ForEach(smartCategories) { category in
@@ -276,10 +281,11 @@ private struct SmartCollectionCard: View {
             .padding(20)
             .background {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.primary.opacity(isHovered ? (colorScheme == .dark ? 0.05 : 0.03) : (colorScheme == .dark ? 0.03 : 0.015)))
+                    .fill(Color.primary.opacity(isHovered ? (colorScheme == .dark ? 0.06 : 0.04) : (colorScheme == .dark ? 0.03 : 0.015)))
+                    .shadow(color: accentColor.opacity(isHovered ? (colorScheme == .dark ? 0.2 : 0.15) : 0), radius: 15, x: 0, y: 10)
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(accentColor.opacity(isHovered ? 0.3 : 0.1), lineWidth: 1)
+                            .stroke(accentColor.opacity(isHovered ? 0.4 : 0.1), lineWidth: 1)
                     }
             }
             .overlay(alignment: .topTrailing) {

@@ -21,6 +21,9 @@ struct ReleaseCalendarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     VStack(alignment: .leading, spacing: 15) {
+                        PageHeader("Calendar", subtitle: "Release radar and temporal discovery.", color: appAccent.color)
+                            .padding(.bottom, 10)
+                        
                         monthNavigation
                     }
                     .padding(.top, 20)

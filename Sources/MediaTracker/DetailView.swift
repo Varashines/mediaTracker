@@ -153,15 +153,11 @@ struct DetailView: View {
 
     @ViewBuilder
     private var castAndTrackingSection: some View {
-        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+        VStack(alignment: .leading, spacing: 32) {
             if showHeavyContent {
-                // 1. TV TRACKING (Highest Priority for Series)
+                // 1. TV TRACKING (Modular Card)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                        Text("Seasons & Episodes")
-                            .font(.title3.bold())
-                            .padding(.horizontal, AppTheme.Spacing.tiny)
-
+                    ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: viewModel.themeColor) {
                         TVTrackingView(
                             tvDetails: tv,
                             themeColor: viewModel.themeColor,
@@ -169,27 +165,13 @@ struct DetailView: View {
                             onWatchedToggle: { viewModel.checkOverallCompletion() },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
                         )
-
+                        .padding(.top, 4)
                     }
-                    Divider().padding(.vertical, AppTheme.Spacing.small)
                 }
 
-                // 2. TOP CAST (High Priority for Both)
+                // 2. TOP CAST (Modular Card)
                 if !viewModel.item.displayCast.isEmpty {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                        HStack {
-                            Text("Top Cast")
-                                .font(.title3.bold())
-                            Spacer()
-                            Text("\(viewModel.item.displayCast.count)")
-                                .font(.caption.bold())
-                                .padding(.horizontal, AppTheme.Spacing.tiny)
-                                .padding(.vertical, 2)
-                                .background(viewModel.themeColor.opacity(0.2))
-                                .clipShape(Capsule())
-                        }
-                        .padding(.horizontal, AppTheme.Spacing.tiny)
-
+                    ModularSection(title: "Top Cast", icon: "person.2.fill", color: viewModel.themeColor) {
                         CastSectionViewNew(
                             cast: viewModel.item.displayCast,
                             themeColor: viewModel.themeColor
@@ -197,20 +179,17 @@ struct DetailView: View {
                             onSearchActor?(actorName)
                         }
                     }
-                    Divider().padding(.vertical, AppTheme.Spacing.small)
                 }
             } else {
-                // SKELETON LOADER (Perceived Speed)
-                VStack(alignment: .leading, spacing: 30) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(height: 150)
-                    
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(height: 120)
+                // SKELETON LOADER
+                VStack(spacing: 24) {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.primary.opacity(0.04))
+                        .frame(height: 180)
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.primary.opacity(0.04))
+                        .frame(height: 140)
                 }
-                .padding(.top, 20)
                 .shimmering()
             }
         }
@@ -279,6 +258,38 @@ struct DetailView: View {
                     NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                 }
             }
+        }
+    }
+}
+
+/// A premium, modular container for cinematic detail sections.
+struct ModularSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let color: Color
+    @ViewBuilder let content: Content
+    @Environment(\.colorScheme) var scheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(color.gradient)
+                Text(title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                Spacer()
+            }
+            .padding(.leading, 4)
+            
+            content
+                .padding(20)
+                .background(.ultraThinMaterial.opacity(scheme == .dark ? 0.3 : 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                }
         }
     }
 }

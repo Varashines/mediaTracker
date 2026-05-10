@@ -11,9 +11,37 @@ struct LibraryHeaderView: View {
     let onBack: (() -> Void)?
     var viewModel: MediaViewModel? = nil
     @Query private var collections: [MediaCollection]
+
+    private var pageTitle: String {
+        if let collectionID = viewModel?.selectedCollectionID {
+            return collections.first(where: { $0.id == collectionID })?.name ?? selectedCategory.title
+        }
+        return selectedCategory.title
+    }
+
+    private var pageSubtitle: String? {
+        switch selectedCategory {
+        case .home: return "Welcome back to your theater."
+        case .all: return "Exploring your entire cinematic library."
+        case .movie: return "Browsing your film collection."
+        case .tvShow: return "Tracking your favorite series."
+        case .discover: return "Find something new to watch."
+        case .smartHub: return "Intelligent library automation."
+        case .upcoming: return "Release radar and temporal discovery."
+        default: return nil
+        }
+    }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 16) {
+            // 1. PAGE TITLE
+            if isMainSection {
+                PageHeader(pageTitle, subtitle: pageSubtitle, color: appAccent.color)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 10)
+            }
+
+            // 2. FILTER INFO
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
                 

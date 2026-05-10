@@ -5,6 +5,7 @@ struct LibraryFilterBar: View {
     @Bindable var viewModel: MediaViewModel
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @Environment(\.colorScheme) var colorScheme
+    @Namespace private var filterNamespace
     
     // Year options: Current year down to 1950
     private let years: [String] = {
@@ -86,28 +87,28 @@ struct LibraryFilterBar: View {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .bold))
                 Text(title)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
-                    .opacity(0.5)
+                    .opacity(0.4)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
+            .foregroundStyle(active ? appAccent.color(for: colorScheme) : .primary.opacity(0.7))
             .background {
-                Capsule()
-                    .fill(.regularMaterial)
-                    .overlay {
-                        if active {
-                            Capsule()
-                                .fill(appAccent.color.opacity(0.12))
-                        }
-                    }
+                if active {
+                    Capsule()
+                        .fill(appAccent.color(for: colorScheme).opacity(colorScheme == .dark ? 0.12 : 0.1))
+                        .matchedGeometryEffect(id: "filter_active", in: filterNamespace)
+                } else {
+                    Capsule()
+                        .fill(.primary.opacity(0.04))
+                }
             }
             .overlay {
                 Capsule()
-                    .stroke(active ? appAccent.color.opacity(0.3) : .primary.opacity(0.1), lineWidth: 1)
+                    .stroke(active ? appAccent.color(for: colorScheme).opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
             }
-            .foregroundStyle(active ? appAccent.color : .primary)
         }
         .buttonStyle(.plain)
     }

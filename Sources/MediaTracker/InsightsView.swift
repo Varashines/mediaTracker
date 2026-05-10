@@ -4,6 +4,7 @@ import SwiftUI
 
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
     @State private var stats: LibraryStats?
@@ -77,26 +78,20 @@ struct InsightsView: View {
     }
 
     private var dnaHeader: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("CINEMA DNA")
-                .font(.system(size: 14, weight: .black))
-                .foregroundStyle(appAccent.color)
-                .kerning(5)
-
-            Text("Your Cinematic Profile")
-                .font(.system(size: 56, weight: .black, design: .rounded))
-        }
+        PageHeader("Cinema DNA", subtitle: "Your unique cinematic profile.", color: appAccent.color)
     }
 
     @ViewBuilder
     private func dnaDescription(stats: LibraryStats) -> some View {
-        VStack(alignment: .leading, spacing: 40) {
+        VStack(alignment: .leading, spacing: 32) {
             let topGenre = stats.topRatedGenres.first?.0 ?? "Cinema"
             let topActor = stats.topRatedActors.first?.name ?? "Great Talent"
 
-            Text("An expert in ") + Text(topGenre).foregroundColor(appAccent.color)
+            (Text("An expert in ") + Text(topGenre).foregroundColor(appAccent.color)
                 + Text(", driven by the performances of ")
-                + Text(topActor).foregroundColor(appAccent.color) + Text(".")
+                + Text(topActor).foregroundColor(appAccent.color) + Text("."))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .lineSpacing(4)
 
             VStack(alignment: .leading, spacing: 20) {
                 metricSimple(
@@ -107,8 +102,6 @@ struct InsightsView: View {
                     value: "\(stats.totalMovies + stats.totalTVShows) TITLES")
             }
         }
-        .font(.system(size: 32, weight: .black, design: .rounded))
-        .lineSpacing(6)
     }
 
     @ViewBuilder
@@ -124,7 +117,7 @@ struct InsightsView: View {
     @ViewBuilder
     private func productionDeckSection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 60) {
-            headerMini("PRODUCTION DECK")
+            SubSectionHeader("PRODUCTION DECK")
 
             VStack(alignment: .leading, spacing: 50) {
                 horizontalAffinityList(
@@ -141,7 +134,7 @@ struct InsightsView: View {
     @ViewBuilder
     private func masterySection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 40) {
-            headerMini("MASTERED COLLECTIONS")
+            SubSectionHeader("MASTERED COLLECTIONS")
 
             HStack(spacing: 30) {
                 masteryCard(
@@ -301,15 +294,14 @@ struct InsightsView: View {
     // MARK: - Helpers
 
     private func headerMini(_ text: String) -> some View {
-        Text(text).font(.system(size: 11, weight: .black)).foregroundStyle(.secondary).kerning(4)
+        SubSectionHeader(text)
     }
 
     private func metricSimple(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 10, weight: .black)).kerning(2).foregroundStyle(
-                .secondary)
-            Text(value).font(.system(size: 24, weight: .black, design: .rounded)).foregroundStyle(
-                appAccent.color)
+            SubSectionHeader(label)
+            Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(
+                appAccent.color(for: colorScheme))
         }
     }
 
