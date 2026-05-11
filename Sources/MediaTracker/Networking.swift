@@ -45,6 +45,7 @@ actor APIClient {
     }()
     
     // Phase 2: Search Cache
+    private var inFlightTasks: [String: Task<[MediaSearchResult], Error>] = [:]
     private var searchCache: [String: [MediaSearchResult]] = [:]
     private var lastSearchTime: [String: Date] = [:]
     private let cacheExpiry: TimeInterval = 300 // 5 minutes
@@ -149,25 +150,39 @@ actor APIClient {
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
         }
+
+        if let inFlight = inFlightTasks[cacheKey] {
+            return try await inFlight.value
+        }
+
+        let task = Task {
+            // Phase 3: Disk Cache check for searches
+            if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
+               let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+                return results
+            }
+            
+            let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: cleanQuery, year: year)
+            let final = results.map { $0.toSearchResult() }
+            
+            if let encoded = try? JSONEncoder().encode(final) {
+                saveToCache(data: encoded, forKey: "\(cacheKey).json")
+            }
+            return final
+        }
+
+        inFlightTasks[cacheKey] = task
         
-        // Phase 3: Disk Cache check for searches
-        if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
-           let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+        do {
+            let results = try await task.value
+            inFlightTasks[cacheKey] = nil
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
             return results
+        } catch {
+            inFlightTasks[cacheKey] = nil
+            throw error
         }
-        
-        let results: [TMDBMovie] = try await searchTMDB(path: "/search/movie", query: cleanQuery, year: year)
-        let final = results.map { $0.toSearchResult() }
-        
-        if let encoded = try? JSONEncoder().encode(final) {
-            saveToCache(data: encoded, forKey: "\(cacheKey).json")
-        }
-        
-        searchCache[cacheKey] = final
-        lastSearchTime[cacheKey] = Date()
-        return final
     }
     
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
@@ -178,24 +193,38 @@ actor APIClient {
             return searchCache[cacheKey] ?? []
         }
 
-        // Phase 3: Disk Cache check for searches
-        if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
-           let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+        if let inFlight = inFlightTasks[cacheKey] {
+            return try await inFlight.value
+        }
+
+        let task = Task {
+            // Phase 3: Disk Cache check for searches
+            if let cachedData = await getCachedData(forKey: "\(cacheKey).json"),
+               let results = try? decoder.decode([MediaSearchResult].self, from: cachedData) {
+                return results
+            }
+
+            let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: cleanQuery, year: year)
+            let final = results.map { $0.toSearchResult() }
+            
+            if let encoded = try? JSONEncoder().encode(final) {
+                saveToCache(data: encoded, forKey: "\(cacheKey).json")
+            }
+            return final
+        }
+
+        inFlightTasks[cacheKey] = task
+        
+        do {
+            let results = try await task.value
+            inFlightTasks[cacheKey] = nil
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
             return results
+        } catch {
+            inFlightTasks[cacheKey] = nil
+            throw error
         }
-
-        let results: [TMDBTV] = try await searchTMDB(path: "/search/tv", query: cleanQuery, year: year)
-        let final = results.map { $0.toSearchResult() }
-        
-        if let encoded = try? JSONEncoder().encode(final) {
-            saveToCache(data: encoded, forKey: "\(cacheKey).json")
-        }
-        
-        searchCache[cacheKey] = final
-        lastSearchTime[cacheKey] = Date()
-        return final
     }
     
     // MARK: - Details

@@ -88,6 +88,7 @@ struct SettingsView: View {
                         .matchedGeometryEffect(id: "tab_bg", in: headerNamespace)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -159,6 +160,7 @@ struct SettingsView: View {
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -277,6 +279,7 @@ struct SettingsView: View {
                         Spacer()
                         Image(systemName: "trash.fill").foregroundStyle(.red)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -308,6 +311,7 @@ struct SettingsView: View {
             content()
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 
     private func modernToggle(_ title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
@@ -315,6 +319,12 @@ struct SettingsView: View {
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)
                 .labelsHidden()
+        }
+        .onTapGesture {
+            withAnimation {
+                isOn.wrappedValue.toggle()
+            }
+            FeedbackManager.shared.trigger(.click)
         }
     }
 

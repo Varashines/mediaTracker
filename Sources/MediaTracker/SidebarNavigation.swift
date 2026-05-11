@@ -13,20 +13,34 @@ struct SidebarNavigation: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                // Primary Section
+                // Main Section
                 VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(title: NavigationCategory.home.title, icon: NavigationCategory.home.icon, item: .category(.home))
-                    sidebarRow(title: NavigationCategory.discover.title, icon: NavigationCategory.discover.icon, item: .category(.discover))
                     sidebarRow(title: NavigationCategory.upcoming.title, icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
-                }
-                .padding(.bottom, 20)
-
-                sidebarSectionHeader("Library")
-                VStack(alignment: .leading, spacing: 4) {
+                    sidebarRow(title: "Now Watching", icon: "play.fill", item: .category(.home))
+                    sidebarRow(title: NavigationCategory.inProgress.title, icon: NavigationCategory.inProgress.icon, item: .category(.inProgress))
+                    sidebarRow(title: NavigationCategory.watchlist.title, icon: NavigationCategory.watchlist.icon, item: .category(.watchlist))
                     sidebarRow(title: NavigationCategory.all.title, icon: NavigationCategory.all.icon, item: .category(.all))
+                }
+                .padding(.bottom, 16)
+
+                sidebarSectionHeader("Smart Folders")
+                VStack(alignment: .leading, spacing: 4) {
+                    sidebarRow(title: NavigationCategory.stalled.title, icon: NavigationCategory.stalled.icon, item: .category(.stalled))
+                    sidebarRow(title: "Dropped", icon: "xmark.bin", item: .category(.disliked))
+                    sidebarRow(title: NavigationCategory.archive.title, icon: NavigationCategory.archive.icon, item: .category(.archive))
+                }
+                .padding(.bottom, 16)
+                
+                sidebarSectionHeader("Explore")
+                VStack(alignment: .leading, spacing: 4) {
+                    sidebarRow(title: NavigationCategory.discover.title, icon: NavigationCategory.discover.icon, item: .category(.discover))
+                }
+                .padding(.bottom, 16)
+                
+                sidebarSectionHeader("Categories")
+                VStack(alignment: .leading, spacing: 4) {
                     sidebarRow(title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon, item: .category(.movie))
                     sidebarRow(title: NavigationCategory.tvShow.title, icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
-                    sidebarRow(title: NavigationCategory.smartHub.title, icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
                     
                     let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
                     ForEach(NavigationCategory.allCases.filter { pinnedList.contains($0.rawValue) }) { category in
@@ -37,12 +51,12 @@ struct SidebarNavigation: View {
                         sidebarRow(title: collection.name, icon: collection.systemImage, item: .collection(collection.id, name: collection.name, icon: collection.systemImage))
                     }
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, 16)
                 
                 sidebarSectionHeader("Analytics")
                 sidebarRow(title: NavigationCategory.insights.title, icon: NavigationCategory.insights.icon, item: .category(.insights))
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 16)
         }
     }
@@ -71,26 +85,33 @@ struct SidebarNavigation: View {
             HStack(spacing: 12) {
                 Image(systemName: iconName)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.6))
+                    .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: 24)
                 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                    .foregroundStyle(isSelected ? .white : Color.secondary)
                 
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.blue)
+                        .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     private func sidebarSectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .black))
-            .foregroundStyle(.tertiary)
+        Text(title)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.secondary.opacity(0.7))
             .padding(.leading, 12)
             .padding(.bottom, 4)
     }

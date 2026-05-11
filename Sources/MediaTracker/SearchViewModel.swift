@@ -15,23 +15,34 @@ class SearchViewModel {
     
     private var searchTask: Task<Void, Never>?
     private let modelContainer: ModelContainer
+    private var cancellables = Set<AnyCancellable>()
+    private let searchSubject = PassthroughSubject<(String, SearchType), Never>()
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
+        setupSearchDebounce()
+    }
+
+    private func setupSearchDebounce() {
+        searchSubject
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] text, selectedType in
+                self?.searchTask?.cancel()
+                self?.searchTask = Task {
+                    await self?.performSearch(text: text, selectedType: selectedType)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func handleSearchTextChange(_ text: String, selectedType: SearchType) {
-        searchTask?.cancel()
         if text.isEmpty {
+            searchTask?.cancel()
             movieResults = []
             tvResults = []
             filteredLocalResults = []
         } else {
-            searchTask = Task {
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                if Task.isCancelled { return }
-                await performSearch(text: text, selectedType: selectedType)
-            }
+            searchSubject.send((text, selectedType))
         }
     }
 

@@ -314,7 +314,7 @@ struct MediaThumbnailView: View, Equatable {
         }()
 
         ZStack {
-            if let ns = namespace, !isFastScrolling && !itemIDString.isEmpty {
+            if let ns = namespace, mode == .hero, !isFastScrolling && !itemIDString.isEmpty {
                 posterContent
                     .matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
                     .background {
