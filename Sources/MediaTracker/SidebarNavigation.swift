@@ -1,12 +1,12 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @MainActor
 struct SidebarNavigation: View {
     @Binding var selection: SidebarItem?
-    @Query(filter: #Predicate<MediaCollection> { $0.isPinned }) private var pinnedCollections: [MediaCollection]
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = ""
+    @Query(filter: #Predicate<MediaCollection> { $0.isPinned }) private var pinnedCollections:
+        [MediaCollection]
+    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var sidebarNamespace
 
@@ -15,46 +15,62 @@ struct SidebarNavigation: View {
             VStack(alignment: .leading, spacing: 4) {
                 // Main Section
                 VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(title: NavigationCategory.upcoming.title, icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
-                    sidebarRow(title: "Now Watching", icon: "play.fill", item: .category(.home))
-                    sidebarRow(title: NavigationCategory.inProgress.title, icon: NavigationCategory.inProgress.icon, item: .category(.inProgress))
-                    sidebarRow(title: NavigationCategory.watchlist.title, icon: NavigationCategory.watchlist.icon, item: .category(.watchlist))
-                    sidebarRow(title: NavigationCategory.all.title, icon: NavigationCategory.all.icon, item: .category(.all))
+                    sidebarRow(
+                        title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
+                        item: .category(.home))
+                    sidebarRow(
+                        title: NavigationCategory.discover.title,
+                        icon: NavigationCategory.discover.icon, item: .category(.discover))
+                    sidebarRow(
+                        title: NavigationCategory.upcoming.title,
+                        icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
                 }
                 .padding(.bottom, 16)
 
-                sidebarSectionHeader("Smart Folders")
+                sidebarSectionHeader("LIBRARY")
                 VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(title: NavigationCategory.stalled.title, icon: NavigationCategory.stalled.icon, item: .category(.stalled))
-                    sidebarRow(title: "Dropped", icon: "xmark.bin", item: .category(.disliked))
-                    sidebarRow(title: NavigationCategory.archive.title, icon: NavigationCategory.archive.icon, item: .category(.archive))
+                    sidebarRow(
+                        title: NavigationCategory.all.title, icon: NavigationCategory.all.icon,
+                        item: .category(.all))
+                    sidebarRow(
+                        title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon,
+                        item: .category(.movie))
+                    sidebarRow(
+                        title: NavigationCategory.tvShow.title,
+                        icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
                 }
                 .padding(.bottom, 16)
-                
-                sidebarSectionHeader("Explore")
+
+                sidebarSectionHeader("COLLECTIONS")
                 VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(title: NavigationCategory.discover.title, icon: NavigationCategory.discover.icon, item: .category(.discover))
-                }
-                .padding(.bottom, 16)
-                
-                sidebarSectionHeader("Categories")
-                VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon, item: .category(.movie))
-                    sidebarRow(title: NavigationCategory.tvShow.title, icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
+                    sidebarRow(
+                        title: NavigationCategory.smartHub.title,
+                        icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
                     
-                    let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
-                    ForEach(NavigationCategory.allCases.filter { pinnedList.contains($0.rawValue) }) { category in
-                        sidebarRow(title: category.title, icon: category.icon, item: .category(category))
+                    let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
+                        .map(String.init)
+                        .compactMap { NavigationCategory(rawValue: $0) }
+                    
+                    ForEach(pinnedSystemList) { category in
+                        sidebarRow(
+                            title: category.title,
+                            icon: category.icon,
+                            item: .category(category))
                     }
-                    
+
                     ForEach(pinnedCollections) { collection in
-                        sidebarRow(title: collection.name, icon: collection.systemImage, item: .collection(collection.id, name: collection.name, icon: collection.systemImage))
+                        sidebarRow(
+                            title: collection.name, icon: collection.systemImage,
+                            item: .collection(
+                                collection.id, name: collection.name, icon: collection.systemImage))
                     }
                 }
                 .padding(.bottom, 16)
-                
-                sidebarSectionHeader("Analytics")
-                sidebarRow(title: NavigationCategory.insights.title, icon: NavigationCategory.insights.icon, item: .category(.insights))
+
+                sidebarSectionHeader("ANALYTICS")
+                sidebarRow(
+                    title: NavigationCategory.insights.title,
+                    icon: NavigationCategory.insights.icon, item: .category(.insights))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 16)
@@ -64,10 +80,28 @@ struct SidebarNavigation: View {
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
         let isSelected = selection == item
         
+        let activeColor: Color = {
+            switch item {
+            case .category(let cat):
+                switch cat {
+                case .home, .all: return .blue
+                case .discover, .smartHub: return .purple
+                case .upcoming: return .orange
+                case .movie: return .indigo
+                case .tvShow: return .teal
+                case .releaseRadar: return .pink
+                case .insights: return .green
+                default: return .blue
+                }
+            case .collection:
+                return .blue
+            }
+        }()
+
         // Only append .fill if the icon name doesn't already contain it and it's a standard symbol
         let iconName: String
         if isSelected {
-            if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" {
+            if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" || icon == "calendar.badge.clock" || icon == "sparkles.tv" || icon == "sparkles.rectangle.stack" {
                 iconName = icon
             } else {
                 iconName = "\(icon).fill"
@@ -75,7 +109,7 @@ struct SidebarNavigation: View {
         } else {
             iconName = icon
         }
-        
+
         return Button {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 selection = item
@@ -87,11 +121,11 @@ struct SidebarNavigation: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: 24)
-                
+
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                     .foregroundStyle(isSelected ? .white : Color.secondary)
-                
+
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -99,7 +133,7 @@ struct SidebarNavigation: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.blue)
+                        .fill(activeColor.gradient)
                         .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
                 }
             }

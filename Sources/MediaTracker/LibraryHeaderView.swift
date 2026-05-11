@@ -6,7 +6,6 @@ struct LibraryHeaderView: View {
     let selectedNetworks: [String]?
     let isCategoryPage: Bool
     let isMainSection: Bool
-    let appAccent: AppAccent
     let onNetworkSelected: ([String]) -> Void
     let onBack: (() -> Void)?
     var viewModel: MediaViewModel? = nil
@@ -45,7 +44,7 @@ struct LibraryHeaderView: View {
                     
                     Text(title)
                         .font(.system(size: 12, weight: .black, design: .rounded))
-                        .foregroundStyle(appAccent.color)
+                        .foregroundStyle(Color.accentColor)
                     
                     Button { withAnimation { onNetworkSelected([]) } } label: {
                         Image(systemName: "xmark.circle.fill")

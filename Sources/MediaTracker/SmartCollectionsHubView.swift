@@ -6,8 +6,8 @@ struct SmartCollectionsHubView: View {
     @Binding var selection: SidebarItem?
     
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = ""
+
+    @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     
     @State private var counts: [NavigationCategory: Int] = [:]
     @State private var customSmartCounts: [UUID: Int] = [:]
@@ -40,7 +40,7 @@ struct SmartCollectionsHubView: View {
                             icon: category.icon,
                             description: description(for: category),
                             count: counts[category] ?? 0,
-                            accentColor: appAccent.color,
+                            accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(category.rawValue),
                             onPinToggle: { togglePinned(category) }
                         ) {

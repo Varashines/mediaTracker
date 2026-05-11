@@ -30,8 +30,8 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .home: return "Featured"
-        case .upcoming: return "Upcoming"
+        case .home: return "Home"
+        case .upcoming: return "Release Calendar"
         case .inProgress: return "In Progress"
         case .watchlist: return "Watchlist"
         case .all: return "Library"
@@ -40,7 +40,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .archive: return "Re-watching"
         case .disliked: return "Disliked"
         case .binge: return "Binge"
-        case .discover: return "Discover"
+        case .discover: return "Discovery Hub"
         case .insights: return "Statistics"
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
@@ -54,8 +54,8 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
 
     var icon: String {
         switch self {
-        case .home: return "sparkles"
-        case .upcoming: return "calendar"
+        case .home: return "house"
+        case .upcoming: return "calendar.badge.clock" // Matches the visual style shown or standard
         case .inProgress: return "play.circle"
         case .watchlist: return "list.bullet.rectangle"
         case .all: return "tray.full"
@@ -64,7 +64,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .archive: return "arrow.clockwise"
         case .disliked: return "hand.thumbsdown"
         case .binge: return "rectangle.stack"
-        case .discover: return "plus.square"
+        case .discover: return "sparkles.tv"
         case .insights: return "chart.bar"
         case .movie: return "film"
         case .tvShow: return "tv"
@@ -136,67 +136,6 @@ enum FilterType: String, Codable, Hashable, Sendable {
     case genre = "Genre"
     case studio = "Studio"
     case language = "Language"
-}
-
-enum ThemeStyle: String, Codable, CaseIterable, Identifiable, Sendable {
-    case standard = "Standard"
-    case brand = "Brand Blue"
-    var id: String { self.rawValue }
-}
-
-enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
-    case cosmic = "Cosmic"
-    case midnightRose = "Midnight Rose"
-    case electricViolet = "Electric Violet"
-    case azureDeep = "Azure Deep"
-    case neonMint = "Neon Mint"
-    case solarFlare = "Solar Flare"
-    case arcticFrost = "Arctic Frost"
-
-    var id: String { self.rawValue }
-
-    private var hue: Double {
-        switch self {
-        case .cosmic: return 265
-        case .midnightRose: return 345
-        case .electricViolet: return 295
-        case .azureDeep: return 245
-        case .neonMint: return 165
-        case .solarFlare: return 40
-        case .arcticFrost: return 210
-        }
-    }
-
-    private var chroma: Double {
-        switch self {
-        case .arcticFrost: return 0.06
-        default: return 0.22
-        }
-    }
-
-    var color: Color {
-        color(for: .dark)
-    }
-
-    func color(for scheme: ColorScheme) -> Color {
-        if scheme == .dark {
-            // Dark Mode: Deep and Vibrant (L ≈ 0.65)
-            return Color.fromOKLCH(l: 0.65, c: chroma, h: hue)
-        } else {
-            // Light Mode: Punchy and authoritative (L ≈ 0.55)
-            return Color.fromOKLCH(l: 0.55, c: chroma + 0.05, h: hue)
-        }
-    }
-
-    func brandBackground(for colorScheme: ColorScheme) -> Color {
-        if colorScheme == .dark {
-            // Deep, high-end immersive backgrounds (L ≈ 0.1)
-            return Color.fromOKLCH(l: 0.1, c: 0.04, h: hue)
-        } else {
-            // Very subtle, clean tinted backgrounds (L ≈ 0.96)
-            return Color.fromOKLCH(l: 0.96, c: 0.02, h: hue)
-        }
-    }
 }
 
 enum TasteValue: String, Codable, CaseIterable, Sendable {

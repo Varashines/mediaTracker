@@ -39,7 +39,8 @@ struct DiscoveryHubView: View {
                     .padding(.top, 100)
                 }
             }
-            .padding(.vertical, 20)
+            .padding(.top, 30)
+            .padding(.bottom, 20)
             .padding(.bottom, 100)
             // Essential: Prevent clipping during scaling
             .scrollTargetLayout()
@@ -132,15 +133,22 @@ struct DiscoverySection: View {
     let nodes: [DiscoveryNode]
     let style: DiscoveryCardStyle
     let onSelected: (DiscoveryNode) -> Void
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+    
+    var sectionColor: Color {
+        switch title {
+        case "Genres": return .indigo
+        case "Languages": return .teal
+        default: return .accentColor
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            SectionHeader(title: title, icon: icon, iconColor: appAccent.color)
+            SectionHeader(title: title, icon: icon, iconColor: sectionColor)
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: style == .logo ? 200 : 180), spacing: 24)], spacing: 24) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 24)], spacing: 24) {
                 ForEach(nodes) { node in
-                    DiscoveryCard(node: node, style: style) { onSelected(node) }
+                    DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
                 }
             }
             .padding(.horizontal, 40)
@@ -151,52 +159,40 @@ struct DiscoverySection: View {
 struct DiscoveryCard: View {
     let node: DiscoveryNode
     let style: DiscoveryCardStyle
+    var baseColor: Color = .accentColor
     let action: () -> Void
     
     @State private var isHovered = false
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
     private var themeColor: Color {
-        if let hex = node.themeColorHex, let color = Color(hex: hex) {
-            return color
+        if style == .logo {
+            if let hex = node.themeColorHex, let color = Color(hex: hex) {
+                return color
+            }
+            return .accentColor
         }
-        return appAccent.color
+        return baseColor
     }
 
     var body: some View {
         Button(action: action) {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+            let cornerRadius: CGFloat = style == .logo ? 20 : 32
             
             ZStack {
                 // Main Layer
-                Group {
-                    if style == .logo {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(appAccent.color.opacity(colorScheme == .dark ? 0.12 : 0.08))
-                            .background {
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .fill(Color(NSColor.windowBackgroundColor))
-                                    .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.2), lineWidth: isHovered ? 2 : 1)
-                            }
-                    } else {
-                        Capsule()
-                            .fill(appAccent.color.opacity(colorScheme == .dark ? 0.12 : 0.08))
-                            .background {
-                                Capsule()
-                                    .fill(Color(NSColor.windowBackgroundColor))
-                                    .shadow(color: accent.opacity(isHovered ? 0.2 : 0), radius: isHovered ? 15 : 0, y: isHovered ? 8 : 0)
-                            }
-                            .overlay {
-                                Capsule()
-                                    .stroke(accent.opacity(isHovered ? 0.6 : 0.2), lineWidth: isHovered ? 2 : 1)
-                            }
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.06))
+                    .background {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color(NSColor.windowBackgroundColor))
+                            .shadow(color: accent.opacity(isHovered ? 0.12 : 0), radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
                     }
-                }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(accent.opacity(isHovered ? 0.3 : 0.08), lineWidth: isHovered ? 1.5 : 1)
+                    }
                 
                 if style == .logo {
                     logoContent
@@ -204,7 +200,7 @@ struct DiscoveryCard: View {
                     textContent
                 }
             }
-            .frame(height: style == .logo ? 140 : 80)
+            .frame(height: style == .logo ? 110 : 65)
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.03 : 1.0)
@@ -216,50 +212,56 @@ struct DiscoveryCard: View {
     private var logoContent: some View {
         ZStack {
             if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
-                CachedImage(url: url, targetSize: CGSize(width: 120, height: 60), alwaysPreserveAlpha: true) {
+                CachedImage(url: url, targetSize: CGSize(width: 100, height: 50), alwaysPreserveAlpha: true) {
                     _ in
                 } placeholder: {
                     Color.secondary.opacity(0.1)
                 }
                 .aspectRatio(contentMode: .fit)
-                .frame(width: isHovered ? 90 : 120, height: isHovered ? 45 : 60)
-                .offset(y: isHovered ? -15 : 0)
+                .frame(width: isHovered ? 75 : 100, height: isHovered ? 38 : 50)
+                .offset(y: isHovered ? -12 : 0)
             } else {
                 Text(node.name)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .multilineTextAlignment(.center)
-                    .offset(y: isHovered ? -15 : 0)
+                    .offset(y: isHovered ? -12 : 0)
             }
             
             VStack(spacing: 2) {
                 if node.logoPath != nil {
                     Text(node.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .multilineTextAlignment(.center)
+                        .lineLimit(1)
                 }
                 Text("\(node.count) TITLES")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
             }
             .opacity(isHovered ? 1 : 0)
-            .offset(y: isHovered ? 30 : 45)
+            .offset(y: isHovered ? 22 : 35)
             .scaleEffect(isHovered ? 1.0 : 0.9)
         }
-        .padding(20)
+        .padding(15)
     }
     
     @ViewBuilder
     private var textContent: some View {
         ZStack {
             Text(node.name)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .offset(y: isHovered ? -8 : 0)
-            
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+                .offset(y: isHovered ? -10 : 0)
+
             Text("\(node.count) ITEMS")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(.secondary.opacity(0.8))
+                .tracking(0.5)
                 .opacity(isHovered ? 1 : 0)
                 .offset(y: isHovered ? 12 : 20)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
     }
 }

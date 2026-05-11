@@ -16,7 +16,7 @@ struct TVTrackingView: View {
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     @State private var selectedSeasonNumber: Int?
 
@@ -140,7 +140,7 @@ private struct SeasonTab: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     private var progress: Double {
         let total = season.totalEpisodesCount
@@ -227,7 +227,7 @@ private struct SeasonSection: View {
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
@@ -351,7 +351,7 @@ private struct EpisodeCube: View {
     var themeColor: Color
     var onToggle: () -> Void
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
     @State private var showingOverview = false
 
     var body: some View {

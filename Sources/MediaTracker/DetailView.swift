@@ -5,8 +5,6 @@ struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
     @State private var viewModel: DetailViewModel
     @State private var isAppeared = false
@@ -37,20 +35,25 @@ struct DetailView: View {
 
     @ViewBuilder
     private var contentOverlay: some View {
-        backgroundLayer
-            .animation(.spring(response: 0.8, dampingFraction: 0.85), value: isAppeared)
-            .animation(.easeInOut(duration: 1.0), value: viewModel.themeColor)
-
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                headerSection
-                tmdbWarningSection
-                castAndTrackingSection
+        ZStack {
+            Color(NSColor.windowBackgroundColor).ignoresSafeArea()
+            
+            effectiveThemeColor
+                .opacity(colorScheme == .dark ? 0.25 : 0.1)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.8), value: effectiveThemeColor)
+            
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                    headerSection
+                    tmdbWarningSection
+                    castAndTrackingSection
+                }
+                .padding(.horizontal, AppTheme.Spacing.xLarge)
+                .padding(.vertical, AppTheme.Spacing.section)
             }
-            .padding(.horizontal, AppTheme.Spacing.xLarge)
-            .padding(.vertical, AppTheme.Spacing.section)
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .navigationTitle("Details")
         .toolbar { detailToolbar }
         .onAppear {
@@ -76,24 +79,13 @@ struct DetailView: View {
                 viewModel.refreshLocalItem()
             }
         }
-        .tint(viewModel.contrastThemeColor)
-        .appBackground(
-            tint: viewModel.vibrantThemeColor, 
-            warmTint: viewModel.warmThemeColor, 
-            coolTint: viewModel.coolThemeColor, 
-            disableBrandBackground: true
-        )
+        .tint(effectiveThemeColor)
     }
 
     private var effectiveThemeColor: Color {
         viewModel.themeColor
     }
 
-    @ViewBuilder
-    private var backgroundLayer: some View {
-        viewModel.themeColor.themedBackground(colorScheme: colorScheme)
-            .ignoresSafeArea()
-    }
     @ViewBuilder
     private var headerSection: some View {
         MediaHeaderView(

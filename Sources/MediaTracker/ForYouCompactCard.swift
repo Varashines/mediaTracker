@@ -8,7 +8,6 @@ struct ForYouCompactCard: View {
     @State private var isHovered = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @State private var item: MediaItem?
     
     private let cardWidth: CGFloat = 420

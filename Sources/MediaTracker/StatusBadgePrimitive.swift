@@ -11,7 +11,6 @@ struct StatusBadgePrimitive: View {
 
     var body: some View {
         let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
-        let bgAccent = accentColor.luminousAccent(colorScheme: colorScheme)
         
         HStack(spacing: 0) {
             if !label.isEmpty {
@@ -22,15 +21,11 @@ struct StatusBadgePrimitive: View {
             }
         }
         .frame(minHeight: 20)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
-        .liquidGlassPill(
-            accentColor: bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4),
-            isSolid: isSolid,
-            progress: nil,
-            isMicro: true,
-            hPadding: 10,
-            vPadding: 4
-        )
+        .background(isSolid ? accentColor : accentColor.opacity(colorScheme == .dark ? 0.15 : 0.2))
+        .clipShape(Capsule())
         .overlay {
             if let progress = progress, progress > 0 && progress < 1.0 {
                 Capsule()

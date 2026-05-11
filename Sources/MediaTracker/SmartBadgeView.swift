@@ -9,8 +9,6 @@ struct SmartBadgeView: View {
     let themeColorOverride: Color?
     
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
 
     init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
         self.item = item
@@ -114,7 +112,6 @@ struct SmartBadgeView: View {
             accentColor: badgeConfig.bg,
             isSolid: true,
             progress: progress,
-            isCompact: true,
             foregroundColor: badgeConfig.fg
         )
         .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
@@ -145,16 +142,34 @@ struct SmartBadgeView: View {
             if let override = themeColorOverride {
                 return override
             }
-            return themeStyle == .brand ? appAccent.color : .blue
+            
+            switch currentState {
+            case .active, .rewatching:
+                // In Progress: Vibrant Blue
+                return Color.fromOKLCH(l: 0.55, c: 0.2, h: 250)
+            case .wishlist:
+                // Watchlist: Warm Amber/Gold
+                return Color.fromOKLCH(l: 0.7, c: 0.18, h: 75)
+            case .onHold:
+                // On Hold: Slate Gray
+                return Color.fromOKLCH(l: 0.5, c: 0.05, h: 250)
+            case .dropped:
+                // Dropped: Soft Red
+                return Color.fromOKLCH(l: 0.6, c: 0.15, h: 25)
+            case .completed:
+                // Completed: Emerald Green
+                return Color.fromOKLCH(l: 0.65, c: 0.2, h: 145)
+            }
         }()
+
+        let isSolid = isAvailable || currentState == .active || currentState == .rewatching
 
         return StatusBadgePrimitive(
             label: displayLabel,
-            accentColor: isAvailable ? finalAccent : .primary,
-            isSolid: isAvailable,
+            accentColor: finalAccent,
+            isSolid: isSolid,
             progress: showProgressBar ? progress : nil,
-            isCompact: true, // Force circular for premium grid consistency
-            foregroundColor: isAvailable ? (finalAccent.isLightColor ? .black : .white) : nil
+            foregroundColor: isSolid ? (finalAccent.isLightColor ? .black : .white) : nil
         )
         .opacity(currentState == .completed ? 0 : 1)
     }

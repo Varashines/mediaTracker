@@ -5,7 +5,6 @@ import SwiftUI
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
@@ -67,7 +66,7 @@ struct InsightsView: View {
     private func cinemaDNASection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack(spacing: 80) {
-                RadarChartView(data: stats.genreDNA, accentColor: appAccent.color)
+                RadarChartView(data: stats.genreDNA, accentColor: Color.accentColor)
                     .frame(width: 450, height: 450)
 
                 dnaDescription(stats: stats)
@@ -76,7 +75,7 @@ struct InsightsView: View {
     }
 
     private var dnaHeader: some View {
-        PageHeader("Cinema DNA", subtitle: "Your unique cinematic profile.", color: appAccent.color)
+        PageHeader("Cinema DNA", subtitle: "Your unique cinematic profile.", color: Color.accentColor)
     }
 
     @ViewBuilder
@@ -85,7 +84,7 @@ struct InsightsView: View {
             let topGenre = stats.topRatedGenres.first?.0 ?? "Cinema"
             let topActor = stats.topRatedActors.first?.name ?? "Great Talent"
 
-            Text("An expert in \(Text(topGenre).foregroundColor(appAccent.color)), driven by the performances of \(Text(topActor).foregroundColor(appAccent.color)).")
+            Text("An expert in \(Text(topGenre).foregroundColor(Color.accentColor)), driven by the performances of \(Text(topActor).foregroundColor(Color.accentColor)).")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .lineSpacing(4)
 
@@ -297,7 +296,7 @@ struct InsightsView: View {
         VStack(alignment: .leading, spacing: 4) {
             SubSectionHeader(label)
             Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(
-                appAccent.color(for: colorScheme))
+                Color.accentColor)
         }
     }
 

@@ -6,7 +6,7 @@ struct CastMemberCardNew: View {
     let themeColor: Color
     var action: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     var body: some View {
         Button {

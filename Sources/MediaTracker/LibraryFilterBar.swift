@@ -3,7 +3,6 @@ import SwiftData
 
 struct LibraryFilterBar: View {
     @Bindable var viewModel: MediaViewModel
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var filterNamespace
     
@@ -94,7 +93,7 @@ struct LibraryFilterBar: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .foregroundStyle(active ? appAccent.color(for: colorScheme) : .primary.opacity(0.7))
+            .foregroundStyle(active ? Color.accentColor : .primary.opacity(0.7))
             .background {
                 ZStack {
                     Capsule()
@@ -102,14 +101,14 @@ struct LibraryFilterBar: View {
                     
                     if active {
                         Capsule()
-                            .fill(appAccent.color(for: colorScheme).opacity(colorScheme == .dark ? 0.15 : 0.12))
+                            .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.15 : 0.12))
                             .matchedGeometryEffect(id: "filter_active", in: filterNamespace)
                     }
                 }
             }
             .overlay {
                 Capsule()
-                    .stroke(active ? appAccent.color(for: colorScheme).opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
+                    .stroke(active ? Color.accentColor.opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

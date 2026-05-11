@@ -66,15 +66,6 @@ class DetailViewModel {
                 }
             }
         }
-        
-        // Read current accent from storage for fallback
-        let appAccentRaw = UserDefaults.standard.string(forKey: "app_accent") ?? AppAccent.cosmic.rawValue
-        let appAccent = AppAccent(rawValue: appAccentRaw) ?? .cosmic
-        
-        withAnimation {
-            self.themeColor = appAccent.color
-            self.recalculateVibrantPalette()
-        }
     }
 
     private func recalculateVibrantPalette() {

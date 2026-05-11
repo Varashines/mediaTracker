@@ -22,7 +22,6 @@ struct MainLibraryView: View {
     var viewModel: MediaViewModel
 
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @State private var visibleCount = 40
     @State private var scrollTask: Task<Void, Never>?
 
@@ -127,7 +126,7 @@ struct MainLibraryView: View {
                                 LibraryHeaderView(
                                     selectedCategory: selectedCategory,
                                     selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                    isMainSection: isMainSection, appAccent: appAccent,
+                                    isMainSection: isMainSection,
                                     onNetworkSelected: onNetworkSelected, onBack: onBack,
                                     viewModel: viewModel)
 
@@ -140,7 +139,8 @@ struct MainLibraryView: View {
                         }
                     }
                 }
-                .padding(.vertical, 20)
+                .padding(.top, 30)
+                .padding(.bottom, 20)
                 .background {
                     ScrollVelocityTracker(
                         isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)

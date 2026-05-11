@@ -8,8 +8,6 @@ struct SettingsView: View {
     @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("studio_aliases") private var studioAliases = ""
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @AppStorage("theme_preference") private var themePreference: Int = 0 
     
     // Feedback Switches
@@ -31,7 +29,7 @@ struct SettingsView: View {
                 Spacer()
                 HStack(spacing: 2) {
                     modernTabButton(title: "General", icon: "gearshape", index: 0)
-                    modernTabButton(title: "Design", icon: "paintpalette", index: 1)
+                    modernTabButton(title: "Connect", icon: "network", index: 1)
                     modernTabButton(title: "Engine", icon: "cpu", index: 2)
                     modernTabButton(title: "Vault", icon: "tray.full", index: 3)
                 }
@@ -48,9 +46,9 @@ struct SettingsView: View {
                     Group {
                         switch selectedTab {
                         case 0: generalTab
-                        case 1: appearanceTab
-                        case 2: discoveryTab
-                        case 3: maintenanceTab
+                        case 1: connectivityTab
+                        case 2: engineTab
+                        case 3: vaultTab
                         default: EmptyView()
                         }
                     }
@@ -70,9 +68,9 @@ struct SettingsView: View {
             FeedbackManager.shared.trigger(.click)
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: selectedTab == index ? "\(icon).fill" : icon)
+                Image(systemName: selectedTab == index ? (icon == "gearshape" ? "gearshape.fill" : (icon == "tray.full" ? "tray.full.fill" : (icon == "cpu" ? "cpu.fill" : (icon == "network" ? "network" : "\(icon).fill")))) : icon)
                     .font(.system(size: 20))
-                    .foregroundStyle(selectedTab == index ? adaptiveAccent : .primary.opacity(0.4))
+                    .foregroundStyle(selectedTab == index ? Color.accentColor : .primary.opacity(0.4))
                     .frame(width: 32, height: 32)
                 
                 Text(title)
@@ -97,29 +95,21 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Connectivity")
+            settingsHeader("Appearance", icon: "paintbrush", color: .purple)
             
             GroupContainer {
-                modernRow(title: "TMDB API Key", subtitle: "Required for movie and series metadata sync.") {
-                    HStack(spacing: 8) {
-                        SecureField("Enter Key", text: $tmdbApiKey)
-                            .textFieldStyle(.plain)
-                            .padding(8)
-                            .background(Color.primary.opacity(0.04))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .font(.system(size: 11, design: .monospaced))
-                            .frame(width: 200)
-                        
-                        Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
-                            Image(systemName: "questionmark.circle.fill").font(.title3)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(adaptiveAccent)
+                modernRow(title: "Theme Mode", subtitle: "Switch between light and dark UI.") {
+                    Picker("", selection: $themePreference) {
+                        Text("Auto").tag(0)
+                        Text("Light").tag(1)
+                        Text("Dark").tag(2)
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
                 }
             }
 
-            settingsHeader("Feedback & Power")
+            settingsHeader("Feedback & Power", icon: "bolt.fill", color: .orange)
             
             GroupContainer {
                 modernToggle("Tactile Haptics", subtitle: "Physical feedback on actions.", isOn: $hapticsEnabled)
@@ -147,8 +137,34 @@ struct SettingsView: View {
                 Divider().opacity(0.3)
                 modernToggle("Prevent Sleep", subtitle: "Keep background sync active.", isOn: $preventSleepMode)
             }
+        }
+    }
+
+    private var connectivityTab: some View {
+        VStack(alignment: .leading, spacing: 32) {
+            settingsHeader("Connectivity", icon: "network", color: .blue)
             
-            settingsHeader("Notifications")
+            GroupContainer {
+                modernRow(title: "TMDB API Key", subtitle: "Required for movie and series metadata sync.") {
+                    HStack(spacing: 8) {
+                        SecureField("Enter Key", text: $tmdbApiKey)
+                            .textFieldStyle(.plain)
+                            .padding(8)
+                            .background(Color.primary.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .font(.system(size: 11, design: .monospaced))
+                            .frame(width: 200)
+                        
+                        Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
+                            Image(systemName: "questionmark.circle.fill").font(.title3)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                    }
+                }
+            }
+            
+            settingsHeader("Notifications", icon: "bell.fill", color: .red)
             
             GroupContainer {
                 Button { showNotificationDebug = true } label: {
@@ -168,55 +184,9 @@ struct SettingsView: View {
         .sheet(isPresented: $showNotificationDebug) { NotificationDebugView() }
     }
 
-    private var appearanceSection: some View {
+    private var engineTab: some View {
         VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Accent Color")
-            
-            GroupContainer {
-                HStack(spacing: 12) {
-                    ForEach(AppAccent.allCases) { accent in
-                        Circle()
-                            .fill(accent.color(for: colorScheme).gradient)
-                            .frame(width: 26, height: 26)
-                            .overlay {
-                                if appAccent == accent {
-                                    Circle()
-                                        .stroke(Color.primary, lineWidth: 2)
-                                        .frame(width: 36, height: 36)
-                                }
-                            }
-                            .onTapGesture { 
-                                withAnimation(.snappy) { appAccent = accent }
-                                FeedbackManager.shared.trigger(.click)
-                            }
-                    }
-                }
-                .frame(height: 36)
-                .frame(maxWidth: .infinity)
-            }
-
-            settingsHeader("User Interface")
-            
-            GroupContainer {
-                modernToggle("Glassmorphism", subtitle: "Enable translucent frosted materials.", isOn: Binding(get: { themeStyle == .brand }, set: { themeStyle = $0 ? .brand : .standard }))
-                Divider().opacity(0.3)
-                modernRow(title: "Theme Mode", subtitle: "Switch between light and dark UI.") {
-                    Picker("", selection: $themePreference) {
-                        Text("Auto").tag(0)
-                        Text("Light").tag(1)
-                        Text("Dark").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
-                }
-            }
-        }
-    }
-
-    // Re-using same logic but keeping it clean for the new style
-    private var discoveryTab: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Data Processing")
+            settingsHeader("Data Processing", icon: "brain", color: .green)
             
             VStack(alignment: .leading, spacing: 12) {
                 Text("STUDIO ALIASES").font(.system(size: 10, weight: .black)).foregroundStyle(.tertiary)
@@ -232,9 +202,9 @@ struct SettingsView: View {
         }
     }
 
-    private var maintenanceTab: some View {
+    private var vaultTab: some View {
         VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Maintenance")
+            settingsHeader("Maintenance", icon: "wrench.and.screwdriver.fill", color: .blue)
             
             GroupContainer {
                 modernRow(title: "Library Backup", subtitle: "Export or import your entire library.") {
@@ -267,7 +237,7 @@ struct SettingsView: View {
                 }
             }
 
-            settingsHeader("Danger Zone")
+            settingsHeader("Danger Zone", icon: "exclamationmark.triangle.fill", color: .red)
             
             GroupContainer {
                 Button { showClearDatabaseConfirmation = true } label: {
@@ -291,14 +261,24 @@ struct SettingsView: View {
         }
     }
 
-    private var appearanceTab: some View { appearanceSection }
-
     // MARK: - Helpers
 
-    private func settingsHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 20, weight: .bold))
-            .foregroundStyle(.primary)
+    private func settingsHeader(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(color.highContrastAccent(colorScheme: colorScheme))
+            }
+            
+            Text(title)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
     }
 
     private func modernRow<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
@@ -329,7 +309,7 @@ struct SettingsView: View {
     }
 
     private var adaptiveAccent: Color {
-        appAccent.color(for: colorScheme)
+        Color.accentColor
     }
 
     private var appVersion: String {
@@ -344,16 +324,11 @@ struct GroupContainer<Content: View>: View {
             content
         }
         .padding(20)
-        .background(adaptiveAccent.opacity(0.04))
+        .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(adaptiveAccent.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
-    }
-
-    private var adaptiveAccent: Color {
-        @AppStorage("app_accent") var appAccent: AppAccent = .cosmic
-        return appAccent.color(for: .dark) // Use a stable variant for the container math
     }
 }

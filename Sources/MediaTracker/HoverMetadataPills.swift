@@ -7,7 +7,6 @@ struct HoverMetadataPills: View {
     let nextAiringDate: Date?
     let isUpcoming: Bool
     let isHovered: Bool
-    let appAccent: Color
     
     @Environment(\.colorScheme) var colorScheme
 
@@ -20,7 +19,7 @@ struct HoverMetadataPills: View {
                 .font(.system(size: 10.5, weight: .black, design: .rounded))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(appAccent)
+                .background(Color.accentColor)
                 .clipShape(Capsule())
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)

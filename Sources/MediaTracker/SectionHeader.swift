@@ -7,7 +7,6 @@ struct SectionHeader: View {
     var subtitle: String? = nil
     var scrollProgress: Double? = nil
     var showDivider: Bool = false
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -45,7 +44,7 @@ struct SectionHeader: View {
                                 .frame(height: 4)
                             
                             Capsule()
-                                .fill(appAccent.color.gradient)
+                                .fill(Color.accentColor.gradient)
                                 .frame(width: itemWidth, height: 4)
                                 .offset(x: progress * scrollableTrackWidth)
                         }

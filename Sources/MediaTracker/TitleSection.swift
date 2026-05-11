@@ -7,7 +7,7 @@ struct TitleSection: View {
     var onStatusChange: ((MediaState?) -> Void)?
     var namespace: Namespace.ID? = nil
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     var body: some View {
         if item.modelContext != nil {

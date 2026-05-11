@@ -10,7 +10,6 @@ struct ThumbnailHoverOverlay: View {
     let gridBadgeText: String?
     let isHovered: Bool
     let mode: MediaThumbnailView.DisplayMode
-    let appAccent: AppAccent
 
     var body: some View {
         VStack(spacing: 8) {
@@ -43,7 +42,7 @@ struct ThumbnailHoverOverlay: View {
                     .font(.system(size: 8, weight: .black, design: .rounded))
                     .kerning(1.5)
                     .padding(.top, 4)
-                    .foregroundStyle(date.contains("STREAMING") ? appAccent.color : .white)
+                    .foregroundStyle(date.contains("STREAMING") ? Color.accentColor : .white)
                     .shadow(color: .black.opacity(0.4), radius: 2)
             }
         }

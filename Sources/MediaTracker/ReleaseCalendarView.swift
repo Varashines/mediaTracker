@@ -4,7 +4,7 @@ import SwiftData
 struct ReleaseCalendarView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
+
     @Namespace private var calendarNamespace
     var viewModel: MediaViewModel
     
@@ -24,7 +24,7 @@ struct ReleaseCalendarView: View {
                     VStack(alignment: .leading, spacing: 15) {
                         monthNavigation
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 30)
                     
                     if let data = calendarData {
                         contributionGraph(data: data)
@@ -68,7 +68,9 @@ struct ReleaseCalendarView: View {
                         }
                     }
                 }
-                .padding(40)
+                .padding(.top, 30)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxWidth: .infinity)
@@ -93,6 +95,9 @@ struct ReleaseCalendarView: View {
             
             Spacer()
             
+            let isSelected = selectedDate == nil
+            let accent = Color.accentColor
+            
             Button {
                 withAnimation(.smooth) {
                     selectedDate = nil
@@ -100,7 +105,19 @@ struct ReleaseCalendarView: View {
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
                     .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(selectedDate == nil ? appAccent.color : .primary)
+                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(accent.gradient)
+                                .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
+                        } else {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                        }
+                    }
             }
             .buttonStyle(.plain)
             
@@ -271,15 +288,18 @@ struct ReleaseCalendarView: View {
                         }
                         
                         let intensity = Double(i - 1) / 3.0 // Normalize 1-4 to 0-1
-                        let o = appAccent.color(for: colorScheme).oklch
+                        let o = Color.accentColor.oklch
                         if colorScheme == .dark {
-                            // For Dark Mode: Interpolate from subtle dark to rich accent
-                            let l = 0.2 + (intensity * (o.l - 0.2))
-                            let c = (o.c * 0.4) + (intensity * (o.c * 0.6))
+                            // Light to Dark: L goes from 0.8 (Less) to 0.3 (More)
+                            let l = 0.8 - (intensity * 0.5)
+                            // Increase Chroma for "More" to keep it vibrant even when dark
+                            let c = (o.c * 0.5) + (intensity * (o.c * 0.5))
                             return Color.fromOKLCH(l: l, c: c, h: o.h)
                         } else {
-                            let l = 0.9 - (intensity * 0.4)
-                            return Color.fromOKLCH(l: l, c: o.c, h: o.h)
+                            // Light to Dark: L goes from 0.95 (Less) to 0.4 (More)
+                            let l = 0.95 - (intensity * 0.55)
+                            let c = (o.c * 0.6) + (intensity * (o.c * 0.4))
+                            return Color.fromOKLCH(l: l, c: c, h: o.h)
                         }
                     }()
                     
@@ -310,22 +330,22 @@ struct ReleaseCalendarView: View {
                     ForEach(next7Days, id: \.self) { date in
                         let dayInfo = data.days[date]
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
-                        let accent = appAccent.color.highContrastAccent(colorScheme: colorScheme)
+                        let accent = Color.accentColor
 
                         Button {                            withAnimation(.smooth) { selectedDate = date }
                         } label: {
                             VStack(spacing: 8) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
                                     .font(.system(size: 10, weight: .black))
-                                    .foregroundStyle(isSelected ? (colorScheme == .dark ? .black : .white) : .secondary)
+                                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .secondary)
                                 
                                 Text(date.formatted(.dateTime.day()))
                                     .font(.system(size: 18, weight: .black, design: .rounded))
-                                    .foregroundStyle(isSelected ? (colorScheme == .dark ? .black : .white) : .primary)
+                                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary)
                                 
                                 if let info = dayInfo, !info.items.isEmpty {
                                     Circle()
-                                        .fill(isSelected ? (colorScheme == .dark ? .black : .white) : appAccent.color)
+                                        .fill(isSelected ? (accent.isLightColor ? .black : .white) : Color.accentColor)
                                         .frame(width: 4, height: 4)
                                 }
                             }
@@ -334,6 +354,7 @@ struct ReleaseCalendarView: View {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(accent.gradient)
+                                        .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
                                 } else {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Color.primary.opacity(0.05))
@@ -358,21 +379,21 @@ struct ReleaseCalendarView: View {
                 return Color.secondary.opacity(0.1)
             }
             
-            let o = appAccent.color(for: colorScheme).oklch
+            let o = Color.accentColor.oklch
             if colorScheme == .dark {
-                // For Dark Mode: Interpolate from subtle dark to rich accent
-                // This gives the "darker tones" for low activity days and rich color for high ones.
-                let l = 0.2 + (day.intensity * (o.l - 0.2))
-                let c = (o.c * 0.4) + (day.intensity * (o.c * 0.6))
+                // Light to Dark: L goes from 0.8 (Less) to 0.3 (More)
+                let l = 0.8 - (day.intensity * 0.5)
+                let c = (o.c * 0.5) + (day.intensity * (o.c * 0.5))
                 return Color.fromOKLCH(l: l, c: c, h: o.h)
             } else {
-                // For Light Mode: Interpolate Lightness from 0.9 (Low) to 0.5 (High)
-                let l = 0.9 - (day.intensity * 0.4)
-                return Color.fromOKLCH(l: l, c: o.c, h: o.h)
+                // Light to Dark: L goes from 0.95 (Less) to 0.4 (More)
+                let l = 0.95 - (day.intensity * 0.55)
+                let c = (o.c * 0.6) + (day.intensity * (o.c * 0.4))
+                return Color.fromOKLCH(l: l, c: c, h: o.h)
             }
         }()
         
-        let vibrantAccent = appAccent.color(for: colorScheme)
+        let vibrantAccent = Color.accentColor
         
         RoundedRectangle(cornerRadius: 4)
             .fill(cellColor)
@@ -407,7 +428,7 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            let accent = appAccent.color.highContrastAccent(colorScheme: colorScheme)
+            let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
                 .font(.system(size: 12, weight: .black))
                 .foregroundStyle(accent)
@@ -475,7 +496,7 @@ struct ReleaseCalendarView: View {
     
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
-        let accent = appAccent.color.highContrastAccent(colorScheme: colorScheme)
+        let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
         VStack(alignment: .leading, spacing: 8) {
             MediaThumbnailView(metadata: item.metadata, mode: .grid)
             

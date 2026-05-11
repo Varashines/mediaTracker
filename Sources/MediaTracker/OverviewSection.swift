@@ -5,7 +5,7 @@ struct OverviewSection: View {
     let themeColor: Color
 
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

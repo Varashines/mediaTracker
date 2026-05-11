@@ -11,13 +11,12 @@ struct PosterView: View {
             ZStack {
                 // 1. Aurora Glow Background
                 RadialGradient(
-                    colors: [themeColor.opacity(0.35), .clear],
+                    colors: [themeColor.opacity(0.5), .clear],
                     center: .center,
-                    startRadius: 0,
-                    endRadius: 200
+                    startRadius: 20,
+                    endRadius: 250
                 )
-                .frame(width: 320, height: 450)
-                .offset(y: 20)
+                .frame(width: 360, height: 490)
                 
                 let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .critical, themeColor: themeColor) { _ in
                     } placeholder: {

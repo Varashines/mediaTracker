@@ -5,10 +5,11 @@ struct FilteredLibraryGridView: View {
     let filter: DiscoveryFilter
     let namespace: Namespace.ID
     @Binding var isFastScrolling: Bool
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
     @Environment(\.modelContext) private var modelContext
 
     @State private var items: [MediaThumbnailMetadata] = []
+    @State private var networkColor: Color? = nil
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ScrollView {
@@ -28,6 +29,12 @@ struct FilteredLibraryGridView: View {
             .padding(30)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .background {
+            if let color = networkColor {
+                color.opacity(colorScheme == .dark ? 0.08 : 0.04)
+                    .ignoresSafeArea()
+            }
+        }
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
         .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
             fetchItems()
@@ -37,6 +44,17 @@ struct FilteredLibraryGridView: View {
         }
         .task {
             fetchItems()
+            if filter.type == .studio {
+                fetchNetworkColor()
+            }
+        }
+    }
+
+    private func fetchNetworkColor() {
+        let name = filter.name
+        let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
+        if let network = try? modelContext.fetch(descriptor).first, let hex = network.themeColorHex {
+            self.networkColor = Color(hex: hex)
         }
     }
 

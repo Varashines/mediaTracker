@@ -7,7 +7,7 @@ struct MetadataLine: View {
     var isLanguage: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("theme_style") private var themeStyle: ThemeStyle = .standard
+
 
     var body: some View {
         if let value = value, !value.isEmpty {

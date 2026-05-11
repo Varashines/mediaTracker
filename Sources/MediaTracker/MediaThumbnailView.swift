@@ -1,20 +1,18 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @MainActor
 struct MediaThumbnailView: View, Equatable {
     nonisolated static func == (lhs: MediaThumbnailView, rhs: MediaThumbnailView) -> Bool {
-        return lhs.capturedID == rhs.capturedID &&
-               lhs.capturedItemID == rhs.capturedItemID &&
-               lhs.capturedTitle == rhs.capturedTitle &&
-               lhs.capturedPosterURL == rhs.capturedPosterURL &&
-               lhs.capturedType == rhs.capturedType &&
-               lhs.capturedState == rhs.capturedState &&
-               lhs.capturedProgress == rhs.capturedProgress &&
-               lhs.isCompletedInCollection == rhs.isCompletedInCollection &&
-               lhs.selectedCollectionID == rhs.selectedCollectionID &&
-               lhs.capturedIsUpcoming == rhs.capturedIsUpcoming &&
-               lhs.capturedGridBadgeText == rhs.capturedGridBadgeText
+        return lhs.capturedID == rhs.capturedID && lhs.capturedItemID == rhs.capturedItemID
+            && lhs.capturedTitle == rhs.capturedTitle
+            && lhs.capturedPosterURL == rhs.capturedPosterURL
+            && lhs.capturedType == rhs.capturedType && lhs.capturedState == rhs.capturedState
+            && lhs.capturedProgress == rhs.capturedProgress
+            && lhs.isCompletedInCollection == rhs.isCompletedInCollection
+            && lhs.selectedCollectionID == rhs.selectedCollectionID
+            && lhs.capturedIsUpcoming == rhs.capturedIsUpcoming
+            && lhs.capturedGridBadgeText == rhs.capturedGridBadgeText
     }
 
     enum DisplayMode {
@@ -53,21 +51,22 @@ struct MediaThumbnailView: View, Equatable {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("app_accent") private var appAccent: AppAccent = .cosmic
-    
+
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
-    
+
     // Performance optimization: Status passed from parent to avoid @Query in every thumbnail
     var isCompletedInCollection: Bool = false
     var selectedCollectionID: UUID? = nil
 
     init(
-        item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false, 
-        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
+        item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
+        isUpcomingSection: Bool = false,
+        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
+        action: (() -> Void)? = nil
     ) {
         self.item = item
         self.metadata = nil
@@ -81,7 +80,7 @@ struct MediaThumbnailView: View, Equatable {
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
-        
+
         // IMMEDIATE CAPTURE - This prevents crashes if item is deleted later
         self.capturedID = item.persistentModelID
         self.capturedItemID = item.id
@@ -98,11 +97,13 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedGridBadgeText = item.badgeText
         self.capturedNextAiringDate = item.cachedNextAiringDate
     }
-    
+
     init(
-        metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true, isUpcomingSection: Bool = false,
+        metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
+        isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
-        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil, action: (() -> Void)? = nil
+        isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
+        action: (() -> Void)? = nil
     ) {
         self.item = nil
         self.metadata = metadata
@@ -116,7 +117,7 @@ struct MediaThumbnailView: View, Equatable {
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
-        
+
         self.capturedID = metadata.id
         self.capturedItemID = metadata.itemID
         self.capturedTitle = metadata.title
@@ -142,7 +143,7 @@ struct MediaThumbnailView: View, Equatable {
         self.action = action
         self.namespace = nil
         self.staggerIndex = nil
-        
+
         self.capturedID = nil
         self.capturedItemID = ""
         self.capturedTitle = result.title
@@ -190,7 +191,9 @@ struct MediaThumbnailView: View, Equatable {
         return (item != nil || capturedID != nil) || isLocalInSearch
     }
 
-    private var nextEpisodeLabel: String? { item?.storedNextEpisodeLabel ?? capturedNextEpisodeLabel }
+    private var nextEpisodeLabel: String? {
+        item?.storedNextEpisodeLabel ?? capturedNextEpisodeLabel
+    }
     private var watchProgress: String? { item?.storedWatchProgressLabel ?? capturedWatchProgress }
     private var isUpcoming: Bool { item?.isUpcoming ?? capturedIsUpcoming }
     private var gridBadgeText: String? { item?.badgeText ?? capturedGridBadgeText }
@@ -213,7 +216,8 @@ struct MediaThumbnailView: View, Equatable {
         .accessibilityLabel(accessibilityLabel)
         .contextMenu {
             if !isRemoved, let id = capturedID {
-                libraryContextMenu(for: id, type: capturedType, state: capturedState, progress: capturedProgress)
+                libraryContextMenu(
+                    for: id, type: capturedType, state: capturedState, progress: capturedProgress)
             }
         }
     }
@@ -221,7 +225,7 @@ struct MediaThumbnailView: View, Equatable {
     private var accessibilityLabel: String {
         var parts = [title]
         parts.append(type.rawValue)
-        
+
         if isUpcoming, let badge = gridBadgeText {
             parts.append("Releases on \(badge)")
         } else {
@@ -230,7 +234,7 @@ struct MediaThumbnailView: View, Equatable {
                 parts.append(progress)
             }
         }
-        
+
         return parts.joined(separator: ", ")
     }
 
@@ -238,7 +242,7 @@ struct MediaThumbnailView: View, Equatable {
     private var mainContent: some View {
         let hasNoPoster = (posterURL == nil || posterURL?.isEmpty == true)
         let effectiveHover = isHovered || hasNoPoster
-        
+
         let posterContent = ZStack(alignment: .center) {
             // 1. Poster Layer
             ThumbnailPosterLayer(
@@ -249,7 +253,7 @@ struct MediaThumbnailView: View, Equatable {
                 isFastScrolling: isFastScrolling,
                 width: width,
                 height: height,
-                namespace: nil, // Moved to root
+                namespace: nil,  // Moved to root
                 capturedID: nil,
                 resultID: nil
             )
@@ -261,8 +265,7 @@ struct MediaThumbnailView: View, Equatable {
                 nextEpisodeLabel: nextEpisodeLabel,
                 nextAiringDate: nextAiringDate,
                 isUpcoming: isUpcoming,
-                isHovered: effectiveHover,
-                appAccent: appAccent.color
+                isHovered: effectiveHover
             )
 
             // Smart Badge (Top Leading)
@@ -282,7 +285,7 @@ struct MediaThumbnailView: View, Equatable {
             .padding(8)
             .opacity(isHovered ? 0 : 1)
             .offset(x: isHovered ? -4 : 0, y: isHovered ? -4 : 0)
-            
+
             // Top Trailing Badges
             if isCompletedInCollection || showTypeBadge {
                 VStack {
@@ -295,7 +298,7 @@ struct MediaThumbnailView: View, Equatable {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.white)
                                 .padding(4)
-                                .background(appAccent.color)
+                                .background(Color.accentColor)
                                 .clipShape(Circle())
                                 .shadow(radius: 2)
                         }
@@ -323,7 +326,7 @@ struct MediaThumbnailView: View, Equatable {
             } else {
                 posterContent
             }
-            
+
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
                 ThumbnailSearchOverlay(
@@ -355,11 +358,15 @@ struct MediaThumbnailView: View, Equatable {
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
-        
+
         // Optimize: Find first unwatched season first
         let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return }
-        
+        guard
+            let currentSeason = sortedSeasons.first(where: {
+                $0.watchedEpisodesCount < $0.totalEpisodesCount
+            })
+        else { return }
+
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
 
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
@@ -381,28 +388,31 @@ struct MediaThumbnailView: View, Equatable {
         Group {
             switch type {
             case .movie:
-                Image(systemName: "film.fill")
+                Image(systemName: "film")
             case .tvShow:
-                Image(systemName: "tv.fill")
+                Image(systemName: "tv")
             }
         }
         .font(.system(size: 9, weight: .bold))
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(appAccent.color.opacity(0.8))
+        .background(Color.accentColor.opacity(0.4))
         .clipShape(Capsule())
     }
 
     @ViewBuilder
-    private func libraryContextMenu(for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?) -> some View {
+    private func libraryContextMenu(
+        for itemID: PersistentIdentifier, type: MediaType, state: MediaState, progress: Double?
+    ) -> some View {
         if let collectionID = selectedCollectionID {
             let itemIDString = capturedItemID
             let isSeenInCollection = isCompletedInCollection
-            
+
             Section("Collection Actions") {
                 Button {
                     Task { @MainActor in
-                        let descriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == collectionID })
+                        let descriptor = FetchDescriptor<MediaCollection>(
+                            predicate: #Predicate { $0.id == collectionID })
                         if let collection = try? modelContext.fetch(descriptor).first {
                             if isSeenInCollection {
                                 collection.completedItemIDs.removeAll { $0 == itemIDString }
@@ -410,13 +420,15 @@ struct MediaThumbnailView: View, Equatable {
                                 collection.completedItemIDs.append(itemIDString)
                             }
                             SaveCoordinator.shared.requestSave(modelContext)
-            
+
                         }
                         NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                     }
                 } label: {
-                    Label(isSeenInCollection ? "Mark as Unseen in Collection" : "Mark as Seen in Collection", 
-                          systemImage: isSeenInCollection ? "circle" : "checkmark.circle.fill")
+                    Label(
+                        isSeenInCollection
+                            ? "Mark as Unseen in Collection" : "Mark as Seen in Collection",
+                        systemImage: isSeenInCollection ? "circle" : "checkmark.circle.fill")
                 }
             }
         }
@@ -448,7 +460,8 @@ struct MediaThumbnailView: View, Equatable {
         }
 
         Section("Set Status") {
-            ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) { targetState in
+            ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) {
+                targetState in
                 Button(targetState.displayName) {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
                         withAnimation {
@@ -466,7 +479,7 @@ struct MediaThumbnailView: View, Equatable {
                 isRemoved = true
                 FeedbackManager.shared.trigger(.removeFromLibrary)
             }
-            
+
             if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
                 let id = item.id
                 NotificationManager.shared.cancelNotification(id: id, type: type)

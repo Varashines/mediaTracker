@@ -252,6 +252,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
                     if let selection = newValue {
+                        // Reset navigation stack when switching categories
+                        viewModel.navigationPath = NavigationPath()
+                        
                         switch selection {
                         case .category(let category):
                             viewModel.selectedCategory = category
@@ -262,9 +265,9 @@ struct ContentView: View {
                             viewModel.selectedState = nil
                             viewModel.isInitialLoading = true
                             
-                            if category != .smartHub {
-                                viewModel.selectedCollectionID = nil
-                            }
+                            // Always clear collection ID when explicitly selecting a category
+                            // especially when switching to 'smartHub' itself from the sidebar
+                            viewModel.selectedCollectionID = nil
                         case .collection(let id, let name, _):
                             viewModel.selectedCategory = .smartHub
                             viewModel.selectedCollectionID = id
@@ -416,7 +419,6 @@ struct ContentView: View {
                 }
             }
         }
-        .appBackground(network: viewModel.selectedNetworks?.first, category: viewModel.selectedCategory.rawValue)
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
         .animation(.smooth(duration: 0.4), value: isSearchActive)
         .sheet(isPresented: $showingBulkManager) {
