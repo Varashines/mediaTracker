@@ -9,18 +9,21 @@ BUILD_DIR=".build/arm64-apple-macosx/release"
 
 echo "🚀 Building $APP_NAME in Release mode (Incremental)..."
 
-# 1. Build the executable
-swift build -c release --arch arm64
+# 1. Build the executable using all available cores
+CORES=$(sysctl -n hw.ncpu)
+swift build -c release --arch arm64 -j $CORES
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed."
     exit 1
 fi
 
-echo "🎨 Generating App Icon..."
-swift generate_icon.swift
-iconutil -c icns AppIcon.iconset -o AppIcon.icns
-rm -rf AppIcon.iconset
+if [ ! -f "AppIcon.icns" ]; then
+    echo "🎨 Generating App Icon..."
+    swift generate_icon.swift
+    iconutil -c icns AppIcon.iconset -o AppIcon.icns
+    rm -rf AppIcon.iconset
+fi
 
 echo "📦 Packaging into $APP_NAME.app..."
 

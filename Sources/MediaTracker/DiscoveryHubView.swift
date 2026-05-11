@@ -181,17 +181,43 @@ struct DiscoveryCard: View {
             let cornerRadius: CGFloat = style == .logo ? 20 : 32
             
             ZStack {
-                // Main Layer
+                // Main Layer: Deep Themed Wash
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.06))
+                    .fill(themeColor.themedBackground(colorScheme: colorScheme))
+                    .overlay {
+                        // Subtle Gradient Glow
+                        if colorScheme == .dark {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .fill(
+                                    RadialGradient(
+                                        colors: [themeColor.opacity(0.12), .clear],
+                                        center: .topLeading,
+                                        startRadius: 0,
+                                        endRadius: 150
+                                    )
+                                )
+                        }
+                    }
                     .background {
+                        // Dynamic Shadow/Glow
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color(NSColor.windowBackgroundColor))
-                            .shadow(color: accent.opacity(isHovered ? 0.12 : 0), radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+                            .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color(NSColor.windowBackgroundColor))
+                            .shadow(color: accent.opacity(isHovered ? (colorScheme == .dark ? 0.25 : 0.15) : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
                     }
                     .overlay {
+                        // Vibrant Border
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(accent.opacity(isHovered ? 0.3 : 0.08), lineWidth: isHovered ? 1.5 : 1)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        accent.opacity(isHovered ? 0.6 : 0.15),
+                                        accent.opacity(isHovered ? 0.2 : 0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isHovered ? 1.5 : 1
+                            )
                     }
                 
                 if style == .logo {

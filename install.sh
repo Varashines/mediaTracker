@@ -5,25 +5,38 @@ APP_NAME="MediaTracker"
 BUNDLE_ID="com.vara.mediatracker"
 EXECUTABLE_NAME="MediaTracker"
 INSTALL_DIR="/Applications"
-BUILD_DIR=".build/arm64-apple-macosx/release"
 
-echo "🧹 Cleaning previous build artifacts..."
-swift package clean
+BUILD_MODE="release"
+BUILD_CONFIG="release"
 
-echo "🚀 Building $APP_NAME in Release mode..."
+# Parse arguments
+for arg in "$@"; do
+    if [ "$arg" == "--debug" ]; then
+        BUILD_MODE="debug"
+        BUILD_CONFIG="debug"
+    fi
+done
 
-# 1. Build the executable
-swift build -c release --arch arm64
+BUILD_DIR=".build/arm64-apple-macosx/$BUILD_CONFIG"
+
+echo "🚀 Building $APP_NAME in $BUILD_MODE mode (Incremental)..."
+
+# 1. Build the executable using all available cores
+CORES=$(sysctl -n hw.ncpu)
+swift build -c $BUILD_MODE --arch arm64 -j $CORES
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed."
     exit 1
 fi
 
-echo "🎨 Generating App Icon..."
-swift generate_icon.swift
-iconutil -c icns AppIcon.iconset -o AppIcon.icns
-rm -rf AppIcon.iconset
+# 2. Only generate icons if they don't exist or if specifically requested (simplified for now)
+if [ ! -f "AppIcon.icns" ]; then
+    echo "🎨 Generating App Icon..."
+    swift generate_icon.swift
+    iconutil -c icns AppIcon.iconset -o AppIcon.icns
+    rm -rf AppIcon.iconset
+fi
 
 echo "📦 Packaging into $APP_NAME.app..."
 

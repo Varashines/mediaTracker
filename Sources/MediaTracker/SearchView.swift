@@ -123,11 +123,7 @@ struct SearchView: View {
             Divider().padding(.horizontal, 30)
         }
         .background {
-            if #available(macOS 26.0, *) {
-                Rectangle().fill(.clear).glassEffect(.regular)
-            } else {
-                Rectangle().fill(.ultraThinMaterial)
-            }
+            Rectangle().fill(Color(NSColor.windowBackgroundColor))
         }
         .zIndex(10)
     }

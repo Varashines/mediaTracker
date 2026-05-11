@@ -62,7 +62,7 @@ struct SmartBadgeView: View {
                 )
             }
         } else if let res = result, res.type == .movie {
-             statusUI(isUpcoming: false, state: .wishlist, badgeText: nil, watchProgressLabel: nil, nextEpisodeLabel: nil, progress: nil)
+             EmptyView()
         }
     }
 

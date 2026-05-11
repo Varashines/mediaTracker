@@ -34,9 +34,9 @@ struct MainLibraryView: View {
     }
 
     var body: some View {
-        GeometryReader { mainGeo in
+        GeometryReader { (mainGeo: GeometryProxy) in
             let spacing: CGFloat = 20
-            let columns = [
+            let columns: [GridItem] = [
                 GridItem(.adaptive(minimum: 170, maximum: 200), spacing: spacing)
             ]
 

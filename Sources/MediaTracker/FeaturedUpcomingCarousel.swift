@@ -34,25 +34,25 @@ struct FeaturedUpcomingCarousel: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 20)
                 .background(
-                    GeometryReader { geo in
-                        let minX = geo.frame(in: .named(scrollSpace)).minX
+                    GeometryReader { (geo: GeometryProxy) in
+                        let minX: CGFloat = geo.frame(in: .named(scrollSpace)).minX
                         Color.clear
                             .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
                             .onAppear { contentWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { _, newValue in contentWidth = newValue }
+                            .onChange(of: geo.size.width) { (_: CGFloat, newValue: CGFloat) in contentWidth = newValue }
                     }
                 )
             }
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: scrollSpace)
             .background(
-                GeometryReader { geo in
+                GeometryReader { (geo: GeometryProxy) in
                     Color.clear
                         .onAppear { containerWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
+                        .onChange(of: geo.size.width) { (_: CGFloat, newValue: CGFloat) in containerWidth = newValue }
                 }
             )
-            .onPreferenceChange(ScrollOffsetKey.self) { dict in
+            .onPreferenceChange(ScrollOffsetKey.self) { (dict: [String: CGFloat]) in
                 guard let minX = dict[scrollSpace] else { return }
                 let maxScroll = max(1, contentWidth - containerWidth)
                 let currentScroll = max(0, -minX)
@@ -60,5 +60,14 @@ struct FeaturedUpcomingCarousel: View {
             }
         }
         .compositingGroup()
+        .onAppear { prewarm(items: items) }
+        .onChange(of: items) { _, newItems in prewarm(items: newItems) }
+    }
+
+    private func prewarm(items: [MediaThumbnailMetadata]) {
+        let urls = items.prefix(10).compactMap { $0.posterURL }.compactMap { URL(string: $0) }
+        if !urls.isEmpty {
+            ImageCache.shared.prewarmImages(urls: urls, targetSize: .thumbMedium, priority: .normal)
+        }
     }
 }
