@@ -134,7 +134,13 @@ struct SleepOverlayModifier: ViewModifier {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(40)
-                    .background(.ultraThinMaterial)
+                    .background {
+                        if #available(macOS 26.0, *) {
+                            RoundedRectangle(cornerRadius: 24).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        } else {
+                            RoundedRectangle(cornerRadius: 24).fill(.ultraThinMaterial)
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 24))
                     .overlay {
                         RoundedRectangle(cornerRadius: 24)

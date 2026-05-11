@@ -21,11 +21,41 @@ struct StreamingServiceRule: Codable {
 }
 
 struct DateUtils {
+    private static let formattersLock = NSLock()
+    nonisolated(unsafe) private static var formatters: [String: DateFormatter] = [:]
+    nonisolated(unsafe) private static var isoFormatterInstance: ISO8601DateFormatter? = nil
+    
+    private static func getIsoFormatter() -> ISO8601DateFormatter {
+        formattersLock.lock()
+        defer { formattersLock.unlock() }
+        if let formatter = isoFormatterInstance { return formatter }
+        let formatter = ISO8601DateFormatter()
+        isoFormatterInstance = formatter
+        return formatter
+    }
+    
+    private static func getFormatter(format: String, timeZoneIdentifier: String?) -> DateFormatter {
+        let key = "\(format)_\(timeZoneIdentifier ?? "nil")"
+        formattersLock.lock()
+        defer { formattersLock.unlock() }
+        
+        if let formatter = formatters[key] {
+            return formatter
+        }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        if let tzName = timeZoneIdentifier, let tz = TimeZone(identifier: tzName) {
+            formatter.timeZone = tz
+        }
+        formatters[key] = formatter
+        return formatter
+    }
+
     static func parseDate(_ dateString: String?) -> Date? {
         guard let dateString = dateString else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let formatter = getFormatter(format: "yyyy-MM-dd", timeZoneIdentifier: nil)
         return formatter.date(from: dateString)
     }
     
@@ -46,21 +76,17 @@ struct DateUtils {
 
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
         guard let dateString = dateString else { return nil }
-        let isoFormatter = ISO8601DateFormatter()
         
         // 1. Identify the service explicitly for smart defaults
         let service = (serviceName ?? show?.network ?? "").lowercased()
         
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
         var finalDate: Date? = nil
 
         // 2. Data-Driven Streaming Overrides (Preserve existing strict rules)
         if let rule = StreamingServiceRule.defaults.first(where: { rule in
             rule.patterns.contains(where: { service.contains($0) })
         }) {
-            formatter.dateFormat = "yyyy-MM-dd HH:mm"
-            formatter.timeZone = TimeZone(identifier: rule.timeZoneIdentifier)
+            let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: rule.timeZoneIdentifier)
             if let baseDate = formatter.date(from: "\(dateString) \(rule.releaseTime)") {
                 finalDate = Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
             }
@@ -68,20 +94,18 @@ struct DateUtils {
 
         if finalDate == nil {
             // 3. Fallback: Trust high-precision ISO airstamp if available from the database
-            if let airstamp = airstamp, let date = isoFormatter.date(from: airstamp) {
+            if let airstamp = airstamp, let date = getIsoFormatter().date(from: airstamp) {
                 finalDate = date
             } 
             // 4. Use provided timezone and show-level schedule
-            else if let tzName = timezone ?? show?.timezone, let tz = TimeZone(identifier: tzName) {
-                formatter.dateFormat = "yyyy-MM-dd HH:mm"
-                formatter.timeZone = tz
+            else if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
+                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
                 let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
                 finalDate = formatter.date(from: "\(dateString) \(timeToUse)")
             } 
             // 5. Smart Fallback for TMDB dates without time: Assume US Network (8 PM ET)
             else {
-                formatter.dateFormat = "yyyy-MM-dd HH:mm"
-                formatter.timeZone = TimeZone(identifier: "America/New_York")
+                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
                 finalDate = formatter.date(from: "\(dateString) 20:00")
             }
         }

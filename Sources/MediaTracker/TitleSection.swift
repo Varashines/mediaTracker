@@ -73,7 +73,13 @@ struct TitleSection: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
-                .background(.ultraThinMaterial)
+                .background {
+                    if #available(macOS 26.0, *) {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 20))
+                    } else {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)

@@ -41,15 +41,13 @@ struct SectionHeader: View {
                         
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.secondary.opacity(0.15))
-                                .background(Capsule().fill(.ultraThinMaterial))
+                                .fill(Color.secondary.opacity(0.1))
                                 .frame(height: 4)
                             
                             Capsule()
                                 .fill(appAccent.color.gradient)
                                 .frame(width: itemWidth, height: 4)
                                 .offset(x: progress * scrollableTrackWidth)
-                                .shadow(color: appAccent.color.opacity(0.3), radius: 4, x: 0, y: 2)
                         }
                         .frame(maxHeight: .infinity, alignment: .center)
                     }

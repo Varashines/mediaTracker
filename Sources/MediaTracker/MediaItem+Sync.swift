@@ -18,11 +18,9 @@ extension MediaItem {
         // Phase 1 Modularization: Use Centralized Badge Engine
         if let result = BadgeEngine.calculateBadge(for: self, now: now) {
             self.storedSmartBadgeLabel = result.label
-            self.storedSmartBadgeIcon = result.icon
             self.storedSmartBadgeIsSparkle = result.isSparkle
         } else {
             self.storedSmartBadgeLabel = nil
-            self.storedSmartBadgeIcon = nil
             self.storedSmartBadgeIsSparkle = false
         }
 

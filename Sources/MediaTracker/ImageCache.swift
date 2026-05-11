@@ -495,8 +495,6 @@ class ImageCache {
             let descriptor = FetchDescriptor<ImageCacheEntity>(predicate: #Predicate { $0.id == diskFileName })
             guard let entity = try? context.fetch(descriptor).first else { return nil }
             
-            entity.accessDate = Date()
-            try? context.save()
             let data = entity.data
             
             if let targetSize = targetSize {

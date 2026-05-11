@@ -25,7 +25,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let isUpcoming: Bool
     let badgeText: String?
     let smartBadgeLabel: String?
-    let smartBadgeIcon: String?
     let isSparkleBadge: Bool
     let remainingCount: Int?
     let nextAiringDate: Date?
@@ -56,7 +55,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.isUpcoming = item.storedIsUpcoming
         self.badgeText = item.gridBadgeText
         self.smartBadgeLabel = item.storedSmartBadgeLabel
-        self.smartBadgeIcon = item.storedSmartBadgeIcon
         self.isSparkleBadge = item.storedSmartBadgeIsSparkle
         self.remainingCount = item.remainingEpisodesCount
         self.nextAiringDate = item.cachedNextAiringDate
@@ -80,7 +78,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.isUpcoming = false
         self.badgeText = nil
         self.smartBadgeLabel = nil
-        self.smartBadgeIcon = nil
         self.isSparkleBadge = false
         self.remainingCount = nil
         self.nextAiringDate = nil
@@ -118,9 +115,10 @@ actor MediaFilterActor {
 
         let now = Date()
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
+        let searchToken = processedSearch.split(separator: " ").first.map(String.init) ?? ""
         
         // 1. Optimized Predicate (Push filters to SQLite)
-        var basePredicate = buildBasePredicate(category: category)
+        var basePredicate = buildBasePredicate(category: category, searchToken: searchToken)
         var smartRules: [SmartRule] = []
         
         if let cid = collectionID {
@@ -210,45 +208,109 @@ actor MediaFilterActor {
         }
     }
 
-    private func buildBasePredicate(category: NavigationCategory) -> Predicate<MediaItem> {
+    private func buildBasePredicate(category: NavigationCategory, searchToken: String) -> Predicate<MediaItem> {
+        let hasSearch = !searchToken.isEmpty
+
         switch category {
         case .upcoming:
-            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.storedIsUpcoming == true && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+            }
         case .inProgress:
-            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
+            }
         case .watchlist:
-            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
+            }
         case .loved:
-            return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.tasteValue == "Love" && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
+            }
         case .completed:
-            return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.stateValue == "Completed" && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
+            }
         case .archive:
-            return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in (item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching") && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
+            }
         case .disliked:
-            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
+            }
         case .binge:
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in (item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE") && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
+            }
         case .movie, .tvShow:
             let typeString = category.rawValue
-            return #Predicate<MediaItem> { item in item.typeValue == typeString }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.typeValue == typeString && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.typeValue == typeString }
+            }
         case .quickBites:
-            return #Predicate<MediaItem> { item in 
-                if let runtime = item.cachedRuntime {
-                    return runtime > 0 && runtime < 90
-                } else {
-                    return false
+            if hasSearch {
+                return #Predicate<MediaItem> { item in 
+                    if let runtime = item.cachedRuntime {
+                        return runtime > 0 && runtime < 90 && item.searchableText.localizedStandardContains(searchToken)
+                    } else {
+                        return false
+                    }
+                }
+            } else {
+                return #Predicate<MediaItem> { item in 
+                    if let runtime = item.cachedRuntime {
+                        return runtime > 0 && runtime < 90
+                    } else {
+                        return false
+                    }
                 }
             }
         case .catchUp:
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
+            }
         case .stalled:
-            return #Predicate<MediaItem> { item in item.stateValue == "Active" }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { item in item.stateValue == "Active" }
+            }
         case .releaseRadar:
             // Complex logical ORs in Predicates often cause compiler timeouts.
             // We'll fetch all and refine in Swift.
-            return #Predicate<MediaItem> { _ in true }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { _ in true }
+            }
         default:
-            return #Predicate<MediaItem> { _ in true }
+            if hasSearch {
+                return #Predicate<MediaItem> { item in item.searchableText.localizedStandardContains(searchToken) }
+            } else {
+                return #Predicate<MediaItem> { _ in true }
+            }
         }
     }
 
@@ -362,9 +424,11 @@ actor MediaFilterActor {
         // 1. High Priority Fetch: Split into focused fetches to avoid compiler timeouts and starvation
         
         // Pass A: Items already marked as "NEW" or "BINGE DROP" (Across entire library)
+        let newLabel = "NEW"
+        let bingeLabel = "BINGE DROP"
+        let dislikeLabel = "Dislike"
         let pStreaming = #Predicate<MediaItem> { item in
-            (item.storedSmartBadgeLabel == "NEW" || item.storedSmartBadgeLabel == "BINGE DROP") &&
-            item.tasteValue != "Dislike"
+            (item.storedSmartBadgeLabel == newLabel || item.storedSmartBadgeLabel == bingeLabel) && item.tasteValue != dislikeLabel
         }
         
         // Pass B: Items transitioning from Upcoming to Released (Across entire library)
@@ -430,45 +494,7 @@ actor MediaFilterActor {
             }
         }
         
-        // Proactive Badge Heal: Ensure items crossing boundaries are updated before filtering/sorting
-        // This is critical for the "Transition" items to actually get their "NEW" label.
-        let twoDaysAgo = now.addingTimeInterval(-172800)
-        
-        let staleUpcoming = homeResults.filter { item in
-            item.storedIsUpcoming == true && (
-                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now) ||
-                (item.releaseDate != nil && item.releaseDate! < now)
-            )
-        }
-        
-        let staleSoon = homeResults.filter { item in
-            item.storedSmartBadgeLabel == "SOON" && item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < now
-        }
-        
-        let staleNew = homeResults.filter { item in
-            item.storedSmartBadgeLabel == "NEW" && (
-                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < twoDaysAgo) ||
-                (item.releaseDate != nil && item.releaseDate! < twoDaysAgo)
-            )
-        }
-
-        let sevenDaysAgo = now.addingTimeInterval(-604800)
-        let staleFinale = homeResults.filter { item in
-            item.storedSmartBadgeLabel == "FINALE" && (
-                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < sevenDaysAgo) ||
-                (item.releaseDate != nil && item.releaseDate! < sevenDaysAgo)
-            )
-        }
-        
-        let allStale = staleUpcoming + staleSoon + staleNew + staleFinale
-        
-        if !allStale.isEmpty {
-            for item in allStale {
-                item.syncCachedProperties(now: now)
-            }
-            try? modelContext.save()
-        }
-
+        let now = Date() // Redefine just to be safe if it was defined above
         let activeItems = homeResults.filter { item in
             // Basic exclusion
             if item.stateValue == "Completed" || item.stateValue == "Dropped" { return false }

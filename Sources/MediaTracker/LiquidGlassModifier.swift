@@ -5,17 +5,17 @@ struct LiquidGlassModifier: ViewModifier {
     let isSolid: Bool
     let foregroundColor: Color?
     let progress: Double?
+    var isMicro: Bool = false
     var horizontalPadding: CGFloat = 10
     var verticalPadding: CGFloat = 4
     @Environment(\.colorScheme) var colorScheme
 
     func body(content: Content) -> some View {
-        let isLight = accentColor.isLightColor
         let isAsleep = SleepManager.shared.isAsleep
 
-        let defaultForeground = isSolid ? Color.white : .primary
+        let defaultForeground = Color.white
         let foreground = foregroundColor ?? defaultForeground
-        let tintOpacity = isSolid ? 0.9 : (isLight ? 0.2 : 0.3)
+        let tintOpacity = isSolid ? 0.95 : (accentColor.isLightColor ? 0.25 : 0.35)
 
         return content
             .padding(.horizontal, horizontalPadding)
@@ -27,27 +27,29 @@ struct LiquidGlassModifier: ViewModifier {
                         .fill(isSolid ? accentColor : Color.gray.opacity(0.15))
                 } else {
                     ZStack(alignment: .leading) {
-                        if isSolid {
+                        if isMicro {
                             Capsule()
                                 .fill(accentColor.opacity(tintOpacity))
+                                .background(.ultraThinMaterial)
                         } else {
                             Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule()
-                                        .fill(accentColor.opacity(tintOpacity))
-                                }
+                                .fill(accentColor.opacity(tintOpacity))
+                                .glassEffect(.regular, in: .capsule)
+                        }
+                        
+                        // PROGRESS FILL
+                        if let prog = progress, prog > 0 && prog < 1.0 {
+                            GeometryReader { geo in
+                                Capsule()
+                                    .fill(accentColor.opacity(isSolid ? 1.0 : 0.7))
+                                    .frame(width: geo.size.width * CGFloat(clampedProgress(prog)))
+                            }
                         }
                     }
                 }
             }
             .clipShape(Capsule())
-            .overlay {
-                if !isAsleep {
-                    Capsule()
-                        .stroke(accentColor.opacity(0.3), lineWidth: 0.5)
-                }
-            }
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
 
     private func clampedProgress(_ val: Double) -> Double {
@@ -58,11 +60,11 @@ struct LiquidGlassModifier: ViewModifier {
 extension View {
     func liquidGlassPill(
         accentColor: Color, isSolid: Bool = false, foregroundColor: Color? = nil, progress: Double? = nil,
-        hPadding: CGFloat = 10, vPadding: CGFloat = 4
+        isMicro: Bool = false, hPadding: CGFloat = 10, vPadding: CGFloat = 4
     ) -> some View {
         self.modifier(
             LiquidGlassModifier(
                 accentColor: accentColor, isSolid: isSolid, foregroundColor: foregroundColor, progress: progress,
-                horizontalPadding: hPadding, verticalPadding: vPadding))
+                isMicro: isMicro, horizontalPadding: hPadding, verticalPadding: vPadding))
     }
 }

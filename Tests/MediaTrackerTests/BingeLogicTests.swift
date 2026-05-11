@@ -356,7 +356,6 @@ final class BingeLogicTests: XCTestCase {
         
         // Should show BINGE because 3 episodes were watched recently
         XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE")
-        XCTAssertEqual(item.storedSmartBadgeIcon, "flame.fill")
     }
 }
 

@@ -39,7 +39,6 @@ struct SettingsView: View {
             }
             .padding(.top, 12)
             .padding(.bottom, 12)
-            .background(.ultraThinMaterial)
             
             Divider().opacity(0.4)
             

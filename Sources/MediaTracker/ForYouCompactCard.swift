@@ -24,7 +24,6 @@ struct ForYouCompactCard: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
                 .clipped()
-                .overlay(.ultraThinMaterial.opacity(0.6))
                 .overlay(Color.black.opacity(isHovered ? 0.2 : 0.4))
             } else {
                 Rectangle().fill(Color.black.opacity(0.8))
@@ -46,17 +45,6 @@ struct ForYouCompactCard: View {
 
                 // 3. Info Pane
                 VStack(alignment: .leading, spacing: 8) {
-                    // Reason Pill
-                    if let context = recommendationContext {
-                        Text(context.uppercased())
-                            .font(.system(size: 8, weight: .black))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(appAccent.color.gradient)
-                            .clipShape(Capsule())
-                    }
-                    
                     Text(metadata.title)
                         .font(.system(size: 22, weight: .black, design: .rounded))
                         .foregroundStyle(.white)

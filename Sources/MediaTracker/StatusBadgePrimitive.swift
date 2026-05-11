@@ -2,7 +2,6 @@ import SwiftUI
 
 struct StatusBadgePrimitive: View {
     let label: String
-    let systemImage: String
     let accentColor: Color
     let isSolid: Bool
     let progress: Double?
@@ -14,37 +13,32 @@ struct StatusBadgePrimitive: View {
         let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
         let bgAccent = accentColor.luminousAccent(colorScheme: colorScheme)
         
-        HStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .bold))
-            
-            if !isCompact && !label.isEmpty {
+        HStack(spacing: 0) {
+            if !label.isEmpty {
                 Text(label.uppercased())
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .kerning(0.5)
+                    .font(.system(size: 7.5, weight: .black, design: .rounded))
+                    .kerning(1.0)
+                    .multilineTextAlignment(.center)
             }
         }
-        .frame(minWidth: 24, minHeight: 24)
-        .padding(.horizontal, isCompact ? 0 : 8)
+        .frame(minHeight: 20)
         .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
         .liquidGlassPill(
             accentColor: bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4),
             isSolid: isSolid,
             progress: nil,
-            hPadding: 0, // Controlled by HStack and frame
+            isMicro: true,
+            hPadding: 10,
             vPadding: 4
         )
         .overlay {
-            // AUTHORITATIVE CIRCULAR PROGRESS (Matches Season Tab pattern)
             if let progress = progress, progress > 0 && progress < 1.0 {
-                Circle()
-                    .inset(by: 1.25) // Half of the stroke width to sit perfectly on the edge
-                    .trim(from: 0, to: CGFloat(progress))
+                Capsule()
+                    .trim(from: 0, to: progress)
                     .stroke(
                         Color.blueToGreen(progress: progress),
-                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
                     )
-                    .rotationEffect(.degrees(-90))
             }
         }
     }

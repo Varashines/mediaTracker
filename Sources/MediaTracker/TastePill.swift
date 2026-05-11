@@ -22,8 +22,13 @@ struct TastePill: View {
                 if isSelected {
                     activeColor
                 } else {
-                    Color.primary.opacity(0.05)
-                        .background(.ultraThinMaterial)
+                    if #available(macOS 26.0, *) {
+                        Color.primary.opacity(0.05)
+                            .glassEffect(.regular)
+                    } else {
+                        Color.primary.opacity(0.05)
+                            .background(.ultraThinMaterial)
+                    }
                 }
             }
             .clipShape(Capsule())

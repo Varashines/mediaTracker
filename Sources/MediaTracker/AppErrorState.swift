@@ -127,9 +127,16 @@ struct ToastView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            if #available(macOS 26.0, *) {
+                Capsule()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .capsule)
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            } else {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            }
         }
         .overlay {
             Capsule()

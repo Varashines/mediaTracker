@@ -30,7 +30,6 @@ final class MediaItem: Identifiable {
     var remainingEpisodesCount: Int?
 
     var storedSmartBadgeLabel: String?
-    var storedSmartBadgeIcon: String?
     var storedSmartBadgeIsSparkle: Bool = false
     var storedIsUpcoming: Bool = false
     var storedNextEpisodeLabel: String?

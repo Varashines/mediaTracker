@@ -254,19 +254,15 @@ struct MediaThumbnailView: View, Equatable {
                 resultID: nil
             )
 
-            // 2. Glass Peek Overlay (Bottom sliding tray)
-            GlassPeekOverlay(
+            // 2. Hover Metadata Pills (Floating capsules)
+            HoverMetadataPills(
                 title: title,
                 year: yearLabel,
-                state: safeState,
                 nextEpisodeLabel: nextEpisodeLabel,
-                watchProgress: watchProgress,
                 nextAiringDate: nextAiringDate,
                 isUpcoming: isUpcoming,
-                gridBadgeText: gridBadgeText,
                 isHovered: effectiveHover,
-                mode: mode,
-                appAccent: appAccent
+                appAccent: appAccent.color
             )
 
             // Smart Badge (Top Leading)
@@ -287,17 +283,22 @@ struct MediaThumbnailView: View, Equatable {
             .opacity(isHovered ? 0 : 1)
             .offset(x: isHovered ? -4 : 0, y: isHovered ? -4 : 0)
             
-            // Collection Status Badge (Top Trailing)
-            if isCompletedInCollection {
+            // Top Trailing Badges
+            if isCompletedInCollection || showTypeBadge {
                 VStack {
                     HStack {
                         Spacer()
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.white)
-                            .padding(4)
-                            .background(appAccent.color)
-                            .clipShape(Circle())
-                            .shadow(radius: 2)
+                        if showTypeBadge {
+                            typeBadge
+                        }
+                        if isCompletedInCollection {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.white)
+                                .padding(4)
+                                .background(appAccent.color)
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
                     }
                     Spacer()
                 }
@@ -386,7 +387,10 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .font(.system(size: 9, weight: .bold))
-        .liquidGlassPill(accentColor: appAccent.color.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.2 : 0.4), isSolid: false)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(appAccent.color.opacity(0.8))
+        .clipShape(Capsule())
     }
 
     @ViewBuilder

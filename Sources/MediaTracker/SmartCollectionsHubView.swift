@@ -352,7 +352,13 @@ private struct SmartCollectionCard: View {
             }
         }
         .padding(4)
-        .background(.ultraThinMaterial)
+        .background {
+            if #available(macOS 26.0, *) {
+                Capsule().fill(.clear).glassEffect(.regular, in: .capsule)
+            } else {
+                Capsule().fill(.ultraThinMaterial)
+            }
+        }
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
     }

@@ -258,7 +258,17 @@ struct ModularSection<Content: View>: View {
             
             content
                 .padding(24)
-                .background(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
+                .background {
+                    if #available(macOS 26.0, *) {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.clear)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                            .opacity(scheme == .dark ? 0.4 : 0.6)
+                    } else {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
+                    }
+                }
                 .background(color.opacity(scheme == .dark ? 0.05 : 0.02))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {

@@ -85,9 +85,7 @@ struct InsightsView: View {
             let topGenre = stats.topRatedGenres.first?.0 ?? "Cinema"
             let topActor = stats.topRatedActors.first?.name ?? "Great Talent"
 
-            (Text("An expert in ") + Text(topGenre).foregroundColor(appAccent.color)
-                + Text(", driven by the performances of ")
-                + Text(topActor).foregroundColor(appAccent.color) + Text("."))
+            Text("An expert in \(Text(topGenre).foregroundColor(appAccent.color)), driven by the performances of \(Text(topActor).foregroundColor(appAccent.color)).")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .lineSpacing(4)
 

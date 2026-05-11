@@ -12,7 +12,6 @@ struct MetadataLine: View {
     var body: some View {
         if let value = value, !value.isEmpty {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-            let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
             
             HStack(spacing: 6) {
                 if let icon = icon {
@@ -27,7 +26,6 @@ struct MetadataLine: View {
             .font(.system(size: 12, weight: .bold, design: .rounded))
             .padding(.horizontal, 4)
             .minimumScaleFactor(0.9)
-            .liquidGlassPill(accentColor: bgAccent.opacity(colorScheme == .dark ? 0.15 : 0.4), isSolid: false)
         }
     }
     

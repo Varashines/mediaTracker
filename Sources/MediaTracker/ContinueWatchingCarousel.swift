@@ -98,8 +98,16 @@ struct ContinueWatchingCarousel: View {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(24)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .background {
+                        if #available(macOS 26.0, *) {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.clear)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        } else {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        }
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .stroke(Color.primary.opacity(0.05), lineWidth: 1)

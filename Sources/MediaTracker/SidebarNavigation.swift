@@ -45,7 +45,6 @@ struct SidebarNavigation: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 16)
         }
-        .background(.ultraThinMaterial.opacity(0.3))
     }
 
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
@@ -72,25 +71,18 @@ struct SidebarNavigation: View {
             HStack(spacing: 12) {
                 Image(systemName: iconName)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isSelected ? .white : .primary.opacity(0.6))
+                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.6))
                     .frame(width: 24)
                 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .contentShape(Rectangle())
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.vibrantDarkBlue)
-                        .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
-                }
-            }
         }
         .buttonStyle(.plain)
     }

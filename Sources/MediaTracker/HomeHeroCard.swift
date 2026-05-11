@@ -40,7 +40,18 @@ struct HomeHeroCard: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .foregroundStyle(.white)
-                        .background(.ultraThinMaterial.opacity(0.8))
+                        .background {
+                            if #available(macOS 26.0, *) {
+                                Capsule()
+                                    .fill(.clear)
+                                    .glassEffect(.regular, in: .capsule)
+                                    .opacity(0.8)
+                            } else {
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.8)
+                            }
+                        }
                         .clipShape(Capsule())
                         .overlay {
                             Capsule().stroke(.white.opacity(0.1), lineWidth: 0.5)
