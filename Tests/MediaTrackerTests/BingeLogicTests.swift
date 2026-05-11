@@ -189,13 +189,13 @@ final class BingeLogicTests: XCTestCase {
     }
 
     @MainActor
-    func testFinaleBadgeLogicFuture() async throws {
+    func testFinaleBadgeLogicRecent() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        let item2 = MediaItem(id: "future_finale_8", title: "Future Finale 8", overview: "", type: .tvShow)
+        let item2 = MediaItem(id: "recent_finale_8", title: "Recent Finale 8", overview: "", type: .tvShow)
         context.insert(item2)
         let tvDetails2 = TVShowDetails(tmdbID: 106)
         tvDetails2.item = item2
@@ -213,8 +213,8 @@ final class BingeLogicTests: XCTestCase {
             context.insert(ep)
         }
         
-        // Finale airing in 11 days (May 10 relative to April 29)
-        let airDate = "2026-05-10"
+        // Finale airing in 3 days (May 2 relative to April 29)
+        let airDate = "2026-05-02"
         let ep8 = TVEpisode(episodeNumber: 8, seasonNumber: 1, name: "Finale", overview: "", airDate: airDate)
         ep8.season = season2
         ep8.airDateValue = DateUtils.parseDate(airDate)
@@ -226,7 +226,66 @@ final class BingeLogicTests: XCTestCase {
         item2.syncCachedProperties(now: testNow)
         XCTAssertEqual(item2.storedSmartBadgeLabel, "FINALE")
     }
+
+    @MainActor
+    func testOldFinaleDoesNotShowBadge() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let item = MediaItem(id: "old_finale", title: "Old Finale Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tvDetails = TVShowDetails(tmdbID: 107)
+        tvDetails.item = item
+        item.tvShowDetails = tvDetails
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 107)
+        season.tvShowDetails = tvDetails
+        tvDetails.seasons.append(season)
+        
+        // Finale aired 30 days ago
+        let airDate = "2026-03-30"
+        let ep10 = TVEpisode(episodeNumber: 10, seasonNumber: 1, name: "The End", overview: "", airDate: airDate)
+        ep10.season = season
+        ep10.airDateValue = DateUtils.parseDate(airDate)
+        season.episodes.append(ep10)
+        
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
+        
+        XCTAssertNotEqual(item.storedSmartBadgeLabel, "FINALE")
+    }
     
+    @MainActor
+    func testUndatedFinaleDoesNotShowBadge() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let item = MediaItem(id: "undated_finale", title: "Undated Finale Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tvDetails = TVShowDetails(tmdbID: 108)
+        tvDetails.item = item
+        item.tvShowDetails = tvDetails
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 108)
+        season.tvShowDetails = tvDetails
+        tvDetails.seasons.append(season)
+        
+        // Finale with NO air date
+        let ep10 = TVEpisode(episodeNumber: 10, seasonNumber: 1, name: "The End", overview: "", airDate: nil)
+        ep10.season = season
+        ep10.airDateValue = nil
+        season.episodes.append(ep10)
+        
+        try context.save()
+        tvDetails.recalculateCachedProperties()
+        item.syncCachedProperties(now: testNow)
+        
+        XCTAssertNil(item.storedSmartBadgeLabel)
+    }
+
     @MainActor
     func testPeckingOrder() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])

@@ -146,18 +146,31 @@ enum ThemeStyle: String, Codable, CaseIterable, Identifiable, Sendable {
 
 enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
     case cosmic = "Cosmic"
-    case ocean = "Ocean"
-    case emerald = "Emerald"
-    case amber = "Amber"
+    case midnightRose = "Midnight Rose"
+    case electricViolet = "Electric Violet"
+    case azureDeep = "Azure Deep"
+    case neonMint = "Neon Mint"
+    case solarFlare = "Solar Flare"
+    case arcticFrost = "Arctic Frost"
 
     var id: String { self.rawValue }
 
-    private var baseColor: Color {
+    private var hue: Double {
         switch self {
-        case .cosmic: return Color(red: 0.35, green: 0.35, blue: 1.0)
-        case .ocean: return Color(red: 0.0, green: 0.5, blue: 1.0)
-        case .emerald: return Color(red: 0.0, green: 0.75, blue: 0.4)
-        case .amber: return Color(red: 1.0, green: 0.55, blue: 0.0)
+        case .cosmic: return 265
+        case .midnightRose: return 345
+        case .electricViolet: return 295
+        case .azureDeep: return 245
+        case .neonMint: return 165
+        case .solarFlare: return 40
+        case .arcticFrost: return 210
+        }
+    }
+
+    private var chroma: Double {
+        switch self {
+        case .arcticFrost: return 0.06
+        default: return 0.22
         }
     }
 
@@ -166,24 +179,22 @@ enum AppAccent: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     func color(for scheme: ColorScheme) -> Color {
-        let o = baseColor.oklch
         if scheme == .dark {
-            // Dark Mode: Deep and Vibrant (not pastel)
-            return Color.fromOKLCH(l: 0.65, c: max(o.c, 0.25), h: o.h)
+            // Dark Mode: Deep and Vibrant (L ≈ 0.65)
+            return Color.fromOKLCH(l: 0.65, c: chroma, h: hue)
         } else {
-            // Light Mode: Punchy and authoritative
-            return Color.fromOKLCH(l: 0.55, c: max(o.c, 0.3), h: o.h)
+            // Light Mode: Punchy and authoritative (L ≈ 0.55)
+            return Color.fromOKLCH(l: 0.55, c: chroma + 0.05, h: hue)
         }
     }
 
     func brandBackground(for colorScheme: ColorScheme) -> Color {
-        let o = baseColor.oklch
         if colorScheme == .dark {
             // Deep, high-end immersive backgrounds (L ≈ 0.1)
-            return Color.fromOKLCH(l: 0.1, c: 0.04, h: o.h)
+            return Color.fromOKLCH(l: 0.1, c: 0.04, h: hue)
         } else {
             // Very subtle, clean tinted backgrounds (L ≈ 0.96)
-            return Color.fromOKLCH(l: 0.96, c: 0.02, h: o.h)
+            return Color.fromOKLCH(l: 0.96, c: 0.02, h: hue)
         }
     }
 }

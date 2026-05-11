@@ -24,18 +24,18 @@ struct BadgeEngine {
                 }
             
             if let nextToWatch = unwatchedEpisodes.first {
-                // Check for FINALE first - can show even for future releases
-                if let season = nextToWatch.season, nextToWatch.episodeNumber == season.episodeCount {
-                    return BadgeResult(label: "FINALE", icon: "flag.checkered", isSparkle: true)
-                }
-
                 if let airDate = nextToWatch.airDateAsDate {
                     let daysSinceAir = now.timeIntervalSince(airDate) / 86400
                     // Milestone window: Within last 7 days or next 14 days (widened for hype)
                     let isRelevantMilestone = daysSinceAir >= -14 && daysSinceAir <= 7
                     
                     if isRelevantMilestone {
-                        // 1. SEASON/SERIES PREMIERE
+                        // 1. FINALE - Check if this is the last episode of the season
+                        if let season = nextToWatch.season, nextToWatch.episodeNumber == season.episodeCount {
+                            return BadgeResult(label: "FINALE", icon: "flag.checkered", isSparkle: true)
+                        }
+
+                        // 2. SEASON/SERIES PREMIERE
                         if nextToWatch.episodeNumber == 1 {
                             let label = nextToWatch.seasonNumber == 1 ? "SERIES PREMIERE" : "SEASON PREMIERE"
                             let icon = nextToWatch.seasonNumber == 1 ? "star.square.fill" : "play.square.stack.fill"

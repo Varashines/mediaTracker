@@ -7,24 +7,32 @@ struct StatusBadgePrimitive: View {
     let isSolid: Bool
     let progress: Double?
     var isCompact: Bool = false
+    var foregroundColor: Color? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
         let bgAccent = accentColor.luminousAccent(colorScheme: colorScheme)
         
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             Image(systemName: systemImage)
                 .font(.system(size: 11, weight: .bold))
+            
+            if !isCompact && !label.isEmpty {
+                Text(label.uppercased())
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .kerning(0.5)
+            }
         }
-        .frame(width: 24, height: 24)
-        .foregroundStyle(isSolid ? .white : contrastColor)
+        .frame(minWidth: 24, minHeight: 24)
+        .padding(.horizontal, isCompact ? 0 : 8)
+        .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
         .liquidGlassPill(
             accentColor: bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4),
             isSolid: isSolid,
             progress: nil,
-            hPadding: isCompact ? 0 : 10,
-            vPadding: isCompact ? 0 : 4
+            hPadding: 0, // Controlled by HStack and frame
+            vPadding: 4
         )
         .overlay {
             // AUTHORITATIVE CIRCULAR PROGRESS (Matches Season Tab pattern)

@@ -49,6 +49,7 @@ struct MediaThumbnailView: View, Equatable {
     private let capturedWatchProgress: String?
     private let capturedIsUpcoming: Bool
     private let capturedGridBadgeText: String?
+    private let capturedNextAiringDate: Date?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -58,7 +59,6 @@ struct MediaThumbnailView: View, Equatable {
     @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
-    @State private var mouseLocation: CGPoint = .zero
     
     // Performance optimization: Status passed from parent to avoid @Query in every thumbnail
     var isCompletedInCollection: Bool = false
@@ -96,6 +96,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedWatchProgress = item.storedWatchProgressLabel
         self.capturedIsUpcoming = item.isUpcoming
         self.capturedGridBadgeText = item.badgeText
+        self.capturedNextAiringDate = item.cachedNextAiringDate
     }
     
     init(
@@ -129,6 +130,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedWatchProgress = metadata.watchProgress
         self.capturedIsUpcoming = metadata.isUpcoming
         self.capturedGridBadgeText = metadata.badgeText
+        self.capturedNextAiringDate = metadata.nextAiringDate
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
@@ -154,6 +156,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedWatchProgress = nil
         self.capturedIsUpcoming = false
         self.capturedGridBadgeText = nil
+        self.capturedNextAiringDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
     }
 
     private var width: CGFloat {
@@ -191,6 +194,7 @@ struct MediaThumbnailView: View, Equatable {
     private var watchProgress: String? { item?.storedWatchProgressLabel ?? capturedWatchProgress }
     private var isUpcoming: Bool { item?.isUpcoming ?? capturedIsUpcoming }
     private var gridBadgeText: String? { item?.badgeText ?? capturedGridBadgeText }
+    private var nextAiringDate: Date? { item?.cachedNextAiringDate ?? capturedNextAiringDate }
 
     var body: some View {
         Group {
@@ -249,20 +253,6 @@ struct MediaThumbnailView: View, Equatable {
                 capturedID: nil,
                 resultID: nil
             )
-            
-            // Dynamic Light Highlight (Specular for 3D Tilt)
-            if isHovered {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        RadialGradient(
-                            colors: [.white.opacity(0.15), .clear],
-                            center: UnitPoint(x: mouseLocation.x / width, y: mouseLocation.y / height),
-                            startRadius: 0,
-                            endRadius: 100
-                        )
-                    )
-                    .blendMode(.screen)
-            }
 
             // 2. Glass Peek Overlay (Bottom sliding tray)
             GlassPeekOverlay(
@@ -271,6 +261,7 @@ struct MediaThumbnailView: View, Equatable {
                 state: safeState,
                 nextEpisodeLabel: nextEpisodeLabel,
                 watchProgress: watchProgress,
+                nextAiringDate: nextAiringDate,
                 isUpcoming: isUpcoming,
                 gridBadgeText: gridBadgeText,
                 isHovered: effectiveHover,
@@ -358,15 +349,7 @@ struct MediaThumbnailView: View, Equatable {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
         .contentShape(Rectangle())
-        .onContinuousHover { phase in
-            switch phase {
-            case .active(let location):
-                mouseLocation = location
-                isHovered = true
-            case .ended:
-                isHovered = false
-            }
-        }
+        .onHover { isHovered = $0 }
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {

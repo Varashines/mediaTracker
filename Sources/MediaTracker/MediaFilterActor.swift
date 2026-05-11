@@ -28,11 +28,12 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let smartBadgeIcon: String?
     let isSparkleBadge: Bool
     let remainingCount: Int?
+    let nextAiringDate: Date?
     let genres: [String]
     let recommendationReason: String?
-    
+
     var versionHash: String { "\(id.hashValue)_\(progress ?? 0)" }
-    
+
     var formattedMetadata: String {
         let year = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? ""
         return year
@@ -58,10 +59,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.smartBadgeIcon = item.storedSmartBadgeIcon
         self.isSparkleBadge = item.storedSmartBadgeIsSparkle
         self.remainingCount = item.remainingEpisodesCount
+        self.nextAiringDate = item.cachedNextAiringDate
         self.recommendationReason = recommendationReason
         self.genres = item.cachedGenres
     }
-
     init(id: PersistentIdentifier, title: String, overview: String) {
         self.id = id
         self.itemID = ""
@@ -82,6 +83,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.smartBadgeIcon = nil
         self.isSparkleBadge = false
         self.remainingCount = nil
+        self.nextAiringDate = nil
         self.genres = []
         self.recommendationReason = nil
     }
@@ -449,8 +451,16 @@ actor MediaFilterActor {
                 (item.releaseDate != nil && item.releaseDate! < twoDaysAgo)
             )
         }
+
+        let sevenDaysAgo = now.addingTimeInterval(-604800)
+        let staleFinale = homeResults.filter { item in
+            item.storedSmartBadgeLabel == "FINALE" && (
+                (item.cachedNextAiringDate != nil && item.cachedNextAiringDate! < sevenDaysAgo) ||
+                (item.releaseDate != nil && item.releaseDate! < sevenDaysAgo)
+            )
+        }
         
-        let allStale = staleUpcoming + staleSoon + staleNew
+        let allStale = staleUpcoming + staleSoon + staleNew + staleFinale
         
         if !allStale.isEmpty {
             for item in allStale {
@@ -477,15 +487,15 @@ actor MediaFilterActor {
                 return true
             }
             
-            // 2. Items that JUST released (NEW or BINGE DROP badges)
+            // 2. Items that JUST released (NEW, BINGE DROP, or FINALE badges)
             let badge = item.storedSmartBadgeLabel
-            return badge == "NEW" || badge == "BINGE DROP"
+            return badge == "NEW" || badge == "BINGE DROP" || badge == "FINALE"
         }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
-            // SORTING: Priority to NEW/BINGE drops first, then currently watching
+            // SORTING: Priority to NEW/BINGE/FINALE drops first, then currently watching
             let badgeA = itemA.storedSmartBadgeLabel
-            let isRecentA = badgeA == "NEW" || badgeA == "BINGE DROP"
+            let isRecentA = badgeA == "NEW" || badgeA == "BINGE DROP" || badgeA == "FINALE"
             let badgeB = itemB.storedSmartBadgeLabel
-            let isRecentB = badgeB == "NEW" || badgeB == "BINGE DROP"
+            let isRecentB = badgeB == "NEW" || badgeB == "BINGE DROP" || badgeB == "FINALE"
             
             if isRecentA != isRecentB { return isRecentA }
             
@@ -497,6 +507,10 @@ actor MediaFilterActor {
             let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
             if isAStreaming != isBStreaming { return isAStreaming }
             
+            let isAFinale = itemA.storedSmartBadgeLabel == "FINALE"
+            let isBFinale = itemB.storedSmartBadgeLabel == "FINALE"
+            if isAFinale != isBFinale { return isAFinale }
+
             let isABinge = itemA.storedSmartBadgeLabel == "BINGE DROP"
             let isBBinge = itemB.storedSmartBadgeLabel == "BINGE DROP"
             if isABinge != isBBinge { return isABinge }

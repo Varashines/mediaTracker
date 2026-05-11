@@ -73,34 +73,34 @@ struct SmartBadgeView: View {
         let badgeConfig: (bg: Color, fg: Color) = {
             switch label {
             case "SERIES PREMIERE":
-                // Series Premiere: Electric Purple
-                return (Color(red: 0.5, green: 0.3, blue: 0.9), .white)
+                // Series Premiere: Deep Ultraviolet
+                return (Color.fromOKLCH(l: 0.55, c: 0.25, h: 280), .white)
             case "SEASON PREMIERE":
-                // Season Premiere: Vibrant Magenta
-                return (Color(red: 0.9, green: 0.2, blue: 0.5), .white)
+                // Season Premiere: Electric Orchid
+                return (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), .white)
             case "FINALE":
-                // Finale: Deep Gold
-                return (Color(red: 0.9, green: 0.7, blue: 0.1), .white)
+                // Finale: Vibrant Rose (Premium shift away from yellow)
+                return (Color.fromOKLCH(l: 0.62, c: 0.24, h: 340), .white)
             case "BINGE":
                 if isSparkle {
-                    // Active Binge (Hot Streak): Fiery Red/Orange
-                    return (Color(red: 0.9, green: 0.3, blue: 0.2), .white)
+                    // Active Binge (Hot Streak): Lava Red
+                    return (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), .white)
                 } else {
-                    // Backlog Binge (User commitment nudge): Deep Indigo
-                    return (Color(red: 0.3, green: 0.3, blue: 0.8), .white)
+                    // Backlog Binge: Deep Indigo
+                    return (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), .white)
                 }
             case "BINGE DROP":
-                // Binge Drop: Cyan/Mint
-                return (Color(red: 0.1, green: 0.7, blue: 0.6), .white)
+                // Binge Drop: Electric Cyan/Teal
+                return (Color.fromOKLCH(l: 0.7, c: 0.15, h: 190), .white)
             case "NEW":
-                // New: Bright Green
-                return (Color(red: 0.2, green: 0.8, blue: 0.4), .white)
+                // New: Luminous Mint
+                return (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), .black)
             case "SOON":
-                // Soon: Solar Orange
-                return (Color.orange, .white)
+                // Soon: Luminous Tangerine
+                return (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), .black)
             case "CATCH UP":
                 // Engagement: Slate Blue
-                return (Color(red: 0.3, green: 0.4, blue: 0.6), .white)
+                return (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white)
             case "RECENT":
                 // Fallback: Translucent Gray
                 return (Color.secondary.opacity(0.8), .white)
@@ -115,7 +115,8 @@ struct SmartBadgeView: View {
             accentColor: badgeConfig.bg,
             isSolid: true,
             progress: progress,
-            isCompact: true
+            isCompact: true,
+            foregroundColor: badgeConfig.fg
         )
         .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
         .overlay {
@@ -141,23 +142,14 @@ struct SmartBadgeView: View {
         let badge = badgeText ?? ""
         let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
 
-        // 2. Determine Display Label
-        let displayLabel: String = {
-            if hideEpisodeProgress {
-                return currentState.displayName
-            }
-            return nextEpisodeLabel ?? watchProgressLabel ?? currentState.displayName
-        }()
+        // 2. Determine Display Label (Used for accessibility, hidden in compact UI)
+        let displayLabel = currentState.displayName
 
         // 3. Determine Icon
         let icon = isAvailable ? "play.fill" : (isUpcoming ? "sparkles" : currentState.iconName)
 
-        // 4. Pill Logic
+        // 4. Progress Logic
         let isInProgress = (currentState == .active || currentState == .rewatching)
-        let hasEpisodeStats = nextEpisodeLabel != nil
-        let showFullPill = !hideEpisodeProgress && ((isUpcoming && hasEpisodeStats) || (!isUpcoming && isInProgress))
-
-        // 5. Progress Bar
         let showProgressBar = !hideEpisodeProgress && !isUpcoming && isInProgress
 
         let finalAccent: Color = {
@@ -173,7 +165,8 @@ struct SmartBadgeView: View {
             accentColor: isAvailable ? finalAccent : .primary,
             isSolid: isAvailable,
             progress: showProgressBar ? progress : nil,
-            isCompact: !showFullPill
+            isCompact: true, // Force circular for premium grid consistency
+            foregroundColor: isAvailable ? (finalAccent.isLightColor ? .black : .white) : nil
         )
         .opacity(currentState == .completed ? 0 : 1)
     }

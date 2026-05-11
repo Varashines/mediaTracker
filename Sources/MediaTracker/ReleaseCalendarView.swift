@@ -273,8 +273,10 @@ struct ReleaseCalendarView: View {
                         let intensity = Double(i - 1) / 3.0 // Normalize 1-4 to 0-1
                         let o = appAccent.color(for: colorScheme).oklch
                         if colorScheme == .dark {
-                            let l = 0.25 + (intensity * 0.6)
-                            return Color.fromOKLCH(l: l, c: o.c, h: o.h)
+                            // For Dark Mode: Interpolate from subtle dark to rich accent
+                            let l = 0.2 + (intensity * (o.l - 0.2))
+                            let c = (o.c * 0.4) + (intensity * (o.c * 0.6))
+                            return Color.fromOKLCH(l: l, c: c, h: o.h)
                         } else {
                             let l = 0.9 - (intensity * 0.4)
                             return Color.fromOKLCH(l: l, c: o.c, h: o.h)
@@ -358,10 +360,11 @@ struct ReleaseCalendarView: View {
             
             let o = appAccent.color(for: colorScheme).oklch
             if colorScheme == .dark {
-                // For Dark Mode: Interpolate Lightness from 0.3 (Low) to 0.85 (High)
-                // This gives the "darker tones" for low activity days.
-                let l = 0.25 + (day.intensity * 0.6)
-                return Color.fromOKLCH(l: l, c: o.c, h: o.h)
+                // For Dark Mode: Interpolate from subtle dark to rich accent
+                // This gives the "darker tones" for low activity days and rich color for high ones.
+                let l = 0.2 + (day.intensity * (o.l - 0.2))
+                let c = (o.c * 0.4) + (day.intensity * (o.c * 0.6))
+                return Color.fromOKLCH(l: l, c: c, h: o.h)
             } else {
                 // For Light Mode: Interpolate Lightness from 0.9 (Low) to 0.5 (High)
                 let l = 0.9 - (day.intensity * 0.4)
