@@ -95,7 +95,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         ]
         
         if episode == 1 {
-            content.subtitle = "Season Premiere"
+            content.subtitle = "Premiere"
             content.body = "Season \(season) starts today! 📺"
         } else {
             content.subtitle = "New Episode"

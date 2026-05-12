@@ -41,11 +41,16 @@ struct ContentView: View {
             // Optimization: Skip heavy data load if moving to Discovery Hub
             if category == .discover || (category == .smartHub && collectionID == nil) { return }
 
-            // Reset pagination for new filter/sort
-            await MainActor.run {
-                viewModel.displayedItems = []
-                viewModel.currentOffset = 0
-                viewModel.isLoadingMore = false
+            // Determine if this is a "Hard" update (category/filter change) vs a "Soft" update (data refresh)
+            let isSoftUpdate = !viewModel.displayedItems.isEmpty && !viewModel.isInitialLoading
+
+            if !isSoftUpdate {
+                // Reset pagination only for "Hard" updates to avoid flickering during background syncs
+                await MainActor.run {
+                    viewModel.displayedItems = []
+                    viewModel.currentOffset = 0
+                    viewModel.isLoadingMore = false
+                }
             }
 
             do {

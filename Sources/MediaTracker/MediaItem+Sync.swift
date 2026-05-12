@@ -105,8 +105,9 @@ extension MediaItem {
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount
-
+        
         if progressResult.totalCount > 0 {
+            self.cachedEpisodeRuntime = progressResult.totalRuntime / progressResult.totalCount
             let progress = Double(progressResult.watchedCount) / Double(progressResult.totalCount)
             
             // Auto-advance State

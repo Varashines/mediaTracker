@@ -70,11 +70,8 @@ struct SmartBadgeView: View {
     private func intelligentBadge(label: String, isSparkle: Bool, remaining: Int? = nil, progress: Double? = nil) -> some View {
         let badgeConfig: (bg: Color, fg: Color) = {
             switch label {
-            case "SERIES PREMIERE":
-                // Series Premiere: Deep Ultraviolet
-                return (Color.fromOKLCH(l: 0.55, c: 0.25, h: 280), .white)
-            case "SEASON PREMIERE":
-                // Season Premiere: Electric Orchid
+            case "PREMIERE":
+                // Premiere: Electric Orchid
                 return (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), .white)
             case "FINALE":
                 // Finale: Vibrant Rose (Premium shift away from yellow)

@@ -22,28 +22,32 @@ struct BulkCollectionManagerView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Header
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Manage Items")
-                        .font(.title2.bold())
+                        .font(.title3.bold())
                     Text("Add or remove items from '\(collection.name)'")
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
                 
                 // Search
                 HStack {
                     Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     TextField("Search your library...", text: $searchText)
+                        .font(.system(size: 13))
                         .textFieldStyle(.plain)
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(Color.primary.opacity(0.05))
-                .cornerRadius(12)
+                .cornerRadius(10)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
                 
                 // Grid
                 ScrollView {
@@ -54,7 +58,8 @@ struct BulkCollectionManagerView: View {
                             }
                         }
                     }
-                    .padding(24)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }
@@ -76,7 +81,7 @@ struct BulkCollectionManagerView: View {
                 selectedItemIDs = Set(collection.items.map { $0.id })
             }
         }
-        .frame(minWidth: 600, minHeight: 500)
+        .frame(minWidth: 600, minHeight: 450, maxHeight: 650)
     }
     
     private func toggleSelection(for item: MediaItem) {

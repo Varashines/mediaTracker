@@ -26,6 +26,7 @@ final class MediaItem: Identifiable {
     var cachedNetworkLogoPath: String?
     var cachedNextAiringDate: Date?
     var cachedRuntime: Int?
+    var cachedEpisodeRuntime: Int?
     var cachedWatchedEpisodeCount: Int?
     var remainingEpisodesCount: Int?
 

@@ -49,7 +49,7 @@ final class BingeLogicTests: XCTestCase {
     }
 
     @MainActor
-    func testSeriesPremiereLogic() async throws {
+    func testPremiereLogic() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
@@ -78,7 +78,7 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.recalculateCachedProperties()
         item.syncCachedProperties(now: testNow)
         
-        XCTAssertEqual(item.storedSmartBadgeLabel, "SERIES PREMIERE")
+        XCTAssertEqual(item.storedSmartBadgeLabel, "PREMIERE")
     }
 
     @MainActor
@@ -112,7 +112,7 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.recalculateCachedProperties()
         item.syncCachedProperties(now: testNow)
         
-        XCTAssertEqual(item.storedSmartBadgeLabel, "SEASON PREMIERE")
+        XCTAssertEqual(item.storedSmartBadgeLabel, "PREMIERE")
     }
 
     @MainActor
@@ -145,9 +145,10 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.recalculateCachedProperties()
         item.syncCachedProperties(now: testNow)
         
-        XCTAssertNotEqual(item.storedSmartBadgeLabel, "SERIES PREMIERE")
-        // It should be RECENT (within 14 days)
-        XCTAssertEqual(item.storedSmartBadgeLabel, "RECENT")
+        // 10 days ago is too old for PREMIERE (now 3 days)
+        XCTAssertNotEqual(item.storedSmartBadgeLabel, "PREMIERE")
+        // But it's within 14 days, so it gets NEW
+        XCTAssertEqual(item.storedSmartBadgeLabel, "NEW")
     }
 
     @MainActor
@@ -164,7 +165,7 @@ final class BingeLogicTests: XCTestCase {
         
         try context.save()
         movie.syncCachedProperties(now: testNow)
-        XCTAssertEqual(movie.storedSmartBadgeLabel, "SOON")
+        XCTAssertEqual(movie.storedSmartBadgeLabel, "PREMIERE")
         
         // Show with regular episode (not premiere) airing tomorrow
         let show = MediaItem(id: "soon_show", title: "Soon Show", overview: "", type: .tvShow)
@@ -293,7 +294,7 @@ final class BingeLogicTests: XCTestCase {
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // Show that is both SOON (April 30) and SEASON PREMIERE
+        // Show that is both SOON (April 30) and PREMIERE
         let item = MediaItem(id: "multi_badge", title: "Multi Badge Show", overview: "", type: .tvShow)
         context.insert(item)
         let tvDetails = TVShowDetails(tmdbID: 106)
@@ -314,8 +315,8 @@ final class BingeLogicTests: XCTestCase {
         tvDetails.recalculateCachedProperties()
         item.syncCachedProperties(now: testNow)
         
-        // SEASON PREMIERE (LEVEL 1) > SOON (LEVEL 2)
-        XCTAssertEqual(item.storedSmartBadgeLabel, "SEASON PREMIERE")
+        // PREMIERE (LEVEL 1) > SOON (LEVEL 2)
+        XCTAssertEqual(item.storedSmartBadgeLabel, "PREMIERE")
     }
 
     @MainActor
@@ -330,15 +331,23 @@ final class BingeLogicTests: XCTestCase {
         let tvDetails = TVShowDetails(tmdbID: 107)
         tvDetails.item = item
         item.tvShowDetails = tvDetails
+        context.insert(tvDetails)
+        
         let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 10, showID: 107)
         season.tvShowDetails = tvDetails
         tvDetails.seasons.append(season)
+        context.insert(season)
         
-        // Mark 3 episodes as watched recently
+        // Use a fixed testNow for consistency
+        let fixedNow = DateUtils.parseDate("2026-04-29")!
+        
+        // Mark 3 episodes as watched recently (relative to fixedNow)
         for i in 1...3 {
             let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", airDate: "2026-01-01")
             ep.season = season
-            ep.markWatched(true) // This sets lastWatchedDate = now
+            ep.isWatched = true
+            ep.lastWatchedDate = fixedNow.addingTimeInterval(-3600 * Double(i)) // Within last few hours
+            ep.airDateValue = DateUtils.parseDate("2026-01-01")
             season.episodes.append(ep)
             context.insert(ep)
         }
@@ -347,15 +356,29 @@ final class BingeLogicTests: XCTestCase {
         let ep4 = TVEpisode(episodeNumber: 4, seasonNumber: 1, name: "Ep 4", overview: "", airDate: "2026-01-01")
         ep4.season = season
         ep4.airDateValue = DateUtils.parseDate("2026-01-01")
+        ep4.isWatched = false
         season.episodes.append(ep4)
         context.insert(ep4)
         
         try context.save()
-        tvDetails.recalculateCachedProperties()
-        item.syncCachedProperties(now: testNow)
         
-        // Should show BINGE because 3 episodes were watched recently
+        // Ensure denormalized counts are set for the mock time
+        _ = tvDetails.calculateProgress(now: fixedNow)
+        
+        // Manually trigger the sync with the fixed time
+        item.syncCachedProperties(now: fixedNow)
+        
+        // Should show BINGE because 3 episodes were watched recently and there are remaining episodes
         XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE")
+        
+        // Now mark ep4 as watched and sync again
+        ep4.isWatched = true
+        ep4.lastWatchedDate = fixedNow
+        try context.save()
+        item.syncCachedProperties(now: fixedNow)
+        
+        // Should NOT show BINGE because it's now a completed series (remainingCount == 0)
+        XCTAssertNotEqual(item.storedSmartBadgeLabel, "BINGE")
     }
 }
 

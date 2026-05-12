@@ -9,6 +9,11 @@ struct BadgeEngine {
     }
 
     static func calculateBadge(for item: MediaItem, now: Date = Date()) -> BadgeResult? {
+        // --- LEVEL 0: STATE EXCLUSIONS ---
+        if item.state == .dropped {
+            return nil
+        }
+
         // --- LEVEL 1: MILESTONE EVENTS (Highest Priority) ---
         // These are checked against the user's NEXT unwatched episode to ensure relevance.
         var nextToWatch: TVEpisode? = nil
@@ -38,25 +43,25 @@ struct BadgeEngine {
             if let nextToWatch = nextToWatch {
                 if let airDate = nextToWatch.airDateAsDate {
                     let daysSinceAir = now.timeIntervalSince(airDate) / 86400
-                    // Milestone window: Within last 14 days or next 14 days (widened for hype)
+                    
+                    // 1. PREMIERE (No future limit, 3-day past limit)
+                    if nextToWatch.episodeNumber == 1 && daysSinceAir <= 3 {
+                        return BadgeResult(label: "PREMIERE", isSparkle: true)
+                    }
+
+                    // Milestone window for Binge Drop: Within last 14 days or next 14 days
                     let isRelevantMilestone = daysSinceAir >= -14 && daysSinceAir <= 14
                     
-                    if isRelevantMilestone {
-                        // 1. FINALE - Check if this is the last episode of the season
-                        if let season = nextToWatch.season, nextToWatch.episodeNumber == season.episodeCount {
+                    // 2. FINALE - Check if this is the last episode of the season (7-day past limit, 14-day future limit)
+                    if let season = nextToWatch.season, nextToWatch.episodeNumber == season.episodeCount {
+                        if daysSinceAir >= -7 && daysSinceAir <= 14 {
                             return BadgeResult(label: "FINALE", isSparkle: true)
                         }
+                    }
 
-                        // 2. SEASON/SERIES PREMIERE
-                        if nextToWatch.episodeNumber == 1 {
-                            let label = nextToWatch.seasonNumber == 1 ? "SERIES PREMIERE" : "SEASON PREMIERE"
-                            return BadgeResult(label: label, isSparkle: true)
-                        }
-                        
-                        // 3. BINGE DROP (Multiple episodes aired on same day for the user's current progress)
-                        if airedOnSameDayCount > 1 {
-                            return BadgeResult(label: "BINGE DROP", isSparkle: true)
-                        }
+                    // 3. BINGE DROP (Multiple episodes aired on same day for the user's current progress)
+                    if isRelevantMilestone && airedOnSameDayCount > 1 {
+                        return BadgeResult(label: "BINGE DROP", isSparkle: true)
                     }
                 }
             }
@@ -65,6 +70,11 @@ struct BadgeEngine {
         // --- LEVEL 2: RELEASE WINDOW (Standard Recency) ---
         if let airDate = item.cachedNextAiringDate ?? item.releaseDate {
             let timeToAir = airDate.timeIntervalSince(now)
+
+            // PREMIERE for Movies (No future limit, 3-day past limit)
+            if item.type == .movie && timeToAir >= -259200 {
+                return BadgeResult(label: "PREMIERE", isSparkle: true)
+            }
 
             // NEW: Released within last 14 days
             if timeToAir <= 0 && timeToAir >= -1209600 {
@@ -79,13 +89,12 @@ struct BadgeEngine {
 
         // --- LEVEL 3: USER ENGAGEMENT (Behavioral & Backlog Nudges) ---
         if item.type == .tvShow, let tv = item.tvShowDetails {
-            // 1. BEHAVIORAL BINGE (New: User is actively binging right now)
-            if recentlyWatchedCount >= 3 {
+            let remainingCount = tv.remainingEpisodesCount ?? 0
+            
+            // 1. BEHAVIORAL BINGE (New: User is actively binging right now. Don't show if completed/no episodes left)
+            if recentlyWatchedCount >= 3 && remainingCount > 0 {
                 return BadgeResult(label: "BINGE", isSparkle: true)
             }
-
-            // Rely on pre-calculated remainingEpisodesCount to avoid recalculating unwatchedAiredCount fully
-            let remainingCount = tv.remainingEpisodesCount ?? 0
             
             let isLikedOrLoved = item.taste == .like || item.taste == .love
 

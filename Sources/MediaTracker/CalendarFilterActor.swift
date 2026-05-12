@@ -6,6 +6,7 @@ struct CalendarReleaseItem: Sendable, Identifiable {
     let metadata: MediaThumbnailMetadata
     let releaseContext: String
     let date: Date
+    let weight: Int
 }
 
 struct CalendarDayInfo: Sendable, Identifiable {
@@ -116,7 +117,7 @@ actor CalendarFilterActor {
             let date = movie.cachedNextAiringDate ?? movie.releaseDate ?? .distantPast
             if date != .distantPast {
                 let day = calendar.startOfDay(for: date)
-                let item = CalendarReleaseItem(metadata: toMetadata(movie), releaseContext: "Movie Premiere", date: date)
+                let item = CalendarReleaseItem(metadata: toMetadata(movie), releaseContext: "Movie Premiere", date: date, weight: 1)
                 dailyItems[day, default: []].append(item)
                 allItems.append(item)
             }
@@ -146,7 +147,7 @@ actor CalendarFilterActor {
             let sorted = eps.sorted { $0.episodeNumber < $1.episodeNumber }
             let context = sorted.count > 3 ? "Season \(season)" : "S\(season) " + sorted.map { "E\($0.episodeNumber)" }.joined(separator: ", ")
             
-            let releaseItem = CalendarReleaseItem(metadata: toMetadata(foundItem), releaseContext: context, date: airDate)
+            let releaseItem = CalendarReleaseItem(metadata: toMetadata(foundItem), releaseContext: context, date: airDate, weight: eps.count)
             dailyItems[day, default: []].append(releaseItem)
             allItems.append(releaseItem)
         }
@@ -154,12 +155,20 @@ actor CalendarFilterActor {
 
     private func finalizeDayInfos(dailyItems: [Date: [CalendarReleaseItem]], bounds: MonthBounds, calendar: Calendar) -> [Date: CalendarDayInfo] {
         var dayInfos: [Date: CalendarDayInfo] = [:]
-        let maxPerDay = Double(dailyItems.values.map { $0.count }.max() ?? 1)
+        
+        // Calculate total weight per day
+        var dailyWeights: [Date: Int] = [:]
+        for (date, items) in dailyItems {
+            dailyWeights[date] = items.reduce(0) { $0 + $1.weight }
+        }
+        
+        let maxWeight = Double(dailyWeights.values.max() ?? 1)
         
         var current = bounds.start
         while current <= bounds.end {
             let items = dailyItems[current] ?? []
-            let intensity = maxPerDay > 0 ? Double(items.count) / maxPerDay : 0
+            let weight = Double(dailyWeights[current] ?? 0)
+            let intensity = maxWeight > 0 ? weight / maxWeight : 0
             dayInfos[current] = CalendarDayInfo(date: current, items: items, intensity: intensity)
             guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
             current = next

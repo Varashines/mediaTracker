@@ -21,7 +21,7 @@ struct SmartCollectionsHubView: View {
     private var manualCollections: [MediaCollection]
     
     private let smartCategories: [NavigationCategory] = [
-        .releaseRadar, .catchUp, .loved, .binge, .quickBites, .stalled, .archive
+        .releaseRadar, .catchUp, .loved, .binge, .quickBites
     ]
     
     var body: some View {
