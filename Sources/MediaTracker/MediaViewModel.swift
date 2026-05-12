@@ -68,6 +68,7 @@ class MediaViewModel {
     var cachedNetworks: [DiscoveryNode] = []
     var cachedGenres: [DiscoveryNode] = []
     var cachedLanguages: [DiscoveryNode] = []
+    var cachedBadges: [DiscoveryNode] = []
     var forYouRecommendations: [MediaThumbnailMetadata] = []
     var lastDiscoveryRefresh: Date?
 

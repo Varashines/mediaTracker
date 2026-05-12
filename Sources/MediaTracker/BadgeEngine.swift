@@ -38,8 +38,8 @@ struct BadgeEngine {
             if let nextToWatch = nextToWatch {
                 if let airDate = nextToWatch.airDateAsDate {
                     let daysSinceAir = now.timeIntervalSince(airDate) / 86400
-                    // Milestone window: Within last 7 days or next 14 days (widened for hype)
-                    let isRelevantMilestone = daysSinceAir >= -14 && daysSinceAir <= 7
+                    // Milestone window: Within last 14 days or next 14 days (widened for hype)
+                    let isRelevantMilestone = daysSinceAir >= -14 && daysSinceAir <= 14
                     
                     if isRelevantMilestone {
                         // 1. FINALE - Check if this is the last episode of the season
@@ -66,8 +66,8 @@ struct BadgeEngine {
         if let airDate = item.cachedNextAiringDate ?? item.releaseDate {
             let timeToAir = airDate.timeIntervalSince(now)
 
-            // NEW: Released within last 48 hours
-            if timeToAir <= 0 && timeToAir >= -172800 {
+            // NEW: Released within last 14 days
+            if timeToAir <= 0 && timeToAir >= -1209600 {
                 return BadgeResult(label: "NEW", isSparkle: true)
             }
 

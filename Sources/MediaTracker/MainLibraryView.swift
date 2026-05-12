@@ -43,32 +43,16 @@ struct MainLibraryView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 30, pinnedViews: [.sectionHeaders]) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                        // 1. CONTINUE WATCHING
-                        ContinueWatchingCarousel(
-                            items: homeContinueWatching, namespace: namespace,
-                            isFastScrolling: isFastScrolling, onSelect: onSelectHero
-                        ) {
-                            onCategorySelected(.discover)
-                        }
-                        .padding(.top, 10)
-                        .padding(.bottom, 20)
-
-                        // 2. COMING SOON (Limited to 10)
-                        let comingSoon = featuredCarouselItems.isEmpty ? (groupedItems.first(where: { $0.0 == "Coming Soon" })?.1 ?? []) : featuredCarouselItems
-                        if !comingSoon.isEmpty {
-                            FeaturedUpcomingCarousel(
-                                items: Array(comingSoon.prefix(10)), namespace: namespace,
-                                isFastScrolling: isFastScrolling, onSelect: onSelectHero
-                            )
-                            .padding(.bottom, 20)
-                        }
-
-                        // 3. FOR YOU (Recommendations)
-                        ForYouCarousel(
-                            items: recommendations, namespace: namespace,
-                            isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                        HomeViewSections(
+                            homeContinueWatching: homeContinueWatching,
+                            featuredCarouselItems: featuredCarouselItems,
+                            groupedItems: groupedItems,
+                            recommendations: recommendations,
+                            namespace: namespace,
+                            isFastScrolling: isFastScrolling,
+                            onSelectHero: onSelectHero,
+                            onCategorySelected: onCategorySelected
                         )
-                        .padding(.bottom, 20)
                     }
 
                     if showingUpcomingOnly && searchText.isEmpty && selectedNetworks == nil
@@ -81,46 +65,21 @@ struct MainLibraryView: View {
 
                     if selectedCategory != .home {
                         Section {
-                            VStack(alignment: .leading, spacing: 15) {
-                                if items.isEmpty && groupedItems.isEmpty {
-                                    if viewModel.isInitialLoading {
-                                        LoadingGridSkeleton(
-                                            selectedCategory: selectedCategory, columns: columns)
-                                    } else {
-                                        LibraryEmptyStateView(category: selectedCategory) {
-                                            withAnimation {
-                                                viewModel.selectedCategory = .discover
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    if selectedCategory == .all && searchText.isEmpty
-                                        && selectedNetworks == nil
-                                    {
-                                        RecentlyAddedRow(
-                                            items: recentlyAdded, isFastScrolling: isFastScrolling)
-                                    }
-
-                                    if viewModel.currentGroupBy == .none {
-                                        MainMediaGrid(
-                                            items: items,
-                                            featuredCount: showingUpcomingOnly
-                                                ? featuredCarouselItems.count : 0,
-                                            showingUpcomingOnly: showingUpcomingOnly,
-                                            isCategoryPage: isCategoryPage, namespace: namespace,
-                                            isFastScrolling: isFastScrolling,
-                                            selectedCollectionID: viewModel.selectedCollectionID,
-                                            onLoadMore: onLoadMore, columns: columns)
-                                    } else {
-                                        GroupedMediaGrid(
-                                            groupedItems: groupedItems,
-                                            selectedCategoryRef: selectedCategory,
-                                            showingUpcomingOnly: showingUpcomingOnly,
-                                            viewModel: viewModel, namespace: namespace,
-                                            isFastScrolling: isFastScrolling, columns: columns)
-                                    }
-                                }
-                            }
+                            LibraryGridSection(
+                                items: items,
+                                groupedItems: groupedItems,
+                                recentlyAdded: recentlyAdded,
+                                featuredCarouselItems: featuredCarouselItems,
+                                selectedCategory: selectedCategory,
+                                showingUpcomingOnly: showingUpcomingOnly,
+                                searchText: searchText,
+                                selectedNetworks: selectedNetworks,
+                                namespace: namespace,
+                                isFastScrolling: isFastScrolling,
+                                columns: columns,
+                                viewModel: viewModel,
+                                onLoadMore: onLoadMore
+                            )
                         } header: {
                             VStack(alignment: .leading, spacing: 0) {
                                 LibraryHeaderView(

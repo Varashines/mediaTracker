@@ -46,7 +46,11 @@ final class MediaFilterActorTests: XCTestCase {
             searchText: "",
             sortOrder: .alphabetical,
             network: nil,
-            language: nil
+            language: nil,
+            genre: nil,
+            year: nil,
+            state: nil,
+            badge: nil
         )
         
         let continueWatching = result.homeContinueWatching

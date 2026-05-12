@@ -64,21 +64,27 @@ struct FilteredLibraryGridView: View {
             var network: [String]? = nil
             var language: String? = nil
             var genre: String? = nil
+            var badge: String? = nil
+            var sortOrder: SortOrder = .alphabetical
             
             switch filter.type {
             case .studio: network = filter.sourceNames ?? [filter.name]
             case .genre: genre = filter.name
             case .language: language = filter.name
+            case .badge: 
+                badge = filter.name
+                sortOrder = .recentInteraction
             }
             
             do {
                 let result = try await filterActor.filterAndSort(
                     category: .all,
                     searchText: "",
-                    sortOrder: .alphabetical,
+                    sortOrder: sortOrder,
                     network: network,
                     language: language,
                     genre: genre,
+                    badge: badge,
                     limit: 1000,
                     offset: 0
                 )

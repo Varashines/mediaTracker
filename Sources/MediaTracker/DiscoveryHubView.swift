@@ -15,17 +15,24 @@ struct DiscoveryHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 60) { // Increased spacing for scale effect
                 if hasDataLoaded {
-                    // 1. Networks & Studios (Full Grid)
+                    // 1. Recent Activity (Badges)
+                    if !viewModel.cachedBadges.isEmpty {
+                        DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.cachedBadges, style: .text) { node in
+                            onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
+                        }
+                    }
+
+                    // 2. Networks & Studios (Full Grid)
                     DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
                         onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
                     }
 
-                    // 2. Genres (Full Grid)
+                    // 3. Genres (Full Grid)
                     DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.cachedGenres, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                     }
 
-                    // 3. Languages (Full Grid)
+                    // 4. Languages (Full Grid)
                     DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.cachedLanguages, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
@@ -85,15 +92,19 @@ struct DiscoveryHubView: View {
                 SortDescriptor(\.name, order: .forward)
             ])
             let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
-                SortDescriptor(\.count, order: .reverse),
                 SortDescriptor(\.code, order: .forward)
+            ])
+            let badgeDescriptor = FetchDescriptor<BadgeEntity>(sortBy: [
+                SortDescriptor(\.count, order: .reverse),
+                SortDescriptor(\.label, order: .forward)
             ])
 
             let existingNets = (try? context.fetch(netDescriptor)) ?? []
             let existingGenres = (try? context.fetch(genreDescriptor)) ?? []
-            
+            let existingBadges = (try? context.fetch(badgeDescriptor)) ?? []
+
             // 1. Local Aggregation - ONLY if forced or empty
-            if force || (existingNets.isEmpty && existingGenres.isEmpty) {
+            if force || (existingNets.isEmpty && existingGenres.isEmpty && existingBadges.isEmpty) {
                 await syncService.syncLibrary(force: force)
             }
 
@@ -107,6 +118,7 @@ struct DiscoveryHubView: View {
                 let name = LanguageUtils.languageName(for: $0.code)
                 return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
             }
+            let snBadges = ((try? context.fetch(badgeDescriptor)) ?? []).map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
 
             await MainActor.run {
                 withAnimation(.smooth(duration: 0.5)) {
@@ -114,180 +126,11 @@ struct DiscoveryHubView: View {
                     self.viewModel.cachedNetworks = snNets
                     self.viewModel.cachedGenres = snGenres
                     self.viewModel.cachedLanguages = snLangs
+                    self.viewModel.cachedBadges = snBadges
                     self.hasDataLoaded = true
                     self.viewModel.isBatchRefreshing = false
                 }
             }
         }
-    }
-}
-// MARK: - Rich Grid Components
-
-enum DiscoveryCardStyle {
-    case logo, text
-}
-
-struct DiscoverySection: View {
-    let title: String
-    let icon: String
-    let nodes: [DiscoveryNode]
-    let style: DiscoveryCardStyle
-    let onSelected: (DiscoveryNode) -> Void
-    
-    var sectionColor: Color {
-        switch title {
-        case "Genres": return .indigo
-        case "Languages": return .teal
-        default: return .accentColor
-        }
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SectionHeader(title: title, icon: icon, iconColor: sectionColor)
-            
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 24)], spacing: 24) {
-                ForEach(nodes) { node in
-                    DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
-                }
-            }
-            .padding(.horizontal, 40)
-        }
-    }
-}
-
-struct DiscoveryCard: View {
-    let node: DiscoveryNode
-    let style: DiscoveryCardStyle
-    var baseColor: Color = .accentColor
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    @Environment(\.colorScheme) var colorScheme
-
-    private var themeColor: Color {
-        if style == .logo {
-            if let hex = node.themeColorHex, let color = Color(hex: hex) {
-                return color
-            }
-            return .accentColor
-        }
-        return baseColor
-    }
-
-    var body: some View {
-        Button(action: action) {
-            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-            let cornerRadius: CGFloat = style == .logo ? 20 : 32
-            
-            ZStack {
-                // Main Layer: Deep Themed Wash
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(themeColor.themedBackground(colorScheme: colorScheme))
-                    .overlay {
-                        // Subtle Gradient Glow
-                        if colorScheme == .dark {
-                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                                .fill(
-                                    RadialGradient(
-                                        colors: [themeColor.opacity(0.12), .clear],
-                                        center: .topLeading,
-                                        startRadius: 0,
-                                        endRadius: 150
-                                    )
-                                )
-                        }
-                    }
-                    .background {
-                        // Dynamic Shadow/Glow
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color(NSColor.windowBackgroundColor))
-                            .shadow(color: accent.opacity(isHovered ? (colorScheme == .dark ? 0.25 : 0.15) : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
-                    }
-                    .overlay {
-                        // Vibrant Border
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        accent.opacity(isHovered ? 0.6 : 0.15),
-                                        accent.opacity(isHovered ? 0.2 : 0.05)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: isHovered ? 1.5 : 1
-                            )
-                    }
-                
-                if style == .logo {
-                    logoContent
-                } else {
-                    textContent
-                }
-            }
-            .frame(height: style == .logo ? 110 : 65)
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
-        .onHover { isHovered = $0 }
-    }
-    
-    @ViewBuilder
-    private var logoContent: some View {
-        ZStack {
-            if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
-                CachedImage(url: url, targetSize: CGSize(width: 100, height: 50), alwaysPreserveAlpha: true) {
-                    _ in
-                } placeholder: {
-                    Color.secondary.opacity(0.1)
-                }
-                .aspectRatio(contentMode: .fit)
-                .frame(width: isHovered ? 75 : 100, height: isHovered ? 38 : 50)
-                .offset(y: isHovered ? -12 : 0)
-            } else {
-                Text(node.name)
-                    .font(.system(size: 16, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .offset(y: isHovered ? -12 : 0)
-            }
-            
-            VStack(spacing: 2) {
-                if node.logoPath != nil {
-                    Text(node.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                }
-                Text("\(node.count) TITLES")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
-            }
-            .opacity(isHovered ? 1 : 0)
-            .offset(y: isHovered ? 22 : 35)
-            .scaleEffect(isHovered ? 1.0 : 0.9)
-        }
-        .padding(15)
-    }
-    
-    @ViewBuilder
-    private var textContent: some View {
-        ZStack {
-            Text(node.name)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 8)
-                .offset(y: isHovered ? -10 : 0)
-
-            Text("\(node.count) ITEMS")
-                .font(.system(size: 8, weight: .black))
-                .foregroundStyle(.secondary.opacity(0.8))
-                .tracking(0.5)
-                .opacity(isHovered ? 1 : 0)
-                .offset(y: isHovered ? 12 : 20)
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
     }
 }

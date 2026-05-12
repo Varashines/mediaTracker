@@ -117,6 +117,10 @@ class SearchViewModel {
             sortOrder: .alphabetical,
             network: nil,
             language: nil,
+            genre: nil,
+            year: nil,
+            state: nil,
+            badge: nil,
             limit: 50,
             offset: 0
         )

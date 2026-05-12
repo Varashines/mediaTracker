@@ -5,30 +5,68 @@ APP_NAME="MediaTracker"
 BUNDLE_ID="com.vara.mediatracker"
 EXECUTABLE_NAME="MediaTracker"
 INSTALL_DIR="/Applications"
-BUILD_DIR=".build/arm64-apple-macosx/release"
 
-echo "🚀 Building $APP_NAME in Release mode (Incremental)..."
+BUILD_MODE="release"
+BUILD_CONFIG="release"
+DO_CLEAN=false
 
-# 1. Build the executable using all available cores
-CORES=$(sysctl -n hw.ncpu)
-swift build -c release --arch arm64 -j $CORES
+# Parse arguments
+for arg in "$@"; do
+    if [ "$arg" == "--clean" ]; then
+        DO_CLEAN=true
+    elif [ "$arg" == "--help" ] || [ "$arg" == "-h" ]; then
+        echo "Usage: ./quick_install.sh [options]"
+        echo ""
+        echo "Options:"
+        echo "  --clean    Perform a full clean build (removes .build directory)"
+        echo "  --help     Show this help message"
+        exit 0
+    fi
+done
+
+if [ "$DO_CLEAN" = true ]; then
+    echo "🧹 Performing full clean build..."
+    swift package clean
+    rm -rf .build
+fi
+
+echo "🚀 Building $APP_NAME in Quick Release mode..."
+
+# 1. Capture binary state before build
+BINARY_PATH=$(swift build -c release --arch arm64 --show-bin-path 2>/dev/null)/$EXECUTABLE_NAME
+PRE_BUILD_STAT=$(stat -f "%m%z" "$BINARY_PATH" 2>/dev/null || echo "none")
+
+# 2. Build the executable
+swift build -c release --arch arm64 -j $(sysctl -n hw.ncpu) -Xswiftc -index-ignore-system-modules
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed."
     exit 1
 fi
 
-if [ ! -f "AppIcon.icns" ]; then
+# 3. Capture binary state after build
+POST_BUILD_STAT=$(stat -f "%m%z" "$BINARY_PATH" 2>/dev/null || echo "none")
+
+# 4. Optimized Icon Generation (Cached)
+if [ ! -f "AppIcon.icns" ] || [ "generate_icon.swift" -nt "AppIcon.icns" ]; then
     echo "🎨 Generating App Icon..."
     swift generate_icon.swift
     iconutil -c icns AppIcon.iconset -o AppIcon.icns
     rm -rf AppIcon.iconset
 fi
 
+# 5. Skip packaging if no changes detected
+APP_BUNDLE="$APP_NAME.app"
+INSTALLED_APP="$INSTALL_DIR/$APP_BUNDLE"
+
+if [ "$PRE_BUILD_STAT" == "$POST_BUILD_STAT" ] && [ -d "$INSTALLED_APP" ]; then
+    echo "✨ No changes detected in binary. Skipping packaging."
+    exit 0
+fi
+
 echo "📦 Packaging into $APP_NAME.app..."
 
-# 2. Create the .app bundle structure
-APP_BUNDLE="$APP_NAME.app"
+# 6. Create the .app bundle structure
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -36,12 +74,11 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
-# 3. Copy the executable and icon
-cp "$BUILD_DIR/$EXECUTABLE_NAME" "$MACOS_DIR/"
+# 7. Copy the executable and icon
+cp "$BINARY_PATH" "$MACOS_DIR/"
 cp AppIcon.icns "$RESOURCES_DIR/"
-rm AppIcon.icns
 
-# 4. Create a basic Info.plist
+# 8. Create Info.plist
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -67,13 +104,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-# 5. Move to Applications
-echo "🚚 Installing to $INSTALL_DIR..."
-rm -rf "$INSTALL_DIR/$APP_BUNDLE"
-mv "$APP_BUNDLE" "$INSTALL_DIR/"
-
-# 6. Ad-hoc sign the app (Required for Notifications on macOS)
+# 9. Ad-hoc sign the app
 echo "🔐 Ad-hoc signing $APP_NAME..."
-codesign --force --deep --sign - "$INSTALL_DIR/$APP_BUNDLE"
+codesign --force --sign - "$APP_BUNDLE"
+
+# 10. Move to Applications
+echo "🚚 Installing to $INSTALL_DIR..."
+rm -rf "$INSTALLED_APP"
+mv "$APP_BUNDLE" "$INSTALL_DIR/"
 
 echo "✅ Done! $APP_NAME is now in your Applications folder."

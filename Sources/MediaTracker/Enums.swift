@@ -136,6 +136,7 @@ enum FilterType: String, Codable, Hashable, Sendable {
     case genre = "Genre"
     case studio = "Studio"
     case language = "Language"
+    case badge = "Badge"
 }
 
 enum TasteValue: String, Codable, CaseIterable, Sendable {
@@ -158,6 +159,7 @@ enum SortOrder: String, CaseIterable, Identifiable, Sendable {
     case alphabetical = "Alphabetical"
     case newestRelease = "Newest Release"
     case recentlyAdded = "Recently Added"
+    case recentInteraction = "Recent Interaction"
 
     var id: String { self.rawValue }
 
@@ -166,6 +168,7 @@ enum SortOrder: String, CaseIterable, Identifiable, Sendable {
         case .alphabetical: return "textformat.abc"
         case .newestRelease: return "calendar"
         case .recentlyAdded: return "clock.badge.checkmark"
+        case .recentInteraction: return "clock.arrow.2.circlepath"
         }
     }
 }

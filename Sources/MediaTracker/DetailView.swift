@@ -197,6 +197,7 @@ struct DetailView: View {
         let network = itemToDelete.cachedNetwork
         let genres = itemToDelete.cachedGenres
         let lang = itemToDelete.cachedLanguage
+        let badge = itemToDelete.storedSmartBadgeLabel
         // let container = modelContext.container
 
         withAnimation {
@@ -216,7 +217,7 @@ struct DetailView: View {
                 await backgroundService.deleteMediaItem(id: itemID)
                 
                 let sync = DiscoverySyncService(modelContainer: container)
-                await sync.updateItemDeleted(network: network, genres: genres, language: lang)
+                await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
                 
                 await MainActor.run {
                     NotificationCenter.default.post(name: .mediaStateChanged, object: nil)

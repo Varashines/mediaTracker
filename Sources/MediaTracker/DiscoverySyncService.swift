@@ -65,6 +65,7 @@ actor DiscoverySyncService {
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
+        var badgeCounts: [String: Int] = [:]
         
         let batchSize = 500
         var offset = 0
@@ -93,26 +94,32 @@ actor DiscoverySyncService {
             for item in items {
                 // Count Networks
                 if item.type == .tvShow, let originalName = item.cachedNetwork {
-                    let name = sourceToTarget[originalName] ?? originalName
-                    let preferredSource = targetToLogoSource[name]
+                    let targetName: String = sourceToTarget[originalName] ?? originalName
+                    let preferredSource: String? = targetToLogoSource[targetName]
                     
-                    let current = networkCounts[name] ?? (logo: nil, count: 0, priority: 0, sources: [])
-                    var newLogo = current.logo
-                    var newPriority = current.priority
-                    var newSources = current.sources
-                    if !newSources.contains(originalName) { newSources.append(originalName) }
+                    let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                    var newLogo: String? = currentData.logo
+                    var newPriority: Int = currentData.priority
+                    var newSources: [String] = currentData.sources
+                    
+                    if !newSources.contains(originalName) {
+                        newSources.append(originalName)
+                    }
                     
                     if let itemLogo = item.cachedNetworkLogoPath {
-                        if let pref = preferredSource, originalName == pref {
+                        let isPreferredSource = (preferredSource != nil && originalName == preferredSource)
+                        let isMainSource = (originalName == targetName)
+                        
+                        if isPreferredSource {
                             newLogo = itemLogo
                             newPriority = 100
-                        } else if newLogo == nil || (originalName == name && newPriority < 50) {
+                        } else if newLogo == nil || (isMainSource && newPriority < 50) {
                             newLogo = itemLogo
-                            newPriority = (originalName == name) ? 50 : 10
+                            newPriority = isMainSource ? 50 : 10
                         }
                     }
                     
-                    networkCounts[name] = (logo: newLogo, count: current.count + 1, priority: newPriority, sources: newSources)
+                    networkCounts[targetName] = (logo: newLogo, count: currentData.count + 1, priority: newPriority, sources: newSources)
                 }
                 
                 // Count Genres
@@ -123,6 +130,11 @@ actor DiscoverySyncService {
                 // Count Languages
                 if let lang = item.cachedLanguage {
                     languageCounts[lang, default: 0] += 1
+                }
+
+                // Count Badges
+                if let badge = item.storedSmartBadgeLabel {
+                    badgeCounts[badge, default: 0] += 1
                 }
             }
             
@@ -167,6 +179,18 @@ actor DiscoverySyncService {
             }
         }
         for entity in existingLanguages where languageCounts[entity.code] == nil {
+            modelContext.delete(entity)
+        }
+
+        let existingBadges = (try? modelContext.fetch(FetchDescriptor<BadgeEntity>())) ?? []
+        for (label, count) in badgeCounts {
+            if let existing = existingBadges.first(where: { $0.label == label }) {
+                existing.count = count
+            } else {
+                modelContext.insert(BadgeEntity(label: label, count: count))
+            }
+        }
+        for entity in existingBadges where badgeCounts[entity.label] == nil {
             modelContext.delete(entity)
         }
         
@@ -215,6 +239,16 @@ actor DiscoverySyncService {
                 modelContext.insert(LanguageEntity(code: lang, count: 1))
             }
         }
+
+        // Incremental Badge update
+        if let badge = item.storedSmartBadgeLabel {
+            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == badge })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(BadgeEntity(label: badge, count: 1))
+            }
+        }
         
         try? modelContext.save()
         
@@ -222,7 +256,7 @@ actor DiscoverySyncService {
         await extractMissingColors()
     }
 
-    func updateItemDeleted(network: String?, genres: [String], language: String?) async {
+    func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?) async {
         // Studio Aliases
         let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
@@ -256,6 +290,14 @@ actor DiscoverySyncService {
                 if existing.count <= 0 { modelContext.delete(existing) }
             }
         }
+
+        if let b = badge {
+            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == b })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count -= 1
+                if existing.count <= 0 { modelContext.delete(existing) }
+            }
+        }
         
         try? modelContext.save()
     }
@@ -269,32 +311,45 @@ actor DiscoverySyncService {
 
         await withTaskGroup(of: (PersistentIdentifier, String?).self) { group in
             for network in missing {
-                let id = network.persistentModelID
-                let name = network.name
-                let logo = network.logoPath
+                let id: PersistentIdentifier = network.persistentModelID
+                let name: String = network.name
+                let logoPath: String? = network.logoPath
 
                 group.addTask {
-                    // Restore from cache if available
-                    if let cachedColor = await (MainActor.run { NetworkThemeManager.shared.color(for: name) }) {
-                        return (id, cachedColor.toHex())
+                    // 1. Try Local Theme Manager Cache
+                    let cachedHex: String? = await MainActor.run { 
+                        NetworkThemeManager.shared.color(for: name)?.toHex() 
+                    }
+                    if let hex = cachedHex {
+                        return (id, hex)
                     }
 
-                    guard let logo = logo,
-                          let urlString = APIClient.tmdbImageURL(path: logo, size: "w92"),
-                          let url = URL(string: urlString) else { return (id, nil) }
-
-                    if let (data, _) = try? await URLSession.shared.data(from: url) {
-                        let color = await ColorExtractor.dominantColor(from: data)
-                        await MainActor.run { NetworkThemeManager.shared.save(color: color, for: name) }
-                        return (id, color.toHex())
+                    // 2. Fetch Logo and Extract Color
+                    guard let path = logoPath,
+                          let urlString = APIClient.tmdbImageURL(path: path, size: "w92"),
+                          let url = URL(string: urlString) else {
+                        return (id, nil)
                     }
-                    return (id, nil)
+
+                    do {
+                        let (data, _) = try await URLSession.shared.data(from: url)
+                        let extractedColor = await ColorExtractor.dominantColor(from: data)
+                        let hexString = extractedColor.toHex()
+                        
+                        // Update cache for future use
+                        await MainActor.run { 
+                            NetworkThemeManager.shared.save(color: extractedColor, for: name) 
+                        }
+                        return (id, hexString)
+                    } catch {
+                        return (id, nil)
+                    }
                 }
             }
 
             for await (id, hex) in group {
-                if let hex = hex, let network = modelContext.model(for: id) as? NetworkEntity {
-                    network.themeColorHex = hex
+                if let hexValue = hex, let network = modelContext.model(for: id) as? NetworkEntity {
+                    network.themeColorHex = hexValue
                 }
             }
         }

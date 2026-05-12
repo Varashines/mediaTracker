@@ -194,6 +194,10 @@ struct SmartCollectionsHubView: View {
                     sortOrder: .alphabetical,
                     network: nil,
                     language: nil,
+                    genre: nil,
+                    year: nil,
+                    state: nil,
+                    badge: nil,
                     limit: 1,
                     offset: 0
                 )
@@ -211,6 +215,10 @@ struct SmartCollectionsHubView: View {
                     sortOrder: .alphabetical,
                     network: nil,
                     language: nil,
+                    genre: nil,
+                    year: nil,
+                    state: nil,
+                    badge: nil,
                     collectionID: collection.id,
                     limit: 1,
                     offset: 0

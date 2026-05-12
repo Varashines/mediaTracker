@@ -107,6 +107,7 @@ actor MediaFilterActor {
         genre: String? = nil,
         year: String? = nil,
         state: MediaState? = nil,
+        badge: String? = nil,
         groupBy: GroupBy = .none,
         collectionID: UUID? = nil,
         limit: Int = 40,
@@ -145,6 +146,7 @@ actor MediaFilterActor {
                                (genre != nil && !genre!.isEmpty) ||
                                year != nil ||
                                state != nil ||
+                               badge != nil ||
                                category == .releaseRadar ||
                                category == .stalled ||
                                !smartRules.isEmpty
@@ -157,7 +159,7 @@ actor MediaFilterActor {
         var results = try modelContext.fetch(descriptor)
         
         // 2. Swift-Level Refinement
-        results = refineResults(results, network: network, language: language, genre: genre, year: year, state: state, searchText: processedSearch, category: category, smartRules: smartRules)
+        results = refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, searchText: processedSearch, category: category, smartRules: smartRules)
 
         let totalCount = (hasComplexFilters || groupBy != .none) ? 
                          results.count : 
@@ -205,6 +207,8 @@ actor MediaFilterActor {
             results.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
         case .recentlyAdded:
             results.sort { ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast) }
+        case .recentInteraction:
+            results.sort { ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast) }
         }
     }
 
@@ -212,91 +216,18 @@ actor MediaFilterActor {
         let hasSearch = !searchToken.isEmpty
 
         switch category {
-        case .upcoming:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.storedIsUpcoming == true && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
-            }
-        case .inProgress:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
-            }
-        case .watchlist:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
-            }
-        case .loved:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.tasteValue == "Love" && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
-            }
-        case .completed:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.stateValue == "Completed" && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
-            }
-        case .archive:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in (item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching") && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
-            }
-        case .disliked:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
-            }
-        case .binge:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in (item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE") && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
-            }
-        case .movie, .tvShow:
-            let typeString = category.rawValue
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.typeValue == typeString && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.typeValue == typeString }
-            }
-        case .quickBites:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in 
-                    if let runtime = item.cachedRuntime {
-                        return runtime > 0 && runtime < 90 && item.searchableText.localizedStandardContains(searchToken)
-                    } else {
-                        return false
-                    }
-                }
-            } else {
-                return #Predicate<MediaItem> { item in 
-                    if let runtime = item.cachedRuntime {
-                        return runtime > 0 && runtime < 90
-                    } else {
-                        return false
-                    }
-                }
-            }
-        case .catchUp:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
-            }
-        case .stalled:
-            if hasSearch {
-                return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.searchableText.localizedStandardContains(searchToken) }
-            } else {
-                return #Predicate<MediaItem> { item in item.stateValue == "Active" }
-            }
+        case .upcoming: return buildUpcomingPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .inProgress: return buildInProgressPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .watchlist: return buildWatchlistPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .loved: return buildLovedPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .completed: return buildCompletedPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .archive: return buildArchivePredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .disliked: return buildDislikedPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .binge: return buildBingePredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .movie, .tvShow: return buildTypePredicate(typeString: category.rawValue, hasSearch: hasSearch, searchToken: searchToken)
+        case .quickBites: return buildQuickBitesPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .catchUp: return buildCatchUpPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .stalled: return buildStalledPredicate(hasSearch: hasSearch, searchToken: searchToken)
         case .releaseRadar:
             // Complex logical ORs in Predicates often cause compiler timeouts.
             // We'll fetch all and refine in Swift.
@@ -314,6 +245,114 @@ actor MediaFilterActor {
         }
     }
 
+    private func buildUpcomingPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+        }
+    }
+
+    private func buildInProgressPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
+        }
+    }
+
+    private func buildWatchlistPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
+        }
+    }
+
+    private func buildLovedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.tasteValue == "Love" && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
+        }
+    }
+
+    private func buildCompletedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.stateValue == "Completed" && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
+        }
+    }
+
+    private func buildArchivePredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in (item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching") && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
+        }
+    }
+
+    private func buildDislikedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
+        }
+    }
+
+    private func buildBingePredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in (item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE") && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
+        }
+    }
+
+    private func buildTypePredicate(typeString: String, hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.typeValue == typeString && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.typeValue == typeString }
+        }
+    }
+
+    private func buildQuickBitesPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in 
+                if let runtime = item.cachedRuntime {
+                    return runtime > 0 && runtime < 90 && item.searchableText.localizedStandardContains(searchToken)
+                } else {
+                    return false
+                }
+            }
+        } else {
+            return #Predicate<MediaItem> { item in 
+                if let runtime = item.cachedRuntime {
+                    return runtime > 0 && runtime < 90
+                } else {
+                    return false
+                }
+            }
+        }
+    }
+
+    private func buildCatchUpPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
+        }
+    }
+
+    private func buildStalledPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.stateValue == "Active" }
+        }
+    }
+
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder) {
         if category == .upcoming {
             descriptor.sortBy = [SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward)]
@@ -322,11 +361,12 @@ actor MediaFilterActor {
             case .alphabetical: descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
             case .newestRelease: descriptor.sortBy = [SortDescriptor<MediaItem>(\.releaseDate, order: .reverse)]
             case .recentlyAdded: descriptor.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
+            case .recentInteraction: descriptor.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
             }
         }
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
         var refined = results
         
         if !smartRules.isEmpty {
@@ -341,7 +381,7 @@ actor MediaFilterActor {
                 return lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo
             }
         } else if category == .releaseRadar {
-            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "SERIES PREMIERE", "SEASON PREMIERE"]
+            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "SERIES PREMIERE", "SEASON PREMIERE", "FINALE", "RECENT"]
             let now = Date()
             refined = refined.filter { item in
                 // 1. Must have a valid radar badge
@@ -351,6 +391,10 @@ actor MediaFilterActor {
                 let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
                 return airDate <= now
             }
+        }
+
+        if let b = badge {
+            refined = refined.filter { $0.storedSmartBadgeLabel == b }
         }
 
         if let nets = network, !nets.isEmpty {

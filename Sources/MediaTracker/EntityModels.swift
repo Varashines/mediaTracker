@@ -41,6 +41,17 @@ final class LanguageEntity {
 }
 
 @Model
+final class BadgeEntity {
+    var label: String
+    var count: Int = 0
+
+    init(label: String, count: Int = 0) {
+        self.label = label
+        self.count = count
+    }
+}
+
+@Model
 final class StudioAliasEntity {
     @Attribute(.unique) var target: String
     var sources: [String] = []

@@ -258,17 +258,15 @@ struct MediaThumbnailView: View, Equatable {
                 resultID: nil
             )
 
-            // 2. Hover Metadata Pills (Floating capsules) - Skip in Search Mode
-            if mode != .search {
-                HoverMetadataPills(
-                    title: title,
-                    year: yearLabel,
-                    nextEpisodeLabel: nextEpisodeLabel,
-                    nextAiringDate: nextAiringDate,
-                    isUpcoming: isUpcoming,
-                    isHovered: effectiveHover
-                )
-            }
+            // 2. Hover Metadata Pills (Floating capsules)
+            HoverMetadataPills(
+                title: title,
+                year: yearLabel,
+                nextEpisodeLabel: nextEpisodeLabel,
+                nextAiringDate: nextAiringDate,
+                isUpcoming: isUpcoming,
+                isHovered: effectiveHover
+            )
 
             // Smart Badge (Top Leading)
             VStack {

@@ -13,7 +13,7 @@ struct MediaTrackerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
-            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, PersonImageEntity.self,
+            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self
         ])
         
