@@ -44,8 +44,8 @@ struct BadgeEngine {
                 if let airDate = nextToWatch.airDateAsDate {
                     let daysSinceAir = now.timeIntervalSince(airDate) / 86400
                     
-                    // 1. PREMIERE (No future limit, 3-day past limit)
-                    if nextToWatch.episodeNumber == 1 && daysSinceAir <= 3 {
+                    // 1. PREMIERE (30-day future hype window, 3-day past limit)
+                    if nextToWatch.episodeNumber == 1 && daysSinceAir <= 3 && daysSinceAir >= -30 {
                         return BadgeResult(label: "PREMIERE", isSparkle: true)
                     }
 
@@ -71,8 +71,8 @@ struct BadgeEngine {
         if let airDate = item.cachedNextAiringDate ?? item.releaseDate {
             let timeToAir = airDate.timeIntervalSince(now)
 
-            // PREMIERE for Movies (No future limit, 3-day past limit)
-            if item.type == .movie && timeToAir >= -259200 {
+            // PREMIERE for Movies (30-day future hype window, 3-day past limit)
+            if item.type == .movie && timeToAir >= -259200 && timeToAir <= 2592000 {
                 return BadgeResult(label: "PREMIERE", isSparkle: true)
             }
 

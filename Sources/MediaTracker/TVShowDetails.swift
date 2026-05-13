@@ -41,7 +41,18 @@ final class TVShowDetails {
         self.tmdbID = tmdbID
     }
 
-    func calculateProgress(now: Date = Date()) -> TVProgressResult {
+    func calculateProgress(now: Date = Date(), forceRecalculate: Bool = false) -> TVProgressResult {
+        // Optimization: Return cached results if we already have them and don't need a deep scan
+        if !forceRecalculate && totalEpisodesCount > 0 {
+            return TVProgressResult(
+                totalCount: totalEpisodesCount,
+                watchedCount: watchedEpisodesCount,
+                remainingCount: remainingEpisodesCount ?? 0,
+                firstUnwatched: nil, // Note: firstUnwatched still requires a scan if needed
+                totalRuntime: 0 // Note: totalRuntime also requires a scan if needed
+            )
+        }
+
         var total = 0
         var watched = 0
         var aired = 0

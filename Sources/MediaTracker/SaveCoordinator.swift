@@ -11,7 +11,7 @@ class SaveCoordinator {
     
     /// Requests a save operation, which will be executed after a short delay (debounce).
     /// If another request comes in before the delay finishes, the timer resets.
-    func requestSave(_ context: ModelContext, delayMs: UInt64 = 1000) {
+    func requestSave(_ context: ModelContext, delayMs: UInt64 = 350) {
         saveTask?.cancel()
         
         saveTask = Task { @MainActor in

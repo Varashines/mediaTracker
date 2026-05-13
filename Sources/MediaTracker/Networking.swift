@@ -229,9 +229,9 @@ actor APIClient {
     
     // MARK: - Details
 
-    func fetchMovieDetails(tmdbID: Int) async throws -> MovieDetailsResult {
+    func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        if let cachedData = await getCachedData(forKey: cacheKey),
+        if !force, let cachedData = await getCachedData(forKey: cacheKey),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
         }
@@ -284,9 +284,9 @@ actor APIClient {
         )
     }
 
-    func fetchTVDetails(tmdbID: Int) async throws -> TVDetailsResult {
+    func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
-        if let cachedData = await getCachedData(forKey: cacheKey),
+        if !force, let cachedData = await getCachedData(forKey: cacheKey),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             return processTVDetails(d)
         }

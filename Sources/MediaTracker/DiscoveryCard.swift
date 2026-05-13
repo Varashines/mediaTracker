@@ -31,15 +31,15 @@ struct DiscoveryCard: View {
             ZStack {
                 // Main Layer
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.06))
+                    .fill(themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.22 : 0.12) : (isHovered ? 0.08 : 0.05)))
                     .background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color(NSColor.windowBackgroundColor))
-                            .shadow(color: accent.opacity(isHovered ? 0.12 : 0), radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+                            .fill(colorScheme == .dark ? Color.white.opacity(isHovered ? 0.1 : 0.06) : Color(NSColor.windowBackgroundColor))
+                            .shadow(color: colorScheme == .dark ? accent.opacity(isHovered ? 0.25 : 0) : Color.black.opacity(isHovered ? 0.08 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(accent.opacity(isHovered ? 0.3 : 0.08), lineWidth: isHovered ? 1.5 : 1)
+                            .stroke(accent.opacity(colorScheme == .dark ? (isHovered ? 0.45 : 0.15) : (isHovered ? 0.2 : 0.08)), lineWidth: isHovered ? 1.5 : 1)
                     }
                 
                 if style == .logo {
@@ -71,6 +71,7 @@ struct DiscoveryCard: View {
             } else {
                 Text(node.name)
                     .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
                     .multilineTextAlignment(.center)
                     .offset(y: isHovered ? -12 : 0)
             }
@@ -84,7 +85,7 @@ struct DiscoveryCard: View {
                 }
                 Text("\(node.count) TITLES")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isHovered ? (colorScheme == .dark ? .white.opacity(0.8) : themeColor.highContrastAccent(colorScheme: colorScheme)) : .secondary)
             }
             .opacity(isHovered ? 1 : 0)
             .offset(y: isHovered ? 22 : 35)
@@ -95,17 +96,18 @@ struct DiscoveryCard: View {
     
     @ViewBuilder
     private var textContent: some View {
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         ZStack {
             Text(node.name)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                .foregroundStyle(isHovered && colorScheme == .dark ? .white : accent)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
                 .offset(y: isHovered ? -10 : 0)
 
             Text("\(node.count) ITEMS")
                 .font(.system(size: 8, weight: .black))
-                .foregroundStyle(.secondary.opacity(0.8))
+                .foregroundStyle(isHovered && colorScheme == .dark ? .white.opacity(0.9) : .secondary)
                 .tracking(0.5)
                 .opacity(isHovered ? 1 : 0)
                 .offset(y: isHovered ? 12 : 20)

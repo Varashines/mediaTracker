@@ -100,8 +100,8 @@ extension MediaItem {
         self.cachedNetwork = tv.network
         self.cachedNetworkLogoPath = tv.networkLogoPath
         
-        // Use Unified Logic
-        let progressResult = tv.calculateProgress(now: now)
+        // Use Unified Logic - Always force recalculate during sync to heal any drift
+        let progressResult = tv.calculateProgress(now: now, forceRecalculate: true)
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount

@@ -92,6 +92,7 @@ struct DiscoveryHubView: View {
                 SortDescriptor(\.name, order: .forward)
             ])
             let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
+                SortDescriptor(\.count, order: .reverse),
                 SortDescriptor(\.code, order: .forward)
             ])
             let badgeDescriptor = FetchDescriptor<BadgeEntity>(sortBy: [

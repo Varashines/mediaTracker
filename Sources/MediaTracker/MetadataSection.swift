@@ -37,9 +37,7 @@ struct MetadataSection: View {
             // Row 2: Content Details
             HStack(spacing: 12) {
                 if item.type == .movie {
-                    if let movie = item.movieDetails {
-                        MetadataLine(icon: "clock.fill", value: DateUtils.formatRuntime(movie.runtime), themeColor: themeColor)
-                    }
+                    MetadataLine(icon: "clock.fill", value: DateUtils.formatRuntime(item.cachedRuntime), themeColor: themeColor)
                 } else if item.type == .tvShow {
                     if let tv = item.tvShowDetails {
                         MetadataLine(icon: "info.circle.fill", value: tv.status, themeColor: themeColor)

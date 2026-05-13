@@ -163,12 +163,13 @@ actor CalendarFilterActor {
         }
         
         let maxWeight = Double(dailyWeights.values.max() ?? 1)
+        let logMax = log1p(maxWeight)
         
         var current = bounds.start
         while current <= bounds.end {
             let items = dailyItems[current] ?? []
             let weight = Double(dailyWeights[current] ?? 0)
-            let intensity = maxWeight > 0 ? weight / maxWeight : 0
+            let intensity = maxWeight > 0 ? log1p(weight) / logMax : 0
             dayInfos[current] = CalendarDayInfo(date: current, items: items, intensity: intensity)
             guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
             current = next

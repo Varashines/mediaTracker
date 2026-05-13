@@ -200,7 +200,22 @@ actor BackgroundDataService {
         let allSeasons = try modelContext.fetch(sDesc)
         let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
-        let tvMap = Dictionary(uniqueKeysWithValues: allTVDetails.map { ($0.tmdbID, $0) })
+        
+        // Fix for Crash: Safely handle duplicate tmdbIDs if they exist in the DB
+        let tvMap = Dictionary(allTVDetails.map { ($0.tmdbID, $0) }, uniquingKeysWith: { first, second in
+            // Logic to keep the one that actually has a MediaItem attached
+            if first.item != nil { 
+                if second.item == nil {
+                    modelContext.delete(second) // Clean up the orphaned duplicate
+                }
+                return first 
+            }
+            if second.item != nil { 
+                modelContext.delete(first) // Clean up the orphaned duplicate
+                return second 
+            }
+            return first
+        })
         
         for season in allSeasons {
             if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
@@ -279,7 +294,7 @@ actor BackgroundDataService {
             let success = try await SyncCoordinator.shared.perform(key: "sync_\(tmdbID)") {
                 let success: Bool
                 if itemType == .movie {
-                    success = await self.refreshMovie(id: id, tmdbID: tmdbID)
+                    success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
                 } else if itemType == .tvShow {
                     success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
                 } else {
@@ -379,12 +394,12 @@ actor BackgroundDataService {
         }
     }
 
-    private func refreshMovie(id: String, tmdbID: Int) async -> Bool {
+    private func refreshMovie(id: String, tmdbID: Int, force: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return false }
         
         do {
-            let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID)
+            let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: force)
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
             if let newOverview = details.overview {
                 item.overview = newOverview
@@ -395,6 +410,7 @@ actor BackgroundDataService {
             
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
             movieDetails.item = item
+            item.movieDetails = movieDetails
             movieDetails.runtime = details.runtime
             movieDetails.genres = details.genres
             movieDetails.voteAverage = details.voteAverage
@@ -440,8 +456,10 @@ actor BackgroundDataService {
         guard let item = try? modelContext.fetch(descriptor).first else { return false }
 
         do {
-            let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID)
+            let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: force)
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
+            tvDetails.item = item
+            item.tvShowDetails = tvDetails
             
             let totalCachedEpisodes = tvDetails.seasons.reduce(0) { $0 + $1.episodes.count }
             let hasMissingEpisodes = tvDetails.seasons.contains(where: { $0.episodes.isEmpty }) && !tvDetails.seasons.isEmpty

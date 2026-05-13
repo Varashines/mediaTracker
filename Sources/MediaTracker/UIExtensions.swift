@@ -94,8 +94,8 @@ extension Color {
         }
         
         if colorScheme == .dark {
-            // Phase 5 Refinement: Perceptually uniform moodiness.
-            return Color.fromOKLCH(l: max(min(o.l, 0.8), 0.65), c: max(o.c, 0.15), h: o.h)
+            // Phase 5 Refinement: Perceptually uniform moodiness - boosted for visibility.
+            return Color.fromOKLCH(l: max(min(o.l, 0.85), 0.7), c: max(o.c, 0.22), h: o.h)
         } else {
             // Phase 5 Refinement: Perceptually uniform airiness.
             return Color.fromOKLCH(l: max(min(o.l, 0.92), 0.82), c: max(o.c, 0.18), h: o.h)
@@ -105,25 +105,24 @@ extension Color {
     /// Returns a version of the color optimized for text, icons, and small UI elements.
     func highContrastAccent(colorScheme: ColorScheme) -> Color {
         let o = self.oklch
-        
+
         // Handle grayscale
         if o.c < 0.02 {
             if colorScheme == .dark {
-                return Color(white: max(o.l, 0.9))
+                return Color(white: max(o.l, 0.95))
             } else {
-                return Color(white: min(o.l, 0.45))
+                return Color(white: min(o.l, 0.35))
             }
         }
-        
+
         if colorScheme == .dark {
-            // On dark backgrounds, ensure perceptual lightness is at least 0.9
-            return Color.fromOKLCH(l: max(o.l, 0.9), c: max(o.c, 0.2), h: o.h)
+            // On dark backgrounds, ensure perceptual lightness and chroma are high for vibrancy
+            return Color.fromOKLCH(l: max(o.l, 0.92), c: max(o.c, 0.3), h: o.h)
         } else {
             // On light backgrounds, ensure it's deep enough for WCAG contrast but highly saturated
-            return Color.fromOKLCH(l: min(o.l, 0.45), c: max(o.c, 0.4), h: o.h)
+            return Color.fromOKLCH(l: min(o.l, 0.4), c: max(o.c, 0.45), h: o.h)
         }
     }
-
     /// Returns a subtly tinted background color based on the current color using OKLCH.
     func themedBackground(colorScheme: ColorScheme) -> Color {
         let o = self.oklch

@@ -88,8 +88,8 @@ final class MediaItem: Identifiable {
         }
     }
 
-    @Relationship(deleteRule: .cascade) var movieDetails: MovieDetails?
-    @Relationship(deleteRule: .cascade) var tvShowDetails: TVShowDetails?
+    @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?
+    @Relationship(deleteRule: .cascade, inverse: \TVShowDetails.item) var tvShowDetails: TVShowDetails?
     
     static func availableStates(for type: MediaType, progress: Double?) -> [MediaState] {
         let progressVal = progress ?? 0

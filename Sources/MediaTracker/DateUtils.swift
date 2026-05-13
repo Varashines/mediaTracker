@@ -13,8 +13,8 @@ struct StreamingServiceRule: Codable {
         StreamingServiceRule(patterns: ["disney"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // Netflix: Midnight PT.
         StreamingServiceRule(patterns: ["netflix"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
-        // Amazon Prime: Midnight GMT.
-        StreamingServiceRule(patterns: ["amazon", "prime"], releaseTime: "00:00", timeZoneIdentifier: "GMT", dayOffset: 0),
+        // Amazon Prime / MGM+: New 2025/2026 standard is Midnight PT.
+        StreamingServiceRule(patterns: ["amazon", "prime", "mgm"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Hulu: Midnight ET.
         StreamingServiceRule(patterns: ["hulu"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0)
     ]
