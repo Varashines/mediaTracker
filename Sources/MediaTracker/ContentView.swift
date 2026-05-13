@@ -589,7 +589,7 @@ struct ContentView: View {
     }
     private var isSystemSmartCategory: Bool {
         let cat = viewModel.selectedCategory
-        return cat == .releaseRadar || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
+        return cat == .releaseRadar || cat == .smartUpcoming || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
     }
 
     private func performLibrarySync() {

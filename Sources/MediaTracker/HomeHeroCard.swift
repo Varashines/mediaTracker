@@ -36,27 +36,29 @@ struct HomeHeroCard: View {
                                 .font(.system(size: 10, weight: .black))
                             Text(context.uppercased())
                                 .font(.system(size: 9, weight: .black))
+                                .tracking(1.2)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .foregroundStyle(.white)
                         .background {
                             if #available(macOS 26.0, *) {
                                 Capsule()
                                     .fill(.clear)
                                     .glassEffect(.regular, in: .capsule)
-                                    .opacity(0.8)
+                                    .opacity(0.9)
                             } else {
                                 Capsule()
                                     .fill(.ultraThinMaterial)
-                                    .opacity(0.8)
+                                    .opacity(0.9)
                             }
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5)
                         }
-                        .padding(20)
+                        .shadow(color: .black.opacity(0.15), radius: 5, y: 3)
+                        .padding(24)
                     }
                     Spacer()
                 }

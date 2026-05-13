@@ -35,6 +35,9 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
 
     var formattedMetadata: String {
         let year = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? ""
+        if let firstGenre = genres.first {
+            return "\(year) • \(firstGenre)"
+        }
         return year
     }
 
@@ -244,6 +247,7 @@ actor MediaFilterActor {
         case .quickBites: return buildQuickBitesPredicate(hasSearch: hasSearch, searchToken: searchToken)
         case .catchUp: return buildCatchUpPredicate(hasSearch: hasSearch, searchToken: searchToken)
         case .stalled: return buildStalledPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .smartUpcoming: return buildSmartUpcomingPredicate(hasSearch: hasSearch, searchToken: searchToken)
         case .releaseRadar:
             // Complex logical ORs in Predicates often cause compiler timeouts.
             // We'll fetch all and refine in Swift.
@@ -365,8 +369,17 @@ actor MediaFilterActor {
         }
     }
 
+    private func buildSmartUpcomingPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+        let premiere = "PREMIERE"
+        if hasSearch {
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == premiere && item.searchableText.localizedStandardContains(searchToken) }
+        } else {
+            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == premiere }
+        }
+    }
+
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
-        if category == .upcoming || badge == "PREMIERE" {
+        if category == .upcoming || category == .smartUpcoming || badge == "PREMIERE" {
             descriptor.sortBy = [
                 SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward),
                 SortDescriptor<MediaItem>(\.title, order: .forward)
@@ -405,7 +418,7 @@ actor MediaFilterActor {
             refined = refined.filter { item in
                 if item.typeValue == "Movie" {
                     let runtime = item.cachedRuntime ?? 0
-                    return runtime > 0 && runtime < 100
+                    return runtime > 0 && runtime < 90
                 } else if item.typeValue == "TV Show" {
                     let epRuntime = item.cachedEpisodeRuntime ?? 0
                     return epRuntime > 0 && epRuntime < 25
@@ -503,6 +516,8 @@ actor MediaFilterActor {
                     return item.state == state
                 case .taste(let taste):
                     return item.taste == taste
+                case .badge(let badge):
+                    return item.storedSmartBadgeLabel == badge
                 }
             }
         }

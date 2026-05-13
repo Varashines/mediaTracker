@@ -25,6 +25,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case catchUp = "Catch Up"
     case stalled = "Stalled"
     case releaseRadar = "Release Radar"
+    case smartUpcoming = "Smart Upcoming"
 
     var id: String { self.rawValue }
 
@@ -49,6 +50,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .catchUp: return "Catch Up"
         case .stalled: return "On Hold"
         case .releaseRadar: return "Release Radar"
+        case .smartUpcoming: return "Premiere Radar"
         }
     }
 
@@ -73,6 +75,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .catchUp: return "arrow.uturn.right.circle"
         case .stalled: return "pause.circle"
         case .releaseRadar: return "sparkles"
+        case .smartUpcoming: return "calendar.badge.clock"
         }
     }
 }

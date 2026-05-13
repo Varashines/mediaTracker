@@ -43,12 +43,25 @@ struct TitleSection: View {
                         .font(.system(size: 10, weight: .black))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(bgAccent.opacity(colorScheme == .dark ? 0.2 : 0.4))
-                        .clipShape(Capsule())
                         .foregroundStyle(accent)
+                        .background {
+                            if #available(macOS 26.0, *) {
+                                Capsule()
+                                    .fill(bgAccent.opacity(colorScheme == .dark ? 0.15 : 0.25))
+                                    .glassEffect(.regular, in: .capsule)
+                            } else {
+                                Capsule()
+                                    .fill(bgAccent.opacity(colorScheme == .dark ? 0.2 : 0.4))
+                            }
+                        }
+                        .clipShape(Capsule())
+                        .overlay {
+                            Capsule().stroke(accent.opacity(0.1), lineWidth: 0.5)
+                        }
 
                     if item.isUpcoming, let dateText = item.detailBadgeText {
                         let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
+                        let color = isStreaming ? Color.green : Color.orange
                         HStack(spacing: 4) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
                                 .font(.system(size: 8, weight: .black))
@@ -57,9 +70,21 @@ struct TitleSection: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(isStreaming ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                        .foregroundStyle(color)
+                        .background {
+                            if #available(macOS 26.0, *) {
+                                Capsule()
+                                    .fill(color.opacity(0.12))
+                                    .glassEffect(.regular, in: .capsule)
+                            } else {
+                                Capsule()
+                                    .fill(color.opacity(0.15))
+                            }
+                        }
                         .clipShape(Capsule())
-                        .foregroundStyle(isStreaming ? .green : .orange)
+                        .overlay {
+                            Capsule().stroke(color.opacity(0.15), lineWidth: 0.5)
+                        }
                     }
                 }
                 

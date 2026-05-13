@@ -21,7 +21,7 @@ struct SmartCollectionsHubView: View {
     private var manualCollections: [MediaCollection]
     
     private let smartCategories: [NavigationCategory] = [
-        .releaseRadar, .catchUp, .loved, .binge, .quickBites
+        .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites
     ]
     
     var body: some View {
@@ -171,6 +171,7 @@ struct SmartCollectionsHubView: View {
     private func description(for category: NavigationCategory) -> String {
         switch category {
         case .releaseRadar: return "Recently released episodes and movies from your library."
+        case .smartUpcoming: return "Highly anticipated upcoming premieres and release dates."
         case .catchUp: return "Shows with backlogs and new episodes airing this week."
         case .loved: return "Your absolute favorites, marked with a heart."
         case .binge: return "Shows with multiple unwatched episodes available."

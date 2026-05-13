@@ -35,11 +35,11 @@ struct DiscoveryCard: View {
                     .background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(colorScheme == .dark ? Color.white.opacity(isHovered ? 0.1 : 0.06) : Color(NSColor.windowBackgroundColor))
-                            .shadow(color: colorScheme == .dark ? accent.opacity(isHovered ? 0.25 : 0) : Color.black.opacity(isHovered ? 0.08 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
+                            .shadow(color: Color.black.opacity(isHovered ? 0.15 : 0), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(accent.opacity(colorScheme == .dark ? (isHovered ? 0.45 : 0.15) : (isHovered ? 0.2 : 0.08)), lineWidth: isHovered ? 1.5 : 1)
+                            .stroke(accent.opacity(colorScheme == .dark ? (isHovered ? 0.4 : 0.12) : (isHovered ? 0.2 : 0.08)), lineWidth: isHovered ? 1.5 : 1)
                     }
                 
                 if style == .logo {
@@ -60,7 +60,7 @@ struct DiscoveryCard: View {
     private var logoContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         ZStack {
-            // Normal State: Centered Logo or Name
+            // 1. Logo or Name (Always Visible, Moves Up on Hover)
             Group {
                 if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
                     CachedImage(url: url, targetSize: CGSize(width: 100, height: 50), alwaysPreserveAlpha: true) {
@@ -77,27 +77,27 @@ struct DiscoveryCard: View {
                         .multilineTextAlignment(.center)
                 }
             }
-            .opacity(isHovered ? 0 : 1)
-            .scaleEffect(isHovered ? 0.9 : 1.0)
+            .scaleEffect(isHovered ? 0.7 : 1.0)
+            .offset(y: isHovered ? -22 : 0)
             
-            // Hover State: Horizontal Split Info
+            // 2. Info Split (Appears below logo on hover)
             HStack(spacing: 0) {
                 Text(node.name)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(colorScheme == .dark ? .white : accent)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(accent)
                     .lineLimit(1)
                 
                 Spacer()
                 
                 Text("\(node.count)")
-                    .font(.system(size: 13, weight: .black, design: .monospaced))
-                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundStyle(accent.opacity(0.9))
             }
             .padding(.horizontal, 24)
             .opacity(isHovered ? 1 : 0)
-            .offset(y: isHovered ? 0 : 10)
+            .offset(y: isHovered ? 28 : 45)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
     }
     
     @ViewBuilder
@@ -108,14 +108,14 @@ struct DiscoveryCard: View {
             
             Text(node.name)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(isHovered && colorScheme == .dark ? .white : accent)
+                .foregroundStyle(accent)
                 .lineLimit(1)
             
             if isHovered {
                 Spacer()
                 Text("\(node.count)")
                     .font(.system(size: 13, weight: .black, design: .monospaced))
-                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
+                    .foregroundStyle(accent.opacity(0.9))
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 Spacer()

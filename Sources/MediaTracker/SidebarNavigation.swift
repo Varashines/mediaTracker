@@ -86,7 +86,7 @@ struct SidebarNavigation: View {
                 switch cat {
                 case .home, .all: return .blue
                 case .discover, .smartHub: return .purple
-                case .upcoming: return .orange
+                case .upcoming, .smartUpcoming: return .orange
                 case .movie: return .indigo
                 case .tvShow: return .teal
                 case .releaseRadar: return .pink
@@ -101,7 +101,7 @@ struct SidebarNavigation: View {
         // Only append .fill if the icon name doesn't already contain it and it's a standard symbol
         let iconName: String
         if isSelected {
-            if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" || icon == "calendar.badge.clock" || icon == "sparkles.tv" || icon == "sparkles.rectangle.stack" {
+            if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" || icon == "calendar.badge.clock" || icon == "calendar.badge.sparkles" || icon == "sparkles.tv" || icon == "sparkles.rectangle.stack" {
                 iconName = icon
             } else {
                 iconName = "\(icon).fill"

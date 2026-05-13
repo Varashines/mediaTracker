@@ -7,6 +7,7 @@ enum SmartRule: Codable, Equatable {
     case mediaType(MediaType)
     case state(MediaState)
     case taste(TasteValue)
+    case badge(String)
     
     enum Comparison: String, Codable {
         case equals = "is"

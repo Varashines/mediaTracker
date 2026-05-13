@@ -227,6 +227,14 @@ struct CreateCollectionSheet: View {
                         Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
                         Button("Horror") { smartRules.append(.genre("Horror")) }
                     }
+                    Menu("Badges") {
+                        Button("Premiere") { smartRules.append(.badge("PREMIERE")) }
+                        Button("Binge") { smartRules.append(.badge("BINGE")) }
+                        Button("Binge Drop") { smartRules.append(.badge("BINGE DROP")) }
+                        Button("New") { smartRules.append(.badge("NEW")) }
+                        Button("Finale") { smartRules.append(.badge("FINALE")) }
+                        Button("Returning") { smartRules.append(.badge("RETURNING")) }
+                    }
                 } label: {
                     Label("Add Rule", systemImage: "plus.circle")
                         .font(.system(size: 11, weight: .bold))
@@ -284,6 +292,8 @@ struct CreateCollectionSheet: View {
             Label("Status: \(state.displayName)", systemImage: state.iconName)
         case .taste(let taste):
             Label("Taste: \(taste.rawValue)", systemImage: taste.iconName)
+        case .badge(let b):
+            Label("Badge: \(b)", systemImage: "sparkles")
         }
     }
 }

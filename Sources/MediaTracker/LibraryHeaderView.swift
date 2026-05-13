@@ -27,6 +27,7 @@ struct LibraryHeaderView: View {
         case .discover: return "Find something new to watch."
         case .smartHub: return "Intelligent library automation."
         case .upcoming: return "Release radar and temporal discovery."
+        case .smartUpcoming: return "Tracking the next wave of premieres."
         default: return nil
         }
     }

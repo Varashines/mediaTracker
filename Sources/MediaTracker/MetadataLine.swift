@@ -32,7 +32,7 @@ struct MetadataLine: View {
     private var displayValue: String {
         guard let value = value else { return "" }
         if isLanguage {
-            return Locale.current.localizedString(forLanguageCode: value) ?? value.uppercased()
+            return LanguageUtils.languageName(for: value)
         }
         return value
     }

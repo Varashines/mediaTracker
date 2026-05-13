@@ -29,8 +29,46 @@ struct ForYouCompactCard: View {
                     .frame(width: cardWidth, height: cardHeight)
             }
             
+            // 2. Matching Your Taste Tag (Top Right)
+            if let context = recommendationContext {
+                VStack {
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 10, weight: .black))
+                            Text(context.uppercased())
+                                .font(.system(size: 9, weight: .black))
+                                .tracking(1.2)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(.white)
+                        .background {
+                            if #available(macOS 26.0, *) {
+                                Capsule()
+                                    .fill(.clear)
+                                    .glassEffect(.regular, in: .capsule)
+                                    .opacity(0.9)
+                            } else {
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.9)
+                            }
+                        }
+                        .clipShape(Capsule())
+                        .overlay {
+                            Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5)
+                        }
+                        .shadow(color: .black.opacity(0.15), radius: 5, y: 3)
+                        .padding(16)
+                    }
+                    Spacer()
+                }
+            }
+            
             HStack(spacing: 20) {
-                // 2. Floating Poster (The "Hero" element)
+                // 3. Floating Poster (The "Hero" element)
                 if let poster = metadata.posterURL, let url = URL(string: poster) {
                     CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
@@ -42,7 +80,7 @@ struct ForYouCompactCard: View {
                     .scaleEffect(isHovered ? 1.05 : 1.0)
                 }
 
-                // 3. Info Pane
+                // 4. Info Pane
                 VStack(alignment: .leading, spacing: 8) {
                     Text(metadata.title)
                         .font(.system(size: 22, weight: .black, design: .rounded))
@@ -53,17 +91,6 @@ struct ForYouCompactCard: View {
                     Text(metadata.formattedMetadata)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white.opacity(0.8))
-
-                    if let reason = recommendationContext {
-                        Text(reason)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Capsule())
-                            .padding(.top, 4)
-                    }
                 }
                 .padding(.trailing, 20)
             }
@@ -76,7 +103,7 @@ struct ForYouCompactCard: View {
                 .stroke(Color.white.opacity(isHovered ? 0.3 : 0.1), lineWidth: 1)
         }
         .shadow(color: .black.opacity(isHovered ? 0.4 : 0.2), radius: 15, y: 10)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onHover { isHovered = $0 }
         .task {
