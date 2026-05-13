@@ -205,11 +205,26 @@ actor MediaFilterActor {
         case .alphabetical:
             results.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
         case .newestRelease:
-            results.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
+            results.sort { 
+                if $0.releaseDate != $1.releaseDate {
+                    return ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast)
+                }
+                return $0.title < $1.title
+            }
         case .recentlyAdded:
-            results.sort { ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast) }
+            results.sort { 
+                if $0.dateAdded != $1.dateAdded {
+                    return ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast)
+                }
+                return $0.title < $1.title
+            }
         case .recentInteraction:
-            results.sort { ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast) }
+            results.sort { 
+                if $0.lastInteractionDate != $1.lastInteractionDate {
+                    return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
+                }
+                return $0.title < $1.title
+            }
         }
     }
 
@@ -352,13 +367,29 @@ actor MediaFilterActor {
 
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
         if category == .upcoming || badge == "PREMIERE" {
-            descriptor.sortBy = [SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward)]
+            descriptor.sortBy = [
+                SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward),
+                SortDescriptor<MediaItem>(\.title, order: .forward)
+            ]
         } else {
             switch sortOrder {
-            case .alphabetical: descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
-            case .newestRelease: descriptor.sortBy = [SortDescriptor<MediaItem>(\.releaseDate, order: .reverse)]
-            case .recentlyAdded: descriptor.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
-            case .recentInteraction: descriptor.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+            case .alphabetical: 
+                descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
+            case .newestRelease: 
+                descriptor.sortBy = [
+                    SortDescriptor<MediaItem>(\.releaseDate, order: .reverse),
+                    SortDescriptor<MediaItem>(\.title, order: .forward)
+                ]
+            case .recentlyAdded: 
+                descriptor.sortBy = [
+                    SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
+                    SortDescriptor<MediaItem>(\.title, order: .forward)
+                ]
+            case .recentInteraction: 
+                descriptor.sortBy = [
+                    SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse),
+                    SortDescriptor<MediaItem>(\.title, order: .forward)
+                ]
             }
         }
     }
@@ -682,12 +713,15 @@ actor MediaFilterActor {
 
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
         if category == .home { return [] }
-        var recentDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue != "Wishlist" })
-        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.dateAdded, order: .reverse)]
+        var recentDesc = FetchDescriptor<MediaItem>()
+        recentDesc.sortBy = [
+            SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
+            SortDescriptor<MediaItem>(\.title, order: .forward)
+        ]
         recentDesc.fetchLimit = 15
         
         if let recentItems = try? modelContext.fetch(recentDesc) {
-            return recentItems.prefix(10).map { toMetadata($0) }
+            return recentItems.prefix(12).map { toMetadata($0) }
         }
         return []
     }

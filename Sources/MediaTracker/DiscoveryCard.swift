@@ -58,60 +58,70 @@ struct DiscoveryCard: View {
     
     @ViewBuilder
     private var logoContent: some View {
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         ZStack {
-            if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
-                CachedImage(url: url, targetSize: CGSize(width: 100, height: 50), alwaysPreserveAlpha: true) {
-                    _ in
-                } placeholder: {
-                    Color.secondary.opacity(0.1)
-                }
-                .aspectRatio(contentMode: .fit)
-                .frame(width: isHovered ? 75 : 100, height: isHovered ? 38 : 50)
-                .offset(y: isHovered ? -12 : 0)
-            } else {
-                Text(node.name)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .offset(y: isHovered ? -12 : 0)
-            }
-            
-            VStack(spacing: 2) {
-                if node.logoPath != nil {
+            // Normal State: Centered Logo or Name
+            Group {
+                if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
+                    CachedImage(url: url, targetSize: CGSize(width: 100, height: 50), alwaysPreserveAlpha: true) {
+                        _ in
+                    } placeholder: {
+                        Color.secondary.opacity(0.1)
+                    }
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 50)
+                } else {
                     Text(node.name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(accent)
                         .multilineTextAlignment(.center)
-                        .lineLimit(1)
                 }
-                Text("\(node.count) TITLES")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(isHovered ? (colorScheme == .dark ? .white.opacity(0.8) : themeColor.highContrastAccent(colorScheme: colorScheme)) : .secondary)
             }
+            .opacity(isHovered ? 0 : 1)
+            .scaleEffect(isHovered ? 0.9 : 1.0)
+            
+            // Hover State: Horizontal Split Info
+            HStack(spacing: 0) {
+                Text(node.name)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(colorScheme == .dark ? .white : accent)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Text("\(node.count)")
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
+            }
+            .padding(.horizontal, 24)
             .opacity(isHovered ? 1 : 0)
-            .offset(y: isHovered ? 22 : 35)
-            .scaleEffect(isHovered ? 1.0 : 0.9)
+            .offset(y: isHovered ? 0 : 10)
         }
-        .padding(15)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
     }
     
     @ViewBuilder
     private var textContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-        ZStack {
+        HStack(spacing: 0) {
+            if !isHovered { Spacer() }
+            
             Text(node.name)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(isHovered && colorScheme == .dark ? .white : accent)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 8)
-                .offset(y: isHovered ? -10 : 0)
-
-            Text("\(node.count) ITEMS")
-                .font(.system(size: 8, weight: .black))
-                .foregroundStyle(isHovered && colorScheme == .dark ? .white.opacity(0.9) : .secondary)
-                .tracking(0.5)
-                .opacity(isHovered ? 1 : 0)
-                .offset(y: isHovered ? 12 : 20)
+                .lineLimit(1)
+            
+            if isHovered {
+                Spacer()
+                Text("\(node.count)")
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                Spacer()
+            }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        .padding(.horizontal, isHovered ? 24 : 12)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
     }
 }

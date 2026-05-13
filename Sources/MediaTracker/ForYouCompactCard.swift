@@ -53,6 +53,17 @@ struct ForYouCompactCard: View {
                     Text(metadata.formattedMetadata)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white.opacity(0.8))
+
+                    if let reason = recommendationContext {
+                        Text(reason)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Capsule())
+                            .padding(.top, 4)
+                    }
                 }
                 .padding(.trailing, 20)
             }
