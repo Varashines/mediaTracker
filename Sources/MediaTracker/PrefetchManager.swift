@@ -18,14 +18,17 @@ class PrefetchManager {
         prefetchTask?.cancel()
         
         prefetchTask = Task {
-            // Give the main thread a breath
-            try? await Task.sleep(for: .milliseconds(50))
             if Task.isCancelled { return }
             
             ImageCache.shared.prewarmImages(urls: newURLs, targetSize: targetSize, priority: .low)
             
-            // Maintain a small set of recently prefetched to avoid thrashing
-            lastPrefetchedURLs = Set(urls)
+            // Maintain a larger bounded set of recently prefetched (250 items)
+            let current = Set(urls)
+            if lastPrefetchedURLs.count > 250 {
+                lastPrefetchedURLs = current
+            } else {
+                lastPrefetchedURLs.formUnion(current)
+            }
         }
     }
     

@@ -372,7 +372,7 @@ final class BingeLogicTests: XCTestCase {
         XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE")
         
         // Now mark ep4 as watched and sync again
-        ep4.isWatched = true
+        ep4.markWatched(true)
         ep4.lastWatchedDate = fixedNow
         try context.save()
         item.syncCachedProperties(now: fixedNow)

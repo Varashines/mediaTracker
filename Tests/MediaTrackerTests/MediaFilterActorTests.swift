@@ -24,7 +24,7 @@ final class MediaFilterActorTests: XCTestCase {
         let item2 = MediaItem(id: "2", title: "Active New", overview: "", type: .tvShow)
         item2.stateValue = "Active"
         item2.lastInteractionDate = Date()
-        item2.releaseDate = Date().addingTimeInterval(-500000) // Older (RECENT)
+        item2.releaseDate = Date().addingTimeInterval(-20 * 86400) // Outside 14-day window
         context.insert(item2)
         
         // 3. Active, NEW, newest interaction

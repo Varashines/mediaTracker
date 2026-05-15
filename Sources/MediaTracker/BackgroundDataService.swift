@@ -178,11 +178,11 @@ actor BackgroundDataService {
                             }
                         }
                     }
-                    tv.recalculateCachedProperties(triggerSync: true)
+                    tv.recalculateCachedProperties(triggerSync: true, force: true)
                 }
             }
             
-            item.syncCachedProperties()
+            item.syncCachedProperties(force: true)
             item.updateSearchableText()
         }
         
@@ -247,7 +247,7 @@ actor BackgroundDataService {
         print("🧬 Deep Heal: Starting genre deconstruction for \(items.count) items...")
         
         for item in items {
-            item.syncCachedProperties()
+            item.syncCachedProperties(force: true)
             item.updateSearchableText()
         }
         
@@ -332,7 +332,7 @@ actor BackgroundDataService {
             
             if !success { return false }
             
-            item.syncCachedProperties()
+            item.syncCachedProperties(force: true)
             item.updateSearchableText()
             
             // Phase 5: Notification Scheduling
@@ -405,11 +405,11 @@ actor BackgroundDataService {
                     }
                 }
             }
-            tv.recalculateCachedProperties(triggerSync: true)
+            tv.recalculateCachedProperties(triggerSync: true, force: true)
         }
         
         item.lastInteractionDate = Date()
-        item.syncCachedProperties()
+        item.syncCachedProperties(force: true)
         item.updateSearchableText()
         item.checkOverallCompletion()
         
@@ -615,7 +615,7 @@ actor BackgroundDataService {
                         print("⚠️ Failed to sync season \(sNum) for show \(tmdbID): \(error)")
                     }
                 }
-                tvDetails.recalculateCachedProperties()
+                tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
             
             item.lastUpdated = Date()

@@ -48,8 +48,8 @@ final class TVShowDetails {
                 totalCount: totalEpisodesCount,
                 watchedCount: watchedEpisodesCount,
                 remainingCount: remainingEpisodesCount ?? 0,
-                firstUnwatched: nil, // Note: firstUnwatched still requires a scan if needed
-                totalRuntime: 0 // Note: totalRuntime also requires a scan if needed
+                firstUnwatched: findFirstUnwatched(),
+                totalRuntime: item?.cachedRuntime ?? 0
             )
         }
 
@@ -57,29 +57,30 @@ final class TVShowDetails {
         var watched = 0
         var aired = 0
         var runtime = 0
-        var firstUnwatched: TVEpisode? = nil
+        var firstUnwatchedEpisode: TVEpisode? = nil
         
         // Ensure seasons are sorted for consistent traversal
         let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
         
         for season in sortedSeasons {
-            // Update individual season denormalized counts
             let seasonEpisodes = season.episodes
+            // Sync season counts
             season.totalEpisodesCount = seasonEpisodes.count
             season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
 
             // Standard progress calculations usually exclude Specials (Season 0)
             if season.seasonNumber > 0 {
+                total += season.totalEpisodesCount
+                watched += season.watchedEpisodesCount
+                
                 // Ensure episodes are sorted
                 let sortedEpisodes = seasonEpisodes.sorted { $0.episodeNumber < $1.episodeNumber }
                 
                 for ep in sortedEpisodes {
-                    total += 1
                     if ep.isWatched {
-                        watched += 1
                         runtime += ep.runtime ?? 0
-                    } else if firstUnwatched == nil {
-                        firstUnwatched = ep
+                    } else if firstUnwatchedEpisode == nil {
+                        firstUnwatchedEpisode = ep
                     }
                     
                     if let airDate = ep.airDateValue, airDate <= now {
@@ -100,17 +101,45 @@ final class TVShowDetails {
             totalCount: total,
             watchedCount: watched,
             remainingCount: remaining,
-            firstUnwatched: firstUnwatched,
+            firstUnwatched: firstUnwatchedEpisode,
             totalRuntime: runtime
         )
     }
 
-    func refreshCounts() {
-        _ = calculateProgress()
+    /// Optimized lookup for the next episode to watch
+    private func findFirstUnwatched() -> TVEpisode? {
+        if let context = modelContext {
+            let showID = self.tmdbID
+            var descriptor = FetchDescriptor<TVEpisode>(
+                predicate: #Predicate { $0.showID == showID && !$0.isWatched && $0.seasonNumber > 0 },
+                sortBy: [SortDescriptor(\.seasonNumber), SortDescriptor(\.episodeNumber)]
+            )
+            descriptor.fetchLimit = 1
+            if let first = try? context.fetch(descriptor).first {
+                return first
+            }
+        }
+        
+        // Fallback to relationship scan if context is unavailable
+        return seasons
+            .filter { $0.seasonNumber > 0 }
+            .flatMap { $0.episodes }
+            .filter { !$0.isWatched }
+            .sorted { 
+                if $0.seasonNumber != $1.seasonNumber {
+                    return $0.seasonNumber < $1.seasonNumber
+                }
+                return $0.episodeNumber < $1.episodeNumber
+            }
+            .first
+    }
+
+    func refreshCounts(force: Bool = false) {
+        _ = calculateProgress(forceRecalculate: force)
     }
     
-    func recalculateCachedProperties(triggerSync: Bool = true) {
-        _ = calculateProgress()
-        if triggerSync { item?.syncCachedProperties() }
+    func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
+        _ = calculateProgress(forceRecalculate: force)
+        if triggerSync { item?.syncCachedProperties(force: force) }
     }
 }

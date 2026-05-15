@@ -10,7 +10,7 @@ struct ImageContainer: @unchecked Sendable {
 
 @MainActor
 @Observable
-class ImageCache {
+class ImageCache: NSObject {
     static let shared = ImageCache()
     
     // Performance: Prioritize small memory cache for 8GB M1 Macs
@@ -35,10 +35,10 @@ class ImageCache {
     
     private let dbContainer: ModelContainer
 
-    private init() {
-        // Cost-based memory limit (increased to 256MB for smoother grid scrolling)
+    private override init() {
+        // Cost-based memory limit (Restored to 256MB for grid responsiveness)
         memoryCache.totalCostLimit = 256 * 1024 * 1024
-        memoryCache.countLimit = 1000 // Allow more small thumbnails in memory
+        memoryCache.countLimit = 1500 // Allow more small thumbnails in memory
         
         // Initialize SwiftData SQLite DB for images
         let schema = Schema([ImageCacheEntity.self])
@@ -49,6 +49,11 @@ class ImageCache {
         } catch {
             fatalError("CRITICAL: Failed to initialize ImageCache ModelContainer. Error: \(error)")
         }
+        
+        super.init()
+        
+        // Phase 3 Fix: Delegate to clean up urlToKeys leak
+        self.memoryCache.delegate = self
         
         // Phase 2 Optimization: Asynchronous Disk Indexing
         let container = self.dbContainer
@@ -82,9 +87,9 @@ class ImageCache {
     private func performMemoryCompaction(level: MemoryPressureLevel) {
         switch level {
         case .warning:
-            // Prune to 40MB
-            self.memoryCache.totalCostLimit = 40 * 1024 * 1024
-            self.memoryCache.countLimit = 50
+            // Prune to 80MB (was 40MB) - Balanced for 8GB RAM
+            self.memoryCache.totalCostLimit = 80 * 1024 * 1024
+            self.memoryCache.countLimit = 150
         case .critical:
             self.memoryCache.totalCostLimit = 10 * 1024 * 1024
             self.memoryCache.countLimit = 10
@@ -523,6 +528,36 @@ class ImageCache {
 
     enum ImagePriority {
         case low, normal, critical
+    }
+}
+
+extension ImageCache: NSCacheDelegate {
+    nonisolated func cache(_ cache: NSCache<AnyObject, AnyObject>, willEvictObject obj: Any) {
+        // Phase 3 Fix: Clean up reverse lookup keys when NSCache evicts objects
+        // This prevents the urlToKeys dictionary from growing indefinitely.
+        Task { @MainActor in
+            // Finding the original URL from the specific cache key
+            // Specific key format: "URL" or "URL_WIDTHxHEIGHT"
+            for (url, keys) in urlToKeys {
+                var updatedKeys = keys
+                let keysToRemove = keys.filter { k in
+                    // If we can't find the object in cache for this key, it might be the one being evicted
+                    // Note: willEvictObject is called JUST BEFORE eviction, so checking presence is tricky.
+                    // Instead, we just prune any key that no longer points to a valid cached object.
+                    memoryCache.object(forKey: k as NSString) == nil
+                }
+                
+                for k in keysToRemove {
+                    updatedKeys.remove(k)
+                }
+                
+                if updatedKeys.isEmpty {
+                    urlToKeys.removeValue(forKey: url)
+                } else {
+                    urlToKeys[url] = updatedKeys
+                }
+            }
+        }
     }
 }
 

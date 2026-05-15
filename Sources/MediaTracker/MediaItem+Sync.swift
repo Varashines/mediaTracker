@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 extension MediaItem {
-    func syncCachedProperties(now: Date = Date()) {
+    func syncCachedProperties(now: Date = Date(), force: Bool = false) {
         // Phase 4 Optimization: Avoid relationship faulting cascades during sync
         // If details aren't loaded, don't force a sync unless explicitly requested.
         let currentState = state ?? .wishlist
@@ -12,7 +12,7 @@ extension MediaItem {
         if type == .movie {
             syncMovieProperties()
         } else if type == .tvShow {
-            syncTVProperties(now: now, currentState: currentState)
+            syncTVProperties(now: now, currentState: currentState, forceRecalculate: force)
         }
 
         // Phase 1 Modularization: Use Centralized Badge Engine
@@ -81,7 +81,7 @@ extension MediaItem {
         self.cachedRuntime = movie.runtime
     }
 
-    func syncTVProperties(now: Date, currentState: MediaState) {
+    func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
         guard let tv = tvShowDetails else { return }
         
         // Force consistency: If series is marked as Completed, all episodes MUST be watched (if enabled).
@@ -100,8 +100,8 @@ extension MediaItem {
         self.cachedNetwork = tv.network
         self.cachedNetworkLogoPath = tv.networkLogoPath
         
-        // Use Unified Logic - Always force recalculate during sync to heal any drift
-        let progressResult = tv.calculateProgress(now: now, forceRecalculate: true)
+        // Use Unified Logic - Only force recalculate if explicitly requested to heal drift
+        let progressResult = tv.calculateProgress(now: now, forceRecalculate: forceRecalculate)
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount

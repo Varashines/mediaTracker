@@ -742,7 +742,8 @@ actor MediaFilterActor {
     }
 
     func allLibraryTMDBIDs() throws -> Set<String> {
-        let descriptor = FetchDescriptor<MediaItem>()
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.propertiesToFetch = [\.id]
         let items = try modelContext.fetch(descriptor)
         return Set(items.map { $0.id })
     }

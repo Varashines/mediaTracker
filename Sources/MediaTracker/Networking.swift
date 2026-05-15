@@ -37,7 +37,7 @@ actor APIClient {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(
-            memoryCapacity: 64 * 1024 * 1024,
+            memoryCapacity: 16 * 1024 * 1024,
             diskCapacity: 256 * 1024 * 1024,
             directory: nil
         )

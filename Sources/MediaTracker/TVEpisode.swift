@@ -33,8 +33,27 @@ final class TVEpisode {
             } else {
                 self.lastWatchedDate = nil
             }
-            season?.watchedEpisodesCount += (watched ? 1 : -1)
-            season?.tvShowDetails?.watchedEpisodesCount += (watched ? 1 : -1)
+            
+            let delta = watched ? 1 : -1
+            season?.watchedEpisodesCount += delta
+            
+            if let tv = season?.tvShowDetails {
+                tv.watchedEpisodesCount += delta
+                
+                // Update total watched runtime incrementally on the MediaItem
+                if let item = tv.item {
+                    let epRuntime = self.runtime ?? 0
+                    let currentRuntime = item.cachedRuntime ?? 0
+                    item.cachedRuntime = max(0, currentRuntime + (watched ? epRuntime : -epRuntime))
+                }
+                
+                // Only adjust remaining count if the episode has already aired
+                let now = Date()
+                if let airDate = airDateValue, airDate <= now {
+                    let oldRemaining = tv.remainingEpisodesCount ?? 0
+                    tv.remainingEpisodesCount = max(0, oldRemaining - delta)
+                }
+            }
         }
     }
     
