@@ -240,6 +240,33 @@ actor BackgroundDataService {
         }
     }
 
+    func deepHealGenres() async {
+        let descriptor = FetchDescriptor<MediaItem>()
+        guard let items = try? modelContext.fetch(descriptor) else { return }
+        
+        print("🧬 Deep Heal: Starting genre deconstruction for \(items.count) items...")
+        
+        for item in items {
+            item.syncCachedProperties()
+            item.updateSearchableText()
+        }
+        
+        do {
+            try modelContext.save()
+            print("✅ Deep Heal: Genre deconstruction complete.")
+            
+            // Re-sync discovery entities to reflect new atomic genres
+            let sync = DiscoverySyncService(modelContainer: modelContext.container)
+            await sync.syncLibrary(force: true)
+            
+            await MainActor.run {
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            }
+        } catch {
+            print("❌ Deep Heal: Failed to save context: \(error)")
+        }
+    }
+
     func refreshMetadata(for itemIDs: [String], metadataOnly: Bool = false, force: Bool = false) async {
         if isThermalThrottled {
             print("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.")

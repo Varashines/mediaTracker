@@ -13,6 +13,13 @@ struct ForYouCompactCard: View {
     private let cardWidth: CGFloat = 420
     private let cardHeight: CGFloat = 200
 
+    private var themeColor: Color {
+        if let hex = metadata.themeColorHex, let color = Color(hex: hex) {
+            return color
+        }
+        return .accentColor
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             // 1. Background Layer (Backdrop with Glass)
@@ -23,9 +30,9 @@ struct ForYouCompactCard: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
                 .clipped()
-                .overlay(Color.black.opacity(isHovered ? 0.2 : 0.4))
+                .overlay(Color.black.opacity(isHovered ? 0.25 : 0.45)) // Slightly darker for better text contrast
             } else {
-                Rectangle().fill(Color.black.opacity(0.8))
+                Rectangle().fill(Color.black.opacity(0.85))
                     .frame(width: cardWidth, height: cardHeight)
             }
             
@@ -38,29 +45,22 @@ struct ForYouCompactCard: View {
                             Image(systemName: "wand.and.stars")
                                 .font(.system(size: 10, weight: .black))
                             Text(context.uppercased())
-                                .font(.system(size: 9, weight: .black))
+                                .font(.system(size: 10, weight: .black)) // Slightly larger
                                 .tracking(1.2)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .foregroundStyle(.white)
                         .background {
-                            if #available(macOS 26.0, *) {
-                                Capsule()
-                                    .fill(.clear)
-                                    .glassEffect(.regular, in: .capsule)
-                                    .opacity(0.9)
-                            } else {
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.9)
-                            }
+                            Capsule()
+                                .fill(themeColor.opacity(0.3)) // Stronger theme tint
+                                .background(.ultraThinMaterial)
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5)
+                            Capsule().stroke(themeColor.opacity(0.5), lineWidth: 1) // Added defined border
                         }
-                        .shadow(color: .black.opacity(0.15), radius: 5, y: 3)
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
                         .padding(16)
                     }
                     Spacer()

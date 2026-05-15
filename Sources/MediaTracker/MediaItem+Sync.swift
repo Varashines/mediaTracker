@@ -74,7 +74,7 @@ extension MediaItem {
 
     func syncMovieProperties() {
         guard let movie = movieDetails else { return }
-        self.cachedGenres = movie.genres
+        self.cachedGenres = GenreMapper.standardize(movie.genres)
         self.cachedCreators = movie.creators
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
@@ -94,7 +94,7 @@ extension MediaItem {
             }
         }
 
-        self.cachedGenres = tv.genres
+        self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
         self.cachedNetwork = tv.network

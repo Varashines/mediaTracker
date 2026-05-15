@@ -438,6 +438,14 @@ struct ContentView: View {
             performUpdate()
             checkAndRepairMissingMetadata()
             checkAndRepairStaleMetadata()
+            
+            // Phase 6: Genre Deconstruction Migration
+            let migrated = UserDefaults.standard.bool(forKey: "genre_deconstruction_v1")
+            if !migrated {
+                let service = BackgroundDataService(modelContainer: modelContext.container)
+                await service.deepHealGenres()
+                UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
+            }
         }
     }
 

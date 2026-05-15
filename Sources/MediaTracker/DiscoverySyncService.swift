@@ -123,7 +123,7 @@ actor DiscoverySyncService {
                 }
                 
                 // Count Genres
-                for genre in item.cachedGenres {
+                for genre in GenreMapper.standardize(item.cachedGenres) {
                     genreCounts[genre, default: 0] += 1
                 }
                 
@@ -221,7 +221,7 @@ actor DiscoverySyncService {
             }
         }
         
-        for genre in item.cachedGenres {
+        for genre in GenreMapper.standardize(item.cachedGenres) {
             let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count += 1
@@ -275,7 +275,7 @@ actor DiscoverySyncService {
             }
         }
         
-        for genre in genres {
+        for genre in GenreMapper.standardize(genres) {
             let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count -= 1

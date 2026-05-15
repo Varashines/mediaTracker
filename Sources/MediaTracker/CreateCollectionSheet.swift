@@ -222,10 +222,23 @@ struct CreateCollectionSheet: View {
                     }
                     Menu("Genre") {
                         Button("Action") { smartRules.append(.genre("Action")) }
+                        Button("Adventure") { smartRules.append(.genre("Adventure")) }
+                        Button("Animation") { smartRules.append(.genre("Animation")) }
                         Button("Comedy") { smartRules.append(.genre("Comedy")) }
+                        Button("Crime") { smartRules.append(.genre("Crime")) }
+                        Button("Documentary") { smartRules.append(.genre("Documentary")) }
                         Button("Drama") { smartRules.append(.genre("Drama")) }
-                        Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
+                        Button("Family") { smartRules.append(.genre("Family")) }
+                        Button("Fantasy") { smartRules.append(.genre("Fantasy")) }
+                        Button("History") { smartRules.append(.genre("History")) }
                         Button("Horror") { smartRules.append(.genre("Horror")) }
+                        Button("Music") { smartRules.append(.genre("Music")) }
+                        Button("Mystery") { smartRules.append(.genre("Mystery")) }
+                        Button("Romance") { smartRules.append(.genre("Romance")) }
+                        Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
+                        Button("Thriller") { smartRules.append(.genre("Thriller")) }
+                        Button("War") { smartRules.append(.genre("War")) }
+                        Button("Western") { smartRules.append(.genre("Western")) }
                     }
                     Menu("Badges") {
                         Button("Premiere") { smartRules.append(.badge("PREMIERE")) }
