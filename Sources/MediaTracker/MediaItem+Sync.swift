@@ -62,7 +62,7 @@ extension MediaItem {
                             order: member.order
                         ))
                     }
-                    if uniqueList.count >= 10 { break }
+                    if uniqueList.count >= 15 { break }
                 }
                 
                 self.storedCast = uniqueList

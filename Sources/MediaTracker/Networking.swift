@@ -248,7 +248,7 @@ actor APIClient {
     }
 
     private nonisolated func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
-        let cast = details.credits?.cast.prefix(10).map { 
+        let cast = details.credits?.cast.prefix(15).map { 
             CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
         } ?? []
         
@@ -308,12 +308,12 @@ actor APIClient {
         if let aggregate = d.aggregate_credits {
             // Sort by episode count descending to ensure leads (like Steve Carell) appear first
             let sortedAggregate = aggregate.cast.sorted { $0.total_episode_count > $1.total_episode_count }
-            cast = sortedAggregate.prefix(10).map { member in
+            cast = sortedAggregate.prefix(15).map { member in
                 let character = member.roles.first?.character ?? "Unknown"
                 return CastMemberResult(name: member.name, character: character, profilePath: member.profile_path, order: member.order)
             }
         } else {
-            cast = d.credits?.cast.prefix(10).map { 
+            cast = d.credits?.cast.prefix(15).map { 
                 CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
             } ?? []
         }

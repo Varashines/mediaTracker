@@ -101,7 +101,7 @@ struct TVTrackingView: View {
     }
 
     private func autoFetchIfNeeded(season: TVSeason) {
-        if season.totalEpisodesCount == 0 && season.episodeCount > 0 && !isRefreshing {
+        if season.totalEpisodesCount == 0 && season.episodes.isEmpty && season.episodeCount > 0 && !isRefreshing {
             onSeasonSelected?(season)
         }
     }

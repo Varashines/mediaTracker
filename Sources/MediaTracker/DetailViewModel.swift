@@ -130,7 +130,7 @@ class DetailViewModel {
     private func prewarmCast() {
         guard item.modelContext != nil else { return }
         let cast = item.storedCast
-        let urls = cast.prefix(6).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
+        let urls = cast.prefix(15).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
         if !urls.isEmpty {
             ImageCache.shared.prewarmImages(urls: urls, targetSize: CGSize(width: 120, height: 180), priority: .low)
         }
@@ -253,7 +253,7 @@ class DetailViewModel {
                         episode.isWatched = markAsWatched
                     }
                     
-                    self.item.tvShowDetails?.recalculateCachedProperties()
+                    self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
                     self.item.updateSearchableText()
                     self.checkOverallCompletion()
                 }

@@ -233,7 +233,7 @@ actor LibraryStatsActor {
                     updateTaste(&taste.languageTaste, lang, nil)
                 }
 
-                for actor in item.displayCast.prefix(8) {
+                for actor in item.displayCast.prefix(15) {
                     updateTaste(&taste.actorTaste, actor.name, actor.profileURL)
                 }
             }
