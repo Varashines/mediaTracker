@@ -235,19 +235,19 @@ actor MediaFilterActor {
         let hasSearch = !searchToken.isEmpty
 
         switch category {
-        case .upcoming: return buildUpcomingPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .inProgress: return buildInProgressPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .watchlist: return buildWatchlistPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .loved: return buildLovedPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .completed: return buildCompletedPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .archive: return buildArchivePredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .disliked: return buildDislikedPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .binge: return buildBingePredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .movie, .tvShow: return buildTypePredicate(typeString: category.rawValue, hasSearch: hasSearch, searchToken: searchToken)
-        case .quickBites: return buildQuickBitesPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .catchUp: return buildCatchUpPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .stalled: return buildStalledPredicate(hasSearch: hasSearch, searchToken: searchToken)
-        case .smartUpcoming: return buildSmartUpcomingPredicate(hasSearch: hasSearch, searchToken: searchToken)
+        case .upcoming: return buildUpcomingPredicate()
+        case .inProgress: return buildInProgressPredicate()
+        case .watchlist: return buildWatchlistPredicate()
+        case .loved: return buildLovedPredicate()
+        case .completed: return buildCompletedPredicate()
+        case .archive: return buildArchivePredicate()
+        case .disliked: return buildDislikedPredicate()
+        case .binge: return buildBingePredicate()
+        case .movie, .tvShow: return buildTypePredicate(typeString: category.rawValue)
+        case .quickBites: return buildQuickBitesPredicate()
+        case .catchUp: return buildCatchUpPredicate()
+        case .stalled: return buildStalledPredicate()
+        case .smartUpcoming: return buildSmartUpcomingPredicate()
         case .releaseRadar:
             // Complex logical ORs in Predicates often cause compiler timeouts.
             // We'll fetch all and refine in Swift.
@@ -265,117 +265,62 @@ actor MediaFilterActor {
         }
     }
 
-    private func buildUpcomingPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+    private func buildUpcomingPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.storedIsUpcoming == true }
+    }
+
+    private func buildInProgressPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
+    }
+
+    private func buildWatchlistPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
+    }
+
+    private func buildLovedPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
+    }
+
+    private func buildCompletedPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
+    }
+
+    private func buildArchivePredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
+    }
+
+    private func buildDislikedPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
+    }
+
+    private func buildBingePredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
+    }
+
+    private func buildTypePredicate(typeString: String) -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.typeValue == typeString }
+    }
+
+    private func buildQuickBitesPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in 
+            (item.cachedRuntime ?? 0) > 0 || (item.cachedEpisodeRuntime ?? 0) > 0
         }
     }
 
-    private func buildInProgressPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.stateValue == "Active" && item.storedIsUpcoming == false }
-        }
+    private func buildCatchUpPredicate() -> Predicate<MediaItem> {
+        return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
     }
 
-    private func buildWatchlistPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.stateValue == "Wishlist" && item.storedIsUpcoming == false }
-        }
-    }
-
-    private func buildLovedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.tasteValue == "Love" && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.tasteValue == "Love" }
-        }
-    }
-
-    private func buildCompletedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.stateValue == "Completed" && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.stateValue == "Completed" }
-        }
-    }
-
-    private func buildArchivePredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in (item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching") && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.stateValue == "On Hold" || item.stateValue == "Dropped" || item.stateValue == "Re-watching" }
-        }
-    }
-
-    private func buildDislikedPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.tasteValue == "Dislike" }
-        }
-    }
-
-    private func buildBingePredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in (item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE") && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BINGE DROP" || item.storedSmartBadgeLabel == "BINGE" }
-        }
-    }
-
-    private func buildTypePredicate(typeString: String, hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.typeValue == typeString && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.typeValue == typeString }
-        }
-    }
-
-    private func buildQuickBitesPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in 
-                ((item.cachedRuntime ?? 0) > 0 || (item.cachedEpisodeRuntime ?? 0) > 0) &&
-                item.searchableText.localizedStandardContains(searchToken)
-            }
-        } else {
-            return #Predicate<MediaItem> { item in 
-                (item.cachedRuntime ?? 0) > 0 || (item.cachedEpisodeRuntime ?? 0) > 0
-            }
-        }
-    }
-
-    private func buildCatchUpPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
-        }
-    }
-
-    private func buildStalledPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+    private func buildStalledPredicate() -> Predicate<MediaItem> {
         let active = "Active"
         let onHold = "On Hold"
         let dropped = "Dropped"
-        if hasSearch {
-            return #Predicate<MediaItem> { item in (item.stateValue == active || item.stateValue == onHold || item.stateValue == dropped) && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.stateValue == active || item.stateValue == onHold || item.stateValue == dropped }
-        }
+        return #Predicate<MediaItem> { item in item.stateValue == active || item.stateValue == onHold || item.stateValue == dropped }
     }
 
-    private func buildSmartUpcomingPredicate(hasSearch: Bool, searchToken: String) -> Predicate<MediaItem> {
+    private func buildSmartUpcomingPredicate() -> Predicate<MediaItem> {
         let premiere = "PREMIERE"
-        if hasSearch {
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == premiere && item.searchableText.localizedStandardContains(searchToken) }
-        } else {
-            return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == premiere }
-        }
+        return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == premiere }
     }
 
     private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
@@ -527,16 +472,21 @@ actor MediaFilterActor {
     private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
         // 1. High Priority Fetch: Split into focused fetches to avoid compiler timeouts and starvation
         
-        // Pass A: Items already marked as "NEW", "BINGE DROP", "FINALE", or "PREMIERE" (Across entire library)
+        // Pass A1: Items marked as "NEW" or "BINGE DROP"
         let newLabel = "NEW"
         let bingeLabel = "BINGE DROP"
+        let dislikeLabel = "Dislike"
+        let pStreamingA = #Predicate<MediaItem> { item in
+            (item.storedSmartBadgeLabel == newLabel || 
+             item.storedSmartBadgeLabel == bingeLabel) && 
+            item.tasteValue != dislikeLabel
+        }
+        
+        // Pass A2: Items marked as "FINALE" or "PREMIERE"
         let finaleLabel = "FINALE"
         let premiereLabel = "PREMIERE"
-        let dislikeLabel = "Dislike"
-        let pStreaming = #Predicate<MediaItem> { item in
-            (item.storedSmartBadgeLabel == newLabel || 
-             item.storedSmartBadgeLabel == bingeLabel ||
-             item.storedSmartBadgeLabel == finaleLabel ||
+        let pStreamingB = #Predicate<MediaItem> { item in
+            (item.storedSmartBadgeLabel == finaleLabel || 
              item.storedSmartBadgeLabel == premiereLabel) && 
             item.tasteValue != dislikeLabel
         }
@@ -561,9 +511,13 @@ actor MediaFilterActor {
             item.stateValue == "Re-watching" && item.tasteValue != "Dislike"
         }
         
-        var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
-        descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreaming.fetchLimit = 100 // Increased limit
+        var descStreamingA = FetchDescriptor<MediaItem>(predicate: pStreamingA)
+        descStreamingA.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descStreamingA.fetchLimit = 100
+        
+        var descStreamingB = FetchDescriptor<MediaItem>(predicate: pStreamingB)
+        descStreamingB.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descStreamingB.fetchLimit = 100
         
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
@@ -577,7 +531,10 @@ actor MediaFilterActor {
         descRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descRewatching.fetchLimit = 50
         
-        let streamingItems = try modelContext.fetch(descStreaming)
+        let streamingItemsA = try modelContext.fetch(descStreamingA)
+        let streamingItemsB = try modelContext.fetch(descStreamingB)
+        let streamingItems = streamingItemsA + streamingItemsB
+        
         let transitionItems = try modelContext.fetch(descTransition)
         let activeItemsRaw = try modelContext.fetch(descActive)
         let rewatchingItems = try modelContext.fetch(descRewatching)

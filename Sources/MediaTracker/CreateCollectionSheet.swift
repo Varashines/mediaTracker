@@ -121,24 +121,7 @@ struct CreateCollectionSheet: View {
                             .frame(width: 180)
                     }
                     
-                    ScrollView {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
-                            ForEach(filteredIcons, id: \.self) { iconName in
-                                Image(systemName: iconName)
-                                    .font(.title3)
-                                    .frame(width: 44, height: 44)
-                                    .background(icon == iconName ? Color.blue.gradient : Color.primary.opacity(0.05).gradient)
-                                    .foregroundStyle(icon == iconName ? .white : .primary)
-                                    .cornerRadius(14)
-                                    .onTapGesture {
-                                        withAnimation(.spring) { icon = iconName }
-                                    }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(height: 180)
+                    IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
                 }
             }
             
@@ -199,59 +182,7 @@ struct CreateCollectionSheet: View {
                     .foregroundStyle(.secondary)
                     .kerning(1)
                 Spacer()
-                Menu {
-                    Menu("Media Type") {
-                        Button("Only Movies") { smartRules.append(.mediaType(.movie)) }
-                        Button("Only TV Shows") { smartRules.append(.mediaType(.tvShow)) }
-                    }
-                    Menu("Status") {
-                        Button("In Progress") { smartRules.append(.state(.active)) }
-                        Button("Watchlist") { smartRules.append(.state(.wishlist)) }
-                        Button("Completed") { smartRules.append(.state(.completed)) }
-                    }
-                    Menu("Taste") {
-                        Button("Loved") { smartRules.append(.taste(.love)) }
-                        Button("Liked") { smartRules.append(.taste(.like)) }
-                    }
-                    Menu("Release Year") {
-                        Button("Exactly 2024") { smartRules.append(.releaseYear(2024, .equals)) }
-                        Button("After 2020") { smartRules.append(.releaseYear(2020, .after)) }
-                        Button("Before 2000") { smartRules.append(.releaseYear(2000, .before)) }
-                        Button("90s (1990-1999)") { smartRules.append(.releaseYearRange(1990, 1999)) }
-                        Button("80s (1980-1989)") { smartRules.append(.releaseYearRange(1980, 1989)) }
-                    }
-                    Menu("Genre") {
-                        Button("Action") { smartRules.append(.genre("Action")) }
-                        Button("Adventure") { smartRules.append(.genre("Adventure")) }
-                        Button("Animation") { smartRules.append(.genre("Animation")) }
-                        Button("Comedy") { smartRules.append(.genre("Comedy")) }
-                        Button("Crime") { smartRules.append(.genre("Crime")) }
-                        Button("Documentary") { smartRules.append(.genre("Documentary")) }
-                        Button("Drama") { smartRules.append(.genre("Drama")) }
-                        Button("Family") { smartRules.append(.genre("Family")) }
-                        Button("Fantasy") { smartRules.append(.genre("Fantasy")) }
-                        Button("History") { smartRules.append(.genre("History")) }
-                        Button("Horror") { smartRules.append(.genre("Horror")) }
-                        Button("Music") { smartRules.append(.genre("Music")) }
-                        Button("Mystery") { smartRules.append(.genre("Mystery")) }
-                        Button("Romance") { smartRules.append(.genre("Romance")) }
-                        Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
-                        Button("Thriller") { smartRules.append(.genre("Thriller")) }
-                        Button("War") { smartRules.append(.genre("War")) }
-                        Button("Western") { smartRules.append(.genre("Western")) }
-                    }
-                    Menu("Badges") {
-                        Button("Premiere") { smartRules.append(.badge("PREMIERE")) }
-                        Button("Binge") { smartRules.append(.badge("BINGE")) }
-                        Button("Binge Drop") { smartRules.append(.badge("BINGE DROP")) }
-                        Button("New") { smartRules.append(.badge("NEW")) }
-                        Button("Finale") { smartRules.append(.badge("FINALE")) }
-                        Button("Returning") { smartRules.append(.badge("RETURNING")) }
-                    }
-                } label: {
-                    Label("Add Rule", systemImage: "plus.circle")
-                        .font(.system(size: 11, weight: .bold))
-                }
+                RuleAddMenu(smartRules: $smartRules)
             }
             
             if smartRules.isEmpty {
@@ -307,6 +238,92 @@ struct CreateCollectionSheet: View {
             Label("Taste: \(taste.rawValue)", systemImage: taste.iconName)
         case .badge(let b):
             Label("Badge: \(b)", systemImage: "sparkles")
+        }
+    }
+}
+
+struct IconPickerGridView: View {
+    @Binding var selectedIcon: String
+    let filteredIcons: [String]
+    
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                ForEach(filteredIcons, id: \.self) { iconName in
+                    Image(systemName: iconName)
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .background(selectedIcon == iconName ? Color.blue.gradient : Color.primary.opacity(0.05).gradient)
+                        .foregroundStyle(selectedIcon == iconName ? .white : .primary)
+                        .cornerRadius(14)
+                        .onTapGesture {
+                            withAnimation(.spring) { selectedIcon = iconName }
+                        }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: 180)
+    }
+}
+
+struct RuleAddMenu: View {
+    @Binding var smartRules: [SmartRule]
+    
+    var body: some View {
+        Menu {
+            Menu("Media Type") {
+                Button("Only Movies") { smartRules.append(.mediaType(.movie)) }
+                Button("Only TV Shows") { smartRules.append(.mediaType(.tvShow)) }
+            }
+            Menu("Status") {
+                Button("In Progress") { smartRules.append(.state(.active)) }
+                Button("Watchlist") { smartRules.append(.state(.wishlist)) }
+                Button("Completed") { smartRules.append(.state(.completed)) }
+            }
+            Menu("Taste") {
+                Button("Loved") { smartRules.append(.taste(.love)) }
+                Button("Liked") { smartRules.append(.taste(.like)) }
+            }
+            Menu("Release Year") {
+                Button("Exactly 2024") { smartRules.append(.releaseYear(2024, .equals)) }
+                Button("After 2020") { smartRules.append(.releaseYear(2020, .after)) }
+                Button("Before 2000") { smartRules.append(.releaseYear(2000, .before)) }
+                Button("90s (1990-1999)") { smartRules.append(.releaseYearRange(1990, 1999)) }
+                Button("80s (1980-1989)") { smartRules.append(.releaseYearRange(1980, 1989)) }
+            }
+            Menu("Genre") {
+                Button("Action") { smartRules.append(.genre("Action")) }
+                Button("Adventure") { smartRules.append(.genre("Adventure")) }
+                Button("Animation") { smartRules.append(.genre("Animation")) }
+                Button("Comedy") { smartRules.append(.genre("Comedy")) }
+                Button("Crime") { smartRules.append(.genre("Crime")) }
+                Button("Documentary") { smartRules.append(.genre("Documentary")) }
+                Button("Drama") { smartRules.append(.genre("Drama")) }
+                Button("Family") { smartRules.append(.genre("Family")) }
+                Button("Fantasy") { smartRules.append(.genre("Fantasy")) }
+                Button("History") { smartRules.append(.genre("History")) }
+                Button("Horror") { smartRules.append(.genre("Horror")) }
+                Button("Music") { smartRules.append(.genre("Music")) }
+                Button("Mystery") { smartRules.append(.genre("Mystery")) }
+                Button("Romance") { smartRules.append(.genre("Romance")) }
+                Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
+                Button("Thriller") { smartRules.append(.genre("Thriller")) }
+                Button("War") { smartRules.append(.genre("War")) }
+                Button("Western") { smartRules.append(.genre("Western")) }
+            }
+            Menu("Badges") {
+                Button("Premiere") { smartRules.append(.badge("PREMIERE")) }
+                Button("Binge") { smartRules.append(.badge("BINGE")) }
+                Button("Binge Drop") { smartRules.append(.badge("BINGE DROP")) }
+                Button("New") { smartRules.append(.badge("NEW")) }
+                Button("Finale") { smartRules.append(.badge("FINALE")) }
+                Button("Returning") { smartRules.append(.badge("RETURNING")) }
+            }
+        } label: {
+            Label("Add Rule", systemImage: "plus.circle")
+                .font(.system(size: 11, weight: .bold))
         }
     }
 }

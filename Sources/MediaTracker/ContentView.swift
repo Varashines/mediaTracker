@@ -4,19 +4,224 @@ import Combine
 
 struct ContentView: View {
     @Namespace private var posterNamespace
+    @State private var viewModel = MediaViewModel()
+    @State private var sidebarSelection: SidebarItem? = .category(.home)
+    @State private var isSearchActive = false
+
+    var body: some View {
+        NavigationSplitView {
+            SidebarNavigation(selection: $sidebarSelection)
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .navigationTitle("Library")
+                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
+                .onChange(of: sidebarSelection) { _, newValue in
+                    if let selection = newValue {
+                        // Reset navigation stack when switching categories
+                        viewModel.navigationPath = NavigationPath()
+                        
+                        switch selection {
+                        case .category(let category):
+                            viewModel.selectedCategory = category
+                            viewModel.selectedNetworks = nil
+                            viewModel.selectedLanguage = nil
+                            viewModel.selectedGenre = nil
+                            viewModel.selectedYear = nil
+                            viewModel.selectedState = nil
+                            viewModel.isInitialLoading = true
+                            
+                            // Always clear collection ID when explicitly selecting a category
+                            // especially when switching to 'smartHub' itself from the sidebar
+                            viewModel.selectedCollectionID = nil
+                        case .collection(let id, let name, _):
+                            viewModel.selectedCategory = .smartHub
+                            viewModel.selectedCollectionID = id
+                            viewModel.selectedCollectionName = name
+                            viewModel.selectedGenre = nil
+                            viewModel.selectedYear = nil
+                            viewModel.selectedState = nil
+                            viewModel.isInitialLoading = true
+                        }
+                        
+                        viewModel.filterSubject.send()
+                    }
+                }
+        } detail: {
+            LibraryDetailView(
+                sidebarSelection: $sidebarSelection,
+                isSearchActive: $isSearchActive,
+                posterNamespace: posterNamespace,
+                viewModel: viewModel
+            )
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
+        .animation(.smooth(duration: 0.4), value: isSearchActive)
+    }
+}
+
+struct LibraryDetailView: View {
+    @Binding var sidebarSelection: SidebarItem?
+    @Binding var isSearchActive: Bool
+    var posterNamespace: Namespace.ID
+    @Bindable var viewModel: MediaViewModel
+    
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Query private var collections: [MediaCollection]
-    @State private var viewModel = MediaViewModel()
-    @State private var themeCoordinator = AppThemeCoordinator.shared
-    @State private var isSearchActive = false
-    @State private var sidebarSelection: SidebarItem? = .category(.home)
-    @State private var selectedHeroItem: MediaItem? = nil
+    
     @State private var isSyncHovered = false
     @State private var showingBulkManager = false
-
-
+    @State private var themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
+    
+    var body: some View {
+        NavigationStack(path: $viewModel.navigationPath) {
+            ZStack {
+                mainContent
+
+                if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
+                    NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(100)
+                }
+            }
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+            .navigationTitle(
+                isSearchActive
+                    ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
+            )
+            .navigationDestination(for: MediaItem.self) { item in
+                DetailView(item: item, namespace: posterNamespace) { actorName in
+                    viewModel.selectedCategory = .all
+                    viewModel.searchText = actorName
+                    viewModel.navigationPath = NavigationPath()
+                    isSearchActive = true
+                    viewModel.filterSubject.send()
+                }
+            }
+            .navigationDestination(for: PersistentIdentifier.self) { id in
+                if let item = modelContext.model(for: id) as? MediaItem {
+                    DetailView(item: item, namespace: posterNamespace) { actorName in
+                        viewModel.selectedCategory = .all
+                        viewModel.searchText = actorName
+                        viewModel.navigationPath = NavigationPath()
+                        isSearchActive = true
+                        viewModel.filterSubject.send()
+                    }
+                }
+            }
+            .navigationDestination(for: DiscoveryFilter.self) { filter in
+                FilteredLibraryGridView(
+                    filter: filter, namespace: posterNamespace,
+                    isFastScrolling: $viewModel.isFastScrolling)
+            }
+            .searchable(
+                text: $viewModel.searchText, isPresented: $isSearchActive,
+                placement: .automatic, prompt: "Search movies & shows"
+            )
+            .onSubmit(of: .search) {
+                viewModel.searchSubmitTrigger += 1
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+                LibraryStatsActor.clearCache()
+                viewModel.filterSubject.send()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+                LibraryStatsActor.clearCache()
+                viewModel.filterSubject.send()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
+                LibraryStatsActor.clearCache()
+                viewModel.filterSubject.send()
+            }
+            .task(id: viewModel.searchText) {
+                viewModel.filterSubject.send()
+            }
+            .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
+                performUpdate()
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    if !isSearchActive {
+                        if viewModel.selectedCollectionID != nil {
+                            HStack(spacing: 4) {
+                                Button {
+                                    withAnimation {
+                                        sidebarSelection = .category(.smartHub)
+                                        viewModel.selectedCollectionID = nil
+                                    }
+                                    viewModel.filterSubject.send()
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                                .help("Go Back")
+                                
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        viewModel.showingNoteOverlay.toggle()
+                                    }
+                                } label: {
+                                    let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
+                                    let hasNote = !viewModel.currentCollectionNote.isEmpty
+                                    Image(systemName: icon)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(hasNote ? Color.blue : Color.secondary)
+                                }
+                                .help("Collection Notes")
+
+                                Button {
+                                    showingBulkManager = true
+                                } label: {
+                                    Image(systemName: "plus.square.on.square")
+                                        .font(.system(size: 14))
+                                }
+                                .help("Manage Items")
+                            }
+                        } else if isSystemSmartCategory {
+                            Button {
+                                withAnimation {
+                                    sidebarSelection = .category(.smartHub)
+                                }
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .help("Back to Smart Hub")
+                        }
+                    }
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    if !isSearchActive && isRefreshable {
+                        refreshButton
+                    }
+                }
+            }
+            .background {
+                KeyboardShortcutsView(sidebarSelection: $sidebarSelection, isSearchActive: $isSearchActive)
+            }
+        }
+        .sheet(isPresented: $showingBulkManager) {
+            if let collectionID = viewModel.selectedCollectionID,
+               let collection = collections.first(where: { $0.id == collectionID }) {
+                BulkCollectionManagerView(collection: collection)
+            }
+        }
+        .task {
+            performUpdate()
+            checkAndRepairMissingMetadata()
+            checkAndRepairStaleMetadata()
+            
+            // Phase 6: Genre Deconstruction Migration
+            let migrated = UserDefaults.standard.bool(forKey: "genre_deconstruction_v1")
+            if !migrated {
+                let service = BackgroundDataService(modelContainer: modelContext.container)
+                await service.deepHealGenres()
+                UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
+            }
+        }
+    }
 
     private func performUpdate() {
         // Skip updating if app is in sleep mode
@@ -250,211 +455,11 @@ struct ContentView: View {
         }
     }
 
-    var body: some View {
-        NavigationSplitView {
-            SidebarNavigation(selection: $sidebarSelection)
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-                .navigationTitle("Library")
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-                .onChange(of: sidebarSelection) { _, newValue in
-                    if let selection = newValue {
-                        // Reset navigation stack when switching categories
-                        viewModel.navigationPath = NavigationPath()
-                        
-                        switch selection {
-                        case .category(let category):
-                            viewModel.selectedCategory = category
-                            viewModel.selectedNetworks = nil
-                            viewModel.selectedLanguage = nil
-                            viewModel.selectedGenre = nil
-                            viewModel.selectedYear = nil
-                            viewModel.selectedState = nil
-                            viewModel.isInitialLoading = true
-                            
-                            // Always clear collection ID when explicitly selecting a category
-                            // especially when switching to 'smartHub' itself from the sidebar
-                            viewModel.selectedCollectionID = nil
-                        case .collection(let id, let name, _):
-                            viewModel.selectedCategory = .smartHub
-                            viewModel.selectedCollectionID = id
-                            viewModel.selectedCollectionName = name
-                            viewModel.selectedGenre = nil
-                            viewModel.selectedYear = nil
-                            viewModel.selectedState = nil
-                            viewModel.isInitialLoading = true
-                        }
-                        
-                        viewModel.filterSubject.send()
-                    }
-                }
-        } detail: {
-            NavigationStack(path: $viewModel.navigationPath) {
-                ZStack {
-                    mainContent
-
-                    if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
-                        NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                            .zIndex(100)
-                    }
-                }                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
-                .navigationTitle(
-                    isSearchActive
-                        ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
-                )
-                .navigationDestination(for: MediaItem.self) { item in
-                    DetailView(item: item, namespace: posterNamespace) { actorName in
-                        viewModel.selectedCategory = .all
-                        viewModel.searchText = actorName
-                        viewModel.navigationPath = NavigationPath()
-                        isSearchActive = true
-                        viewModel.filterSubject.send()
-                    }
-                }
-                .navigationDestination(for: PersistentIdentifier.self) { id in
-                    if let item = modelContext.model(for: id) as? MediaItem {
-                        DetailView(item: item, namespace: posterNamespace) { actorName in
-                            viewModel.selectedCategory = .all
-                            viewModel.searchText = actorName
-                            viewModel.navigationPath = NavigationPath()
-                            isSearchActive = true
-                            viewModel.filterSubject.send()
-                        }
-                    }
-                }
-                .navigationDestination(for: DiscoveryFilter.self) { filter in
-                    FilteredLibraryGridView(
-                        filter: filter, namespace: posterNamespace,
-                        isFastScrolling: $viewModel.isFastScrolling)
-                }
-                .searchable(
-                    text: $viewModel.searchText, isPresented: $isSearchActive,
-                    placement: .automatic, prompt: "Search movies & shows"
-                )
-                .onSubmit(of: .search) {
-                    viewModel.searchSubmitTrigger += 1
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-                    LibraryStatsActor.clearCache()
-                    viewModel.filterSubject.send()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-                    LibraryStatsActor.clearCache()
-                    viewModel.filterSubject.send()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
-                    LibraryStatsActor.clearCache()
-                    viewModel.filterSubject.send()
-                }
-                .task(id: viewModel.searchText) {
-                    viewModel.filterSubject.send()
-                }
-                .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
-                    performUpdate()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        if !isSearchActive {
-                            if viewModel.selectedCollectionID != nil {
-                                HStack(spacing: 4) {
-                                    Button {
-                                        withAnimation {
-                                            sidebarSelection = .category(.smartHub)
-                                            viewModel.selectedCollectionID = nil
-                                        }
-                                        viewModel.filterSubject.send()
-                                    } label: {
-                                        Image(systemName: "chevron.left")
-                                            .font(.system(size: 14, weight: .bold))
-                                    }
-                                    .help("Go Back")
-                                    
-                                    Button {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            viewModel.showingNoteOverlay.toggle()
-                                        }
-                                    } label: {
-                                        let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
-                                        let hasNote = !viewModel.currentCollectionNote.isEmpty
-                                        Image(systemName: icon)
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(hasNote ? Color.blue : Color.secondary)
-                                    }
-                                    .help("Collection Notes")
-
-                                    Button {
-                                        showingBulkManager = true
-                                    } label: {
-                                        Image(systemName: "plus.square.on.square")
-                                            .font(.system(size: 14))
-                                    }
-                                    .help("Manage Items")
-                                }
-                            } else if isSystemSmartCategory {
-                                Button {
-                                    withAnimation {
-                                        sidebarSelection = .category(.smartHub)
-                                    }
-                                } label: {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .bold))
-                                }
-                                .help("Back to Smart Hub")
-                            }
-                        }
-                    }
-
-                    ToolbarItem(placement: .primaryAction) {
-                        if !isSearchActive && isRefreshable {
-                            refreshButton
-                        }
-                    }
-                }
-                .background {
-                    Group {
-                        Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
-                        Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                        Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
-                    }
-                    .opacity(0)
-                }
-            }
-        }
-        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
-        .animation(.smooth(duration: 0.4), value: isSearchActive)
-        .sheet(isPresented: $showingBulkManager) {
-            if let collectionID = viewModel.selectedCollectionID,
-               let collection = collections.first(where: { $0.id == collectionID }) {
-                BulkCollectionManagerView(collection: collection)
-            }
-        }
-        .task {
-            performUpdate()
-            checkAndRepairMissingMetadata()
-            checkAndRepairStaleMetadata()
-            
-            // Phase 6: Genre Deconstruction Migration
-            let migrated = UserDefaults.standard.bool(forKey: "genre_deconstruction_v1")
-            if !migrated {
-                let service = BackgroundDataService(modelContainer: modelContext.container)
-                await service.deepHealGenres()
-                UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
-            }
-        }
-    }
-
     private func checkAndRepairStaleMetadata() {
         let container = modelContext.container
         Task.detached(priority: .background) {
             let context = ModelContext(container)
             let now = Date()
-            // Look for items currently marked as upcoming or with a badge that might be stale
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.storedIsUpcoming == true && $0.cachedNextAiringDate != nil && $0.cachedNextAiringDate! < now })
             
             if let staleItems = try? context.fetch(descriptor), !staleItems.isEmpty {
@@ -475,7 +480,6 @@ struct ContentView: View {
         let container = modelContext.container
         Task.detached(priority: .background) {
             let context = ModelContext(container)
-            // Fetch all and filter in memory to avoid complex Predicate compiler timeouts
             let descriptor = FetchDescriptor<MediaItem>()
             if let allItems = try? context.fetch(descriptor) {
                 let missingItems = allItems.filter { $0.overview == "" || $0.posterURL == nil || $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
@@ -595,6 +599,7 @@ struct ContentView: View {
         if cat == .insights || cat == .home { return false }
         return true
     }
+    
     private var isSystemSmartCategory: Bool {
         let cat = viewModel.selectedCategory
         return cat == .releaseRadar || cat == .smartUpcoming || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
@@ -607,5 +612,24 @@ struct ContentView: View {
         guard let items = try? modelContext.fetch(descriptor) else { return }
 
         DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
+    }
+}
+
+struct KeyboardShortcutsView: View {
+    @Binding var sidebarSelection: SidebarItem?
+    @Binding var isSearchActive: Bool
+    
+    var body: some View {
+        Group {
+            Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
+            Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
+            Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
+            Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
+            Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
+            Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+            Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
+            Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+        }
+        .opacity(0)
     }
 }
