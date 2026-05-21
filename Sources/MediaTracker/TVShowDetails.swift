@@ -60,10 +60,13 @@ final class TVShowDetails {
         var firstUnwatchedEpisode: TVEpisode? = nil
         
         // Ensure seasons are sorted for consistent traversal
-        let sortedSeasons = seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        // Defensive: skip seasons/episodes deleted during background context merges
+        let sortedSeasons = seasons
+            .filter { !$0.isDeleted && $0.modelContext != nil }
+            .sorted { $0.seasonNumber < $1.seasonNumber }
         
         for season in sortedSeasons {
-            let seasonEpisodes = season.episodes
+            let seasonEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
             // Sync season counts
             season.totalEpisodesCount = seasonEpisodes.count
             season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
@@ -122,8 +125,8 @@ final class TVShowDetails {
         
         // Fallback to relationship scan if context is unavailable
         return seasons
-            .filter { $0.seasonNumber > 0 }
-            .flatMap { $0.episodes }
+            .filter { !$0.isDeleted && $0.modelContext != nil && $0.seasonNumber > 0 }
+            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
             .filter { !$0.isWatched }
             .sorted { 
                 if $0.seasonNumber != $1.seasonNumber {

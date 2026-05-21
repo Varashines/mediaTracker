@@ -9,7 +9,10 @@ struct DiscoveryManagementView: View {
     @Environment(\.colorScheme) var colorScheme
 
     private var hiddenList: [String] {
-        hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.sorted()
+        let allHidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
+        return allHidden.filter { name in
+            networkEntities.first(where: { $0.name == name })?.count ?? 0 >= 4
+        }.sorted()
     }
     
     private var addableNetworks: [String] {
@@ -126,9 +129,10 @@ struct DiscoveryManagementView: View {
             hidden.append(name)
         }
         hiddenStudios = hidden.joined(separator: ",")
+        LibraryStatsActor.clearCache()
     }
 
     private func calculateNetworks() {
-        availableNetworks = networkEntities.map { $0.name }.sorted()
+        availableNetworks = networkEntities.filter { $0.count >= 4 }.map { $0.name }.sorted()
     }
 }

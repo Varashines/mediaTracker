@@ -166,13 +166,19 @@ actor TasteActor {
                 map[key] = s
             }
             for g in item.cachedGenres { update(&acc.genreStats, g) }
-            if let n = item.cachedNetwork { update(&acc.networkStats, n) }
+            if let rawNetwork = item.cachedNetwork {
+                let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                for n in networks where !n.isEmpty {
+                    update(&acc.networkStats, n)
+                }
+            }
             if let l = item.cachedLanguage { update(&acc.languageStats, l) }
 
-            let cast = (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name } ?? [])
+            let limit = item.type == .movie ? 5 : 10
+            let cast = item.displayCast.prefix(limit).map { $0.name }
             for actor in cast { update(&acc.castStats, actor) }
-            let creators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
-            for creator in creators { update(&acc.creatorStats, creator) }
+            // Use the denormalized cachedCreators to avoid faulting movieDetails/tvShowDetails relationships
+            for creator in item.cachedCreators { update(&acc.creatorStats, creator) }
         }
     }
 
@@ -238,9 +244,20 @@ actor TasteActor {
 
             // Network matching
             var networkAff: Double = 0
-            if let n = item.cachedNetwork, let aff = networkAffinity[n], aff != 0 {
-                networkAff = aff
-                potentialReasons.append(("From \(n)", aff, 2))
+            if let rawNetwork = item.cachedNetwork {
+                let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                var totalAff: Double = 0
+                var matchedCount = 0
+                for n in networks where !n.isEmpty {
+                    if let aff = networkAffinity[n], aff != 0 {
+                        totalAff += aff
+                        matchedCount += 1
+                        potentialReasons.append(("From \(n)", aff, 2))
+                    }
+                }
+                if matchedCount > 0 {
+                    networkAff = totalAff / Double(matchedCount)
+                }
             }
 
             // Language matching
@@ -252,10 +269,9 @@ actor TasteActor {
 
             // Cast matching (Reduced Weight with Decay)
             var castTotalAffinity: Double = 0
-            let itemCast =
-                (item.movieDetails?.cast.map { $0.name } ?? item.tvShowDetails?.cast.map { $0.name }
-                    ?? [])
-            for (idx, actor) in itemCast.prefix(5).enumerated() {
+            let limit = item.type == .movie ? 5 : 10
+            let itemCast = item.displayCast.prefix(limit).map { $0.name }
+            for (idx, actor) in itemCast.enumerated() {
                 if let aff = castAffinity[actor], aff != 0 {
                     let decay = idx < 1 ? 1.0 : 0.5
                     castTotalAffinity += (aff * decay)
@@ -265,8 +281,8 @@ actor TasteActor {
 
             // Creator matching
             var creatorTotalAffinity: Double = 0
-            let itemCreators = (item.movieDetails?.creators ?? item.tvShowDetails?.creators ?? [])
-            for creator in itemCreators {
+            // Use the denormalized cachedCreators to avoid faulting movieDetails/tvShowDetails relationships
+            for creator in item.cachedCreators {
                 if let aff = creatorAffinity[creator], aff != 0 {
                     creatorTotalAffinity += aff
                     potentialReasons.append(

@@ -109,8 +109,10 @@ actor CalendarFilterActor {
             episodes.append(contentsOf: matched)
             Task.detached(priority: .background) { await self.healMissingDates() }
         }
-        return episodes
+        // Defensive: exclude any episodes deleted/detached during concurrent background merges
+        return episodes.filter { !$0.isDeleted && $0.modelContext != nil }
     }
+
 
     private func processMovies(_ movies: [MediaItem], calendar: Calendar, dailyItems: inout [Date: [CalendarReleaseItem]], allItems: inout [CalendarReleaseItem]) {
         for movie in movies {

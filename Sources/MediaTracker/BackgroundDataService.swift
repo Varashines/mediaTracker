@@ -155,20 +155,26 @@ actor BackgroundDataService {
                 if let tv = item.tvShowDetails {
                     // Force Watch State Consistency
                     if item.stateValue == "Completed" {
-                        let episodes = tv.seasons.flatMap { $0.episodes }
-                        for ep in episodes where !ep.isWatched {
+                        // Defensive: skip deleted/detached during concurrent merges
+                        let liveEps = tv.seasons
+                            .filter { !$0.isDeleted && $0.modelContext != nil }
+                            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+                        for ep in liveEps where !ep.isWatched {
                             ep.isWatched = true
                         }
                     }
 
                     // Standardize Seasons and Episodes
-                    for season in tv.seasons {
+                    // Defensive: skip deleted/detached seasons and episodes
+                    let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+                    for season in liveSeasons {
                         season.showID = tmdbID
                         if season.uniqueID == nil {
                             season.uniqueID = "\(tmdbID)_\(season.seasonNumber)"
                         }
                         
-                        for episode in season.episodes {
+                        let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+                        for episode in liveEps {
                             episode.showID = tmdbID
                             if episode.uniqueID == nil {
                                 episode.uniqueID = "\(tmdbID)_\(season.seasonNumber)_\(episode.episodeNumber)"
@@ -179,6 +185,10 @@ actor BackgroundDataService {
                         }
                     }
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
+                } else if item.type == .movie {
+                    if let movieDetails = item.movieDetails, movieDetails.network == nil {
+                        _ = await self.refreshMovie(id: item.id, tmdbID: tmdbID)
+                    }
                 }
             }
             
@@ -388,7 +398,9 @@ actor BackgroundDataService {
         if let tv = item.tvShowDetails {
             let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
             if let seasons = try? modelContext.fetch(sDescriptor) {
-                for season in seasons {
+                // Defensive: skip deleted/detached seasons
+                let liveSeasons = seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+                for season in liveSeasons {
                     if season.tvShowDetails?.persistentModelID != tv.persistentModelID {
                         season.tvShowDetails = tv
                     }
@@ -443,6 +455,11 @@ actor BackgroundDataService {
             movieDetails.voteAverage = details.voteAverage
             movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
             movieDetails.creators = details.directors.map { $0.name }
+            
+            let prodNames = details.productionCompanies.map { $0.name }
+            let prodLogos = details.productionCompanies.map { $0.logoPath ?? "" }
+            movieDetails.network = prodNames.isEmpty ? nil : prodNames.joined(separator: ",")
+            movieDetails.networkLogoPath = prodLogos.isEmpty ? nil : prodLogos.joined(separator: ",")
             
             // Update Cast
             let newCastResults = details.cast

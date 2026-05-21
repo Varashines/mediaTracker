@@ -140,8 +140,11 @@ class DetailViewModel {
         guard item.modelContext != nil else { return }
         if let tv = item.tvShowDetails {
             // Instant UI Update: Mark all CURRENTLY LOADED episodes as watched on MainActor
-            for season in tv.seasons {
-                for episode in season.episodes {
+            // Defensive: skip seasons/episodes deleted during concurrent background merges
+            let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+            for season in liveSeasons {
+                let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+                for episode in liveEps {
                     episode.markWatched(true)
                 }
             }
@@ -218,7 +221,8 @@ class DetailViewModel {
                 await MainActor.run {
                     guard self.item.modelContext != nil, !self.item.isDeleted else { return }
                     // Re-fetch season in MainActor context
-                    guard let currentSeason = self.item.tvShowDetails?.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
+                    guard let currentSeason = self.item.tvShowDetails?.seasons
+                        .first(where: { !$0.isDeleted && $0.modelContext != nil && $0.persistentModelID == seasonID }) else { return }
                     
                     for ep in episodes {
                         let epUniqueID = "\(tmdbID)_\(seasonNumber)_\(ep.episodeNumber)"

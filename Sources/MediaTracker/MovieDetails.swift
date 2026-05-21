@@ -10,6 +10,8 @@ final class MovieDetails {
     var originalLanguage: String?
     var creators: [String] = []
     @Relationship(deleteRule: .cascade, inverse: \CastMember.movieDetails) var cast: [CastMember] = []
+    var network: String?
+    var networkLogoPath: String?
     var item: MediaItem?
 
     init(tmdbID: Int) {

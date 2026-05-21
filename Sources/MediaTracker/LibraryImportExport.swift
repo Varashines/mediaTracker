@@ -2,12 +2,12 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-struct LibraryBackup: Codable {
+struct LibraryBackup: Codable, Sendable {
     let items: [MediaItemData]
     var version: Int = 1
 }
 
-struct MediaItemData: Codable {
+struct MediaItemData: Codable, Sendable {
     let id: String
     let title: String
     let type: String
@@ -23,14 +23,16 @@ class LibraryImportExportService {
     private init() {}
 
     func exportLibrary(items: [MediaItem]) {
-        let exportItems = items.map { item in
+        // Map items to Sendable structs on the MainActor before crossing boundaries
+        let exportItems = items.map { item -> MediaItemData in
             var watchedIDs: [String]? = nil
             if item.type == .tvShow, let tv = item.tvShowDetails {
-                watchedIDs = tv.seasons.flatMap { $0.episodes }
+                watchedIDs = tv.seasons
+                    .filter { !$0.isDeleted && $0.modelContext != nil }
+                    .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
                     .filter { $0.isWatched }
                     .map { $0.uniqueID ?? "" }
             }
-
             return MediaItemData(
                 id: item.id,
                 title: item.title,
@@ -41,89 +43,79 @@ class LibraryImportExportService {
                 watchedEpisodeIDs: watchedIDs
             )
         }
-        
+
         let backup = LibraryBackup(items: exportItems)
-        
+
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "MediaTracker_Backup_\(Date().formatted(date: .abbreviated, time: .omitted)).json"
-        
+
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                do {
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = .prettyPrinted
-                    let data = try encoder.encode(backup)
-                    try data.write(to: url)
-                    print("✅ Library exported to \(url.path)")
-                } catch {
-                    print("❌ Export error: \(error)")
+                // Offload encoding + disk write to FileIOActor to avoid blocking MainActor
+                Task.detached(priority: .userInitiated) {
+                    await FileIOActor.shared.run {
+                        do {
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = .prettyPrinted
+                            let data = try encoder.encode(backup)
+                            try data.write(to: url, options: .atomic)
+                            print("✅ Library exported to \(url.path)")
+                        } catch {
+                            print("❌ Export error: \(error)")
+                        }
+                    }
                 }
             }
         }
     }
 
-    func automatedBackup(items: [MediaItem]) async {
-        let exportItems = items.map { item in
-            var watchedIDs: [String]? = nil
-            if item.type == .tvShow, let tv = item.tvShowDetails {
-                watchedIDs = tv.seasons.flatMap { $0.episodes }
-                    .filter { $0.isWatched }
-                    .map { $0.uniqueID ?? "" }
-            }
+    /// Accepts a pre-built Sendable `LibraryBackup` struct so callers can map
+    /// non-Sendable `MediaItem` models to value types on their own context/actor
+    /// before crossing the MainActor boundary.
+    func automatedBackup(backup: LibraryBackup) async {
+        // Offload all filesystem and serialization work to FileIOActor
+        await FileIOActor.shared.run {
+            let fm = FileManager.default
+            let backupDir = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
 
-            return MediaItemData(
-                id: item.id,
-                title: item.title,
-                type: item.type?.rawValue ?? "Movie",
-                state: item.state?.rawValue ?? "Wishlist",
-                dateAdded: item.dateAdded ?? Date(),
-                taste: item.tasteValue,
-                watchedEpisodeIDs: watchedIDs
-            )
-        }
-        
-        let backup = LibraryBackup(items: exportItems)
-        
-        let fm = FileManager.default
-        let backupDir = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
-        
-        do {
-            if !fm.fileExists(atPath: backupDir.path) {
-                try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
-            }
-            
-            // Format: MediaTracker_Auto_yyyy-MM-dd_HH-mm-ss.json
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-            let fileName = "MediaTracker_Auto_\(formatter.string(from: Date())).json"
-            let fileURL = backupDir.appendingPathComponent(fileName)
-            
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(backup)
-            try data.write(to: fileURL)
-            print("✅ Automated backup saved to \(fileName)")
-            
-            // Enforce rolling limit (keep last 20)
-            let files = try fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey])
-            var fileInfos = files.compactMap { url -> (URL, Date)? in
-                guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                      let creationDate = attrs[.creationDate] as? Date else { return nil }
-                return (url, creationDate)
-            }
-            
-            if fileInfos.count > 20 {
-                // Sort oldest first
-                fileInfos.sort { $0.1 < $1.1 }
-                let itemsToRemove = fileInfos.prefix(fileInfos.count - 20)
-                for item in itemsToRemove {
-                    try? fm.removeItem(at: item.0)
-                    print("🗑️ Removed old automated backup: \(item.0.lastPathComponent)")
+            do {
+                if !fm.fileExists(atPath: backupDir.path) {
+                    try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
                 }
+
+                // Format: MediaTracker_Auto_yyyy-MM-dd_HH-mm-ss.json
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+                let fileName = "MediaTracker_Auto_\(formatter.string(from: Date())).json"
+                let fileURL = backupDir.appendingPathComponent(fileName)
+
+                let encoder = JSONEncoder()
+                let data = try encoder.encode(backup)
+                try data.write(to: fileURL, options: .atomic)
+                print("✅ Automated backup saved to \(fileName)")
+
+                // Enforce rolling limit (keep last 20)
+                let files = try fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey])
+                var fileInfos = files.compactMap { url -> (URL, Date)? in
+                    guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                          let creationDate = attrs[.creationDate] as? Date else { return nil }
+                    return (url, creationDate)
+                }
+
+                if fileInfos.count > 20 {
+                    // Sort oldest first
+                    fileInfos.sort { $0.1 < $1.1 }
+                    let itemsToRemove = fileInfos.prefix(fileInfos.count - 20)
+                    for item in itemsToRemove {
+                        try? fm.removeItem(at: item.0)
+                        print("🗑️ Removed old automated backup: \(item.0.lastPathComponent)")
+                    }
+                }
+
+            } catch {
+                print("❌ Automated backup failed: \(error)")
             }
-            
-        } catch {
-            print("❌ Automated backup failed: \(error)")
         }
     }
 

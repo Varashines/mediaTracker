@@ -46,7 +46,9 @@ extension MediaItem {
                 var seen = Set<String>()
                 var uniqueList: [SimpleCastMember] = []
                 
+                // Defensive: skip any objects that were deleted/detached during a concurrent merge
                 let sortedRaw = castMembers
+                    .filter { !$0.isDeleted && $0.modelContext != nil }
                     .filter { $0.characterName != "Creator" && $0.characterName != "Director" }
                     .sorted { $0.order < $1.order }
                 
@@ -79,6 +81,8 @@ extension MediaItem {
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
         self.cachedRuntime = movie.runtime
+        self.cachedNetwork = movie.network
+        self.cachedNetworkLogoPath = movie.networkLogoPath
     }
 
     func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
@@ -87,8 +91,11 @@ extension MediaItem {
         // Force consistency: If series is marked as Completed, all episodes MUST be watched (if enabled).
         let autoMark = UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched")
         if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
-            for season in tv.seasons {
-                for ep in season.episodes where !ep.isWatched {
+            // Defensive: skip deleted/detached seasons and episodes
+            let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+            for season in liveSeasons {
+                let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+                for ep in liveEps where !ep.isWatched {
                     ep.markWatched(true)
                 }
             }

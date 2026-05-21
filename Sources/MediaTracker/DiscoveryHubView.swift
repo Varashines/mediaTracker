@@ -111,7 +111,7 @@ struct DiscoveryHubView: View {
 
             let nets = (try? context.fetch(netDescriptor)) ?? []
             let hiddenSet = Set(localHidden.components(separatedBy: ",").filter { !$0.isEmpty })
-            let filteredNets = nets.filter { !hiddenSet.contains($0.name) }
+            let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
 
             let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
             let snGenres = ((try? context.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }

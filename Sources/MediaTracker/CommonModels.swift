@@ -22,6 +22,11 @@ struct CastMemberResult: Codable {
 
 struct TVEpisodeResult: Codable { let episodeNumber: Int, name: String?, overview: String?, airDate: String?, runtime: Int? }
 
+struct ProductionCompanyResult: Codable {
+    let name: String
+    let logoPath: String?
+}
+
 struct MovieDetailsResult {
     let runtime: Int?
     let genres: [String]
@@ -33,6 +38,7 @@ struct MovieDetailsResult {
     let originalLanguage: String?
     let cast: [CastMemberResult]
     let directors: [CastMemberResult]
+    let productionCompanies: [ProductionCompanyResult]
 }
 
 struct TVDetailsResult {

@@ -21,7 +21,9 @@ struct TVTrackingView: View {
     @State private var selectedSeasonNumber: Int?
 
     private var sortedSeasons: [TVSeason] {
-        tvDetails.seasons.sorted(by: { $0.seasonNumber < $1.seasonNumber })
+        tvDetails.seasons
+            .filter { !$0.isDeleted && $0.modelContext != nil }
+            .sorted(by: { $0.seasonNumber < $1.seasonNumber })
     }
 
     var body: some View {
@@ -315,7 +317,9 @@ private struct SeasonSection: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
-                        season.episodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }),
+                        season.episodes
+                            .filter { !$0.isDeleted && $0.modelContext != nil }
+                            .sorted(by: { $0.episodeNumber < $1.episodeNumber }),
                         id: \.persistentModelID
                     ) { ep in
                         EpisodeCube(episode: ep, themeColor: themeColor) {
@@ -329,8 +333,10 @@ private struct SeasonSection: View {
 
     private func toggleSeasonWatchedStatus() {
         let targetStatus = !isAllWatched
+        // Defensive: skip deleted/detached episodes during concurrent merges
+        let liveEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
         withAnimation {
-            for episode in season.episodes {
+            for episode in liveEpisodes {
                 episode.markWatched(targetStatus)
             }
             onWatchedToggle()

@@ -106,8 +106,30 @@ class BackgroundTaskManager {
             let context = ModelContext(container)
             
             // Automated Rolling Backup
+            // Map MediaItem (non-Sendable) → LibraryBackup (Sendable) on the background context
+            // BEFORE crossing into the @MainActor LibraryImportExportService boundary.
             if let allItems = try? context.fetch(FetchDescriptor<MediaItem>()) {
-                await LibraryImportExportService.shared.automatedBackup(items: allItems)
+                let exportItems = allItems.map { item -> MediaItemData in
+                    var watchedIDs: [String]? = nil
+                    if item.type == .tvShow, let tv = item.tvShowDetails {
+                        watchedIDs = tv.seasons
+                            .filter { !$0.isDeleted && $0.modelContext != nil }
+                            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+                            .filter { $0.isWatched }
+                            .map { $0.uniqueID ?? "" }
+                    }
+                    return MediaItemData(
+                        id: item.id,
+                        title: item.title,
+                        type: item.type?.rawValue ?? "Movie",
+                        state: item.state?.rawValue ?? "Wishlist",
+                        dateAdded: item.dateAdded ?? Date(),
+                        taste: item.tasteValue,
+                        watchedEpisodeIDs: watchedIDs
+                    )
+                }
+                let backup = LibraryBackup(items: exportItems)
+                await LibraryImportExportService.shared.automatedBackup(backup: backup)
             }
             
             // Also run a library discovery sync if needed
@@ -119,6 +141,7 @@ class BackgroundTaskManager {
             try? await maintenance.performLibraryHeal()
         }
     }
+
     
     /// Scans for items that have crossed a time threshold (e.g. from Upcoming to Recent)
     /// and triggers a badge recalculation so the UI is always accurate.

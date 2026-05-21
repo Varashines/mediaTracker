@@ -457,8 +457,9 @@ actor MediaFilterActor {
         if let nets = network, !nets.isEmpty {
             let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
             refined = refined.filter { item in
-                guard let itemNet = item.cachedNetwork?.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) else { return false }
-                return normalizedNets.contains(itemNet)
+                guard let rawNets = item.cachedNetwork else { return false }
+                let itemNets = rawNets.components(separatedBy: ",").map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+                return itemNets.contains { normalizedNets.contains($0) }
             }
         }
         
@@ -714,7 +715,11 @@ actor MediaFilterActor {
             switch groupBy {
             case .genre: return item.cachedGenres.first ?? "Uncategorized"
             case .language: return item.cachedLanguage ?? "Unknown"
-            case .network: return item.cachedNetwork ?? "Unknown"
+            case .network:
+                if let rawNetwork = item.cachedNetwork {
+                    return rawNetwork.components(separatedBy: ",").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?.trimmingCharacters(in: .whitespaces) ?? "Unknown"
+                }
+                return "Unknown"
             case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
             case .category: return item.stateValue
             case .none: return ""
@@ -769,11 +774,15 @@ actor MediaFilterActor {
         ])
 
         let nets = (try? modelContext.fetch(netDescriptor)) ?? []
+        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
+        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
+        let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
+
         let genres = (try? modelContext.fetch(genreDescriptor)) ?? []
         let langs = (try? modelContext.fetch(langDescriptor)) ?? []
 
         return LibraryMetadata(
-            networks: nets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) },
+            networks: filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) },
             genres: genres.map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) },
             languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) }
         )

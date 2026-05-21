@@ -184,8 +184,10 @@ struct StudioAliasManagerView: View {
     }
     
     private func calculateNetworks() {
-        let allNets = items.compactMap { $0.cachedNetwork }
-        availableNetworks = Array(Set(allNets)).sorted()
+        let allNets = items.flatMap { item in
+            item.cachedNetwork?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+        }
+        availableNetworks = Array(Set(allNets.filter { !$0.isEmpty })).sorted()
     }
 
     private func migrateIfNeeded() {

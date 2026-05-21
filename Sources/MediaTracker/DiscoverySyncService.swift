@@ -82,9 +82,11 @@ actor DiscoverySyncService {
             var sourceToTarget: [String: String] = [:]
             var targetToLogoSource: [String: String] = [:]
             
+            // Build normalized alias lookup (lowercased+trimmed to match the filter's behavior)
             for rule in rules {
                 for source in rule.sources {
-                    sourceToTarget[source] = rule.target
+                    let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
+                    sourceToTarget[normalizedSource] = rule.target
                 }
                 if let pref = rule.preferredLogoSource {
                     targetToLogoSource[rule.target] = pref
@@ -93,33 +95,41 @@ actor DiscoverySyncService {
             
             for item in items {
                 // Count Networks
-                if item.type == .tvShow, let originalName = item.cachedNetwork {
-                    let targetName: String = sourceToTarget[originalName] ?? originalName
-                    let preferredSource: String? = targetToLogoSource[targetName]
+                // Normalize name to lowercase+trimmed to match how the filter compares networks
+                if let rawName = item.cachedNetwork {
+                    let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                    let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                     
-                    let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [])
-                    var newLogo: String? = currentData.logo
-                    var newPriority: Int = currentData.priority
-                    var newSources: [String] = currentData.sources
-                    
-                    if !newSources.contains(originalName) {
-                        newSources.append(originalName)
-                    }
-                    
-                    if let itemLogo = item.cachedNetworkLogoPath {
-                        let isPreferredSource = (preferredSource != nil && originalName == preferredSource)
-                        let isMainSource = (originalName == targetName)
+                    for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
+                        let normalizedName = originalName.lowercased()
+                        let targetName: String = sourceToTarget[normalizedName].map { $0 } ?? originalName
+                        let preferredSource: String? = targetToLogoSource[targetName]
                         
-                        if isPreferredSource {
-                            newLogo = itemLogo
-                            newPriority = 100
-                        } else if newLogo == nil || (isMainSource && newPriority < 50) {
-                            newLogo = itemLogo
-                            newPriority = isMainSource ? 50 : 10
+                        let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                        var newLogo: String? = currentData.logo
+                        var newPriority: Int = currentData.priority
+                        var newSources: [String] = currentData.sources
+                        
+                        if !newSources.contains(originalName) {
+                            newSources.append(originalName)
                         }
+                        
+                        let itemLogo = index < logoPaths.count && !logoPaths[index].isEmpty ? logoPaths[index] : nil
+                        if let logo = itemLogo {
+                            let isPreferredSource = (preferredSource != nil && originalName == preferredSource)
+                            let isMainSource = (originalName == targetName)
+                            
+                            if isPreferredSource {
+                                newLogo = logo
+                                newPriority = 100
+                            } else if newLogo == nil || (isMainSource && newPriority < 50) {
+                                newLogo = logo
+                                newPriority = isMainSource ? 50 : 10
+                            }
+                        }
+                        
+                        networkCounts[targetName] = (logo: newLogo, count: currentData.count + 1, priority: newPriority, sources: newSources)
                     }
-                    
-                    networkCounts[targetName] = (logo: newLogo, count: currentData.count + 1, priority: newPriority, sources: newSources)
                 }
                 
                 // Count Genres
@@ -201,23 +211,32 @@ actor DiscoverySyncService {
     }
 
     func updateItemAdded(_ item: MediaItem) async {
-        // Studio Aliases
+        // Studio Aliases — normalize keys to lowercase+trimmed to match filter behavior
         let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {
-                sourceToTarget[source] = rule.target
+                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
+                sourceToTarget[normalizedSource] = rule.target
             }
         }
 
+
         // Incremental Network update
-        if item.type == .tvShow, let originalName = item.cachedNetwork {
-            let name = sourceToTarget[originalName] ?? originalName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(NetworkEntity(name: name, logoPath: item.cachedNetworkLogoPath, count: 1))
+        if let rawName = item.cachedNetwork {
+            let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+            
+            for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
+                let itemLogo = index < logoPaths.count && !logoPaths[index].isEmpty ? logoPaths[index] : nil
+                let normalizedName = originalName.lowercased()
+                let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
+                let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
+                if let existing = try? modelContext.fetch(descriptor).first {
+                    existing.count += 1
+                } else {
+                    modelContext.insert(NetworkEntity(name: name, logoPath: itemLogo, count: 1))
+                }
             }
         }
         
@@ -257,21 +276,26 @@ actor DiscoverySyncService {
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?) async {
-        // Studio Aliases
+        // Studio Aliases — normalize keys to lowercase+trimmed to match filter behavior
         let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
         for rule in rules {
             for source in rule.sources {
-                sourceToTarget[source] = rule.target
+                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
+                sourceToTarget[normalizedSource] = rule.target
             }
         }
 
-        if let originalName = network {
-            let name = sourceToTarget[originalName] ?? originalName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
+        if let networkString = network {
+            let networks = networkString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            for originalName in networks where !originalName.isEmpty {
+                let normalizedName = originalName.lowercased()
+                let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
+                let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
+                if let existing = try? modelContext.fetch(descriptor).first {
+                    existing.count -= 1
+                    if existing.count <= 0 { modelContext.delete(existing) }
+                }
             }
         }
         

@@ -21,17 +21,8 @@ actor APIClient {
     static let shared = APIClient()
     private let decoder = JSONDecoder()
     
-    private nonisolated var cacheFolder: URL {
-        let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        guard let base = paths.first else {
-            return FileManager.default.temporaryDirectory.appendingPathComponent("api_details_cache")
-        }
-        let folder = base.appendingPathComponent("api_details_cache")
-        if !FileManager.default.fileExists(atPath: folder.path) {
-            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        }
-        return folder
-    }
+    // Precomputed once at init to avoid repeated synchronous filesystem checks on every cache read/write
+    nonisolated let cacheFolder: URL
     
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -49,10 +40,24 @@ actor APIClient {
     private var searchCache: [String: [MediaSearchResult]] = [:]
     private var lastSearchTime: [String: Date] = [:]
     private let cacheExpiry: TimeInterval = 300 // 5 minutes
+
+    // In-flight task coalescing: prevents concurrent duplicate network requests for the same resource
+    private var inFlightMovieDetails: [Int: Task<MovieDetailsResult, Error>] = [:]
+    private var inFlightTVDetails: [Int: Task<TVDetailsResult, Error>] = [:]
+    private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
     
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
 
     init() {
+        // Compute and create the cache directory exactly once instead of on every getCachedData/saveToCache call
+        let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        let base = paths.first ?? FileManager.default.temporaryDirectory
+        let folder = base.appendingPathComponent("api_details_cache")
+        if !FileManager.default.fileExists(atPath: folder.path) {
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        self.cacheFolder = folder
+
         NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
             Task { [weak self] in await self?.clearSearchCache() }
         }
@@ -236,15 +241,23 @@ actor APIClient {
             return processMovieDetails(details)
         }
 
-        return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
-            let (data, response) = try await self.session.data(from: url)
-            try self.validateResponse(response)
-            
-            self.saveToCache(data: data, forKey: cacheKey)
-            let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
-            return self.processMovieDetails(details)
+        // Coalesce concurrent in-flight requests for the same movie to share one network call
+        if let existing = inFlightMovieDetails[tmdbID] {
+            return try await existing.value
         }
+        let task = Task<MovieDetailsResult, Error> {
+            defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
+            return try await self.executeWithRetry {
+                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
+                let (data, response) = try await self.session.data(from: url)
+                try self.validateResponse(response)
+                self.saveToCache(data: data, forKey: cacheKey)
+                let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
+                return self.processMovieDetails(details)
+            }
+        }
+        inFlightMovieDetails[tmdbID] = task
+        return try await task.value
     }
 
     private nonisolated func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
@@ -270,6 +283,10 @@ actor APIClient {
             }
         }
         
+        let productionCompanies = details.production_companies?.map {
+            ProductionCompanyResult(name: $0.name, logoPath: $0.logo_path)
+        } ?? []
+        
         return MovieDetailsResult(
             runtime: details.runtime, 
             genres: details.genres.map { $0.name }, 
@@ -280,7 +297,8 @@ actor APIClient {
             overview: details.overview,
             originalLanguage: details.original_language, 
             cast: Array(cast), 
-            directors: directors
+            directors: directors,
+            productionCompanies: productionCompanies
         )
     }
 
@@ -291,15 +309,23 @@ actor APIClient {
             return processTVDetails(d)
         }
 
-        return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits")])
-            let (data, response) = try await self.session.data(from: url)
-            try self.validateResponse(response)
-            
-            self.saveToCache(data: data, forKey: cacheKey)
-            let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
-            return self.processTVDetails(d)
+        // Coalesce concurrent in-flight requests for the same show to share one network call
+        if let existing = inFlightTVDetails[tmdbID] {
+            return try await existing.value
         }
+        let task = Task<TVDetailsResult, Error> {
+            defer { self.inFlightTVDetails.removeValue(forKey: tmdbID) }
+            return try await self.executeWithRetry {
+                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits")])
+                let (data, response) = try await self.session.data(from: url)
+                try self.validateResponse(response)
+                self.saveToCache(data: data, forKey: cacheKey)
+                let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
+                return self.processTVDetails(d)
+            }
+        }
+        inFlightTVDetails[tmdbID] = task
+        return try await task.value
     }
 
     private nonisolated func processTVDetails(_ d: TMDBTVDetailsResponse) -> TVDetailsResult {
@@ -357,23 +383,42 @@ actor APIClient {
     }
 
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
-        do {
-            return try await executeWithRetry {
-                let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
-                let (data, response) = try await self.session.data(from: url)
-                try self.validateResponse(response)
-                let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
-                return decoded.episodes.map { 
-                    TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
-                }
+        let cacheKey = "season_details_\(tmdbID)_\(seasonNumber).json"
+        let coalescingKey = cacheKey
+
+        // Check disk cache first (24h TTL for season data)
+        if let cachedData = await getCachedData(forKey: cacheKey),
+           let decoded = try? decoder.decode(TMDBSeasonResponse.self, from: cachedData) {
+            return decoded.episodes.map {
+                TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
             }
-        } catch APIError.requestFailed(let code) where code == 404 {
-            // TMDB often 404s for Season 0 (Specials) if it's listed in the brief but has no episodes yet.
-            print("ℹ️ Season details not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.")
-            return []
-        } catch {
-            throw error
         }
+
+        // Coalesce concurrent in-flight requests for the same season
+        if let existing = inFlightSeasonDetails[coalescingKey] {
+            return try await existing.value
+        }
+        let task = Task<[TVEpisodeResult], Error> {
+            defer { self.inFlightSeasonDetails.removeValue(forKey: coalescingKey) }
+            do {
+                return try await self.executeWithRetry {
+                    let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
+                    let (data, response) = try await self.session.data(from: url)
+                    try self.validateResponse(response)
+                    self.saveToCache(data: data, forKey: cacheKey)
+                    let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
+                    return decoded.episodes.map {
+                        TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
+                    }
+                }
+            } catch APIError.requestFailed(let code) where code == 404 {
+                // TMDB often 404s for Season 0 (Specials) if it's listed in the brief but has no episodes yet.
+                print("ℹ️ Season details not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.")
+                return []
+            }
+        }
+        inFlightSeasonDetails[coalescingKey] = task
+        return try await task.value
     }
 
     func searchPerson(query: String) async throws -> String? {

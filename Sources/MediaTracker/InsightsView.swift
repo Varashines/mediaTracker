@@ -116,7 +116,9 @@ struct InsightsView: View {
 
             VStack(alignment: .leading, spacing: 50) {
                 horizontalAffinityList(
-                    title: "Studios", data: stats.topRatedNetworks, icon: "tv.fill", color: .purple)
+                    title: "Studios", data: stats.topRatedStudios, icon: "film.fill", color: .purple)
+                horizontalAffinityList(
+                    title: "Networks", data: stats.topRatedNetworks, icon: "tv.fill", color: .indigo)
                 horizontalAffinityList(
                     title: "Languages", data: stats.topRatedLanguages, icon: "globe", color: .mint)
                 horizontalAffinityList(

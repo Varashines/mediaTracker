@@ -15,12 +15,20 @@ struct TMDBMovie: TMDBMedia {
     var mediaType: MediaType { .movie }
 }
 
+struct TMDBProductionCompany: Codable {
+    let id: Int
+    let name: String
+    let logo_path: String?
+    let origin_country: String?
+}
+
 struct TMDBMovieDetailsResponse: Codable {
     let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, backdrop_path: String?, poster_path: String?
     let overview: String?
     let original_language: String?
     let credits: TMDBCreditsResponse?
     let release_dates: TMDBReleaseDatesResponse?
+    let production_companies: [TMDBProductionCompany]?
 }
 
 struct TMDBReleaseDatesResponse: Codable {

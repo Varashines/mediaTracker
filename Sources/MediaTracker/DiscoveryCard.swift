@@ -70,6 +70,10 @@ struct DiscoveryCard: View {
                     }
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 100, height: 50)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(colorScheme == .dark ? Color.white.opacity(0.85) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
                     Text(node.name)
                         .font(.system(size: 16, weight: .bold))

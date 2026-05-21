@@ -33,6 +33,7 @@ struct LibraryStats: Sendable {
     let topRatedCreators: [VisualPersonStat]
     let topRatedGenres: [(name: String, score: Double)]
     let topRatedNetworks: [(name: String, score: Double)]
+    let topRatedStudios: [(name: String, score: Double)]
     let topRatedLanguages: [(name: String, score: Double)]
 
     let lovedCount: Int
@@ -53,6 +54,7 @@ struct LibraryStats: Sendable {
         topRatedCreators: [],
         topRatedGenres: [],
         topRatedNetworks: [],
+        topRatedStudios: [],
         topRatedLanguages: [],
         lovedCount: 0,
         likedCount: 0,
@@ -152,6 +154,7 @@ actor LibraryStatsActor {
     private struct TasteMapsContainer {
         var genreTaste: [String: CategoryStats] = [:]
         var networkTaste: [String: CategoryStats] = [:]
+        var studioTaste: [String: CategoryStats] = [:]
         var actorTaste: [String: CategoryStats] = [:]
         var creatorTaste: [String: CategoryStats] = [:]
         var languageTaste: [String: CategoryStats] = [:]
@@ -159,6 +162,8 @@ actor LibraryStatsActor {
 
     private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer) {
         let calendar = Calendar.current
+        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
+        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
@@ -226,14 +231,24 @@ actor LibraryStatsActor {
                 for g in item.cachedGenres {
                     updateTaste(&taste.genreTaste, g, nil)
                 }
-                if let n = item.cachedNetwork {
-                    updateTaste(&taste.networkTaste, n, nil)
+                if let rawNetwork = item.cachedNetwork {
+                    let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                    for n in networks where !n.isEmpty {
+                        if !hiddenSet.contains(n.lowercased()) {
+                            if item.type == .movie {
+                                updateTaste(&taste.studioTaste, n, nil)
+                            } else {
+                                updateTaste(&taste.networkTaste, n, nil)
+                            }
+                        }
+                    }
                 }
                 if let lang = item.cachedLanguage {
                     updateTaste(&taste.languageTaste, lang, nil)
                 }
 
-                for actor in item.displayCast.prefix(15) {
+                let limit = item.type == .movie ? 5 : 10
+                for actor in item.displayCast.prefix(limit) {
                     updateTaste(&taste.actorTaste, actor.name, actor.profileURL)
                 }
             }
@@ -267,15 +282,15 @@ actor LibraryStatsActor {
             .sorted { $0.1.affinity(cutoff: 5) > $1.1.affinity(cutoff: 5) }
             .prefix(10)
 
-        let visualActors = await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1) })
+        let visualActors = await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1) }, cutoff: 5)
         
         let creatorAffinityPairs = taste.creatorTaste.map { name, val in (name, val) }
         let topCreators = creatorAffinityPairs
-            .filter { $0.1.affinity(cutoff: 5) >= 0 }
-            .sorted { $0.1.affinity(cutoff: 5) > $1.1.affinity(cutoff: 5) }
+            .filter { $0.1.affinity(cutoff: 3) >= 0 }
+            .sorted { $0.1.affinity(cutoff: 3) > $1.1.affinity(cutoff: 3) }
             .prefix(10)
 
-        let visualCreators = await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1) })
+        let visualCreators = await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1) }, cutoff: 3)
 
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)
@@ -296,6 +311,7 @@ actor LibraryStatsActor {
             topRatedCreators: visualCreators,
             topRatedGenres: mapTaste(taste.genreTaste),
             topRatedNetworks: mapTaste(taste.networkTaste),
+            topRatedStudios: mapTaste(taste.studioTaste),
             topRatedLanguages: languageRankings,
             lovedCount: stats.loved,
             likedCount: stats.liked,
@@ -305,7 +321,7 @@ actor LibraryStatsActor {
     }
 
     // Move CategoryStats inside scope helper if needed, or pass fields
-    private func resolvePeopleImages(people: [PersonInput]) async -> [VisualPersonStat] {
+    private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async -> [VisualPersonStat] {
         var results: [VisualPersonStat] = []
 
         // Phase 5 Logic Fix: Throttle concurrent API calls to prevent 429 Rate Limiting
@@ -321,7 +337,7 @@ actor LibraryStatsActor {
                         return VisualPersonStat(
                             name: input.name,
                             profileURL: image,
-                            score: input.stats.affinity(cutoff: 5),
+                            score: input.stats.affinity(cutoff: cutoff),
                             count: input.stats.total
                         )
                     }

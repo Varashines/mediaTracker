@@ -23,9 +23,15 @@ struct BadgeEngine {
 
         if item.type == .tvShow, let tv = item.tvShowDetails {
             // Find the absolute next unwatched episode regardless of date, efficiently
-            let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+            // Defensive: skip seasons/episodes deleted during background context merges
+            let sortedSeasons = tv.seasons
+                .filter { !$0.isDeleted && $0.modelContext != nil }
+                .sorted { $0.seasonNumber < $1.seasonNumber }
             for season in sortedSeasons {
-                let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+                let sortedEpisodes = season.episodes
+                    .filter { !$0.isDeleted && $0.modelContext != nil }
+                    .sorted { $0.episodeNumber < $1.episodeNumber }
+
                 for ep in sortedEpisodes {
                     if !ep.isWatched {
                         if nextToWatch == nil {
