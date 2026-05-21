@@ -1,10 +1,10 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "MediaTracker",
     platforms: [
-        .macOS(.v26) // Now valid with tools-version 6.2
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "MediaTracker", targets: ["MediaTracker"])
