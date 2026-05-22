@@ -84,8 +84,31 @@ final class MediaItem: Identifiable {
                 lastInteractionDate = Date()
                 lastStateChangeDate = Date()
                 syncCachedProperties()
+                
+                if typeValue == "TV Show" && stateValue == "Completed" {
+                    if UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched") {
+                        markLoadedEpisodesAsWatched()
+                        NotificationCenter.default.post(
+                            name: Notification.Name("tvShowMarkedCompleted"),
+                            object: nil,
+                            userInfo: ["itemID": id]
+                        )
+                    }
+                }
             }
         }
+    }
+
+    func markLoadedEpisodesAsWatched() {
+        guard type == .tvShow, let details = tvShowDetails else { return }
+        let liveSeasons = details.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+        for season in liveSeasons {
+            let liveEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+            for episode in liveEpisodes {
+                episode.markWatched(true)
+            }
+        }
+        details.recalculateCachedProperties(triggerSync: true)
     }
 
     @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?

@@ -67,70 +67,34 @@ struct DiscoveryHubView: View {
             return
         }
 
-        // Phase 5 Optimization: Pre-check for existing data to avoid flicker
-        let netDescriptor = FetchDescriptor<NetworkEntity>()
-        let existingCount = (try? modelContext.fetchCount(netDescriptor)) ?? 0
-        if existingCount > 0 {
-            self.hasDataLoaded = true
-        }
-
         viewModel.isBatchRefreshing = true
         let container = modelContext.container
         let localHidden = hiddenStudios
-
         let syncService = DiscoverySyncService(modelContainer: container)
 
-        Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-
-            let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [
-                SortDescriptor(\.count, order: .reverse),
-                SortDescriptor(\.name, order: .forward)
-            ])
-            let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [
-                SortDescriptor(\.count, order: .reverse),
-                SortDescriptor(\.name, order: .forward)
-            ])
-            let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
-                SortDescriptor(\.count, order: .reverse),
-                SortDescriptor(\.code, order: .forward)
-            ])
-            let badgeDescriptor = FetchDescriptor<BadgeEntity>(sortBy: [
-                SortDescriptor(\.count, order: .reverse),
-                SortDescriptor(\.label, order: .forward)
-            ])
-
-            let existingNets = (try? context.fetch(netDescriptor)) ?? []
-            let existingGenres = (try? context.fetch(genreDescriptor)) ?? []
-            let existingBadges = (try? context.fetch(badgeDescriptor)) ?? []
+        Task {
+            // Pre-check for existing data to avoid flicker
+            let isEmpty = await syncService.isHubDataEmpty()
+            if !isEmpty {
+                self.hasDataLoaded = true
+            }
 
             // 1. Local Aggregation - ONLY if forced or empty
-            if force || (existingNets.isEmpty && existingGenres.isEmpty && existingBadges.isEmpty) {
+            if force || isEmpty {
                 await syncService.syncLibrary(force: force)
             }
 
-            let nets = (try? context.fetch(netDescriptor)) ?? []
-            let hiddenSet = Set(localHidden.components(separatedBy: ",").filter { !$0.isEmpty })
-            let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
+            // 2. Fetch all components thread-safely via actor
+            let hubData = await syncService.fetchHubData(hiddenStudios: localHidden)
 
-            let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
-            let snGenres = ((try? context.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
-            let snLangs = ((try? context.fetch(langDescriptor)) ?? []).map {
-                let name = LanguageUtils.languageName(for: $0.code)
-                return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
-            }
-            let snBadges = ((try? context.fetch(badgeDescriptor)) ?? []).map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
-
-            await MainActor.run {
-                withAnimation(.smooth(duration: 0.5)) {
-                    self.viewModel.lastDiscoveryRefresh = Date()
-                    self.viewModel.cachedNetworks = snNets
-                    self.viewModel.cachedGenres = snGenres
-                    self.viewModel.cachedLanguages = snLangs
-                    self.viewModel.cachedBadges = snBadges
-                    self.hasDataLoaded = true
-                    self.viewModel.isBatchRefreshing = false
-                }
+            withAnimation(.smooth(duration: 0.5)) {
+                self.viewModel.lastDiscoveryRefresh = Date()
+                self.viewModel.cachedNetworks = hubData.networks
+                self.viewModel.cachedGenres = hubData.genres
+                self.viewModel.cachedLanguages = hubData.languages
+                self.viewModel.cachedBadges = hubData.badges
+                self.hasDataLoaded = true
+                self.viewModel.isBatchRefreshing = false
             }
         }
     }

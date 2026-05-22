@@ -30,6 +30,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let nextAiringDate: Date?
     let genres: [String]
     let recommendationReason: String?
+    let lastInteractionDate: Date?
 
     var versionHash: String { "\(id.hashValue)_\(progress ?? 0)" }
 
@@ -63,6 +64,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.nextAiringDate = item.cachedNextAiringDate
         self.recommendationReason = recommendationReason
         self.genres = item.cachedGenres
+        self.lastInteractionDate = item.lastInteractionDate
     }
     init(id: PersistentIdentifier, title: String, overview: String) {
         self.id = id
@@ -86,6 +88,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.nextAiringDate = nil
         self.genres = []
         self.recommendationReason = nil
+        self.lastInteractionDate = nil
     }
 }
 
@@ -472,21 +475,16 @@ actor MediaFilterActor {
     private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
         // 1. High Priority Fetch: Split into focused fetches to avoid compiler timeouts and starvation
         
-        // Pass A1: Items marked as "NEW" or "BINGE DROP"
+        // Combined Pass A: Items marked as "NEW", "BINGE DROP", "FINALE", or "PREMIERE"
         let newLabel = "NEW"
         let bingeLabel = "BINGE DROP"
-        let dislikeLabel = "Dislike"
-        let pStreamingA = #Predicate<MediaItem> { item in
-            (item.storedSmartBadgeLabel == newLabel || 
-             item.storedSmartBadgeLabel == bingeLabel) && 
-            item.tasteValue != dislikeLabel
-        }
-        
-        // Pass A2: Items marked as "FINALE" or "PREMIERE"
         let finaleLabel = "FINALE"
         let premiereLabel = "PREMIERE"
-        let pStreamingB = #Predicate<MediaItem> { item in
-            (item.storedSmartBadgeLabel == finaleLabel || 
+        let dislikeLabel = "Dislike"
+        let pStreaming = #Predicate<MediaItem> { item in
+            (item.storedSmartBadgeLabel == newLabel || 
+             item.storedSmartBadgeLabel == bingeLabel ||
+             item.storedSmartBadgeLabel == finaleLabel ||
              item.storedSmartBadgeLabel == premiereLabel) && 
             item.tasteValue != dislikeLabel
         }
@@ -501,43 +499,30 @@ actor MediaFilterActor {
             )
         }
         
-        // Pass C: "Active" items (Currently watching)
-        let pActive = #Predicate<MediaItem> { item in
-            item.stateValue == "Active" && item.tasteValue != "Dislike"
+        // Combined Pass C/D: "Active" and "Re-watching" items
+        let activeState = "Active"
+        let rewatchingState = "Re-watching"
+        let pActiveOrRewatching = #Predicate<MediaItem> { item in
+            (item.stateValue == activeState || item.stateValue == rewatchingState) &&
+            item.tasteValue != dislikeLabel
         }
         
-        // Pass D: "Re-watching" items
-        let pRewatching = #Predicate<MediaItem> { item in
-            item.stateValue == "Re-watching" && item.tasteValue != "Dislike"
-        }
-        
-        var descStreamingA = FetchDescriptor<MediaItem>(predicate: pStreamingA)
-        descStreamingA.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreamingA.fetchLimit = 100
-        
-        var descStreamingB = FetchDescriptor<MediaItem>(predicate: pStreamingB)
-        descStreamingB.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreamingB.fetchLimit = 100
+        var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
+        descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descStreaming.fetchLimit = 150
         
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descTransition.fetchLimit = 50
         
-        var descActive = FetchDescriptor<MediaItem>(predicate: pActive)
-        descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descActive.fetchLimit = 150 // High limit for active tracking
+        var descActiveOrRewatching = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
+        descActiveOrRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descActiveOrRewatching.fetchLimit = 200 // High combined limit
         
-        var descRewatching = FetchDescriptor<MediaItem>(predicate: pRewatching)
-        descRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descRewatching.fetchLimit = 50
-        
-        let streamingItemsA = try modelContext.fetch(descStreamingA)
-        let streamingItemsB = try modelContext.fetch(descStreamingB)
-        let streamingItems = streamingItemsA + streamingItemsB
-        
+        let streamingItems = try modelContext.fetch(descStreaming)
         let transitionItems = try modelContext.fetch(descTransition)
-        let activeItemsRaw = try modelContext.fetch(descActive)
-        let rewatchingItems = try modelContext.fetch(descRewatching)
+        let activeItemsRaw = try modelContext.fetch(descActiveOrRewatching)
+        let rewatchingItems: [MediaItem] = []
         
         // 2. Recent Interaction Fetch: Fill remaining slots with recent Wishlist items
         let recentPredicate = #Predicate<MediaItem> { item in
@@ -743,6 +728,86 @@ actor MediaFilterActor {
             genres: genres.map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) },
             languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) }
         )
+    }
+
+    func fetchMetadataIfMatches(
+        for id: PersistentIdentifier,
+        category: NavigationCategory,
+        searchText: String,
+        network: [String]? = nil,
+        language: String? = nil,
+        genre: String? = nil,
+        year: String? = nil,
+        state: MediaState? = nil,
+        badge: String? = nil,
+        collectionID: UUID? = nil
+    ) throws -> MediaThumbnailMetadata? {
+        guard let item = modelContext.model(for: id) as? MediaItem else { return nil }
+        
+        let stringID = item.id
+        let descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate<MediaItem> { $0.id == stringID }
+        )
+        guard let fetchedItem = try? modelContext.fetch(descriptor).first else { return nil }
+        
+        if let collectionID = collectionID {
+            let collectionDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == collectionID })
+            if let collection = try? modelContext.fetch(collectionDescriptor).first {
+                if !collection.items.contains(where: { $0.id == fetchedItem.id }) {
+                    return nil
+                }
+            }
+        }
+        
+        switch category {
+        case .upcoming:
+            if !fetchedItem.storedIsUpcoming { return nil }
+        case .inProgress:
+            if fetchedItem.stateValue != "Active" { return nil }
+        case .watchlist:
+            if fetchedItem.stateValue != "Wishlist" { return nil }
+        case .loved:
+            if fetchedItem.tasteValue != "Loved" { return nil }
+        case .completed:
+            if fetchedItem.stateValue != "Completed" { return nil }
+        case .archive:
+            if fetchedItem.stateValue != "Archive" { return nil }
+        case .disliked:
+            if fetchedItem.tasteValue != "Disliked" { return nil }
+        case .binge:
+            if fetchedItem.storedSmartBadgeLabel != "BINGE DROP" && fetchedItem.storedSmartBadgeLabel != "BINGE" { return nil }
+        case .movie:
+            if fetchedItem.typeValue != "Movie" { return nil }
+        case .tvShow:
+            if fetchedItem.typeValue != "TV Show" { return nil }
+        case .quickBites:
+            let hasRuntime = (fetchedItem.cachedRuntime ?? 0) > 0 || (fetchedItem.cachedEpisodeRuntime ?? 0) > 0
+            if !hasRuntime { return nil }
+        case .catchUp:
+            if fetchedItem.storedSmartBadgeLabel != "CATCH UP" { return nil }
+        case .stalled:
+            let isStalled = fetchedItem.stateValue == "Active" || fetchedItem.stateValue == "On Hold" || fetchedItem.stateValue == "Dropped"
+            if !isStalled { return nil }
+        case .smartUpcoming:
+            if fetchedItem.storedSmartBadgeLabel != "PREMIERE" { return nil }
+        default:
+            break
+        }
+        
+        let refined = refineResults(
+            [fetchedItem],
+            network: network,
+            language: language,
+            genre: genre,
+            year: year,
+            state: state,
+            badge: badge,
+            searchText: searchText,
+            category: category
+        )
+        
+        guard let matchingItem = refined.first else { return nil }
+        return toMetadata(matchingItem)
     }
 
     private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {

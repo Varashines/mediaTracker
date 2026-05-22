@@ -301,18 +301,15 @@ private struct SmartCollectionCard: View {
             .padding(20)
             .background {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(colorScheme == .dark 
-                          ? accentColor.opacity(isHovered ? 0.08 : 0.04) 
-                          : Color(NSColor.controlBackgroundColor).opacity(isHovered ? 1.0 : 0.85))
-                    .shadow(color: colorScheme == .dark 
-                            ? accentColor.opacity(isHovered ? 0.2 : 0)
-                            : Color(red: 0, green: 0.1, blue: 0.3).opacity(isHovered ? 0.12 : 0.05), 
-                            radius: isHovered ? 15 : 10, x: 0, y: isHovered ? 10 : 5)
+                    .fill(.thinMaterial)
+                    .background {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(Color.primary.opacity(isHovered ? 0.05 : 0.02))
+                    }
+                    .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(colorScheme == .dark 
-                                    ? accentColor.opacity(isHovered ? 0.4 : 0.15) 
-                                    : Color(red: 0, green: 0.1, blue: 0.3).opacity(isHovered ? 0.15 : 0.08), lineWidth: 1)
+                            .stroke(Color.primary.opacity(isHovered ? 0.15 : 0.06), lineWidth: 1)
                     }
             }
             .overlay(alignment: .topTrailing) {
@@ -362,11 +359,7 @@ private struct SmartCollectionCard: View {
         }
         .padding(4)
         .background {
-            if #available(macOS 26.0, *) {
-                Capsule().fill(.clear).glassEffect(.regular, in: .capsule)
-            } else {
-                Capsule().fill(.ultraThinMaterial)
-            }
+            Capsule().fill(.ultraThinMaterial)
         }
         .clipShape(Capsule())
         .shadow(color: .black.opacity(0.15), radius: 10, y: 5)

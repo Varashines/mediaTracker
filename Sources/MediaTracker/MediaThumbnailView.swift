@@ -378,7 +378,7 @@ struct MediaThumbnailView: View, Equatable {
                 if let context = item.modelContext {
                     SaveCoordinator.shared.requestSave(context)
                 }
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": item.persistentModelID])
             }
         }
     }
@@ -420,9 +420,8 @@ struct MediaThumbnailView: View, Equatable {
                                 collection.completedItemIDs.append(itemIDString)
                             }
                             SaveCoordinator.shared.requestSave(modelContext)
-
                         }
-                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": itemID])
                     }
                 } label: {
                     Label(

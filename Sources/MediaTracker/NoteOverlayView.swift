@@ -58,11 +58,7 @@ struct NoteOverlayView: View {
                         .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                 }
                 .background {
-                    if #available(macOS 26.0, *) {
-                        RoundedRectangle(cornerRadius: 20).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 20))
-                    } else {
-                        RoundedRectangle(cornerRadius: 20).fill(.ultraThinMaterial)
-                    }
+                    RoundedRectangle(cornerRadius: 20).fill(.ultraThinMaterial)
                 }
                 .cornerRadius(20)
                 .overlay {

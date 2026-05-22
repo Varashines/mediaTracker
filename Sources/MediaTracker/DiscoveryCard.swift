@@ -25,22 +25,26 @@ struct DiscoveryCard: View {
 
     var body: some View {
         Button(action: action) {
-            let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
             let cornerRadius: CGFloat = style == .logo ? 20 : 32
+            let backingOpacity = colorScheme == .dark ? (isHovered ? 0.22 : 0.12) : (isHovered ? 0.12 : 0.06)
+            let strokeOpacity = colorScheme == .dark ? (isHovered ? 0.45 : 0.25) : (isHovered ? 0.30 : 0.15)
+            let shadowOpacity = isHovered ? 0.22 : 0.10
+            let shadowRadius: CGFloat = isHovered ? 12 : 6
+            let shadowY: CGFloat = isHovered ? 6 : 3
             
             ZStack {
-                // Main Layer
+                // Main Layer with translucent material, brand color overlay, stroke, and shadow
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.22 : 0.12) : (isHovered ? 0.08 : 0.05)))
-                    .background {
+                    .fill(.thinMaterial)
+                    .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(colorScheme == .dark ? Color.white.opacity(isHovered ? 0.1 : 0.06) : Color(NSColor.windowBackgroundColor))
-                            .shadow(color: Color.black.opacity(isHovered ? 0.15 : 0), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0)
+                            .fill(themeColor.opacity(backingOpacity))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(accent.opacity(colorScheme == .dark ? (isHovered ? 0.4 : 0.12) : (isHovered ? 0.2 : 0.08)), lineWidth: isHovered ? 1.5 : 1)
+                            .stroke(themeColor.opacity(strokeOpacity), lineWidth: isHovered ? 1.5 : 1)
                     }
+                    .shadow(color: themeColor.opacity(shadowOpacity), radius: shadowRadius, y: shadowY)
                 
                 if style == .logo {
                     logoContent
@@ -72,7 +76,6 @@ struct DiscoveryCard: View {
                     .frame(width: 100, height: 50)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(colorScheme == .dark ? Color.white.opacity(0.85) : Color.clear)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
                     Text(node.name)

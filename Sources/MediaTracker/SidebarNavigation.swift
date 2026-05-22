@@ -8,6 +8,7 @@ struct SidebarNavigation: View {
         [MediaCollection]
     @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     @Environment(\.colorScheme) var colorScheme
+    @State private var hoveredItem: SidebarItem? = nil
     @Namespace private var sidebarNamespace
 
     var body: some View {
@@ -80,23 +81,7 @@ struct SidebarNavigation: View {
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
         let isSelected = selection == item
         
-        let activeColor: Color = {
-            switch item {
-            case .category(let cat):
-                switch cat {
-                case .home, .all: return .blue
-                case .discover, .smartHub: return .purple
-                case .upcoming, .smartUpcoming: return .orange
-                case .movie: return .indigo
-                case .tvShow: return .teal
-                case .releaseRadar: return .pink
-                case .insights: return .green
-                default: return .blue
-                }
-            case .collection:
-                return .blue
-            }
-        }()
+        let activeColor = Color.accentColor
 
         // Only append .fill if the icon name doesn't already contain it and it's a standard symbol
         let iconName: String
@@ -135,11 +120,19 @@ struct SidebarNavigation: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(activeColor.gradient)
                         .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
+                } else if hoveredItem == item {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovered in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                hoveredItem = isHovered ? item : nil
+            }
+        }
     }
 
     private func sidebarSectionHeader(_ title: String) -> some View {

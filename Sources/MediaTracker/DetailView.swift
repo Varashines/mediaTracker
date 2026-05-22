@@ -96,6 +96,15 @@ struct DetailView: View {
             onStatusChange: { newState in
                 if newState == .completed {
                     viewModel.markAllAsWatched()
+                } else {
+                    if let context = viewModel.item.modelContext {
+                        SaveCoordinator.shared.requestSave(context)
+                    }
+                    NotificationCenter.default.post(
+                        name: .mediaStateChanged,
+                        object: nil,
+                        userInfo: ["itemID": viewModel.item.persistentModelID]
+                    )
                 }
             }
         )
@@ -252,17 +261,10 @@ struct ModularSection<Content: View>: View {
             content
                 .padding(24)
                 .background {
-                    if #available(macOS 26.0, *) {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.clear)
-                            .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                            .opacity(scheme == .dark ? 0.4 : 0.6)
-                    } else {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
-                    }
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
                 }
-                .background(color.opacity(scheme == .dark ? 0.05 : 0.02))
+                .background(color.opacity(scheme == .dark ? 0.05 : 0.02) as Color)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)

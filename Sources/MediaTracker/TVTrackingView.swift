@@ -162,7 +162,6 @@ private struct SeasonTab: View {
     var body: some View {
         Button(action: action) {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-            let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
             HStack(spacing: 8) {
                 Text("Season \(season.seasonNumber)")
 
@@ -172,53 +171,20 @@ private struct SeasonTab: View {
                         .foregroundStyle(Color.semanticGreen(for: colorScheme))
                 }
             }
-            .font(.system(size: 13, weight: isSelected ? .black : .bold, design: .rounded))
+            .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background {
-                if isSelected {
-                    Capsule()
-                        .fill(bgAccent.opacity(colorScheme == .dark ? 0.3 : 0.4))
-                } else {
-                    Capsule()
-                        .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
-                }
+                Capsule()
+                    .fill(isSelected ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03))
             }
             .overlay {
-                // 1. Base Perimeter Track (Matched Vibrancy & Glow)
-                if !isFullyWatched {
-                    let o = themeColor.oklch
-                    // Boost lightness (0.5) and saturation for high energy
-                    let vibrantBase = Color.fromOKLCH(l: 0.55, c: max(o.c, 0.25), h: o.h)
-                    let baseOpacity = isSelected ? 0.7 : 0.4
-                    Capsule()
-                        .stroke(vibrantBase.opacity(baseOpacity), lineWidth: 2.5)
-                        .shadow(color: vibrantBase.opacity(isSelected ? 0.3 : 0.1), radius: 2)
-                }
-                
-                // 2. Dynamic Success Progress (Semantic Green)
-                if isOngoing {
-                    let green = Color.semanticGreen(for: colorScheme)
-                    Capsule()
-                        .trim(from: 0, to: progress)
-                        .stroke(
-                            green,
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                        )
-                        .shadow(color: green.opacity(0.3), radius: 2)
-                } else if isFullyWatched {
-                    let green = Color.semanticGreen(for: colorScheme)
-                    Capsule()
-                        .stroke(green, lineWidth: 2.5)
-                        .shadow(color: green.opacity(0.2), radius: 2)
-                }
+                Capsule()
+                    .stroke(isSelected ? accent.opacity(0.4) : Color.clear, lineWidth: 1)
             }
-            .foregroundStyle(isSelected ? accent : .secondary)
-            .scaleEffect(isSelected ? 1.05 : 1.0)
+            .foregroundStyle(isSelected ? Color.primary : .secondary)
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.3), value: isSelected)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: progress)
     }
 }
 
@@ -347,7 +313,8 @@ private struct SeasonSection: View {
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
-            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            let itemID = season.tvShowDetails?.item?.persistentModelID
+            NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: itemID.map { ["itemID": $0] })
         }
     }
 }
@@ -378,7 +345,8 @@ private struct EpisodeCube: View {
                     if let context = episode.modelContext {
                         SaveCoordinator.shared.requestSave(context)
                     }
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    let itemID = episode.season?.tvShowDetails?.item?.persistentModelID
+                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: itemID.map { ["itemID": $0] })
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 10) {
@@ -390,11 +358,11 @@ private struct EpisodeCube: View {
                             .padding(.vertical, 4)
                             .background(
                                 episode.isWatched
-                                    ? Color.semanticGreen(for: colorScheme) 
-                                    : accent.opacity(colorScheme == .dark ? 0.2 : 0.15)
+                                    ? Color.semanticGreen(for: colorScheme).opacity(0.15) 
+                                    : Color.primary.opacity(0.05)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .foregroundStyle(episode.isWatched ? .white : accent)
+                            .foregroundStyle(episode.isWatched ? Color.semanticGreen(for: colorScheme) : Color.secondary)
 
                         Spacer()
 
@@ -439,14 +407,15 @@ private struct EpisodeCube: View {
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, minHeight: 100)
-                .background(themeColor.opacity(colorScheme == .dark ? 0.12 : 0.06))
+                .background(.thinMaterial)
+                .background(colorScheme == .dark ? Color.white.opacity(0.02) : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
                             episode.isWatched
                                 ? Color.semanticGreen(for: colorScheme).opacity(0.2)
-                                : themeColor.opacity(0.2), lineWidth: 1.5)
+                                : Color.primary.opacity(0.05), lineWidth: 1)
                 }
             }
             .buttonStyle(.interactive(feedback: nil))

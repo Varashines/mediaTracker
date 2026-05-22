@@ -8,13 +8,29 @@ struct ImageContainer: @unchecked Sendable {
     let image: CGImage
 }
 
+final class CachedImageWrapper: NSObject, @unchecked Sendable {
+    let image: CGImage
+    let urlString: String
+    let cacheKey: String
+
+    init(image: CGImage, urlString: String, cacheKey: String) {
+        self.image = image
+        self.urlString = urlString
+        self.cacheKey = cacheKey
+        super.init()
+    }
+}
+
+enum ImagePriority {
+    case low, normal, critical
+}
+
 @MainActor
-@Observable
 class ImageCache: NSObject {
     static let shared = ImageCache()
     
     // Performance: Prioritize small memory cache for 8GB M1 Macs
-    private let memoryCache = NSCache<NSString, CGImage>()
+    private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private let maxDiskCacheSize: Int64 = 500 * 1024 * 1024 // 500MB
     
     // Notification for broadcast updates
@@ -169,22 +185,20 @@ class ImageCache: NSObject {
     }
     
     func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {
-        // 1. Exact size match
-        let specificKey = generateCacheKey(key: key, size: targetSize)
-        if let exact = memoryCache.object(forKey: specificKey as NSString) {
-            return ImageContainer(image: exact)
+        let specificKey = targetSize.map { "\(key)_\(Int($0.width))x\(Int($0.height))" } ?? key
+        if let wrapper = memoryCache.object(forKey: specificKey as NSString) {
+            return ImageContainer(image: wrapper.image)
         }
         
-        // 2. Aggressive Match: If we have a larger version in memory, use it as an "exact" match 
-        // to avoid the blur-in transition for slightly different sizes.
+        // Return ANY size to let standard scale aspect fill, avoiding black layouts
         if let keys = urlToKeys[key] {
-            // Find all available sizes for this URL
             let matches = keys.compactMap { k -> (String, CGImage)? in
-                guard let img = memoryCache.object(forKey: k as NSString) else { return nil }
-                return (k, img)
+                if let wrapper = memoryCache.object(forKey: k as NSString) {
+                    return (k, wrapper.image)
+                }
+                return nil
             }
             
-            // Prefer versions that are EQUAL or LARGER than target
             if let target = targetSize {
                 let largerMatch = matches.first { (k, img) in
                     CGFloat(img.width) >= target.width * screenScale && 
@@ -223,8 +237,8 @@ class ImageCache: NSObject {
         let tinyKey = generateCacheKey(key: key, size: tinySize)
         
         // 1. Memory Check
-        if let image = memoryCache.object(forKey: tinyKey as NSString) {
-            return ImageContainer(image: image)
+        if let wrapper = memoryCache.object(forKey: tinyKey as NSString) {
+            return ImageContainer(image: wrapper.image)
         }
         
         // 2. Disk Check (Optimized via Index)
@@ -232,7 +246,8 @@ class ImageCache: NSObject {
         guard diskCacheIndex.contains(diskFileName) else { return nil }
         
         if let container = await loadFromDisk(diskFileName: diskFileName, targetSize: tinySize) {
-            memoryCache.setObject(container.image, forKey: tinyKey as NSString, cost: cost(for: container.image))
+            let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: tinyKey)
+            memoryCache.setObject(wrapper, forKey: tinyKey as NSString, cost: cost(for: container.image))
             registerKeyForURL(key, specificKey: tinyKey)
             return container
         }
@@ -249,16 +264,16 @@ class ImageCache: NSObject {
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
         // 1. Memory Check
         let specificKey = generateCacheKey(key: key, size: targetSize)
-        if let image = memoryCache.object(forKey: specificKey as NSString) {
-            return ImageContainer(image: image)
+        if let wrapper = memoryCache.object(forKey: specificKey as NSString) {
+            return ImageContainer(image: wrapper.image)
         }
         
         // 2. Coalesce tasks by the SPECIFIC key (URL + Size) to prevent duplicate downloads
         if let existingTask = activeTasks[specificKey] {
             await existingTask.value
             // Re-check memory after shared task finishes
-            if let image = memoryCache.object(forKey: specificKey as NSString) {
-                return ImageContainer(image: image)
+            if let wrapper = memoryCache.object(forKey: specificKey as NSString) {
+                return ImageContainer(image: wrapper.image)
             }
         }
         
@@ -272,7 +287,8 @@ class ImageCache: NSObject {
             if self.diskCacheIndex.contains(diskFileName) {
                 if let container = await self.loadFromDisk(diskFileName: diskFileName, targetSize: targetSize) {
                     if Task.isCancelled { return }
-                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
+                    let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: specificKey)
+                    self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key) 
                     return
@@ -296,7 +312,8 @@ class ImageCache: NSObject {
 
                 // Re-load decoded version after save to verify
                 if let container = await self.loadFromDisk(diskFileName: diskFileName, targetSize: targetSize) {
-                    self.memoryCache.setObject(container.image, forKey: specificKey as NSString, cost: self.cost(for: container.image))
+                    let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: specificKey)
+                    self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key)
                 }
@@ -311,8 +328,8 @@ class ImageCache: NSObject {
         await task.value
         activeTasks[specificKey] = nil
         
-        if let image = memoryCache.object(forKey: specificKey as NSString) {
-            return ImageContainer(image: image)
+        if let wrapper = memoryCache.object(forKey: specificKey as NSString) {
+            return ImageContainer(image: wrapper.image)
         }
         return nil
     }
@@ -332,7 +349,7 @@ class ImageCache: NSObject {
 
     func isExactMatch(image: CGImage, forURL url: String, size: CGSize?) -> Bool {
         let specificKey = generateCacheKey(key: url, size: size)
-        if memoryCache.object(forKey: specificKey as NSString) === image {
+        if memoryCache.object(forKey: specificKey as NSString)?.image === image {
             return true
         }
         
@@ -525,36 +542,21 @@ class ImageCache: NSObject {
             return ImageContainer(image: cgImage)
         }.value
     }
-
-    enum ImagePriority {
-        case low, normal, critical
-    }
 }
 
 extension ImageCache: NSCacheDelegate {
     nonisolated func cache(_ cache: NSCache<AnyObject, AnyObject>, willEvictObject obj: Any) {
-        // Phase 3 Fix: Clean up reverse lookup keys when NSCache evicts objects
-        // This prevents the urlToKeys dictionary from growing indefinitely.
+        guard let wrapper = obj as? CachedImageWrapper else { return }
+        let url = wrapper.urlString
+        let key = wrapper.cacheKey
+        
         Task { @MainActor in
-            // Finding the original URL from the specific cache key
-            // Specific key format: "URL" or "URL_WIDTHxHEIGHT"
-            for (url, keys) in urlToKeys {
-                var updatedKeys = keys
-                let keysToRemove = keys.filter { k in
-                    // If we can't find the object in cache for this key, it might be the one being evicted
-                    // Note: willEvictObject is called JUST BEFORE eviction, so checking presence is tricky.
-                    // Instead, we just prune any key that no longer points to a valid cached object.
-                    memoryCache.object(forKey: k as NSString) == nil
-                }
-                
-                for k in keysToRemove {
-                    updatedKeys.remove(k)
-                }
-                
-                if updatedKeys.isEmpty {
+            if var keys = urlToKeys[url] {
+                keys.remove(key)
+                if keys.isEmpty {
                     urlToKeys.removeValue(forKey: url)
                 } else {
-                    urlToKeys[url] = updatedKeys
+                    urlToKeys[url] = keys
                 }
             }
         }
@@ -564,7 +566,7 @@ extension ImageCache: NSCacheDelegate {
 struct CachedImage<Placeholder: View>: View {
     let url: URL?
     let targetSize: CGSize?
-    let priority: ImageCache.ImagePriority
+    let priority: ImagePriority
     var themeColor: Color? = nil
     var isFastScrolling: Bool = false
     var alwaysPreserveAlpha: Bool = false
@@ -576,8 +578,8 @@ struct CachedImage<Placeholder: View>: View {
     @State private var fuzzyMatch: CGImage?
     @State private var isLoading = false
     @State private var broadcastCancellable: AnyCancellable?
-
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImageCache.ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+ 
+    init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
         self.targetSize = targetSize
         self.priority = priority

@@ -50,12 +50,11 @@ struct GroupedMediaGrid: View {
                                     // Phase 4 Optimization: Predictive Prefetching
                                     if isFastScrolling {
                                         let prefetchCount = 8
+                                        let endIdx = min(idx + 1 + prefetchCount, groupArray.count)
                                         if idx + 1 < groupArray.count {
-                                            let endIdx = min(idx + 1 + prefetchCount, groupArray.count)
-                                            let urlsToPrefetch = groupArray[idx + 1..<endIdx]
-                                                .map { $0.element }
-                                                .compactMap { $0.posterURL }
-                                                .compactMap { URL(string: $0) }
+                                            let slice = groupArray[(idx + 1)..<endIdx]
+                                            let elements: [MediaThumbnailMetadata] = slice.map { $0.element }
+                                            let urlsToPrefetch: [URL] = elements.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
                                             
                                             if !urlsToPrefetch.isEmpty {
                                                 ImageCache.shared.prewarmImages(urls: urlsToPrefetch, targetSize: CGSize(width: 160, height: 240), priority: .low)

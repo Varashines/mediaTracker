@@ -45,6 +45,9 @@ struct MediaTrackerApp: App {
         // Hand off container for background actions
         NotificationManager.shared.setModelContainer(sharedModelContainer)
         
+        // Hand off container for foreground and background watch sync actions
+        DataService.shared.setModelContainer(sharedModelContainer)
+        
         // Initialize Theme Cache
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
         

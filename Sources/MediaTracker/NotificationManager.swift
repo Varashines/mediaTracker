@@ -211,18 +211,19 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         guard let container = modelContainer else { return }
         let context = ModelContext(container)
         
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let allItems = try? context.fetch(descriptor) else { 
+        let descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate<MediaItem> { $0.storedIsUpcoming == true }
+        )
+        guard let upcomingItemsFetched = try? context.fetch(descriptor) else { 
             onProgress?("❌ Failed to fetch items")
             return 
         }
         
-        let upcomingItems = allItems.filter { $0.isUpcoming }
-            .sorted { 
-                let date1 = $0.cachedNextAiringDate ?? $0.releaseDate ?? .distantPast
-                let date2 = $1.cachedNextAiringDate ?? $1.releaseDate ?? .distantFuture
-                return date1 < date2
-            }
+        let upcomingItems = upcomingItemsFetched.sorted { 
+            let date1 = $0.cachedNextAiringDate ?? $0.releaseDate ?? .distantPast
+            let date2 = $1.cachedNextAiringDate ?? $1.releaseDate ?? .distantFuture
+            return date1 < date2
+        }
         
         onProgress?("🔔 Found \(upcomingItems.count) upcoming items")
         

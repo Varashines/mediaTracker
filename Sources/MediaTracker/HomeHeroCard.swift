@@ -42,16 +42,9 @@ struct HomeHeroCard: View {
                         .padding(.vertical, 8)
                         .foregroundStyle(.white)
                         .background {
-                            if #available(macOS 26.0, *) {
-                                Capsule()
-                                    .fill(.clear)
-                                    .glassEffect(.regular, in: .capsule)
-                                    .opacity(0.9)
-                            } else {
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.9)
-                            }
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.9)
                         }
                         .clipShape(Capsule())
                         .overlay {

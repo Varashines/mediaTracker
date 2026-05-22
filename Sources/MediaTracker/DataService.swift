@@ -20,6 +20,33 @@ class DataService {
     var isRunningMaintenance = false
     var showMaintenanceComplete = false
 
+    private var modelContainer: ModelContainer?
+    private var tvShowCompletedObserver: Any?
+
+    func setModelContainer(_ container: ModelContainer) {
+        self.modelContainer = container
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        guard tvShowCompletedObserver == nil else { return }
+        
+        let container = self.modelContainer
+        tvShowCompletedObserver = NotificationCenter.default.addObserver(
+            forName: .tvShowMarkedCompleted,
+            object: nil,
+            queue: nil
+        ) { notification in
+            guard let itemID = notification.userInfo?["itemID"] as? String,
+                  let container = container else { return }
+            
+            Task.detached(priority: .userInitiated) {
+                let backgroundService = BackgroundDataService(modelContainer: container)
+                await backgroundService.markAllEpisodesAsWatched(itemID: itemID)
+            }
+        }
+    }
+
     func isProcessing(id: String) -> Bool { itemsInProgress.contains(id) }
     func startProcessing(id: String) { itemsInProgress.insert(id) }
     func stopProcessing(id: String) { itemsInProgress.remove(id) }
@@ -33,13 +60,15 @@ class DataService {
     }
 
     func refreshMetadata(for items: [MediaItem], modelContext: ModelContext, metadataOnly: Bool = false, force: Bool = false, skipDelay: Bool = false) {
+        refreshMetadata(forIDs: items.map { $0.id }, modelContext: modelContext, metadataOnly: metadataOnly, force: force, skipDelay: skipDelay)
+    }
+
+    func refreshMetadata(forIDs ids: [String], modelContext: ModelContext, metadataOnly: Bool = false, force: Bool = false, skipDelay: Bool = false) {
         // Skip if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
-        let itemIDs = items.map { $0.id }
-
         // Phase 4 Optimization: Coalesce into Batch Queue
-        pendingRefreshIDs.formUnion(itemIDs)
+        pendingRefreshIDs.formUnion(ids)
         refreshTask?.cancel()
 
         isRefreshing = true

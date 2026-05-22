@@ -94,7 +94,7 @@ struct SettingsView: View {
     // MARK: - Tabs
 
     private var generalTab: some View {
-        VStack(alignment: .leading, spacing: 32) {
+        VStack(alignment: .leading, spacing: 24) {
             settingsHeader("Appearance", icon: "paintbrush", color: .purple)
             
             GroupContainer {
@@ -107,6 +107,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 180)
                 }
+            }
+
+            settingsHeader("Tracking Behavior", icon: "play.square.stack", color: .blue)
+            
+            GroupContainer {
+                modernToggle("Auto-Complete TV Shows", subtitle: "Marking a show completed automatically marks all episodes watched.", isOn: $autoMarkEpisodesWatched)
             }
 
             settingsHeader("Feedback & Power", icon: "bolt.fill", color: .orange)
@@ -243,8 +249,12 @@ struct SettingsView: View {
                 Button { showClearDatabaseConfirmation = true } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Delete All Data").font(.headline).foregroundStyle(.red)
-                            Text("Permanently remove everything. Cannot be undone.").font(.caption).foregroundStyle(.secondary)
+                            Text("Delete All Data")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.red)
+                            Text("Permanently remove everything. Cannot be undone.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Image(systemName: "trash.fill").foregroundStyle(.red)
@@ -264,19 +274,13 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private func settingsHeader(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(color.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(color.highContrastAccent(colorScheme: colorScheme))
-            }
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.primary)
             
             Text(title)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.primary)
         }
     }
@@ -284,13 +288,16 @@ struct SettingsView: View {
     private func modernRow<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 20)
             content()
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
@@ -320,15 +327,15 @@ struct SettingsView: View {
 struct GroupContainer<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             content
         }
-        .padding(20)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(14)
+        .background(Color.primary.opacity(0.02))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         }
     }
 }

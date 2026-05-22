@@ -210,7 +210,8 @@ actor DiscoverySyncService {
         await extractMissingColors()
     }
 
-    func updateItemAdded(_ item: MediaItem) async {
+    func updateItemAdded(_ itemID: PersistentIdentifier) async {
+        guard let item = modelContext.model(for: itemID) as? MediaItem else { return }
         // Studio Aliases — normalize keys to lowercase+trimmed to match filter behavior
         let rules = await fetchAliasRules()
         var sourceToTarget: [String: String] = [:]
@@ -273,6 +274,49 @@ actor DiscoverySyncService {
         
         // Ensure colors are updated for the new network
         await extractMissingColors()
+    }
+
+    func isHubDataEmpty() async -> Bool {
+        let netDescriptor = FetchDescriptor<NetworkEntity>()
+        let netCount = (try? modelContext.fetchCount(netDescriptor)) ?? 0
+        let genreDescriptor = FetchDescriptor<GenreEntity>()
+        let genreCount = (try? modelContext.fetchCount(genreDescriptor)) ?? 0
+        let badgeDescriptor = FetchDescriptor<BadgeEntity>()
+        let badgeCount = (try? modelContext.fetchCount(badgeDescriptor)) ?? 0
+        return netCount == 0 && genreCount == 0 && badgeCount == 0
+    }
+
+    func fetchHubData(hiddenStudios: String) async -> DiscoveryHubData {
+        let netDescriptor = FetchDescriptor<NetworkEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
+        let genreDescriptor = FetchDescriptor<GenreEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
+        let langDescriptor = FetchDescriptor<LanguageEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.code, order: .forward)
+        ])
+        let badgeDescriptor = FetchDescriptor<BadgeEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.label, order: .forward)
+        ])
+
+        let nets = (try? modelContext.fetch(netDescriptor)) ?? []
+        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
+        let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
+
+        let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
+        let snGenres = ((try? modelContext.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
+        let snLangs = ((try? modelContext.fetch(langDescriptor)) ?? []).map {
+            let name = LanguageUtils.languageName(for: $0.code)
+            return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
+        }
+        let snBadges = ((try? modelContext.fetch(badgeDescriptor)) ?? []).map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
+
+        return DiscoveryHubData(networks: snNets, genres: snGenres, languages: snLangs, badges: snBadges)
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?) async {

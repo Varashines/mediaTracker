@@ -198,15 +198,8 @@ actor CalendarFilterActor {
                 try? modelContext.save()
                 await Task.yield()
             }
+            print("✅ Calendar: Background date healing completed.")
         }
-        
-        let movies = (try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "Movie" }))) ?? []
-        for movie in movies {
-            movie.syncCachedProperties()
-        }
-        
-        try? modelContext.save()
-        print("✅ Calendar: Background date healing completed.")
     }
 
     private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {

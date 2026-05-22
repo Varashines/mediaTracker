@@ -39,8 +39,12 @@ struct FilteredLibraryGridView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
             fetchItems()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
-            fetchItems()
+        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { notification in
+            if let itemID = notification.userInfo?["itemID"] as? PersistentIdentifier {
+                updateSingleItem(id: itemID)
+            } else {
+                fetchItems()
+            }
         }
         .task {
             fetchItems()
@@ -95,6 +99,60 @@ struct FilteredLibraryGridView: View {
                 }
             } catch {
                 print("Error fetching filtered items: \(error)")
+            }
+        }
+    }
+
+    private func updateSingleItem(id: PersistentIdentifier) {
+        let container = modelContext.container
+        var network: [String]? = nil
+        var language: String? = nil
+        var genre: String? = nil
+        var badge: String? = nil
+        
+        switch filter.type {
+        case .studio: network = filter.sourceNames ?? [filter.name]
+        case .genre: genre = filter.name
+        case .language: language = filter.name
+        case .badge: badge = filter.name
+        }
+        
+        Task {
+            do {
+                let filterActor = MediaFilterActor(modelContainer: container)
+                let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
+                    for: id,
+                    category: .all,
+                    searchText: "",
+                    network: network,
+                    language: language,
+                    genre: genre,
+                    badge: badge
+                )
+                
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if let index = items.firstIndex(where: { $0.id == id }) {
+                            if let updated = updatedMetadata {
+                                items[index] = updated
+                            } else {
+                                items.remove(at: index)
+                            }
+                        } else if let updated = updatedMetadata {
+                            items.append(updated)
+                            
+                            // Re-sort the items list
+                            switch filter.type {
+                            case .badge:
+                                items.sort { ($0.lastInteractionDate ?? Date.distantPast) > ($1.lastInteractionDate ?? Date.distantPast) }
+                            default:
+                                items.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("Error updating single item in FilteredLibraryGridView: \(error)")
             }
         }
     }

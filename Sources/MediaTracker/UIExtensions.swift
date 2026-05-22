@@ -124,15 +124,7 @@ extension Color {
             return Color.fromOKLCH(l: min(o.l, 0.4), c: max(o.c, 0.45), h: o.h)
         }
     }
-    /// Returns a subtly tinted background color based on the current color using OKLCH.
-    func themedBackground(colorScheme: ColorScheme) -> Color {
-        let o = self.oklch
-        if colorScheme == .dark {
-            return Color.fromOKLCH(l: 0.1, c: 0.04, h: o.h)
-        } else {
-            return Color.fromOKLCH(l: 0.96, c: 0.02, h: o.h)
-        }
-    }
+
 
     /// Returns a color with a slight hue shift for organic gradients.
     func hueShift(by amount: Double) -> Color {

@@ -73,10 +73,46 @@ struct LibraryDetailView: View {
     @State private var showingBulkManager = false
     @State private var themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
+
+    private var categoryMoodColor: Color {
+        if isSearchActive {
+            return Color.blue
+        }
+        switch viewModel.selectedCategory {
+        case .home: return Color.blue
+        case .discover: return Color.purple
+        case .upcoming: return Color.orange
+        case .all: return Color.blue
+        case .movie: return Color.indigo
+        case .tvShow: return Color.teal
+        case .smartHub: return Color.purple
+        case .insights: return Color.green
+        case .releaseRadar: return Color.pink
+        default: return Color.blue
+        }
+    }
     
     var body: some View {
         NavigationStack(path: $viewModel.navigationPath) {
             ZStack {
+                let mood = themeCoordinator.categoryMoodColor == .clear ? categoryMoodColor : themeCoordinator.categoryMoodColor
+                GeometryReader { geo in
+                    ZStack {
+                        Circle()
+                            .fill(mood.opacity(colorScheme == .dark ? 0.08 : 0.04))
+                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
+                            .blur(radius: 120)
+                            .offset(x: geo.size.width * 0.2, y: -geo.size.height * 0.1)
+                        
+                        Circle()
+                            .fill(mood.opacity(colorScheme == .dark ? 0.04 : 0.02))
+                            .frame(width: geo.size.width * 0.5, height: geo.size.width * 0.5)
+                            .blur(radius: 80)
+                            .offset(x: -geo.size.width * 0.2, y: geo.size.height * 0.3)
+                    }
+                    .ignoresSafeArea()
+                }
+
                 mainContent
 
                 if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
@@ -85,7 +121,9 @@ struct LibraryDetailView: View {
                         .zIndex(100)
                 }
             }
+            .background(.ultraThinMaterial)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewModel.selectedCategory)
             .navigationTitle(
                 isSearchActive
                     ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
@@ -122,9 +160,13 @@ struct LibraryDetailView: View {
             .onSubmit(of: .search) {
                 viewModel.searchSubmitTrigger += 1
             }
-            .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { notification in
                 LibraryStatsActor.clearCache()
-                viewModel.filterSubject.send()
+                if let itemID = notification.userInfo?["itemID"] as? PersistentIdentifier {
+                    updateSingleItemInContentView(id: itemID)
+                } else {
+                    viewModel.filterSubject.send()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
                 LibraryStatsActor.clearCache()
@@ -480,13 +522,31 @@ struct LibraryDetailView: View {
         let container = modelContext.container
         Task.detached(priority: .background) {
             let context = ModelContext(container)
-            let descriptor = FetchDescriptor<MediaItem>()
-            if let allItems = try? context.fetch(descriptor) {
-                let missingItems = allItems.filter { $0.overview == "" || $0.posterURL == nil || $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
-                if !missingItems.isEmpty {
-                    await MainActor.run {
-                        DataService.shared.refreshMetadata(for: missingItems, modelContext: modelContext, force: true)
-                    }
+            
+            let p1 = #Predicate<MediaItem> { $0.overview == "" }
+            let p2 = #Predicate<MediaItem> { $0.posterURL == nil }
+            let p3 = #Predicate<MediaItem> { $0.lastUpdated == nil }
+            let p4 = #Predicate<MediaItem> { $0.cachedWatchedEpisodeCount == nil }
+            
+            var missingIDs = Set<String>()
+            
+            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p1)) {
+                missingIDs.formUnion(items.map { $0.id })
+            }
+            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p2)) {
+                missingIDs.formUnion(items.map { $0.id })
+            }
+            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p3)) {
+                missingIDs.formUnion(items.map { $0.id })
+            }
+            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p4)) {
+                missingIDs.formUnion(items.map { $0.id })
+            }
+            
+            if !missingIDs.isEmpty {
+                let idsArray = Array(missingIDs)
+                await MainActor.run {
+                    DataService.shared.refreshMetadata(forIDs: idsArray, modelContext: modelContext, force: true)
                 }
             }
         }
@@ -612,6 +672,76 @@ struct LibraryDetailView: View {
         guard let items = try? modelContext.fetch(descriptor) else { return }
 
         DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
+    }
+
+    private func updateSingleItemInContentView(id: PersistentIdentifier) {
+        let category = viewModel.selectedCategory
+        let searchText = viewModel.searchText
+        let networks = viewModel.selectedNetworks
+        let language = viewModel.selectedLanguage
+        let genre = viewModel.selectedGenre
+        let year = viewModel.selectedYear
+        let state = viewModel.selectedState
+        let collectionID = viewModel.selectedCollectionID
+        
+        let container = modelContext.container
+        
+        Task {
+            do {
+                let filterActor = MediaFilterActor(modelContainer: container)
+                let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
+                    for: id,
+                    category: category,
+                    searchText: searchText,
+                    network: networks,
+                    language: language,
+                    genre: genre,
+                    year: year,
+                    state: state,
+                    collectionID: collectionID
+                )
+                
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        func updateList(_ list: inout [MediaThumbnailMetadata], updated: MediaThumbnailMetadata?) {
+                            if let index = list.firstIndex(where: { $0.id == id }) {
+                                if let updated = updated {
+                                    list[index] = updated
+                                } else {
+                                    list.remove(at: index)
+                                }
+                            }
+                        }
+                        
+                        updateList(&viewModel.displayedItems, updated: updatedMetadata)
+                        updateList(&viewModel.recentlyAddedItems, updated: updatedMetadata)
+                        updateList(&viewModel.homeContinueWatchingItems, updated: updatedMetadata)
+                        updateList(&viewModel.featuredUpcomingItems, updated: updatedMetadata)
+                        
+                        if viewModel.spotlightHero?.id == id {
+                            viewModel.spotlightHero = updatedMetadata
+                        }
+                        
+                        for i in 0..<viewModel.groupedItems.count {
+                            var itemsInGroup = viewModel.groupedItems[i].1
+                            if let index = itemsInGroup.firstIndex(where: { $0.id == id }) {
+                                if let updated = updatedMetadata {
+                                    itemsInGroup[index] = updated
+                                } else {
+                                    itemsInGroup.remove(at: index)
+                                }
+                                viewModel.groupedItems[i].1 = itemsInGroup
+                            }
+                        }
+                        
+                        let moodColors = viewModel.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
+                        themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
+                    }
+                }
+            } catch {
+                print("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
+            }
+        }
     }
 }
 

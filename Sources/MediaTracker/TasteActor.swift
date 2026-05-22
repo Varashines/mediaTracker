@@ -109,7 +109,7 @@ actor TasteActor {
         let batchSize = 500
         var offset = 0
         while true {
-            var descriptor = FetchDescriptor<MediaItem>()
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.tasteValue != "None" })
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
@@ -220,10 +220,8 @@ actor TasteActor {
         let creatorAffinity = profile.creator
         let langAffinity = profile.language
 
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let allItems = try? modelContext.fetch(descriptor) else { return [] }
-
-        let wishlist = allItems.filter { $0.stateValue == "Wishlist" }
+        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue == "Wishlist" })
+        guard let wishlist = try? modelContext.fetch(descriptor) else { return [] }
         var recommendations: [(id: PersistentIdentifier, score: Double, reason: String)] = []
         let now = Date()
 

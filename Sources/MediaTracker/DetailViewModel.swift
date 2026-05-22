@@ -138,53 +138,11 @@ class DetailViewModel {
     
     func markAllAsWatched() {
         guard item.modelContext != nil else { return }
-        if let tv = item.tvShowDetails {
-            // Instant UI Update: Mark all CURRENTLY LOADED episodes as watched on MainActor
-            // Defensive: skip seasons/episodes deleted during concurrent background merges
-            let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
-            for season in liveSeasons {
-                let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
-                for episode in liveEps {
-                    episode.markWatched(true)
-                }
-            }
-            
-            // Heal/Sync check before batch marking
-            let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
-            guard Int(tmdbIDString) != nil else { return }
-            
-            let seasonIDs = tv.seasons.map { $0.persistentModelID }
-            let itemID = item.id
-            let container = item.modelContext?.container
-            
-            isRefreshing = true // Show loading state during batch update
-            
-            Task { [weak self] in
-                guard let self = self else { return }
-                
-                // Concurrent fetching of missing episodes and re-linking
-                await withTaskGroup(of: Void.self) { group in
-                    for seasonID in seasonIDs {
-                        group.addTask {
-                            await self.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: true)
-                        }
-                    }
-                }
-                
-                // Perform batch update on background actor (handles orphaned/unloaded episodes)
-                if let container = container {
-                    let backgroundService = BackgroundDataService(modelContainer: container)
-                    await backgroundService.markAllEpisodesAsWatched(itemID: itemID)
-                }
-                
-                await MainActor.run { [weak self] in
-                    guard let self = self, self.item.modelContext != nil else { return }
-                    self.refreshLocalItem()
-                    self.isRefreshing = false
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
-                }
-            }
+        if item.state != .completed {
+            item.state = .completed
         }
+        try? item.modelContext?.save()
+        NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": item.persistentModelID])
     }
 
     func fetchEpisodes(for season: TVSeason) {
@@ -309,10 +267,7 @@ class DetailViewModel {
             Task.detached {
                 if let container = container {
                     let sync = DiscoverySyncService(modelContainer: container)
-                    let actorContext = ModelContext(container)
-                    if let fetchedItem = actorContext.model(for: itemID) as? MediaItem {
-                        await sync.updateItemAdded(fetchedItem)
-                    }
+                    await sync.updateItemAdded(itemID)
                 }
             }
             

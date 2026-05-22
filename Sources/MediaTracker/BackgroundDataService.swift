@@ -394,40 +394,86 @@ actor BackgroundDataService {
         let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
         guard let tmdbID = Int(tmdbIDString) else { return }
 
-        // Deep Heal: Ensure all records are linked before updating
-        if let tv = item.tvShowDetails {
-            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
-            if let seasons = try? modelContext.fetch(sDescriptor) {
-                // Defensive: skip deleted/detached seasons
-                let liveSeasons = seasons.filter { !$0.isDeleted && $0.modelContext != nil }
-                for season in liveSeasons {
-                    if season.tvShowDetails?.persistentModelID != tv.persistentModelID {
-                        season.tvShowDetails = tv
-                    }
-                    
-                    let sNum = season.seasonNumber
-                    let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID && $0.seasonNumber == sNum })
-                    if let episodes = try? modelContext.fetch(eDescriptor) {
-                        for episode in episodes {
+        // 1. Force refresh TMDB details first to get the latest list of seasons and episodes
+        _ = await refreshTVShow(id: itemID, tmdbID: tmdbID, metadataOnly: false, force: true)
+        
+        // Refetch the item to ensure context alignment
+        guard let refreshedItem = try? modelContext.fetch(descriptor).first,
+              let tv = refreshedItem.tvShowDetails else { return }
+              
+        // 2. Fetch and pre-populate missing episodes for seasons if needed
+        let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
+        if let seasons = try? modelContext.fetch(sDescriptor) {
+            let liveSeasons = seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+            
+            // N+1 Prevention: Prefetch all episodes for this show into a map
+            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
+            let allEpisodes = (try? modelContext.fetch(eDescriptor)) ?? []
+            var episodeMap = Dictionary(uniqueKeysWithValues: allEpisodes.compactMap { ep -> (String, TVEpisode)? in
+                guard let uid = ep.uniqueID else { return nil }
+                return (uid, ep)
+            })
+            
+            for season in liveSeasons {
+                if season.tvShowDetails?.persistentModelID != tv.persistentModelID {
+                    season.tvShowDetails = tv
+                }
+                
+                let sNum = season.seasonNumber
+                // If season has no episodes, or is missing some, fetch and populate
+                if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
+                    do {
+                        let tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
+                        for ep in tmdbEpisodes {
+                            let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
+                            let epName = ep.name ?? "Episode \(ep.episodeNumber)"
+                            let epOverview = ep.overview ?? ""
+                            
+                            let episode: TVEpisode
+                            if let existing = episodeMap[epUniqueID] {
+                                episode = existing
+                                episode.name = epName
+                                episode.overview = epOverview
+                                episode.airDate = ep.airDate
+                                episode.runtime = ep.runtime
+                                episode.updateAirDateValue()
+                            } else {
+                                episode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime, showID: tmdbID)
+                                episode.showID = tmdbID
+                                modelContext.insert(episode)
+                                episodeMap[epUniqueID] = episode
+                            }
+                            
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
                             episode.markWatched(true)
                         }
+                    } catch {
+                        print("⚠️ Failed to download details for season \(sNum) during auto-completion: \(error)")
+                    }
+                } else {
+                    for episode in season.episodes {
+                        episode.markWatched(true)
                     }
                 }
             }
-            tv.recalculateCachedProperties(triggerSync: true, force: true)
         }
         
-        item.lastInteractionDate = Date()
-        item.syncCachedProperties(force: true)
-        item.updateSearchableText()
-        item.checkOverallCompletion()
+        tv.recalculateCachedProperties(triggerSync: true, force: true)
+        refreshedItem.lastInteractionDate = Date()
+        refreshedItem.syncCachedProperties(force: true)
+        refreshedItem.updateSearchableText()
+        refreshedItem.checkOverallCompletion()
         
         do {
             try modelContext.save()
             print("✅ Deep Completion: Marked all episodes as watched for \(itemID).")
+            
+            // Broadcast the refresh
+            await MainActor.run {
+                NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": itemID])
+            }
         } catch {
             print("❌ Deep Completion: Failed to save: \(error)")
         }

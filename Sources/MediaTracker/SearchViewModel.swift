@@ -74,16 +74,16 @@ class SearchViewModel {
             // Parallel Search: Local + Web
             async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
 
-            async let webMovies: [MediaSearchResult] = {
+            async let webMovies: [MediaSearchResult]? = {
                 if selectedType == .all || selectedType == .movie {
-                    return (try? await APIClient.shared.searchMovies(query: text)) ?? []
+                    return try? await APIClient.shared.searchMovies(query: text)
                 }
                 return []
             }()
 
-            async let webTV: [MediaSearchResult] = {
+            async let webTV: [MediaSearchResult]? = {
                 if selectedType == .all || selectedType == .tvShow {
-                    return (try? await APIClient.shared.searchTVShows(query: text)) ?? []
+                    return try? await APIClient.shared.searchTVShows(query: text)
                 }
                 return []
             }()
@@ -93,13 +93,32 @@ class SearchViewModel {
             if Task.isCancelled { return }
 
             self.filteredLocalResults = local
-            self.movieResults = movies
-            self.tvResults = tv
-            self.isSearching = false
-            self.isOfflineResultsOnly = false
             
-            // 2. Save to Cache
-            saveToCache(query: text, type: selectedType, results: movies + tv)
+            var hasNewResults = false
+            if let movies = movies {
+                self.movieResults = movies
+                hasNewResults = true
+            }
+            if let tv = tv {
+                self.tvResults = tv
+                hasNewResults = true
+            }
+            
+            if movies == nil || tv == nil {
+                self.errorMessage = "Offline or search failed. Displaying cached results."
+                self.showError = true
+            } else {
+                self.errorMessage = nil
+                self.showError = false
+            }
+            
+            self.isSearching = false
+            self.isOfflineResultsOnly = (movies == nil || tv == nil)
+            
+            // 2. Save to Cache only if we successfully retrieved new results
+            if hasNewResults, let fetchedMovies = movies, let fetchedTV = tv {
+                saveToCache(query: text, type: selectedType, results: fetchedMovies + fetchedTV)
+            }
         }
     }
 
@@ -145,11 +164,12 @@ class SearchViewModel {
     }
 
     private func saveToCache(query: String, type: SearchType, results: [MediaSearchResult]) {
-        let context = ModelContext(modelContainer)
+        let container = modelContainer
         let key = "\(type.rawValue)_\(query)"
         
         // Use background task to not block UI
-        Task.detached(priority: .background) { [context, key, query, type, results] in
+        Task.detached(priority: .background) { [container, key, query, type, results] in
+            let context = ModelContext(container)
             // Remove old if exists
             try? context.delete(model: SearchCacheEntity.self, where: #Predicate { $0.key == key })
             
@@ -196,10 +216,7 @@ class SearchViewModel {
                 // Sync Discovery Entities
                 if let id = result.id {
                     let sync = DiscoverySyncService(modelContainer: container)
-                    let actorContext = ModelContext(container)
-                    if let fetchedItem = actorContext.model(for: id) as? MediaItem {
-                        await sync.updateItemAdded(fetchedItem)
-                    }
+                    await sync.updateItemAdded(id)
                 }
                 
                 return result
