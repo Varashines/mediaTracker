@@ -20,6 +20,21 @@ struct DiscoveryCard: View {
             }
             return .accentColor
         }
+        // Genre Color Coding
+        if baseColor == .indigo {
+            switch node.name {
+            case "Action", "Adventure": return .orange
+            case "Comedy": return .yellow
+            case "Drama": return .blue
+            case "Sci-Fi", "Science Fiction", "Fantasy": return .purple
+            case "Horror", "Thriller": return .red
+            case "Mystery", "Crime": return .indigo
+            case "Documentary": return .gray
+            case "Animation": return .pink
+            case "Family": return .green
+            default: return baseColor
+            }
+        }
         return baseColor
     }
 
@@ -64,6 +79,19 @@ struct DiscoveryCard: View {
     private var logoContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         ZStack {
+            // Logo Backing Glow (Hardware-accelerated scale/opacity on hover)
+            if node.logoPath != nil {
+                RadialGradient(
+                    colors: [themeColor.opacity(isHovered ? 0.25 : 0.0), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 45
+                )
+                .frame(width: 100, height: 50)
+                .scaleEffect(isHovered ? 1.4 : 0.8)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
+            }
+
             // 1. Logo or Name (Always Visible, Moves Up on Hover)
             Group {
                 if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {

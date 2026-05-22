@@ -27,6 +27,10 @@ struct MediaThumbnailPlaceholder: View {
                         .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
                 }
             
+            Image(systemName: "photo")
+                .font(.system(size: 32))
+                .foregroundStyle(Color.primary.opacity(0.12))
+            
             VStack {
                 Spacer()
                 RoundedRectangle(cornerRadius: 4)
@@ -37,5 +41,6 @@ struct MediaThumbnailPlaceholder: View {
             }
         }
         .frame(width: width, height: height)
+        .skeletonPulse()
     }
 }

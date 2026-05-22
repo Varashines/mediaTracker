@@ -167,8 +167,18 @@ private struct SeasonTab: View {
 
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.caption2)
+                        .font(.system(size: 10.5))
                         .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                } else if progress > 0 {
+                    Circle()
+                        .trim(from: 0.0, to: CGFloat(progress))
+                        .stroke(accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .frame(width: 8, height: 8)
+                        .rotationEffect(.degrees(-90))
+                } else {
+                    Circle()
+                        .stroke(Color.primary.opacity(0.15), lineWidth: 1.5)
+                        .frame(width: 8, height: 8)
                 }
             }
             .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
@@ -368,8 +378,8 @@ private struct EpisodeCube: View {
 
                         if episode.isWatched {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.semanticGreen(for: colorScheme))
-                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color.semanticGreen(for: colorScheme).opacity(0.8))
+                                .font(.system(size: 10.5))
                         }
                     }
 

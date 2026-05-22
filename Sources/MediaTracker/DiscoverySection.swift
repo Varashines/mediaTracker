@@ -20,8 +20,9 @@ struct DiscoverySection: View {
             SectionHeader(title: title, icon: icon, iconColor: sectionColor)
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 24)], spacing: 24) {
-                ForEach(nodes) { node in
+                ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
+                        .entranceStagger(index: index)
                 }
             }
             .padding(.horizontal, 40)

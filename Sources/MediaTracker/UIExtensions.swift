@@ -284,3 +284,24 @@ extension Color {
                      opacity: alpha)
     }
 }
+
+// MARK: - Skeleton Pulse
+struct SkeletonPulseModifier: ViewModifier {
+    @State private var isAnimating = false
+    func body(content: Content) -> some View {
+        content
+            .opacity(isAnimating ? 0.5 : 0.85)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
+extension View {
+    func skeletonPulse() -> some View {
+        self.modifier(SkeletonPulseModifier())
+    }
+}
+

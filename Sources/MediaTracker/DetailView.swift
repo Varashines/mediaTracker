@@ -38,10 +38,17 @@ struct DetailView: View {
         ZStack {
             Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             
-            effectiveThemeColor
-                .opacity(colorScheme == .dark ? 0.25 : 0.1)
+            // Dynamic Backdrop Blend - optimized with RadialGradient (No heavy dynamic blur)
+            GeometryReader { geo in
+                RadialGradient(
+                    colors: [effectiveThemeColor.opacity(colorScheme == .dark ? 0.22 : 0.08), .clear],
+                    center: .topTrailing,
+                    startRadius: 0,
+                    endRadius: min(geo.size.width, geo.size.height) * 0.95
+                )
                 .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.8), value: effectiveThemeColor)
+            }
+            .animation(.easeInOut(duration: 0.8), value: effectiveThemeColor)
             
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -51,8 +58,16 @@ struct DetailView: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.xLarge)
                 .padding(.vertical, AppTheme.Spacing.section)
+                .padding(.bottom, 90) // Ensure scroll content doesn't get covered by floating bar
             }
             .scrollBounceBehavior(.basedOnSize)
+            
+            // Floating Action Bar overlay at bottom
+            VStack {
+                Spacer()
+                floatingActionBar
+                    .padding(.bottom, 24)
+            }
         }
         .navigationTitle("Details")
         .toolbar { detailToolbar }
@@ -145,7 +160,7 @@ struct DetailView: View {
                 // 2. TOP CAST (Modular Card)
                 if !viewModel.item.displayCast.isEmpty {
                     ModularSection(title: "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
-                        CastSectionViewNew(
+                        CastSectionView(
                             cast: viewModel.item.displayCast,
                             themeColor: effectiveThemeColor
                         ) { actorName in
@@ -171,31 +186,7 @@ struct DetailView: View {
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            HStack(spacing: 16) {
-                Button {
-                    showingCollectionPicker = true
-                } label: {
-                    Label("Add to Collection", systemImage: "folder.badge.plus")
-                }
-                .help("Add to Collection")
-
-                Button {
-                    viewModel.refreshData(force: true)
-                } label: {
-                    if viewModel.isRefreshing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                }
-                .disabled(viewModel.isRefreshing)
-
-                Button(role: .destructive) {
-                    deleteItem()
-                } label: {
-                    Label("Remove", systemImage: "trash")
-                }
-            }
+            Spacer()
         }
     }
 
@@ -232,6 +223,68 @@ struct DetailView: View {
                     NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
                 }
             }
+        }
+    }
+
+    // MARK: - Floating Action Bar View
+    private var floatingActionBar: some View {
+        HStack(spacing: 16) {
+            Button {
+                showingCollectionPicker = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder.badge.plus")
+                    Text("Add to Collection")
+                }
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+            }
+            .buttonStyle(.plain)
+            .help("Add to Collection")
+            
+            Divider()
+                .frame(height: 14)
+            
+            Button {
+                viewModel.refreshData(force: true)
+            } label: {
+                HStack(spacing: 6) {
+                    if viewModel.isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("Refresh")
+                }
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isRefreshing)
+            
+            Divider()
+                .frame(height: 14)
+            
+            Button(role: .destructive) {
+                deleteItem()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                    Text("Remove")
+                }
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 10, y: 5)
+        }
+        .overlay {
+            Capsule()
+                .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
         }
     }
 }

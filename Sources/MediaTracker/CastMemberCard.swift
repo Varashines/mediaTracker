@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct CastMemberCardNew: View {
+struct CastMemberCard: View {
     let member: SimpleCastMember
     let themeColor: Color
     var action: (() -> Void)? = nil

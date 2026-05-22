@@ -32,20 +32,103 @@ struct SmartCollectionsHubView: View {
                     .padding(.horizontal, 40)
                     .padding(.top, 40)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
+                Grid(alignment: .leading, horizontalSpacing: 25, verticalSpacing: 25) {
                     let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
-                    ForEach(smartCategories) { category in
+                    
+                    GridRow {
+                        // Release Radar (spans 2)
+                        let releaseRadar = NavigationCategory.releaseRadar
                         SmartCollectionCard(
-                            title: category.title,
-                            icon: category.icon,
-                            description: description(for: category),
-                            count: counts[category] ?? 0,
+                            title: releaseRadar.title,
+                            icon: releaseRadar.icon,
+                            description: description(for: releaseRadar),
+                            count: counts[releaseRadar] ?? 0,
                             accentColor: Color.accentColor,
-                            isPinned: pinnedList.contains(category.rawValue),
-                            onPinToggle: { togglePinned(category) }
+                            isPinned: pinnedList.contains(releaseRadar.rawValue),
+                            onPinToggle: { togglePinned(releaseRadar) }
                         ) {
-                            selection = .category(category)
+                            selection = .category(releaseRadar)
                         }
+                        .gridCellColumns(2)
+                        
+                        // Smart Upcoming (spans 1)
+                        let smartUpcoming = NavigationCategory.smartUpcoming
+                        SmartCollectionCard(
+                            title: smartUpcoming.title,
+                            icon: smartUpcoming.icon,
+                            description: description(for: smartUpcoming),
+                            count: counts[smartUpcoming] ?? 0,
+                            accentColor: Color.accentColor,
+                            isPinned: pinnedList.contains(smartUpcoming.rawValue),
+                            onPinToggle: { togglePinned(smartUpcoming) }
+                        ) {
+                            selection = .category(smartUpcoming)
+                        }
+                    }
+                    
+                    GridRow {
+                        // Catch Up (spans 2)
+                        let catchUp = NavigationCategory.catchUp
+                        SmartCollectionCard(
+                            title: catchUp.title,
+                            icon: catchUp.icon,
+                            description: description(for: catchUp),
+                            count: counts[catchUp] ?? 0,
+                            accentColor: Color.accentColor,
+                            isPinned: pinnedList.contains(catchUp.rawValue),
+                            onPinToggle: { togglePinned(catchUp) }
+                        ) {
+                            selection = .category(catchUp)
+                        }
+                        .gridCellColumns(2)
+                        
+                        // Loved (spans 1)
+                        let loved = NavigationCategory.loved
+                        SmartCollectionCard(
+                            title: loved.title,
+                            icon: loved.icon,
+                            description: description(for: loved),
+                            count: counts[loved] ?? 0,
+                            accentColor: Color.accentColor,
+                            isPinned: pinnedList.contains(loved.rawValue),
+                            onPinToggle: { togglePinned(loved) }
+                        ) {
+                            selection = .category(loved)
+                        }
+                    }
+                    
+                    GridRow {
+                        // Binge (spans 1)
+                        let binge = NavigationCategory.binge
+                        SmartCollectionCard(
+                            title: binge.title,
+                            icon: binge.icon,
+                            description: description(for: binge),
+                            count: counts[binge] ?? 0,
+                            accentColor: Color.accentColor,
+                            isPinned: pinnedList.contains(binge.rawValue),
+                            onPinToggle: { togglePinned(binge) }
+                        ) {
+                            selection = .category(binge)
+                        }
+                        
+                        // Quick Bites (spans 1)
+                        let quickBites = NavigationCategory.quickBites
+                        SmartCollectionCard(
+                            title: quickBites.title,
+                            icon: quickBites.icon,
+                            description: description(for: quickBites),
+                            count: counts[quickBites] ?? 0,
+                            accentColor: Color.accentColor,
+                            isPinned: pinnedList.contains(quickBites.rawValue),
+                            onPinToggle: { togglePinned(quickBites) }
+                        ) {
+                            selection = .category(quickBites)
+                        }
+                        
+                        // Empty cell to balance the GridRow columns
+                        Color.clear
+                            .gridCellUnsizedAxes([.horizontal, .vertical])
                     }
                 }
                 .padding(.horizontal, 40)
@@ -281,10 +364,21 @@ private struct SmartCollectionCard: View {
                     
                     Spacer()
                     
-                    Text("\(count)")
-                        .font(.system(.title2, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary.opacity(0.8))
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(accentColor.isLightColor ? .black : .white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(accentColor.gradient)
+                            .clipShape(Capsule())
+                            .shadow(color: accentColor.opacity(0.2), radius: 4, y: 2)
+                    } else {
+                        Text("0")
+                            .font(.system(.title3, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary.opacity(0.4))
+                    }
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
@@ -312,30 +406,40 @@ private struct SmartCollectionCard: View {
                             .stroke(Color.primary.opacity(isHovered ? 0.15 : 0.06), lineWidth: 1)
                     }
             }
-            .overlay(alignment: .topTrailing) {
-                if isHovered {
-                    if let collection = collection {
-                        actionButtons(for: collection)
-                            .padding(12)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    } else {
-                        // System category pinning
-                        actionButton(icon: isPinned ? "pin.fill" : "pin", color: isPinned ? .blue : .primary) {
-                            onPinToggle?()
-                        }
-                        .padding(4)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .padding(12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-            }
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .contextMenu {
+            if let collection = collection {
+                Button {
+                    withAnimation { collection.isPinned.toggle() }
+                } label: {
+                    Label(collection.isPinned ? "Unpin from Sidebar" : "Pin to Sidebar", systemImage: collection.isPinned ? "pin.slash.fill" : "pin")
+                }
+                
+                Button {
+                    showingEditSheet = true
+                } label: {
+                    Label("Edit Collection", systemImage: "pencil")
+                }
+                
+                Divider()
+                
+                Button(role: .destructive) {
+                    modelContext.delete(collection)
+                } label: {
+                    Label("Delete Collection", systemImage: "trash")
+                }
+            } else if onPinToggle != nil {
+                Button {
+                    onPinToggle?()
+                } label: {
+                    Label(isPinned ? "Unpin from Sidebar" : "Pin to Sidebar", systemImage: isPinned ? "pin.slash.fill" : "pin")
+                }
+            }
+        }
         .sheet(isPresented: $showingEditSheet) {
             if let collection = collection {
                 CreateCollectionSheet(editingCollection: collection)

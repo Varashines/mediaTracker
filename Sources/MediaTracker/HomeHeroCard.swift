@@ -181,5 +181,6 @@ struct HomeHeroCardPlaceholder: View {
             .padding(24)
         }
         .frame(width: 500, height: 280)
+        .skeletonPulse()
     }
 }

@@ -137,7 +137,8 @@ struct SidebarNavigation: View {
 
     private func sidebarSectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: 9.5, weight: .black))
+            .kerning(1.5)
             .foregroundStyle(.secondary.opacity(0.7))
             .padding(.leading, 12)
             .padding(.bottom, 4)

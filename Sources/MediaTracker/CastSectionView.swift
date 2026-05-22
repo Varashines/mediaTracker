@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct CastSectionViewNew: View {
+struct CastSectionView: View {
     let cast: [SimpleCastMember]
     let themeColor: Color
     var onCastSelected: ((String) -> Void)? = nil
@@ -12,7 +12,7 @@ struct CastSectionViewNew: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 ForEach(cast) { member in
-                    CastMemberCardNew(member: member, themeColor: themeColor) {
+                    CastMemberCard(member: member, themeColor: themeColor) {
                         onCastSelected?(member.name)
                     }
                     .offset(x: isVisible ? 0 : 20)

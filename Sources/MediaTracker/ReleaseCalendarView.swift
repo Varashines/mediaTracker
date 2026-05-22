@@ -36,7 +36,7 @@ struct ReleaseCalendarView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: 320)
-            .background(Color.secondary.opacity(0.05))
+            .background(.ultraThinMaterial)
             
             Divider()
             
@@ -86,10 +86,11 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.headline)
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(Circle())
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial)
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
             
@@ -104,18 +105,24 @@ struct ReleaseCalendarView: View {
                 }
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary.opacity(0.8))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            Capsule()
                                 .fill(accent.gradient)
                                 .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
                         } else {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
+                            Capsule()
+                                .fill(.regularMaterial)
+                        }
+                    }
+                    .overlay {
+                        if !isSelected {
+                            Capsule()
+                                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                         }
                     }
             }
@@ -127,10 +134,11 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.headline)
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(Circle())
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial)
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
         }
