@@ -10,17 +10,15 @@ struct SmartBadgeView: View {
     
     @Environment(\.colorScheme) var colorScheme
 
-    private static let badgeColors: [String: (bg: Color, fg: Color)] = [
-        "PREMIERE": (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), .white),
-        "FINALE": (Color.fromOKLCH(l: 0.62, c: 0.24, h: 340), .white),
-        "BINGE_BACKLOG": (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), .white),
-        "BINGE_SPARKLE": (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), .white),
-        "BINGE DROP": (Color.fromOKLCH(l: 0.7, c: 0.15, h: 190), .white),
-        "NEW": (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), .black),
-        "SOON": (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), .black),
-        "BEHIND": (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white),
-        "CATCH UP": (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white),
-        "RECENT": (Color.secondary.opacity(0.8), .white),
+    private static let badgeColors: [SmartBadge: (bg: Color, fg: Color)] = [
+        .premiere: (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), Color.white),
+        .finale: (Color.fromOKLCH(l: 0.62, c: 0.24, h: 340), Color.white),
+        .bingeDrop: (Color.fromOKLCH(l: 0.7, c: 0.15, h: 190), Color.white),
+        .new: (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), Color.black),
+        .soon: (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), Color.black),
+        .behind: (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), Color.white),
+        .catchUp: (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), Color.white),
+        .recent: (Color.secondary.opacity(0.8), Color.white),
     ]
 
     init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
@@ -81,14 +79,15 @@ struct SmartBadgeView: View {
 
     @ViewBuilder
     private func intelligentBadge(label: String, isSparkle: Bool, remaining: Int? = nil, progress: Double? = nil) -> some View {
+        let badgeLabel = SmartBadge(rawValue: label)
         let badgeConfig: (bg: Color, fg: Color) = {
-            if let config = Self.badgeColors[label] {
+            if let label = badgeLabel, let config = Self.badgeColors[label] {
                 return config
             }
-            if label == "BINGE" {
-                return isSparkle ? Self.badgeColors["BINGE_SPARKLE"]! : Self.badgeColors["BINGE_BACKLOG"]!
+            if badgeLabel == .binge {
+                return isSparkle ? (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), Color.white) : (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), Color.white)
             }
-            return (Color.secondary.opacity(0.8), .white)
+            return (Color.secondary.opacity(0.8), Color.white)
         }()
 
         StatusBadgePrimitive(
@@ -158,4 +157,25 @@ struct SmartBadgeView: View {
         .opacity(currentState == .completed ? 0 : 1)
     }
 
+}
+
+#Preview("Smart Badge - Premiere") {
+    let container = try! ModelContainer(for: MediaItem.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let item = MediaItem(id: "sb1", title: "Premiere Show", overview: "", type: .tvShow)
+    item.storedSmartBadgeLabel = "PREMIERE"
+    item.storedSmartBadgeIsSparkle = true
+    context.insert(item)
+    return SmartBadgeView(item: item)
+}
+
+#Preview("Smart Badge - Behind") {
+    let container = try! ModelContainer(for: MediaItem.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let item = MediaItem(id: "sb2", title: "Behind Show", overview: "", type: .tvShow)
+    item.storedSmartBadgeLabel = "BEHIND"
+    item.storedProgress = 0.5
+    item.remainingEpisodesCount = 5
+    context.insert(item)
+    return SmartBadgeView(item: item)
 }

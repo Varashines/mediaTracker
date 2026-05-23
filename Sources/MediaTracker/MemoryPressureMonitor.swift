@@ -24,18 +24,14 @@ class MemoryPressureMonitor {
         switch event {
         case .warning:
             logger.warning("Memory pressure warning. Reducing cache sizes.")
-            NotificationCenter.default.post(name: .memoryPressureWarning, object: nil)
+            ImageCache.shared.performMemoryCompaction(level: .warning)
+            Task { await APIClient.shared.clearMemoryCaches() }
         case .critical:
             logger.error("Critical memory pressure! Purging all non-essential memory.")
-            // Phase 3: Immediate context clearing for 8GB RAM preservation
-            NotificationCenter.default.post(name: .memoryPressureCritical, object: nil)
+            ImageCache.shared.performMemoryCompaction(level: .critical)
+            Task { await APIClient.shared.clearMemoryCaches() }
         default:
             break
         }
     }
-}
-
-extension Notification.Name {
-    static let memoryPressureWarning = Notification.Name("memoryPressureWarning")
-    static let memoryPressureCritical = Notification.Name("memoryPressureCritical")
 }

@@ -3,7 +3,7 @@ import SwiftData
 
 struct StudioAliasManagerView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [MediaItem]
+    @Query(filter: #Predicate<MediaItem> { $0.cachedNetwork != nil }) private var items: [MediaItem]
     @Query(sort: \StudioAliasEntity.target) private var aliasEntities: [StudioAliasEntity]
     @AppStorage("studio_aliases") private var legacyAliases = ""
     

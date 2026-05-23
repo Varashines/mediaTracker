@@ -154,9 +154,14 @@ actor TasteActor {
     private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String) {
         var s = map[key, default: CategoryStats()]
         s.total += 1
-        if taste == "Love" { s.loved += 1 }
-        else if taste == "Like" { s.liked += 1 }
-        else if taste == "Dislike" { s.disliked += 1 }
+        if let tasteVal = TasteValue(rawValue: taste) {
+            switch tasteVal {
+            case .love: s.loved += 1
+            case .like: s.liked += 1
+            case .dislike: s.disliked += 1
+            case .none: break
+            }
+        }
         map[key] = s
     }
 

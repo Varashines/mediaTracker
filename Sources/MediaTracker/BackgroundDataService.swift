@@ -66,7 +66,7 @@ actor BackgroundDataService {
                 )
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
                 item.dateAdded = itemData.dateAdded
-                item.tasteValue = itemData.taste ?? "None"
+                item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
                 modelContext.insert(item)
                 importedCount += 1
 

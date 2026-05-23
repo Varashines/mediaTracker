@@ -5,10 +5,10 @@ struct BulkCollectionManagerView: View {
     let collection: MediaCollection
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     
     @State private var searchText = ""
     @State private var selectedItemIDs: Set<String> = []
+    @State private var allItems: [MediaItem] = []
     
     var filteredItems: [MediaItem] {
         if searchText.isEmpty {
@@ -21,7 +21,6 @@ struct BulkCollectionManagerView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Manage Items")
                         .font(.title3.bold())
@@ -33,7 +32,6 @@ struct BulkCollectionManagerView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
                 
-                // Search
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 12))
@@ -49,7 +47,6 @@ struct BulkCollectionManagerView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 
-                // Grid
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160))], spacing: 16) {
                         ForEach(filteredItems) { item in
@@ -80,6 +77,11 @@ struct BulkCollectionManagerView: View {
             .onAppear {
                 selectedItemIDs = Set(collection.items.map { $0.id })
             }
+            .task {
+                var descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                descriptor.propertiesToFetch = [\.id, \.title, \.posterURL, \.typeValue]
+                allItems = (try? modelContext.fetch(descriptor)) ?? []
+            }
         }
         .frame(minWidth: 600, minHeight: 450, maxHeight: 650)
     }
@@ -93,12 +95,10 @@ struct BulkCollectionManagerView: View {
     }
     
     private func saveChanges() {
-        // Remove items no longer selected
         collection.items.removeAll { item in
             !selectedItemIDs.contains(item.id)
         }
         
-        // Add newly selected items
         for id in selectedItemIDs {
             if !collection.items.contains(where: { $0.id == id }) {
                 if let item = allItems.first(where: { $0.id == id }) {
@@ -168,4 +168,19 @@ struct BulkItemCard: View {
         .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
         .cornerRadius(16)
     }
+}
+
+#Preview("Bulk Collection Manager") {
+    BulkCollectionManagerView(collection: {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, MediaCollection.self, configurations: config)
+        let context = container.mainContext
+        let collection = MediaCollection(name: "Favorites", systemImage: "heart.fill")
+        context.insert(collection)
+        return collection
+    }())
+    .modelContainer(try! ModelContainer(
+        for: MediaItem.self, MediaCollection.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    ))
 }

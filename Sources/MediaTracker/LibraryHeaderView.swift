@@ -9,11 +9,12 @@ struct LibraryHeaderView: View {
     let onNetworkSelected: ([String]) -> Void
     let onBack: (() -> Void)?
     var viewModel: MediaViewModel? = nil
-    @Query private var collections: [MediaCollection]
+    
+    @State private var collectionName: String? = nil
 
-    private var pageTitle: String {
-        if let collectionID = viewModel?.selectedCollectionID {
-            return collections.first(where: { $0.id == collectionID })?.name ?? selectedCategory.title
+    var pageTitle: String {
+        if viewModel?.selectedCollectionID != nil {
+            return collectionName ?? selectedCategory.title
         }
         return selectedCategory.title
     }
@@ -34,7 +35,6 @@ struct LibraryHeaderView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            // FILTER INFO
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
                 
@@ -59,5 +59,18 @@ struct LibraryHeaderView: View {
             }
         }
         .padding(.horizontal, AppTheme.Spacing.xLarge)
+        .task(id: viewModel?.selectedCollectionID) {
+            guard let collectionID = viewModel?.selectedCollectionID else {
+                collectionName = nil
+                return
+            }
+            let descriptor = FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.id == collectionID },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            collectionName = try? modelContext.fetch(descriptor).first?.name
+        }
     }
+    
+    @Environment(\.modelContext) private var modelContext
 }

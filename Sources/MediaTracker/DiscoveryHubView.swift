@@ -3,7 +3,6 @@ import SwiftData
 
 struct DiscoveryHubView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var existingItems: [MediaItem]
     let namespace: Namespace.ID
     @Bindable var viewModel: MediaViewModel
     let onFilterSelected: (DiscoveryFilter) -> Void
@@ -100,4 +99,20 @@ struct DiscoveryHubView: View {
             }
         }
     }
+}
+
+#Preview("Discovery Hub") {
+    @Previewable @State var viewModel = MediaViewModel()
+    @Previewable var namespace = Namespace().wrappedValue
+    
+    DiscoveryHubView(
+        namespace: namespace,
+        viewModel: viewModel,
+        onFilterSelected: { _ in }
+    )
+    .modelContainer(try! ModelContainer(
+        for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
+             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    ))
 }

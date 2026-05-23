@@ -5,7 +5,6 @@ import ServiceManagement
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
-    @Query(sort: \MediaItem.title) private var allItems: [MediaItem]
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("studio_aliases") private var studioAliases = ""
     @AppStorage("theme_preference") private var themePreference: Int = 0 
@@ -215,7 +214,12 @@ struct SettingsView: View {
             GroupContainer {
                 modernRow(title: "Library Backup", subtitle: "Export or import your entire library.") {
                     HStack(spacing: 8) {
-                        Button("Export") { LibraryImportExportService.shared.exportLibrary(items: allItems) }.buttonStyle(.bordered)
+                        Button("Export") {
+                            let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                            if let items = try? modelContext.fetch(descriptor) {
+                                LibraryImportExportService.shared.exportLibrary(items: items)
+                            }
+                        }.buttonStyle(.bordered)
                         Button("Import") { LibraryImportExportService.shared.importLibrary(modelContext: modelContext) }.buttonStyle(.bordered)
                     }
                 }
@@ -338,4 +342,13 @@ struct GroupContainer<Content: View>: View {
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         }
     }
+}
+
+#Preview("Settings View") {
+    SettingsView()
+        .modelContainer(try! ModelContainer(
+            for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
+                 MediaCollection.self, StudioAliasEntity.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        ))
 }

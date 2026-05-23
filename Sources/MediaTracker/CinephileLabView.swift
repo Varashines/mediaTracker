@@ -437,3 +437,30 @@ private func formatWatchTimeMini(minutes: Int) -> String {
     if hours > 0 { return "\(hours)h" }
     return "\(minutes)m"
 }
+
+#Preview("Cinephile Lab") {
+    let stats = LibraryStats(
+        totalWatchTimeMinutes: 15000,
+        totalMovies: 120,
+        completedMovies: 95,
+        totalTVShows: 45,
+        completedTVShows: 30,
+        totalEpisodesWatched: 450,
+        genreDNA: [("Action", 0.25), ("Drama", 0.20), ("Comedy", 0.15), ("Sci-Fi", 0.12), ("Thriller", 0.10)],
+        topRatedActors: [],
+        topRatedCreators: [],
+        topRatedGenres: [("Action", 0.85), ("Drama", 0.72)],
+        topRatedNetworks: [("HBO", 0.90), ("Netflix", 0.78)],
+        topRatedStudios: [("Warner Bros", 0.85), ("Universal", 0.72)],
+        topRatedLanguages: [("English", 0.80)],
+        lovedCount: 50,
+        likedCount: 80,
+        dislikedCount: 10,
+        watchTimeHistory: [],
+        decadeDistribution: [],
+        collaborations: [],
+        completedItems: [],
+        barcodeData: []
+    )
+    CinephileLabView(stats: stats, barcodeData: [], recentItems: [])
+}

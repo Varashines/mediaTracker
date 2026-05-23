@@ -64,3 +64,12 @@ struct SectionHeader: View {
         }
     }
 }
+
+#Preview("Section Header") {
+    VStack(spacing: 20) {
+        SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: .indigo)
+        SectionHeader(title: "Coming Soon", icon: "calendar", iconColor: .orange, subtitle: "Next 30 Days")
+        SectionHeader(title: "Continue Watching", icon: nil, iconColor: .blue, scrollProgress: 0.3)
+    }
+    .padding()
+}

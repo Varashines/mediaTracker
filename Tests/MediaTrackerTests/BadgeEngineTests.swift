@@ -286,7 +286,7 @@ final class BadgeEngineTests: XCTestCase {
         item.cachedNextAiringDate = tenDaysAgo
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, "NEW")
+        XCTAssertEqual(result?.label, .new)
     }
 
     @MainActor
@@ -371,7 +371,7 @@ final class BadgeEngineTests: XCTestCase {
         item.cachedNextAiringDate = oneDayAgo
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, "PREMIERE")
+        XCTAssertEqual(result?.label, .premiere)
     }
 
     // MARK: - Level 3: Behavioral BINGE
@@ -417,7 +417,7 @@ final class BadgeEngineTests: XCTestCase {
         tv.remainingEpisodesCount = 1
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, "BINGE")
+        XCTAssertEqual(result?.label, .binge)
         XCTAssertTrue(result!.isSparkle)
     }
 
@@ -453,7 +453,7 @@ final class BadgeEngineTests: XCTestCase {
         tv.remainingEpisodesCount = 0
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertNotEqual(result?.label, "BINGE")
+        XCTAssertNotEqual(result?.label, .binge)
     }
 
     // MARK: - Level 3: BEHIND
@@ -465,7 +465,7 @@ final class BadgeEngineTests: XCTestCase {
         let context = container.mainContext
 
         let item = MediaItem(id: "bh1", title: "Behind Show", overview: "", type: .tvShow)
-        item.tasteValue = "Like"
+        item.taste = .like
         context.insert(item)
         let tv = TVShowDetails(tmdbID: 501)
         tv.item = item
@@ -495,7 +495,7 @@ final class BadgeEngineTests: XCTestCase {
         try context.save()
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, "BEHIND")
+        XCTAssertEqual(result?.label, .behind)
         XCTAssertFalse(result!.isSparkle)
     }
 
@@ -508,7 +508,7 @@ final class BadgeEngineTests: XCTestCase {
         let context = container.mainContext
 
         let item = MediaItem(id: "bl1", title: "Backlog Show", overview: "", type: .tvShow)
-        item.tasteValue = "Like"
+        item.taste = .like
         context.insert(item)
         let tv = TVShowDetails(tmdbID: 601)
         tv.item = item
@@ -534,7 +534,7 @@ final class BadgeEngineTests: XCTestCase {
         tv.remainingEpisodesCount = 8
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, "BINGE")
+        XCTAssertEqual(result?.label, .binge)
         XCTAssertFalse(result!.isSparkle)
     }
 
@@ -545,7 +545,7 @@ final class BadgeEngineTests: XCTestCase {
         let context = container.mainContext
 
         let item = MediaItem(id: "bl2", title: "No Backlog Show", overview: "", type: .tvShow)
-        item.tasteValue = "Like"
+        item.taste = .like
         context.insert(item)
         let tv = TVShowDetails(tmdbID: 602)
         tv.item = item

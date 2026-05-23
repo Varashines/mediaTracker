@@ -209,12 +209,13 @@ actor LibraryStatsActor {
     private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ tasteValue: String, _ pURL: String? = nil) {
         var s = map[key, default: CategoryStats()]
         s.total += 1
-        if tasteValue == "Love" {
-            s.loved += 1
-        } else if tasteValue == "Like" {
-            s.liked += 1
-        } else if tasteValue == "Dislike" {
-            s.disliked += 1
+        if let taste = TasteValue(rawValue: tasteValue) {
+            switch taste {
+            case .love: s.loved += 1
+            case .like: s.liked += 1
+            case .dislike: s.disliked += 1
+            case .none: break
+            }
         }
         if let pURL = pURL { s.profileURL = pURL }
         map[key] = s
@@ -234,11 +235,13 @@ actor LibraryStatsActor {
             ))
 
             // Taste counts
-            switch tasteValue {
-            case "Love": stats.loved += 1
-            case "Like": stats.liked += 1
-            case "Dislike": stats.disliked += 1
-            default: break
+            if let taste = TasteValue(rawValue: tasteValue) {
+                switch taste {
+                case .love: stats.loved += 1
+                case .like: stats.liked += 1
+                case .dislike: stats.disliked += 1
+                case .none: break
+                }
             }
 
             // Stats per type
@@ -277,7 +280,7 @@ actor LibraryStatsActor {
             }
 
             // Common traits (Volume & Quality)
-            if item.stateValue != "Wishlist" || tasteValue != "None" {
+            if item.stateValue != "Wishlist" || tasteValue != TasteValue.none.rawValue {
                 for g in item.cachedGenres {
                     updateTaste(&taste.genreTaste, g, tasteValue)
                 }

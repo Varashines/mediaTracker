@@ -19,8 +19,8 @@ extension MediaItem {
         let oldLabel = storedSmartBadgeLabel
         let oldSparkle = storedSmartBadgeIsSparkle
         if let result = BadgeEngine.calculateBadge(for: self, now: now) {
-            if result.label != oldLabel || result.isSparkle != oldSparkle {
-                self.storedSmartBadgeLabel = result.label
+            if result.label.rawValue != oldLabel || result.isSparkle != oldSparkle {
+                self.storedSmartBadgeLabel = result.label.rawValue
                 self.storedSmartBadgeIsSparkle = result.isSparkle
             }
         } else {

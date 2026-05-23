@@ -205,7 +205,7 @@ struct RecentlyWatched: View {
                     )
             }
 
-            if item.tasteValue != "None" {
+            if item.tasteValue != TasteValue.none.rawValue {
                 Text(tasteEmoji(item.tasteValue))
                     .font(.system(size: 11))
                     .padding(4)
@@ -225,11 +225,12 @@ struct RecentlyWatched: View {
     }
 
     private func tasteEmoji(_ taste: String) -> String {
-        switch taste {
-        case "Love": return "♥"
-        case "Like": return "👍"
-        case "Dislike": return "👎"
-        default: return ""
+        guard let tasteVal = TasteValue(rawValue: taste) else { return "" }
+        switch tasteVal {
+        case .love: return "♥"
+        case .like: return "👍"
+        case .dislike: return "👎"
+        case .none: return ""
         }
     }
 }

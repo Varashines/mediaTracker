@@ -12,15 +12,7 @@ struct MainMediaGrid: View {
     let onLoadMore: () -> Void
     let columns: [GridItem]
 
-    @Query private var collections: [MediaCollection]
-
-    private var completedIDs: Set<String> {
-        if let cid = selectedCollectionID,
-           let collection = collections.first(where: { $0.id == cid }) {
-            return Set(collection.completedItemIDs)
-        }
-        return []
-    }
+    @State private var completedIDs: Set<String> = []
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
@@ -46,9 +38,8 @@ struct MainMediaGrid: View {
                             onLoadMore()
                         }
                         
-                        // Phase 4 Optimization: Predictive Prefetching
                         if !isFastScrolling {
-                            let prefetchCount = 12 // Look ahead ~2-3 rows
+                            let prefetchCount = 12
                             if idx + 1 < baseItems.count {
                                 let endIdx = min(idx + 1 + prefetchCount, baseItems.count)
                                 let urlsToPrefetch = baseItems[idx+1..<endIdx]
@@ -68,5 +59,20 @@ struct MainMediaGrid: View {
         .padding(.horizontal, 30)
         .padding(.top, 20)
         .padding(.bottom, 40)
+        .task(id: selectedCollectionID) {
+            guard let cid = selectedCollectionID else {
+                completedIDs = []
+                return
+            }
+            let descriptor = FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.id == cid },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            if let collection = try? modelContext.fetch(descriptor).first {
+                completedIDs = Set(collection.completedItemIDs)
+            }
+        }
     }
+
+    @Environment(\.modelContext) private var modelContext
 }

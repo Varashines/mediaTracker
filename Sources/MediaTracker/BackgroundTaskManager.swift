@@ -59,7 +59,7 @@ class BackgroundTaskManager {
                 
                 // broadcast UI update
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    MediaStateService.shared.postMediaStateChanged()
                 }
             }
         } catch {

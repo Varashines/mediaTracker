@@ -207,3 +207,21 @@ struct SearchView: View {
         }
     }
 }
+
+#Preview("Search View") {
+    @Previewable @State var searchText = ""
+    @Previewable @State var isSearchActive = true
+    @Previewable @State var viewModel = MediaViewModel()
+    let container = try! ModelContainer(
+        for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+    
+    SearchView(
+        searchText: $searchText,
+        isSearchActive: $isSearchActive,
+        submitTrigger: 0,
+        viewModel: viewModel,
+        modelContainer: container
+    )
+}

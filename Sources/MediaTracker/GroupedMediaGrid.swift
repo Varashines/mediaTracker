@@ -10,16 +10,8 @@ struct GroupedMediaGrid: View {
     let isFastScrolling: Bool
     let columns: [GridItem]
     
-    @Query private var collections: [MediaCollection]
+    @State private var completedIDs: Set<String> = []
     
-    private var completedIDs: Set<String> {
-        if let cid = viewModel.selectedCollectionID,
-           let collection = collections.first(where: { $0.id == cid }) {
-            return Set(collection.completedItemIDs)
-        }
-        return []
-    }
-
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 60) {
             ForEach(groupedItems, id: \.0) { (key, groupMetadatas) in
@@ -47,7 +39,6 @@ struct GroupedMediaGrid: View {
                                 .id(metadata.versionHash)
                                 .entranceStagger(index: 0)
                                 .onAppear {
-                                    // Phase 4 Optimization: Predictive Prefetching
                                     if isFastScrolling {
                                         let prefetchCount = 8
                                         let endIdx = min(idx + 1 + prefetchCount, groupArray.count)
@@ -72,5 +63,20 @@ struct GroupedMediaGrid: View {
             }
         }
         .padding(.bottom, 40)
+        .task(id: viewModel.selectedCollectionID) {
+            guard let cid = viewModel.selectedCollectionID else {
+                completedIDs = []
+                return
+            }
+            let descriptor = FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.id == cid },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            if let collection = try? modelContext.fetch(descriptor).first {
+                completedIDs = Set(collection.completedItemIDs)
+            }
+        }
     }
+    
+    @Environment(\.modelContext) private var modelContext
 }

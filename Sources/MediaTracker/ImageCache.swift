@@ -84,15 +84,6 @@ class ImageCache: NSObject {
             }
         }
         
-        // Dynamic Resource Management
-        NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.performMemoryCompaction(level: .warning) }
-        }
-        
-        NotificationCenter.default.addObserver(forName: .memoryPressureCritical, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.performMemoryCompaction(level: .critical) }
-        }
-
         Task.detached(priority: .background) {
             await ImageCache.shared.pruneDiskCacheIfNeeded()
         }
@@ -100,7 +91,7 @@ class ImageCache: NSObject {
     
     /// macOS 26 Tahoe inspired Memory Compaction
     @MainActor
-    private func performMemoryCompaction(level: MemoryPressureLevel) {
+    func performMemoryCompaction(level: MemoryPressureLevel) {
         switch level {
         case .warning:
             self.memoryCache.totalCostLimit = 80 * 1024 * 1024
@@ -110,7 +101,6 @@ class ImageCache: NSObject {
             self.memoryCache.countLimit = 10
             self.memoryCache.removeAllObjects()
             self.urlToKeys.removeAll()
-            NotificationCenter.default.post(name: NSNotification.Name("ForceSwiftDataSave"), object: nil)
         }
         Task {
             await StringPool.shared.clear()

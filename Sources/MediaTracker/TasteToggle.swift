@@ -11,47 +11,56 @@ struct TasteToggle: View {
                 TastePill(
                     label: "Love",
                     icon: "heart",
-                    isSelected: item.tasteValue == "Love",
+                    isSelected: item.taste == .love,
                     activeColor: .red,
-                    action: { setTaste("Love") }
+                    action: { setTaste(.love) }
                 )
                 
                 TastePill(
                     label: "Like",
                     icon: "hand.thumbsup",
-                    isSelected: item.tasteValue == "Like",
+                    isSelected: item.taste == .like,
                     activeColor: .blue,
-                    action: { setTaste("Like") }
+                    action: { setTaste(.like) }
                 )
                 
                 TastePill(
                     label: "Dislike",
                     icon: "hand.thumbsdown",
-                    isSelected: item.tasteValue == "Dislike",
+                    isSelected: item.taste == .dislike,
                     activeColor: .gray,
-                    action: { setTaste("Dislike") }
+                    action: { setTaste(.dislike) }
                 )
             }
         }
     }
     
-    private func setTaste(_ val: String) {
+    private func setTaste(_ val: TasteValue) {
         guard item.modelContext != nil else { return }
         withAnimation(.easeInOut(duration: 0.3)) {
-            if item.tasteValue == val {
-                item.tasteValue = "None"
+            if item.taste == val {
+                item.tasteValue = TasteValue.none.rawValue
                 FeedbackManager.shared.trigger(.click)
             } else {
-                item.tasteValue = val
+                item.tasteValue = val.rawValue
                 
-                // Creative Feedback Personality
                 switch val {
-                case "Love": FeedbackManager.shared.trigger(.tasteLove)
-                case "Like": FeedbackManager.shared.trigger(.tasteLike)
-                case "Dislike": FeedbackManager.shared.trigger(.tasteDislike)
-                default: FeedbackManager.shared.trigger(.click)
+                case .love: FeedbackManager.shared.trigger(.tasteLove)
+                case .like: FeedbackManager.shared.trigger(.tasteLike)
+                case .dislike: FeedbackManager.shared.trigger(.tasteDislike)
+                case .none: FeedbackManager.shared.trigger(.click)
                 }
             }
         }
     }
+}
+
+#Preview("Taste Toggle") {
+    VStack {
+        Text("Rate this title:")
+            .font(.headline)
+        TasteToggle(item: MediaItem(id: "tt1", title: "Test Movie", overview: "A test movie", type: .movie), themeColor: .blue)
+    }
+    .padding()
+    .modelContainer(try! ModelContainer(for: MediaItem.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
 }

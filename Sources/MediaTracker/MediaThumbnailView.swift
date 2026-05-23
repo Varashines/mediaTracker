@@ -490,3 +490,29 @@ struct MediaThumbnailView: View, Equatable {
         }
     }
 }
+
+#Preview("Media Thumbnail - Movie") {
+    @Previewable var namespace = Namespace().wrappedValue
+    
+    let container = try! ModelContainer(
+        for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, MediaCollection.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+    let context = container.mainContext
+    let item = MediaItem(id: "mt1", title: "The Matrix", overview: "A computer hacker learns about reality", type: .movie)
+    item.state = .completed
+    context.insert(item)
+    
+    return MediaThumbnailView(
+        item: item,
+        mode: .grid,
+        showTypeBadge: true,
+        isUpcomingSection: false,
+        namespace: namespace,
+        isFastScrolling: false,
+        isCompletedInCollection: false,
+        selectedCollectionID: nil
+    )
+    .frame(width: 160)
+    .modelContainer(container)
+}

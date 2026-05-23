@@ -27,9 +27,18 @@ struct CinephileBarcodeView: View {
                             Text("·")
                                 .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
-                            Text(item.tasteValue == "None" ? "UNRATED" : item.tasteValue.uppercased())
+                            let isNone = item.tasteValue == TasteValue.none.rawValue
+                            Text(isNone ? "UNRATED" : item.tasteValue.uppercased())
                                 .font(AppTheme.Font.caption2)
-                                .foregroundStyle(item.tasteValue == "Love" ? .red : item.tasteValue == "Like" ? .blue : item.tasteValue == "Dislike" ? .orange : .secondary)
+                                .foregroundStyle({
+                                    guard let taste = TasteValue(rawValue: item.tasteValue) else { return Color.secondary }
+                                    switch taste {
+                                    case .love: return Color.red
+                                    case .like: return Color.blue
+                                    case .dislike: return Color.orange
+                                    case .none: return Color.secondary
+                                    }
+                                }())
                         }
                         .transition(.opacity)
                     } else {
@@ -59,11 +68,12 @@ struct CinephileBarcodeView: View {
                                     if let hex = item.themeColorHex, let c = Color(hex: hex) {
                                         return c
                                     }
-                                    switch item.tasteValue {
-                                    case "Love": return .red
-                                    case "Like": return .blue
-                                    case "Dislike": return .orange
-                                    default: return .primary.opacity(0.15)
+                                    guard let taste = TasteValue(rawValue: item.tasteValue) else { return .primary.opacity(0.15) }
+                                    switch taste {
+                                    case .love: return .red
+                                    case .like: return .blue
+                                    case .dislike: return .orange
+                                    case .none: return .primary.opacity(0.15)
                                     }
                                 }()
 

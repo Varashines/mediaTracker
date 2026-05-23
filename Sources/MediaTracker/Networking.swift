@@ -57,10 +57,6 @@ actor APIClient {
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         }
         self.cacheFolder = folder
-
-        NotificationCenter.default.addObserver(forName: .memoryPressureWarning, object: nil, queue: .main) { [weak self] _ in
-            Task { [weak self] in await self?.clearSearchCache() }
-        }
     }
 
     private func clearSearchCache() {
