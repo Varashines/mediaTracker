@@ -5,19 +5,20 @@ struct CinephileLabDestination: Hashable {}
 
 struct CinephileLabView: View {
     let stats: LibraryStats
-    let allItems: [MediaItem]
+    let barcodeData: [BarcodeSlice]
+    let recentItems: [MediaItem]
 
     var body: some View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.section) {
                 // Cinephile Spectrum (Barcode)
-                CinephileBarcodeView(items: allItems)
+                CinephileBarcodeView(items: barcodeData)
                     .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
 
                 // Weekly Watch Arc
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Weekly Activity", icon: "calendar.badge.clock", iconColor: .orange)
-                    WeeklyWatchArc(points: stats.watchTimeHistory, items: allItems)
+                    WeeklyWatchArc(points: stats.watchTimeHistory, items: recentItems)
                         .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
                 }
 

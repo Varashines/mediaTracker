@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct CinephileBarcodeView: View {
-    let items: [MediaItem]
-    @State private var hoveredItem: MediaItem?
+    let items: [BarcodeSlice]
+    @State private var hoveredItem: BarcodeSlice?
     @State private var isScanning = false
     @State private var scanPosition: CGFloat = 0.0
     @Environment(\.colorScheme) private var colorScheme
@@ -90,7 +90,6 @@ struct CinephileBarcodeView: View {
                         }
                         .frame(height: 44)
 
-                        // Glowing sweep scanner overlay
                         if isScanning {
                             GeometryReader { geo in
                                 Color.accentColor.opacity(0.4)

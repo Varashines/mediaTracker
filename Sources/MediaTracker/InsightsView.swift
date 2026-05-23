@@ -7,7 +7,7 @@ struct InsightsView: View {
     @State private var stats: LibraryStats?
     @State private var isLoading = true
 
-    @Query(sort: \MediaItem.lastInteractionDate, order: .reverse) private var allItems: [MediaItem]
+    @State private var recentItems: [MediaItem] = []
 
     var body: some View {
         ZStack {
@@ -77,10 +77,10 @@ struct InsightsView: View {
                         }
 
                         // 4. Recently Watched
-                        if !allItems.isEmpty {
+                        if !recentItems.isEmpty {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                                 SectionHeader(title: "Recently Watched", icon: "play.circle.fill", iconColor: .blue)
-                                RecentlyWatched(items: allItems)
+                                RecentlyWatched(items: recentItems)
                             }
                         }
                     }
@@ -89,7 +89,7 @@ struct InsightsView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .navigationDestination(for: CinephileLabDestination.self) { _ in
-                    CinephileLabView(stats: stats, allItems: allItems)
+                    CinephileLabView(stats: stats, barcodeData: stats.barcodeData, recentItems: recentItems)
                 }
             }
         }
@@ -97,16 +97,28 @@ struct InsightsView: View {
     }
 
     private func refreshData() {
-        Task {
-            let actor = LibraryStatsActor(modelContainer: modelContext.container)
+        let container = modelContext.container
+        Task { @MainActor in
+            let actor = LibraryStatsActor(modelContainer: container)
             let result = await actor.fetchStats()
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    self.stats = result
-                    self.isLoading = false
-                }
+            let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
+            descriptor.fetchLimit = 50
+            let recent = (try? modelContext.fetch(descriptor)) ?? []
+            withAnimation(.easeInOut(duration: 0.3)) {
+                self.stats = result
+                self.recentItems = recent
+                self.isLoading = false
             }
         }
+    }
+
+    @MainActor
+    private func fetchRecentItems() async -> [MediaItem] {
+        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
+        descriptor.fetchLimit = 50
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 }
 

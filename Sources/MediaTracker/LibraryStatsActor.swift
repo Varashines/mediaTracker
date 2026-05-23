@@ -20,6 +20,13 @@ struct DecadeDistributionPoint: Sendable, Identifiable {
     let count: Int
 }
 
+struct BarcodeSlice: Sendable, Identifiable {
+    let id: String
+    let title: String
+    let tasteValue: String
+    let themeColorHex: String?
+}
+
 struct CompletedItemRepresentation: Sendable, Identifiable {
     let id: String
     let title: String
@@ -67,6 +74,7 @@ struct LibraryStats: Sendable {
     
     let collaborations: [CreatorCollaboration]
     let completedItems: [CompletedItemRepresentation]
+    let barcodeData: [BarcodeSlice]
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -88,7 +96,8 @@ struct LibraryStats: Sendable {
         watchTimeHistory: [],
         decadeDistribution: [],
         collaborations: [],
-        completedItems: []
+        completedItems: [],
+        barcodeData: []
     )
 }
 
@@ -185,6 +194,7 @@ actor LibraryStatsActor {
         var decadeCounts: [String: Int] = [:]
         var completedItemsList: [CompletedItemRepresentation] = []
         var collaborationsCount: [String: Int] = [:]
+        var barcodeData: [BarcodeSlice] = []
     }
 
     private struct TasteMapsContainer {
@@ -215,6 +225,13 @@ actor LibraryStatsActor {
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
+
+            stats.barcodeData.append(BarcodeSlice(
+                id: item.id,
+                title: item.title,
+                tasteValue: tasteValue,
+                themeColorHex: item.themeColorHex
+            ))
 
             // Taste counts
             switch tasteValue {
@@ -396,7 +413,8 @@ actor LibraryStatsActor {
             watchTimeHistory: history,
             decadeDistribution: decadeDistribution,
             collaborations: collaborations,
-            completedItems: completedItems
+            completedItems: completedItems,
+            barcodeData: stats.barcodeData
         )
     }
 
