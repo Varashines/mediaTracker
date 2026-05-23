@@ -212,7 +212,8 @@ struct BadgeLabel: View {
     
     var body: some View {
         Text(text)
-            .font(.system(size: 9, weight: .black))
+            .font(.system(size: 9, weight: .semibold))
+            .kerning(0.5)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(color.opacity(0.15))

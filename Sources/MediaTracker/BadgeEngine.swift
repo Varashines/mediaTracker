@@ -104,11 +104,11 @@ struct BadgeEngine {
             
             let isLikedOrLoved = item.taste == .like || item.taste == .love
 
-            // 2. CATCH UP (Selective Nudge)
+            // 2. BEHIND (Selective Nudge)
             if isLikedOrLoved, let nextAiring = item.cachedNextAiringDate {
                 let daysToAiring = nextAiring.timeIntervalSince(now) / 86400
                 if daysToAiring > 0 && daysToAiring <= 7 && remainingCount > 0 {
-                    return BadgeResult(label: "CATCH UP", isSparkle: false)
+                    return BadgeResult(label: "BEHIND", isSparkle: false)
                 }
             }
 
@@ -121,14 +121,6 @@ struct BadgeEngine {
                 if progress >= 0.20 {
                     return BadgeResult(label: "BINGE", isSparkle: false)
                 }
-            }
-        }
-
-        // --- LEVEL 4: PASSIVE FALLBACK ---
-        if let release = item.releaseDate {
-            let timeToRelease = release.timeIntervalSince(now)
-            if timeToRelease <= 0 && timeToRelease > -604800 * 2 { // Last 14 days
-                return BadgeResult(label: "RECENT", isSparkle: false)
             }
         }
 

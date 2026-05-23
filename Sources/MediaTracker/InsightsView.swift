@@ -267,7 +267,7 @@ struct InsightsView: View {
     private func metricField(label: String, value: String, subValue: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 8, weight: .black))
+                .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(.secondary)
                 .kerning(1.5)
             Text(value)
@@ -410,7 +410,7 @@ struct InsightsView: View {
                 dividerLine
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TOTAL EPISODES WATCHED")
-                        .font(.system(size: 8, weight: .black))
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
                         .kerning(1.5)
                     Text("\(stats.totalEpisodesWatched)")
@@ -431,7 +431,7 @@ struct InsightsView: View {
         let pct = total > 0 ? Double(current) / Double(total) : 0.0
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 8, weight: .black))
+                .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(.secondary)
                 .kerning(1.5)
             
@@ -531,7 +531,7 @@ struct InsightsView: View {
         VStack(spacing: 24) {
             ProgressView().controlSize(.large)
             Text("EXTRACTING CINEMA DNA")
-                .font(.system(size: 13, weight: .black))
+                .font(.system(size: 13, weight: .bold))
                 .kerning(2.5)
                 .foregroundStyle(.secondary)
         }
@@ -545,10 +545,10 @@ struct InsightsView: View {
 func sectionLabel(_ text: String, icon: String) -> some View {
     HStack(spacing: 8) {
         Image(systemName: icon)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Color.accentColor.gradient)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.accentColor.opacity(0.8))
         Text(text)
-            .font(.system(size: 10, weight: .black))
+            .font(.system(size: 10, weight: .bold))
             .kerning(1.5)
             .foregroundStyle(.secondary)
     }
@@ -565,7 +565,7 @@ struct CinephileBarcodeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("CINEMA DNA SIGNATURE")
-                    .font(.system(size: 10, weight: .black))
+                    .font(.system(size: 10, weight: .bold))
                     .kerning(1.5)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -640,19 +640,14 @@ struct TalentLedgerView: View {
     let stats: LibraryStats
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 24) {
             sectionLabel("TOP RATED TALENT", icon: "person.3.fill")
             
-            HStack(alignment: .top, spacing: 32) {
-                // Column 1: Top Actors
-                talentColumn(title: "TOP ACTORS", people: stats.topRatedActors, color: .orange)
-                    .frame(maxWidth: .infinity)
-                
-                // Column 2: Top Directors & Creators
-                talentColumn(title: "TOP DIRECTORS & CREATORS", people: stats.topRatedCreators, color: .green)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.vertical, 8)
+            // Top Actors Scroll
+            talentSection(title: "TOP ACTORS", people: stats.topRatedActors, color: .orange)
+            
+            // Top Directors Scroll
+            talentSection(title: "TOP DIRECTORS & CREATORS", people: stats.topRatedCreators, color: .green)
             
             Divider()
                 .opacity(0.12)
@@ -660,16 +655,12 @@ struct TalentLedgerView: View {
     }
     
     @ViewBuilder
-    private func talentColumn(title: String, people: [VisualPersonStat], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 9, weight: .bold))
-                    .kerning(1.5)
-                    .foregroundStyle(.secondary)
-                Divider()
-                    .opacity(0.12)
-            }
+    private func talentSection(title: String, people: [VisualPersonStat], color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .kerning(1.5)
+                .foregroundStyle(.secondary)
             
             if people.isEmpty {
                 Text("No talent records in this category")
@@ -677,60 +668,95 @@ struct TalentLedgerView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 12)
             } else {
-                ForEach(Array(people.prefix(5).enumerated()), id: \.element.name) { index, person in
-                    let rank = index + 1
-                    VStack(spacing: 0) {
-                        HStack(spacing: 12) {
-                            Text("#\(rank)")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .foregroundStyle(color)
-                                .frame(width: 20, alignment: .leading)
-                            
-                            // Minimal avatar
-                            ZStack {
-                                Circle()
-                                    .fill(color.opacity(0.1))
-                                    .frame(width: 24, height: 24)
-                                
-                                if let urlStr = person.profileURL, let url = URL(string: urlStr) {
-                                    CachedImage(url: url, targetSize: CGSize(width: 48, height: 48), priority: .normal) {
-                                        Image(systemName: "person.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(color.opacity(0.5))
-                                    }
-                                    .frame(width: 24, height: 24)
-                                    .clipShape(Circle())
-                                } else {
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(color)
-                                }
-                            }
-                            
-                            Text(person.name)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            
-                            Spacer()
-                            
-                            Text("\(person.count) titles")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            
-                            Text(String(format: "%.0f%%", person.score * 100))
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(color)
-                                .frame(width: 35, alignment: .trailing)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(Array(people.prefix(10).enumerated()), id: \.element.name) { index, person in
+                            TalentMemberCard(person: person, rank: index + 1, color: color)
                         }
-                        .padding(.vertical, 6)
-                        
-                        Divider()
-                            .opacity(0.06)
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 2)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
         }
+    }
+}
+
+struct TalentMemberCard: View {
+    let person: VisualPersonStat
+    let rank: Int
+    let color: Color
+    
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Profile image section
+            Group {
+                if let urlStr = person.profileURL, let url = URL(string: urlStr) {
+                    CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .normal) {
+                        placeholderImage
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 60, height: 90)
+                } else {
+                    placeholderImage
+                }
+            }
+            .frame(width: 60, height: 90)
+            .background(Color.secondary.opacity(0.1))
+            .clipped()
+            
+            // Text section
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Text("#\(rank)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(color)
+                    Spacer()
+                    Text(String(format: "%.0f%%", person.score * 100))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(color)
+                }
+                
+                Text(person.name)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                Spacer()
+                
+                Text("\(person.count) \(person.count == 1 ? "title" : "titles")")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(width: 140, height: 90, alignment: .topLeading)
+        }
+        .frame(width: 200, height: 90)
+        .background(color.opacity(colorScheme == .dark ? 0.12 : 0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
+        }
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+    
+    private var placeholderImage: some View {
+        ZStack {
+            color.opacity(0.15)
+            Image(systemName: "person.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(color.opacity(colorScheme == .dark ? 0.4 : 0.6))
+        }
+        .frame(width: 60, height: 90)
     }
 }
 

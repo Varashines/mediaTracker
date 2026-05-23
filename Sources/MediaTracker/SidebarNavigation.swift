@@ -118,7 +118,7 @@ struct SidebarNavigation: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(activeColor.gradient)
+                        .fill(activeColor)
                         .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
                 } else if hoveredItem == item {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -137,8 +137,8 @@ struct SidebarNavigation: View {
 
     private func sidebarSectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 9.5, weight: .black))
-            .kerning(1.5)
+            .font(.system(size: 9.5, weight: .bold))
+            .kerning(1.2)
             .foregroundStyle(.secondary.opacity(0.7))
             .padding(.leading, 12)
             .padding(.bottom, 4)

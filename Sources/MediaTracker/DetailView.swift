@@ -234,7 +234,7 @@ struct DetailView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.badge.plus")
-                    Text("Add to Collection")
+                    Text("Collection")
                 }
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .contentShape(Rectangle())
@@ -292,7 +292,7 @@ struct DetailView: View {
     }
 }
 
-/// A premium, modular container for cinematic detail sections.
+/// A minimal, modular container for detail sections.
 struct ModularSection<Content: View>: View {
     let title: String
     let icon: String
@@ -301,31 +301,27 @@ struct ModularSection<Content: View>: View {
     @Environment(\.colorScheme) var scheme
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .black))
-                    .foregroundStyle(color.gradient)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.7))
                 Text(title.uppercased())
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .kerning(1.2)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary.opacity(0.7))
+                    .kerning(0.8)
                 Spacer()
             }
-            .padding(.leading, 8)
+            .padding(.leading, 4)
             
             content
-                .padding(24)
+                .padding(16)
                 .background {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
                 }
                 .background(color.opacity(scheme == .dark ? 0.05 : 0.02) as Color)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(.white.opacity(scheme == .dark ? 0.1 : 0.2), lineWidth: 0.5)
-                }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 }

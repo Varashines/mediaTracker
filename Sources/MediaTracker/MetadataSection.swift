@@ -4,6 +4,14 @@ import SwiftData
 struct MetadataSection: View {
     let item: MediaItem
     let themeColor: Color
+    
+    @Environment(\.colorScheme) var colorScheme
+
+    struct MetadataItem: Identifiable {
+        let id = UUID()
+        let icon: String
+        let value: String
+    }
 
     var voteAverage: Double? {
         if item.type == .movie {
@@ -13,46 +21,67 @@ struct MetadataSection: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Row 1: Core Metadata
-            HStack(spacing: 12) {
-                if let rating = voteAverage, rating > 0 {
-                    MetadataLine(icon: "star.fill", value: String(format: "%.1f", rating), themeColor: themeColor)
-                }
-
-                if let date = item.releaseDate {
-                    MetadataLine(icon: "calendar", value: date.formatted(.dateTime.year().month().day()), themeColor: themeColor)
-                }
-                
-                if let lang = item.cachedLanguage {
-                    MetadataLine(icon: "globe", value: lang, themeColor: themeColor, isLanguage: true)
-                }
-
-                if let net = item.cachedNetwork {
-                    MetadataLine(icon: "tv.fill", value: net, themeColor: themeColor)
-                }
+    private var metadataItems: [MetadataItem] {
+        var items: [MetadataItem] = []
+        
+        if let rating = voteAverage, rating > 0 {
+            items.append(MetadataItem(icon: "star.fill", value: String(format: "%.1f", rating)))
+        }
+        
+        if let date = item.releaseDate {
+            let year = Calendar.current.component(.year, from: date)
+            items.append(MetadataItem(icon: "calendar", value: String(year)))
+        }
+        
+        if item.type == .movie {
+            if let runtime = item.cachedRuntime, runtime > 0 {
+                items.append(MetadataItem(icon: "clock.fill", value: DateUtils.formatRuntime(runtime)))
             }
-            
-            // Row 2: Content Details
-            HStack(spacing: 12) {
-                if item.type == .movie {
-                    MetadataLine(icon: "clock.fill", value: DateUtils.formatRuntime(item.cachedRuntime), themeColor: themeColor)
-                } else if item.type == .tvShow {
-                    if let tv = item.tvShowDetails {
-                        MetadataLine(icon: "info.circle.fill", value: tv.status, themeColor: themeColor)
-                        
-                        if let s = tv.numberOfSeasons, let e = tv.numberOfEpisodes {
-                            MetadataLine(icon: "rectangle.stack.fill", value: "\(s) Seasons, \(e) Episodes", themeColor: themeColor)
-                        }
-                    }
-                }
+        } else if item.type == .tvShow, let tv = item.tvShowDetails {
+            if let s = tv.numberOfSeasons, s > 0 {
+                items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons")"))
+            }
+            if let e = tv.numberOfEpisodes, e > 0 {
+                items.append(MetadataItem(icon: "play.fill", value: "\(e) \(e == 1 ? "Ep" : "Eps")"))
+            }
+        }
+        
+        if let net = item.cachedNetwork, !net.isEmpty {
+            items.append(MetadataItem(icon: "tv.fill", value: net))
+        }
+        
+        if let lang = item.cachedLanguage, !lang.isEmpty {
+            items.append(MetadataItem(icon: "globe", value: LanguageUtils.languageName(for: lang)))
+        }
+        
+        if let firstGenre = item.cachedGenres.first {
+            items.append(MetadataItem(icon: "tag.fill", value: firstGenre))
+        }
+        
+        return items
+    }
 
-                if !item.cachedGenres.isEmpty {
-                    MetadataLine(icon: "tag.fill", value: item.cachedGenres.joined(separator: ", "), themeColor: themeColor)
+    var body: some View {
+        let items = metadataItems
+        HStack(spacing: 8) {
+            ForEach(0..<items.count, id: \.self) { index in
+                let item = items[index]
+                HStack(spacing: 4) {
+                    Image(systemName: item.icon)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                    Text(item.value)
+                        .foregroundStyle(.primary)
+                }
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                
+                if index < items.count - 1 {
+                    Text("·")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary.opacity(0.5))
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 }

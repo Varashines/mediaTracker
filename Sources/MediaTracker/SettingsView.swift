@@ -195,12 +195,12 @@ struct SettingsView: View {
             settingsHeader("Data Processing", icon: "brain", color: .green)
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("STUDIO ALIASES").font(.system(size: 10, weight: .black)).foregroundStyle(.tertiary)
+                Text("STUDIO ALIASES").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary)
                 GroupContainer {
                     StudioAliasManagerView().padding(.vertical, 8)
                 }
                 
-                Text("CONTENT FILTERS").font(.system(size: 10, weight: .black)).foregroundStyle(.tertiary).padding(.top, 8)
+                Text("CONTENT FILTERS").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary).padding(.top, 8)
                 GroupContainer {
                     DiscoveryManagementView().padding(.vertical, 8)
                 }

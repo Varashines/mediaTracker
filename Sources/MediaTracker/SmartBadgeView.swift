@@ -93,7 +93,7 @@ struct SmartBadgeView: View {
             case "SOON":
                 // Soon: Luminous Tangerine
                 return (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), .black)
-            case "CATCH UP":
+            case "BEHIND", "CATCH UP":
                 // Engagement: Slate Blue
                 return (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white)
             case "RECENT":

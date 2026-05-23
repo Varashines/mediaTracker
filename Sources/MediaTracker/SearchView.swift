@@ -87,44 +87,42 @@ struct SearchView: View {
 
     @ViewBuilder
     private var headerSection: some View {
-        VStack(spacing: 12) {
-            HStack {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
                 Text("Media Type")
-                    .font(.subheadline.bold())
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                 
-                Picker("Media Type", selection: $selectedType) {
+                Picker("", selection: $selectedType) {
                     ForEach(SearchType.allCases, id: \.self) { type in
                         Text(type.rawValue).tag(type)
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 300)
+                .labelsHidden()
+                .frame(maxWidth: 200)
+                
+                Button {} label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("Tip: Use \"y:2023\" to filter results by release year.")
+                
+                Spacer()
                 
                 if searchVM.isSearching {
                     ProgressView()
                         .controlSize(.small)
-                        .padding(.trailing, 10)
                 }
             }
             .padding(.horizontal, 30)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
-
-            HStack {
-                Text("Tip: Use \"y:2023\" to filter results by release year.")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.horizontal, 34)
-            .padding(.bottom, 12)
+            .padding(.vertical, 12)
 
             Divider().padding(.horizontal, 30)
         }
-        .background {
-            Rectangle().fill(Color(NSColor.windowBackgroundColor))
-        }
+        .background(.ultraThinMaterial)
         .zIndex(10)
     }
 

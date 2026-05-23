@@ -14,12 +14,12 @@ struct SectionHeader: View {
                 if let icon = icon {
                     Image(systemName: icon)
                         .foregroundStyle(iconColor)
-                        .font(.system(size: 24, weight: .black))
+                        .font(.system(size: 24, weight: .semibold))
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                     
                     if let subtitle = subtitle {
                         Text(subtitle)

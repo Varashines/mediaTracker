@@ -41,27 +41,27 @@ struct ForYouCompactCard: View {
                 VStack {
                     HStack {
                         Spacer()
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 9, weight: .semibold))
                             Text(context.uppercased())
-                                .font(.system(size: 10, weight: .black)) // Slightly larger
-                                .tracking(1.2)
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(0.8)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                         .foregroundStyle(.white)
                         .background {
                             Capsule()
-                                .fill(themeColor.opacity(0.3)) // Stronger theme tint
+                                .fill(themeColor.opacity(0.25))
                                 .background(.ultraThinMaterial)
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(themeColor.opacity(0.5), lineWidth: 1) // Added defined border
+                            Capsule().stroke(themeColor.opacity(0.4), lineWidth: 0.8)
                         }
-                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-                        .padding(16)
+                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                        .padding(12)
                     }
                     Spacer()
                 }
@@ -77,13 +77,12 @@ struct ForYouCompactCard: View {
                     .frame(width: 100, height: 150)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.6), radius: 10, x: 5, y: 5)
-                    .scaleEffect(isHovered ? 1.05 : 1.0)
                 }
 
                 // 4. Info Pane
                 VStack(alignment: .leading, spacing: 8) {
                     Text(metadata.title)
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .shadow(radius: 2)
@@ -97,13 +96,13 @@ struct ForYouCompactCard: View {
             .padding(.leading, 20)
         }
         .frame(width: cardWidth, height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(isHovered ? 0.3 : 0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
         }
-        .shadow(color: .black.opacity(isHovered ? 0.4 : 0.2), radius: 15, y: 10)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 8, y: 4)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onHover { isHovered = $0 }
         .task {

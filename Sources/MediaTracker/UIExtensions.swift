@@ -211,9 +211,9 @@ struct SubSectionHeader: View {
     
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 11, weight: .black))
+            .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.secondary)
-            .tracking(2.0)
+            .tracking(1.2)
     }
 }
 

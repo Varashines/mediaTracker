@@ -339,7 +339,7 @@ struct MediaThumbnailView: View, Equatable {
         .frame(width: width, height: height)
         .cornerRadius(16)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
-        .scaleEffect(isHovered ? 1.05 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
+        .scaleEffect(isHovered ? 1.02 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         .onAppear {
             if isFastScrolling {

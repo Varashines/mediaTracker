@@ -9,6 +9,7 @@ struct NoteOverlayView: View {
     
     @State private var localNote: String = ""
     @FocusState private var isFocused: Bool
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         VStack {
@@ -36,7 +37,7 @@ struct NoteOverlayView: View {
                         .font(.system(size: 13))
                         .scrollContentBackground(.hidden)
                         .background(Color.primary.opacity(0.03))
-                        .cornerRadius(8)
+                        .cornerRadius(10)
                         .frame(minHeight: 100, maxHeight: 200)
                         .focused($isFocused)
                         .overlay(alignment: .topLeading) {
@@ -53,17 +54,13 @@ struct NoteOverlayView: View {
                 .padding(20)
                 .frame(width: 320)
                 .background {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color(NSColor.windowBackgroundColor))
-                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 15, y: 5)
                 }
-                .background {
-                    RoundedRectangle(cornerRadius: 20).fill(.ultraThinMaterial)
-                }
-                .cornerRadius(20)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
                 }
                 .padding(.top, 60)
                 .padding(.trailing, 20)

@@ -14,7 +14,7 @@ struct ThumbnailHoverOverlay: View {
     var body: some View {
         VStack(spacing: 8) {
             Text(title.uppercased())
-                .font(.system(size: mode == .hero ? 18 : 13, weight: .black, design: .rounded))
+                .font(.system(size: mode == .hero ? 18 : 13, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.8), radius: 4)
@@ -39,8 +39,8 @@ struct ThumbnailHoverOverlay: View {
             
             if isUpcoming, let date = gridBadgeText {
                 Text(date.uppercased())
-                    .font(.system(size: 8, weight: .black, design: .rounded))
-                    .kerning(1.5)
+                    .font(.system(size: 8, weight: .semibold, design: .rounded))
+                    .kerning(1.2)
                     .padding(.top, 4)
                     .foregroundStyle(date.contains("STREAMING") ? Color.accentColor : .white)
                     .shadow(color: .black.opacity(0.4), radius: 2)

@@ -11,11 +11,11 @@ struct TitleSection: View {
 
     var body: some View {
         if item.modelContext != nil {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 18) {
                 // 1. Editorial Title & Creators
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     let titleView = Text(item.title)
-                        .font(.system(size: 52, weight: .black, design: .rounded))
+                        .font(.system(size: 40, weight: .heavy, design: .rounded))
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(.primary)
@@ -29,7 +29,7 @@ struct TitleSection: View {
                     let creators = item.cachedCreators
                     if !creators.isEmpty {
                         Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -40,7 +40,8 @@ struct TitleSection: View {
                     let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
                     
                     Text(item.type?.rawValue.uppercased() ?? "")
-                        .font(.system(size: 10, weight: .black))
+                        .font(.system(size: 10, weight: .semibold))
+                        .kerning(1.2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .foregroundStyle(accent)
@@ -58,9 +59,10 @@ struct TitleSection: View {
                         let color = isStreaming ? Color.green : Color.orange
                         HStack(spacing: 4) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
-                                .font(.system(size: 8, weight: .black))
+                                .font(.system(size: 8, weight: .bold))
                             Text(dateText.uppercased())
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 10, weight: .semibold))
+                                .kerning(1.2)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -85,7 +87,7 @@ struct TitleSection: View {
                     TasteToggle(item: item, themeColor: themeColor)
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.vertical, 10)
                 .background {
                     RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial)
                 }

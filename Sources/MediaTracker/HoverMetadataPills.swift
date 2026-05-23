@@ -16,12 +16,16 @@ struct HoverMetadataPills: View {
             
             // Row 1: Name Pill
             Text(title)
-                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.accentColor)
+                .background(.ultraThinMaterial)
                 .clipShape(Capsule())
-                .foregroundStyle(.white)
+                .overlay(
+                    Capsule()
+                        .stroke(.white.opacity(colorScheme == .dark ? 0.15 : 0.45), lineWidth: 0.5)
+                )
+                .foregroundStyle(.primary)
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                 .offset(y: isHovered ? 0 : 20)
                 .opacity(isHovered ? 1 : 0)
@@ -30,29 +34,41 @@ struct HoverMetadataPills: View {
             HStack(spacing: 6) {
                 if let year = year {
                     Text(year)
-                        .font(.system(size: 8.5, weight: .black, design: .rounded))
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+                        )
                 }
                 
                 if let episode = nextEpisodeLabel {
                     Text(episode)
-                        .font(.system(size: 8.5, weight: .black, design: .rounded))
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+                        )
                 }
                 
                 if let nextDate = nextAiringDate, nextDate > Date() {
                     Text(nextDate.formatted(.dateTime.month().day()))
-                        .font(.system(size: 8.5, weight: .black, design: .rounded))
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+                        )
                 }
             }
             .shadow(color: .black.opacity(0.1), radius: 4, y: 2)

@@ -227,9 +227,9 @@ struct SmartCollectionsHubView: View {
     
     private func sectionHeaderMini(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 11, weight: .black))
+            .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.secondary)
-            .kerning(2)
+            .kerning(1.2)
     }
 
     private func emptyStatePlaceholder(title: String, subtitle: String, color: Color, action: @escaping () -> Void) -> some View {
@@ -366,16 +366,15 @@ private struct SmartCollectionCard: View {
                     
                     if count > 0 {
                         Text("\(count)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(accentColor.isLightColor ? .black : .white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(accentColor.gradient)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(accentColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(accentColor.opacity(0.12))
                             .clipShape(Capsule())
-                            .shadow(color: accentColor.opacity(0.2), radius: 4, y: 2)
                     } else {
                         Text("0")
-                            .font(.system(.title3, design: .rounded))
+                            .font(.system(.subheadline, design: .rounded))
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary.opacity(0.4))
                     }
@@ -392,18 +391,18 @@ private struct SmartCollectionCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(20)
+            .padding(16)
             .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(.thinMaterial)
                     .background {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.primary.opacity(isHovered ? 0.05 : 0.02))
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.primary.opacity(isHovered ? 0.04 : 0.015))
                     }
-                    .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0), radius: isHovered ? 12 : 0, y: isHovered ? 6 : 0)
+                    .shadow(color: Color.black.opacity(isHovered ? 0.06 : 0), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(Color.primary.opacity(isHovered ? 0.15 : 0.06), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.05), lineWidth: 0.8)
                     }
             }
             .scaleEffect(isHovered ? 1.02 : 1.0)

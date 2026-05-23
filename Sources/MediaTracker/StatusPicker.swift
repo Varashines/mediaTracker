@@ -5,6 +5,7 @@ struct StatusPicker: View {
     @Bindable var item: MediaItem
     var onChange: ((MediaState?) -> Void)?
     @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
 
     var body: some View {
         if item.modelContext != nil {
@@ -27,21 +28,27 @@ struct StatusPicker: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: currentState.iconName)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 12, weight: .semibold))
                     Text(currentState.displayName)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 12, weight: .semibold))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .opacity(0.6)
+                        .font(.system(size: 8, weight: .semibold))
+                        .opacity(0.5)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .foregroundStyle(currentState == .wishlist && colorScheme == .light ? .black : .white)
-                .background(accent)
-                .clipShape(Capsule())
-                .shadow(color: accent.opacity(0.3), radius: 8, x: 0, y: 4)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(accent)
+                .background {
+                    Capsule()
+                        .fill(accent.opacity(isHovered ? 0.12 : 0.04))
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(accent.opacity(isHovered ? 0.35 : 0.15), lineWidth: 0.8)
+                }
             }
             .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
         }
     }
     

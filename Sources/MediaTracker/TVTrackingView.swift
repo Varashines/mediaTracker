@@ -182,8 +182,8 @@ private struct SeasonTab: View {
                 }
             }
             .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .background {
                 Capsule()
                     .fill(isSelected ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03))
@@ -221,7 +221,7 @@ private struct SeasonSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Season \(season.seasonNumber)")
-                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
 
                         if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
                             Text(parsed.formatted(.dateTime.year()))
@@ -232,9 +232,9 @@ private struct SeasonSection: View {
 
                     if season.episodeCount > 0 {
                         Text("\(season.episodeCount) EPISODES")
-                            .font(.system(size: 10, weight: .black))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.secondary)
-                            .kerning(1)
+                            .kerning(1.2)
                     }
                 }
 
@@ -250,7 +250,7 @@ private struct SeasonSection: View {
                                 ? "arrow.counterclockwise" : "checkmark.seal.fill")
                         Text(isAllWatched ? "Reset" : "Mark All")
                     }
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(isAllWatched ? themeColor.opacity(colorScheme == .dark ? 0.1 : 0.05) : accent.opacity(colorScheme == .dark ? 0.15 : 0.12))
@@ -336,10 +336,12 @@ private struct EpisodeCube: View {
     @Environment(\.colorScheme) var colorScheme
 
     @State private var showingOverview = false
+    @State private var isHovering = false
 
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-        
+        let green = Color.semanticGreen(for: colorScheme)
+
         ZStack(alignment: .bottomTrailing) {
             Button {
                 withAnimation(.smooth) {
@@ -359,78 +361,99 @@ private struct EpisodeCube: View {
                     NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: itemID.map { ["itemID": $0] })
                 }
             } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Header: Episode Label & Watched Status
-                    HStack(alignment: .center) {
-                        Text("E\(episode.episodeNumber)")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                episode.isWatched
-                                    ? Color.semanticGreen(for: colorScheme).opacity(0.15) 
-                                    : Color.primary.opacity(0.05)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .foregroundStyle(episode.isWatched ? Color.semanticGreen(for: colorScheme) : Color.secondary)
+                HStack(spacing: 0) {
+                    // Left accent bar — full green when watched, muted accent when not
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(episode.isWatched ? green : accent.opacity(colorScheme == .dark ? 0.45 : 0.65))
+                        .frame(width: 3)
+                        .padding(.vertical, 8)
 
-                        Spacer()
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Episode number — green when watched, accent when not
+                        HStack {
+                            Text("E\(episode.episodeNumber)")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(episode.isWatched ? green : accent.opacity(0.7))
+                            Spacer()
+                        }
+                        .padding(.bottom, 5)
 
-                        if episode.isWatched {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.semanticGreen(for: colorScheme).opacity(0.8))
-                                .font(.system(size: 10.5))
+                        // Title
+                        Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .lineLimit(2, reservesSpace: true)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .foregroundStyle(episode.isWatched ? .secondary : .primary)
+
+                        Spacer(minLength: 4)
+
+                        // Footer divider
+                        Divider()
+                            .opacity(0.07)
+                            .padding(.bottom, 4)
+
+                        // Footer: date · runtime
+                        HStack(spacing: 4) {
+                            if let date = episode.airDateAsDate {
+                                Text(date.formatted(.dateTime.month(.abbreviated).day()))
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.secondary.opacity(0.65))
+                            }
+                            if episode.airDateAsDate != nil, let runtime = episode.runtime, runtime > 0 {
+                                Text("·")
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.secondary.opacity(0.3))
+                            }
+                            if let runtime = episode.runtime, runtime > 0 {
+                                Text("\(runtime)m")
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.secondary.opacity(0.45))
+                            }
+                            Spacer()
                         }
                     }
-
-                    // Content: Title
-                    Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .lineLimit(2, reservesSpace: true)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .foregroundStyle(.primary)
-
-                    Spacer(minLength: 0)
-
-                    // Footer: Date & Runtime
-                    HStack(spacing: 8) {
-                        if let date = episode.airDateAsDate {
-                            Text(date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let runtime = episode.runtime, runtime > 0 {
-                            Text("\(runtime)m")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary.opacity(0.8))
-                        }
-                        
-                        // Empty space to prevent overlap with info button
-                        if !episode.overview.isEmpty {
-                            Color.clear.frame(width: 14)
-                        }
-                    }
+                    .padding(.leading, 10)
+                    .padding(.trailing, 28) // Keeps a safe margin from the bottom-right info button
+                    .padding(.vertical, 8)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, minHeight: 100)
-                .background(.thinMaterial)
-                .background(colorScheme == .dark ? Color.white.opacity(0.02) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(maxWidth: .infinity, minHeight: 78)
+                .background {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(colorScheme == .dark ? Color.black.opacity(0.18) : Color(NSColor.controlBackgroundColor).opacity(0.55))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(episode.isWatched ? green.opacity(colorScheme == .dark ? 0.04 : 0.03) : Color.clear)
+                        }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .stroke(
                             episode.isWatched
-                                ? Color.semanticGreen(for: colorScheme).opacity(0.2)
-                                : Color.primary.opacity(0.05), lineWidth: 1)
+                                ? green.opacity(colorScheme == .dark ? 0.2 : 0.15)
+                                : (isHovering ? accent.opacity(colorScheme == .dark ? 0.28 : 0.2) : Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04)),
+                            lineWidth: 0.6
+                        )
                 }
+                // Watched cards gently recede — unobtrusive signal without any badge
+                .opacity(episode.isWatched ? 0.72 : 1.0)
+                .shadow(
+                    color: .black.opacity(colorScheme == .dark ? 0.18 : 0.07),
+                    radius: isHovering ? 12 : 4,
+                    x: 0, y: isHovering ? 5 : 2
+                )
             }
             .buttonStyle(.interactive(feedback: nil))
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.16)) { isHovering = hovering }
+            }
 
-            // Info Button (Integrated into bottom right)
+            // Info Button (Integrated into bottom right, with high priority gesture to fix nested button tap)
             if !episode.overview.isEmpty {
                 Button {
                     showingOverview.toggle()
@@ -442,33 +465,81 @@ private struct EpisodeCube: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .popover(isPresented: $showingOverview) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("EPISODE \(episode.episodeNumber)")
-                                .font(.system(size: 10, weight: .black))
-                                .foregroundStyle(accent.opacity(0.8))
-                                .kerning(1)
-                            
-                            Text(episode.name)
-                                .font(.system(size: 18, weight: .black, design: .rounded))
+                .highPriorityGesture(
+                    TapGesture()
+                        .onEnded {
+                            showingOverview.toggle()
                         }
+                )
+                .popover(isPresented: $showingOverview) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Header: episode label + title + optional watched pill
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("EPISODE \(episode.episodeNumber)")
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(accent.opacity(0.8))
+                                    .kerning(0.8)
+
+                                Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
+                                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                            }
+
+                            Spacer()
+
+                            if episode.isWatched {
+                                Text("WATCHED")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(green)
+                                    .kerning(0.6)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2.5)
+                                    .background(green.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                        }
+
+                        // Meta row
+                        let dateString: String? = episode.airDateAsDate?.formatted(date: .abbreviated, time: .omitted)
+                        let runtimeString: String? = (episode.runtime ?? 0) > 0 ? "\(episode.runtime!)m" : nil
                         
-                        Divider()
-                        
-                        ScrollView {
-                            Text(episode.overview)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineSpacing(4)
-                                .foregroundStyle(.secondary)
+                        if dateString != nil || runtimeString != nil {
+                            HStack(spacing: 0) {
+                                if let dateStr = dateString {
+                                    Text(dateStr)
+                                }
+                                if dateString != nil && runtimeString != nil {
+                                    Text(" · ")
+                                        .foregroundStyle(.secondary.opacity(0.5))
+                                }
+                                if let runStr = runtimeString {
+                                    Text(runStr)
+                                }
+                            }
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        }
+
+                        // Overview (only if present)
+                        if !episode.overview.isEmpty {
+                            ScrollView(showsIndicators: false) {
+                                Text(episode.overview)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.secondary)
+                                    .lineSpacing(3)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.top, 4)
                         }
                     }
-                    .padding(20)
-                    .frame(width: 320, height: 220)
+                    .padding(14)
+                    .frame(width: 270, height: episode.overview.isEmpty ? 84 : 165)
                 }
             }
         }
-        .animation(.spring(response: 0.3), value: episode.isWatched)
+        .animation(.spring(response: 0.26, dampingFraction: 0.8), value: episode.isWatched)
+        .animation(.easeInOut(duration: 0.16), value: isHovering)
     }
 }
 

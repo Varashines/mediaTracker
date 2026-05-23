@@ -98,11 +98,11 @@ struct StudioAliasManagerView: View {
                             .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(isSelected ? Color.blue.opacity(0.15) : Color.primary.opacity(0.05))
+                            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
                             .clipShape(Capsule())
                             .overlay {
                                 if isSelected {
-                                    Capsule().stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                    Capsule().stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
                                 }
                             }
                     }
@@ -134,7 +134,7 @@ struct StudioAliasManagerView: View {
                             Text(src)
                                 .font(.system(size: 11))
                         }
-                        .foregroundStyle(isLogo ? Color.blue : .secondary)
+                        .foregroundStyle(isLogo ? Color.accentColor : .secondary)
                     }
                     .buttonStyle(.plain)
                 }

@@ -11,11 +11,11 @@ struct OverviewSection: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Image(systemName: "quote.opening")
-                    .font(.system(size: 14, weight: .black))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(themeColor.gradient)
 
                 Text("SYNOPSIS")
-                    .font(.system(size: 13, weight: .black))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
             }

@@ -75,13 +75,13 @@ struct ContinueWatchingCarousel: View {
                 Button {
                     onDiscoverySpotlight?()
                 } label: {
-                    HStack(spacing: 24) {
+                    HStack(spacing: 16) {
                         Image(systemName: "sparkles.tv.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.white)
-                            .frame(width: 80, height: 80)
-                            .background(Color.accentColor.gradient)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 54, height: 54)
+                            .background(Color.accentColor.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Ready to start watching?")
@@ -97,14 +97,14 @@ struct ContinueWatchingCarousel: View {
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.tertiary)
                     }
-                    .padding(24)
+                    .padding(16)
                     .background {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(.ultraThinMaterial)
                     }
                     .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 0.8)
                     }
                 }
                 .buttonStyle(.plain)

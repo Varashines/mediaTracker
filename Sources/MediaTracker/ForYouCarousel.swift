@@ -65,7 +65,7 @@ struct ForYouCarousel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 20) {
                         ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 24)
+                            RoundedRectangle(cornerRadius: 18)
                                 .fill(Color.secondary.opacity(0.1))
                                 .frame(width: 420, height: 200)
                         }

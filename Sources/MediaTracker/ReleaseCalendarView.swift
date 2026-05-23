@@ -86,10 +86,10 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial)
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.03))
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -97,7 +97,6 @@ struct ReleaseCalendarView: View {
             Spacer()
             
             let isSelected = selectedDate == nil
-            let accent = Color.accentColor
             
             Button {
                 withAnimation(.smooth) {
@@ -105,24 +104,18 @@ struct ReleaseCalendarView: View {
                 }
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary.opacity(0.8))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                     .background {
                         if isSelected {
                             Capsule()
-                                .fill(accent.gradient)
+                                .fill(Color.primary.opacity(0.08))
                                 .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
                         } else {
                             Capsule()
-                                .fill(.regularMaterial)
-                        }
-                    }
-                    .overlay {
-                        if !isSelected {
-                            Capsule()
-                                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                                .fill(Color.primary.opacity(0.03))
                         }
                     }
             }
@@ -134,10 +127,10 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial)
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.03))
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -329,8 +322,8 @@ struct ReleaseCalendarView: View {
         
         VStack(alignment: .leading, spacing: 15) {
             Text("NEXT 7 DAYS")
-                .font(.system(size: 10, weight: .black))
-                .kerning(1.5)
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(1.2)
                 .foregroundStyle(.secondary)
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -340,32 +333,37 @@ struct ReleaseCalendarView: View {
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
                         let accent = Color.accentColor
 
-                        Button {                            withAnimation(.smooth) { selectedDate = date }
+                        Button {
+                            withAnimation(.smooth) { selectedDate = date }
                         } label: {
-                            VStack(spacing: 8) {
+                            VStack(spacing: 6) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                    .font(.system(size: 10, weight: .black))
-                                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .secondary)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(isSelected ? accent : .secondary)
                                 
                                 Text(date.formatted(.dateTime.day()))
-                                    .font(.system(size: 18, weight: .black, design: .rounded))
-                                    .foregroundStyle(isSelected ? (accent.isLightColor ? .black : .white) : .primary)
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(isSelected ? accent : .primary)
                                 
                                 if let info = dayInfo, !info.items.isEmpty {
                                     Circle()
-                                        .fill(isSelected ? (accent.isLightColor ? .black : .white) : Color.accentColor)
+                                        .fill(isSelected ? accent : Color.accentColor.opacity(0.5))
                                         .frame(width: 4, height: 4)
                                 }
                             }
-                            .frame(width: 50, height: 75)
+                            .frame(width: 50, height: 72)
                             .background {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(accent.gradient)
+                                        .fill(Color.primary.opacity(0.06))
                                         .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(accent.opacity(0.3), lineWidth: 0.8)
+                                        }
                                 } else {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.primary.opacity(0.05))
+                                        .fill(Color.primary.opacity(0.03))
                                 }
                             }
                         }
@@ -438,12 +436,12 @@ struct ReleaseCalendarView: View {
         VStack(alignment: .leading, spacing: 8) {
             let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
-                .font(.system(size: 12, weight: .black))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(accent)
-                .kerning(2)
+                .kerning(1.2)
             
             Text(isAllMonth ? date.formatted(.dateTime.month(.wide).year()) : "\(count) Releases")
-                .font(.system(size: 44, weight: .black, design: .rounded))
+                .font(.system(size: 44, weight: .heavy, design: .rounded))
             
             if isAllMonth {
                 Text("\(count) total releases this month")
@@ -505,13 +503,13 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
         let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             MediaThumbnailView(metadata: item.metadata, mode: .grid)
             
             Text(item.releaseContext)
-                .font(.system(size: 11, weight: .black))
+                .font(.system(size: 9.5, weight: .semibold))
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.vertical, 3.5)
                 .background(accent.opacity(0.12))
                 .foregroundStyle(accent)
                 .clipShape(Capsule())

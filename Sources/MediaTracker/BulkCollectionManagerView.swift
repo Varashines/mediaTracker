@@ -132,9 +132,9 @@ struct BulkItemCard: View {
                         }
                     }
                     .frame(width: 120, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(Color.primary.opacity(0.1))
                         .frame(width: 120, height: 180)
                         .overlay {

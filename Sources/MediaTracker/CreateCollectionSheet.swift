@@ -63,15 +63,15 @@ struct CreateCollectionSheet: View {
                 // Name Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("NAME")
-                        .font(.system(size: 10, weight: .black))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .kerning(1)
+                        .kerning(1.2)
                     TextField("Collection Name", text: $name)
                         .textFieldStyle(.plain)
                         .font(.system(.body, design: .rounded))
                         .padding()
                         .background(Color.primary.opacity(0.05))
-                        .cornerRadius(16)
+                        .cornerRadius(12)
                 }
                 
                 // Smart Playlist Toggle
@@ -97,7 +97,7 @@ struct CreateCollectionSheet: View {
                 .toggleStyle(.switch)
                 .padding()
                 .background(Color.primary.opacity(0.03))
-                .cornerRadius(16)
+                .cornerRadius(12)
                 
                 if isSmart {
                     smartRulesSection
@@ -107,9 +107,9 @@ struct CreateCollectionSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("ICON")
-                            .font(.system(size: 10, weight: .black))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.secondary)
-                            .kerning(1)
+                            .kerning(1.2)
                         Spacer()
                         TextField("Search symbols...", text: $iconSearchText)
                             .textFieldStyle(.plain)
@@ -133,7 +133,7 @@ struct CreateCollectionSheet: View {
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Color.primary.opacity(0.05))
-                    .cornerRadius(16)
+                    .cornerRadius(12)
                 
                 Button(editingCollection == nil ? "Create" : "Save") {
                     if let editing = editingCollection {
@@ -153,9 +153,9 @@ struct CreateCollectionSheet: View {
                 .font(.system(.body, design: .rounded)).bold()
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(Color.blue.gradient))
+                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(Color.blue))
                 .foregroundStyle(.white)
-                .cornerRadius(16)
+                .cornerRadius(12)
             }
             .padding(.top, 10)
         }
@@ -178,9 +178,9 @@ struct CreateCollectionSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("RULES")
-                    .font(.system(size: 10, weight: .black))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .kerning(1)
+                    .kerning(1.2)
                 Spacer()
                 RuleAddMenu(smartRules: $smartRules)
             }
@@ -192,7 +192,7 @@ struct CreateCollectionSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.primary.opacity(0.02))
-                    .cornerRadius(12)
+                    .cornerRadius(10)
             } else {
                 VStack(spacing: 8) {
                     ForEach(Array(smartRules.enumerated()), id: \.offset) { idx, rule in
@@ -211,14 +211,14 @@ struct CreateCollectionSheet: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.primary.opacity(0.05))
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                     }
                 }
             }
         }
         .padding()
         .background(Color.primary.opacity(0.02))
-        .cornerRadius(16)
+        .cornerRadius(12)
     }
     
     @ViewBuilder
@@ -253,9 +253,9 @@ struct IconPickerGridView: View {
                     Image(systemName: iconName)
                         .font(.title3)
                         .frame(width: 44, height: 44)
-                        .background(selectedIcon == iconName ? Color.blue.gradient : Color.primary.opacity(0.05).gradient)
+                        .background(selectedIcon == iconName ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.05)))
                         .foregroundStyle(selectedIcon == iconName ? .white : .primary)
-                        .cornerRadius(14)
+                        .cornerRadius(10)
                         .onTapGesture {
                             withAnimation(.spring) { selectedIcon = iconName }
                         }

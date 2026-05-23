@@ -33,9 +33,9 @@ struct HomeHeroCard: View {
                         Spacer()
                         HStack(spacing: 6) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 10, weight: .semibold))
                             Text(context.uppercased())
-                                .font(.system(size: 9, weight: .black))
+                                .font(.system(size: 9, weight: .semibold))
                                 .tracking(1.2)
                         }
                         .padding(.horizontal, 14)
@@ -84,7 +84,7 @@ struct HomeHeroCard: View {
                     }
                     
                     Text(metadata.title)
-                        .font(.system(size: 28, weight: .black))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
@@ -103,8 +103,8 @@ struct HomeHeroCard: View {
         }
         .frame(width: 500, height: 280)
         .cornerRadius(24)
-        .shadow(color: .black.opacity(isHovered ? 0.3 : 0), radius: 20, x: 0, y: 10)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
+        .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 10, y: 5)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onHover { isHovered = $0 }
         .task {

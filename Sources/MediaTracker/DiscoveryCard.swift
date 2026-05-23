@@ -40,15 +40,14 @@ struct DiscoveryCard: View {
 
     var body: some View {
         Button(action: action) {
-            let cornerRadius: CGFloat = style == .logo ? 20 : 32
-            let backingOpacity = colorScheme == .dark ? (isHovered ? 0.22 : 0.12) : (isHovered ? 0.12 : 0.06)
-            let strokeOpacity = colorScheme == .dark ? (isHovered ? 0.45 : 0.25) : (isHovered ? 0.30 : 0.15)
-            let shadowOpacity = isHovered ? 0.22 : 0.10
-            let shadowRadius: CGFloat = isHovered ? 12 : 6
-            let shadowY: CGFloat = isHovered ? 6 : 3
+            let cornerRadius: CGFloat = style == .logo ? 16 : 18
+            let backingOpacity = colorScheme == .dark ? (isHovered ? 0.18 : 0.10) : (isHovered ? 0.10 : 0.05)
+            let strokeOpacity = colorScheme == .dark ? (isHovered ? 0.35 : 0.20) : (isHovered ? 0.22 : 0.10)
+            let shadowOpacity = isHovered ? 0.15 : 0.06
+            let shadowRadius: CGFloat = 4
+            let shadowY: CGFloat = 2
             
             ZStack {
-                // Main Layer with translucent material, brand color overlay, stroke, and shadow
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.thinMaterial)
                     .overlay {
@@ -57,7 +56,7 @@ struct DiscoveryCard: View {
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(themeColor.opacity(strokeOpacity), lineWidth: isHovered ? 1.5 : 1)
+                            .stroke(themeColor.opacity(strokeOpacity), lineWidth: isHovered ? 1.0 : 0.8)
                     }
                     .shadow(color: themeColor.opacity(shadowOpacity), radius: shadowRadius, y: shadowY)
                 
@@ -70,7 +69,7 @@ struct DiscoveryCard: View {
             .frame(height: style == .logo ? 110 : 65)
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
         .onHover { isHovered = $0 }
     }
@@ -112,7 +111,7 @@ struct DiscoveryCard: View {
                 Spacer()
                 
                 Text("\(node.count)")
-                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(accent.opacity(0.9))
             }
             .padding(.horizontal, 24)
@@ -136,7 +135,7 @@ struct DiscoveryCard: View {
             if isHovered {
                 Spacer()
                 Text("\(node.count)")
-                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(accent.opacity(0.9))
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {

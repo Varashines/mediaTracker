@@ -44,7 +44,7 @@ struct LibraryHeaderView: View {
                         .foregroundStyle(.secondary)
                     
                     Text(title)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.accentColor)
                     
                     Button { withAnimation { onNetworkSelected([]) } } label: {

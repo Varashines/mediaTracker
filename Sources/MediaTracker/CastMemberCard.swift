@@ -32,7 +32,7 @@ struct CastMemberCard: View {
                 .fill(Color(NSColor.windowBackgroundColor))
                 .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         }
-        .overlay(borderOverlay(accent: accent))
+        .overlay(borderOverlay())
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -80,8 +80,8 @@ struct CastMemberCard: View {
         .frame(width: 140, alignment: .leading)
     }
 
-    private func borderOverlay(accent: Color) -> some View {
+    private func borderOverlay() -> some View {
         RoundedRectangle(cornerRadius: 12)
-            .stroke(accent.opacity(colorScheme == .dark ? 0.4 : 0.25), lineWidth: 1.0)
+            .stroke(Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
     }
 }

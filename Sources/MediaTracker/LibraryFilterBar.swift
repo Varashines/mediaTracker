@@ -87,12 +87,9 @@ struct LibraryFilterBar: View {
                     .font(.system(size: 11, weight: .bold))
                 Text(title)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-                    .opacity(0.4)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .foregroundStyle(active ? Color.accentColor : .primary.opacity(0.7))
             .background {
                 ZStack {

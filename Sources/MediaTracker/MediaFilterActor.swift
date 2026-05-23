@@ -311,7 +311,7 @@ actor MediaFilterActor {
     }
 
     private func buildCatchUpPredicate() -> Predicate<MediaItem> {
-        return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "CATCH UP" }
+        return #Predicate<MediaItem> { item in item.storedSmartBadgeLabel == "BEHIND" }
     }
 
     private func buildStalledPredicate() -> Predicate<MediaItem> {
@@ -386,7 +386,7 @@ actor MediaFilterActor {
                 return lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo
             }
         } else if category == .releaseRadar {
-            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE", "RECENT"]
+            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
             let now = Date()
             refined = refined.filter { item in
                 // 1. Must have a valid radar badge
@@ -784,7 +784,7 @@ actor MediaFilterActor {
             let hasRuntime = (fetchedItem.cachedRuntime ?? 0) > 0 || (fetchedItem.cachedEpisodeRuntime ?? 0) > 0
             if !hasRuntime { return nil }
         case .catchUp:
-            if fetchedItem.storedSmartBadgeLabel != "CATCH UP" { return nil }
+            if fetchedItem.storedSmartBadgeLabel != "BEHIND" { return nil }
         case .stalled:
             let isStalled = fetchedItem.stateValue == "Active" || fetchedItem.stateValue == "On Hold" || fetchedItem.stateValue == "Dropped"
             if !isStalled { return nil }
