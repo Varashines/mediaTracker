@@ -42,7 +42,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .disliked: return "Disliked"
         case .binge: return "Binge"
         case .discover: return "Discovery Hub"
-        case .insights: return "Statistics"
+        case .insights: return "Cinema DNA"
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
         case .smartHub: return "Smart Hub"

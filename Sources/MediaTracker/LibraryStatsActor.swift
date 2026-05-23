@@ -14,6 +14,12 @@ struct WatchTimePoint: Sendable, Identifiable {
     let minutes: Int
 }
 
+struct DecadeDistributionPoint: Sendable, Identifiable {
+    let id = UUID()
+    let decade: String
+    let count: Int
+}
+
 struct LibraryStats: Sendable {
     let totalWatchTimeMinutes: Int
 
@@ -41,6 +47,7 @@ struct LibraryStats: Sendable {
     let dislikedCount: Int
     
     let watchTimeHistory: [WatchTimePoint]
+    let decadeDistribution: [DecadeDistributionPoint]
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -59,7 +66,8 @@ struct LibraryStats: Sendable {
         lovedCount: 0,
         likedCount: 0,
         dislikedCount: 0,
-        watchTimeHistory: []
+        watchTimeHistory: [],
+        decadeDistribution: []
     )
 }
 
@@ -149,6 +157,7 @@ actor LibraryStatsActor {
         var liked = 0
         var disliked = 0
         var history: [Date: Int] = [:]
+        var decadeCounts: [String: Int] = [:]
     }
 
     private struct TasteMapsContainer {
@@ -252,6 +261,13 @@ actor LibraryStatsActor {
                     updateTaste(&taste.actorTaste, actor.name, actor.profileURL)
                 }
             }
+
+            if let releaseDate = item.releaseDate {
+                let year = calendar.component(.year, from: releaseDate)
+                let decadeStart = (year / 10) * 10
+                let decadeName = "\(decadeStart)s"
+                stats.decadeCounts[decadeName, default: 0] += 1
+            }
         }
     }
 
@@ -299,6 +315,9 @@ actor LibraryStatsActor {
         let history = stats.history.map { WatchTimePoint(date: $0.key, minutes: $0.value) }
             .sorted { $0.date < $1.date }
 
+        let decadeDistribution = stats.decadeCounts.map { DecadeDistributionPoint(decade: $0.key, count: $0.value) }
+            .sorted { $0.decade < $1.decade }
+
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
             totalMovies: stats.movieCount,
@@ -316,7 +335,8 @@ actor LibraryStatsActor {
             lovedCount: stats.loved,
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
-            watchTimeHistory: history
+            watchTimeHistory: history,
+            decadeDistribution: decadeDistribution
         )
     }
 
