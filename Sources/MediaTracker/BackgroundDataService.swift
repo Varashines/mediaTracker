@@ -134,7 +134,15 @@ actor BackgroundDataService {
         }
     }
 
+    private var lastHealedDate: Date?
+
     func performLibraryHeal() async throws {
+        if let lastHealed = lastHealedDate, Date().timeIntervalSince(lastHealed) < 300 {
+            print("⏭️ Skipping library heal — last heal was \(Int(Date().timeIntervalSince(lastHealed)))s ago")
+            return
+        }
+        lastHealedDate = Date()
+
         // 1. Repair Orphaned Entities
         try await repairOrphanedEntities()
 

@@ -16,12 +16,18 @@ extension MediaItem {
         }
 
         // Phase 1 Modularization: Use Centralized Badge Engine
+        let oldLabel = storedSmartBadgeLabel
+        let oldSparkle = storedSmartBadgeIsSparkle
         if let result = BadgeEngine.calculateBadge(for: self, now: now) {
-            self.storedSmartBadgeLabel = result.label
-            self.storedSmartBadgeIsSparkle = result.isSparkle
+            if result.label != oldLabel || result.isSparkle != oldSparkle {
+                self.storedSmartBadgeLabel = result.label
+                self.storedSmartBadgeIsSparkle = result.isSparkle
+            }
         } else {
-            self.storedSmartBadgeLabel = nil
-            self.storedSmartBadgeIsSparkle = false
+            if oldLabel != nil || oldSparkle != false {
+                self.storedSmartBadgeLabel = nil
+                self.storedSmartBadgeIsSparkle = false
+            }
         }
 
         if let airDate = cachedNextAiringDate {

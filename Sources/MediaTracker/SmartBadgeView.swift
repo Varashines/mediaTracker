@@ -10,6 +10,19 @@ struct SmartBadgeView: View {
     
     @Environment(\.colorScheme) var colorScheme
 
+    private static let badgeColors: [String: (bg: Color, fg: Color)] = [
+        "PREMIERE": (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), .white),
+        "FINALE": (Color.fromOKLCH(l: 0.62, c: 0.24, h: 340), .white),
+        "BINGE_BACKLOG": (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), .white),
+        "BINGE_SPARKLE": (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), .white),
+        "BINGE DROP": (Color.fromOKLCH(l: 0.7, c: 0.15, h: 190), .white),
+        "NEW": (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), .black),
+        "SOON": (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), .black),
+        "BEHIND": (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white),
+        "CATCH UP": (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white),
+        "RECENT": (Color.secondary.opacity(0.8), .white),
+    ]
+
     init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
         self.item = item
         self.metadata = nil
@@ -69,39 +82,13 @@ struct SmartBadgeView: View {
     @ViewBuilder
     private func intelligentBadge(label: String, isSparkle: Bool, remaining: Int? = nil, progress: Double? = nil) -> some View {
         let badgeConfig: (bg: Color, fg: Color) = {
-            switch label {
-            case "PREMIERE":
-                // Premiere: Electric Orchid
-                return (Color.fromOKLCH(l: 0.6, c: 0.22, h: 310), .white)
-            case "FINALE":
-                // Finale: Vibrant Rose (Premium shift away from yellow)
-                return (Color.fromOKLCH(l: 0.62, c: 0.24, h: 340), .white)
-            case "BINGE":
-                if isSparkle {
-                    // Active Binge (Hot Streak): Lava Red
-                    return (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), .white)
-                } else {
-                    // Backlog Binge: Deep Indigo
-                    return (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), .white)
-                }
-            case "BINGE DROP":
-                // Binge Drop: Electric Cyan/Teal
-                return (Color.fromOKLCH(l: 0.7, c: 0.15, h: 190), .white)
-            case "NEW":
-                // New: Luminous Mint
-                return (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), .black)
-            case "SOON":
-                // Soon: Luminous Tangerine
-                return (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), .black)
-            case "BEHIND", "CATCH UP":
-                // Engagement: Slate Blue
-                return (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), .white)
-            case "RECENT":
-                // Fallback: Translucent Gray
-                return (Color.secondary.opacity(0.8), .white)
-            default:
-                return (Color.secondary.opacity(0.8), .white)
+            if let config = Self.badgeColors[label] {
+                return config
             }
+            if label == "BINGE" {
+                return isSparkle ? Self.badgeColors["BINGE_SPARKLE"]! : Self.badgeColors["BINGE_BACKLOG"]!
+            }
+            return (Color.secondary.opacity(0.8), .white)
         }()
 
         StatusBadgePrimitive(

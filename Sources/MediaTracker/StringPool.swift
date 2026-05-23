@@ -4,7 +4,11 @@ import Foundation
 // Ensures unique string instances for common metadata across the app.
 actor StringPool {
     static let shared = StringPool()
-    private let cache = NSCache<NSString, NSString>()
+    private let cache: NSCache<NSString, NSString> = {
+        let c = NSCache<NSString, NSString>()
+        c.countLimit = 5000
+        return c
+    }()
 
     private init() {}
 

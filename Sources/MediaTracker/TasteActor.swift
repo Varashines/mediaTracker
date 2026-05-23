@@ -117,7 +117,6 @@ actor TasteActor {
             accumulateBatch(items, into: &accumulators)
             
             offset += batchSize
-            modelContext.processPendingChanges()
         }
 
         let result = finalizeAffinities(accumulators)
@@ -152,33 +151,32 @@ actor TasteActor {
         var languageStats: [String: CategoryStats] = [:]
     }
 
-    private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators) {
-        let ratedItems = items.filter { $0.tasteValue != "None" }
+    private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String) {
+        var s = map[key, default: CategoryStats()]
+        s.total += 1
+        if taste == "Love" { s.loved += 1 }
+        else if taste == "Like" { s.liked += 1 }
+        else if taste == "Dislike" { s.disliked += 1 }
+        map[key] = s
+    }
 
-        for item in ratedItems {
+    private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators) {
+        for item in items {
             let taste = item.tasteValue
-            let update: (inout [String: CategoryStats], String) -> Void = { map, key in
-                var s = map[key, default: CategoryStats()]
-                s.total += 1
-                if taste == "Love" { s.loved += 1 }
-                else if taste == "Like" { s.liked += 1 }
-                else if taste == "Dislike" { s.disliked += 1 }
-                map[key] = s
-            }
-            for g in item.cachedGenres { update(&acc.genreStats, g) }
+            for g in item.cachedGenres { updateTaste(&acc.genreStats, g, taste) }
             if let rawNetwork = item.cachedNetwork {
                 let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 for n in networks where !n.isEmpty {
-                    update(&acc.networkStats, n)
+                    updateTaste(&acc.networkStats, n, taste)
                 }
             }
-            if let l = item.cachedLanguage { update(&acc.languageStats, l) }
+            if let l = item.cachedLanguage { updateTaste(&acc.languageStats, l, taste) }
 
             let limit = item.type == .movie ? 5 : 10
             let cast = item.displayCast.prefix(limit).map { $0.name }
-            for actor in cast { update(&acc.castStats, actor) }
+            for actor in cast { updateTaste(&acc.castStats, actor, taste) }
             // Use the denormalized cachedCreators to avoid faulting movieDetails/tvShowDetails relationships
-            for creator in item.cachedCreators { update(&acc.creatorStats, creator) }
+            for creator in item.cachedCreators { updateTaste(&acc.creatorStats, creator, taste) }
         }
     }
 

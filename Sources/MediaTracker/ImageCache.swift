@@ -327,8 +327,8 @@ class ImageCache: NSObject {
         }
         
         activeTasks[specificKey] = task
+        defer { activeTasks[specificKey] = nil }
         await task.value
-        activeTasks[specificKey] = nil
         
         if let wrapper = memoryCache.object(forKey: specificKey as NSString) {
             return ImageContainer(image: wrapper.image)
@@ -396,7 +396,6 @@ class ImageCache: NSObject {
                 let maxDimension = max(targetSize.width, targetSize.height) * screenScale
                 let downsampleOptions = [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceShouldCacheImmediately: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
                     kCGImageSourceThumbnailMaxPixelSize: maxDimension
                 ] as CFDictionary
@@ -414,6 +413,7 @@ class ImageCache: NSObject {
                     let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
                     context.insert(entity)
                 }
+                await Task.yield()
             } else {
                 let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
                 context.insert(entity)
@@ -444,7 +444,6 @@ class ImageCache: NSObject {
                 let tinyMaxDim: CGFloat = 75 * screenScale
                 let tinyOptions = [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceShouldCacheImmediately: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
                     kCGImageSourceThumbnailMaxPixelSize: tinyMaxDim
                 ] as CFDictionary
@@ -505,6 +504,7 @@ class ImageCache: NSObject {
                     await MainActor.run {
                         _ = ImageCache.shared.diskCacheIndex.remove(id)
                     }
+                    await Task.yield()
                 }
                 try? context.save()
             }
@@ -527,7 +527,6 @@ class ImageCache: NSObject {
                     let maxDimension = max(targetSize.width, targetSize.height) * screenScale
                     let downsampleOptions = [
                         kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceShouldCacheImmediately: true,
                         kCGImageSourceCreateThumbnailWithTransform: true,
                         kCGImageSourceThumbnailMaxPixelSize: maxDimension
                     ] as CFDictionary

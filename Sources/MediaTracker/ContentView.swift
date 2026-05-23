@@ -254,8 +254,15 @@ struct LibraryDetailView: View {
                     offset: 0
                 )
                 
-                let allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
-                let metadata = try? await filterActor.fetchLibraryMetadata()
+                let allIDs: Set<String>
+                let metadata: MediaFilterActor.LibraryMetadata?
+                if !isSoftUpdate {
+                    allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
+                    metadata = try? await filterActor.fetchLibraryMetadata()
+                } else {
+                    allIDs = viewModel.libraryTMDBIDs
+                    metadata = nil
+                }
 
                 if Task.isCancelled { return }
 
@@ -280,9 +287,8 @@ struct LibraryDetailView: View {
                     let moodColors = result.displayed.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
                     themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
 
-                    // If we just loaded "All" category, also extract colors for Sidebar
-                    if category == .discover || category == .all {
-                        // Extract network colors in background
+                    // Sync network/studio data on hard updates only
+                    if !isSoftUpdate && (category == .discover || category == .all) {
                         let container = modelContext.container
                         Task.detached(priority: .background) {
                             let sync = DiscoverySyncService(modelContainer: container)
@@ -449,23 +455,14 @@ struct LibraryDetailView: View {
         Task.detached(priority: .background) {
             let context = ModelContext(container)
             
-            let p1 = #Predicate<MediaItem> { $0.overview == "" }
-            let p2 = #Predicate<MediaItem> { $0.posterURL == nil }
-            let p3 = #Predicate<MediaItem> { $0.lastUpdated == nil }
-            let p4 = #Predicate<MediaItem> { $0.cachedWatchedEpisodeCount == nil }
-            
             var missingIDs = Set<String>()
             
+            let p1 = #Predicate<MediaItem> { $0.overview == "" || $0.posterURL == nil }
             if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p1)) {
                 missingIDs.formUnion(items.map { $0.id })
             }
+            let p2 = #Predicate<MediaItem> { $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
             if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p2)) {
-                missingIDs.formUnion(items.map { $0.id })
-            }
-            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p3)) {
-                missingIDs.formUnion(items.map { $0.id })
-            }
-            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p4)) {
                 missingIDs.formUnion(items.map { $0.id })
             }
             

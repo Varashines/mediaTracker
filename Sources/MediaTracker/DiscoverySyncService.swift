@@ -62,6 +62,21 @@ actor DiscoverySyncService {
     func syncLibrary(force: Bool) async {
         // Clear cache at start of sync
         await MainActor.run { Self.cachedRules = nil }
+
+        // Fetch alias rules once before batch loop
+        let rules = await fetchAliasRules()
+        var sourceToTarget: [String: String] = [:]
+        var targetToLogoSource: [String: String] = [:]
+        for rule in rules {
+            for source in rule.sources {
+                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
+                sourceToTarget[normalizedSource] = rule.target
+            }
+            if let pref = rule.preferredLogoSource {
+                targetToLogoSource[rule.target] = pref
+            }
+        }
+
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
@@ -77,22 +92,6 @@ actor DiscoverySyncService {
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
 
-            // Studio Aliases (Cached internally in fetchAliasRules)
-            let rules = await fetchAliasRules()
-            var sourceToTarget: [String: String] = [:]
-            var targetToLogoSource: [String: String] = [:]
-            
-            // Build normalized alias lookup (lowercased+trimmed to match the filter's behavior)
-            for rule in rules {
-                for source in rule.sources {
-                    let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
-                    sourceToTarget[normalizedSource] = rule.target
-                }
-                if let pref = rule.preferredLogoSource {
-                    targetToLogoSource[rule.target] = pref
-                }
-            }
-            
             for item in items {
                 // Count Networks
                 // Normalize name to lowercase+trimmed to match how the filter compares networks
@@ -149,8 +148,6 @@ actor DiscoverySyncService {
             }
             
             offset += batchSize
-            // Clear context objects to free memory
-            modelContext.processPendingChanges()
         }
         
         // 2. Incremental Sync: Update existing, insert new, delete orphaned

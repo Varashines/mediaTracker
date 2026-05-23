@@ -128,6 +128,7 @@ actor LibraryStatsActor {
     private struct PersonInput: Sendable {
         let name: String
         let stats: CategoryStats
+        let precomputedScore: Double
     }
 
     func fetchStats() async -> LibraryStats {
@@ -140,6 +141,10 @@ actor LibraryStatsActor {
         var statsContainer = RawStatsContainer()
         var tasteMaps = TasteMapsContainer()
 
+        // Compute hidden set once before batch loop
+        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
+        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
+
         // Phase 5 Optimization: Batched Processing to prevent memory exhaustion
         let batchSize = 500
         var offset = 0
@@ -151,10 +156,9 @@ actor LibraryStatsActor {
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
             
-            processBatch(items, stats: &statsContainer, taste: &tasteMaps)
+            processBatch(items, stats: &statsContainer, taste: &tasteMaps, hiddenSet: hiddenSet)
             
             offset += batchSize
-            modelContext.processPendingChanges()
         }
 
         let result = await finalizeStats(stats: statsContainer, taste: tasteMaps)
@@ -192,10 +196,22 @@ actor LibraryStatsActor {
         var languageTaste: [String: CategoryStats] = [:]
     }
 
-    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer) {
+    private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ tasteValue: String, _ pURL: String? = nil) {
+        var s = map[key, default: CategoryStats()]
+        s.total += 1
+        if tasteValue == "Love" {
+            s.loved += 1
+        } else if tasteValue == "Like" {
+            s.liked += 1
+        } else if tasteValue == "Dislike" {
+            s.disliked += 1
+        }
+        if let pURL = pURL { s.profileURL = pURL }
+        map[key] = s
+    }
+
+    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>) {
         let calendar = Calendar.current
-        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
-        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
@@ -206,21 +222,6 @@ actor LibraryStatsActor {
             case "Like": stats.liked += 1
             case "Dislike": stats.disliked += 1
             default: break
-            }
-
-            // Helper for taste stats
-            let updateTaste: (inout [String: CategoryStats], String, String?) -> Void = { map, key, pURL in
-                var s = map[key, default: CategoryStats()]
-                s.total += 1
-                if tasteValue == "Love" {
-                    s.loved += 1
-                } else if tasteValue == "Like" {
-                    s.liked += 1
-                } else if tasteValue == "Dislike" {
-                    s.disliked += 1
-                }
-                if let pURL = pURL { s.profileURL = pURL }
-                map[key] = s
             }
 
             // Stats per type
@@ -238,7 +239,7 @@ actor LibraryStatsActor {
                 }
 
                 for c in item.cachedCreators {
-                    updateTaste(&taste.creatorTaste, c, nil)
+                    updateTaste(&taste.creatorTaste, c, tasteValue)
                 }
             } else if item.type == .tvShow {
                 stats.tvCount += 1
@@ -254,34 +255,34 @@ actor LibraryStatsActor {
                 }
 
                 for c in item.cachedCreators {
-                    updateTaste(&taste.creatorTaste, c, nil)
+                    updateTaste(&taste.creatorTaste, c, tasteValue)
                 }
             }
 
             // Common traits (Volume & Quality)
             if item.stateValue != "Wishlist" || tasteValue != "None" {
                 for g in item.cachedGenres {
-                    updateTaste(&taste.genreTaste, g, nil)
+                    updateTaste(&taste.genreTaste, g, tasteValue)
                 }
                 if let rawNetwork = item.cachedNetwork {
                     let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                     for n in networks where !n.isEmpty {
                         if !hiddenSet.contains(n.lowercased()) {
                             if item.type == .movie {
-                                updateTaste(&taste.studioTaste, n, nil)
+                                updateTaste(&taste.studioTaste, n, tasteValue)
                             } else {
-                                updateTaste(&taste.networkTaste, n, nil)
+                                updateTaste(&taste.networkTaste, n, tasteValue)
                             }
                         }
                     }
                 }
                 if let lang = item.cachedLanguage {
-                    updateTaste(&taste.languageTaste, lang, nil)
+                    updateTaste(&taste.languageTaste, lang, tasteValue)
                 }
 
                 let limit = item.type == .movie ? 5 : 10
                 for actor in item.displayCast.prefix(limit) {
-                    updateTaste(&taste.actorTaste, actor.name, actor.profileURL)
+                    updateTaste(&taste.actorTaste, actor.name, tasteValue, actor.profileURL)
                 }
             }
 
@@ -334,21 +335,21 @@ actor LibraryStatsActor {
         }
 
         // 3. Visual Stats Resolution
-        let actorAffinityPairs = taste.actorTaste.map { name, val in (name, val) }
-        let topActors = actorAffinityPairs
-            .filter { $0.1.affinity(cutoff: 5) >= 0 }
-            .sorted { $0.1.affinity(cutoff: 5) > $1.1.affinity(cutoff: 5) }
-            .prefix(10)
+        let actorWithScore: [(String, CategoryStats, Double)] = taste.actorTaste.compactMap { name, val in
+            let score = val.affinity(cutoff: 5)
+            return score >= 0 ? (name, val, score) : nil
+        }
+        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
 
-        let visualActors = await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1) }, cutoff: 5)
+        let visualActors = await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
         
-        let creatorAffinityPairs = taste.creatorTaste.map { name, val in (name, val) }
-        let topCreators = creatorAffinityPairs
-            .filter { $0.1.affinity(cutoff: 3) >= 0 }
-            .sorted { $0.1.affinity(cutoff: 3) > $1.1.affinity(cutoff: 3) }
-            .prefix(10)
+        let creatorWithScore: [(String, CategoryStats, Double)] = taste.creatorTaste.compactMap { name, val in
+            let score = val.affinity(cutoff: 3)
+            return score >= 0 ? (name, val, score) : nil
+        }
+        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
 
-        let visualCreators = await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1) }, cutoff: 3)
+        let visualCreators = await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)
@@ -416,7 +417,7 @@ actor LibraryStatsActor {
                         return VisualPersonStat(
                             name: input.name,
                             profileURL: image,
-                            score: input.stats.affinity(cutoff: cutoff),
+                            score: input.precomputedScore,
                             count: input.stats.total
                         )
                     }

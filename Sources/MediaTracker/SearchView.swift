@@ -17,22 +17,6 @@ struct SearchView: View {
     
     @State private var searchVM: SearchViewModel
     @State private var selectedType: SearchType = .all
-    @State private var resultsCount = 0
-
-    private var allWebResults: [MediaSearchResult] {
-        let lookup = viewModel.libraryTMDBIDs
-        var results: [MediaSearchResult] = []
-        
-        if selectedType == .all || selectedType == .movie {
-            results.append(
-                contentsOf: searchVM.movieResults.filter { !lookup.contains("movie_\($0.id)") }.prefix(15))
-        }
-        if selectedType == .all || selectedType == .tvShow {
-            results.append(
-                contentsOf: searchVM.tvResults.filter { !lookup.contains("tv_\($0.id)") }.prefix(15))
-        }
-        return results
-    }
 
     init(
         searchText: Binding<String>, isSearchActive: Binding<Bool>, submitTrigger: Int,
@@ -70,9 +54,11 @@ struct SearchView: View {
         .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
         .onChange(of: searchText) { oldValue, newValue in
+            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
+            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
         }
         .alert("Search Error", isPresented: $searchVM.showError, presenting: searchVM.errorMessage) { _ in
@@ -81,6 +67,7 @@ struct SearchView: View {
             Text(message)
         }
         .onAppear {
+            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             if !searchText.isEmpty {
                 Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
             }
@@ -189,7 +176,8 @@ struct SearchView: View {
 
     @ViewBuilder
     private var webResultsSection: some View {
-        if !allWebResults.isEmpty {
+        let combined = searchVM.allWebResults
+        if !combined.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
                     Image(systemName: "globe")
@@ -201,7 +189,7 @@ struct SearchView: View {
 
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
-                    ForEach(allWebResults) { result in
+                    ForEach(combined) { result in
                         MediaThumbnailView(result: result, isLocal: false) {
                             searchVM.addMedia(result, modelContext: modelContext) { item in
                                 isSearchActive = false

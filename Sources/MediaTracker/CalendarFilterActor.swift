@@ -97,7 +97,9 @@ actor CalendarFilterActor {
         let episodePredicate = #Predicate<TVEpisode> { ep in
             ep.airDateValue != nil && (ep.airDateValue ?? fallbackPast) >= startOfDay && (ep.airDateValue ?? fallbackFuture) <= endOfDay
         }
-        var episodes = try modelContext.fetch(FetchDescriptor<TVEpisode>(predicate: episodePredicate))
+        var descriptor = FetchDescriptor<TVEpisode>(predicate: episodePredicate)
+        descriptor.fetchLimit = 500
+        var episodes = try modelContext.fetch(descriptor)
         
         let unindexedPredicate = #Predicate<TVEpisode> { ep in ep.airDateValue == nil }
         let unindexed = (try? modelContext.fetch(FetchDescriptor<TVEpisode>(predicate: unindexedPredicate))) ?? []

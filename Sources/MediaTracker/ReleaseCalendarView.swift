@@ -282,30 +282,10 @@ struct ReleaseCalendarView: View {
             // Legend
             HStack(spacing: 4) {
                 Text("Less").font(.caption2).foregroundStyle(.secondary)
+                let legendColors = Self.legendColors(for: colorScheme)
                 ForEach(0..<5) { i in
-                    let color: Color = {
-                        if i == 0 {
-                            return Color.secondary.opacity(0.1)
-                        }
-                        
-                        let intensity = Double(i - 1) / 3.0 // Normalize 1-4 to 0-1
-                        let o = Color.accentColor.oklch
-                        if colorScheme == .dark {
-                            // Light to Dark: L goes from 0.8 (Less) to 0.3 (More)
-                            let l = 0.8 - (intensity * 0.5)
-                            // Increase Chroma for "More" to keep it vibrant even when dark
-                            let c = (o.c * 0.5) + (intensity * (o.c * 0.5))
-                            return Color.fromOKLCH(l: l, c: c, h: o.h)
-                        } else {
-                            // Light to Dark: L goes from 0.95 (Less) to 0.4 (More)
-                            let l = 0.95 - (intensity * 0.55)
-                            let c = (o.c * 0.6) + (intensity * (o.c * 0.4))
-                            return Color.fromOKLCH(l: l, c: c, h: o.h)
-                        }
-                    }()
-                    
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(color)
+                        .fill(legendColors[i])
                         .frame(width: 10, height: 10)
                 }
                 Text("More").font(.caption2).foregroundStyle(.secondary)
@@ -500,6 +480,23 @@ struct ReleaseCalendarView: View {
         }
     }
     
+    private static func legendColors(for colorScheme: ColorScheme) -> [Color] {
+        let o = Color.accentColor.oklch
+        return (0..<5).map { i in
+            if i == 0 { return Color.secondary.opacity(0.1) }
+            let intensity = Double(i - 1) / 3.0
+            if colorScheme == .dark {
+                let l = 0.8 - (intensity * 0.5)
+                let c = (o.c * 0.5) + (intensity * (o.c * 0.5))
+                return Color.fromOKLCH(l: l, c: c, h: o.h)
+            } else {
+                let l = 0.95 - (intensity * 0.55)
+                let c = (o.c * 0.6) + (intensity * (o.c * 0.4))
+                return Color.fromOKLCH(l: l, c: c, h: o.h)
+            }
+        }
+    }
+
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
         let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)

@@ -86,6 +86,9 @@ enum ColorExtractor {
                 b += pb
                 count += 1
             }
+            if i % (bytesPerPixel * 200) == 0 {
+                await Task.yield()
+            }
         }
         
         if count == 0 { return .accentColor }
