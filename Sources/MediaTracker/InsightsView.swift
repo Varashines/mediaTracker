@@ -19,6 +19,8 @@ struct InsightsView: View {
     @State private var selectedTab: InsightsTab = .taste
     @Namespace private var tabNamespace
 
+    @Query(sort: \MediaItem.lastInteractionDate, order: .reverse) private var allItems: [MediaItem]
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Color(NSColor.windowBackgroundColor).ignoresSafeArea()
@@ -26,7 +28,7 @@ struct InsightsView: View {
             // Atmospheric gradient glow
             GeometryReader { geo in
                 RadialGradient(
-                    colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.14 : 0.05), .clear],
+                    colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.12 : 0.04), .clear],
                     center: .topLeading,
                     startRadius: 0,
                     endRadius: min(geo.size.width, geo.size.height) * 0.9
@@ -35,13 +37,16 @@ struct InsightsView: View {
             }
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 44) {
+                VStack(alignment: .leading, spacing: 32) {
                     if isLoading {
                         loadingView
                     } else if let stats = stats {
                         // Empty space to push content below native title bar
                         Spacer()
                             .frame(height: 12)
+                        
+                        // Cinephile Barcode Header (Unique Library Fingerprint)
+                        CinephileBarcodeView(items: allItems)
                         
                         mainContent(stats: stats)
                     }
@@ -76,21 +81,42 @@ struct InsightsView: View {
 
     @ViewBuilder
     private func tasteTabContent(stats: LibraryStats) -> some View {
-        cinephilePassportCard(stats: stats)
+        // Hero Statistics Grid (Passport/Calibration merged & flattened)
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(alignment: .top, spacing: 32) {
+                metricField(label: "TOTAL LIBRARY", value: "\(stats.totalMovies + stats.totalTVShows)", subValue: "\(stats.totalMovies) Movies • \(stats.totalTVShows) TV Shows")
+                dividerLine
+                metricField(label: "WATCH VOLUME", value: formatWatchTimeSimple(minutes: stats.totalWatchTimeMinutes), subValue: "\(stats.totalEpisodesWatched) Episodes Watched")
+                dividerLine
+                metricField(label: "TASTE DISTRIBUTION", value: "\(stats.lovedCount) / \(stats.likedCount) / \(stats.dislikedCount)", subValue: "Love / Like / Dislike Ratio")
+                dividerLine
+                metricField(label: "LIBRARY ARCHETYPE", value: calculateArchetype(stats: stats).title.uppercased(), subValue: calculateArchetype(stats: stats).description)
+            }
+            .padding(.vertical, 16)
+            
+            Divider()
+                .opacity(0.12)
+        }
         
-        cinemaDNADashboard(stats: stats)
+        // High-Density Affinity Ledger Tables (Genres, Studios, Networks, Languages)
+        affinityLedgerSection(stats: stats)
         
-        decadeFilmStripSection(stats: stats)
-        
-        productionDeckSection(stats: stats)
+        // Decade Distribution Chart
+        decadeDistributionSection(stats: stats)
     }
 
     @ViewBuilder
     private func activityTabContent(stats: LibraryStats) -> some View {
-        watchTrendsSection(stats: stats)
+        // High-Density Top Talent list (split layout)
+        TalentLedgerView(stats: stats)
         
-        hallOfFameSection(stats: stats)
+        // Top actor-director collaborations
+        CollaborationsLedgerView(collaborations: stats.collaborations)
         
+        // Watch Log Timeline (git-style history log)
+        WatchLogTimelineView(completedItems: stats.completedItems)
+        
+        // Mastery Section
         masterySection(stats: stats)
     }
 
@@ -141,21 +167,9 @@ struct InsightsView: View {
     }
 
     @ViewBuilder
-    private func premiumCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(28)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.thinMaterial)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.04), radius: 10, x: 0, y: 4)
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.06), lineWidth: 0.5)
-            }
+    private func premiumCard<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
+        PremiumCard(content: content)
     }
-
 
     private func refreshData() {
         Task {
@@ -172,10 +186,6 @@ struct InsightsView: View {
     }
 
     // MARK: - Sections
-
-    // MARK: - Cinema DNA Dashboard & Calibration
-
-    // MARK: - Archetype & Passport Structures
 
     private struct ArchetypeData {
         let title: String
@@ -241,570 +251,213 @@ struct InsightsView: View {
                 title: "The Cinema Explorer",
                 icon: "map.fill",
                 color: .green,
-                description: "A balanced generalist who appreciates all aspects of filmmaking. You enjoy crossing genre boundaries and finding hidden gems."
+                        description: "A balanced generalist who appreciates all aspects of filmmaking. You enjoy crossing genre boundaries and finding hidden gems."
             )
         }
     }
 
-    @ViewBuilder
-    private func cinephilePassportCard(stats: LibraryStats) -> some View {
-        let totalLibrary = stats.totalMovies + stats.totalTVShows
-        let rank: String = {
-            if totalLibrary >= 100 { return "ELITE CURATOR" }
-            if totalLibrary >= 50 { return "MARATHON LEGEND" }
-            if totalLibrary >= 20 { return "ACTIVE EXPLORER" }
-            return "CINEMA NOVICE"
-        }()
-        
-        let archetype = calculateArchetype(stats: stats)
-        
-        premiumCard {
-            HStack(spacing: 28) {
-                // Left Column: Avatar & Rank
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(archetype.color.gradient.opacity(0.18))
-                            .frame(width: 80, height: 80)
-                        
-                        Image(systemName: archetype.icon)
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundStyle(archetype.color.gradient)
-                            .shadow(color: archetype.color.opacity(0.3), radius: 5)
-                    }
-                    
-                    Text(rank)
-                        .font(.system(size: 9, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(archetype.color.gradient)
-                        .clipShape(Capsule())
-                        .shadow(color: archetype.color.opacity(0.3), radius: 4)
-                }
-                .frame(width: 120)
-                
-                // Divider
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.primary.opacity(0.08))
-                    .frame(width: 1)
-                    .frame(maxHeight: 110)
-                
-                // Right Column: Passport details
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        Text("CINEPHILE PASSPORT")
-                            .font(.system(size: 10, weight: .black))
-                            .kerning(2.0)
-                            .foregroundStyle(.secondary)
-                        
-                        Spacer()
-                        
-                        Image(systemName: "globe.americas.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                    }
-                    
-                    // Detail Grid
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ], spacing: 12) {
-                        passportField(label: "PASSPORT NO.", value: String(format: "MT-%05d-%02d", totalLibrary, stats.totalEpisodesWatched % 100))
-                        passportField(label: "ARCHETYPE", value: archetype.title.uppercased())
-                        passportField(label: "TOTAL WATCHED", value: "\(totalLibrary) TITLES")
-                        passportField(label: "CINEMA EXP", value: formatWatchTimeSimple(minutes: stats.totalWatchTimeMinutes).uppercased())
-                    }
-                }
-            }
-        }
+    private var dividerLine: some View {
+        Divider()
+            .frame(width: 1)
+            .frame(height: 48)
+            .opacity(0.12)
     }
 
     @ViewBuilder
-    private func passportField(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func metricField(label: String, value: String, subValue: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 8, weight: .black))
-                .foregroundStyle(.secondary.opacity(0.7))
-                .kerning(1.0)
-            
+                .foregroundStyle(.secondary)
+                .kerning(1.5)
             Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+            Text(subValue)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .frame(maxWidth: 180, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private func decadeFilmStripSection(stats: LibraryStats) -> some View {
+    private func affinityLedgerSection(stats: LibraryStats) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            sectionLabel("AFFINITY LEDGER", icon: "tablecells")
+            
+            HStack(alignment: .top, spacing: 32) {
+                // Column 1: Top Genres
+                VStack(alignment: .leading, spacing: 12) {
+                    tableHeader(title: "GENRES")
+                    ForEach(stats.genreDNA.prefix(5), id: \.name) { item in
+                        tableRow(name: item.name, value: String(format: "%.0f%%", item.percentage * 100))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                
+                // Column 2: Top Studios & Networks
+                VStack(alignment: .leading, spacing: 12) {
+                    tableHeader(title: "STUDIOS & NETWORKS")
+                    let topStudios = stats.topRatedStudios.prefix(3).map { (name: $0.name, type: "Studio", score: $0.score) }
+                    let topNetworks = stats.topRatedNetworks.prefix(2).map { (name: $0.name, type: "Network", score: $0.score) }
+                    let combined = (topStudios + topNetworks).sorted { $0.score > $1.score }
+                    ForEach(combined, id: \.name) { item in
+                        tableRow(name: item.name, value: String(format: "%.1f ★", item.score))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                
+                // Column 3: Languages
+                VStack(alignment: .leading, spacing: 12) {
+                    tableHeader(title: "LANGUAGES")
+                    ForEach(stats.topRatedLanguages.prefix(5), id: \.name) { item in
+                        tableRow(name: item.name.uppercased(), value: String(format: "%.1f ★", item.score))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.vertical, 8)
+            
+            Divider()
+                .opacity(0.12)
+        }
+    }
+
+    @ViewBuilder
+    private func tableHeader(title: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .kerning(1.5)
+                .foregroundStyle(.secondary)
+            Divider()
+                .opacity(0.12)
+        }
+    }
+    
+    @ViewBuilder
+    private func tableRow(name: String, value: String) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(name)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer()
+                Text(value)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(.vertical, 6)
+            
+            Divider()
+                .opacity(0.06)
+        }
+    }
+
+    @ViewBuilder
+    private func decadeDistributionSection(stats: LibraryStats) -> some View {
         if !stats.decadeDistribution.isEmpty {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Image(systemName: "film")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.accentColor.gradient)
-                    Text("DECADE DENSITY (FILM STRIP)")
-                        .font(.system(size: 10, weight: .black))
-                        .kerning(1.5)
-                        .foregroundStyle(.secondary)
-                }
+                sectionLabel("DECADE DISTRIBUTION", icon: "calendar")
                 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(stats.decadeDistribution) { point in
-                            VStack(spacing: 6) {
-                                // Top sprockets
-                                HStack(spacing: 6) {
-                                    ForEach(0..<6) { _ in
-                                        RoundedRectangle(cornerRadius: 1)
-                                            .fill(Color.primary.opacity(0.2))
-                                            .frame(width: 6, height: 4)
+                VStack(spacing: 8) {
+                    let maxCount = stats.decadeDistribution.map { $0.count }.max() ?? 1
+                    ForEach(stats.decadeDistribution) { point in
+                        HStack(spacing: 12) {
+                            Text(point.decade)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 50, alignment: .leading)
+                            
+                            GeometryReader { geo in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.accentColor.opacity(0.15))
+                                    .overlay(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(Color.accentColor)
+                                            .frame(width: geo.size.width * CGFloat(Double(point.count) / Double(maxCount)))
                                     }
-                                }
-                                .padding(.top, 4)
-                                
-                                Spacer()
-                                
-                                VStack(spacing: 2) {
-                                    Text(point.decade)
-                                        .font(.system(size: 16, weight: .black, design: .rounded))
-                                        .foregroundStyle(.primary)
-                                    
-                                    Text("\(point.count) titles")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                // Bottom sprockets
-                                HStack(spacing: 6) {
-                                    ForEach(0..<6) { _ in
-                                        RoundedRectangle(cornerRadius: 1)
-                                            .fill(Color.primary.opacity(0.2))
-                                            .frame(width: 6, height: 4)
-                                    }
-                                }
-                                .padding(.bottom, 4)
                             }
-                            .frame(width: 100, height: 110)
-                            .background(.thinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                            }
+                            .frame(height: 8)
+                            
+                            Text("\(point.count) titles")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.primary)
+                                .frame(width: 60, alignment: .trailing)
                         }
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func cinemaDNADashboard(stats: LibraryStats) -> some View {
-        HStack(alignment: .top, spacing: 24) {
-            // Left Panel: DNA Profile (Identity + Radar Chart)
-            dnaProfileCard(stats: stats)
-                .frame(maxWidth: .infinity)
-            
-            // Right Panel: Taste Calibration (Donut Chart + Stats)
-            tasteCalibrationCard(stats: stats)
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    @ViewBuilder
-    private func dnaProfileCard(stats: LibraryStats) -> some View {
-        let archetype = calculateArchetype(stats: stats)
-
-        premiumCard {
-            VStack(alignment: .leading, spacing: 20) {
-                sectionLabel("CINEMA DNA PROFILE", icon: "sparkles")
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(archetype.title)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(archetype.color.gradient)
-                    
-                    Text(archetype.description)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.bottom, 10)
-                
-                RadarChartView(data: stats.genreDNA, accentColor: archetype.color)
-                    .frame(height: 250)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func tasteCalibrationCard(stats: LibraryStats) -> some View {
-        let totalLibrary = stats.totalMovies + stats.totalTVShows
-        let leftoverCount = max(0, totalLibrary - (stats.lovedCount + stats.likedCount + stats.dislikedCount))
-        
-        let segments = [
-            TasteSegment(label: "Loved", count: stats.lovedCount, color: Color.semanticGreen(for: colorScheme)),
-            TasteSegment(label: "Liked", count: stats.likedCount, color: .yellow),
-            TasteSegment(label: "Disliked", count: stats.dislikedCount, color: Color.semanticRed(for: colorScheme)),
-            TasteSegment(label: "Unrated", count: leftoverCount, color: colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08))
-        ].filter { $0.count > 0 }
-
-        premiumCard {
-            VStack(alignment: .leading, spacing: 20) {
-                sectionLabel("TASTE CALIBRATION", icon: "chart.pie.fill")
-                
-                HStack(alignment: .center, spacing: 24) {
-                    // Donut Chart
-                    ZStack {
-                        if totalLibrary > 0 {
-                            Chart(segments) { segment in
-                                SectorMark(
-                                    angle: .value("Count", segment.count),
-                                    innerRadius: .ratio(0.68),
-                                    angularInset: 2.5
-                                )
-                                .foregroundStyle(segment.color)
-                                .cornerRadius(5)
-                            }
-                            .frame(width: 140, height: 140)
-
-                            VStack(spacing: 2) {
-                                Text("\(totalLibrary)")
-                                    .font(.system(size: 24, weight: .black, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text("TITLES")
-                                    .font(.system(size: 8, weight: .black))
-                                    .kerning(1.5)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            VStack(spacing: 8) {
-                                Image(systemName: "chart.pie.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.secondary)
-                                Text("No Titles")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .frame(width: 150, height: 150)
-                    
-                    // Legend
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(segments) { segment in
-                            HStack(spacing: 8) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(segment.color)
-                                    .frame(width: 8, height: 8)
-                                
-                                Text(segment.label)
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                
-                                Spacer()
-                                
-                                Text("\(segment.count)")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(.primary)
-                                
-                                if totalLibrary > 0 {
-                                    Text("(\(Int(Double(segment.count) / Double(totalLibrary) * 100))%)")
-                                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                .padding(.vertical, 8)
                 
                 Divider()
-                    .opacity(0.3)
-                
-                HStack(spacing: 12) {
-                    // Watch Time
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "hourglass.badge.ellipsis")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.orange.gradient)
-                            Text("WATCH TIME")
-                                .font(.system(size: 9, weight: .black))
-                                .kerning(1.0)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(formatWatchTimeSimple(minutes: stats.totalWatchTimeMinutes))
-                            .font(.system(size: 20, weight: .black, design: .rounded))
-                            .foregroundStyle(.primary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    Divider()
-                        .frame(height: 36)
-                        .opacity(0.4)
-                    
-                    // Episodes Watched
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "play.square.stack.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.blue.gradient)
-                            Text("EPISODES WATCHED")
-                                .font(.system(size: 9, weight: .black))
-                                .kerning(1.0)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("\(stats.totalEpisodesWatched)")
-                            .font(.system(size: 20, weight: .black, design: .rounded))
-                            .foregroundStyle(.primary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.top, 4)
+                    .opacity(0.12)
             }
-        }
-    }
-
-    // MARK: - Watch Trends Section
-
-    private var mockWatchHistory: [WatchTimePoint] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        return (0..<7).map { i in
-            let date = calendar.date(byAdding: .day, value: -i, to: today) ?? today
-            let minutes = [45, 90, 0, 120, 60, 30, 75][i]
-            return WatchTimePoint(date: date, minutes: minutes)
-        }.sorted { $0.date < $1.date }
-    }
-
-    @ViewBuilder
-    private func watchTrendsSection(stats: LibraryStats) -> some View {
-        let isPlaceholder = stats.watchTimeHistory.isEmpty
-        let historyData: [WatchTimePoint] = {
-            if isPlaceholder { return mockWatchHistory }
-            let calendar = Calendar.current
-            let today = calendar.startOfDay(for: Date())
-            return (0..<7).map { i in
-                let date = calendar.date(byAdding: .day, value: -i, to: today) ?? today
-                let mins = stats.watchTimeHistory.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.minutes ?? 0
-                return WatchTimePoint(date: date, minutes: mins)
-            }.sorted { $0.date < $1.date }
-        }()
-        let lastPoint = historyData.last
-        
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 10) {
-                sectionLabel("ACTIVITY INDEX", icon: "chart.xyaxis.line")
-
-                HStack(spacing: 4) {
-                    PulsatingDot()
-                    Text("LIVE FEED")
-                        .font(.system(size: 8, weight: .black))
-                        .foregroundStyle(.green)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green.opacity(0.09))
-                .clipShape(Capsule())
-                
-                Spacer()
-                if isPlaceholder {
-                    Text("PREVIEW STATE")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Capsule())
-                }
-            }
-
-            premiumCard {
-                ZStack {
-                    Chart {
-                        ForEach(historyData) { point in
-                            AreaMark(
-                                x: .value("Date", point.date, unit: .day),
-                                y: .value("", point.minutes)
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.accentColor.opacity(isPlaceholder ? 0.07 : 0.22),
-                                        Color.accentColor.opacity(0.0)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-
-                            LineMark(
-                                x: .value("Date", point.date, unit: .day),
-                                y: .value("", point.minutes)
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                            .foregroundStyle(Color.accentColor.opacity(isPlaceholder ? 0.4 : 1.0))
-
-                            if point.id == lastPoint?.id {
-                                PointMark(
-                                    x: .value("Date", point.date, unit: .day),
-                                    y: .value("", point.minutes)
-                                )
-                                .foregroundStyle(Color.accentColor)
-                                .symbolSize(100)
-                                .annotation(position: .overlay, alignment: .center, spacing: 0) {
-                                    PulsatingChartNode(color: Color.accentColor)
-                                }
-                            } else {
-                                PointMark(
-                                    x: .value("Date", point.date, unit: .day),
-                                    y: .value("", point.minutes)
-                                )
-                                .foregroundStyle(Color.accentColor.opacity(isPlaceholder ? 0.4 : 1.0))
-                                .symbolSize(32)
-                            }
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .day, count: 1)) { value in
-                            if value.as(Date.self) != nil {
-                                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                            }
-                            AxisGridLine()
-                                .foregroundStyle(Color.primary.opacity(0.04))
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks { value in
-                            if let mins = value.as(Int.self) {
-                                AxisValueLabel("\(mins)")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            }
-                            AxisGridLine()
-                                .foregroundStyle(Color.primary.opacity(0.04))
-                        }
-                    }
-                    .frame(height: 300)
-
-                    if isPlaceholder {
-                        VStack(spacing: 10) {
-                            Image(systemName: "chart.xyaxis.line")
-                                .font(.title2)
-                                .foregroundStyle(.secondary.opacity(0.6))
-                            Text("Viewing activity trends will appear as you watch content.")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(20)
-                        .background(.thinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func hallOfFameSection(stats: LibraryStats) -> some View {
-        VStack(alignment: .leading, spacing: 32) {
-            personCarousel(title: "TOP ACTORS", people: stats.topRatedActors, color: .orange)
-            personCarousel(title: "TOP CREATORS & DIRECTORS", people: stats.topRatedCreators, color: .green)
-        }
-    }
-
-    @ViewBuilder
-    private func productionDeckSection(stats: LibraryStats) -> some View {
-        VStack(alignment: .leading, spacing: 36) {
-            bentoGenreGrid(data: stats.topRatedGenres)
-
-            HStack(alignment: .top, spacing: 32) {
-                filmStripStudiosList(data: stats.topRatedStudios)
-                    .frame(maxWidth: .infinity)
-                
-                broadcastNetworksGrid(data: stats.topRatedNetworks)
-                    .frame(maxWidth: .infinity)
-            }
-
-            languagePillsRow(data: stats.topRatedLanguages)
         }
     }
 
     @ViewBuilder
     private func masterySection(stats: LibraryStats) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            sectionLabel("MASTERED COLLECTIONS", icon: "checkmark.seal.fill")
+            sectionLabel("LIBRARY COMPLETION & MASTERY", icon: "checkmark.seal.fill")
 
-            HStack(spacing: 20) {
-                MasteryCardView(
-                    title: "Movies", label: nil, value: nil, subtitle: nil,
-                    current: stats.completedMovies, total: stats.totalMovies,
-                    color: .blue, colorScheme: colorScheme)
-                
-                MasteryCardView(
-                    title: "TV Shows", label: nil, value: nil, subtitle: nil,
-                    current: stats.completedTVShows, total: stats.totalTVShows,
-                    color: .purple, colorScheme: colorScheme)
-                
-                MasteryCardView(
-                    title: nil, label: "EPISODES", value: "\(stats.totalEpisodesWatched)", subtitle: "WATCHED",
-                    current: 0, total: 0,
-                    color: .orange, colorScheme: colorScheme)
+            HStack(spacing: 32) {
+                masteryRow(title: "MOVIES COMPLETION", current: stats.completedMovies, total: stats.totalMovies, color: .blue)
+                dividerLine
+                masteryRow(title: "TV SHOWS COMPLETION", current: stats.completedTVShows, total: stats.totalTVShows, color: .purple)
+                dividerLine
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TOTAL EPISODES WATCHED")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundStyle(.secondary)
+                        .kerning(1.5)
+                    Text("\(stats.totalEpisodesWatched)")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Record count in database")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(.vertical, 8)
         }
     }
-
-    // MARK: - Shared Label Helper
-
-    private func sectionLabel(_ text: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.accentColor.gradient)
-            Text(text)
-                .font(.system(size: 10, weight: .black))
-                .kerning(1.5)
+    
+    @ViewBuilder
+    private func masteryRow(title: String, current: Int, total: Int, color: Color) -> some View {
+        let pct = total > 0 ? Double(current) / Double(total) : 0.0
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 8, weight: .black))
                 .foregroundStyle(.secondary)
+                .kerning(1.5)
+            
+            HStack(spacing: 8) {
+                Text("\(current) / \(total)")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                
+                Text(String(format: "(%.0f%%)", pct * 100))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(color)
+            }
+            
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color.opacity(0.12))
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color)
+                            .frame(width: geo.size.width * CGFloat(pct))
+                    }
+            }
+            .frame(height: 4)
+            .frame(maxWidth: 160)
         }
-    }
-
-    // MARK: - Genre & Production Components
-
-    private func emoji(forGenre genre: String) -> String {
-        let lower = genre.lowercased()
-        if lower.contains("action") { return "⚔️" }
-        if lower.contains("adventure") { return "🗺️" }
-        if lower.contains("animation") { return "🎨" }
-        if lower.contains("comedy") { return "😂" }
-        if lower.contains("crime") { return "🕵️‍♂️" }
-        if lower.contains("documentary") { return "📹" }
-        if lower.contains("drama") { return "🎭" }
-        if lower.contains("family") { return "👨‍👩‍👧‍👦" }
-        if lower.contains("fantasy") { return "🦄" }
-        if lower.contains("history") { return "📜" }
-        if lower.contains("horror") { return "👻" }
-        if lower.contains("music") { return "🎵" }
-        if lower.contains("mystery") { return "🔍" }
-        if lower.contains("romance") { return "💖" }
-        if lower.contains("sci-fi") || lower.contains("science") { return "🚀" }
-        if lower.contains("thriller") { return "⚡" }
-        if lower.contains("war") { return "🪖" }
-        if lower.contains("western") { return "🤠" }
-        return "🎬"
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func networkColor(name: String) -> Color {
@@ -866,440 +519,6 @@ struct InsightsView: View {
         return "🌐"
     }
 
-    @ViewBuilder
-    private func bentoGenreGrid(data: [(name: String, score: Double)]) -> some View {
-        if !data.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Image(systemName: "tag.fill")
-                        .foregroundStyle(.blue)
-                        .font(.system(size: 13, weight: .bold))
-                    Text("HIGHEST RATED GENRES")
-                        .font(.system(size: 11, weight: .black))
-                        .kerning(1.5)
-                        .foregroundStyle(.secondary)
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(Array(data.enumerated()), id: \.element.name) { index, item in
-                            VisualGenreCard(rank: index + 1, name: item.name, score: item.score, color: .blue)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 8)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func filmStripStudiosList(data: [(name: String, score: Double)]) -> some View {
-        if !data.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Image(systemName: "film.fill")
-                        .foregroundStyle(.purple)
-                        .font(.system(size: 13, weight: .bold))
-                    Text("TOP STUDIOS")
-                        .font(.system(size: 11, weight: .black))
-                        .kerning(1.5)
-                        .foregroundStyle(.secondary)
-                }
-
-                premiumCard {
-                    VStack(spacing: 12) {
-                        ForEach(Array(data.prefix(6).enumerated()), id: \.element.0) { index, item in
-                            let rank = index + 1
-                            HStack(spacing: 14) {
-                                // Film sprocket decoration
-                                VStack(spacing: 4) {
-                                    ForEach(0..<3) { _ in
-                                        RoundedRectangle(cornerRadius: 1)
-                                            .fill(Color.primary.opacity(0.18))
-                                            .frame(width: 4, height: 5)
-                                    }
-                                }
-                                .padding(.horizontal, 3)
-                                
-                                Text("#\(rank)")
-                                    .font(.system(size: 11, weight: .black, design: .rounded))
-                                    .foregroundStyle(.purple)
-                                    .frame(width: 28, alignment: .leading)
-                                
-                                Text(item.0)
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .lineLimit(1)
-                                    .foregroundStyle(.primary)
-                                
-                                Spacer()
-                                
-                                // Dot meter (spacious and clean)
-                                HStack(spacing: 3) {
-                                    let activeDots = Int(round(item.1 * 10))
-                                    ForEach(0..<10) { dotIdx in
-                                        Circle()
-                                            .fill(dotIdx < activeDots ? Color.purple : Color.primary.opacity(0.06))
-                                            .frame(width: 5, height: 5)
-                                    }
-                                }
-                                
-                                Text("\(Int(item.1 * 100))%")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(.purple)
-                                    .frame(width: 38, alignment: .trailing)
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(
-                                Color.purple.opacity(rank == 1 ? 0.08 : 0.0)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            
-                            if rank < min(data.count, 6) {
-                                Divider().opacity(0.3)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func broadcastNetworksGrid(data: [(name: String, score: Double)]) -> some View {
-        if !data.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Image(systemName: "tv.fill")
-                        .foregroundStyle(.indigo)
-                        .font(.system(size: 13, weight: .bold))
-                    Text("TOP NETWORKS")
-                        .font(.system(size: 11, weight: .black))
-                        .kerning(1.5)
-                        .foregroundStyle(.secondary)
-                }
-
-                premiumCard {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)
-                        ],
-                        spacing: 12
-                    ) {
-                        ForEach(Array(data.prefix(6).enumerated()), id: \.element.0) { index, item in
-                            let rank = index + 1
-                            let nColor = networkColor(name: item.0)
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(alignment: .center) {
-                                    Text("#\(rank)")
-                                        .font(.system(size: 9, weight: .black, design: .rounded))
-                                        .foregroundStyle(rank == 1 ? Color.white : nColor)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(rank == 1 ? nColor : nColor.opacity(0.12))
-                                        .clipShape(Capsule())
-                                    Spacer()
-                                }
-                                
-                                Text(item.0)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .lineLimit(1)
-                                    .foregroundStyle(.primary)
-                                
-                                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                    Text("\(Int(item.1 * 100))%")
-                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                        .foregroundStyle(nColor)
-                                    Text("SCORE")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(12)
-                            .background(
-                                ZStack {
-                                    Color.secondary.opacity(0.02)
-                                    RadialGradient(
-                                        colors: [nColor.opacity(0.06), .clear],
-                                        center: .bottomTrailing,
-                                        startRadius: 0,
-                                        endRadius: 50
-                                    )
-                                }
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(nColor.opacity(rank == 1 ? 0.35 : 0.08), lineWidth: rank == 1 ? 1.0 : 0.5)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func languagePillsRow(data: [(name: String, score: Double)]) -> some View {
-        if !data.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Image(systemName: "globe")
-                        .foregroundStyle(.mint)
-                        .font(.system(size: 13, weight: .bold))
-                    Text("TOP LANGUAGES")
-                        .font(.system(size: 11, weight: .black))
-                        .kerning(1.5)
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack(spacing: 12) {
-                    ForEach(Array(data.prefix(6).enumerated()), id: \.element.0) { index, item in
-                        let rank = index + 1
-                        HStack(spacing: 8) {
-                            Text(flag(forLanguage: item.0))
-                                .font(.system(size: 16))
-                            
-                            Text(item.0)
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                            
-                            Text("\(Int(item.1 * 100))%")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.mint)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.mint.opacity(0.13))
-                                .clipShape(Capsule())
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.thinMaterial)
-                        .clipShape(Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(Color.mint.opacity(rank == 1 ? 0.4 : 0.08), lineWidth: rank == 1 ? 1.0 : 0.5)
-                        }
-                        .shadow(color: Color.black.opacity(0.02), radius: 4, y: 2)
-                    }
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func personCarousel(title: String, people: [VisualPersonStat], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: title.contains("ACTORS") ? "person.3.fill" : "crown.fill")
-                    .foregroundStyle(color)
-                    .font(.system(size: 13, weight: .bold))
-                
-                Text(title)
-                    .font(.system(size: 11, weight: .black))
-                    .kerning(1.5)
-                    .foregroundStyle(.secondary)
-            }
-            
-            if people.isEmpty {
-                premiumCard {
-                    HStack {
-                        Spacer()
-                        Text("No entries available")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 24)
-                        Spacer()
-                    }
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(Array(people.enumerated()), id: \.element.name) { index, person in
-                            VisualPersonCard(rank: index + 1, person: person, color: color)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 8)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Carousel Cards
-
-private struct VisualGenreCard: View {
-    let rank: Int
-    let name: String
-    let score: Double
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("#\(rank)")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
-                    .foregroundStyle(rank == 1 ? .white : color)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(rank == 1 ? color : color.opacity(0.12))
-                    .clipShape(Capsule())
-                
-                Spacer()
-                
-                Text(emoji(forGenre: name))
-                    .font(.system(size: 26))
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(name.uppercased())
-                    .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(Int(score * 100))%")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundStyle(color)
-                    Text("AFFINITY")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            GeometryReader { geo in
-                Capsule()
-                    .fill(Color.primary.opacity(0.06))
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(color.gradient)
-                            .frame(width: geo.size.width * CGFloat(score))
-                    }
-            }
-            .frame(height: 4)
-        }
-        .padding(16)
-        .frame(width: 170, height: 130)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.03), radius: 6, x: 0, y: 3)
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(rank == 1 ? color.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: rank == 1 ? 1.2 : 0.5)
-        }
-    }
-    
-    private func emoji(forGenre genre: String) -> String {
-        let lower = genre.lowercased()
-        if lower.contains("action") { return "⚔️" }
-        if lower.contains("adventure") { return "🗺️" }
-        if lower.contains("animation") { return "🎨" }
-        if lower.contains("comedy") { return "😂" }
-        if lower.contains("crime") { return "🕵️‍♂️" }
-        if lower.contains("documentary") { return "📹" }
-        if lower.contains("drama") { return "🎭" }
-        if lower.contains("family") { return "👨‍👩‍👧‍👦" }
-        if lower.contains("fantasy") { return "🦄" }
-        if lower.contains("history") { return "📜" }
-        if lower.contains("horror") { return "👻" }
-        if lower.contains("music") { return "🎵" }
-        if lower.contains("mystery") { return "🔍" }
-        if lower.contains("romance") { return "💖" }
-        if lower.contains("sci-fi") || lower.contains("science") { return "🚀" }
-        if lower.contains("thriller") { return "⚡" }
-        if lower.contains("war") { return "🪖" }
-        if lower.contains("western") { return "🤠" }
-        return "🎬"
-    }
-}
-
-private struct VisualPersonCard: View {
-    let rank: Int
-    let person: VisualPersonStat
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ZStack(alignment: .topLeading) {
-                Group {
-                    if let urlString = person.profileURL, let url = URL(string: urlString) {
-                        CachedImage(url: url, targetSize: CGSize(width: 240, height: 360), priority: .normal) { _ in
-                        } placeholder: {
-                            Color.secondary.opacity(0.08)
-                                .overlay {
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundStyle(.secondary.opacity(0.6))
-                                }
-                        }
-                        .scaledToFill()
-                    } else {
-                        Color.secondary.opacity(0.08)
-                            .overlay {
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundStyle(.secondary.opacity(0.6))
-                            }
-                    }
-                }
-                .frame(width: 120, height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .clipped()
-                
-                Text("#\(rank)")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(color.gradient)
-                    .clipShape(Capsule())
-                    .shadow(color: color.opacity(0.4), radius: 4, x: 0, y: 2)
-                    .offset(x: 10, y: 10)
-            }
-            .frame(width: 120, height: 180)
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(rank == 1 ? color.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: rank == 1 ? 1.0 : 0.5)
-            }
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.03), radius: 4, x: 0, y: 2)
-            
-            VStack(alignment: .leading, spacing: 3) {
-                Text(person.name)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .frame(width: 120, alignment: .leading)
-                
-                HStack(spacing: 4) {
-                    Text("\(person.count) titles")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("•")
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        
-                    Text("\(Int(person.score * 100))%")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(color)
-                }
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-}
-
-extension InsightsView {
-
-    // MARK: - Helpers
-
     private func formatWatchTimeSimple(minutes: Int) -> String {
         let days = minutes / 1440
         let hours = (minutes % 1440) / 60
@@ -1320,276 +539,380 @@ extension InsightsView {
     }
 }
 
-// MARK: - Dedicated Views for Premium Aesthetics
+// MARK: - Shared File-Scoped Helpers
 
-private struct MasteryCardView: View {
-    let title: String?
-    let label: String?
-    let value: String?
-    let subtitle: String?
-    let current: Int
-    let total: Int
-    let color: Color
-    let colorScheme: ColorScheme
-    
-    var body: some View {
-        HStack(spacing: 20) {
-            if let title = title {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title.uppercased())
-                        .font(.system(size: 12, weight: .black))
-                        .kerning(2.0)
-                        .foregroundStyle(.secondary)
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(current)")
-                            .font(.system(size: 38, weight: .black, design: .rounded))
-                        Text("/ \(total)")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Text("COMPLETED")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
-                
-                let pct = total > 0 ? Double(current) / Double(total) : 0.0
-                ZStack {
-                    Circle()
-                        .stroke(color.opacity(0.12), lineWidth: 7)
-                        .frame(width: 68, height: 68)
-                    
-                    Circle()
-                        .trim(from: 0, to: CGFloat(pct))
-                        .stroke(color.gradient, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                        .frame(width: 68, height: 68)
-                        .rotationEffect(.degrees(-90))
-                    
-                    Text("\(Int(pct * 100))%")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                }
-            } else {
-                ZStack(alignment: .trailing) {
-                    Image(systemName: "play.square.stack.fill")
-                        .font(.system(size: 72))
-                        .foregroundStyle(color.opacity(0.09))
-                        .rotationEffect(.degrees(-10))
-                        .offset(x: 14, y: 6)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(label ?? "")
-                            .font(.system(size: 12, weight: .black))
-                            .kerning(1.5)
-                            .foregroundStyle(.secondary)
-                        
-                        Text(value ?? "")
-                            .font(.system(size: 38, weight: .black, design: .rounded))
-                            .foregroundStyle(color)
-                        
-                        Text(subtitle ?? "")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.03) : Color.white.opacity(0.8))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.03), radius: 6, x: 0, y: 3)
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(color.opacity(0.12), lineWidth: 0.5)
-        }
-    }
-}
-
-// MARK: - Radar Chart Components
-
-struct RadarChartView: View {
-    let data: [(name: String, percentage: Double)]
-    let accentColor: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let radius = min(geo.size.width, geo.size.height) / 2 * 0.62
-
-            ZStack {
-                backgroundRings(center: center, radius: radius, count: data.count)
-                axisLines(center: center, radius: radius)
-                dataShape(center: center, radius: radius)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func backgroundRings(center: CGPoint, radius: CGFloat, count: Int) -> some View {
-        ForEach(1...4, id: \.self) { i in
-            RadarPolygon(count: count, radius: radius * (Double(i) / 4.0), center: center)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
-    }
-
-    @ViewBuilder
-    private func axisLines(center: CGPoint, radius: CGFloat) -> some View {
-        ForEach(0..<data.count, id: \.self) { i in
-            RadarAxisLine(
-                i: i, count: data.count, name: data[i].name, center: center, radius: radius)
-        }
-    }
-
-    @ViewBuilder
-    private func dataShape(center: CGPoint, radius: CGFloat) -> some View {
-        ZStack {
-            RadarShape(data: data, center: center, radius: radius, isVisible: true)
-                .fill(accentColor.opacity(0.15))
-
-            RadarShape(data: data, center: center, radius: radius, isVisible: true)
-                .stroke(accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-            
-            ForEach(0..<data.count, id: \.self) { i in
-                let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-                let val = data[i].percentage
-                let point = CGPoint(
-                    x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                    y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
-                )
-                
-                Circle()
-                    .fill(accentColor)
-                    .frame(width: 7, height: 7)
-                    .overlay {
-                        Circle()
-                            .stroke(Color.white, lineWidth: 1.5)
-                    }
-                    .shadow(color: accentColor.opacity(0.8), radius: 4)
-                    .position(point)
-            }
-        }
-    }
-}
-
-private struct RadarAxisLine: View {
-    let i: Int
-    let count: Int
-    let name: String
-    let center: CGPoint
-    let radius: CGFloat
-
-    var body: some View {
-        let angle = (Double(i) / Double(count)) * 2 * .pi - .pi / 2
-
-        Path { path in
-            path.move(to: center)
-            path.addLine(
-                to: CGPoint(
-                    x: center.x + CGFloat(cos(angle)) * radius,
-                    y: center.y + CGFloat(sin(angle)) * radius
-                ))
-        }
-        .stroke(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-
-        let labelPos = CGPoint(
-            x: center.x + CGFloat(cos(angle)) * (radius + 22),
-            y: center.y + CGFloat(sin(angle)) * (radius + 12)
-        )
-        Text(name.uppercased())
-            .font(.system(size: 10, weight: .bold, design: .rounded))
+@ViewBuilder
+func sectionLabel(_ text: String, icon: String) -> some View {
+    HStack(spacing: 8) {
+        Image(systemName: icon)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color.accentColor.gradient)
+        Text(text)
+            .font(.system(size: 10, weight: .black))
+            .kerning(1.5)
             .foregroundStyle(.secondary)
-            .position(labelPos)
     }
 }
 
-struct RadarPolygon: Shape {
-    let count: Int
-    let radius: CGFloat
-    let center: CGPoint
+// MARK: - Cinephile Barcode Component
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard count >= 3 else { return path }
-        for i in 0..<count {
-            let angle = (Double(i) / Double(count)) * 2 * .pi - .pi / 2
-            let point = CGPoint(
-                x: center.x + CGFloat(cos(angle)) * radius,
-                y: center.y + CGFloat(sin(angle)) * radius
-            )
-            if i == 0 {
-                path.move(to: point)
+struct CinephileBarcodeView: View {
+    let items: [MediaItem]
+    @State private var hoveredItem: MediaItem?
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CINEMA DNA SIGNATURE")
+                    .font(.system(size: 10, weight: .black))
+                    .kerning(1.5)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let item = hoveredItem {
+                    HStack(spacing: 6) {
+                        Text(item.title.uppercased())
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.primary)
+                        Text("•")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text(item.tasteValue == "None" ? "UNRATED" : item.tasteValue.uppercased())
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(item.tasteValue == "Love" ? .red : item.tasteValue == "Like" ? .blue : item.tasteValue == "Dislike" ? .orange : .secondary)
+                    }
+                    .transition(.opacity)
+                } else {
+                    Text("DECODING CONSOLE: HOVER TO SCAN")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                }
+            }
+            
+            // Barcode Strip
+            let validItems = items.filter { $0.themeColorHex != nil }
+            if validItems.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("Add rated or themed titles to generate signature")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(height: 24)
             } else {
-                path.addLine(to: point)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(validItems) { item in
+                            let isCurrentHovered = hoveredItem?.id == item.id
+                            
+                            RoundedRectangle(cornerRadius: 0)
+                                .fill(Color.primary.opacity(isCurrentHovered ? 1.0 : (item.tasteValue == "Love" ? 0.8 : item.tasteValue == "Like" ? 0.5 : item.tasteValue == "Dislike" ? 0.25 : 0.12)))
+                                .frame(width: 3)
+                                .frame(height: 24)
+                                .scaleEffect(y: isCurrentHovered ? 1.25 : 1.0)
+                                .onHover { isHovered in
+                                    withAnimation(.spring(response: 0.15, dampingFraction: 0.75)) {
+                                        if isHovered {
+                                            hoveredItem = item
+                                        } else if hoveredItem?.id == item.id {
+                                            hoveredItem = nil
+                                        }
+                                    }
+                                }
+                        }
+                    }
+                    .frame(height: 32)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             }
+            
+            Divider()
+                .opacity(0.12)
         }
-        path.closeSubpath()
-        return path
+        .padding(.vertical, 8)
     }
 }
 
-private struct RadarShape: Shape {
-    let data: [(name: String, percentage: Double)]
-    let center: CGPoint
-    let radius: CGFloat
-    let isVisible: Bool
+// MARK: - Talent Ledger Component
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        for i in 0..<data.count {
-            let angle = (Double(i) / Double(data.count)) * 2 * .pi - .pi / 2
-            let val = isVisible ? data[i].percentage : 0
-            let point = CGPoint(
-                x: center.x + CGFloat(cos(angle)) * radius * CGFloat(val),
-                y: center.y + CGFloat(sin(angle)) * radius * CGFloat(val)
+struct TalentLedgerView: View {
+    let stats: LibraryStats
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            sectionLabel("TOP RATED TALENT", icon: "person.3.fill")
+            
+            HStack(alignment: .top, spacing: 32) {
+                // Column 1: Top Actors
+                talentColumn(title: "TOP ACTORS", people: stats.topRatedActors, color: .orange)
+                    .frame(maxWidth: .infinity)
+                
+                // Column 2: Top Directors & Creators
+                talentColumn(title: "TOP DIRECTORS & CREATORS", people: stats.topRatedCreators, color: .green)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.vertical, 8)
+            
+            Divider()
+                .opacity(0.12)
+        }
+    }
+    
+    @ViewBuilder
+    private func talentColumn(title: String, people: [VisualPersonStat], color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 9, weight: .bold))
+                    .kerning(1.5)
+                    .foregroundStyle(.secondary)
+                Divider()
+                    .opacity(0.12)
+            }
+            
+            if people.isEmpty {
+                Text("No talent records in this category")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
+            } else {
+                ForEach(Array(people.prefix(5).enumerated()), id: \.element.name) { index, person in
+                    let rank = index + 1
+                    VStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            Text("#\(rank)")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(color)
+                                .frame(width: 20, alignment: .leading)
+                            
+                            // Minimal avatar
+                            ZStack {
+                                Circle()
+                                    .fill(color.opacity(0.1))
+                                    .frame(width: 24, height: 24)
+                                
+                                if let urlStr = person.profileURL, let url = URL(string: urlStr) {
+                                    CachedImage(url: url, targetSize: CGSize(width: 48, height: 48), priority: .normal) {
+                                        Image(systemName: "person.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(color.opacity(0.5))
+                                    }
+                                    .frame(width: 24, height: 24)
+                                    .clipShape(Circle())
+                                } else {
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(color)
+                                }
+                            }
+                            
+                            Text(person.name)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            
+                            Spacer()
+                            
+                            Text("\(person.count) titles")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            
+                            Text(String(format: "%.0f%%", person.score * 100))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(color)
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                        .padding(.vertical, 6)
+                        
+                        Divider()
+                            .opacity(0.06)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Collaborations Ledger Component
+
+struct CollaborationsLedgerView: View {
+    let collaborations: [CreatorCollaboration]
+    
+    var body: some View {
+        if !collaborations.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                sectionLabel("CREATIVE COLLABORATIONS", icon: "link")
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header row
+                    HStack {
+                        Text("ACTOR")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text("DIRECTOR / CREATOR")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text("COLLABORATIONS")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 120, alignment: .trailing)
+                    }
+                    .padding(.bottom, 6)
+                    
+                    Divider()
+                        .opacity(0.12)
+                    
+                    ForEach(collaborations.prefix(5)) { col in
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text(col.actorName)
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                Text(col.creatorName)
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                Text("\(col.count) titles")
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 120, alignment: .trailing)
+                            }
+                            .padding(.vertical, 8)
+                            
+                            Divider()
+                                .opacity(0.06)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+                
+                Divider()
+                    .opacity(0.12)
+            }
+        }
+    }
+}
+
+// MARK: - Watch Log Timeline Component
+
+struct WatchLogTimelineView: View {
+    let completedItems: [CompletedItemRepresentation]
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionLabel("CHRONOLOGICAL WATCH LOG", icon: "clock.arrow.circlepath")
+            
+            if completedItems.isEmpty {
+                Text("No watch history records")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(completedItems.prefix(15).enumerated()), id: \.element.id) { index, item in
+                        HStack(alignment: .top, spacing: 16) {
+                            // Timeline dot & line
+                            VStack(spacing: 0) {
+                                Circle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: 8, height: 8)
+                                    .padding(.top, 4)
+                                
+                                if index < completedItems.prefix(15).count - 1 {
+                                    Rectangle()
+                                        .fill(Color.primary.opacity(0.12))
+                                        .frame(width: 1)
+                                        .frame(maxHeight: .infinity)
+                                }
+                            }
+                            .frame(width: 12)
+                            
+                            // Date
+                            Text(formatDate(item.completedDate))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 90, alignment: .leading)
+                                .padding(.top, 1)
+                            
+                            // Title & Type capsule
+                            HStack(spacing: 8) {
+                                if let urlStr = item.posterURL, let url = URL(string: urlStr) {
+                                    CachedImage(url: url, targetSize: CGSize(width: 40, height: 60), priority: .normal) {
+                                        Color.secondary.opacity(0.1)
+                                    }
+                                    .frame(width: 20, height: 30)
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    
+                                    HStack(spacing: 6) {
+                                        Text(item.typeValue.uppercased())
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.primary.opacity(0.06))
+                                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                        .frame(minHeight: 44)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            
+            Divider()
+                .opacity(0.12)
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM dd, yyyy"
+        return formatter.string(from: date).uppercased()
+    }
+}
+
+// MARK: - Premium Card Container
+
+struct PremiumCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let content: () -> Content
+    
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+    
+    var body: some View {
+        content()
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.thinMaterial)
             )
-            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
-        }
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct TasteSegment: Identifiable, Sendable {
-    let id: UUID
-    let label: String
-    let count: Int
-    let color: Color
-    
-    init(id: UUID = UUID(), label: String, count: Int, color: Color) {
-        self.id = id
-        self.label = label
-        self.count = count
-        self.color = color
-    }
-}
-
-private struct PulsatingDot: View {
-    var body: some View {
-        Circle()
-            .fill(Color.green)
-            .frame(width: 6, height: 6)
-    }
-}
-
-private struct PulsatingChartNode: View {
-    let color: Color
-    
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.02), radius: 10, x: 0, y: 4)
             .overlay {
-                Circle()
-                    .stroke(Color.white, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.05), lineWidth: 0.5)
             }
-            .shadow(color: color, radius: 3)
     }
 }

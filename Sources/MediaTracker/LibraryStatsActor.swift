@@ -20,6 +20,22 @@ struct DecadeDistributionPoint: Sendable, Identifiable {
     let count: Int
 }
 
+struct CompletedItemRepresentation: Sendable, Identifiable {
+    let id: String
+    let title: String
+    let posterURL: String?
+    let themeColorHex: String?
+    let completedDate: Date
+    let typeValue: String
+}
+
+struct CreatorCollaboration: Sendable, Identifiable {
+    let id: String
+    let actorName: String
+    let creatorName: String
+    let count: Int
+}
+
 struct LibraryStats: Sendable {
     let totalWatchTimeMinutes: Int
 
@@ -48,6 +64,9 @@ struct LibraryStats: Sendable {
     
     let watchTimeHistory: [WatchTimePoint]
     let decadeDistribution: [DecadeDistributionPoint]
+    
+    let collaborations: [CreatorCollaboration]
+    let completedItems: [CompletedItemRepresentation]
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -67,7 +86,9 @@ struct LibraryStats: Sendable {
         likedCount: 0,
         dislikedCount: 0,
         watchTimeHistory: [],
-        decadeDistribution: []
+        decadeDistribution: [],
+        collaborations: [],
+        completedItems: []
     )
 }
 
@@ -158,6 +179,8 @@ actor LibraryStatsActor {
         var disliked = 0
         var history: [Date: Int] = [:]
         var decadeCounts: [String: Int] = [:]
+        var completedItemsList: [CompletedItemRepresentation] = []
+        var collaborationsCount: [String: Int] = [:]
     }
 
     private struct TasteMapsContainer {
@@ -268,6 +291,25 @@ actor LibraryStatsActor {
                 let decadeName = "\(decadeStart)s"
                 stats.decadeCounts[decadeName, default: 0] += 1
             }
+
+            if isCompleted {
+                let date = item.lastStateChangeDate ?? item.lastInteractionDate ?? Date()
+                stats.completedItemsList.append(CompletedItemRepresentation(
+                    id: item.id,
+                    title: item.title,
+                    posterURL: item.posterURL,
+                    themeColorHex: item.themeColorHex,
+                    completedDate: date,
+                    typeValue: item.typeValue
+                ))
+            }
+
+            for creator in item.cachedCreators {
+                for actor in item.displayCast.prefix(10) {
+                    let key = "\(actor.name)|\(creator)"
+                    stats.collaborationsCount[key, default: 0] += 1
+                }
+            }
         }
     }
 
@@ -318,6 +360,21 @@ actor LibraryStatsActor {
         let decadeDistribution = stats.decadeCounts.map { DecadeDistributionPoint(decade: $0.key, count: $0.value) }
             .sorted { $0.decade < $1.decade }
 
+        let topActorNames = Set(visualActors.map { $0.name })
+        let topCreatorNames = Set(visualCreators.map { $0.name })
+        let collaborations = stats.collaborationsCount.compactMap { key, count -> CreatorCollaboration? in
+            let parts = key.components(separatedBy: "|")
+            guard parts.count == 2 else { return nil }
+            let actor = parts[0]
+            let creator = parts[1]
+            guard topActorNames.contains(actor) && topCreatorNames.contains(creator) else { return nil }
+            return CreatorCollaboration(id: key, actorName: actor, creatorName: creator, count: count)
+        }
+
+        let completedItems = Array(stats.completedItemsList
+            .sorted { $0.completedDate > $1.completedDate }
+            .prefix(100))
+
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
             totalMovies: stats.movieCount,
@@ -336,7 +393,9 @@ actor LibraryStatsActor {
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
             watchTimeHistory: history,
-            decadeDistribution: decadeDistribution
+            decadeDistribution: decadeDistribution,
+            collaborations: collaborations,
+            completedItems: completedItems
         )
     }
 

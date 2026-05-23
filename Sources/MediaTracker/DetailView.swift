@@ -237,6 +237,7 @@ struct DetailView: View {
                     Text("Add to Collection")
                 }
                 .font(.system(size: 11, weight: .bold, design: .rounded))
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Add to Collection")
@@ -256,6 +257,7 @@ struct DetailView: View {
                     Text("Refresh")
                 }
                 .font(.system(size: 11, weight: .bold, design: .rounded))
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isRefreshing)
@@ -272,6 +274,7 @@ struct DetailView: View {
                 }
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(.red)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
