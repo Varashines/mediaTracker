@@ -28,7 +28,7 @@ struct TalentLedgerView: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(stats.topRatedActors.prefix(8).enumerated()), id: \.element.name) { index, person in
+                            ForEach(Array(stats.topRatedActors.prefix(10).enumerated()), id: \.element.name) { index, person in
                                 TalentCardView(person: person, rank: index + 1, color: .orange)
                             }
                         }
@@ -62,7 +62,7 @@ struct TalentLedgerView: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(stats.topRatedCreators.prefix(8).enumerated()), id: \.element.name) { index, person in
+                            ForEach(Array(stats.topRatedCreators.prefix(10).enumerated()), id: \.element.name) { index, person in
                                 TalentCardView(person: person, rank: index + 1, color: .green)
                             }
                         }

@@ -340,6 +340,13 @@ struct HeroStatGrid: View {
         return Double(stats.completedMovies + stats.completedTVShows) / Double(total)
     }
 
+    var overallAffinity: Double {
+        let totalRated = stats.lovedCount + stats.likedCount + stats.dislikedCount
+        guard totalRated > 0 else { return 0 }
+        let score = (3.0 * Double(stats.lovedCount) + 1.0 * Double(stats.likedCount) - 2.0 * Double(stats.dislikedCount)) / (3.0 * Double(totalRated))
+        return max(0, score)
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 24) {
@@ -363,6 +370,13 @@ struct HeroStatGrid: View {
                     label: "Completion",
                     detail: "\(stats.completedMovies + stats.completedTVShows)/\(stats.totalMovies + stats.totalTVShows)",
                     color: .teal
+                )
+                ClaymorphicHeroCard(
+                    emoji: "💖",
+                    value: String(format: "%.0f%%", overallAffinity * 100),
+                    label: "Affinity",
+                    detail: "\(stats.lovedCount)♥ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
+                    color: .purple
                 )
             }
             .padding(.vertical, 16)

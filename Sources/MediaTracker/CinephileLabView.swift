@@ -24,7 +24,7 @@ struct CinephileLabView: View {
                 // Top Genres
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: .indigo)
-                    TopGenresView(items: Array(stats.genreDNA.prefix(8)))
+                    TopGenresView(items: Array(stats.genreDNA.prefix(10)))
                 }
 
                 // Decade Timeline (Release Era Distribution)
@@ -126,7 +126,7 @@ struct TopGenresView: View {
     let items: [(name: String, percentage: Double)]
 
     private var palette: [Color] {
-        [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .mint]
+        [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .mint, .red, .yellow]
     }
 
     var body: some View {
@@ -143,7 +143,7 @@ struct TopGenresView: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(Array(items.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                    ForEach(Array(items.prefix(10).enumerated()), id: \.element.name) { idx, item in
                         let color = palette[idx % palette.count]
                         GalleryCardView(name: item.name, value: item.percentage, rank: idx + 1, color: color, icon: "film.fill")
                     }
@@ -417,7 +417,7 @@ struct TopBrandsHorizontalView: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(Array(items.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                    ForEach(Array(items.prefix(10).enumerated()), id: \.element.name) { idx, item in
                         GalleryCardView(name: item.name, value: item.score, rank: idx + 1, color: color, icon: icon)
                     }
                 }
