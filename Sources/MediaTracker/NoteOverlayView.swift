@@ -56,7 +56,7 @@ struct NoteOverlayView: View {
                 .background {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 15, y: 5)
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 10, y: 4)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)

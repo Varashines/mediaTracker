@@ -39,7 +39,7 @@ struct PosterView: View {
                 }
                 .frame(width: 260, height: 390)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 20)
+                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item, themeColor: themeColor)
                         .padding(14)

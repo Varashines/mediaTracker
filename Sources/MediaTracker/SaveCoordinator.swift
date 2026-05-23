@@ -22,7 +22,7 @@ class SaveCoordinator {
                 try context.save()
             } catch {
                 if !(error is CancellationError) {
-                    print("❌ SaveCoordinator: Failed to save context - \(error)")
+                    AppErrorState.shared.surfaceError("Failed to save changes: \(error.localizedDescription)")
                 }
             }
         }

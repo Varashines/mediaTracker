@@ -14,7 +14,7 @@ struct LibraryFilterBar: View {
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: AppTheme.Spacing.small) {
                 // 1. GENRE FILTER
                 filterMenu(
                     title: viewModel.selectedGenre ?? "All Genres",
@@ -59,7 +59,7 @@ struct LibraryFilterBar: View {
                 Rectangle()
                     .fill(.secondary.opacity(0.2))
                     .frame(width: 1, height: 20)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, AppTheme.Spacing.micro)
 
                 // 4. SORT BY
                 sortMenu
@@ -67,8 +67,8 @@ struct LibraryFilterBar: View {
                 // 5. GROUP BY
                 groupMenu
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppTheme.Spacing.section)
+            .padding(.vertical, AppTheme.Spacing.tiny)
         }
     }
     

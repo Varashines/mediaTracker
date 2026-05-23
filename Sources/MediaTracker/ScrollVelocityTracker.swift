@@ -20,7 +20,7 @@ struct ScrollVelocityTracker: View {
                         guard !Task.isCancelled else { return }
                         
                         await MainActor.run {
-                            withAnimation(.smooth) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
                                 isFastScrolling = false
                             }
                         }

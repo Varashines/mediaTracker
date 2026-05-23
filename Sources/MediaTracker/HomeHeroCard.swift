@@ -105,7 +105,7 @@ struct HomeHeroCard: View {
         .cornerRadius(24)
         .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 10, y: 5)
         .scaleEffect(isHovered ? 1.01 : 1.0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
+        .animation(AppTheme.Animation.springDefault, value: isHovered)
         .onHover { isHovered = $0 }
         .task {
             // Phase 2 Optimization: Lazy Load the full item for recommendation context

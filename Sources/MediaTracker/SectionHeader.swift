@@ -9,8 +9,8 @@ struct SectionHeader: View {
     var showDivider: Bool = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            HStack(spacing: AppTheme.Spacing.small) {
                 if let icon = icon {
                     Image(systemName: icon)
                         .foregroundStyle(iconColor)
@@ -19,11 +19,11 @@ struct SectionHeader: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.title)
                     
                     if let subtitle = subtitle {
                         Text(subtitle)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppTheme.Font.bodyBold)
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
                             .kerning(1.0)
@@ -41,23 +41,25 @@ struct SectionHeader: View {
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(Color.secondary.opacity(0.1))
-                                .frame(height: 4)
+                                .frame(height: AppTheme.Spacing.micro)
                             
                             Capsule()
                                 .fill(Color.accentColor.gradient)
-                                .frame(width: itemWidth, height: 4)
+                                .frame(width: itemWidth, height: AppTheme.Spacing.micro)
                                 .offset(x: progress * scrollableTrackWidth)
                         }
                         .frame(maxHeight: .infinity, alignment: .center)
                     }
-                    .frame(width: 150, height: 4)
-                    .padding(.trailing, 10)
+                    .frame(width: 150, height: AppTheme.Spacing.micro)
+                    .padding(.trailing, AppTheme.Spacing.small)
                 }
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
             
             if showDivider {
-                Divider().padding(.horizontal, 40).padding(.top, 4)
+                Divider()
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.top, AppTheme.Spacing.micro)
             }
         }
     }

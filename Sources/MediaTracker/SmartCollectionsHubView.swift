@@ -314,7 +314,7 @@ struct SmartCollectionsHubView: View {
         }
         
         await MainActor.run {
-            withAnimation(.smooth) {
+            withAnimation(.easeInOut(duration: 0.3)) {
                 self.counts = newCounts
                 self.customSmartCounts = newCustomCounts
             }
@@ -406,7 +406,7 @@ private struct SmartCollectionCard: View {
                     }
             }
             .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

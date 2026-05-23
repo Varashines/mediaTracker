@@ -35,13 +35,12 @@ struct MainLibraryView: View {
 
     var body: some View {
         GeometryReader { (mainGeo: GeometryProxy) in
-            let spacing: CGFloat = 20
             let columns: [GridItem] = [
-                GridItem(.adaptive(minimum: 170, maximum: 200), spacing: spacing)
+                GridItem(.adaptive(minimum: 170, maximum: 200), spacing: AppTheme.Spacing.large)
             ]
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 30, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
                         HomeViewSections(
                             homeContinueWatching: homeContinueWatching,
@@ -91,15 +90,15 @@ struct MainLibraryView: View {
 
                                 if isMainSection {
                                     LibraryFilterBar(viewModel: viewModel)
-                                        .padding(.top, 5)
-                                        .padding(.bottom, 12)
+                                        .padding(.top, AppTheme.Spacing.micro)
+                                        .padding(.bottom, AppTheme.Spacing.small)
                                 }
                             }
                         }
                     }
                 }
-                .padding(.top, 30)
-                .padding(.bottom, 20)
+                .padding(.top, AppTheme.Spacing.section)
+                .padding(.bottom, AppTheme.Spacing.large)
                 .background {
                     ScrollVelocityTracker(
                         isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)

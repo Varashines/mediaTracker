@@ -68,6 +68,11 @@ actor APIClient {
         lastSearchTime.removeAll()
     }
 
+    func clearMemoryCaches() {
+        searchCache.removeAll()
+        lastSearchTime.removeAll()
+    }
+
     nonisolated var isTMDBConfigured: Bool {
         UserDefaults.standard.string(forKey: "tmdb_api_key")?.isEmpty == false
     }

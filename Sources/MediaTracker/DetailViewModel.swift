@@ -57,7 +57,7 @@ class DetailViewModel {
                     
                     await MainActor.run { [weak self] in
                         guard let self = self else { return }
-                        withAnimation(.easeInOut(duration: 0.5)) {
+                        withAnimation(AppTheme.Animation.springGentle) {
                             self.themeColor = extracted
                             self.item.themeColorHex = hex
                             self.recalculateVibrantPalette()
@@ -142,7 +142,7 @@ class DetailViewModel {
             item.state = .completed
         }
         try? item.modelContext?.save()
-        NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": item.persistentModelID])
+        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
     func fetchEpisodes(for season: TVSeason) {
@@ -221,7 +221,7 @@ class DetailViewModel {
                 }
             }
         } catch {
-            print("❌ Error fetching episodes: \(error)")
+            AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")
             await MainActor.run {
                 AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")
             }

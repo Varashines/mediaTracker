@@ -337,7 +337,7 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .cornerRadius(16)
+        .cornerRadius(AppTheme.Radius.medium)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(isHovered ? 1.02 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
@@ -347,11 +347,11 @@ struct MediaThumbnailView: View, Equatable {
                 return
             }
             let delay = Double(staggerIndex ?? 0 % 15) * 0.05
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(delay)) {
+            withAnimation(AppTheme.Animation.springDefault.delay(delay)) {
                 isAppeared = true
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
     }
@@ -378,7 +378,7 @@ struct MediaThumbnailView: View, Equatable {
                 if let context = item.modelContext {
                     SaveCoordinator.shared.requestSave(context)
                 }
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": item.persistentModelID])
+                MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
             }
         }
     }
@@ -421,7 +421,7 @@ struct MediaThumbnailView: View, Equatable {
                             }
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
-                        NotificationCenter.default.post(name: .mediaStateChanged, object: nil, userInfo: ["itemID": itemID])
+                        MediaStateService.shared.postMediaStateChanged(itemID: itemID)
                     }
                 } label: {
                     Label(

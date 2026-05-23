@@ -111,7 +111,7 @@ actor BackgroundDataService {
             try modelContext.save()
             print("🗑️ Cascade Deletion: Deleted \(id) and all associated records.")
         } catch {
-            print("❌ Cascade Deletion: Failed to save deletion: \(error)")
+            Task { @MainActor in AppErrorState.shared.surfaceError("Failed to delete item: \(error.localizedDescription)") }
         }
     }
 
@@ -130,7 +130,7 @@ actor BackgroundDataService {
             
             print("✅ Database cleared successfully.")
         } catch {
-            print("❌ Failed to clear database: \(error.localizedDescription)")
+            Task { @MainActor in AppErrorState.shared.surfaceError("Failed to clear database: \(error.localizedDescription)") }
         }
     }
 
@@ -270,10 +270,10 @@ actor BackgroundDataService {
             await sync.syncLibrary(force: true)
             
             await MainActor.run {
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                MediaStateService.shared.postMediaStateChanged()
             }
         } catch {
-            print("❌ Deep Heal: Failed to save context: \(error)")
+            Task { @MainActor in AppErrorState.shared.surfaceError("Library heal failed to save: \(error.localizedDescription)") }
         }
     }
 
@@ -304,14 +304,13 @@ actor BackgroundDataService {
                 try modelContext.save()
             }
         } catch {
-            print("❌ Background Refresh: Failed to save batch context: \(error)")
+            Task { @MainActor in AppErrorState.shared.surfaceError("Background refresh save failed: \(error.localizedDescription)") }
         }
         
         // Phase 5: Bulk Notification
         if !refreshedIDs.isEmpty {
-            let ids = refreshedIDs
             Task { @MainActor in
-                NotificationCenter.default.post(name: .mediaItemsBulkRefreshed, object: nil, userInfo: ["ids": ids])
+                MediaStateService.shared.postBulkRefreshed()
             }
         }
         
@@ -377,12 +376,13 @@ actor BackgroundDataService {
                 try modelContext.save()
                 let refreshedID = item.id
                 Task { @MainActor in
-                    NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": refreshedID])
+                    MediaStateService.shared.postItemRefreshed(id: refreshedID)
                 }
             }
             return true
         } catch {
-            print("❌ Refresh error for \(item.title): \(error)")
+            let title = item.title
+            Task { @MainActor in AppErrorState.shared.surfaceError("Failed to refresh \(title): \(error.localizedDescription)") }
             return false
         }
     }
@@ -472,10 +472,10 @@ actor BackgroundDataService {
             
             // Broadcast the refresh
             await MainActor.run {
-                NotificationCenter.default.post(name: .mediaItemRefreshed, object: nil, userInfo: ["id": itemID])
+                MediaStateService.shared.postItemRefreshed(id: itemID)
             }
         } catch {
-            print("❌ Deep Completion: Failed to save: \(error)")
+            Task { @MainActor in AppErrorState.shared.surfaceError("Failed to complete show: \(error.localizedDescription)") }
         }
     }
 

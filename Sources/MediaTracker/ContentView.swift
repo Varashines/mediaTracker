@@ -54,8 +54,9 @@ struct ContentView: View {
                 viewModel: viewModel
             )
         }
-        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: viewModel.selectedCategory)
-        .animation(.smooth(duration: 0.4), value: isSearchActive)
+        .frame(minWidth: 900, minHeight: 600)
+        .animation(AppTheme.Animation.springDefault, value: viewModel.selectedCategory)
+        .animation(.easeInOut(duration: 0.3), value: isSearchActive)
     }
 }
 
@@ -96,24 +97,16 @@ struct LibraryDetailView: View {
         NavigationStack(path: $viewModel.navigationPath) {
             ZStack {
                 let mood = themeCoordinator.categoryMoodColor == .clear ? categoryMoodColor : themeCoordinator.categoryMoodColor
-                GeometryReader { geo in
-                    ZStack {
-                        Circle()
-                            .fill(mood.opacity(colorScheme == .dark ? 0.08 : 0.04))
-                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
-                            .blur(radius: 120)
-                            .offset(x: geo.size.width * 0.2, y: -geo.size.height * 0.1)
-                        
-                        Circle()
-                            .fill(mood.opacity(colorScheme == .dark ? 0.04 : 0.02))
-                            .frame(width: geo.size.width * 0.5, height: geo.size.width * 0.5)
-                            .blur(radius: 80)
-                            .offset(x: -geo.size.width * 0.2, y: geo.size.height * 0.3)
-                    }
-                    .ignoresSafeArea()
-                }
+                LibraryBackgroundView(mood: mood)
 
-                mainContent
+                CategoryRouterView(
+                    sidebarSelection: $sidebarSelection,
+                    isSearchActive: $isSearchActive,
+                    posterNamespace: posterNamespace,
+                    viewModel: viewModel,
+                    modelContainer: modelContext.container,
+                    onLoadMore: loadMoreItems
+                )
 
                 if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
                     NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
@@ -122,29 +115,21 @@ struct LibraryDetailView: View {
                 }
             }
             .background(.ultraThinMaterial)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isSearchActive)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewModel.selectedCategory)
+            .animation(AppTheme.Animation.springGentle, value: isSearchActive)
+            .animation(AppTheme.Animation.springGentle, value: viewModel.selectedCategory)
             .navigationTitle(
                 isSearchActive
                     ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
             )
             .navigationDestination(for: MediaItem.self) { item in
                 DetailView(item: item, namespace: posterNamespace) { actorName in
-                    viewModel.selectedCategory = .all
-                    viewModel.searchText = actorName
-                    viewModel.navigationPath = NavigationPath()
-                    isSearchActive = true
-                    viewModel.filterSubject.send()
+                    navigateToActorSearch(actorName)
                 }
             }
             .navigationDestination(for: PersistentIdentifier.self) { id in
                 if let item = modelContext.model(for: id) as? MediaItem {
                     DetailView(item: item, namespace: posterNamespace) { actorName in
-                        viewModel.selectedCategory = .all
-                        viewModel.searchText = actorName
-                        viewModel.navigationPath = NavigationPath()
-                        isSearchActive = true
-                        viewModel.filterSubject.send()
+                        navigateToActorSearch(actorName)
                     }
                 }
             }
@@ -160,21 +145,14 @@ struct LibraryDetailView: View {
             .onSubmit(of: .search) {
                 viewModel.searchSubmitTrigger += 1
             }
-            .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { notification in
+            .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
                 LibraryStatsActor.clearCache()
-                if let itemID = notification.userInfo?["itemID"] as? PersistentIdentifier {
+                let itemID = MediaStateService.shared.lastChangedItemID
+                if let itemID = itemID {
                     updateSingleItemInContentView(id: itemID)
                 } else {
                     viewModel.filterSubject.send()
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-                LibraryStatsActor.clearCache()
-                viewModel.filterSubject.send()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .mediaItemsBulkRefreshed)) { _ in
-                LibraryStatsActor.clearCache()
-                viewModel.filterSubject.send()
             }
             .task(id: viewModel.searchText) {
                 viewModel.filterSubject.send()
@@ -185,52 +163,7 @@ struct LibraryDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     if !isSearchActive {
-                        if viewModel.selectedCollectionID != nil {
-                            HStack(spacing: 4) {
-                                Button {
-                                    withAnimation {
-                                        sidebarSelection = .category(.smartHub)
-                                        viewModel.selectedCollectionID = nil
-                                    }
-                                    viewModel.filterSubject.send()
-                                } label: {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .bold))
-                                }
-                                .help("Go Back")
-                                
-                                Button {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        viewModel.showingNoteOverlay.toggle()
-                                    }
-                                } label: {
-                                    let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
-                                    let hasNote = !viewModel.currentCollectionNote.isEmpty
-                                    Image(systemName: icon)
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(hasNote ? Color.blue : Color.secondary)
-                                }
-                                .help("Collection Notes")
-
-                                Button {
-                                    showingBulkManager = true
-                                } label: {
-                                    Image(systemName: "plus.square.on.square")
-                                        .font(.system(size: 14))
-                                }
-                                .help("Manage Items")
-                            }
-                        } else if isSystemSmartCategory {
-                            Button {
-                                withAnimation {
-                                    sidebarSelection = .category(.smartHub)
-                                }
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .bold))
-                            }
-                            .help("Back to Smart Hub")
-                        }
+                        collectionNavigationToolbar
                     }
                 }
 
@@ -432,68 +365,61 @@ struct LibraryDetailView: View {
         }
     }
 
+    private func navigateToActorSearch(_ actorName: String) {
+        viewModel.selectedCategory = .all
+        viewModel.searchText = actorName
+        viewModel.navigationPath = NavigationPath()
+        isSearchActive = true
+        viewModel.filterSubject.send()
+    }
+
     @ViewBuilder
-    private var mainContent: some View {
-        if isSearchActive {
-            SearchView(
-                searchText: $viewModel.searchText,
-                isSearchActive: $isSearchActive,
-                submitTrigger: viewModel.searchSubmitTrigger,
-                initialType: currentMediaType,
-                viewModel: viewModel,
-                onSelectLocal: { item in
-                    viewModel.navigationPath.append(item.persistentModelID)
-                },
-                modelContainer: modelContext.container
-            )
-        } else if viewModel.selectedCategory == .discover {
-            DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
-                viewModel.navigationPath.append(filter)
-            }
-        } else if viewModel.selectedCategory == .upcoming {
-            ReleaseCalendarView(viewModel: viewModel)
-                .transition(.asymmetric(insertion: .opacity, removal: .opacity))
-        } else if viewModel.selectedCategory == .insights {
-            InsightsView()
-        } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
-            SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
-        } else {
-            MainLibraryView(
-                items: viewModel.displayedItems,
-                featuredCarouselItems: viewModel.featuredUpcomingItems,
-                recentlyAdded: viewModel.recentlyAddedItems,
-                homeContinueWatching: viewModel.homeContinueWatchingItems,
-                groupedItems: viewModel.groupedItems,
-                recommendations: viewModel.recommendations,
-                selectedCategory: viewModel.selectedCategory,
-                showingUpcomingOnly: viewModel.selectedCategory == .upcoming,
-                searchText: viewModel.searchText,
-                selectedNetworks: viewModel.selectedNetworks,
-                namespace: posterNamespace,
-                isFastScrolling: $viewModel.isFastScrolling,
-                onSelectHero: { metadata in
-                    if let item = modelContext.model(for: metadata.id) as? MediaItem {
-                        viewModel.navigationPath.append(item)
-                    }
-                },
-                onNetworkSelected: { networks in
-                    onNetworkSelected(networks)
-                },
-                onCategorySelected: { category in
+    private var collectionNavigationToolbar: some View {
+        if viewModel.selectedCollectionID != nil {
+            HStack(spacing: AppTheme.Spacing.micro) {
+                Button {
                     withAnimation {
-                        sidebarSelection = .category(category)
-                    }
-                },
-                onBack: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         sidebarSelection = .category(.smartHub)
+                        viewModel.selectedCollectionID = nil
                     }
-                },
-                onLoadMore: {
-                    loadMoreItems()
-                },
-                viewModel: viewModel
-            )
+                    viewModel.filterSubject.send()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(AppTheme.Font.heading)
+                }
+                .help("Go Back")
+
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        viewModel.showingNoteOverlay.toggle()
+                    }
+                } label: {
+                    let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
+                    let hasNote = !viewModel.currentCollectionNote.isEmpty
+                    Image(systemName: icon)
+                        .font(.system(size: 14))
+                        .foregroundStyle(hasNote ? Color.blue : Color.secondary)
+                }
+                .help("Collection Notes")
+
+                Button {
+                    showingBulkManager = true
+                } label: {
+                    Image(systemName: "plus.square.on.square")
+                        .font(.system(size: 14))
+                }
+                .help("Manage Items")
+            }
+        } else if isSystemSmartCategory {
+            Button {
+                withAnimation {
+                    sidebarSelection = .category(.smartHub)
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(AppTheme.Font.heading)
+            }
+            .help("Back to Smart Hub")
         }
     }
 
@@ -512,7 +438,7 @@ struct LibraryDetailView: View {
                 try? context.save()
                 
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    MediaStateService.shared.postMediaStateChanged()
                 }
             }
         }
@@ -552,28 +478,6 @@ struct LibraryDetailView: View {
         }
     }
 
-    private func navigate(to metadata: MediaThumbnailMetadata) {
-        if metadata.title == "Start Your Journey" {
-            withAnimation {
-                sidebarSelection = .category(.discover)
-            }
-            return
-        }
-
-        withAnimation(.smooth) {
-            if let item = modelContext.model(for: metadata.id) as? MediaItem {
-                viewModel.navigationPath.append(item)
-            }
-        }
-    }
-
-    private func onNetworkSelected(_ networks: [String]) {
-        withAnimation {
-            viewModel.selectedNetworks = networks.isEmpty ? nil : networks
-            viewModel.filterSubject.send()
-        }
-    }
-
     @ViewBuilder
     private var refreshButton: some View {
         Button {
@@ -593,65 +497,18 @@ struct LibraryDetailView: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(AppTheme.Font.heading)
                 }
             }
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(AppTheme.Animation.easeInOut) {
                 isSyncHovered = hovering
             }
         }
         .help("Sync Library")
         .disabled(DataService.shared.isRefreshing)
-    }
-
-    @ViewBuilder
-    private var displaySettingsMenu: some View {
-        let cat = viewModel.selectedCategory
-
-        Menu {
-            Picker("Sort By", selection: Binding(
-                    get: { viewModel.currentSortOrder },
-                    set: {
-                        viewModel.categorySortOrders[cat] = $0
-                        viewModel.filterSubject.send()
-                    }
-                )
-            ) {
-                ForEach(SortOrder.allCases, id: \.self) { order in
-                    Label(order.rawValue, systemImage: order.icon)
-                        .tag(order)
-                }
-            }
-
-            Picker("Group By", selection: Binding(
-                    get: { viewModel.currentGroupBy },
-                    set: {
-                        viewModel.categoryGroupBys[cat] = $0
-                        viewModel.filterSubject.send()
-                    }
-                )
-            ) {
-                ForEach(GroupBy.allCases, id: \.self) { group in
-                    Label(group.rawValue, systemImage: group.icon)
-                        .tag(group)
-                }
-            }
-        } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-        }
-    }
-
-    private var currentMediaType: MediaType? {
-        return MediaType(rawValue: viewModel.selectedCategory.rawValue)
-    }
-
-    private var isSortable: Bool {
-        let cat = viewModel.selectedCategory
-        if cat == .discover || cat == .insights || cat == .home || cat == .upcoming { return false }
-        return true
     }
 
     private var isRefreshable: Bool {
@@ -702,7 +559,7 @@ struct LibraryDetailView: View {
                 )
                 
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppTheme.Animation.easeInOut) {
                         func updateList(_ list: inout [MediaThumbnailMetadata], updated: MediaThumbnailMetadata?) {
                             if let index = list.firstIndex(where: { $0.id == id }) {
                                 if let updated = updated {

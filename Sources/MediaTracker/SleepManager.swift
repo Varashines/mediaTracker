@@ -53,7 +53,7 @@ class SleepManager {
         lastInteractionDate = Date()
         if isIdle { isIdle = false }
         if isAsleep {
-            withAnimation(.smooth) {
+            withAnimation(.easeInOut(duration: 0.3)) {
                 isAsleep = false
             }
             print("🌅 App woke up from sleep mode.")
@@ -66,7 +66,7 @@ class SleepManager {
     
     private func enterSleepMode() {
         guard !isAsleep else { return }
-        withAnimation(.easeInOut(duration: 1.0)) {
+        withAnimation(AppTheme.Animation.springGentle) {
             isAsleep = true
         }
         // Phase 4 Optimization: Removed aggressive manual cache purging.

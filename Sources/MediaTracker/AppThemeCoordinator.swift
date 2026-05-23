@@ -21,7 +21,7 @@ class AppThemeCoordinator {
         lastUpdate = Date()
         
         guard !colors.isEmpty else {
-            withAnimation(.easeInOut(duration: 0.8)) {
+            withAnimation(AppTheme.Animation.springGentle) {
                 self.categoryMoodColor = .clear
             }
             return
@@ -51,7 +51,7 @@ class AppThemeCoordinator {
             alpha: 0.15 // translucent
         ))
         
-        withAnimation(.easeInOut(duration: 0.8)) {
+        withAnimation(AppTheme.Animation.springGentle) {
             self.categoryMoodColor = finalColor
         }
     }

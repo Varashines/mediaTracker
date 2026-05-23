@@ -62,7 +62,7 @@ class LibraryImportExportService {
                             try data.write(to: url, options: .atomic)
                             print("✅ Library exported to \(url.path)")
                         } catch {
-                            print("❌ Export error: \(error)")
+                            await MainActor.run { AppErrorState.shared.surfaceError("Export failed: \(error.localizedDescription)") }
                         }
                     }
                 }
@@ -114,7 +114,7 @@ class LibraryImportExportService {
                 }
 
             } catch {
-                print("❌ Automated backup failed: \(error)")
+                await MainActor.run { AppErrorState.shared.surfaceError("Backup failed: \(error.localizedDescription)") }
             }
         }
     }
@@ -152,8 +152,9 @@ class LibraryImportExportService {
                         // Run a silent repair to catch any duplicates from the import
                         DataService.shared.runMaintenance(modelContext: modelContext, silent: true)
                     } catch {
-                        print("❌ Import error: \(error)")
-                        AppErrorState.shared.surfaceError("Failed to import library: \(error.localizedDescription)")
+                        await MainActor.run {
+                            AppErrorState.shared.surfaceError("Import failed: \(error.localizedDescription)")
+                        }
                     }
                 }
             }

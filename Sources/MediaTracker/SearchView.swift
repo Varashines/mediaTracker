@@ -66,11 +66,13 @@ struct SearchView: View {
             offlineWarningSection
             resultsScrollView
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
         .onChange(of: searchText) { oldValue, newValue in
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
+        .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
             Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
         }
         .alert("Search Error", isPresented: $searchVM.showError, presenting: searchVM.errorMessage) { _ in
@@ -174,6 +176,7 @@ struct SearchView: View {
                                 onSelectLocal?(item)
                             }
                         }
+                        .accessibilityAddTraits(.isButton)
                         .id("local_\(metadata.id)")
                     }
                 }
@@ -205,6 +208,7 @@ struct SearchView: View {
                                 onSelectLocal?(item)
                             }
                         }
+                        .accessibilityAddTraits(.isButton)
                         .id("web_\(result.id)")
                     }
                 }

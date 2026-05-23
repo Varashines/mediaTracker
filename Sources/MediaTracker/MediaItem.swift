@@ -88,11 +88,7 @@ final class MediaItem: Identifiable {
                 if typeValue == "TV Show" && stateValue == "Completed" {
                     if UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched") {
                         markLoadedEpisodesAsWatched()
-                        NotificationCenter.default.post(
-                            name: Notification.Name("tvShowMarkedCompleted"),
-                            object: nil,
-                            userInfo: ["itemID": id]
-                        )
+                        Task { @MainActor in MediaStateService.shared.postTVShowMarkedCompleted() }
                     }
                 }
             }

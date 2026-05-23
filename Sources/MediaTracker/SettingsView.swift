@@ -57,7 +57,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
         }
-        .frame(width: 600, height: 680)
+        .frame(minWidth: 600, minHeight: 500)
         .fontDesign(.rounded)
         .animation(.spring(duration: 0.3, bounce: 0.1), value: selectedTab)
     }

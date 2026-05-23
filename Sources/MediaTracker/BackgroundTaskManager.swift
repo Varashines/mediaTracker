@@ -63,7 +63,7 @@ class BackgroundTaskManager {
                 }
             }
         } catch {
-            print("❌ Drip Sync error: \(error)")
+            AppErrorState.shared.surfaceError("Background sync failed: \(error.localizedDescription)")
         }
     }
 
@@ -188,11 +188,11 @@ class BackgroundTaskManager {
                 
                 // Broadcast to update UI
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    MediaStateService.shared.postMediaStateChanged()
                 }
             }
         } catch {
-            print("❌ Stale Badge Healer error: \(error)")
+            AppErrorState.shared.surfaceError("Badge update failed: \(error.localizedDescription)")
         }
     }
 }

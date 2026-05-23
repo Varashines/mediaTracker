@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Phase 4: UI Standardization - Centralized Design System
+/// UI Standardization - Centralized Design System
 struct AppTheme {
     struct Spacing {
         static let micro: CGFloat = 4
@@ -11,11 +11,59 @@ struct AppTheme {
         static let xLarge: CGFloat = 32
         static let section: CGFloat = 40
     }
-    
+
     struct Radius {
         static let small: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 20
         static let card: CGFloat = 24
+    }
+
+    struct Font {
+        static let title = SwiftUI.Font.system(size: 28, weight: .bold, design: .rounded)
+        static let title2 = SwiftUI.Font.system(size: 24, weight: .bold, design: .rounded)
+        static let title3 = SwiftUI.Font.system(size: 20, weight: .bold, design: .rounded)
+        static let heading = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
+        static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
+        static let bodyBold = SwiftUI.Font.system(size: 13, weight: .bold, design: .rounded)
+        static let caption = SwiftUI.Font.system(size: 11, weight: .bold, design: .rounded)
+        static let caption2 = SwiftUI.Font.system(size: 10, weight: .semibold, design: .rounded)
+        static let small = SwiftUI.Font.system(size: 9, weight: .semibold, design: .rounded)
+        static let smallBold = SwiftUI.Font.system(size: 9, weight: .bold, design: .rounded)
+        static let tiny = SwiftUI.Font.system(size: 8, weight: .bold, design: .rounded)
+        static let badge = SwiftUI.Font.system(size: 7.5, weight: .semibold, design: .rounded)
+        static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
+        static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
+        static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
+    }
+
+    struct ShadowConfig {
+        let color: Color
+        let radius: CGFloat
+        let x: CGFloat
+        let y: CGFloat
+    }
+
+    struct Shadow {
+        static let card = ShadowConfig(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
+        static let elevated = ShadowConfig(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+        static let floating = ShadowConfig(color: .black.opacity(0.25), radius: 16, x: 0, y: 6)
+        static let glow = ShadowConfig(color: .black.opacity(0.1), radius: 24, x: 0, y: 8)
+    }
+
+    struct Animation {
+        static let springDefault: SwiftUI.Animation = .spring(response: 0.5, dampingFraction: 0.82)
+        static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
+        static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
+        static let smooth: SwiftUI.Animation = .easeInOut(duration: 0.3)
+        static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.2)
+    }
+
+    struct Thumbnail {
+        static let tiny = CGSize(width: 80, height: 120)
+        static let small = CGSize(width: 160, height: 240)
+        static let medium = CGSize(width: 400, height: 600)
+        static let large = CGSize(width: 800, height: 1200)
+        static let backdropLarge = CGSize(width: 2000, height: 1125)
     }
 }

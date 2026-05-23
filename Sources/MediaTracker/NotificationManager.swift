@@ -44,7 +44,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                     print("✅ Notification permission granted.")
                 }
             } catch {
-                print("❌ Notification permission error: \(error.localizedDescription)")
+                AppErrorState.shared.surfaceError("Notification permission error: \(error.localizedDescription)")
             }
         }
     }
@@ -158,7 +158,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             try await center.add(request1)
             print("✅ Scheduled \(identifier)-day1")
         } catch {
-            print("❌ Failed to schedule \(identifier)-day1: \(error.localizedDescription)")
+            AppErrorState.shared.surfaceError("Failed to schedule notification: \(error.localizedDescription)")
         }
         
         // Secondary Reminder (Next Day at 9:30 AM)
@@ -180,7 +180,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                 try await center.add(request2)
                 print("✅ Scheduled \(identifier)-day2")
             } catch {
-                print("❌ Failed to schedule \(identifier)-day2: \(error.localizedDescription)")
+                AppErrorState.shared.surfaceError("Failed to schedule reminder: \(error.localizedDescription)")
             }
         }
     }

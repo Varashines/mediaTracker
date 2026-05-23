@@ -52,6 +52,8 @@ struct DiscoveryHubView: View {
             // Essential: Prevent clipping during scaling
             .scrollTargetLayout()
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Discovery Hub")
         .scrollBounceBehavior(.basedOnSize)
         .onAppear { refreshData(force: false) }
         .refreshable { 
@@ -87,7 +89,7 @@ struct DiscoveryHubView: View {
             // 2. Fetch all components thread-safely via actor
             let hubData = await syncService.fetchHubData(hiddenStudios: localHidden)
 
-            withAnimation(.smooth(duration: 0.5)) {
+            withAnimation(AppTheme.Animation.springGentle) {
                 self.viewModel.lastDiscoveryRefresh = Date()
                 self.viewModel.cachedNetworks = hubData.networks
                 self.viewModel.cachedGenres = hubData.genres

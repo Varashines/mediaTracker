@@ -17,16 +17,14 @@ struct HoverMetadataPills: View {
             // Row 1: Name Pill
             Text(title)
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+                .background(Capsule().fill(.ultraThinMaterial))
                 .overlay(
                     Capsule()
                         .stroke(.white.opacity(colorScheme == .dark ? 0.15 : 0.45), lineWidth: 0.5)
                 )
-                .foregroundStyle(.primary)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                 .offset(y: isHovered ? 0 : 20)
                 .opacity(isHovered ? 1 : 0)
             
@@ -37,8 +35,7 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
+                        .background(Capsule().fill(.ultraThinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
@@ -50,8 +47,7 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
+                        .background(Capsule().fill(.ultraThinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
@@ -63,20 +59,18 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
+                        .background(Capsule().fill(.ultraThinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
                         )
                 }
             }
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             .offset(y: isHovered ? 0 : 30)
             .opacity(isHovered ? 1 : 0)
         }
         .padding(.bottom, 12)
         .padding(.horizontal, 8)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
+        .animation(.easeOut(duration: 0.2), value: isHovered)
     }
 }

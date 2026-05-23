@@ -99,7 +99,7 @@ struct ReleaseCalendarView: View {
             let isSelected = selectedDate == nil
             
             Button {
-                withAnimation(.smooth) {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     selectedDate = nil
                 }
             } label: {
@@ -142,7 +142,7 @@ struct ReleaseCalendarView: View {
             let calendar = Calendar.current
             let newMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: newDate)) ?? newDate
             
-            withAnimation(.smooth) {
+            withAnimation(.easeInOut(duration: 0.3)) {
                 currentDisplayMonth = newMonth
                 selectedDate = nil // Reset to All Month view when navigating
             }
@@ -190,7 +190,7 @@ struct ReleaseCalendarView: View {
                     preloadAdjacentMonths(around: startOfMonth)
                 }
             } catch {
-                print("❌ Calendar fetch error: \(error)")
+                AppErrorState.shared.surfaceError("Failed to load calendar: \(error.localizedDescription)")
                 await MainActor.run { 
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.isLoading = false 
@@ -334,7 +334,7 @@ struct ReleaseCalendarView: View {
                         let accent = Color.accentColor
 
                         Button {
-                            withAnimation(.smooth) { selectedDate = date }
+                            withAnimation(.easeInOut(duration: 0.3)) { selectedDate = date }
                         } label: {
                             VStack(spacing: 6) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
@@ -418,7 +418,7 @@ struct ReleaseCalendarView: View {
                 }
             }
             .onTapGesture {
-                withAnimation(.smooth) {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     if isSelected {
                         selectedDate = nil
                     } else {

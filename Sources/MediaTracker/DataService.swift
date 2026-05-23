@@ -146,7 +146,7 @@ class DataService {
             
             await MainActor.run {
                 AppErrorState.shared.showToast("Database cleared successfully.", systemImage: "trash", type: .success)
-                NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                MediaStateService.shared.postMediaStateChanged()
             }
         }
     }

@@ -103,7 +103,6 @@ class ImageCache: NSObject {
     private func performMemoryCompaction(level: MemoryPressureLevel) {
         switch level {
         case .warning:
-            // Prune to 80MB (was 40MB) - Balanced for 8GB RAM
             self.memoryCache.totalCostLimit = 80 * 1024 * 1024
             self.memoryCache.countLimit = 150
         case .critical:
@@ -111,8 +110,11 @@ class ImageCache: NSObject {
             self.memoryCache.countLimit = 10
             self.memoryCache.removeAllObjects()
             self.urlToKeys.removeAll()
-            // Force a sync to disk for any pending metadata
             NotificationCenter.default.post(name: NSNotification.Name("ForceSwiftDataSave"), object: nil)
+        }
+        Task {
+            await StringPool.shared.clear()
+            await APIClient.shared.clearMemoryCaches()
         }
     }
     
@@ -618,7 +620,7 @@ struct CachedImage<Placeholder: View>: View {
                 staticPlaceholder
             }
         }
-        .animation(.smooth(duration: 0.2), value: image == nil)
+        .animation(AppTheme.Animation.easeInOut, value: image == nil)
         .onAppear {
             // 2. LISTEN-FIRST: Setup listener before any loading begins
             setupBroadcastListener()

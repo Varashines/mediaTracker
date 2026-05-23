@@ -16,16 +16,15 @@ struct DiscoverySection: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SectionHeader(title: title, icon: icon, iconColor: sectionColor)
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 24)], spacing: 24) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                 ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
-                        .entranceStagger(index: index)
                 }
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
         }
     }
 }

@@ -96,16 +96,16 @@ struct SidebarNavigation: View {
         }
 
         return Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 selection = item
             }
             FeedbackManager.shared.trigger(.click)
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: AppTheme.Spacing.small) {
                 Image(systemName: iconName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
-                    .frame(width: 24)
+                    .frame(width: AppTheme.Spacing.large)
 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
@@ -113,23 +113,24 @@ struct SidebarNavigation: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.tiny)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(activeColor)
                         .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
                 } else if hoveredItem == item {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(Color.primary.opacity(0.04))
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(.isButton)
         .onHover { isHovered in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(AppTheme.Animation.easeInOut) {
                 hoveredItem = isHovered ? item : nil
             }
         }
@@ -140,7 +141,7 @@ struct SidebarNavigation: View {
             .font(.system(size: 9.5, weight: .bold))
             .kerning(1.2)
             .foregroundStyle(.secondary.opacity(0.7))
-            .padding(.leading, 12)
-            .padding(.bottom, 4)
+            .padding(.leading, AppTheme.Spacing.small)
+            .padding(.bottom, AppTheme.Spacing.micro)
     }
 }

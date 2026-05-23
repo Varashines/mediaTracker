@@ -33,18 +33,18 @@ struct LibraryHeaderView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 1. FILTER INFO
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            // FILTER INFO
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
                 
-                HStack(spacing: 8) {
+                HStack(spacing: AppTheme.Spacing.tiny) {
                     Text("Filtered by:")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                     
                     Text(title)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(Color.accentColor)
                     
                     Button { withAnimation { onNetworkSelected([]) } } label: {
@@ -56,9 +56,8 @@ struct LibraryHeaderView: View {
                     
                     Spacer()
                 }
-                .padding(.horizontal, 40)
-                .padding(.bottom, 10)
             }
         }
+        .padding(.horizontal, AppTheme.Spacing.xLarge)
     }
 }

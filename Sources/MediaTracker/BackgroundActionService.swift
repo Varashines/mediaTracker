@@ -30,7 +30,7 @@ actor BackgroundActionService {
         
         // Notify UI
         Task { @MainActor in
-            NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+            MediaStateService.shared.postMediaStateChanged()
         }
     }
 }

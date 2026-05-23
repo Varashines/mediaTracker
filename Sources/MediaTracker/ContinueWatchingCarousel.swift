@@ -14,7 +14,7 @@ struct ContinueWatchingCarousel: View {
     private let scrollSpace = "CW_Scroll"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(
                 title: "Continue Watching",
                 icon: "play.fill",
@@ -24,8 +24,8 @@ struct ContinueWatchingCarousel: View {
 
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        Spacer(minLength: 10)
+                    HStack(spacing: AppTheme.Spacing.large) {
+                        Spacer(minLength: AppTheme.Spacing.small)
                         ForEach(items) { metadata in
                             Button {
                                 onSelect(metadata)
@@ -36,9 +36,9 @@ struct ContinueWatchingCarousel: View {
                             }
                             .buttonStyle(.interactive)
                         }
-                        Spacer(minLength: 10)
+                        Spacer(minLength: AppTheme.Spacing.small)
                     }
-                    .padding(.vertical, 15)
+                    .padding(.vertical, AppTheme.Spacing.medium - 1)
                     .background(
                         GeometryReader { (geo: GeometryProxy) in
                             let minX: CGFloat = geo.frame(in: .named(scrollSpace)).minX
@@ -75,15 +75,15 @@ struct ContinueWatchingCarousel: View {
                 Button {
                     onDiscoverySpotlight?()
                 } label: {
-                    HStack(spacing: 16) {
+                    HStack(spacing: AppTheme.Spacing.medium) {
                         Image(systemName: "sparkles.tv.fill")
-                            .font(.system(size: 24))
+                            .font(AppTheme.Font.title3)
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 54, height: 54)
                             .background(Color.accentColor.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
                             Text("Ready to start watching?")
                                 .font(.headline.bold())
                                 .foregroundStyle(.primary)
@@ -97,19 +97,19 @@ struct ContinueWatchingCarousel: View {
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.tertiary)
                     }
-                    .padding(16)
+                    .padding(AppTheme.Spacing.medium)
                     .background {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .fill(.thinMaterial)
                     }
                     .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                             .stroke(Color.primary.opacity(0.06), lineWidth: 0.8)
                     }
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 30)
-                .padding(.vertical, 15)
+                .padding(.horizontal, AppTheme.Spacing.xLarge - 2)
+                .padding(.vertical, AppTheme.Spacing.medium - 1)
             }
         }
     }

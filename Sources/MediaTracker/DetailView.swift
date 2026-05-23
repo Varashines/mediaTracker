@@ -48,7 +48,7 @@ struct DetailView: View {
                 )
                 .ignoresSafeArea()
             }
-            .animation(.easeInOut(duration: 0.8), value: effectiveThemeColor)
+            .animation(AppTheme.Animation.springGentle, value: effectiveThemeColor)
             
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -65,22 +65,26 @@ struct DetailView: View {
             // Floating Action Bar overlay at bottom
             VStack {
                 Spacer()
-                floatingActionBar
-                    .padding(.bottom, 24)
+                DetailFloatingActionBar(
+                    viewModel: viewModel,
+                    onAddToCollection: { showingCollectionPicker = true },
+                    onRefresh: { viewModel.refreshData(force: true) },
+                    onDelete: deleteItem
+                )
+                .padding(.bottom, 24)
             }
         }
         .navigationTitle("Details")
         .toolbar { detailToolbar }
         .onAppear {
             viewModel.refreshData()
-            withAnimation(.spring(response: 1.0, dampingFraction: 0.85).delay(0.1)) {
+            withAnimation(AppTheme.Animation.springGentle.delay(0.1)) {
                 isAppeared = true
             }
             
-            // Phase 2: Navigation Animation Deferral
             Task {
-                try? await Task.sleep(nanoseconds: 250_000_000) // 0.25s delay
-                withAnimation(.easeOut(duration: 0.4)) {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                withAnimation(.easeInOut(duration: 0.3)) {
                     showHeavyContent = true
                 }
             }
@@ -89,8 +93,8 @@ struct DetailView: View {
         .sheet(isPresented: $showingCollectionPicker) {
             CollectionPickerView(item: viewModel.item)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { notification in
-            if let id = notification.userInfo?["id"] as? String, id == viewModel.item.id {
+        .onChange(of: MediaStateService.shared.refreshedItemID) { _, newID in
+            if let id = newID, id == viewModel.item.id {
                 viewModel.refreshLocalItem()
             }
         }
@@ -115,11 +119,7 @@ struct DetailView: View {
                     if let context = viewModel.item.modelContext {
                         SaveCoordinator.shared.requestSave(context)
                     }
-                    NotificationCenter.default.post(
-                        name: .mediaStateChanged,
-                        object: nil,
-                        userInfo: ["itemID": viewModel.item.persistentModelID]
-                    )
+                    MediaStateService.shared.postMediaStateChanged(itemID: viewModel.item.persistentModelID)
                 }
             }
         )
@@ -141,7 +141,7 @@ struct DetailView: View {
 
     @ViewBuilder
     private var castAndTrackingSection: some View {
-        VStack(alignment: .leading, spacing: 32) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
                 // 1. TV TRACKING (Modular Card)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
@@ -170,11 +170,11 @@ struct DetailView: View {
                 }
             } else {
                 // SKELETON LOADER
-                VStack(spacing: 24) {
-                    RoundedRectangle(cornerRadius: 20)
+                VStack(spacing: AppTheme.Spacing.large) {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                         .fill(Color.primary.opacity(0.04))
                         .frame(height: 180)
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                         .fill(Color.primary.opacity(0.04))
                         .frame(height: 140)
                 }
@@ -220,108 +220,10 @@ struct DetailView: View {
                 await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
                 
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+                    MediaStateService.shared.postMediaStateChanged()
                 }
             }
         }
     }
 
-    // MARK: - Floating Action Bar View
-    private var floatingActionBar: some View {
-        HStack(spacing: 16) {
-            Button {
-                showingCollectionPicker = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.badge.plus")
-                    Text("Collection")
-                }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Add to Collection")
-            
-            Divider()
-                .frame(height: 14)
-            
-            Button {
-                viewModel.refreshData(force: true)
-            } label: {
-                HStack(spacing: 6) {
-                    if viewModel.isRefreshing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    Text("Refresh")
-                }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(viewModel.isRefreshing)
-            
-            Divider()
-                .frame(height: 14)
-            
-            Button(role: .destructive) {
-                deleteItem()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "trash")
-                    Text("Remove")
-                }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.red)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 10, y: 5)
-        }
-        .overlay {
-            Capsule()
-                .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-        }
-    }
-}
-
-/// A minimal, modular container for detail sections.
-struct ModularSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @ViewBuilder let content: Content
-    @Environment(\.colorScheme) var scheme
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary.opacity(0.7))
-                Text(title.uppercased())
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary.opacity(0.7))
-                    .kerning(0.8)
-                Spacer()
-            }
-            .padding(.leading, 4)
-            
-            content
-                .padding(16)
-                .background {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
-                }
-                .background(color.opacity(scheme == .dark ? 0.05 : 0.02) as Color)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-    }
 }

@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 
 extension CGSize {
-    static let thumbTiny = CGSize(width: 80, height: 120)
-    static let thumbSmall = CGSize(width: 160, height: 240)
-    static let thumbMedium = CGSize(width: 400, height: 600)
-    static let thumbLarge = CGSize(width: 800, height: 1200)
-    static let backdropLarge = CGSize(width: 2000, height: 1125)
+    static let thumbTiny = AppTheme.Thumbnail.tiny
+    static let thumbSmall = AppTheme.Thumbnail.small
+    static let thumbMedium = AppTheme.Thumbnail.medium
+    static let thumbLarge = AppTheme.Thumbnail.large
+    static let backdropLarge = AppTheme.Thumbnail.backdropLarge
 }
 
 extension Color {
@@ -149,6 +149,7 @@ extension View {
 
 struct ShimmeringModifier: ViewModifier {
     @State private var phase: CGFloat = 0
+    @State private var hasAnimated = false
     
     func body(content: Content) -> some View {
         content
@@ -156,7 +157,7 @@ struct ShimmeringModifier: ViewModifier {
                 GeometryReader { geo in
                     let width = geo.size.width
                     LinearGradient(
-                        colors: [.clear, .white.opacity(0.15), .clear],
+                        colors: [.clear, .white.opacity(0.1), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -165,10 +166,14 @@ struct ShimmeringModifier: ViewModifier {
                     .rotationEffect(.degrees(30))
                 }
                 .mask(content)
+                .opacity(hasAnimated ? 0 : 1)
             }
             .onAppear {
-                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                withAnimation(.linear(duration: 1.5).delay(0.3)) {
                     phase = 1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    hasAnimated = true
                 }
             }
     }

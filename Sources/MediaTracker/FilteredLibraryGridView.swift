@@ -36,11 +36,9 @@ struct FilteredLibraryGridView: View {
             }
         }
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
-        .onReceive(NotificationCenter.default.publisher(for: .mediaItemRefreshed)) { _ in
-            fetchItems()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .mediaStateChanged)) { notification in
-            if let itemID = notification.userInfo?["itemID"] as? PersistentIdentifier {
+        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+            let itemID = MediaStateService.shared.lastChangedItemID
+            if let itemID = itemID {
                 updateSingleItem(id: itemID)
             } else {
                 fetchItems()
@@ -131,7 +129,7 @@ struct FilteredLibraryGridView: View {
                 )
                 
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppTheme.Animation.easeInOut) {
                         if let index = items.firstIndex(where: { $0.id == id }) {
                             if let updated = updatedMetadata {
                                 items[index] = updated

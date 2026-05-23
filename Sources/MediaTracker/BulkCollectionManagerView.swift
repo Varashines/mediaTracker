@@ -108,7 +108,7 @@ struct BulkCollectionManagerView: View {
         }
         
         try? modelContext.save()
-        NotificationCenter.default.post(name: .mediaStateChanged, object: nil)
+        MediaStateService.shared.postMediaStateChanged()
     }
 }
 

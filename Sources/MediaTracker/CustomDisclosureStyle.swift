@@ -7,7 +7,7 @@ struct CustomDisclosureStyle: DisclosureGroupStyle {
         VStack(spacing: 0) {
             Button {
                 // High-response spring for the toggle
-                withAnimation(.smooth) {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     configuration.isExpanded.toggle()
                 }
             } label: {
