@@ -321,7 +321,7 @@ actor LibraryStatsActor {
         let genreDNA = genreDNAMap
             .filter { $0.1 >= 0 }
             .sorted { $0.1 > $1.1 }
-            .prefix(8)
+            .prefix(10)
 
         // 2. Process Taste-based Rankings
         let mapTaste: ([String: CategoryStats]) -> [(String, Double)] = { statsMap in

@@ -3,6 +3,8 @@ import SwiftUI
 struct CinephileBarcodeView: View {
     let items: [MediaItem]
     @State private var hoveredItem: MediaItem?
+    @State private var isScanning = false
+    @State private var scanPosition: CGFloat = 0.0
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -48,41 +50,66 @@ struct CinephileBarcodeView: View {
                     }
                     .frame(height: 32)
                 } else {
-                    HStack(spacing: 2) {
-                        Spacer(minLength: 0)
-                        ForEach(validItems.prefix(100)) { item in
-                            let isCurrentHovered = hoveredItem?.id == item.id
-                            let barColor: Color = {
-                                if let hex = item.themeColorHex, let c = Color(hex: hex) {
-                                    return c
-                                }
-                                switch item.tasteValue {
-                                case "Love": return .red
-                                case "Like": return .blue
-                                case "Dislike": return .orange
-                                default: return .primary.opacity(0.15)
-                                }
-                            }()
+                    ZStack(alignment: .leading) {
+                        HStack(spacing: 2) {
+                            Spacer(minLength: 0)
+                            ForEach(validItems.prefix(100)) { item in
+                                let isCurrentHovered = hoveredItem?.id == item.id
+                                let barColor: Color = {
+                                    if let hex = item.themeColorHex, let c = Color(hex: hex) {
+                                        return c
+                                    }
+                                    switch item.tasteValue {
+                                    case "Love": return .red
+                                    case "Like": return .blue
+                                    case "Dislike": return .orange
+                                    default: return .primary.opacity(0.15)
+                                    }
+                                }()
 
-                            RoundedRectangle(cornerRadius: 1.0)
-                                .fill(isCurrentHovered ? barColor : barColor.opacity(0.8))
-                                .frame(height: 32)
-                                .frame(minWidth: 1.5, maxWidth: 6)
-                                .scaleEffect(y: isCurrentHovered ? 1.3 : 1.0)
-                                .contentShape(Rectangle())
-                                .onHover { isHovered in
-                                    withAnimation(AppTheme.Animation.springSnappy) {
-                                        if isHovered {
-                                            hoveredItem = item
-                                        } else if hoveredItem?.id == item.id {
-                                            hoveredItem = nil
+                                RoundedRectangle(cornerRadius: 1.0)
+                                    .fill(isCurrentHovered ? barColor : barColor.opacity(0.8))
+                                    .frame(height: 32)
+                                    .frame(minWidth: 1.5, maxWidth: 6)
+                                    .scaleEffect(y: isCurrentHovered ? 1.3 : 1.0)
+                                    .shadow(color: isCurrentHovered ? barColor.opacity(0.8) : Color.clear, radius: isCurrentHovered ? 6 : 0)
+                                    .contentShape(Rectangle())
+                                    .onHover { isHovered in
+                                        withAnimation(AppTheme.Animation.springSnappy) {
+                                            if isHovered {
+                                                hoveredItem = item
+                                                isScanning = true
+                                            } else if hoveredItem?.id == item.id {
+                                                hoveredItem = nil
+                                                isScanning = false
+                                            }
                                         }
                                     }
-                                }
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        .frame(height: 44)
+
+                        // Glowing sweep scanner overlay
+                        if isScanning {
+                            GeometryReader { geo in
+                                Color.accentColor.opacity(0.4)
+                                    .frame(width: 2, height: 44)
+                                    .shadow(color: Color.accentColor.opacity(0.9), radius: 6, x: 0, y: 0)
+                                    .offset(x: scanPosition * geo.size.width)
+                                    .onAppear {
+                                        scanPosition = 0.0
+                                        withAnimation(Animation.linear(duration: 2.2).repeatForever(autoreverses: true)) {
+                                            scanPosition = 1.0
+                                        }
+                                    }
+                                    .onDisappear {
+                                        scanPosition = 0.0
+                                    }
+                            }
+                            .allowsHitTesting(false)
+                        }
                     }
-                    .frame(height: 44)
                 }
             }
         }

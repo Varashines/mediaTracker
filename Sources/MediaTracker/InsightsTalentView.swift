@@ -4,14 +4,14 @@ struct TalentLedgerView: View {
     let stats: LibraryStats
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
-            // Actors Column
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+        VStack(spacing: AppTheme.Spacing.section) {
+            // Actors Column / Row
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CAST")
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
-                    .padding(.leading, AppTheme.Spacing.micro)
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
 
                 if stats.topRatedActors.isEmpty {
                     DashboardCard {
@@ -22,31 +22,30 @@ struct TalentLedgerView: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
-                        .frame(height: 120)
+                        .frame(height: 80)
                     }
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
                 } else {
-                    DashboardCard {
-                        VStack(spacing: 0) {
-                            ForEach(Array(stats.topRatedActors.prefix(5).enumerated()), id: \.element.name) { index, person in
-                                TalentRowItem(person: person, rank: index + 1, color: .orange)
-                                if index < min(stats.topRatedActors.count, 5) - 1 {
-                                    Divider()
-                                        .padding(.leading, 64)
-                                }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(stats.topRatedActors.prefix(8).enumerated()), id: \.element.name) { index, person in
+                                TalentCardView(person: person, rank: index + 1, color: .orange)
                             }
                         }
+                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.vertical, 8)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
-            .frame(maxWidth: .infinity)
 
-            // Creators Column
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+            // Creators Column / Row
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CREATORS")
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
-                    .padding(.leading, AppTheme.Spacing.micro)
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
 
                 if stats.topRatedCreators.isEmpty {
                     DashboardCard {
@@ -57,78 +56,106 @@ struct TalentLedgerView: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
-                        .frame(height: 120)
+                        .frame(height: 80)
                     }
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
                 } else {
-                    DashboardCard {
-                        VStack(spacing: 0) {
-                            ForEach(Array(stats.topRatedCreators.prefix(5).enumerated()), id: \.element.name) { index, person in
-                                TalentRowItem(person: person, rank: index + 1, color: .green)
-                                if index < min(stats.topRatedCreators.count, 5) - 1 {
-                                    Divider()
-                                        .padding(.leading, 64)
-                                }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(stats.topRatedCreators.prefix(8).enumerated()), id: \.element.name) { index, person in
+                                TalentCardView(person: person, rank: index + 1, color: .green)
                             }
                         }
+                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.vertical, 8)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
-            .frame(maxWidth: .infinity)
         }
     }
 }
 
-struct TalentRowItem: View {
+struct TalentCardView: View {
     let person: VisualPersonStat
     let rank: Int
     let color: Color
 
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.small) {
-            // Rank Number
-            Text("\(rank)")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(color.opacity(0.8))
-                .frame(width: 20, alignment: .leading)
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
 
-            // Profile Picture
+    var body: some View {
+        HStack(spacing: 12) {
+            // Left: Profile Image (full height)
             Group {
                 if let urlString = person.profileURL, let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 32, height: 48), priority: .low, themeColor: color) {
+                    CachedImage(url: url, targetSize: CGSize(width: 44, height: 64), priority: .low, themeColor: color) {
                         ProgressView().controlSize(.small)
                     }
                     .scaledToFill()
+                    .frame(width: 44, height: 64)
                 } else {
                     ZStack {
-                        Color.primary.opacity(0.04)
+                        Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.03)
                         Image(systemName: "person.fill")
                             .foregroundStyle(.secondary)
-                            .font(.system(size: 14))
+                            .font(.system(size: 16))
                     }
+                    .frame(width: 44, height: 64)
                 }
             }
-            .frame(width: 32, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Name and Stats
+            // Right: Details
             VStack(alignment: .leading, spacing: 2) {
+                ZStack(alignment: .leading) {
+                    // Rank shown by default: e.g. "01"
+                    Text(String(format: "%02d", rank))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(color.gradient)
+                        .opacity(isHovered ? 0.0 : 1.0)
+                        .scaleEffect(isHovered ? 0.8 : 1.0)
+
+                    // Percentage shown on hover: e.g. "85%"
+                    Text(String(format: "%.0f%%", person.score * 100))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(color)
+                        .opacity(isHovered ? 1.0 : 0.0)
+                        .scaleEffect(isHovered ? 1.0 : 1.2)
+                }
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+                .frame(height: 14)
+
                 Text(person.name)
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text("\(person.count) \(person.count == 1 ? "title" : "titles")")
-                    .font(AppTheme.Font.small)
-                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
+            .padding(.trailing, 8)
 
-            Spacer()
-
-            // Affinity score
-            Text(String(format: "%.0f%%", person.score * 100))
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(color)
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, AppTheme.Spacing.tiny)
+        .frame(width: 180, height: 64)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    isHovered
+                        ? AnyShapeStyle(color.gradient)
+                        : AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)),
+                    lineWidth: isHovered ? 1.5 : 0.7
+                )
+        )
+        .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                isHovered = hovering
+            }
+        }
     }
 }

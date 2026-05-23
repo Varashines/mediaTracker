@@ -1,0 +1,438 @@
+import SwiftUI
+import SwiftData
+
+struct CinephileLabDestination: Hashable {}
+
+struct CinephileLabView: View {
+    let stats: LibraryStats
+    let allItems: [MediaItem]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.section) {
+                // Cinephile Spectrum (Barcode)
+                CinephileBarcodeView(items: allItems)
+                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+
+                // Weekly Watch Arc
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Weekly Activity", icon: "calendar.badge.clock", iconColor: .orange)
+                    WeeklyWatchArc(points: stats.watchTimeHistory, items: allItems)
+                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                }
+
+                // Top Genres
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: .indigo)
+                    TopGenresView(items: Array(stats.genreDNA.prefix(8)))
+                }
+
+                // Decade Timeline (Release Era Distribution)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: .accentColor)
+                    DecadeTimeline(decades: stats.decadeDistribution)
+                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                }
+
+                // Top Studios
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Top Studios", icon: "building.2.fill", iconColor: .orange)
+                    TopBrandsHorizontalView(items: stats.topRatedStudios, color: .orange, icon: "building.2.fill")
+                }
+
+                // Top Networks
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Top Networks", icon: "antenna.radiowaves.left.and.right", iconColor: .teal)
+                    TopBrandsHorizontalView(items: stats.topRatedNetworks, color: .teal, icon: "antenna.radiowaves.left.and.right")
+                }
+            }
+            .padding(.vertical, 24)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .navigationTitle("Cinephile Lab")
+    }
+}
+
+// MARK: - Top Genres (Gallery Grid Tiles)
+
+struct GalleryCardView: View {
+    let name: String
+    let value: Double
+    let rank: Int
+    let color: Color
+    let icon: String
+
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Spacer(minLength: 0)
+
+            ZStack {
+                // Rank number shown by default
+                Text(String(format: "%02d", rank))
+                    .font(.system(size: 26, weight: .black, design: .rounded))
+                    .foregroundStyle(color.gradient)
+                    .opacity(isHovered ? 0.0 : 1.0)
+                    .scaleEffect(isHovered ? 0.8 : 1.0)
+
+                // Percentage shown on hover
+                Text(String(format: "%.0f%%", value * 100))
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                    .foregroundStyle(color)
+                    .opacity(isHovered ? 1.0 : 0.0)
+                    .scaleEffect(isHovered ? 1.0 : 1.2)
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+            .frame(height: 32)
+
+            Spacer(minLength: 0)
+
+            Text(name)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 6)
+                .frame(height: 28, alignment: .center)
+        }
+        .padding(.vertical, 8)
+        .frame(width: 104, height: 90)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    isHovered
+                        ? AnyShapeStyle(color.gradient)
+                        : AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)),
+                    lineWidth: isHovered ? 1.5 : 0.7
+                )
+        )
+        .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+struct TopGenresView: View {
+    let items: [(name: String, percentage: Double)]
+
+    private var palette: [Color] {
+        [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .mint]
+    }
+
+    var body: some View {
+        if items.isEmpty {
+            HStack {
+                Spacer()
+                Text("No genre data")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .frame(height: 50)
+            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(items.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                        let color = palette[idx % palette.count]
+                        GalleryCardView(name: item.name, value: item.percentage, rank: idx + 1, color: color, icon: "film.fill")
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                .padding(.vertical, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+}
+
+// MARK: - Decade Distribution
+
+struct DecadeTimeline: View {
+    let decades: [DecadeDistributionPoint]
+
+    var body: some View {
+        if decades.isEmpty {
+            DashboardCard {
+                HStack {
+                    Spacer()
+                    Text("No release date data")
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(height: 80)
+            }
+        } else {
+            let maxCount = decades.map(\.count).max() ?? 1
+            let totalCount = decades.map(\.count).reduce(0, +)
+            
+            DashboardCard {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                    Text("RELEASE ERA DISTRIBUTION")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .kerning(1.2)
+                        .padding(.bottom, AppTheme.Spacing.micro)
+                    
+                    VStack(spacing: AppTheme.Spacing.small) {
+                        ForEach(decades.sorted(by: { $0.decade > $1.decade })) { item in
+                            let palette: [Color] = [.orange, .red, .purple, .blue, .teal, .indigo, .pink]
+                            let index = abs(item.decade.hashValue) % palette.count
+                            let baseColor = palette[index]
+                            
+                            DecadeDistributionRow(
+                                decade: item.decade,
+                                count: item.count,
+                                percentage: Double(item.count) / Double(max(1, totalCount)),
+                                relativeRatio: Double(item.count) / Double(max(1, maxCount)),
+                                color: baseColor
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct DecadeDistributionRow: View {
+    let decade: String
+    let count: Int
+    let percentage: Double
+    let relativeRatio: Double
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.medium) {
+            Text(decade)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+                .frame(width: 50, alignment: .leading)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.04))
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(color.gradient)
+                        .frame(width: geo.size.width * relativeRatio, height: 8)
+                }
+            }
+            .frame(height: 8)
+
+            HStack(spacing: 4) {
+                Text("\(count)")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                
+                Text(String(format: "(%.0f%%)", percentage * 100))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(width: 80, alignment: .trailing)
+        }
+    }
+}
+
+// MARK: - Weekly Watch Arc
+
+struct WeeklyWatchArc: View {
+    let points: [WatchTimePoint]
+    let items: [MediaItem]
+
+    struct DayEntry: Identifiable {
+        let id = UUID()
+        let date: Date
+        let dayName: String
+        let dateNum: Int
+        let minutes: Int
+        let dayItems: [MediaItem]
+    }
+
+    private var dayEntries: [DayEntry] {
+        let calendar = Calendar.current
+        let now = Date()
+        var dayMap: [Date: Int] = [:]
+        for p in points {
+            let start = calendar.startOfDay(for: p.date)
+            dayMap[start, default: 0] += p.minutes
+        }
+
+        let dayNames = calendar.shortWeekdaySymbols
+        var entries: [DayEntry] = []
+        for offset in (0..<7).reversed() {
+            if let dayDate = calendar.date(byAdding: .day, value: -offset, to: now) {
+                let start = calendar.startOfDay(for: dayDate)
+                let weekday = calendar.component(.weekday, from: dayDate)
+                let dayNum = calendar.component(.day, from: dayDate)
+                let mins = dayMap[start, default: 0]
+
+                let dayItems = items.filter { item in
+                    guard let interactionDate = item.lastInteractionDate else { return false }
+                    return calendar.isDate(interactionDate, inSameDayAs: start) && item.stateValue != "Wishlist"
+                }
+
+                entries.append(DayEntry(
+                    date: start,
+                    dayName: dayNames[weekday - 1].uppercased().prefix(3).description,
+                    dateNum: dayNum,
+                    minutes: mins,
+                    dayItems: Array(dayItems.prefix(4))
+                ))
+            }
+        }
+        return entries
+    }
+
+    var body: some View {
+        let totalMin = dayEntries.map(\.minutes).reduce(0, +)
+        let activeDays = dayEntries.filter { $0.minutes > 0 }.count
+
+        DashboardCard {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    ForEach(dayEntries) { day in
+                        DayCard(entry: day)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+
+                HStack {
+                    Text("Total: \(formatWatchTimeCompact(minutes: totalMin))")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(activeDays)/7 days active")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+}
+
+struct DayCard: View {
+    let entry: WeeklyWatchArc.DayEntry
+
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        let isToday = Calendar.current.isDateInToday(entry.date)
+
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+            HStack(spacing: 2) {
+                Text(entry.dayName)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(isToday ? Color.accentColor : .secondary)
+                Text("\(entry.dateNum)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(isToday ? Color.accentColor : .primary)
+            }
+
+            if entry.minutes > 0 {
+                Text(formatWatchTimeMini(minutes: entry.minutes))
+                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(Color.accentColor)
+
+                if !entry.dayItems.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(entry.dayItems.prefix(4)) { item in
+                            if let url = item.posterURL, let imageURL = URL(string: url) {
+                                CachedImage(url: imageURL, targetSize: CGSize(width: 24, height: 36)) {
+                                    Color.clear
+                                }
+                                .scaledToFill()
+                                .frame(width: 24, height: 36)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                        }
+                    }
+                    .frame(height: 36)
+                }
+            } else {
+                Text("—")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.primary.opacity(0.03))
+                    .frame(width: 24, height: 36)
+                    .overlay(
+                        Image(systemName: "film")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary.opacity(0.5))
+                    )
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isToday
+                ? Color.accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05)
+                : Color.primary.opacity(colorScheme == .dark ? 0.02 : 0.01)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                .stroke(
+                    isToday ? Color.accentColor.opacity(0.3) : Color.primary.opacity(0.04),
+                    lineWidth: isToday ? 1.0 : 0.5
+                )
+        )
+    }
+}
+
+// MARK: - Top Brands Horizontal Scroll
+
+struct TopBrandsHorizontalView: View {
+    let items: [(name: String, score: Double)]
+    let color: Color
+    let icon: String
+
+    var body: some View {
+        if items.isEmpty {
+            HStack {
+                Spacer()
+                Text("No statistics available")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .frame(height: 50)
+            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(items.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                        GalleryCardView(name: item.name, value: item.score, rank: idx + 1, color: color, icon: icon)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                .padding(.vertical, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private func formatWatchTimeMini(minutes: Int) -> String {
+    let hours = minutes / 60
+    if hours > 0 { return "\(hours)h" }
+    return "\(minutes)m"
+}
