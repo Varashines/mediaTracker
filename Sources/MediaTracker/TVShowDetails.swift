@@ -68,7 +68,7 @@ final class TVShowDetails {
         for season in sortedSeasons {
             let seasonEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
             // Sync season counts
-            season.totalEpisodesCount = seasonEpisodes.count
+            season.totalEpisodesCount = max(season.episodeCount, seasonEpisodes.count)
             season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
 
             // Standard progress calculations usually exclude Specials (Season 0)

@@ -270,14 +270,25 @@ actor LibraryStatsActor {
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
                 
                 // Per-episode history using watchedDate for accurate daily breakdown
+                var hasWatchedDate = false
                 if let tv = item.tvShowDetails {
                     for season in tv.seasons where !season.isDeleted && season.modelContext != nil {
                         for ep in season.episodes where ep.isWatched && !ep.isDeleted && ep.modelContext != nil {
-                            if let date = ep.watchedDate, let epRuntime = ep.runtime, epRuntime > 0 {
+                            let epRuntime = ep.runtime ?? item.cachedEpisodeRuntime ?? 0
+                            if let date = ep.watchedDate, epRuntime > 0 {
                                 let day = calendar.startOfDay(for: date)
                                 stats.history[day, default: 0] += epRuntime
+                                hasWatchedDate = true
                             }
                         }
+                    }
+                }
+                // Fallback for episodes without watchedDate (existing data before migration)
+                if !hasWatchedDate, let date = item.lastInteractionDate {
+                    let runtime = item.cachedRuntime ?? 0
+                    if runtime > 0 {
+                        let day = calendar.startOfDay(for: date)
+                        stats.history[day, default: 0] += runtime
                     }
                 }
 

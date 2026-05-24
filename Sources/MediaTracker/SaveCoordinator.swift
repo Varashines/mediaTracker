@@ -7,14 +7,16 @@ import SwiftData
 class SaveCoordinator {
     static let shared = SaveCoordinator()
     
-    private var saveTask: Task<Void, Never>?
+    private var saveTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     
     /// Requests a save operation, which will be executed after a short delay (debounce).
     /// If another request comes in before the delay finishes, the timer resets.
     func requestSave(_ context: ModelContext, delayMs: UInt64 = 350) {
-        saveTask?.cancel()
+        let id = ObjectIdentifier(context)
+        saveTasks[id]?.cancel()
         
-        saveTask = Task { @MainActor in
+        saveTasks[id] = Task { @MainActor in
+            defer { saveTasks[id] = nil }
             do {
                 try await Task.sleep(nanoseconds: delayMs * 1_000_000)
                 if Task.isCancelled { return }
@@ -30,7 +32,9 @@ class SaveCoordinator {
     
     /// Immediately forces a save operation, cancelling any pending debounced saves.
     func forceSave(_ context: ModelContext) {
-        saveTask?.cancel()
+        let id = ObjectIdentifier(context)
+        saveTasks[id]?.cancel()
+        saveTasks[id] = nil
         try? context.save()
     }
 }

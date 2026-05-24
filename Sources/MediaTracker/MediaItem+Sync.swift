@@ -30,7 +30,7 @@ extension MediaItem {
             }
         }
 
-        if let airDate = cachedNextAiringDate {
+        if let airDate = cachedNextAiringDate ?? releaseDate {
             self.storedIsUpcoming = airDate > now
         } else {
             self.storedIsUpcoming = false
@@ -123,17 +123,17 @@ extension MediaItem {
             self.cachedEpisodeRuntime = progressResult.totalRuntime / progressResult.totalCount
             let progress = Double(progressResult.watchedCount) / Double(progressResult.totalCount)
             
+            self.storedProgress = progress
+            self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
+
             // Auto-advance State
-            if progress >= 1.0 && currentState != .completed && currentState != .rewatching {
+            if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
                 self.state = .completed
                 self.lastStateChangeDate = now
             } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
                 self.state = .active
                 self.lastStateChangeDate = now
             }
-
-            self.storedProgress = progress
-            self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
             
             if let next = progressResult.firstUnwatched {
                 self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"

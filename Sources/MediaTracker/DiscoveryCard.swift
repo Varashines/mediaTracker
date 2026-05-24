@@ -58,12 +58,12 @@ struct DiscoveryCard: View {
                     textContent
                 }
             }
-            .frame(height: style == .logo ? 110 : 65)
+            .frame(height: style == .logo ? 110 : 60)
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .shadow(color: themeColor.opacity(isHovered ? 0.12 : 0.04), radius: isHovered ? 6 : 2, y: isHovered ? 3 : 1)
-        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85, blendDuration: 0.1), value: isHovered)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isHovered)
         .onHover { isHovered = $0 }
     }
 
@@ -107,23 +107,28 @@ struct DiscoveryCard: View {
             .opacity(isHovered ? 1 : 0)
             .offset(y: isHovered ? 28 : 45)
         }
-        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85, blendDuration: 0.1), value: isHovered)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isHovered)
     }
 
     @ViewBuilder
     private var textContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-        HStack(spacing: 0) {
+        ZStack {
             Text(node.name)
-                .font(AppTheme.Font.bodyBold)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(accent)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: isHovered ? .leading : .center)
+                .scaleEffect(isHovered ? 0.85 : 1.0, anchor: .leading)
 
-            Spacer()
-
-            Text("\(node.count)")
-                .font(AppTheme.Font.mono.weight(.bold))
-                .foregroundStyle(accent.opacity(0.9))
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Text("\(node.count)")
+                    .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(accent)
+                    .scaleEffect(isHovered ? 1.0 : 0.01)
+                    .opacity(isHovered ? 1.0 : 0.0)
+            }
         }
         .padding(.horizontal, AppTheme.Spacing.medium)
     }

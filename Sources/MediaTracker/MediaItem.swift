@@ -89,7 +89,13 @@ final class MediaItem: Identifiable {
                 if typeValue == "TV Show" && stateValue == "Completed" {
                     if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
                         markLoadedEpisodesAsWatched()
-                        Task { @MainActor in MediaStateService.shared.postTVShowMarkedCompleted() }
+                        if let container = modelContext?.container {
+                            let rawID = id
+                            Task.detached(priority: .userInitiated) {
+                                let backgroundService = BackgroundDataService(modelContainer: container)
+                                await backgroundService.markAllEpisodesAsWatched(itemID: rawID)
+                            }
+                        }
                     }
                 }
             }

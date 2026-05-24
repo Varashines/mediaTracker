@@ -79,6 +79,13 @@ actor BackgroundDataService {
                            let sNum = Int(parts[1]), 
                            let eNum = Int(parts[2]) {
                             
+                            let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
+                            // Skip if episode already exists (uniqueID collision)
+                            let existingDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                            if let existing = try? modelContext.fetch(existingDescriptor).first, existing.modelContext != nil {
+                                continue
+                            }
+                            
                             let stubEpisode = TVEpisode(
                                 episodeNumber: eNum, 
                                 seasonNumber: sNum, 
@@ -89,6 +96,7 @@ actor BackgroundDataService {
                                 isWatched: true,
                                 showID: tmdbID
                             )
+                            stubEpisode.uniqueID = epUniqueID
                             modelContext.insert(stubEpisode)
                             // The background sync will later link these to seasons and details via uniqueID
                         }
@@ -170,8 +178,9 @@ actor BackgroundDataService {
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
-                    // Force Watch State Consistency
-                    if item.stateValue == "Completed" {
+                    // Force Watch State Consistency (only if auto-mark is enabled)
+                    let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
+                    if autoMark && item.stateValue == "Completed" {
                         // Defensive: skip deleted/detached during concurrent merges
                         let liveEps = tv.seasons
                             .filter { !$0.isDeleted && $0.modelContext != nil }
