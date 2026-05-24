@@ -10,16 +10,25 @@ struct StudioAliasManagerView: View {
     @State private var availableNetworks: [String] = []
     @State private var showingAddGroup = false
     @State private var newGroupName = ""
+    @State private var isLoading = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            groupListSection
-            addButtonSection
+            if isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Loading studio data…")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 200)
+            } else {
+                groupListSection
+                addButtonSection
+            }
         }
-        .onAppear { 
-            calculateNetworks()
-            migrateIfNeeded()
-        }
+        .task { await loadData() }
     }
 
     @ViewBuilder
@@ -183,36 +192,45 @@ struct StudioAliasManagerView: View {
         }
     }
     
-    private func calculateNetworks() {
+    private func loadData() async {
         let allNets = items.flatMap { item in
             item.cachedNetwork?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
         }
         availableNetworks = Array(Set(allNets.filter { !$0.isEmpty })).sorted()
-    }
 
-    private func migrateIfNeeded() {
-        guard aliasEntities.isEmpty && !legacyAliases.isEmpty else { return }
-        
-        let lines = legacyAliases.components(separatedBy: .newlines)
+        guard aliasEntities.isEmpty && !legacyAliases.isEmpty else {
+            isLoading = false
+            return
+        }
+
+        let container = modelContext.container
+        let legacyData = legacyAliases
+        let context = ModelContext(container)
+
+        let lines = legacyData.components(separatedBy: .newlines)
         for line in lines where line.contains("=") {
             let mainParts = line.components(separatedBy: "|")
             let aliasPart = mainParts[0]
             let logoPart = mainParts.count > 1 ? mainParts[1] : nil
-            
+
             let sides = aliasPart.components(separatedBy: "=")
             guard sides.count >= 2 else { continue }
-            
+
             let target = sides[0].trimmingCharacters(in: .whitespaces)
             let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            
+
             var preferredLogoSource: String? = nil
             if let logoStr = logoPart, logoStr.contains("Logo:") {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
             }
-            
-            modelContext.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
+
+            context.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
         }
-        try? modelContext.save()
-        legacyAliases = ""
+        try? context.save()
+
+        await MainActor.run {
+            legacyAliases = ""
+            isLoading = false
+        }
     }
 }

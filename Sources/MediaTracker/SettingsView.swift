@@ -244,11 +244,15 @@ struct SettingsView: View {
                 ) {
                     HStack(spacing: 8) {
                         Button("Export") {
-                            let descriptor = FetchDescriptor<MediaItem>(sortBy: [
-                                SortDescriptor(\.title)
-                            ])
-                            if let items = try? modelContext.fetch(descriptor) {
-                                LibraryImportExportService.shared.exportLibrary(items: items)
+                            let container = modelContext.container
+                            Task {
+                                let context = ModelContext(container)
+                                let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                                if let items = try? context.fetch(descriptor) {
+                                    await MainActor.run {
+                                        LibraryImportExportService.shared.exportLibrary(items: items)
+                                    }
+                                }
                             }
                         }.buttonStyle(.bordered)
                         Button("Import") {

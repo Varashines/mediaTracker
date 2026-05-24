@@ -22,17 +22,21 @@ struct CategoryRouterView: View {
                 },
                 modelContainer: modelContainer
             )
+            .transition(.identity)
         } else if viewModel.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
+            .transition(.identity)
         } else if viewModel.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel)
-                .transition(.asymmetric(insertion: .opacity, removal: .opacity))
+                .transition(.identity)
         } else if viewModel.selectedCategory == .insights {
             InsightsView()
+                .transition(.identity)
         } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
+                .transition(.identity)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -71,6 +75,7 @@ struct CategoryRouterView: View {
                 onLoadMore: { onLoadMore?() },
                 viewModel: viewModel
             )
+            .transition(.identity)
         }
     }
 

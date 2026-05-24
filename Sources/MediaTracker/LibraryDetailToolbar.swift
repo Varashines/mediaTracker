@@ -105,9 +105,15 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     private func performLibrarySync() {
         guard !DataService.shared.isRefreshing else { return }
 
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let items = try? modelContext.fetch(descriptor) else { return }
-
-        DataService.shared.refreshMetadata(for: items, modelContext: modelContext, force: true)
+        let container = modelContext.container
+        Task {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<MediaItem>()
+            guard let items = try? context.fetch(descriptor) else { return }
+            let ids = items.map(\.id)
+            await MainActor.run {
+                DataService.shared.refreshMetadata(forIDs: ids, modelContext: modelContext, force: true)
+            }
+        }
     }
 }

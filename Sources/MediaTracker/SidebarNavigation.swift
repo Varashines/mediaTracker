@@ -9,7 +9,6 @@ struct SidebarNavigation: View {
     @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     @Environment(\.colorScheme) var colorScheme
     @State private var hoveredItem: SidebarItem? = nil
-    @Namespace private var sidebarNamespace
 
     var body: some View {
         ScrollView {
@@ -116,14 +115,8 @@ struct SidebarNavigation: View {
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.tiny)
             .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(activeColor)
-                        .matchedGeometryEffect(id: "sidebar_active", in: sidebarNamespace)
-                } else if hoveredItem == item {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(Color.primary.opacity(0.04))
-                }
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                    .fill(isSelected ? activeColor : (hoveredItem == item ? Color.primary.opacity(0.04) : .clear))
             }
             .contentShape(Rectangle())
         }

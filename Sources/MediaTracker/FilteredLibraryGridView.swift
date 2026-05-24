@@ -9,30 +9,38 @@ struct FilteredLibraryGridView: View {
 
     @State private var items: [MediaThumbnailMetadata] = []
     @State private var networkColor: Color? = nil
+    @State private var isLoading = true
     @Environment(\.colorScheme) var colorScheme
 
+    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(items) { metadata in
-                        NavigationLink(value: metadata.id) {
-                            MediaThumbnailView(
-                                metadata: metadata, mode: .grid, namespace: namespace,
-                                isFastScrolling: isFastScrolling)
+        Group {
+            if isLoading {
+                LoadingGridSkeleton(selectedCategory: .all, columns: columns)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                            ForEach(items) { metadata in
+                                NavigationLink(value: metadata.id) {
+                                    MediaThumbnailView(
+                                        metadata: metadata, mode: .grid, namespace: namespace,
+                                        isFastScrolling: isFastScrolling)
+                                }
+                                .buttonStyle(.interactive)
+                            }
                         }
-                        .buttonStyle(.interactive)
+                    }
+                    .padding(AppTheme.Spacing.pageMargin)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .background {
+                    if let color = networkColor {
+                        color.opacity(colorScheme == .dark ? 0.08 : 0.04)
+                            .ignoresSafeArea()
                     }
                 }
-            }
-            .padding(AppTheme.Spacing.pageMargin)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .background {
-            if let color = networkColor {
-                color.opacity(colorScheme == .dark ? 0.08 : 0.04)
-                    .ignoresSafeArea()
             }
         }
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
@@ -93,6 +101,7 @@ struct FilteredLibraryGridView: View {
                 await MainActor.run {
                     withAnimation {
                         self.items = result.displayed
+                        self.isLoading = false
                     }
                 }
             } catch {

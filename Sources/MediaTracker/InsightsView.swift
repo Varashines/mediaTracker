@@ -1,6 +1,30 @@
 import SwiftData
 import SwiftUI
 
+private final class StatsCache: @unchecked Sendable {
+    static let shared = StatsCache()
+    private var stats: LibraryStats?
+    private var savedAt: Date?
+    private let lock = NSLock()
+
+    func load() -> LibraryStats? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let savedAt, savedAt > Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? .distantPast else {
+            self.stats = nil
+            return nil
+        }
+        return stats
+    }
+
+    func save(_ s: LibraryStats) {
+        lock.lock()
+        defer { lock.unlock() }
+        stats = s
+        savedAt = Date()
+    }
+}
+
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -14,8 +38,7 @@ struct InsightsView: View {
             Color(NSColor.windowBackgroundColor).ignoresSafeArea()
 
             if isLoading {
-                ProgressView().controlSize(.large)
-                    .frame(maxWidth: .infinity, minHeight: 560)
+                InsightsSkeletonView()
             } else if let stats = stats {
                 ScrollView {
                     VStack(spacing: AppTheme.Spacing.section) {
@@ -97,14 +120,40 @@ struct InsightsView: View {
     }
 
     private func refreshData() {
-        let container = modelContext.container
-        Task { @MainActor in
-            let actor = LibraryStatsActor(modelContainer: container)
-            let result = await actor.fetchStats()
+        if let cached = StatsCache.shared.load() {
             let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
             var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
             descriptor.fetchLimit = 50
             let recent = (try? modelContext.fetch(descriptor)) ?? []
+            self.stats = cached
+            self.recentItems = recent
+            self.isLoading = false
+            return
+        }
+
+        let container = modelContext.container
+        Task {
+            await performFetch(container: container)
+        }
+    }
+
+    private func performFetch(container: ModelContainer) async {
+        let actor = LibraryStatsActor(modelContainer: container)
+        let result = await actor.fetchStats()
+        StatsCache.shared.save(result)
+
+        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
+        descriptor.fetchLimit = 50
+        let recent: [MediaItem]
+        do {
+            let context = ModelContext(container)
+            recent = try context.fetch(descriptor)
+        } catch {
+            recent = []
+        }
+
+        await MainActor.run {
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.stats = result
                 self.recentItems = recent

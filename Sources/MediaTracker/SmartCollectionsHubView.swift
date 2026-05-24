@@ -11,6 +11,7 @@ struct SmartCollectionsHubView: View {
     
     @State private var counts: [NavigationCategory: Int] = [:]
     @State private var customSmartCounts: [UUID: Int] = [:]
+    @State private var countsLoaded = false
     @State private var showingCreateSheet = false
     @State private var initialIsSmart = true
     
@@ -42,7 +43,7 @@ struct SmartCollectionsHubView: View {
                             title: releaseRadar.title,
                             icon: releaseRadar.icon,
                             description: description(for: releaseRadar),
-                            count: counts[releaseRadar] ?? 0,
+                            count: countsLoaded ? counts[releaseRadar] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(releaseRadar.rawValue),
                             onPinToggle: { togglePinned(releaseRadar) }
@@ -57,7 +58,7 @@ struct SmartCollectionsHubView: View {
                             title: smartUpcoming.title,
                             icon: smartUpcoming.icon,
                             description: description(for: smartUpcoming),
-                            count: counts[smartUpcoming] ?? 0,
+                            count: countsLoaded ? counts[smartUpcoming] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(smartUpcoming.rawValue),
                             onPinToggle: { togglePinned(smartUpcoming) }
@@ -73,7 +74,7 @@ struct SmartCollectionsHubView: View {
                             title: catchUp.title,
                             icon: catchUp.icon,
                             description: description(for: catchUp),
-                            count: counts[catchUp] ?? 0,
+                            count: countsLoaded ? counts[catchUp] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(catchUp.rawValue),
                             onPinToggle: { togglePinned(catchUp) }
@@ -88,7 +89,7 @@ struct SmartCollectionsHubView: View {
                             title: loved.title,
                             icon: loved.icon,
                             description: description(for: loved),
-                            count: counts[loved] ?? 0,
+                            count: countsLoaded ? counts[loved] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(loved.rawValue),
                             onPinToggle: { togglePinned(loved) }
@@ -104,7 +105,7 @@ struct SmartCollectionsHubView: View {
                             title: binge.title,
                             icon: binge.icon,
                             description: description(for: binge),
-                            count: counts[binge] ?? 0,
+                            count: countsLoaded ? counts[binge] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(binge.rawValue),
                             onPinToggle: { togglePinned(binge) }
@@ -118,7 +119,7 @@ struct SmartCollectionsHubView: View {
                             title: quickBites.title,
                             icon: quickBites.icon,
                             description: description(for: quickBites),
-                            count: counts[quickBites] ?? 0,
+                            count: countsLoaded ? counts[quickBites] : nil,
                             accentColor: Color.accentColor,
                             isPinned: pinnedList.contains(quickBites.rawValue),
                             onPinToggle: { togglePinned(quickBites) }
@@ -163,7 +164,7 @@ struct SmartCollectionsHubView: View {
                                 title: collection.name,
                                 icon: collection.systemImage,
                                 description: "Dynamic playlist based on smart rules.",
-                                count: customSmartCounts[collection.id] ?? 0,
+                                 count: countsLoaded ? customSmartCounts[collection.id] : nil,
                                 accentColor: .purple
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
@@ -317,6 +318,7 @@ struct SmartCollectionsHubView: View {
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.counts = newCounts
                 self.customSmartCounts = newCustomCounts
+                self.countsLoaded = true
             }
         }
     }
@@ -337,7 +339,7 @@ private struct SmartCollectionCard: View {
     let title: String
     let icon: String
     let description: String
-    let count: Int
+    let count: Int?
     let accentColor: Color
     var isPinned: Bool = false
     var onPinToggle: (() -> Void)? = nil
@@ -364,19 +366,26 @@ private struct SmartCollectionCard: View {
                     
                     Spacer()
                     
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(accentColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(accentColor.opacity(0.12))
-                            .clipShape(Capsule())
+                    if let count {
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(accentColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(accentColor.opacity(0.12))
+                                .clipShape(Capsule())
+                        } else {
+                            Text("0")
+                                .font(.system(.subheadline, design: .rounded))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.secondary.opacity(0.4))
+                        }
                     } else {
-                        Text("0")
-                            .font(.system(.subheadline, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundStyle(.secondary.opacity(0.4))
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(accentColor.opacity(0.08))
+                            .frame(width: 32, height: 18)
+                            .skeletonPulse()
                     }
                 }
                 

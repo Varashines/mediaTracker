@@ -9,6 +9,7 @@ struct BulkCollectionManagerView: View {
     @State private var searchText = ""
     @State private var selectedItemIDs: Set<String> = []
     @State private var allItems: [MediaItem] = []
+    @State private var isLoading = true
     
     var filteredItems: [MediaItem] {
         if searchText.isEmpty {
@@ -47,18 +48,25 @@ struct BulkCollectionManagerView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160))], spacing: 16) {
-                        ForEach(filteredItems) { item in
-                            BulkItemCard(item: item, isSelected: selectedItemIDs.contains(item.id)) {
-                                toggleSelection(for: item)
+                if isLoading {
+                    Spacer()
+                    ProgressView("Loading library…")
+                        .controlSize(.large)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160))], spacing: 16) {
+                            ForEach(filteredItems) { item in
+                                BulkItemCard(item: item, isSelected: selectedItemIDs.contains(item.id)) {
+                                    toggleSelection(for: item)
+                                }
                             }
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -78,9 +86,14 @@ struct BulkCollectionManagerView: View {
                 selectedItemIDs = Set(collection.items.map { $0.id })
             }
             .task {
-                var descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
-                descriptor.propertiesToFetch = [\.id, \.title, \.posterURL, \.typeValue]
-                allItems = (try? modelContext.fetch(descriptor)) ?? []
+                let container = modelContext.container
+                let context = ModelContext(container)
+                let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                let items = (try? context.fetch(descriptor)) ?? []
+                await MainActor.run {
+                    allItems = items
+                    isLoading = false
+                }
             }
         }
         .frame(minWidth: 600, minHeight: 450, maxHeight: 650)

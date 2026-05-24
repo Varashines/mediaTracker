@@ -16,10 +16,10 @@ struct ContentView: View {
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
-                    if let selection = newValue {
-                        // Reset navigation stack when switching categories
+                    guard let selection = newValue else { return }
+                    Task { @MainActor in
                         viewModel.navigationPath = NavigationPath()
-                        
+
                         switch selection {
                         case .category(let category):
                             viewModel.selectedCategory = category
@@ -29,9 +29,7 @@ struct ContentView: View {
                             viewModel.selectedYear = nil
                             viewModel.selectedState = nil
                             viewModel.isInitialLoading = true
-                            
-                            // Always clear collection ID when explicitly selecting a category
-                            // especially when switching to 'smartHub' itself from the sidebar
+
                             viewModel.selectedCollectionID = nil
                         case .collection(let id, let name, _):
                             viewModel.selectedCategory = .smartHub
@@ -42,7 +40,7 @@ struct ContentView: View {
                             viewModel.selectedState = nil
                             viewModel.isInitialLoading = true
                         }
-                        
+
                         viewModel.filterSubject.send()
                     }
                 }
@@ -55,7 +53,6 @@ struct ContentView: View {
             )
         }
         .frame(minWidth: 900, minHeight: 600)
-        .animation(AppTheme.Animation.springDefault, value: viewModel.selectedCategory)
         .animation(.easeInOut(duration: 0.3), value: isSearchActive)
     }
 }
@@ -116,7 +113,6 @@ struct LibraryDetailView: View {
             }
             .background(.ultraThinMaterial)
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
-            .animation(AppTheme.Animation.springGentle, value: viewModel.selectedCategory)
             .navigationTitle(
                 isSearchActive
                     ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
@@ -215,8 +211,8 @@ struct LibraryDetailView: View {
 
         updateTask?.cancel()
         updateTask = Task {
-            // Optimization: Skip heavy data load if moving to Discovery Hub
-            if category == .discover || (category == .smartHub && collectionID == nil) { return }
+            // Optimization: Skip heavy data load if view handles its own data
+            if category == .discover || category == .insights || category == .upcoming || (category == .smartHub && collectionID == nil) { return }
 
             // Determine if this is a "Hard" update (category/filter change) vs a "Soft" update (data refresh)
             let isSoftUpdate = !viewModel.displayedItems.isEmpty && !viewModel.isInitialLoading
