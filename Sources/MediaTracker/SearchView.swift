@@ -106,10 +106,10 @@ struct SearchView: View {
                         .controlSize(.small)
                 }
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.vertical, 12)
 
-            Divider().padding(.horizontal, 30)
+            Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
         .background(.ultraThinMaterial)
         .zIndex(10)
@@ -152,10 +152,10 @@ struct SearchView: View {
                     Text("In Your Library")
                         .font(.title3.bold())
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+                let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(searchVM.filteredLocalResults) { metadata in
                         MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
                             isSearchActive = false
@@ -167,10 +167,10 @@ struct SearchView: View {
                         .id("local_\(metadata.id)")
                     }
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
             
-            Divider().padding(.horizontal, 30)
+            Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
     }
 
@@ -185,10 +185,10 @@ struct SearchView: View {
                     Text("Global Search")
                         .font(.title3.bold())
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+                let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(combined) { result in
                         MediaThumbnailView(result: result, isLocal: false) {
                             searchVM.addMedia(result, modelContext: modelContext) { item in
@@ -200,7 +200,7 @@ struct SearchView: View {
                         .id("web_\(result.id)")
                     }
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
         } else if !searchVM.isSearching && !searchText.isEmpty {
             ContentUnavailableView.search(text: searchText)

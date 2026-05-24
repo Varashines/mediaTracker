@@ -6,7 +6,7 @@ struct RecentlyAddedRow: View {
     let isFastScrolling: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(title: "Recently Added", icon: "clock.badge.checkmark", iconColor: .orange)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
@@ -18,13 +18,13 @@ struct RecentlyAddedRow: View {
                         .buttonStyle(.interactive)
                     }
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, 15)
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
         }
         .compositingGroup()
-        Divider().padding(.horizontal, 30).padding(.bottom, 20)
+        Divider().padding(.horizontal, AppTheme.Spacing.pageMargin).padding(.bottom, 20)
     }
 }

@@ -25,7 +25,6 @@ struct ContinueWatchingCarousel: View {
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.large) {
-                        Spacer(minLength: AppTheme.Spacing.small)
                         ForEach(items) { metadata in
                             Button {
                                 onSelect(metadata)
@@ -36,8 +35,8 @@ struct ContinueWatchingCarousel: View {
                             }
                             .buttonStyle(.interactive)
                         }
-                        Spacer(minLength: AppTheme.Spacing.small)
                     }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, AppTheme.Spacing.medium - 1)
                     .background(
                         GeometryReader { (geo: GeometryProxy) in
@@ -85,10 +84,10 @@ struct ContinueWatchingCarousel: View {
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
                             Text("Ready to start watching?")
-                                .font(.headline.bold())
+                                .font(AppTheme.Font.title3)
                                 .foregroundStyle(.primary)
                             Text("Explore the Discovery Hub to find your next favorite show.")
-                                .font(.subheadline)
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -108,10 +107,11 @@ struct ContinueWatchingCarousel: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, AppTheme.Spacing.xLarge - 2)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.medium - 1)
             }
         }
+        .compositingGroup()
     }
 
     private func prewarm(items: [MediaThumbnailMetadata]) {

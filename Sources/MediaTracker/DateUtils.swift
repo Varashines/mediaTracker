@@ -44,7 +44,7 @@ struct DateUtils {
         defer { formattersLock.unlock() }
         
         if let formatter = formatters[key] {
-            return formatter
+            return formatter.copy() as! DateFormatter
         }
         
         let formatter = DateFormatter()
@@ -54,7 +54,7 @@ struct DateUtils {
             formatter.timeZone = tz
         }
         formatters[key] = formatter
-        return formatter
+        return formatter.copy() as! DateFormatter
     }
 
     static func parseDate(_ dateString: String?) -> Date? {

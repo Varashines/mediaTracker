@@ -13,7 +13,7 @@ struct ForYouCarousel: View {
     private let scrollSpace = "FY_Scroll"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(
                 title: "For You", 
                 icon: "sparkles", 
@@ -23,17 +23,16 @@ struct ForYouCarousel: View {
             
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        Spacer(minLength: 16)
+                    HStack(spacing: AppTheme.Spacing.large) {
                         ForEach(items) { metadata in
                             Button { onSelect(metadata) } label: {
                                 ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling)
                             }
                             .buttonStyle(.interactive)
                         }
-                        Spacer(minLength: 16)
                     }
-                    .padding(.vertical, 15)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.vertical, AppTheme.Spacing.medium - 1)
                     .background(
                         GeometryReader { geo in
                             let minX = geo.frame(in: .named(scrollSpace)).minX
@@ -70,12 +69,13 @@ struct ForYouCarousel: View {
                                 .frame(width: 420, height: 200)
                         }
                     }
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, 15)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollClipDisabled()
             }
         }
+        .compositingGroup()
     }
 }

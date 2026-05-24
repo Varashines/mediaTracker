@@ -46,7 +46,7 @@ actor APIClient {
     private var inFlightTVDetails: [Int: Task<TVDetailsResult, Error>] = [:]
     private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
     
-    private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: "tmdb_api_key") ?? "" }
+    private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
 
     init() {
         // Compute and create the cache directory exactly once instead of on every getCachedData/saveToCache call
@@ -70,7 +70,7 @@ actor APIClient {
     }
 
     nonisolated var isTMDBConfigured: Bool {
-        UserDefaults.standard.string(forKey: "tmdb_api_key")?.isEmpty == false
+        UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue)?.isEmpty == false
     }
     
     private nonisolated func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
@@ -414,7 +414,7 @@ actor APIClient {
                 }
             } catch APIError.requestFailed(let code) where code == 404 {
                 // TMDB often 404s for Season 0 (Specials) if it's listed in the brief but has no episodes yet.
-                print("ℹ️ Season details not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.")
+                AppLogger.debug("ℹ️ Season details not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.", logger: AppLogger.network)
                 return []
             }
         }

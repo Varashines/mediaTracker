@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class CastMember {
-    var uniqueID: String?
+    @Attribute(.unique) var uniqueID: String?
     var mediaID: String?
     var name: String
     var characterName: String

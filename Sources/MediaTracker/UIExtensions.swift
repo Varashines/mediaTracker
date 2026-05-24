@@ -172,7 +172,8 @@ struct ShimmeringModifier: ViewModifier {
                 withAnimation(.linear(duration: 1.5).delay(0.3)) {
                     phase = 1
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
                     hasAnimated = true
                 }
             }

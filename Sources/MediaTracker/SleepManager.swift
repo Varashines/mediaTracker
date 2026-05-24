@@ -35,13 +35,13 @@ class SleepManager {
         // 1. Handle "Idle" (Untouched for 60s, good for background syncs)
         if !isIdle && timeSinceInteraction >= idleThreshold {
             isIdle = true
-            print("🕒 App became idle. Background tasks prioritized.")
+            AppLogger.info("🕒 App became idle. Background tasks prioritized.", logger: AppLogger.background)
         } else if isIdle && timeSinceInteraction < idleThreshold {
             isIdle = false
         }
 
         // 2. Handle "Sleep" (Untouched for 120s, locks UI)
-        let preventSleep = UserDefaults.standard.bool(forKey: "prevent_sleep_mode")
+        let preventSleep = UserDefaults.standard.bool(forKey: UserDefaultsKeys.preventSleepMode.rawValue)
         guard !isAsleep && !preventSleep else { return }
         
         if timeSinceInteraction >= sleepThreshold {
@@ -56,7 +56,7 @@ class SleepManager {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isAsleep = false
             }
-            print("🌅 App woke up from sleep mode.")
+            AppLogger.info("🌅 App woke up from sleep mode.", logger: AppLogger.background)
         }
     }
     
@@ -72,7 +72,7 @@ class SleepManager {
         // Phase 4 Optimization: Removed aggressive manual cache purging.
         // We now trust NSCache's native response to system memory pressure warnings.
         purgeDataCache?()
-        print("💤 App entered sleep mode due to inactivity. UI interactions throttled.")
+        AppLogger.info("💤 App entered sleep mode due to inactivity. UI interactions throttled.", logger: AppLogger.background)
     }
     
     private func setupInteractionMonitor() {

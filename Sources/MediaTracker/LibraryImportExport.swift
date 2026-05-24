@@ -60,7 +60,7 @@ class LibraryImportExportService {
                             encoder.outputFormatting = .prettyPrinted
                             let data = try encoder.encode(backup)
                             try data.write(to: url, options: .atomic)
-                            print("✅ Library exported to \(url.path)")
+                            AppLogger.info("✅ Library exported to \(url.path)", logger: AppLogger.data)
                         } catch {
                             await MainActor.run { AppErrorState.shared.surfaceError("Export failed: \(error.localizedDescription)") }
                         }
@@ -93,7 +93,7 @@ class LibraryImportExportService {
                 let encoder = JSONEncoder()
                 let data = try encoder.encode(backup)
                 try data.write(to: fileURL, options: .atomic)
-                print("✅ Automated backup saved to \(fileName)")
+                AppLogger.info("✅ Automated backup saved to \(fileName)", logger: AppLogger.data)
 
                 // Enforce rolling limit (keep last 20)
                 let files = try fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey])
@@ -109,7 +109,7 @@ class LibraryImportExportService {
                     let itemsToRemove = fileInfos.prefix(fileInfos.count - 20)
                     for item in itemsToRemove {
                         try? fm.removeItem(at: item.0)
-                        print("🗑️ Removed old automated backup: \(item.0.lastPathComponent)")
+                        AppLogger.info("🗑️ Removed old automated backup: \(item.0.lastPathComponent)", logger: AppLogger.data)
                     }
                 }
 
@@ -140,7 +140,7 @@ class LibraryImportExportService {
                         let backgroundService = BackgroundDataService(modelContainer: container)
                         let count = await backgroundService.importLibraryData(backup: backup)
 
-                        print("✅ Library imported successfully: \(count) new items.")
+                        AppLogger.info("✅ Library imported successfully: \(count) new items.", logger: AppLogger.data)
                         AppErrorState.shared.showToast("Imported \(count) items.", systemImage: "tray.and.arrow.down.fill", type: .success)
                         
                         // Automatically start fetching metadata for everything in the library

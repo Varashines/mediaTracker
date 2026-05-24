@@ -151,7 +151,7 @@ actor LibraryStatsActor {
         var tasteMaps = TasteMapsContainer()
 
         // Compute hidden set once before batch loop
-        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
+        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
         let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
 
         // Phase 5 Optimization: Batched Processing to prevent memory exhaustion
@@ -269,9 +269,16 @@ actor LibraryStatsActor {
                 stats.watchTime += runtime
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
                 
-                if let date = item.lastInteractionDate {
-                    let day = calendar.startOfDay(for: date)
-                    stats.history[day, default: 0] += runtime
+                // Per-episode history using watchedDate for accurate daily breakdown
+                if let tv = item.tvShowDetails {
+                    for season in tv.seasons where !season.isDeleted && season.modelContext != nil {
+                        for ep in season.episodes where ep.isWatched && !ep.isDeleted && ep.modelContext != nil {
+                            if let date = ep.watchedDate, let epRuntime = ep.runtime, epRuntime > 0 {
+                                let day = calendar.startOfDay(for: date)
+                                stats.history[day, default: 0] += epRuntime
+                            }
+                        }
+                    }
                 }
 
                 for c in item.cachedCreators {

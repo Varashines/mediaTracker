@@ -3,6 +3,7 @@ import SwiftData
 
 @Model
 final class MediaItem: Identifiable {
+    @Attribute(.unique)
     var id: String
     var title: String
     var overview: String
@@ -86,7 +87,7 @@ final class MediaItem: Identifiable {
                 syncCachedProperties()
                 
                 if typeValue == "TV Show" && stateValue == "Completed" {
-                    if UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched") {
+                    if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
                         markLoadedEpisodesAsWatched()
                         Task { @MainActor in MediaStateService.shared.postTVShowMarkedCompleted() }
                     }

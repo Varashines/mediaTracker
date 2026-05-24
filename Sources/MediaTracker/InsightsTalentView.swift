@@ -11,7 +11,7 @@ struct TalentLedgerView: View {
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 if stats.topRatedActors.isEmpty {
                     DashboardCard {
@@ -24,7 +24,7 @@ struct TalentLedgerView: View {
                         }
                         .frame(height: 80)
                     }
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
@@ -32,7 +32,7 @@ struct TalentLedgerView: View {
                                 TalentCardView(person: person, rank: index + 1, color: .orange)
                             }
                         }
-                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         .padding(.vertical, 8)
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -45,7 +45,7 @@ struct TalentLedgerView: View {
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 if stats.topRatedCreators.isEmpty {
                     DashboardCard {
@@ -58,7 +58,7 @@ struct TalentLedgerView: View {
                         }
                         .frame(height: 80)
                     }
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
@@ -66,7 +66,7 @@ struct TalentLedgerView: View {
                                 TalentCardView(person: person, rank: index + 1, color: .green)
                             }
                         }
-                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         .padding(.vertical, 8)
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -151,7 +151,7 @@ struct TalentCardView: View {
                 )
         )
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 isHovered = hovering

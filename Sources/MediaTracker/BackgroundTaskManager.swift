@@ -50,7 +50,7 @@ class BackgroundTaskManager {
         do {
             let staleItems = try context.fetch(descriptor)
             if !staleItems.isEmpty {
-                print("💧 Drip Sync: Refreshing \(staleItems.count) stale active items...")
+                AppLogger.info("💧 Drip Sync: Refreshing \(staleItems.count) stale active items...", logger: AppLogger.background)
                 let itemIDs = staleItems.map { $0.id }
                 
                 // Use BackgroundDataService for the heavy lifting
@@ -91,13 +91,13 @@ class BackgroundTaskManager {
                 completion(.finished)
             }
         }
-        print("🕒 Scheduled background activity: \(activity.identifier)")
+        AppLogger.debug("🕒 Scheduled background activity: \(activity.identifier)", logger: AppLogger.background)
         #endif
     }
     
     private func performBackgroundSync() async {
         guard let container = container else { return }
-        print("🔄 Background sync started...")
+        AppLogger.info("🔄 Background sync started...", logger: AppLogger.background)
         
         await refreshStaleBadges()
         
@@ -180,7 +180,7 @@ class BackgroundTaskManager {
             let allStale = stale1 + stale2 + stale3
             
             if !allStale.isEmpty {
-                print("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...")
+                AppLogger.info("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...", logger: AppLogger.background)
                 for item in allStale {
                     item.syncCachedProperties(now: now)
                 }

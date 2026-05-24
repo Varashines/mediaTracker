@@ -105,14 +105,20 @@ actor BackgroundDataService {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return }
         
+        let posterURL = item.posterURL
+        let backdropURL = item.backdropURL
+        
         modelContext.delete(item)
         
         do {
             try modelContext.save()
-            print("🗑️ Cascade Deletion: Deleted \(id) and all associated records.")
+            AppLogger.info("🗑️ Cascade Deletion: Deleted \(id) and all associated records.", logger: AppLogger.background)
         } catch {
             Task { @MainActor in AppErrorState.shared.surfaceError("Failed to delete item: \(error.localizedDescription)") }
         }
+        
+        await ImageCache.shared.removeImage(forKey: posterURL)
+        await ImageCache.shared.removeImage(forKey: backdropURL)
     }
 
     func clearDatabase() async {
@@ -128,7 +134,7 @@ actor BackgroundDataService {
             await ImageCache.shared.clearFullCache()
             URLCache.shared.removeAllCachedResponses()
             
-            print("✅ Database cleared successfully.")
+            AppLogger.info("✅ Database cleared successfully.", logger: AppLogger.background)
         } catch {
             Task { @MainActor in AppErrorState.shared.surfaceError("Failed to clear database: \(error.localizedDescription)") }
         }
@@ -138,13 +144,16 @@ actor BackgroundDataService {
 
     func performLibraryHeal() async throws {
         if let lastHealed = lastHealedDate, Date().timeIntervalSince(lastHealed) < 300 {
-            print("⏭️ Skipping library heal — last heal was \(Int(Date().timeIntervalSince(lastHealed)))s ago")
+            AppLogger.debug("⏭️ Skipping library heal — last heal was \(Int(Date().timeIntervalSince(lastHealed)))s ago", logger: AppLogger.background)
             return
         }
         lastHealedDate = Date()
 
         // 1. Repair Orphaned Entities
         try await repairOrphanedEntities()
+        
+        // 1.5. Purge stale search cache entries (older than 7 days)
+        await purgeStaleSearchCache()
 
         let descriptor = FetchDescriptor<MediaItem>()
         let items = try modelContext.fetch(descriptor)
@@ -210,7 +219,7 @@ actor BackgroundDataService {
         // After healing metadata and cached properties, ensure the system notification queue is up to date.
         await NotificationManager.shared.scheduleAllUpcomingNotifications()
         
-        print("✅ Maintenance: Library heal complete.")
+        AppLogger.info("✅ Maintenance: Library heal complete.", logger: AppLogger.background)
     }
 
     private func repairOrphanedEntities() async throws {
@@ -257,12 +266,26 @@ actor BackgroundDataService {
             }
         }
     }
+    
+    private func purgeStaleSearchCache() async {
+        let sevenDaysAgo = Date().addingTimeInterval(-7 * 86400)
+        let descriptor = FetchDescriptor<SearchCacheEntity>(
+            predicate: #Predicate { $0.timestamp < sevenDaysAgo }
+        )
+        if let staleEntries = try? modelContext.fetch(descriptor), !staleEntries.isEmpty {
+            for entry in staleEntries {
+                modelContext.delete(entry)
+            }
+            try? modelContext.save()
+            AppLogger.info("🧹 Purged \(staleEntries.count) stale search cache entries", logger: AppLogger.background)
+        }
+    }
 
     func deepHealGenres() async {
         let descriptor = FetchDescriptor<MediaItem>()
         guard let items = try? modelContext.fetch(descriptor) else { return }
         
-        print("🧬 Deep Heal: Starting genre deconstruction for \(items.count) items...")
+        AppLogger.info("🧬 Deep Heal: Starting genre deconstruction for \(items.count) items...", logger: AppLogger.background)
         
         for item in items {
             item.syncCachedProperties(force: true)
@@ -271,7 +294,7 @@ actor BackgroundDataService {
         
         do {
             try modelContext.save()
-            print("✅ Deep Heal: Genre deconstruction complete.")
+                AppLogger.info("✅ Deep Heal: Genre deconstruction complete.", logger: AppLogger.background)
             
             // Re-sync discovery entities to reflect new atomic genres
             let sync = DiscoverySyncService(modelContainer: modelContext.container)
@@ -287,7 +310,7 @@ actor BackgroundDataService {
 
     func refreshMetadata(for itemIDs: [String], metadataOnly: Bool = false, force: Bool = false) async {
         if isThermalThrottled {
-            print("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.")
+            AppLogger.warning("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.", logger: AppLogger.background)
             return
         }
         
@@ -322,7 +345,7 @@ actor BackgroundDataService {
             }
         }
         
-        print("✅ Background Refresh: Completed with \(errorCount) errors.")
+        AppLogger.info("✅ Background Refresh: Completed with \(errorCount) errors.", logger: AppLogger.background)
     }
 
     func refreshSingleItem(id: String, metadataOnly: Bool = false, force: Bool = false, shouldSave: Bool = true) async -> Bool {
@@ -458,7 +481,7 @@ actor BackgroundDataService {
                             episode.markWatched(true)
                         }
                     } catch {
-                        print("⚠️ Failed to download details for season \(sNum) during auto-completion: \(error)")
+                        AppLogger.warning("⚠️ Failed to download details for season \(sNum) during auto-completion: \(error)", logger: AppLogger.background)
                     }
                 } else {
                     for episode in season.episodes {
@@ -476,7 +499,7 @@ actor BackgroundDataService {
         
         do {
             try modelContext.save()
-            print("✅ Deep Completion: Marked all episodes as watched for \(itemID).")
+            AppLogger.info("✅ Deep Completion: Marked all episodes as watched for \(itemID).", logger: AppLogger.background)
             
             // Broadcast the refresh
             await MainActor.run {
@@ -683,7 +706,7 @@ actor BackgroundDataService {
                         }
                     } catch {
                         // Phase 5: Resilience - If one season fails, log it but continue with the rest of the show refresh
-                        print("⚠️ Failed to sync season \(sNum) for show \(tmdbID): \(error)")
+                        AppLogger.warning("⚠️ Failed to sync season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
                     }
                 }
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)

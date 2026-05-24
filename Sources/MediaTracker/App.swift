@@ -14,27 +14,42 @@ struct MediaTrackerApp: App {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self
+            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self,
+            ImageCacheEntity.self
         ])
         
-        // Configuration: Explicitly allow migration and ensure the store is local
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            allowsSave: true
+            allowsSave: true,
+            groupContainer: .none
         )
 
         do {
-            print("📦 Initializing SwiftData ModelContainer...")
-            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("✅ ModelContainer initialized successfully.")
-            return container
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: MediaTrackerMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
-            print("❌ ModelContainer failed: \(error.localizedDescription)")
-            print("🔍 Detailed Error: \(error)")
+            AppLogger.error("SwiftData migration failed, attempting store recovery: \(error)")
             
-            // Fatal error with context to help debugging
-            fatalError("CRITICAL: Failed to initialize SwiftData ModelContainer. This is likely due to an incompatible schema change. Error: \(error)")
+            // Attempt recovery: delete corrupted store and recreate
+            let storeURL = modelConfiguration.url
+            try? FileManager.default.removeItem(at: storeURL)
+            try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
+            try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+            
+            do {
+                AppLogger.info("Store deleted, recreating ModelContainer...")
+                return try ModelContainer(
+                    for: schema,
+                    migrationPlan: MediaTrackerMigrationPlan.self,
+                    configurations: [modelConfiguration]
+                )
+            } catch {
+                fatalError("CRITICAL: Failed to initialize SwiftData ModelContainer even after store recovery. Error: \(error)")
+            }
         }
     }()
     

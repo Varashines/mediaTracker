@@ -201,20 +201,20 @@ actor TasteActor {
     func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
         // Fetch Weights from UserDefaults (matches AppStorage keys in UI)
         let wGenre =
-            UserDefaults.standard.double(forKey: "taste_weight_genre") == 0
-            ? 15.0 : UserDefaults.standard.double(forKey: "taste_weight_genre")
+            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightGenre.rawValue) == 0
+            ? 15.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightGenre.rawValue)
         let wCreator =
-            UserDefaults.standard.double(forKey: "taste_weight_creator") == 0
-            ? 20.0 : UserDefaults.standard.double(forKey: "taste_weight_creator")
+            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCreator.rawValue) == 0
+            ? 20.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCreator.rawValue)
         let wCast =
-            UserDefaults.standard.double(forKey: "taste_weight_cast") == 0
-            ? 15.0 : UserDefaults.standard.double(forKey: "taste_weight_cast")
+            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCast.rawValue) == 0
+            ? 15.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCast.rawValue)
         let wNetwork =
-            UserDefaults.standard.double(forKey: "taste_weight_network") == 0
-            ? 5.0 : UserDefaults.standard.double(forKey: "taste_weight_network")
+            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightNetwork.rawValue) == 0
+            ? 5.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightNetwork.rawValue)
         let wLang =
-            UserDefaults.standard.double(forKey: "taste_weight_lang") == 0
-            ? 10.0 : UserDefaults.standard.double(forKey: "taste_weight_lang")
+            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightLang.rawValue) == 0
+            ? 10.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightLang.rawValue)
 
         let profile = await calculateAffinityMaps()
         let genreAffinity = profile.genre

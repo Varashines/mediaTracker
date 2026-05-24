@@ -5,9 +5,9 @@ struct NoteOverlayView: View {
     @Bindable var viewModel: MediaViewModel
     let collectionID: UUID
     @Environment(\.modelContext) private var modelContext
-    @Query private var collections: [MediaCollection]
     
     @State private var localNote: String = ""
+    @State private var targetCollection: MediaCollection?
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     
@@ -67,8 +67,12 @@ struct NoteOverlayView: View {
             }
             Spacer()
         }
-        .onAppear {
-            if let col = collections.first(where: { $0.id == collectionID }) {
+        .task(id: collectionID) {
+            let descriptor = FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.id == collectionID }
+            )
+            targetCollection = try? modelContext.fetch(descriptor).first
+            if let col = targetCollection {
                 localNote = col.notes ?? ""
             }
             isFocused = true
@@ -80,10 +84,7 @@ struct NoteOverlayView: View {
     }
     
     private func saveNote(_ text: String) {
-        // Simple synchronous save since it's just a string update
-        if let col = collections.first(where: { $0.id == collectionID }) {
-            col.notes = text
-            try? modelContext.save()
-        }
+        targetCollection?.notes = text
+        try? modelContext.save()
     }
 }

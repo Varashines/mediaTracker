@@ -56,7 +56,7 @@ struct MainMediaGrid: View {
                 .buttonStyle(.interactive)
             }
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.top, 20)
         .padding(.bottom, 40)
         .task(id: selectedCollectionID) {

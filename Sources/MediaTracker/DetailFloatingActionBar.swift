@@ -62,12 +62,12 @@ struct DetailFloatingActionBar: View {
         .padding(.horizontal, AppTheme.Spacing.large)
         .padding(.vertical, AppTheme.Spacing.small)
         .background {
-            Capsule()
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: 10, y: 5)
         }
         .overlay {
-            Capsule()
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
         }
     }

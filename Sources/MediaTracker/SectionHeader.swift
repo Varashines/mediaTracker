@@ -54,11 +54,11 @@ struct SectionHeader: View {
                     .padding(.trailing, AppTheme.Spacing.small)
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
             
             if showDivider {
                 Divider()
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, AppTheme.Spacing.micro)
             }
         }

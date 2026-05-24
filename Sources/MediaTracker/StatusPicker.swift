@@ -15,7 +15,7 @@ struct StatusPicker: View {
             Menu {
                 ForEach(availableStates, id: \.self) { state in
                     Button {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(AppTheme.Animation.smooth) {
                             item.state = state
                             item.lastUpdated = Date()
                             onChange?(state)

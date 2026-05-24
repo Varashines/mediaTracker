@@ -170,7 +170,7 @@ struct ReleaseCalendarView: View {
             try? await Task.sleep(for: .seconds(6))
             await MainActor.run {
                 if self.isLoading {
-                    print("⚠️ Calendar: Loading took too long. Clearing spinner.")
+                    AppLogger.warning("⚠️ Calendar: Loading took too long. Clearing spinner.", logger: AppLogger.ui)
                     self.isLoading = false
                 }
             }

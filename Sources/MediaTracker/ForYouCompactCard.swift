@@ -75,20 +75,20 @@ struct ForYouCompactCard: View {
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 100, height: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                     .shadow(color: .black.opacity(0.6), radius: 10, x: 5, y: 5)
                 }
 
                 // 4. Info Pane
                 VStack(alignment: .leading, spacing: 8) {
                     Text(metadata.title)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.title3)
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .shadow(radius: 2)
                     
                     Text(metadata.formattedMetadata)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.white.opacity(0.8))
                 }
                 .padding(.trailing, 20)
@@ -96,13 +96,13 @@ struct ForYouCompactCard: View {
             .padding(.leading, 20)
         }
         .frame(width: cardWidth, height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                 .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
         }
         .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 8, y: 4)
-        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(AppTheme.Animation.springDefault, value: isHovered)
         .onHover { isHovered = $0 }
         .task {

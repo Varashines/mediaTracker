@@ -11,11 +11,11 @@ struct TitleSection: View {
 
     var body: some View {
         if item.modelContext != nil {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: 8) {
                     let titleView = Text(item.title)
-                        .font(.system(size: 40, weight: .heavy, design: .rounded))
+                        .font(AppTheme.Font.largeTitle)
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(.primary)
@@ -29,7 +29,7 @@ struct TitleSection: View {
                     let creators = item.cachedCreators
                     if !creators.isEmpty {
                         Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -40,7 +40,7 @@ struct TitleSection: View {
                     let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
                     
                     Text(item.type?.rawValue.uppercased() ?? "")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppTheme.Font.caption2)
                         .kerning(1.2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -59,9 +59,9 @@ struct TitleSection: View {
                         let color = isStreaming ? Color.green : Color.orange
                         HStack(spacing: 4) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(AppTheme.Font.tiny)
                             Text(dateText.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(AppTheme.Font.caption2)
                                 .kerning(1.2)
                         }
                         .padding(.horizontal, 10)
@@ -89,11 +89,11 @@ struct TitleSection: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
                 .background {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous).fill(.ultraThinMaterial)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                         .stroke(.white.opacity(0.1), lineWidth: 0.5)
                 }
                 .shadow(color: .black.opacity(0.1), radius: 10, y: 5)

@@ -186,7 +186,7 @@ actor CalendarFilterActor {
         let episodes = (try? modelContext.fetch(descriptor)) ?? []
         
         if !episodes.isEmpty {
-            print("🔍 Calendar: Background date healing starting for \(episodes.count) episodes...")
+            AppLogger.info("🔍 Calendar: Background date healing starting for \(episodes.count) episodes...", logger: AppLogger.background)
             // Process in small batches and yield the actor to allow UI-critical fetches to run
             let batchSize = 50
             for i in stride(from: 0, to: episodes.count, by: batchSize) {
@@ -200,7 +200,7 @@ actor CalendarFilterActor {
                 try? modelContext.save()
                 await Task.yield()
             }
-            print("✅ Calendar: Background date healing completed.")
+            AppLogger.info("✅ Calendar: Background date healing completed.", logger: AppLogger.background)
         }
     }
 

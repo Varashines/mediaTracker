@@ -2,8 +2,8 @@ import SwiftData
 import SwiftUI
 
 private enum TVTrackingConstants {
-    static let cornerRadius: CGFloat = 10
-    static let cardCornerRadius: CGFloat = 12
+    static let cornerRadius: CGFloat = AppTheme.Radius.small
+    static let cardCornerRadius: CGFloat = AppTheme.Radius.medium
     static let strokeWidth: CGFloat = 2.0
     static let secondaryStrokeWidth: CGFloat = 1.5
     static let animationDuration: Double = 1.2

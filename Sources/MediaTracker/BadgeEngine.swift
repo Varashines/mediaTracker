@@ -57,8 +57,8 @@ struct BadgeEngine {
         let cutoff = now.addingTimeInterval(-172800)
         var foundNext = false
 
-        for season in tv.seasons where !season.isDeleted && season.modelContext != nil {
-            for ep in season.episodes where !ep.isDeleted && ep.modelContext != nil {
+        for season in tv.seasons.filter({ !$0.isDeleted && $0.modelContext != nil }).sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
+            for ep in season.episodes.filter({ !$0.isDeleted && $0.modelContext != nil }).sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
                 if !ep.isWatched {
                     if !foundNext {
                         nextEpisodeNumber = ep.episodeNumber

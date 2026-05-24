@@ -76,7 +76,7 @@ extension MediaItem {
                 self.storedCast = uniqueList
             }
         } catch {
-            print("🔍 syncCastCache: Fetch failed: \(error)")
+            AppLogger.debug("🔍 syncCastCache: Fetch failed: \(error)", logger: AppLogger.sync)
         }
     }
 
@@ -95,7 +95,7 @@ extension MediaItem {
         guard let tv = tvShowDetails else { return }
         
         // Force consistency: If series is marked as Completed, all episodes MUST be watched (if enabled).
-        let autoMark = UserDefaults.standard.bool(forKey: "auto_mark_episodes_watched")
+        let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
         if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
             // Defensive: skip deleted/detached seasons and episodes
             let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }

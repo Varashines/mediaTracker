@@ -26,14 +26,14 @@ struct CastMemberCard: View {
         }
         .frame(width: 200, height: 90)
         .background(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .background {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                 .fill(Color(NSColor.windowBackgroundColor))
                 .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
         }
         .overlay(borderOverlay())
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
     }
 
     @ViewBuilder
@@ -50,7 +50,7 @@ struct CastMemberCard: View {
                     Color.secondary.opacity(0.1)
                     Image(systemName: "person.fill")
                         .foregroundStyle(.secondary)
-                        .font(.system(size: 24))
+                        .font(AppTheme.Font.title2)
                 }
             }
         }
@@ -63,13 +63,13 @@ struct CastMemberCard: View {
     private var textSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(member.name)
-                .font(.system(size: 13, weight: .bold))
+                .font(AppTheme.Font.bodyBold)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
 
             Text(member.characterName)
-                .font(.system(size: 11))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
@@ -81,7 +81,7 @@ struct CastMemberCard: View {
     }
 
     private func borderOverlay() -> some View {
-        RoundedRectangle(cornerRadius: 12)
+        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
             .stroke(Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
     }
 }

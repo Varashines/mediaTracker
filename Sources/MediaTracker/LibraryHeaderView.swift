@@ -58,7 +58,7 @@ struct LibraryHeaderView: View {
                 }
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.xLarge)
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .task(id: viewModel?.selectedCollectionID) {
             guard let collectionID = viewModel?.selectedCollectionID else {
                 collectionName = nil

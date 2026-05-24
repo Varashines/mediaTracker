@@ -57,7 +57,7 @@ struct GroupedMediaGrid: View {
                             .buttonStyle(.interactive)
                         }
                     }
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, 10)
                 }
             }

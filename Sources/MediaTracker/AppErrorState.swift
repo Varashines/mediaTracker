@@ -89,7 +89,7 @@ class AppErrorState {
     func handleError(_ error: Error, message: String? = nil) {
         let finalMessage = message ?? error.localizedDescription
         surfaceError(finalMessage)
-        print("Error caught: \(error)")
+        AppLogger.error("Error caught: \(error)")
     }
 }
 

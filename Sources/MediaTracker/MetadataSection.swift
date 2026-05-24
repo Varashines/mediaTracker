@@ -46,7 +46,7 @@ struct MetadataSection: View {
             }
         }
         
-        if let net = item.cachedNetwork, !net.isEmpty {
+        if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
             items.append(MetadataItem(icon: "tv.fill", value: net))
         }
         
@@ -68,16 +68,16 @@ struct MetadataSection: View {
                 let item = items[index]
                 HStack(spacing: 4) {
                     Image(systemName: item.icon)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppTheme.Font.caption2)
                         .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
                     Text(item.value)
                         .foregroundStyle(.primary)
                 }
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 
                 if index < items.count - 1 {
                     Text("·")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary.opacity(0.5))
                 }
             }

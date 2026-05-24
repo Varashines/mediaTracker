@@ -22,8 +22,8 @@ class FeedbackManager {
     }
     
     func trigger(_ type: FeedbackType) {
-        let hapticsEnabled = UserDefaults.standard.object(forKey: "haptics_enabled") as? Bool ?? true
-        let audioEnabled = UserDefaults.standard.object(forKey: "audio_enabled") as? Bool ?? true
+        let hapticsEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.hapticsEnabled.rawValue) as? Bool ?? true
+        let audioEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.audioEnabled.rawValue) as? Bool ?? true
 
         switch type {
         case .click:

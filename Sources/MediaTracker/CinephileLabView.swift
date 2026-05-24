@@ -13,13 +13,13 @@ struct CinephileLabView: View {
             VStack(spacing: AppTheme.Spacing.section) {
                 // Cinephile Spectrum (Barcode)
                 CinephileBarcodeView(items: barcodeData)
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 // Weekly Watch Arc
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Weekly Activity", icon: "calendar.badge.clock", iconColor: .orange)
                     WeeklyWatchArc(points: stats.watchTimeHistory, items: recentItems)
-                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
 
                 // Top Genres
@@ -32,7 +32,7 @@ struct CinephileLabView: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: .accentColor)
                     DecadeTimeline(decades: stats.decadeDistribution)
-                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
 
                 // Top Studios
@@ -114,7 +114,7 @@ struct GalleryCardView: View {
                 )
         )
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 isHovered = hovering
@@ -140,7 +140,7 @@ struct TopGenresView: View {
                 Spacer()
             }
             .frame(height: 50)
-            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -149,7 +149,7 @@ struct TopGenresView: View {
                         GalleryCardView(name: item.name, value: item.percentage, rank: idx + 1, color: color, icon: "film.fill")
                     }
                 }
-                .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, 8)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -414,7 +414,7 @@ struct TopBrandsHorizontalView: View {
                 Spacer()
             }
             .frame(height: 50)
-            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -422,7 +422,7 @@ struct TopBrandsHorizontalView: View {
                         GalleryCardView(name: item.name, value: item.score, rank: idx + 1, color: color, icon: icon)
                     }
                 }
-                .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, 8)
             }
             .scrollBounceBehavior(.basedOnSize)

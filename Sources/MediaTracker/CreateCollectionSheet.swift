@@ -71,7 +71,7 @@ struct CreateCollectionSheet: View {
                         .font(.system(.body, design: .rounded))
                         .padding()
                         .background(Color.primary.opacity(0.05))
-                        .cornerRadius(12)
+                        .cornerRadius(AppTheme.Radius.medium)
                 }
                 
                 // Smart Playlist Toggle
@@ -97,7 +97,7 @@ struct CreateCollectionSheet: View {
                 .toggleStyle(.switch)
                 .padding()
                 .background(Color.primary.opacity(0.03))
-                .cornerRadius(12)
+                .cornerRadius(AppTheme.Radius.medium)
                 
                 if isSmart {
                     smartRulesSection
@@ -133,7 +133,7 @@ struct CreateCollectionSheet: View {
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Color.primary.opacity(0.05))
-                    .cornerRadius(12)
+                    .cornerRadius(AppTheme.Radius.medium)
                 
                 Button(editingCollection == nil ? "Create" : "Save") {
                     if let editing = editingCollection {
@@ -155,7 +155,7 @@ struct CreateCollectionSheet: View {
                 .padding(.vertical, 12)
                 .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(Color.blue))
                 .foregroundStyle(.white)
-                .cornerRadius(12)
+                .cornerRadius(AppTheme.Radius.medium)
             }
             .padding(.top, 10)
         }
@@ -218,7 +218,7 @@ struct CreateCollectionSheet: View {
         }
         .padding()
         .background(Color.primary.opacity(0.02))
-        .cornerRadius(12)
+        .cornerRadius(AppTheme.Radius.medium)
     }
     
     @ViewBuilder

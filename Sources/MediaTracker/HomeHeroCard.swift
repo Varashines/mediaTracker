@@ -33,9 +33,9 @@ struct HomeHeroCard: View {
                         Spacer()
                         HStack(spacing: 6) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(AppTheme.Font.caption2)
                             Text(context.uppercased())
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppTheme.Font.small)
                                 .tracking(1.2)
                         }
                         .padding(.horizontal, 14)
@@ -66,7 +66,7 @@ struct HomeHeroCard: View {
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 140, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                     .shadow(color: .black.opacity(0.5), radius: 12, x: 0, y: 10)
                     .overlay(alignment: .topLeading) {
                         SmartBadgeView(metadata: metadata, hideEpisodeProgress: true)
@@ -84,14 +84,14 @@ struct HomeHeroCard: View {
                     }
                     
                     Text(metadata.title)
-                        .font(.system(size: 28, weight: .bold))
+                        .font(AppTheme.Font.title)
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
                         .shadow(color: .black.opacity(0.5), radius: 2)
                     
                     Text(metadata.formattedMetadata)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(AppTheme.Font.heading)
                         .foregroundStyle(.white.opacity(0.9))
                         .shadow(color: .black.opacity(0.5), radius: 2)
                 }
@@ -102,9 +102,9 @@ struct HomeHeroCard: View {
             .padding(.leading, 30)
         }
         .frame(width: 500, height: 280)
-        .cornerRadius(24)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 10, y: 5)
-        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(AppTheme.Animation.springDefault, value: isHovered)
         .onHover { isHovered = $0 }
         .task {

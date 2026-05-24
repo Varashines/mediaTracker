@@ -10,7 +10,7 @@ struct EntranceStaggerModifier: ViewModifier {
             .opacity(isAppeared ? 1 : 0)
             .onAppear {
                 let delay = Double(index % 12) * 0.02
-                withAnimation(Animation.easeInOut(duration: 0.3).delay(delay)) {
+                withAnimation(AppTheme.Animation.smooth.delay(delay)) {
                     isAppeared = true
                 }
             }

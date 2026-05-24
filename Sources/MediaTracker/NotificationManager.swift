@@ -22,7 +22,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
 
     func requestPermission() {
         guard isProperlyBundled else {
-            print("⚠️ Skipping notification permission request: App is not running from a proper .app bundle.")
+            AppLogger.warning("⚠️ Skipping notification permission request: App is not running from a proper .app bundle.", logger: AppLogger.notifications)
             return
         }
         
@@ -41,7 +41,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
                 if granted {
-                    print("✅ Notification permission granted.")
+                    AppLogger.info("✅ Notification permission granted.", logger: AppLogger.notifications)
                 }
             } catch {
                 AppErrorState.shared.surfaceError("Notification permission error: \(error.localizedDescription)")
@@ -52,11 +52,11 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
         guard let releaseDate = releaseDate, releaseDate > Date() else { 
-            print("ℹ️ Skipping notification for \(title): Release date is in the past or nil.")
+            AppLogger.debug("ℹ️ Skipping notification for \(title): Release date is in the past or nil.", logger: AppLogger.notifications)
             return 
         }
         
-        print("🔔 Scheduling notification for movie: \(title) (\(releaseDate))")
+        AppLogger.info("🔔 Scheduling notification for movie: \(title) (\(releaseDate))", logger: AppLogger.notifications)
         let identifier = "movie-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -74,11 +74,11 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) async {
         guard isProperlyBundled else { return }
         guard let nextDate = nextDate, nextDate > Date() else { 
-            print("ℹ️ Skipping notification for \(title): Next air date is in the past or nil.")
+            AppLogger.debug("ℹ️ Skipping notification for \(title): Next air date is in the past or nil.", logger: AppLogger.notifications)
             return 
         }
         
-        print("🔔 Scheduling notification for TV show: \(title) (\(nextDate))")
+        AppLogger.info("🔔 Scheduling notification for TV show: \(title) (\(nextDate))", logger: AppLogger.notifications)
         let identifier = "tv-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -148,7 +148,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                     day2Attachments = [newAttachment]
                 }
             } catch {
-                print("⚠️ Failed to clone attachment for day2: \(error)")
+                AppLogger.warning("⚠️ Failed to clone attachment for day2: \(error)", logger: AppLogger.notifications)
             }
         }
         
@@ -156,7 +156,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         
         do {
             try await center.add(request1)
-            print("✅ Scheduled \(identifier)-day1")
+            AppLogger.info("✅ Scheduled \(identifier)-day1", logger: AppLogger.notifications)
         } catch {
             AppErrorState.shared.surfaceError("Failed to schedule notification: \(error.localizedDescription)")
         }
@@ -178,7 +178,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             
             do {
                 try await center.add(request2)
-                print("✅ Scheduled \(identifier)-day2")
+                AppLogger.info("✅ Scheduled \(identifier)-day2", logger: AppLogger.notifications)
             } catch {
                 AppErrorState.shared.surfaceError("Failed to schedule reminder: \(error.localizedDescription)")
             }
@@ -260,7 +260,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
         
-        print("☢️ Running Nuclear Test (5 unique alerts)...")
+        AppLogger.info("☢️ Running Nuclear Test (5 unique alerts)...", logger: AppLogger.notifications)
         for i in 1...5 {
             let content = UNMutableNotificationContent()
             content.title = "Nuclear Test #\(i)"
@@ -274,13 +274,13 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             
             let request = UNNotificationRequest(identifier: "nuclear-\(UUID().uuidString)", content: content, trigger: trigger)
             try? await center.add(request)
-            print("☢️ Added nuclear-\(i)")
+            AppLogger.info("☢️ Added nuclear-\(i)", logger: AppLogger.notifications)
         }
     }
     
     func sendTestNotification() {
         guard isProperlyBundled else {
-            print("❌ Cannot send test notification: App is not running as a bundle.")
+            AppLogger.warning("❌ Cannot send test notification: App is not running as a bundle.", logger: AppLogger.notifications)
             return
         }
         let content = UNMutableNotificationContent()

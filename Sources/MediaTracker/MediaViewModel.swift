@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 
 @Observable
+@MainActor
 class MediaViewModel {
     let filterSubject = PassthroughSubject<Void, Never>()
     var selectedCategory: NavigationCategory = .home

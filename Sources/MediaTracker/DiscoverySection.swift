@@ -24,7 +24,7 @@ struct DiscoverySection: View {
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
     }
 }

@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class NetworkEntity {
-    var name: String
+    @Attribute(.unique) var name: String
     var logoPath: String?
     var count: Int = 0
     var themeColorHex: String?
@@ -20,7 +20,7 @@ final class NetworkEntity {
 
 @Model
 final class GenreEntity {
-    var name: String
+    @Attribute(.unique) var name: String
     var count: Int = 0
 
     init(name: String, count: Int = 0) {
@@ -31,7 +31,7 @@ final class GenreEntity {
 
 @Model
 final class LanguageEntity {
-    var code: String
+    @Attribute(.unique) var code: String
     var count: Int = 0
 
     init(code: String, count: Int = 0) {
@@ -42,7 +42,7 @@ final class LanguageEntity {
 
 @Model
 final class BadgeEntity {
-    var label: String
+    @Attribute(.unique) var label: String
     var count: Int = 0
 
     init(label: String, count: Int = 0) {
@@ -83,7 +83,7 @@ final class SearchCacheEntity {
 
 @Model
 final class PersonImageEntity {
-    var name: String
+    @Attribute(.unique) var name: String
     var profileURL: String?
     
     init(name: String, profileURL: String?) {

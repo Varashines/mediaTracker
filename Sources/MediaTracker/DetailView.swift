@@ -56,7 +56,7 @@ struct DetailView: View {
                     tmdbWarningSection
                     castAndTrackingSection
                 }
-                .padding(.horizontal, AppTheme.Spacing.xLarge)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
                 .padding(.bottom, 90) // Ensure scroll content doesn't get covered by floating bar
             }
@@ -133,7 +133,7 @@ struct DetailView: View {
         if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
                 Text("Please add your TMDB API Key in Settings to see more details.")
-                    .font(.caption)
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -168,15 +168,19 @@ struct DetailView: View {
                         }
                     }
                 }
-            } else {
-                // SKELETON LOADER
+            } else if viewModel.item.type == .tvShow || !viewModel.item.displayCast.isEmpty {
+                // SKELETON LOADER — only when content exists to reveal
                 VStack(spacing: AppTheme.Spacing.large) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                        .fill(Color.primary.opacity(0.04))
-                        .frame(height: 180)
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                        .fill(Color.primary.opacity(0.04))
-                        .frame(height: 140)
+                    if viewModel.item.type == .tvShow {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                            .fill(Color.primary.opacity(0.04))
+                            .frame(height: 180)
+                    }
+                    if !viewModel.item.displayCast.isEmpty {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                            .fill(Color.primary.opacity(0.04))
+                            .frame(height: 140)
+                    }
                 }
                 .shimmering()
             }
@@ -198,8 +202,6 @@ struct DetailView: View {
         let genres = itemToDelete.cachedGenres
         let lang = itemToDelete.cachedLanguage
         let badge = itemToDelete.storedSmartBadgeLabel
-        // let container = modelContext.container
-
         withAnimation {
             isDeleted = true
             FeedbackManager.shared.trigger(.removeFromLibrary)
@@ -207,8 +209,8 @@ struct DetailView: View {
 
         dismiss()
 
-        // Use a slightly longer delay to ensure dismissal completes before deletion
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.5))
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
             
             let container = modelContext.container

@@ -23,7 +23,7 @@ actor DiscoverySyncService {
         
         // One-time migration check
         if entities.isEmpty {
-            let legacy = UserDefaults.standard.string(forKey: "studio_aliases") ?? ""
+            let legacy = UserDefaults.standard.string(forKey: UserDefaultsKeys.studioAliases.rawValue) ?? ""
             if !legacy.isEmpty {
                 let rules = migrateLegacyAliases(legacy)
                 for rule in rules {

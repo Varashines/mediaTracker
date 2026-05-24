@@ -287,7 +287,7 @@ struct SmartCollectionsHubView: View {
                 )
                 newCounts[cat] = result.totalCount
             } catch {
-                print("Error fetching count for \(cat.rawValue): \(error)")
+                AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
             }
         }
         
@@ -309,7 +309,7 @@ struct SmartCollectionsHubView: View {
                 )
                 newCustomCounts[collection.id] = result.totalCount
             } catch {
-                print("Error fetching count for smart collection \(collection.name): \(error)")
+                AppLogger.debug("Error fetching count for smart collection \(collection.name): \(error)")
             }
         }
         

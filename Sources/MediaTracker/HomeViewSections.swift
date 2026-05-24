@@ -21,7 +21,7 @@ struct HomeViewSections: View {
                 onCategorySelected(.discover)
             }
             .padding(.top, AppTheme.Spacing.small)
-            .padding(.bottom, AppTheme.Spacing.large)
+            .padding(.bottom, AppTheme.Spacing.small)
 
             // 2. COMING SOON (Limited to 10)
             let comingSoon = featuredCarouselItems.isEmpty ? (groupedItems.first(where: { $0.0 == "Coming Soon" })?.1 ?? []) : featuredCarouselItems
@@ -30,7 +30,7 @@ struct HomeViewSections: View {
                     items: Array(comingSoon.prefix(10)), namespace: namespace,
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
-                .padding(.bottom, AppTheme.Spacing.large)
+                .padding(.bottom, AppTheme.Spacing.small)
             }
 
             // 3. FOR YOU (Recommendations)
@@ -38,7 +38,7 @@ struct HomeViewSections: View {
                 items: recommendations, namespace: namespace,
                 isFastScrolling: isFastScrolling, onSelect: onSelectHero
             )
-            .padding(.bottom, AppTheme.Spacing.large)
+            .padding(.bottom, AppTheme.Spacing.small)
         }
     }
 }

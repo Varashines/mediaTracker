@@ -44,11 +44,11 @@ struct InsightsView: View {
                             .buttonStyle(.plain)
                         }
                         .padding(.top, 24)
-                        .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         // 1. Hero Stats
                         HeroStatGrid(stats: stats)
-                            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         // 2. Taste Profile
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
@@ -67,7 +67,7 @@ struct InsightsView: View {
                                     .frame(maxHeight: .infinity)
                             }
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
 
                         // 3. Cast & Crew
@@ -173,7 +173,7 @@ struct RecentlyWatched: View {
                             titleCard(item: item)
                         }
                     }
-                    .padding(.horizontal, AppTheme.Spacing.xLarge + AppTheme.Spacing.tiny)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, 4)
                     .padding(.bottom, 16)
                 }
@@ -216,7 +216,7 @@ struct RecentlyWatched: View {
         }
         .frame(width: 90, height: 135)
         .shadow(color: .black.opacity(isHovered ? 0.25 : 0.1), radius: isHovered ? 8 : 4, x: 0, y: isHovered ? 4 : 2)
-        .scaleEffect(isHovered ? 1.06 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.springSnappy) {
                 hoveredItemID = hovering ? item.id : nil
@@ -290,7 +290,7 @@ struct ClaymorphicHeroCard: View {
     let emoji: String
     let value: String
     let label: String
-    let detail: String
+    let detail: LocalizedStringKey
     let color: Color
 
     @Environment(\.colorScheme) var colorScheme
@@ -320,12 +320,10 @@ struct ClaymorphicHeroCard: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(detail)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 20)
@@ -333,7 +331,7 @@ struct ClaymorphicHeroCard: View {
         .background(
             ClaymorphicCard(color: color, isHovered: isHovered)
         )
-        .scaleEffect(isHovered ? 1.05 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .shadow(color: color.opacity(isHovered ? 0.15 : 0.0), radius: 10, x: 0, y: 5)
         .shadow(color: .black.opacity(isHovered ? 0.06 : 0.02), radius: isHovered ? 6 : 3, x: 0, y: isHovered ? 3 : 1)
         .onHover { hovering in
@@ -367,7 +365,7 @@ struct HeroStatGrid: View {
                     emoji: "🍿",
                     value: "\(stats.totalMovies + stats.totalTVShows)",
                     label: "Titles",
-                    detail: "\(stats.totalMovies)m · \(stats.totalTVShows)s",
+                    detail: "\(stats.totalMovies) \(Image(systemName: "film")) · \(stats.totalTVShows) \(Image(systemName: "tv"))",
                     color: .pink
                 )
                 ClaymorphicHeroCard(

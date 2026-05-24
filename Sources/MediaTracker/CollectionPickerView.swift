@@ -44,7 +44,7 @@ struct CollectionPickerView: View {
             .padding(.vertical, 12)
             .background(Color.blue)
             .foregroundStyle(.white)
-            .cornerRadius(12)
+            .cornerRadius(AppTheme.Radius.medium)
         }
         .padding(32)
         .frame(width: 350, height: 450)
@@ -74,7 +74,7 @@ struct CollectionToggleRow: View {
             }
             .padding()
             .background(Color.primary.opacity(0.05))
-            .cornerRadius(12)
+            .cornerRadius(AppTheme.Radius.medium)
         }
         .buttonStyle(.plain)
     }

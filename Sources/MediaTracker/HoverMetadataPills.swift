@@ -71,6 +71,6 @@ struct HoverMetadataPills: View {
         }
         .padding(.bottom, 12)
         .padding(.horizontal, 8)
-        .animation(.easeOut(duration: 0.2), value: isHovered)
+        .animation(AppTheme.Animation.easeInOut, value: isHovered)
     }
 }

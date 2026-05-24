@@ -1,20 +1,20 @@
-import SwiftUI
-import SwiftData
 import ServiceManagement
+import SwiftData
+import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("studio_aliases") private var studioAliases = ""
-    @AppStorage("theme_preference") private var themePreference: Int = 0 
-    
+    @AppStorage("theme_preference") private var themePreference: Int = 0
+
     // Feedback Switches
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
     @AppStorage("auto_mark_episodes_watched") private var autoMarkEpisodesWatched = true
-    
+
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var selectedTab = 0
     @State private var showClearDatabaseConfirmation = false
@@ -36,9 +36,9 @@ struct SettingsView: View {
             }
             .padding(.top, 12)
             .padding(.bottom, 12)
-            
+
             Divider().opacity(0.4)
-            
+
             // Content Area
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
@@ -56,7 +56,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
         }
-        .frame(minWidth: 600, minHeight: 500)
+        .frame(minWidth: 300, maxWidth: 600, minHeight: 600)
         .fontDesign(.rounded)
         .animation(.spring(duration: 0.3, bounce: 0.1), value: selectedTab)
     }
@@ -67,11 +67,20 @@ struct SettingsView: View {
             FeedbackManager.shared.trigger(.click)
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: selectedTab == index ? (icon == "gearshape" ? "gearshape.fill" : (icon == "tray.full" ? "tray.full.fill" : (icon == "cpu" ? "cpu.fill" : (icon == "network" ? "network" : "\(icon).fill")))) : icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(selectedTab == index ? Color.accentColor : .primary.opacity(0.4))
-                    .frame(width: 32, height: 32)
-                
+                Image(
+                    systemName: selectedTab == index
+                        ? (icon == "gearshape"
+                            ? "gearshape.fill"
+                            : (icon == "tray.full"
+                                ? "tray.full.fill"
+                                : (icon == "cpu"
+                                    ? "cpu.fill"
+                                    : (icon == "network" ? "network" : "\(icon).fill")))) : icon
+                )
+                .font(.system(size: 20))
+                .foregroundStyle(selectedTab == index ? Color.accentColor : .primary.opacity(0.4))
+                .frame(width: 32, height: 32)
+
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(selectedTab == index ? .primary : .secondary)
@@ -95,7 +104,7 @@ struct SettingsView: View {
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 24) {
             settingsHeader("Appearance", icon: "paintbrush", color: .purple)
-            
+
             GroupContainer {
                 modernRow(title: "Theme Mode", subtitle: "Switch between light and dark UI.") {
                     Picker("", selection: $themePreference) {
@@ -109,38 +118,48 @@ struct SettingsView: View {
             }
 
             settingsHeader("Tracking Behavior", icon: "play.square.stack", color: .blue)
-            
+
             GroupContainer {
-                modernToggle("Auto-Complete TV Shows", subtitle: "Marking a show completed automatically marks all episodes watched.", isOn: $autoMarkEpisodesWatched)
+                modernToggle(
+                    "Auto-Complete TV Shows",
+                    subtitle: "Marking a show completed automatically marks all episodes watched.",
+                    isOn: $autoMarkEpisodesWatched)
             }
 
             settingsHeader("Feedback & Power", icon: "bolt.fill", color: .orange)
-            
+
             GroupContainer {
-                modernToggle("Tactile Haptics", subtitle: "Physical feedback on actions.", isOn: $hapticsEnabled)
+                modernToggle(
+                    "Tactile Haptics", subtitle: "Physical feedback on actions.",
+                    isOn: $hapticsEnabled)
                 Divider().opacity(0.3)
-                modernToggle("Audio Feedback", subtitle: "Sound effects on selection.", isOn: $audioEnabled)
+                modernToggle(
+                    "Audio Feedback", subtitle: "Sound effects on selection.", isOn: $audioEnabled)
                 Divider().opacity(0.3)
-                modernToggle("Launch at Login", subtitle: "Start app automatically.", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        do {
-                            if newValue {
-                                if SMAppService.mainApp.status != .enabled {
-                                    try SMAppService.mainApp.register()
-                                }
-                            } else {
-                                if SMAppService.mainApp.status == .enabled {
-                                    try SMAppService.mainApp.unregister()
-                                }
+                modernToggle(
+                    "Launch at Login", subtitle: "Start app automatically.", isOn: $launchAtLogin
+                )
+                .onChange(of: launchAtLogin) { _, newValue in
+                    do {
+                        if newValue {
+                            if SMAppService.mainApp.status != .enabled {
+                                try SMAppService.mainApp.register()
                             }
-                        } catch {
-                            print("Failed to update launch at login: \(error)")
+                        } else {
+                            if SMAppService.mainApp.status == .enabled {
+                                try SMAppService.mainApp.unregister()
+                            }
                         }
-                        // Refresh state to match reality
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
+                    } catch {
+                        AppLogger.error("Failed to update launch at login: \(error)")
                     }
+                    // Refresh state to match reality
+                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                }
                 Divider().opacity(0.3)
-                modernToggle("Prevent Sleep", subtitle: "Keep background sync active.", isOn: $preventSleepMode)
+                modernToggle(
+                    "Prevent Sleep", subtitle: "Keep background sync active.",
+                    isOn: $preventSleepMode)
             }
         }
     }
@@ -148,9 +167,11 @@ struct SettingsView: View {
     private var connectivityTab: some View {
         VStack(alignment: .leading, spacing: 32) {
             settingsHeader("Connectivity", icon: "network", color: .blue)
-            
+
             GroupContainer {
-                modernRow(title: "TMDB API Key", subtitle: "Required for movie and series metadata sync.") {
+                modernRow(
+                    title: "TMDB API Key", subtitle: "Required for movie and series metadata sync."
+                ) {
                     HStack(spacing: 8) {
                         SecureField("Enter Key", text: $tmdbApiKey)
                             .textFieldStyle(.plain)
@@ -159,7 +180,7 @@ struct SettingsView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .font(.system(size: 11, design: .monospaced))
                             .frame(width: 200)
-                        
+
                         Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
                             Image(systemName: "questionmark.circle.fill").font(.title3)
                         }
@@ -168,15 +189,18 @@ struct SettingsView: View {
                     }
                 }
             }
-            
+
             settingsHeader("Notifications", icon: "bell.fill", color: .red)
-            
+
             GroupContainer {
-                Button { showNotificationDebug = true } label: {
+                Button {
+                    showNotificationDebug = true
+                } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Upcoming Schedule").font(.headline)
-                            Text("Review and cross-examine system alerts.").font(.caption).foregroundStyle(.secondary)
+                            Text("Review and cross-examine system alerts.").font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
@@ -192,14 +216,17 @@ struct SettingsView: View {
     private var engineTab: some View {
         VStack(alignment: .leading, spacing: 32) {
             settingsHeader("Data Processing", icon: "brain", color: .green)
-            
+
             VStack(alignment: .leading, spacing: 12) {
-                Text("STUDIO ALIASES").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary)
+                Text("STUDIO ALIASES").font(.system(size: 10, weight: .bold)).foregroundStyle(
+                    .tertiary)
                 GroupContainer {
                     StudioAliasManagerView().padding(.vertical, 8)
                 }
-                
-                Text("CONTENT FILTERS").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary).padding(.top, 8)
+
+                Text("CONTENT FILTERS").font(.system(size: 10, weight: .bold)).foregroundStyle(
+                    .tertiary
+                ).padding(.top, 8)
                 GroupContainer {
                     DiscoveryManagementView().padding(.vertical, 8)
                 }
@@ -210,37 +237,53 @@ struct SettingsView: View {
     private var vaultTab: some View {
         VStack(alignment: .leading, spacing: 32) {
             settingsHeader("Maintenance", icon: "wrench.and.screwdriver.fill", color: .blue)
-            
+
             GroupContainer {
-                modernRow(title: "Library Backup", subtitle: "Export or import your entire library.") {
+                modernRow(
+                    title: "Library Backup", subtitle: "Export or import your entire library."
+                ) {
                     HStack(spacing: 8) {
                         Button("Export") {
-                            let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                            let descriptor = FetchDescriptor<MediaItem>(sortBy: [
+                                SortDescriptor(\.title)
+                            ])
                             if let items = try? modelContext.fetch(descriptor) {
                                 LibraryImportExportService.shared.exportLibrary(items: items)
                             }
                         }.buttonStyle(.bordered)
-                        Button("Import") { LibraryImportExportService.shared.importLibrary(modelContext: modelContext) }.buttonStyle(.bordered)
+                        Button("Import") {
+                            LibraryImportExportService.shared.importLibrary(
+                                modelContext: modelContext)
+                        }.buttonStyle(.bordered)
                     }
                 }
                 Divider().opacity(0.3)
-                modernRow(title: "Auto Backup Location", subtitle: "Where automated backups are saved.") {
+                modernRow(
+                    title: "Auto Backup Location", subtitle: "Where automated backups are saved."
+                ) {
                     Button("Show in Finder") {
-                        let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+                        let url = URL.applicationSupportDirectory.appendingPathComponent(
+                            "AutoBackups")
                         if !FileManager.default.fileExists(atPath: url.path) {
-                            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                            try? FileManager.default.createDirectory(
+                                at: url, withIntermediateDirectories: true)
                         }
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
                     }
                     .buttonStyle(.bordered)
                 }
                 Divider().opacity(0.3)
-                modernRow(title: "Database Repair", subtitle: "Scan and heal relationship integrity.") {
-                    Button("Start Repair") { DataService.shared.runMaintenance(modelContext: modelContext) }
-                        .buttonStyle(.bordered)
+                modernRow(
+                    title: "Database Repair", subtitle: "Scan and heal relationship integrity."
+                ) {
+                    Button("Start Repair") {
+                        DataService.shared.runMaintenance(modelContext: modelContext)
+                    }
+                    .buttonStyle(.bordered)
                 }
                 Divider().opacity(0.3)
-                modernRow(title: "Image Cache", subtitle: "Free up disk space by purging posters.") {
+                modernRow(title: "Image Cache", subtitle: "Free up disk space by purging posters.")
+                {
                     Button("Purge Cache") { ImageCache.shared.clearFullCache() }
                         .buttonStyle(.bordered)
                         .foregroundStyle(.red)
@@ -248,9 +291,11 @@ struct SettingsView: View {
             }
 
             settingsHeader("Danger Zone", icon: "exclamationmark.triangle.fill", color: .red)
-            
+
             GroupContainer {
-                Button { showClearDatabaseConfirmation = true } label: {
+                Button {
+                    showClearDatabaseConfirmation = true
+                } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Delete All Data")
@@ -267,11 +312,14 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
-            
-            Text("MediaTracker v\(appVersion)").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+
+            Text("MediaTracker v\(appVersion)").font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary).frame(maxWidth: .infinity)
         }
         .confirmationDialog("Reset App?", isPresented: $showClearDatabaseConfirmation) {
-            Button("Delete Everything", role: .destructive) { DataService.shared.clearDatabase(modelContext: modelContext) }
+            Button("Delete Everything", role: .destructive) {
+                DataService.shared.clearDatabase(modelContext: modelContext)
+            }
         }
     }
 
@@ -282,14 +330,16 @@ struct SettingsView: View {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.primary)
-            
+
             Text(title)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.primary)
         }
     }
 
-    private func modernRow<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+    private func modernRow<Content: View>(
+        title: String, subtitle: String, @ViewBuilder content: () -> Content
+    ) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -346,9 +396,10 @@ struct GroupContainer<Content: View>: View {
 
 #Preview("Settings View") {
     SettingsView()
-        .modelContainer(try! ModelContainer(
-            for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
-                 MediaCollection.self, StudioAliasEntity.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        ))
+        .modelContainer(
+            try! ModelContainer(
+                for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
+                MediaCollection.self, StudioAliasEntity.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            ))
 }

@@ -24,7 +24,7 @@ struct CastSectionView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(AppTheme.Animation.smooth) {
                 isVisible = true
             }
         }

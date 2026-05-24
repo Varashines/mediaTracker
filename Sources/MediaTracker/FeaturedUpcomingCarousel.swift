@@ -13,7 +13,7 @@ struct FeaturedUpcomingCarousel: View {
     private let scrollSpace = "Featured_Scroll"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(
                 title: "Coming Soon",
                 icon: "sparkles",
@@ -22,7 +22,7 @@ struct FeaturedUpcomingCarousel: View {
             )
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 20) {
+                HStack(spacing: AppTheme.Spacing.large) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
@@ -31,8 +31,8 @@ struct FeaturedUpcomingCarousel: View {
                         .buttonStyle(.interactive)
                     }
                 }
-                .padding(.horizontal, 30)
-                .padding(.vertical, 20)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.vertical, AppTheme.Spacing.medium - 1)
                 .background(
                     GeometryReader { (geo: GeometryProxy) in
                         let minX: CGFloat = geo.frame(in: .named(scrollSpace)).minX
@@ -59,6 +59,7 @@ struct FeaturedUpcomingCarousel: View {
                 scrollProgress = min(1.0, currentScroll / maxScroll)
             }
         }
+        .scrollClipDisabled()
         .compositingGroup()
         .onAppear { prewarm(items: items) }
         .onChange(of: items) { _, newItems in prewarm(items: newItems) }

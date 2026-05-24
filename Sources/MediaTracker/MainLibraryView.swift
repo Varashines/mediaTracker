@@ -36,7 +36,7 @@ struct MainLibraryView: View {
     var body: some View {
         GeometryReader { (mainGeo: GeometryProxy) in
             let columns: [GridItem] = [
-                GridItem(.adaptive(minimum: 170, maximum: 200), spacing: AppTheme.Spacing.large)
+                GridItem(.adaptive(minimum: 170, maximum: 200), spacing: 16)
             ]
 
             ScrollView {

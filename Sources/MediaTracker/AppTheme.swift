@@ -10,6 +10,7 @@ struct AppTheme {
         static let large: CGFloat = 24
         static let xLarge: CGFloat = 32
         static let section: CGFloat = 40
+        static let pageMargin: CGFloat = 40
     }
 
     struct Radius {
@@ -25,6 +26,7 @@ struct AppTheme {
         static let title3 = SwiftUI.Font.system(size: 20, weight: .bold, design: .rounded)
         static let heading = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
         static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
+        static let bodyMedium = SwiftUI.Font.system(size: 15, weight: .medium, design: .rounded)
         static let bodyBold = SwiftUI.Font.system(size: 13, weight: .bold, design: .rounded)
         static let caption = SwiftUI.Font.system(size: 11, weight: .bold, design: .rounded)
         static let caption2 = SwiftUI.Font.system(size: 10, weight: .semibold, design: .rounded)

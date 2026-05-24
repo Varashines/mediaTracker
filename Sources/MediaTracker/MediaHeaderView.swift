@@ -11,7 +11,7 @@ struct MediaHeaderView: View {
 
     var body: some View {
         if item.modelContext != nil {
-            HStack(alignment: .top, spacing: 35) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.section) {
                 PosterView(item: item, themeColor: themeColor, namespace: namespace)
                 
                 VStack(alignment: .leading, spacing: 24) {

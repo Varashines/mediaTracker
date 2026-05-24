@@ -167,15 +167,18 @@ actor MediaFilterActor {
         var smartRules: [SmartRule] = []
         
         if let cid = collectionID {
-            // Check if it's a smart collection
             let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
             if let collection = try? modelContext.fetch(colDescriptor).first, collection.isSmart {
                 smartRules = collection.smartRules
-                // Smart Collections fetch everything to refine in Swift
                 basePredicate = #Predicate<MediaItem> { _ in true }
-            } else {
-                basePredicate = #Predicate<MediaItem> { item in
-                    item.collections?.contains { $0.id == cid } ?? false
+            } else if let collection = try? modelContext.fetch(colDescriptor).first {
+                let itemIDs = collection.items.compactMap { $0.id }
+                if itemIDs.isEmpty {
+                    basePredicate = #Predicate<MediaItem> { _ in false }
+                } else {
+                    basePredicate = #Predicate<MediaItem> { item in
+                        itemIDs.contains(item.id)
+                    }
                 }
             }
         }
@@ -185,9 +188,9 @@ actor MediaFilterActor {
         
         // Optimization: Skip Swift-level refinement if possible
         let hasComplexFilters = !processedSearch.isEmpty || 
-                               (network != nil && !network!.isEmpty) || 
-                               (language != nil && !language!.isEmpty) || 
-                               (genre != nil && !genre!.isEmpty) ||
+                               (network?.isEmpty == false) || 
+                               !(language ?? "").isEmpty || 
+                               (genre?.isEmpty == false) ||
                                year != nil ||
                                state != nil ||
                                badge != nil ||
@@ -201,7 +204,13 @@ actor MediaFilterActor {
             descriptor.fetchOffset = offset
         }
         
-        var results = try modelContext.fetch(descriptor)
+        var results: [MediaItem] = []
+        do {
+            results = try modelContext.fetch(descriptor)
+        } catch {
+            AppLogger.warning("Fetch failed: \(error)", logger: AppLogger.data)
+            results = []
+        }
         
         // 2. Swift-Level Refinement
         results = refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, searchText: processedSearch, category: category, smartRules: smartRules)
@@ -242,34 +251,6 @@ actor MediaFilterActor {
             grouped: finalGroupedItems,
             totalCount: totalCount
         )
-    }
-
-    private func sortResults(_ results: inout [MediaItem], category: NavigationCategory, sortOrder: SortOrder) {
-        switch sortOrder {
-        case .alphabetical:
-            results.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
-        case .newestRelease:
-            results.sort { 
-                if $0.releaseDate != $1.releaseDate {
-                    return ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        case .recentlyAdded:
-            results.sort { 
-                if $0.dateAdded != $1.dateAdded {
-                    return ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        case .recentInteraction:
-            results.sort { 
-                if $0.lastInteractionDate != $1.lastInteractionDate {
-                    return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        }
     }
 
     private func buildBasePredicate(category: NavigationCategory, searchToken: String) -> Predicate<MediaItem> {
@@ -326,35 +307,6 @@ actor MediaFilterActor {
 
     private func buildSmartUpcomingPredicate() -> Predicate<MediaItem> {
         MediaFilterPredicates.buildSmartUpcomingPredicate()
-    }
-
-    private func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
-        if category == .upcoming || category == .smartUpcoming || badge == "PREMIERE" {
-            descriptor.sortBy = [
-                SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward),
-                SortDescriptor<MediaItem>(\.title, order: .forward)
-            ]
-        } else {
-            switch sortOrder {
-            case .alphabetical: 
-                descriptor.sortBy = [SortDescriptor<MediaItem>(\.title, order: .forward)]
-            case .newestRelease: 
-                descriptor.sortBy = [
-                    SortDescriptor<MediaItem>(\.releaseDate, order: .reverse),
-                    SortDescriptor<MediaItem>(\.title, order: .forward)
-                ]
-            case .recentlyAdded: 
-                descriptor.sortBy = [
-                    SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
-                    SortDescriptor<MediaItem>(\.title, order: .forward)
-                ]
-            case .recentInteraction: 
-                descriptor.sortBy = [
-                    SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse),
-                    SortDescriptor<MediaItem>(\.title, order: .forward)
-                ]
-            }
-        }
     }
 
     private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) -> [MediaItem] {
@@ -474,207 +426,6 @@ actor MediaFilterActor {
         }
     }
 
-    private func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
-        // 1. High Priority Fetch: Split into focused fetches to avoid compiler timeouts and starvation
-        
-        // Combined Pass A: Items marked as "NEW", "BINGE DROP", "FINALE", or "PREMIERE"
-        let newLabel = "NEW"
-        let bingeLabel = "BINGE DROP"
-        let finaleLabel = "FINALE"
-        let premiereLabel = "PREMIERE"
-        let dislikeLabel = "Dislike"
-        let pStreaming = #Predicate<MediaItem> { item in
-            (item.storedSmartBadgeLabel == newLabel || 
-             item.storedSmartBadgeLabel == bingeLabel ||
-             item.storedSmartBadgeLabel == finaleLabel ||
-             item.storedSmartBadgeLabel == premiereLabel) && 
-            item.tasteValue != dislikeLabel
-        }
-        
-        // Pass B: Items transitioning from Upcoming to Released (Across entire library)
-        // This ensures items that just aired but haven't been "healed" yet are still fetched.
-        let distantFuture = Date.distantFuture
-        let pTransition = #Predicate<MediaItem> { item in
-            item.storedIsUpcoming == true && (
-                (item.cachedNextAiringDate ?? distantFuture < now) ||
-                (item.releaseDate ?? distantFuture < now)
-            )
-        }
-        
-        // Combined Pass C/D: "Active" and "Re-watching" items
-        let activeState = "Active"
-        let rewatchingState = "Re-watching"
-        let pActiveOrRewatching = #Predicate<MediaItem> { item in
-            (item.stateValue == activeState || item.stateValue == rewatchingState) &&
-            item.tasteValue != dislikeLabel
-        }
-        
-        var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
-        descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreaming.fetchLimit = 150
-        
-        var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
-        descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descTransition.fetchLimit = 50
-        
-        var descActiveOrRewatching = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
-        descActiveOrRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descActiveOrRewatching.fetchLimit = 200 // High combined limit
-        
-        let streamingItems = try modelContext.fetch(descStreaming)
-        let transitionItems = try modelContext.fetch(descTransition)
-        let activeItemsRaw = try modelContext.fetch(descActiveOrRewatching)
-        let rewatchingItems: [MediaItem] = []
-        
-        // 2. Recent Interaction Fetch: Fill remaining slots with recent Wishlist items
-        let recentPredicate = #Predicate<MediaItem> { item in
-            item.stateValue == "Wishlist" && item.tasteValue != "Dislike"
-        }
-        var recentDesc = FetchDescriptor<MediaItem>(predicate: recentPredicate)
-        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        recentDesc.fetchLimit = 100
-        
-        let recentItems = try modelContext.fetch(recentDesc)
-        
-        // 3. Merge and Deduplicate
-        var homeResultsSet = Set<PersistentIdentifier>()
-        var homeResults: [MediaItem] = []
-        
-        // Priority: Streaming > Transition > Active > Rewatching > Recent
-        for item in (streamingItems + transitionItems + activeItemsRaw + rewatchingItems + recentItems) {
-            if !homeResultsSet.contains(item.persistentModelID) {
-                homeResultsSet.insert(item.persistentModelID)
-                homeResults.append(item)
-            }
-        }
-        
-        let now = Date() // Redefine just to be safe if it was defined above
-        let activeItems = homeResults.filter { item in
-            // Basic exclusion
-            if item.stateValue == "Completed" || item.stateValue == "Dropped" || item.stateValue == "On Hold" { return false }
-            if item.storedIsUpcoming { return false }
-            
-            // Exclude if caught up and next airing is in the future
-            let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
-            let nextAirDate = item.cachedNextAiringDate ?? .distantPast
-            if isCaughtUp && nextAirDate > now && item.type == .tvShow {
-                return false
-            }
-
-            // 1. Items already in progress
-            let isCurrentlyWatching = item.stateValue == "Active" || item.stateValue == "Re-watching" || (item.storedProgress ?? 0) > 0
-            if isCurrentlyWatching {
-                // Staleness check for 0-progress Active/Re-watching items
-                if (item.stateValue == "Active" || item.stateValue == "Re-watching") && (item.storedProgress ?? 0) == 0 {
-                    let lastInter = item.lastInteractionDate ?? .distantPast
-                    let thirtyDaysAgo = now.addingTimeInterval(-30 * 86400)
-                    if lastInter < thirtyDaysAgo {
-                        return false
-                    }
-                }
-                return true
-            }
-            
-            // 2. Items that JUST released
-            let badge = item.storedSmartBadgeLabel
-            let isNewDrop = badge == "NEW" || badge == "BINGE DROP" || badge == "FINALE" || badge == "PREMIERE"
-            
-            if isNewDrop {
-                // Wishlist 5-day rule: Hide if in wishlist (0 progress) and released > 5 days ago
-                if item.stateValue == "Wishlist" && (item.storedProgress ?? 0) == 0 {
-                    let releaseDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
-                    let daysSinceRelease = now.timeIntervalSince(releaseDate) / 86400
-                    if daysSinceRelease > 5 {
-                        return false
-                    }
-                }
-                return true
-            }
-            return false
-        }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
-            // SORTING: Priority to NEW/BINGE/FINALE/PREMIERE drops first, then currently watching
-            let badgeA = itemA.storedSmartBadgeLabel
-            let isRecentA = badgeA == "NEW" || badgeA == "BINGE DROP" || badgeA == "FINALE" || badgeA == "PREMIERE"
-            let badgeB = itemB.storedSmartBadgeLabel
-            let isRecentB = badgeB == "NEW" || badgeB == "BINGE DROP" || badgeB == "FINALE" || badgeB == "PREMIERE"
-            
-            if isRecentA != isRecentB { return isRecentA }
-            
-            let isAActive = itemA.stateValue == "Active" || itemA.stateValue == "Re-watching" || (itemA.storedProgress ?? 0) > 0
-            let isBActive = itemB.stateValue == "Active" || itemB.stateValue == "Re-watching" || (itemB.storedProgress ?? 0) > 0
-            if isAActive != isBActive { return isAActive }
-            
-            let isAPremiere = itemA.storedSmartBadgeLabel == "PREMIERE"
-            let isBPremiere = itemB.storedSmartBadgeLabel == "PREMIERE"
-            if isAPremiere != isBPremiere { return isAPremiere }
-
-            let isAStreaming = itemA.storedSmartBadgeLabel == "NEW"
-            let isBStreaming = itemB.storedSmartBadgeLabel == "NEW"
-            if isAStreaming != isBStreaming { return isAStreaming }
-            
-            let isAFinale = itemA.storedSmartBadgeLabel == "FINALE"
-            let isBFinale = itemB.storedSmartBadgeLabel == "FINALE"
-            if isAFinale != isBFinale { return isAFinale }
-
-            let isABinge = itemA.storedSmartBadgeLabel == "BINGE DROP"
-            let isBBinge = itemB.storedSmartBadgeLabel == "BINGE DROP"
-            if isABinge != isBBinge { return isABinge }
-            
-            let dateA = itemA.lastInteractionDate ?? .distantPast
-            let dateB = itemB.lastInteractionDate ?? .distantPast
-            
-            if dateA != dateB {
-                return dateA > dateB
-            }
-            
-            // Stable sort fallback
-            return itemA.title < itemB.title
-        }
-        
-        // Find Spotlight Hero: Most recently interacted "Active" item
-        let spotlight = activeItems.first { $0.stateValue == "Active" }
-        
-        let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
-        
-        let comingSoonItems = homeResults.filter { item in
-            let airDate = item.cachedNextAiringDate ?? .distantPast
-            return airDate > now
-        }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
-        
-        return PaginatedResult(
-            displayed: [], 
-            featuredUpcoming: [], 
-            recentlyAdded: [], 
-            homeContinueWatching: homeContinueWatching,
-            spotlightHero: spotlight.map { toMetadata($0) },
-            grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })], 
-            totalCount: totalCount
-        )
-    }
-
-    private func groupResults(_ results: [MediaItem], groupBy: GroupBy, collectionID: UUID? = nil) -> [(String, [MediaThumbnailMetadata])] {
-        if groupBy == .none { return [] }
-        
-        let dict = Dictionary(grouping: results) { item -> String in
-            switch groupBy {
-            case .genre: return item.cachedGenres.first ?? "Uncategorized"
-            case .language: return item.cachedLanguage ?? "Unknown"
-            case .network:
-                if let rawNetwork = item.cachedNetwork {
-                    return rawNetwork.components(separatedBy: ",").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?.trimmingCharacters(in: .whitespaces) ?? "Unknown"
-                }
-                return "Unknown"
-            case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
-            case .category: return item.stateValue
-            case .none: return ""
-            }
-        }
-        
-        let grouped = dict.map { ($0.key, $0.value.map { toMetadata($0) }) }
-        
-        return grouped.sorted { $0.0 < $1.0 }
-    }
-
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
         if category == .home { return [] }
         var recentDesc = FetchDescriptor<MediaItem>()
@@ -718,7 +469,7 @@ actor MediaFilterActor {
         ])
 
         let nets = (try? modelContext.fetch(netDescriptor)) ?? []
-        let hiddenStudios = UserDefaults.standard.string(forKey: "hidden_studios") ?? ""
+        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
         let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
         let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
 
@@ -812,7 +563,7 @@ actor MediaFilterActor {
         return toMetadata(matchingItem)
     }
 
-    private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
+    func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
         MediaThumbnailMetadata(item: item)
     }
 }

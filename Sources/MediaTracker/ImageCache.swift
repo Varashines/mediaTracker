@@ -117,6 +117,31 @@ class ImageCache: NSObject {
         urlToKeys.removeAll()
     }
     
+    func removeImage(forKey url: String?) async {
+        guard let url, !url.isEmpty else { return }
+        let hash = SHA256.hash(data: Data(url.utf8)).map { String(format: "%02x", $0) }.joined()
+        
+        if let keys = urlToKeys[url] {
+            for key in keys {
+                memoryCache.removeObject(forKey: key as NSString)
+            }
+            urlToKeys.removeValue(forKey: url)
+        }
+        
+        let container = self.dbContainer
+        Task.detached(priority: .background) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<ImageCacheEntity>(predicate: #Predicate { $0.id == hash })
+            if let entity = try? context.fetch(descriptor).first {
+                context.delete(entity)
+                try? context.save()
+            }
+            await MainActor.run {
+                _ = ImageCache.shared.diskCacheIndex.remove(hash)
+            }
+        }
+    }
+    
     func clearFullCache() {
         clearMemoryCache()
         
@@ -295,7 +320,6 @@ class ImageCache: NSObject {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if Task.isCancelled { return }
                 
-                // Phase 3 Optimization: Directly work with CGImageSource to avoid NSImage overhead
                 guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else { return }
                 
                 await self.save(imageSource: imageSource, data: data, forKey: key, targetSize: targetSize, alwaysPreserveAlpha: alwaysPreserveAlpha)
@@ -311,7 +335,7 @@ class ImageCache: NSObject {
                 }
             } catch {
                 if !(error is CancellationError) {
-                    print("Download error: \(error)")
+                    AppLogger.warning("Download error: \(error)", logger: AppLogger.cache)
                 }
             }
         }
@@ -377,11 +401,8 @@ class ImageCache: NSObject {
         
         await Task.detached(priority: .background) {
             let context = ModelContext(container)
-            
-            // Re-create imageSource inside task to avoid capturing main-actor isolated object
             guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
             
-            // Phase 3 Optimization: Downsample and encode using CGImageDestination (Platform Agnostic)
             if let targetSize = targetSize {
                 let maxDimension = max(targetSize.width, targetSize.height) * screenScale
                 let downsampleOptions = [
@@ -527,7 +548,6 @@ class ImageCache: NSObject {
                 }
             }
             
-            // Fallback for missing targetSize or failed downsample
             guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
                   let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
             return ImageContainer(image: cgImage)

@@ -9,18 +9,22 @@ final class TVEpisode {
     var overview: String
     var airDate: String? {
         didSet {
+            guard !isUpdatingAirDateValue else { return }
             updateAirDateValue()
         }
     }
     var airstamp: String? {
         didSet {
+            guard !isUpdatingAirDateValue else { return }
             updateAirDateValue()
         }
     }
     var airDateValue: Date?
+    private var isUpdatingAirDateValue = false
     var runtime: Int?
     var isWatched: Bool = false
     var lastWatchedDate: Date?
+    var watchedDate: Date?
     var showID: Int?
     @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
@@ -30,8 +34,10 @@ final class TVEpisode {
             self.isWatched = watched
             if watched {
                 self.lastWatchedDate = Date()
+                self.watchedDate = Date()
             } else {
                 self.lastWatchedDate = nil
+                self.watchedDate = nil
             }
             
             let delta = watched ? 1 : -1
@@ -70,6 +76,9 @@ final class TVEpisode {
     }
 
     func updateAirDateValue() {
+        isUpdatingAirDateValue = true
+        defer { isUpdatingAirDateValue = false }
+        
         self.airDateValue = DateUtils.parseEpisodeDate(
             airDate, 
             time: nil, 
@@ -78,6 +87,11 @@ final class TVEpisode {
             serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork, 
             for: season?.tvShowDetails
         )
+        // Clear source strings after successful parse to save storage
+        if airDateValue != nil {
+            airDate = nil
+            airstamp = nil
+        }
     }
     
     init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, airstamp: String? = nil, runtime: Int? = nil, isWatched: Bool = false, showID: Int? = nil) {

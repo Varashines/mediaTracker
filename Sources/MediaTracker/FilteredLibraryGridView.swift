@@ -14,8 +14,8 @@ struct FilteredLibraryGridView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                let columns = [GridItem(.adaptive(minimum: 160), spacing: 25, alignment: .top)]
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+                let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(items) { metadata in
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(
@@ -26,7 +26,7 @@ struct FilteredLibraryGridView: View {
                     }
                 }
             }
-            .padding(30)
+            .padding(AppTheme.Spacing.pageMargin)
         }
         .scrollBounceBehavior(.basedOnSize)
         .background {
@@ -96,7 +96,7 @@ struct FilteredLibraryGridView: View {
                     }
                 }
             } catch {
-                print("Error fetching filtered items: \(error)")
+                AppLogger.debug("Error fetching filtered items: \(error)")
             }
         }
     }
@@ -150,7 +150,7 @@ struct FilteredLibraryGridView: View {
                     }
                 }
             } catch {
-                print("Error updating single item in FilteredLibraryGridView: \(error)")
+                AppLogger.debug("Error updating single item in FilteredLibraryGridView: \(error)")
             }
         }
     }

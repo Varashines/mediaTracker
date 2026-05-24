@@ -68,7 +68,7 @@ struct LibraryDetailView: View {
     
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
-    @Query private var collections: [MediaCollection]
+    @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
     
     @State private var isSyncHovered = false
     @State private var showingBulkManager = false
@@ -186,7 +186,7 @@ struct LibraryDetailView: View {
             checkAndRepairStaleMetadata()
             
             // Phase 6: Genre Deconstruction Migration
-            let migrated = UserDefaults.standard.bool(forKey: "genre_deconstruction_v1")
+            let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
             if !migrated {
                 let service = BackgroundDataService(modelContainer: modelContext.container)
                 await service.deepHealGenres()
@@ -314,7 +314,7 @@ struct LibraryDetailView: View {
                     }
                 }
             } catch {
-                print("Error filtering items: \(error)")
+                AppLogger.debug("Error filtering items: \(error)")
             }
         }
     }
@@ -362,7 +362,7 @@ struct LibraryDetailView: View {
                     viewModel.currentOffset = nextOffset
                 }
             } catch {
-                print("Error loading more: \(error)")
+                AppLogger.debug("Error loading more: \(error)")
                 await MainActor.run { viewModel.isLoadingMore = false }
             }
         }
@@ -384,7 +384,7 @@ struct LibraryDetailView: View {
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.storedIsUpcoming == true && $0.cachedNextAiringDate != nil && $0.cachedNextAiringDate! < now })
             
             if let staleItems = try? context.fetch(descriptor), !staleItems.isEmpty {
-                print("♻️ Auto-healing \(staleItems.count) stale items...")
+                AppLogger.info("♻️ Auto-healing \(staleItems.count) stale items...", logger: AppLogger.background)
                 for item in staleItems {
                     item.syncCachedProperties()
                 }
@@ -492,7 +492,7 @@ struct LibraryDetailView: View {
                     }
                 }
             } catch {
-                print("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
+                AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
             }
         }
     }
