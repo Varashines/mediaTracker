@@ -153,7 +153,7 @@ private struct SeasonTab: View {
         Button(action: action) {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
             HStack(spacing: 8) {
-                Text("Season \(season.seasonNumber)")
+                Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
 
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
@@ -198,7 +198,7 @@ private struct SeasonSection: View {
 
 
     private let columns = [
-        GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
+        GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
     ]
 
     private var isAllWatched: Bool {
@@ -210,7 +210,7 @@ private struct SeasonSection: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("Season \(season.seasonNumber)")
+                        Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
                             .font(.system(size: 20, weight: .bold, design: .rounded))
 
                         if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
@@ -331,6 +331,7 @@ private struct EpisodeCube: View {
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         let green = Color.semanticGreen(for: colorScheme)
+        let unwatchedAccent = Color.blue
 
         ZStack(alignment: .bottomTrailing) {
             Button {
@@ -350,22 +351,22 @@ private struct EpisodeCube: View {
                 HStack(spacing: 0) {
                     // Left accent bar
                     RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                        .fill(episode.isWatched ? green : accent.opacity(colorScheme == .dark ? 0.4 : 0.55))
+                        .fill(episode.isWatched ? green : unwatchedAccent.opacity(colorScheme == .dark ? 0.4 : 0.55))
                         .frame(width: 3.5)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, 20)
 
                     VStack(alignment: .leading, spacing: 0) {
                         // Episode number
                         Text("E\(episode.episodeNumber)")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(episode.isWatched ? green : accent.opacity(0.6))
+                            .foregroundStyle(episode.isWatched ? green : unwatchedAccent.opacity(0.6))
 
                         Spacer(minLength: 4)
 
                         // Title
                         Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .lineLimit(1)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .lineLimit(2)
                             .foregroundStyle(episode.isWatched ? .secondary : .primary)
 
                         Spacer(minLength: 6)
@@ -393,9 +394,9 @@ private struct EpisodeCube: View {
                         .padding(.top, 5)
                     }
                     .padding(.leading, 14)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 18)
                 }
-                .frame(maxWidth: .infinity, minHeight: 92)
+                .frame(maxWidth: .infinity, minHeight: 110)
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(colorScheme == .dark ? Color(white: 0.14) : Color(white: 0.93))

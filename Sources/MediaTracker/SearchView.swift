@@ -13,10 +13,24 @@ struct SearchView: View {
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
     var submitTrigger: Int
-    var viewModel: MediaViewModel // Existing global MediaViewModel
+    var viewModel: MediaViewModel
     
     @State private var searchVM: SearchViewModel
     @State private var selectedType: SearchType = .all
+    @AppStorage("recent_searches") private var recentSearchesData: String = ""
+
+    private var recentSearches: [String] {
+        recentSearchesData.split(separator: "\n").map(String.init)
+    }
+
+    private func addRecentSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        var recent = recentSearches
+        recent.removeAll { $0 == trimmed }
+        recent.insert(trimmed, at: 0)
+        recentSearchesData = Array(recent.prefix(10)).joined(separator: "\n")
+    }
 
     init(
         searchText: Binding<String>, isSearchActive: Binding<Bool>, submitTrigger: Int,
@@ -61,6 +75,7 @@ struct SearchView: View {
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
         }
+        .onSubmit(of: .search) { addRecentSearch(searchText) }
         .alert("Search Error", isPresented: $searchVM.showError, presenting: searchVM.errorMessage) { _ in
             Button("OK") { searchVM.errorMessage = nil }
         } message: { message in
@@ -134,12 +149,59 @@ struct SearchView: View {
     private var resultsScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
+                recentSearchesSection
                 localResultsSection
                 webResultsSection
             }
             .padding(.vertical, 30)
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    @ViewBuilder
+    private var recentSearchesSection: some View {
+        let recent = recentSearches
+        if searchText.isEmpty && !recent.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Recent Searches")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .kerning(1.2)
+                    Spacer()
+                    Button("Clear") {
+                        recentSearchesData = ""
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(recent, id: \.self) { query in
+                            Button {
+                                searchText = query
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.system(size: 10))
+                                    Text(query)
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.primary.opacity(0.06))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+            }
+        }
     }
 
     @ViewBuilder

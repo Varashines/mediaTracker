@@ -1,6 +1,7 @@
 import ServiceManagement
 import SwiftData
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,6 +21,12 @@ struct SettingsView: View {
     @State private var showClearDatabaseConfirmation = false
     @State private var showNotificationDebug = false
     @Namespace private var headerNamespace
+
+    // Notification Preferences
+    @AppStorage("notifications_enabled") private var notificationsEnabled = true
+    @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
+    @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
+    @AppStorage("notifications_time") private var notificationTime: Double = 9 * 3600
 
     var body: some View {
         VStack(spacing: 0) {
@@ -193,15 +200,67 @@ struct SettingsView: View {
             settingsHeader("Notifications", icon: "bell.fill", color: .red)
 
             GroupContainer {
+                Toggle(isOn: $notificationsEnabled.animation(.spring)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable Notifications").font(.headline)
+                        Text("Receive alerts for upcoming releases.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: notificationsEnabled) { _, enabled in
+                    if enabled {
+                        NotificationManager.shared.requestPermission()
+                        Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
+                    } else {
+                        Task {
+                            let center = UNUserNotificationCenter.current()
+                            center.removeAllPendingNotificationRequests()
+                        }
+                    }
+                }
+
+                Divider()
+
+                Toggle("Movie Releases", isOn: $movieNotificationsEnabled)
+                    .disabled(!notificationsEnabled)
+                Toggle("TV Episodes", isOn: $tvNotificationsEnabled)
+                    .disabled(!notificationsEnabled)
+
+                Divider()
+
+                HStack {
+                    Text("Notification Time")
+                        .font(.subheadline)
+                    Spacer()
+                    DatePicker("", selection: Binding(
+                        get: { Date(timeIntervalSince1970: notificationTime) },
+                        set: { notificationTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: 86400) }
+                    ), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                .disabled(!notificationsEnabled)
+
+                Divider()
+
+                Button {
+                    Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
+                } label: {
+                    HStack {
+                        Image(systemName: "sparkles")
+                        Text("Schedule All Upcoming")
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(!notificationsEnabled)
+
+                Divider()
+
                 Button {
                     showNotificationDebug = true
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Upcoming Schedule").font(.headline)
-                            Text("Review and cross-examine system alerts.").font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("Review Schedule")
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                     }

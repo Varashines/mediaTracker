@@ -128,8 +128,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         
         // 2. Default fallback: If it's still 00:00 local time, it's likely a date-only object from a generic release.
         if dateComponents.hour == 0 && dateComponents.minute == 0 {
-            dateComponents.hour = 9
-            dateComponents.minute = 0
+            let storedTime = UserDefaults.standard.double(forKey: "notifications_time")
+            let totalSeconds = storedTime > 0 ? storedTime : (9 * 3600)
+            dateComponents.hour = Int(totalSeconds) / 3600
+            dateComponents.minute = (Int(totalSeconds) % 3600) / 60
         }
         
         let trigger1 = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)

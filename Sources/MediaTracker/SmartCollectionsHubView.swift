@@ -1,6 +1,27 @@
 import SwiftUI
 import SwiftData
 
+private actor HubCountsCache {
+    static let shared = HubCountsCache()
+    private var counts: [NavigationCategory: Int]?
+    private var customCounts: [UUID: Int]?
+    private var savedAt: Date?
+
+    func load() -> ([NavigationCategory: Int], [UUID: Int])? {
+        guard let savedAt, savedAt > Date().addingTimeInterval(-300) else {
+            counts = nil; customCounts = nil; return nil
+        }
+        guard let counts, let customCounts else { return nil }
+        return (counts, customCounts)
+    }
+
+    func save(counts: [NavigationCategory: Int], customCounts: [UUID: Int]) {
+        self.counts = counts
+        self.customCounts = customCounts
+        savedAt = Date()
+    }
+}
+
 struct SmartCollectionsHubView: View {
     let namespace: Namespace.ID
     @Binding var selection: SidebarItem?
@@ -222,7 +243,13 @@ struct SmartCollectionsHubView: View {
             CreateCollectionSheet(initialIsSmart: initialIsSmart)
         }
         .task {
-            await fetchCounts()
+            if let cached = await HubCountsCache.shared.load() {
+                self.counts = cached.0
+                self.customSmartCounts = cached.1
+                self.countsLoaded = true
+            } else {
+                await fetchCounts()
+            }
         }
     }
     
@@ -314,6 +341,7 @@ struct SmartCollectionsHubView: View {
             }
         }
         
+        await HubCountsCache.shared.save(counts: newCounts, customCounts: newCustomCounts)
         await MainActor.run {
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.counts = newCounts

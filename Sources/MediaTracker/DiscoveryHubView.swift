@@ -1,6 +1,37 @@
 import SwiftUI
 import SwiftData
 
+actor DiscoveryHubCache {
+    static let shared = DiscoveryHubCache()
+    private var networks: [DiscoveryNode]?
+    private var genres: [DiscoveryNode]?
+    private var languages: [DiscoveryNode]?
+    private var badges: [DiscoveryNode]?
+    private var savedAt: Date?
+
+    func load() -> (networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode], badges: [DiscoveryNode])? {
+        guard let savedAt, savedAt > Date().addingTimeInterval(-300) else {
+            networks = nil; genres = nil; languages = nil; badges = nil
+            return nil
+        }
+        guard let networks, let genres, let languages, let badges else { return nil }
+        return (networks, genres, languages, badges)
+    }
+
+    func save(networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode], badges: [DiscoveryNode]) {
+        self.networks = networks
+        self.genres = genres
+        self.languages = languages
+        self.badges = badges
+        savedAt = Date()
+    }
+
+    func invalidate() {
+        networks = nil; genres = nil; languages = nil; badges = nil
+        savedAt = nil
+    }
+}
+
 struct DiscoveryHubView: View {
     @Environment(\.modelContext) private var modelContext
     let namespace: Namespace.ID
@@ -12,31 +43,26 @@ struct DiscoveryHubView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 60) { // Increased spacing for scale effect
+            VStack(alignment: .leading, spacing: 60) {
                 if hasDataLoaded {
-                    // 1. Recent Activity (Badges)
                     if !viewModel.cachedBadges.isEmpty {
                         DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.cachedBadges, style: .text) { node in
                             onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
                         }
                     }
 
-                    // 2. Networks & Studios (Full Grid)
                     DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
                         onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
                     }
 
-                    // 3. Genres (Full Grid)
                     DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.cachedGenres, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                     }
 
-                    // 4. Languages (Full Grid)
                     DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.cachedLanguages, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
                 } else {
-                    // Loading State
                     HStack {
                         Spacer()
                         ProgressView().controlSize(.small)
@@ -48,7 +74,6 @@ struct DiscoveryHubView: View {
             .padding(.top, 30)
             .padding(.bottom, 20)
             .padding(.bottom, 100)
-            // Essential: Prevent clipping during scaling
             .scrollTargetLayout()
         }
         .accessibilityElement(children: .contain)
@@ -68,34 +93,74 @@ struct DiscoveryHubView: View {
             return
         }
 
-        viewModel.isBatchRefreshing = true
-        let container = modelContext.container
-        let localHidden = hiddenStudios
-        let syncService = DiscoverySyncService(modelContainer: container)
+        if force {
+            Task { await DiscoveryHubCache.shared.invalidate() }
+        }
 
         Task {
-            // Pre-check for existing data to avoid flicker
+            if force {
+                let oldLogos = viewModel.cachedNetworks.compactMap(\.logoPath)
+                for path in oldLogos {
+                    if let url = APIClient.tmdbImageURL(path: path, size: "w300") {
+                        await ImageCache.shared.removeImage(forKey: url)
+                    }
+                }
+            }
+
+            if !force, let cached = await DiscoveryHubCache.shared.load() {
+                await MainActor.run {
+                    viewModel.lastDiscoveryRefresh = Date()
+                    viewModel.cachedNetworks = cached.networks
+                    viewModel.cachedGenres = cached.genres
+                    viewModel.cachedLanguages = cached.languages
+                    viewModel.cachedBadges = cached.badges
+                    hasDataLoaded = true
+                    viewModel.isBatchRefreshing = false
+                }
+                prewarmLogos(networks: cached.networks)
+                return
+            }
+
+            viewModel.isBatchRefreshing = true
+            let container = modelContext.container
+            let localHidden = hiddenStudios
+            let syncService = DiscoverySyncService(modelContainer: container)
+
             let isEmpty = await syncService.isHubDataEmpty()
             if !isEmpty {
                 self.hasDataLoaded = true
             }
 
-            // 1. Local Aggregation - ONLY if forced or empty
             if force || isEmpty {
                 await syncService.syncLibrary(force: force)
             }
 
-            // 2. Fetch all components thread-safely via actor
             let hubData = await syncService.fetchHubData(hiddenStudios: localHidden)
+            await DiscoveryHubCache.shared.save(networks: hubData.networks, genres: hubData.genres, languages: hubData.languages, badges: hubData.badges)
 
-            withAnimation(AppTheme.Animation.springGentle) {
-                self.viewModel.lastDiscoveryRefresh = Date()
-                self.viewModel.cachedNetworks = hubData.networks
-                self.viewModel.cachedGenres = hubData.genres
-                self.viewModel.cachedLanguages = hubData.languages
-                self.viewModel.cachedBadges = hubData.badges
-                self.hasDataLoaded = true
-                self.viewModel.isBatchRefreshing = false
+            await MainActor.run {
+                withAnimation(AppTheme.Animation.springGentle) {
+                    self.viewModel.lastDiscoveryRefresh = Date()
+                    self.viewModel.cachedNetworks = hubData.networks
+                    self.viewModel.cachedGenres = hubData.genres
+                    self.viewModel.cachedLanguages = hubData.languages
+                    self.viewModel.cachedBadges = hubData.badges
+                    self.hasDataLoaded = true
+                    self.viewModel.isBatchRefreshing = false
+                }
+            }
+            prewarmLogos(networks: hubData.networks)
+        }
+    }
+
+    private func prewarmLogos(networks: [DiscoveryNode]) {
+        let logoURLs = networks.compactMap { node -> URL? in
+            guard let path = node.logoPath else { return nil }
+            return APIClient.tmdbImageURL(path: path, size: "w300").flatMap { URL(string: $0) }
+        }
+        if !logoURLs.isEmpty {
+            Task {
+                ImageCache.shared.prewarmImages(urls: logoURLs, targetSize: CGSize(width: 100, height: 50))
             }
         }
     }
