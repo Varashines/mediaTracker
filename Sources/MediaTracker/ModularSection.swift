@@ -12,10 +12,10 @@ struct ModularSection<Content: View>: View {
             HStack(spacing: 7) {
                 Image(systemName: icon)
                     .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary.opacity(0.7))
+                    .foregroundStyle(color.opacity(0.8))
                 Text(title.uppercased())
                     .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary.opacity(0.7))
+                    .foregroundStyle(color.opacity(0.8))
                     .kerning(0.8)
                 Spacer()
             }
@@ -25,10 +25,14 @@ struct ModularSection<Content: View>: View {
                 .padding(AppTheme.Spacing.medium)
                 .background {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.4 : 0.6))
+                        .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.5 : 0.55))
                 }
-                .background(color.opacity(scheme == .dark ? 0.05 : 0.02) as Color)
+                .background(color.opacity(scheme == .dark ? 0.08 : 0.07) as Color)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                        .stroke(color.opacity(scheme == .dark ? 0.06 : 0.04), lineWidth: 0.5)
+                )
         }
     }
 }

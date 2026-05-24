@@ -47,7 +47,7 @@ struct TitleSection: View {
                         .foregroundStyle(accent)
                         .background {
                             Capsule()
-                                .fill(bgAccent.opacity(colorScheme == .dark ? 0.2 : 0.4))
+                                .fill(bgAccent.opacity(colorScheme == .dark ? 0.25 : 0.30))
                         }
                         .clipShape(Capsule())
                         .overlay {

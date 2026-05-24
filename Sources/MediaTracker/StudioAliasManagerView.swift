@@ -3,7 +3,7 @@ import SwiftData
 
 struct StudioAliasManagerView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<MediaItem> { $0.cachedNetwork != nil }) private var items: [MediaItem]
+    @Query(sort: \NetworkEntity.name) private var networks: [NetworkEntity]
     @Query(sort: \StudioAliasEntity.target) private var aliasEntities: [StudioAliasEntity]
     @AppStorage("studio_aliases") private var legacyAliases = ""
     
@@ -193,10 +193,8 @@ struct StudioAliasManagerView: View {
     }
     
     private func loadData() async {
-        let allNets = items.flatMap { item in
-            item.cachedNetwork?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
-        }
-        availableNetworks = Array(Set(allNets.filter { !$0.isEmpty })).sorted()
+        let allNets = networks.map { $0.name }
+        availableNetworks = allNets.filter { !$0.isEmpty }
 
         guard aliasEntities.isEmpty && !legacyAliases.isEmpty else {
             isLoading = false

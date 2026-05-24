@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var selectedTab = 0
     @State private var showClearDatabaseConfirmation = false
     @State private var showNotificationDebug = false
+    @State private var isPulsing = false
     @Namespace private var headerNamespace
 
     // Notification Preferences
@@ -30,8 +31,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // High-End Modern Header
-            HStack(spacing: 0) {
+            // High-End Modern Tab Bar
+            HStack(spacing: 4) {
                 Spacer()
                 HStack(spacing: 2) {
                     modernTabButton(title: "General", icon: "gearshape", index: 0)
@@ -41,39 +42,62 @@ struct SettingsView: View {
                 }
                 Spacer()
             }
-            .padding(.top, 12)
+            .padding(.top, 14)
             .padding(.bottom, 12)
+            .background(Color(nsColor: .windowBackgroundColor))
 
-            Divider().opacity(0.4)
+            Divider().opacity(0.12)
 
             // Content Area
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    Group {
-                        switch selectedTab {
-                        case 0: generalTab
-                        case 1: connectivityTab
-                        case 2: engineTab
-                        case 3: vaultTab
-                        default: EmptyView()
-                        }
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+                    switch selectedTab {
+                    case 0:
+                        generalTab
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .leading))
+                            ))
+                    case 1:
+                        connectivityTab
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .leading))
+                            ))
+                    case 2:
+                        engineTab
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .leading))
+                            ))
+                    case 3:
+                        vaultTab
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .leading))
+                            ))
+                    default:
+                        EmptyView()
                     }
                 }
-                .padding(32)
+                .padding(.horizontal, AppTheme.Spacing.large)
+                .padding(.vertical, AppTheme.Spacing.large)
             }
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
+            .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 300, maxWidth: 600, minHeight: 600)
+        .frame(minWidth: 540, maxWidth: 650, minHeight: 520, maxHeight: 660)
         .fontDesign(.rounded)
-        .animation(.spring(duration: 0.3, bounce: 0.1), value: selectedTab)
+        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: selectedTab)
     }
 
     private func modernTabButton(title: String, icon: String, index: Int) -> some View {
         Button {
-            selectedTab = index
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                selectedTab = index
+            }
             FeedbackManager.shared.trigger(.click)
         } label: {
-            VStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(
                     systemName: selectedTab == index
                         ? (icon == "gearshape"
@@ -84,67 +108,92 @@ struct SettingsView: View {
                                     ? "cpu.fill"
                                     : (icon == "network" ? "network" : "\(icon).fill")))) : icon
                 )
-                .font(.system(size: 20))
-                .foregroundStyle(selectedTab == index ? Color.accentColor : .primary.opacity(0.4))
-                .frame(width: 32, height: 32)
+                .font(.system(size: 11, weight: .bold))
 
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(selectedTab == index ? .primary : .secondary)
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
             .background {
                 if selectedTab == index {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                        .matchedGeometryEffect(id: "tab_bg", in: headerNamespace)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: gradientForTab(index),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .matchedGeometryEffect(id: "settings_active_tab", in: headerNamespace)
+                        .shadow(
+                            color: gradientForTab(index).first!.opacity(0.24),
+                            radius: 4,
+                            x: 0,
+                            y: 1.5
+                        )
                 }
             }
-            .contentShape(Rectangle())
+            .foregroundStyle(selectedTab == index ? .white : .secondary)
         }
         .buttonStyle(.plain)
+    }
+
+    private func gradientForTab(_ index: Int) -> [Color] {
+        switch index {
+        case 0: return [Color.blue, Color.indigo]
+        case 1: return [Color.pink, Color.red]
+        case 2: return [Color.blue, Color.teal]
+        case 3: return [Color.orange, Color.red]
+        default: return [Color.blue, Color.indigo]
+        }
     }
 
     // MARK: - Tabs
 
     private var generalTab: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            settingsHeader("Appearance", icon: "paintbrush", color: .purple)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            settingsHeader("Appearance", icon: "paintbrush", gradientColors: [Color.purple, Color.indigo])
 
             GroupContainer {
-                modernRow(title: "Theme Mode", subtitle: "Switch between light and dark UI.") {
-                    Picker("", selection: $themePreference) {
-                        Text("Auto").tag(0)
-                        Text("Light").tag(1)
-                        Text("Dark").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
+                modernRow(title: "Theme Mode", subtitle: "Select the application visual style.", showDivider: false) {
+                    CustomThemePicker(selection: $themePreference)
                 }
             }
 
-            settingsHeader("Tracking Behavior", icon: "play.square.stack", color: .blue)
+            settingsHeader("Tracking Behavior", icon: "play.square.stack", gradientColors: [Color.blue, Color.teal])
 
             GroupContainer {
                 modernToggle(
                     "Auto-Complete TV Shows",
-                    subtitle: "Marking a show completed automatically marks all episodes watched.",
-                    isOn: $autoMarkEpisodesWatched)
+                    subtitle: "Marking completed completes all episodes.",
+                    isOn: $autoMarkEpisodesWatched
+                )
             }
 
-            settingsHeader("Feedback & Power", icon: "bolt.fill", color: .orange)
+            settingsHeader("Feedback & Power", icon: "bolt.fill", gradientColors: [Color.orange, Color.red])
 
             GroupContainer {
                 modernToggle(
-                    "Tactile Haptics", subtitle: "Physical feedback on actions.",
-                    isOn: $hapticsEnabled)
-                Divider().opacity(0.3)
+                    "Tactile Haptics",
+                    subtitle: "Vibrate on interactions.",
+                    showDivider: true,
+                    isOn: $hapticsEnabled
+                )
+
                 modernToggle(
-                    "Audio Feedback", subtitle: "Sound effects on selection.", isOn: $audioEnabled)
-                Divider().opacity(0.3)
+                    "Audio Feedback",
+                    subtitle: "Play sounds on actions.",
+                    showDivider: true,
+                    isOn: $audioEnabled
+                )
+
                 modernToggle(
-                    "Launch at Login", subtitle: "Start app automatically.", isOn: $launchAtLogin
+                    "Launch at Login",
+                    subtitle: "Open automatically at login.",
+                    showDivider: true,
+                    isOn: $launchAtLogin
                 )
                 .onChange(of: launchAtLogin) { _, newValue in
                     do {
@@ -160,146 +209,244 @@ struct SettingsView: View {
                     } catch {
                         AppLogger.error("Failed to update launch at login: \(error)")
                     }
-                    // Refresh state to match reality
                     launchAtLogin = SMAppService.mainApp.status == .enabled
                 }
-                Divider().opacity(0.3)
+
                 modernToggle(
-                    "Prevent Sleep", subtitle: "Keep background sync active.",
-                    isOn: $preventSleepMode)
+                    "Prevent Sleep",
+                    subtitle: "Keep Mac awake for background sync.",
+                    showDivider: false,
+                    isOn: $preventSleepMode
+                )
             }
         }
     }
 
     private var connectivityTab: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Connectivity", icon: "network", color: .blue)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            settingsHeader("Connectivity", icon: "network", gradientColors: [Color.blue, Color.teal])
 
             GroupContainer {
                 modernRow(
-                    title: "TMDB API Key", subtitle: "Required for movie and series metadata sync."
+                    title: "TMDB API Key",
+                    subtitle: "Enable movie & TV metadata syncing.",
+                    showDivider: false
                 ) {
                     HStack(spacing: 8) {
-                        SecureField("Enter Key", text: $tmdbApiKey)
+                        // Pulsing Status Dot
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(tmdbApiKey.isEmpty ? Color.red : Color.green)
+                                .frame(width: 7, height: 7)
+                                .opacity(isPulsing ? 0.35 : 1.0)
+                                .animation(
+                                    .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                                    value: isPulsing
+                                )
+                            Text(tmdbApiKey.isEmpty ? "Missing Key" : "Connected")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(tmdbApiKey.isEmpty ? .red.opacity(0.8) : .green.opacity(0.8))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill((tmdbApiKey.isEmpty ? Color.red : Color.green).opacity(0.08))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke((tmdbApiKey.isEmpty ? Color.red : Color.green).opacity(0.15), lineWidth: 0.5)
+                        )
+
+                        SecureField("API Key...", text: $tmdbApiKey)
                             .textFieldStyle(.plain)
-                            .padding(8)
-                            .background(Color.primary.opacity(0.04))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .font(.system(size: 11, design: .monospaced))
-                            .frame(width: 200)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 8)
+                            .background(Color.primary.opacity(0.035))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                            )
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .frame(width: 140)
 
                         Link(destination: URL(string: "https://www.themoviedb.org/settings/api")!) {
-                            Image(systemName: "questionmark.circle.fill").font(.title3)
+                            ZStack {
+                                Circle()
+                                    .fill(Color.accentColor.opacity(0.08))
+                                    .frame(width: 22, height: 22)
+                                Image(systemName: "key.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color.accentColor)
+                            }
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(Color.accentColor)
+                        .help("Get TMDB API Key")
                     }
                 }
             }
+            .onAppear {
+                isPulsing = true
+            }
 
-            settingsHeader("Notifications", icon: "bell.fill", color: .red)
+            settingsHeader("Notifications", icon: "bell.fill", gradientColors: [Color.pink, Color.red])
 
             GroupContainer {
-                Toggle(isOn: $notificationsEnabled.animation(.spring)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable Notifications").font(.headline)
-                        Text("Receive alerts for upcoming releases.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                modernToggle(
+                    "Enable Notifications",
+                    subtitle: "Receive desktop release alerts.",
+                    showDivider: notificationsEnabled,
+                    isOn: $notificationsEnabled
+                )
                 .onChange(of: notificationsEnabled) { _, enabled in
                     if enabled {
                         NotificationManager.shared.requestPermission()
                         Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
                     } else {
                         Task {
-                            let center = UNUserNotificationCenter.current()
-                            center.removeAllPendingNotificationRequests()
+                            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
                         }
                     }
                 }
 
-                Divider()
+                if notificationsEnabled {
+                    // Content Channels Selection
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Notification Channels")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
 
-                Toggle("Movie Releases", isOn: $movieNotificationsEnabled)
-                    .disabled(!notificationsEnabled)
-                Toggle("TV Episodes", isOn: $tvNotificationsEnabled)
-                    .disabled(!notificationsEnabled)
+                        HStack(spacing: AppTheme.Spacing.medium) {
+                            CustomNotificationCheckbox(
+                                title: "Movies",
+                                icon: "film",
+                                isOn: $movieNotificationsEnabled
+                            )
+                            
+                            CustomNotificationCheckbox(
+                                title: "TV Shows",
+                                icon: "tv",
+                                isOn: $tvNotificationsEnabled
+                            )
+                        }
+                        .padding(.bottom, 6)
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.small)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    Divider()
+                        .opacity(0.12)
+                        .padding(.horizontal, 8)
 
-                Divider()
-
-                HStack {
-                    Text("Notification Time")
-                        .font(.subheadline)
-                    Spacer()
-                    DatePicker("", selection: Binding(
-                        get: { Date(timeIntervalSince1970: notificationTime) },
-                        set: { notificationTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: 86400) }
-                    ), displayedComponents: .hourAndMinute)
+                    // Delivery Hour
+                    modernRow(
+                        title: "Preferred Delivery Time",
+                        subtitle: "Daily notification delivery time.",
+                        showDivider: false
+                    ) {
+                        DatePicker("", selection: Binding(
+                            get: { Date(timeIntervalSince1970: notificationTime) },
+                            set: { notificationTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: 86400) }
+                        ), displayedComponents: .hourAndMinute)
                         .labelsHidden()
+                        .controlSize(.regular)
+                    }
+                    .transition(.opacity)
                 }
-                .disabled(!notificationsEnabled)
 
                 Divider()
+                    .opacity(0.12)
+                    .padding(.horizontal, 8)
 
-                Button {
-                    Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
-                } label: {
-                    HStack {
-                        Image(systemName: "sparkles")
-                        Text("Schedule All Upcoming")
+                modernRow(
+                    title: "Scheduled Queue",
+                    subtitle: "Reset notifications or inspect queue.",
+                    showDivider: false
+                ) {
+                    HStack(spacing: 12) {
+                        Button {
+                            Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                Text("Reschedule All")
+                            }
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.accentColor.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!notificationsEnabled)
+
+                        Button {
+                            showNotificationDebug = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("Review Schedule")
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.primary.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .buttonStyle(.plain)
-                .disabled(!notificationsEnabled)
-
-                Divider()
-
-                Button {
-                    showNotificationDebug = true
-                } label: {
-                    HStack {
-                        Text("Review Schedule")
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showNotificationDebug) { NotificationDebugView() }
     }
 
     private var engineTab: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Data Processing", icon: "brain", color: .green)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            settingsHeader("Data Processing", icon: "brain", gradientColors: [Color.green, Color.emerald])
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("STUDIO ALIASES").font(.system(size: 10, weight: .bold)).foregroundStyle(
-                    .tertiary)
+                Text("STUDIO ALIASES")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 4)
+
                 GroupContainer {
-                    StudioAliasManagerView().padding(.vertical, 8)
+                    StudioAliasManagerView().padding(.vertical, 4)
                 }
 
-                Text("CONTENT FILTERS").font(.system(size: 10, weight: .bold)).foregroundStyle(
-                    .tertiary
-                ).padding(.top, 8)
+                Text("CONTENT FILTERS")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 4)
+
                 GroupContainer {
-                    DiscoveryManagementView().padding(.vertical, 8)
+                    DiscoveryManagementView().padding(.vertical, 4)
                 }
             }
         }
     }
 
     private var vaultTab: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            settingsHeader("Maintenance", icon: "wrench.and.screwdriver.fill", color: .blue)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            settingsHeader("Maintenance", icon: "wrench.and.screwdriver.fill", gradientColors: [Color.orange, Color.red])
 
             GroupContainer {
                 modernRow(
-                    title: "Library Backup", subtitle: "Export or import your entire library."
+                    title: "Manual Backup",
+                    subtitle: "Export or import your collection backup.",
+                    showDivider: true
                 ) {
                     HStack(spacing: 8) {
                         Button("Export") {
@@ -313,71 +460,92 @@ struct SettingsView: View {
                                     }
                                 }
                             }
-                        }.buttonStyle(.bordered)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
                         Button("Import") {
-                            LibraryImportExportService.shared.importLibrary(
-                                modelContext: modelContext)
-                        }.buttonStyle(.bordered)
+                            LibraryImportExportService.shared.importLibrary(modelContext: modelContext)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
                 }
-                Divider().opacity(0.3)
+
                 modernRow(
-                    title: "Auto Backup Location", subtitle: "Where automated backups are saved."
+                    title: "Auto Backup Location",
+                    subtitle: "Show automatic backups in Finder.",
+                    showDivider: true
                 ) {
                     Button("Show in Finder") {
-                        let url = URL.applicationSupportDirectory.appendingPathComponent(
-                            "AutoBackups")
+                        let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
                         if !FileManager.default.fileExists(atPath: url.path) {
-                            try? FileManager.default.createDirectory(
-                                at: url, withIntermediateDirectories: true)
+                            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                         }
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                Divider().opacity(0.3)
+
                 modernRow(
-                    title: "Database Repair", subtitle: "Scan and heal relationship integrity."
+                    title: "Database Repair",
+                    subtitle: "Fix relationships and legacy duplicates.",
+                    showDivider: true
                 ) {
                     Button("Start Repair") {
                         DataService.shared.runMaintenance(modelContext: modelContext)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                Divider().opacity(0.3)
-                modernRow(title: "Image Cache", subtitle: "Free up disk space by purging posters.")
-                {
-                    Button("Purge Cache") { ImageCache.shared.clearFullCache() }
-                        .buttonStyle(.bordered)
-                        .foregroundStyle(.red)
+
+                modernRow(
+                    title: "Image Cache",
+                    subtitle: "Delete cached poster images.",
+                    showDivider: false
+                ) {
+                    Button("Purge Cache") {
+                        ImageCache.shared.clearFullCache()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .foregroundStyle(.red)
                 }
             }
 
-            settingsHeader("Danger Zone", icon: "exclamationmark.triangle.fill", color: .red)
+            settingsHeader("Danger Zone", icon: "exclamationmark.triangle.fill", gradientColors: [Color.red, Color.orange])
 
-            GroupContainer {
+            GroupContainer(isDangerZone: true) {
                 Button {
                     showClearDatabaseConfirmation = true
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Delete All Data")
-                                .font(.system(size: 13, weight: .semibold))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Delete All Library Data")
+                                .font(AppTheme.Font.bodyBold)
                                 .foregroundStyle(.red)
-                            Text("Permanently remove everything. Cannot be undone.")
-                                .font(.system(size: 11))
+                            Text("Wipe entire library. This cannot be undone.")
+                                .font(AppTheme.Font.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Image(systemName: "trash.fill").foregroundStyle(.red)
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.red)
                     }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
 
-            Text("MediaTracker v\(appVersion)").font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+            Text("MediaTracker v\(appVersion)")
+                .font(AppTheme.Font.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, AppTheme.Spacing.tiny)
         }
         .confirmationDialog("Reset App?", isPresented: $showClearDatabaseConfirmation) {
             Button("Delete Everything", role: .destructive) {
@@ -388,81 +556,244 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    private func settingsHeader(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.primary)
+    private func settingsHeader(_ title: String, icon: String, gradientColors: [Color]) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 26, height: 26)
+                    .shadow(
+                        color: (gradientColors.first ?? .clear).opacity(0.24),
+                        radius: 4,
+                        x: 0,
+                        y: 2
+                    )
+
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+            }
 
             Text(title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
         }
+        .padding(.horizontal, AppTheme.Spacing.micro)
     }
 
     private func modernRow<Content: View>(
-        title: String, subtitle: String, @ViewBuilder content: () -> Content
+        title: String,
+        subtitle: String,
+        showDivider: Bool = false,
+        @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.primary)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(AppTheme.Font.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: AppTheme.Spacing.medium)
+                content()
             }
-            Spacer(minLength: 20)
-            content()
+            .padding(.vertical, 10)
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+
+            if showDivider {
+                Divider()
+                    .opacity(0.12)
+                    .padding(.horizontal, 8)
+            }
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
     }
 
-    private func modernToggle(_ title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
-        modernRow(title: title, subtitle: subtitle) {
+    private func modernToggle(_ title: String, subtitle: String, showDivider: Bool = false, isOn: Binding<Bool>) -> some View {
+        modernRow(title: title, subtitle: subtitle, showDivider: showDivider) {
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)
                 .labelsHidden()
         }
         .onTapGesture {
-            withAnimation {
+            withAnimation(AppTheme.Animation.springDefault) {
                 isOn.wrappedValue.toggle()
             }
             FeedbackManager.shared.trigger(.click)
         }
     }
 
-    private var adaptiveAccent: Color {
-        Color.accentColor
-    }
-
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.0.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "6.0.0"
     }
 }
 
+// Inline Group Container Card
 struct GroupContainer<Content: View>: View {
+    @Environment(\.colorScheme) var scheme
+    var customBorderColor: Color? = nil
+    var isDangerZone: Bool = false
     @ViewBuilder let content: Content
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             content
         }
-        .padding(14)
-        .background(Color.primary.opacity(0.02))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, AppTheme.Spacing.small)
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.28 : 0.52))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: strokeColors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isDangerZone ? 1.5 : 0.75
+                )
+        }
+        .shadow(
+            color: (scheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.04)),
+            radius: 8,
+            x: 0,
+            y: 4
+        )
+    }
+
+    private var strokeColors: [Color] {
+        if isDangerZone {
+            return [Color.red.opacity(0.6), Color.red.opacity(0.15)]
+        }
+        if let custom = customBorderColor {
+            return [custom.opacity(0.4), custom.opacity(0.08)]
+        }
+        if scheme == .dark {
+            return [.white.opacity(0.12), .white.opacity(0.03)]
+        } else {
+            return [.white.opacity(0.45), Color.primary.opacity(0.06)]
         }
     }
 }
 
-#Preview("Settings View") {
-    SettingsView()
-        .modelContainer(
-            try! ModelContainer(
-                for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
-                MediaCollection.self, StudioAliasEntity.self,
-                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-            ))
+// Custom Slide segment picker for Appearance
+struct CustomThemePicker: View {
+    @Binding var selection: Int
+    @Namespace private var segmentNamespace
+    @Environment(\.colorScheme) var scheme
+
+    private let options = [
+        (0, "Auto", "aqi.medium"),
+        (1, "Light", "sun.max.fill"),
+        (2, "Dark", "moon.fill")
+    ]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.0) { tag, title, icon in
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        selection = tag
+                    }
+                    FeedbackManager.shared.trigger(.click)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: icon)
+                            .font(.system(size: 10.5, weight: .semibold))
+                        Text(title)
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minWidth: 64)
+                    .contentShape(Rectangle())
+                    .background {
+                        if selection == tag {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.accentColor)
+                                .matchedGeometryEffect(id: "active_theme_segment", in: segmentNamespace)
+                                .shadow(color: Color.accentColor.opacity(0.2), radius: 3, x: 0, y: 1)
+                        }
+                    }
+                    .foregroundStyle(selection == tag ? .white : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color.primary.opacity(scheme == .dark ? 0.055 : 0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+// Custom Notification Checkbox
+struct CustomNotificationCheckbox: View {
+    let title: String
+    let icon: String
+    @Binding var isOn: Bool
+    @Environment(\.colorScheme) var scheme
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                isOn.toggle()
+            }
+            FeedbackManager.shared.trigger(.click)
+        } label: {
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isOn ? Color.accentColor : Color.primary.opacity(0.04))
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(isOn ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 0.75)
+                        )
+
+                    if isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                Label(title, systemImage: icon)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(isOn ? .primary : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isOn ? Color.accentColor.opacity(0.05) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isOn ? Color.accentColor.opacity(0.15) : Color.clear, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+extension Color {
+    static let emerald = Color(red: 0.05, green: 0.74, blue: 0.44)
 }

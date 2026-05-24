@@ -351,7 +351,7 @@ private struct EpisodeCube: View {
                 HStack(spacing: 0) {
                     // Left accent bar
                     RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                        .fill(episode.isWatched ? green : unwatchedAccent.opacity(colorScheme == .dark ? 0.4 : 0.55))
+                        .fill(episode.isWatched ? green : unwatchedAccent.opacity(colorScheme == .dark ? 0.5 : 0.7))
                         .frame(width: 3.5)
                         .padding(.vertical, 20)
 
@@ -359,7 +359,7 @@ private struct EpisodeCube: View {
                         // Episode number
                         Text("E\(episode.episodeNumber)")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(episode.isWatched ? green : unwatchedAccent.opacity(0.6))
+                            .foregroundStyle(episode.isWatched ? green : unwatchedAccent.opacity(colorScheme == .dark ? 0.7 : 0.9))
 
                         Spacer(minLength: 4)
 
@@ -400,6 +400,10 @@ private struct EpisodeCube: View {
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(colorScheme == .dark ? Color(white: 0.14) : Color(white: 0.93))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(themeColor.opacity(colorScheme == .dark ? 0.0 : 0.04))
+                        }
                         .overlay {
                             if episode.isWatched {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)

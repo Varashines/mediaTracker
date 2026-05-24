@@ -41,8 +41,8 @@ struct DiscoveryCard: View {
     var body: some View {
         Button(action: action) {
             let cornerRadius: CGFloat = style == .logo ? AppTheme.Radius.medium : AppTheme.Radius.large
-            let bg = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.18 : 0.10) : (isHovered ? 0.10 : 0.05))
-            let border = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.35 : 0.20) : (isHovered ? 0.22 : 0.10))
+            let bg = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.14 : 0.08) : (isHovered ? 0.12 : 0.07))
+            let border = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12))
 
             ZStack {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

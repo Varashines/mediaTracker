@@ -63,25 +63,49 @@ struct MetadataSection: View {
 
     var body: some View {
         let items = metadataItems
-        HStack(spacing: 8) {
-            ForEach(0..<items.count, id: \.self) { index in
-                let item = items[index]
-                HStack(spacing: 4) {
-                    Image(systemName: item.icon)
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                    Text(item.value)
-                        .foregroundStyle(.primary)
+        let mid = min(4, items.count)
+        let firstRow = Array(items.prefix(mid))
+        let secondRow = Array(items.suffix(from: mid))
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ForEach(firstRow) { meta in
+                    pillView(meta, accent: accent)
                 }
-                .font(AppTheme.Font.caption)
-                
-                if index < items.count - 1 {
-                    Text("·")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary.opacity(0.5))
+            }
+
+            if !secondRow.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(secondRow) { meta in
+                        pillView(meta, accent: accent)
+                    }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func pillView(_ meta: MetadataItem, accent: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: meta.icon)
+                .font(.system(size: 9))
+                .foregroundStyle(accent)
+            Text(meta.value)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background {
+            Capsule()
+                .fill(themeColor.opacity(colorScheme == .dark ? 0.10 : 0.14))
+        }
+        .overlay {
+            Capsule()
+                .stroke(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.20), lineWidth: 0.5)
+        }
+        .clipShape(Capsule())
     }
 }

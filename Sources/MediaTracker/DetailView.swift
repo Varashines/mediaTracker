@@ -38,14 +38,29 @@ struct DetailView: View {
         ZStack {
             Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             
-            // Dynamic Backdrop Blend - optimized with RadialGradient (No heavy dynamic blur)
+            // Dynamic Backdrop Gradient — full-view wash
             GeometryReader { geo in
-                RadialGradient(
-                    colors: [effectiveThemeColor.opacity(colorScheme == .dark ? 0.22 : 0.08), .clear],
-                    center: .topTrailing,
-                    startRadius: 0,
-                    endRadius: min(geo.size.width, geo.size.height) * 0.95
-                )
+                ZStack {
+                    RadialGradient(
+                        colors: [
+                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.22 : 0.18),
+                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.08 : 0.06),
+                            .clear
+                        ],
+                        center: .top,
+                        startRadius: 0,
+                        endRadius: min(geo.size.width, geo.size.height) * 1.5
+                    )
+                    RadialGradient(
+                        colors: [
+                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.08 : 0.06),
+                            .clear
+                        ],
+                        center: .bottom,
+                        startRadius: 0,
+                        endRadius: min(geo.size.width, geo.size.height) * 0.8
+                    )
+                }
                 .ignoresSafeArea()
             }
             .animation(AppTheme.Animation.springGentle, value: effectiveThemeColor)

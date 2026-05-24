@@ -17,7 +17,7 @@ extension Color {
         if colorScheme == .dark {
             return Color.green
         } else {
-            return Color(red: 0.0, green: 0.6, blue: 0.2)
+            return Color(red: 0.15, green: 0.75, blue: 0.3)
         }
     }
 

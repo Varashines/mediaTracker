@@ -25,12 +25,12 @@ struct CastMemberCard: View {
             textSection
         }
         .frame(width: 200, height: 90)
-        .background(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
+        .background(themeColor.opacity(colorScheme == .dark ? 0.12 : 0.10))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .background {
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                 .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: accent.opacity(colorScheme == .dark ? 0.2 : 0.1), radius: 6, x: 0, y: 3)
+                .shadow(color: accent.opacity(colorScheme == .dark ? 0.15 : 0.12), radius: 6, x: 0, y: 3)
         }
         .overlay(borderOverlay())
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
