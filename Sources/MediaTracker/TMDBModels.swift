@@ -76,7 +76,10 @@ struct TMDBPersonSearchEntry: Codable {
     let profile_path: String?
 }
 
-struct TMDBExternalIDs: Codable { let tvdb_id: Int? }
+struct TMDBExternalIDs: Codable {
+    let tvdb_id: Int?
+    let imdb_id: String?
+}
 struct TMDBNextEpisode: Codable { let air_date: String?, episode_number: Int?, season_number: Int? }
 struct TMDBSeasonBrief: Codable { let season_number: Int, name: String?, episode_count: Int, air_date: String? }
 struct TMDBSeasonResponse: Codable { let episodes: [TMDBEpisodeBrief] }

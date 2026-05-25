@@ -22,9 +22,12 @@ final class MediaStateService {
         lastChangedItemID = itemID
     }
 
-    func postItemRefreshed(id: String) {
+    func postItemRefreshed(id: String, persistentID: PersistentIdentifier? = nil) {
         needsFullRefreshCount += 1
         refreshedItemID = id
+        if let persistentID {
+            lastChangedItemID = persistentID
+        }
     }
 
     func postBulkRefreshed() {

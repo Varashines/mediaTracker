@@ -35,12 +35,8 @@ struct SmartCollectionsHubView: View {
     @State private var countsLoaded = false
     @State private var showingCreateSheet = false
     @State private var initialIsSmart = true
-    
-    @Query(filter: #Predicate<MediaCollection> { $0.isSmart == true })
-    private var customSmartCollections: [MediaCollection]
-    
-    @Query(filter: #Predicate<MediaCollection> { $0.isSmart == false })
-    private var manualCollections: [MediaCollection]
+    @State private var customSmartCollections: [MediaCollection] = []
+    @State private var manualCollections: [MediaCollection] = []
     
     private let smartCategories: [NavigationCategory] = [
         .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites
@@ -243,12 +239,19 @@ struct SmartCollectionsHubView: View {
             CreateCollectionSheet(initialIsSmart: initialIsSmart)
         }
         .task {
+            await fetchCollections()
             if let cached = await HubCountsCache.shared.load() {
                 self.counts = cached.0
                 self.customSmartCounts = cached.1
                 self.countsLoaded = true
             } else {
                 await fetchCounts()
+            }
+        }
+        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+            let itemID = MediaStateService.shared.lastChangedItemID
+            if itemID == nil {
+                Task { await fetchCollections() }
             }
         }
     }
@@ -290,6 +293,25 @@ struct SmartCollectionsHubView: View {
         case .stalled: return "Active titles with no progress in the last 3 months."
         case .archive: return "Completed or dropped items you've archived."
         default: return ""
+        }
+    }
+
+    private func fetchCollections() async {
+        let smart = try? modelContext.fetch(
+            FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.smartRulesData != nil },
+                sortBy: [SortDescriptor(\.name)]
+            )
+        )
+        let manual = try? modelContext.fetch(
+            FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.smartRulesData == nil },
+                sortBy: [SortDescriptor(\.name)]
+            )
+        )
+        if let smart, let manual {
+            self.customSmartCollections = smart
+            self.manualCollections = manual
         }
     }
 

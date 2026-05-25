@@ -8,6 +8,7 @@ struct GroupedMediaGrid: View {
     var viewModel: MediaViewModel
     let namespace: Namespace.ID
     let isFastScrolling: Bool
+    let useCompactCards: Bool
     let columns: [GridItem]
     
     @State private var completedIDs: Set<String> = []
@@ -22,37 +23,11 @@ struct GroupedMediaGrid: View {
                         iconColor: .secondary
                     )
                     
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
                         let groupArray = Array(groupMetadatas.enumerated())
                         ForEach(groupArray, id: \.element.id) { idx, metadata in
                             NavigationLink(value: metadata.id) {
-                                MediaThumbnailView(
-                                    metadata: metadata, 
-                                    mode: .grid, 
-                                    showTypeBadge: viewModel.currentGroupBy != .category, 
-                                    isUpcomingSection: showingUpcomingOnly, 
-                                    namespace: namespace, 
-                                    isFastScrolling: isFastScrolling, 
-                                    isCompletedInCollection: completedIDs.contains(metadata.itemID),
-                                    selectedCollectionID: viewModel.selectedCollectionID
-                                )
-                                .id(metadata.versionHash)
-                                .entranceStagger(index: 0)
-                                .onAppear {
-                                    if isFastScrolling {
-                                        let prefetchCount = 8
-                                        let endIdx = min(idx + 1 + prefetchCount, groupArray.count)
-                                        if idx + 1 < groupArray.count {
-                                            let slice = groupArray[(idx + 1)..<endIdx]
-                                            let elements: [MediaThumbnailMetadata] = slice.map { $0.element }
-                                            let urlsToPrefetch: [URL] = elements.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
-                                            
-                                            if !urlsToPrefetch.isEmpty {
-                                                ImageCache.shared.prewarmImages(urls: urlsToPrefetch, targetSize: CGSize(width: 160, height: 240), priority: .low)
-                                            }
-                                        }
-                                    }
-                                }
+                                gridCell(for: metadata)
                             }
                             .buttonStyle(.interactive)
                         }
@@ -62,7 +37,7 @@ struct GroupedMediaGrid: View {
                 }
             }
         }
-        .padding(.bottom, 40)
+        .padding(.bottom, 24)
         .task(id: viewModel.selectedCollectionID) {
             guard let cid = viewModel.selectedCollectionID else {
                 completedIDs = []
@@ -78,5 +53,30 @@ struct GroupedMediaGrid: View {
         }
     }
     
+    @ViewBuilder
+    private func gridCell(for metadata: MediaThumbnailMetadata) -> some View {
+        if !useCompactCards {
+            MediaThumbnailView(
+                metadata: metadata,
+                mode: .grid,
+                showTypeBadge: viewModel.currentGroupBy != .category,
+                isUpcomingSection: showingUpcomingOnly,
+                namespace: namespace,
+                isFastScrolling: isFastScrolling,
+                isCompletedInCollection: completedIDs.contains(metadata.itemID),
+                selectedCollectionID: viewModel.selectedCollectionID
+            )
+            .id(metadata.versionHash)
+            .entranceStagger(index: 0)
+        } else {
+            CompactThumbnailView(
+                metadata: metadata,
+                isFastScrolling: isFastScrolling,
+                isCompletedInCollection: completedIDs.contains(metadata.itemID)
+            )
+            .id(metadata.versionHash)
+        }
+    }
+
     @Environment(\.modelContext) private var modelContext
 }

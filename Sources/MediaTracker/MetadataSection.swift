@@ -27,6 +27,13 @@ struct MetadataSection: View {
         if let rating = voteAverage, rating > 0 {
             items.append(MetadataItem(icon: "star.fill", value: String(format: "%.1f", rating)))
         }
+        if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
+            let icon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+            items.append(MetadataItem(icon: icon, value: "\(rt)%"))
+        }
+        if let rated = item.movieDetails?.contentRating ?? item.tvShowDetails?.contentRating, !rated.isEmpty, rated != "N/A" {
+            items.append(MetadataItem(icon: rated.contains("TV") ? "tv" : "film.fill", value: rated))
+        }
         
         if let date = item.releaseDate {
             let year = Calendar.current.component(.year, from: date)
@@ -38,11 +45,12 @@ struct MetadataSection: View {
                 items.append(MetadataItem(icon: "clock.fill", value: DateUtils.formatRuntime(runtime)))
             }
         } else if item.type == .tvShow, let tv = item.tvShowDetails {
-            if let s = tv.numberOfSeasons, s > 0 {
+            if let s = tv.numberOfSeasons, s > 0, let e = tv.numberOfEpisodes, e > 0 {
+                items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons") · \(e) EP"))
+            } else if let s = tv.numberOfSeasons, s > 0 {
                 items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons")"))
-            }
-            if let e = tv.numberOfEpisodes, e > 0 {
-                items.append(MetadataItem(icon: "play.fill", value: "\(e) \(e == 1 ? "Episode" : "Episodes")"))
+            } else if let e = tv.numberOfEpisodes, e > 0 {
+                items.append(MetadataItem(icon: "play.fill", value: "\(e) EP"))
             }
         }
         
@@ -63,7 +71,7 @@ struct MetadataSection: View {
 
     var body: some View {
         let items = metadataItems
-        let mid = min(4, items.count)
+        let mid = item.type == .movie ? min(5, items.count) : min(4, items.count)
         let firstRow = Array(items.prefix(mid))
         let secondRow = Array(items.suffix(from: mid))
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)

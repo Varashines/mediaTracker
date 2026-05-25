@@ -6,7 +6,9 @@ extension CGSize {
     static let thumbSmall = AppTheme.Thumbnail.small
     static let thumbMedium = AppTheme.Thumbnail.medium
     static let thumbLarge = AppTheme.Thumbnail.large
+    static let thumbCompact = AppTheme.Thumbnail.compact
     static let backdropLarge = AppTheme.Thumbnail.backdropLarge
+    static let backdropCompact = AppTheme.Thumbnail.backdropCompact
 }
 
 extension Color {

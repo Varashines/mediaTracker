@@ -47,7 +47,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.itemID = item.id
         self.title = item.title
         self.posterURL = item.posterURL
-        self.backdropURL = recommendationReason != nil ? item.backdropURL : nil
+        self.backdropURL = item.backdropURL
         self.overview = item.overview
         self.releaseDate = item.releaseDate
         self.type = item.type

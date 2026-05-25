@@ -17,6 +17,9 @@ final class TVShowDetails {
     var numberOfEpisodes: Int?
     var status: String?
     var voteAverage: Double?
+    var imdbRating: Double?
+    var rottenTomatoesScore: Int?
+    var contentRating: String?
     var genres: [String] = []
     var network: String?
     var networkLogoPath: String?

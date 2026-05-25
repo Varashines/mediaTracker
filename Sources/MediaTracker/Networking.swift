@@ -47,6 +47,7 @@ actor APIClient {
     private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
     
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
+    private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
 
     init() {
         // Compute and create the cache directory exactly once instead of on every getCachedData/saveToCache call
@@ -243,13 +244,13 @@ actor APIClient {
         }
 
         // Coalesce concurrent in-flight requests for the same movie to share one network call
-        if let existing = inFlightMovieDetails[tmdbID] {
+        if !force, let existing = inFlightMovieDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<MovieDetailsResult, Error> {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates")])
+                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates,external_ids")])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
@@ -288,10 +289,14 @@ actor APIClient {
             ProductionCompanyResult(name: $0.name, logoPath: $0.logo_path)
         } ?? []
         
+        let imdbID = details.external_ids?.imdb_id
+
         return MovieDetailsResult(
             runtime: details.runtime, 
             genres: details.genres.map { $0.name }, 
             voteAverage: details.vote_average, 
+            rottenTomatoesScore: nil,
+            imdbID: imdbID,
             releaseDate: finalReleaseDate, 
             backdropPath: details.backdrop_path, 
             posterPath: details.poster_path, 
@@ -311,7 +316,7 @@ actor APIClient {
         }
 
         // Coalesce concurrent in-flight requests for the same show to share one network call
-        if let existing = inFlightTVDetails[tmdbID] {
+        if !force, let existing = inFlightTVDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<TVDetailsResult, Error> {
@@ -350,11 +355,14 @@ actor APIClient {
         } ?? []
         let network = d.networks?.first
         
+        let imdbID = d.external_ids?.imdb_id
+
         return TVDetailsResult(
             seasonsCount: d.number_of_seasons,
             episodesCount: d.number_of_episodes,
             status: d.status,
             voteAverage: d.vote_average,
+            imdbID: imdbID,
             genres: d.genres.map { $0.name },
             backdropPath: d.backdrop_path,
             posterPath: d.poster_path,
@@ -435,6 +443,32 @@ actor APIClient {
         }
     }
 
+    // MARK: - OMDb Integration
+
+    func fetchOMDBData(imdbID: String) async -> OMDBFullData? {
+        let key = omdbApiKey
+        guard !key.isEmpty else { return nil }
+        var components = URLComponents(string: "https://www.omdbapi.com")!
+        components.queryItems = [
+            URLQueryItem(name: "apikey", value: key),
+            URLQueryItem(name: "i", value: imdbID)
+        ]
+        guard let url = components.url else { return nil }
+        
+        for _ in 0..<3 {
+            guard let (data, response) = try? await session.data(from: url),
+                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                  let decoded = try? decoder.decode(OMDBResponse.self, from: data)
+            else {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                continue
+            }
+            if let result = decoded.toFullData { return result }
+            return nil
+        }
+        return nil
+    }
+
     // MARK: - TVMaze Integration
     func lookupTVMazeID(tvdbID: Int) async throws -> Int? {
         return try await executeWithRetry {
@@ -474,7 +508,7 @@ actor APIClient {
         while attempts < maxAttempts {
             try Task.checkCancellation()
             do {
-        throw APIError.requestFailed(503)
+                return try await request()
             } catch APIError.rateLimited {
                 attempts += 1
                 if attempts >= maxAttempts { throw APIError.rateLimited }
@@ -492,7 +526,7 @@ actor APIClient {
                 throw error
             }
         }
-        return try await request()
+        throw APIError.rateLimited
     }
     
     private nonisolated func validateResponse(_ response: URLResponse) throws {

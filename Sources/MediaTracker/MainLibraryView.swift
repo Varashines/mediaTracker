@@ -33,11 +33,24 @@ struct MainLibraryView: View {
         return true
     }
 
+    var showsFilterBar: Bool {
+        if viewModel.selectedCollectionID != nil { return true }
+        switch selectedCategory {
+        case .all, .movie, .tvShow, .completed: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         GeometryReader { (mainGeo: GeometryProxy) in
-            let columns: [GridItem] = [
-                GridItem(.adaptive(minimum: 170, maximum: 200), spacing: 16)
-            ]
+            let isSmartCategory: Bool = {
+                let cat = selectedCategory
+                return cat == .releaseRadar || cat == .smartUpcoming || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
+            }()
+            let usePortraitCards = viewModel.selectedCollectionID != nil || isSmartCategory
+            let columns: [GridItem] = usePortraitCards
+                ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
+                : [GridItem(.adaptive(minimum: 210, maximum: 230), spacing: 10)]
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
@@ -88,16 +101,16 @@ struct MainLibraryView: View {
                                     onNetworkSelected: onNetworkSelected, onBack: onBack,
                                     viewModel: viewModel)
 
-                                if isMainSection {
+                                if showsFilterBar {
                                     LibraryFilterBar(viewModel: viewModel)
                                         .padding(.top, AppTheme.Spacing.micro)
-                                        .padding(.bottom, AppTheme.Spacing.small)
+                                        .padding(.bottom, AppTheme.Spacing.tiny)
                                 }
                             }
                         }
                     }
                 }
-                .padding(.top, AppTheme.Spacing.section)
+                .padding(.top, AppTheme.Spacing.medium)
                 .padding(.bottom, AppTheme.Spacing.large)
                 .background {
                     ScrollVelocityTracker(

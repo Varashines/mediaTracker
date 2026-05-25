@@ -2,6 +2,7 @@ import Foundation
 
 enum UserDefaultsKeys: String {
     case tmdbAPIKey = "tmdb_api_key"
+    case omdbAPIKey = "omdb_api_key"
     case autoMarkEpisodesWatched = "auto_mark_episodes_watched"
     case preventSleepMode = "prevent_sleep_mode"
     case genreDeconstructionV1 = "genre_deconstruction_v1"

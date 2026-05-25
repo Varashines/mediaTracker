@@ -411,8 +411,9 @@ actor BackgroundDataService {
             if shouldSave {
                 try modelContext.save()
                 let refreshedID = item.id
+                let refreshedPID = item.persistentModelID
                 Task { @MainActor in
-                    MediaStateService.shared.postItemRefreshed(id: refreshedID)
+                    MediaStateService.shared.postItemRefreshed(id: refreshedID, persistentID: refreshedPID)
                 }
             }
             return true
@@ -507,8 +508,9 @@ actor BackgroundDataService {
             AppLogger.info("✅ Deep Completion: Marked all episodes as watched for \(itemID).", logger: AppLogger.background)
             
             // Broadcast the refresh
+            let refreshedPID = refreshedItem.persistentModelID
             await MainActor.run {
-                MediaStateService.shared.postItemRefreshed(id: itemID)
+                MediaStateService.shared.postItemRefreshed(id: itemID, persistentID: refreshedPID)
             }
         } catch {
             Task { @MainActor in AppErrorState.shared.surfaceError("Failed to complete show: \(error.localizedDescription)") }
@@ -535,6 +537,11 @@ actor BackgroundDataService {
             movieDetails.runtime = details.runtime
             movieDetails.genres = details.genres
             movieDetails.voteAverage = details.voteAverage
+            if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
+                movieDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+                movieDetails.imdbRating = omdb.imdbRating
+                movieDetails.contentRating = omdb.contentRating
+            }
             movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
             movieDetails.creators = details.directors.map { $0.name }
             
@@ -667,6 +674,11 @@ actor BackgroundDataService {
             tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
             tvDetails.network = await StringPool.shared.intern(details.network)
             tvDetails.voteAverage = details.voteAverage
+            if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
+                tvDetails.imdbRating = omdb.imdbRating
+                tvDetails.contentRating = omdb.contentRating
+                tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+            }
             tvDetails.genres = details.genres
             tvDetails.networkLogoPath = details.networkLogoPath
             tvDetails.numberOfSeasons = details.seasonsCount

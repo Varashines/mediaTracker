@@ -20,8 +20,14 @@ struct LibraryGridSection: View {
         return selectedCategory == .movie || selectedCategory == .tvShow
     }
 
+    private var useCompactCards: Bool {
+        if viewModel.selectedCollectionID != nil { return false }
+        let cat = selectedCategory
+        return cat != .releaseRadar && cat != .smartUpcoming && cat != .catchUp && cat != .loved && cat != .binge && cat != .quickBites && cat != .stalled && cat != .archive
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: 8) {
             if items.isEmpty && groupedItems.isEmpty {
                 if viewModel.isInitialLoading {
                     LoadingGridSkeleton(
@@ -50,6 +56,7 @@ struct LibraryGridSection: View {
                         isCategoryPage: isCategoryPage, namespace: namespace,
                         isFastScrolling: isFastScrolling,
                         selectedCollectionID: viewModel.selectedCollectionID,
+                        useCompactCards: useCompactCards,
                         onLoadMore: onLoadMore, columns: columns)
                 } else {
                     GroupedMediaGrid(
@@ -57,7 +64,9 @@ struct LibraryGridSection: View {
                         selectedCategoryRef: selectedCategory,
                         showingUpcomingOnly: showingUpcomingOnly,
                         viewModel: viewModel, namespace: namespace,
-                        isFastScrolling: isFastScrolling, columns: columns)
+                        isFastScrolling: isFastScrolling,
+                        useCompactCards: useCompactCards,
+                        columns: columns)
                 }
             }
         }

@@ -80,37 +80,55 @@ class DetailViewModel {
         self.coolThemeColor = vibrantThemeColor.hueShift(by: -0.05)
     }
     
+    private var needsOMDBData: Bool {
+        let apiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? ""
+        guard !apiKey.isEmpty else { return false }
+        
+        if item.type == .movie {
+            let md = item.movieDetails
+            let missingContentRating = md?.contentRating == nil || md?.contentRating?.isEmpty == true
+            let missingRT = md?.rottenTomatoesScore == nil
+            return missingContentRating || missingRT
+        } else {
+            let td = item.tvShowDetails
+            return td?.contentRating == nil || td?.contentRating?.isEmpty == true
+        }
+    }
+
     func refreshData(force: Bool = false) {
-        // Skip if item is deleted or app is in sleep mode
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
-        // Phase 5: Proactive Theme Sync - ensure theme is updated even if data sync is throttled
         updateThemeColor()
 
-        // Use lastUpdated as a proxy for "has fetched details" to avoid relationship faulting
         let hasData = item.lastUpdated != nil
         
-        // Session Throttling
         if !force && DataService.shared.hasRefreshedThisSession(id: item.id) {
             return
         }
 
-        if !force && hasData && !needsUpdate { return }
+        if !force && hasData && !needsUpdate && !needsOMDBData { return }
         
-        // Capture context while on MainActor
         guard let context = item.modelContext else { return }
 
         isRefreshing = true
         let rawID = item.id
+        let startTime = ContinuousClock.now
 
         Task { [weak self] in
             let backgroundService = BackgroundDataService(modelContainer: context.container)
             let success = await backgroundService.refreshSingleItem(id: rawID, force: force)
 
+            let elapsed = startTime.duration(to: .now)
+            let minDuration: Duration = .milliseconds(400)
+            if elapsed < minDuration {
+                try? await Task.sleep(for: minDuration - elapsed)
+            }
+
             await MainActor.run { [weak self] in
                 guard let self = self, self.item.modelContext != nil else { return }
                 if success {
                     self.refreshLocalItem()
+                    DataService.shared.markAsRefreshedThisSession(id: rawID)
                 }
                 self.isRefreshing = false
             }
@@ -118,9 +136,6 @@ class DetailViewModel {
     }
 
     func refreshLocalItem() {
-        // SwiftData automatically propagates background saves to the main context.
-        // We rely on lazy-loading for relationships (seasons, cast, episodes) to keep transitions fast.
-        
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
         

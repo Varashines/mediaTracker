@@ -31,6 +31,8 @@ struct MovieDetailsResult {
     let runtime: Int?
     let genres: [String]
     let voteAverage: Double?
+    let rottenTomatoesScore: Int?
+    let imdbID: String?
     let releaseDate: String?
     let backdropPath: String?
     let posterPath: String?
@@ -46,6 +48,7 @@ struct TVDetailsResult {
     let episodesCount: Int
     let status: String
     let voteAverage: Double?
+    let imdbID: String?
     let genres: [String]
     let backdropPath: String?
     let posterPath: String?

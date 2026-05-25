@@ -66,6 +66,8 @@ struct AppTheme {
         static let small = CGSize(width: 160, height: 240)
         static let medium = CGSize(width: 400, height: 600)
         static let large = CGSize(width: 800, height: 1200)
+        static let compact = CGSize(width: 210, height: 105)
         static let backdropLarge = CGSize(width: 2000, height: 1125)
+        static let backdropCompact = CGSize(width: 400, height: 226)
     }
 }

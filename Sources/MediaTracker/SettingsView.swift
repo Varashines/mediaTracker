@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
+    @AppStorage("omdb_api_key") private var omdbApiKey = ""
     @AppStorage("studio_aliases") private var studioAliases = ""
     @AppStorage("theme_preference") private var themePreference: Int = 0
 
@@ -283,6 +284,61 @@ struct SettingsView: View {
             }
             .onAppear {
                 isPulsing = true
+            }
+
+            GroupContainer {
+                modernRow(
+                    title: "OMDb API Key",
+                    subtitle: "Rotten Tomatoes critic scores for movies.",
+                    showDivider: false
+                ) {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(omdbApiKey.isEmpty ? Color.red : Color.green)
+                                .frame(width: 7, height: 7)
+                            Text(omdbApiKey.isEmpty ? "Optional" : "Connected")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(omdbApiKey.isEmpty ? Color.secondary : Color.green.opacity(0.8))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill((omdbApiKey.isEmpty ? Color.secondary : Color.green).opacity(0.08))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke((omdbApiKey.isEmpty ? Color.secondary : Color.green).opacity(0.15), lineWidth: 0.5)
+                        )
+
+                        SecureField("API Key...", text: $omdbApiKey)
+                            .textFieldStyle(.plain)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 8)
+                            .background(Color.primary.opacity(0.035))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                            )
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .frame(width: 140)
+
+                        Link(destination: URL(string: "https://www.omdbapi.com/apikey.aspx")!) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.accentColor.opacity(0.08))
+                                    .frame(width: 22, height: 22)
+                                Image(systemName: "key.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Get OMDb API Key")
+                    }
+                }
             }
 
             settingsHeader("Notifications", icon: "bell.fill", gradientColors: [Color.pink, Color.red])
