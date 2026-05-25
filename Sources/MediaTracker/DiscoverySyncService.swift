@@ -99,6 +99,7 @@ actor DiscoverySyncService {
                     let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                     let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                     
+                    var seenTargets = Set<String>()
                     for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
                         let normalizedName = originalName.lowercased()
                         let targetName: String = sourceToTarget[normalizedName].map { $0 } ?? originalName
@@ -127,7 +128,8 @@ actor DiscoverySyncService {
                             }
                         }
                         
-                        networkCounts[targetName] = (logo: newLogo, count: currentData.count + 1, priority: newPriority, sources: newSources)
+                        let addedCount = seenTargets.insert(targetName).inserted ? 1 : 0
+                        networkCounts[targetName] = (logo: newLogo, count: currentData.count + addedCount, priority: newPriority, sources: newSources)
                     }
                 }
                 
@@ -225,10 +227,14 @@ actor DiscoverySyncService {
             let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
             
+            var seenTargets = Set<String>()
             for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
                 let itemLogo = index < logoPaths.count && !logoPaths[index].isEmpty ? logoPaths[index] : nil
                 let normalizedName = originalName.lowercased()
                 let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
+                
+                guard seenTargets.insert(name).inserted else { continue }
+                
                 let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
                 if let existing = try? modelContext.fetch(descriptor).first {
                     existing.count += 1
@@ -329,9 +335,13 @@ actor DiscoverySyncService {
 
         if let networkString = network {
             let networks = networkString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            var seenTargets = Set<String>()
             for originalName in networks where !originalName.isEmpty {
                 let normalizedName = originalName.lowercased()
                 let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
+                
+                guard seenTargets.insert(name).inserted else { continue }
+                
                 let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
                 if let existing = try? modelContext.fetch(descriptor).first {
                     existing.count -= 1

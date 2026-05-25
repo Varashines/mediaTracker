@@ -41,35 +41,50 @@ struct DiscoveryCard: View {
     var body: some View {
         Button(action: action) {
             let cornerRadius: CGFloat = style == .logo ? AppTheme.Radius.medium : AppTheme.Radius.large
-            let bg: Color = {
-                let base = themeColor
-                if colorScheme == .dark {
-                    guard let nsColor = NSColor(base).usingColorSpace(.sRGB) else {
-                        return base.opacity(isHovered ? 0.12 : 0.07)
-                    }
-                    var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
-                    nsColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-                    let brightness = (r + g + b) / 3
-                    if brightness < 0.25 {
-                        return Color.white.opacity(isHovered ? 0.28 : 0.18)
-                    }
-                    return base.opacity(isHovered ? 0.12 : 0.07)
-                }
-                return base.opacity(isHovered ? 0.12 : 0.07)
-            }()
-            let border = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12))
+            let border = style == .logo
+                ? (isHovered ? themeColor.opacity(0.35) : Color.primary.opacity(0.06))
+                : themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12))
 
             ZStack {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(bg)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(border, lineWidth: isHovered ? 1.0 : 0.8)
-                    }
-
                 if style == .logo {
+                    let baseCardColor = colorScheme == .dark ? Color(white: 0.14) : Color(white: 0.94)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(baseCardColor)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .fill(themeColor.opacity(isHovered ? 0.16 : 0.08))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .stroke(border, lineWidth: isHovered ? 1.0 : 0.8)
+                        }
+                    
                     logoContent
                 } else {
+                    let bg: Color = {
+                        let base = themeColor
+                        if colorScheme == .dark {
+                            guard let nsColor = NSColor(base).usingColorSpace(.sRGB) else {
+                                return base.opacity(isHovered ? 0.12 : 0.07)
+                            }
+                            var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
+                            nsColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+                            let brightness = (r + g + b) / 3
+                            if brightness < 0.25 {
+                                return Color.white.opacity(isHovered ? 0.28 : 0.18)
+                            }
+                            return base.opacity(isHovered ? 0.12 : 0.07)
+                        }
+                        return base.opacity(isHovered ? 0.12 : 0.07)
+                    }()
+                    
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(bg)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .stroke(border, lineWidth: isHovered ? 1.0 : 0.8)
+                        }
+                    
                     textContent
                 }
             }
@@ -86,54 +101,59 @@ struct DiscoveryCard: View {
     @ViewBuilder
     private var logoContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-        ZStack {
-            // Logo — fades on hover
-            Group {
+        ZStack(alignment: .topTrailing) {
+            // Centered Logo or Name
+            ZStack {
                 if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 80, height: 40)) { _ in } placeholder: {
-                        Color.secondary.opacity(0.1)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.06), radius: 2, y: 1)
+                        
+                        CachedImage(url: url, targetSize: CGSize(width: 75, height: 32)) { _ in } placeholder: {
+                            Color.secondary.opacity(0.1)
+                        }
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 75, height: 32)
+                        .padding(4)
                     }
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 80, height: 40)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
-                } else {
-                    VStack(spacing: 6) {
-                        Image(systemName: "tv.fill")
-                            .font(.system(size: 22))
+                    .frame(width: 85, height: 40)
+                    .opacity(isHovered ? 0.15 : 1.0)
+                    .scaleEffect(isHovered ? 0.95 : 1.0)
+                    
+                    if isHovered {
                         Text(node.name)
-                            .font(AppTheme.Font.caption)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
                             .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .padding(.horizontal, 8)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
-                    .foregroundStyle(accent)
+                } else {
+                    Text(node.name)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(accent)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 10)
                 }
             }
-            .opacity(isHovered ? 0 : 1)
-            .scaleEffect(isHovered ? 0.8 : 1)
-
-            // Name + count — vertically centered on hover
-            HStack(spacing: 0) {
-                Text(node.name)
-                    .font(AppTheme.Font.bodyBold)
-                    .fontWeight(.heavy)
-                    .foregroundStyle(accent)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 4)
-
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Count badge in top-right (only on hover)
+            if isHovered {
                 Text("\(node.count)")
-                    .font(AppTheme.Font.bodyBold)
-                    .fontWeight(.heavy)
-                    .foregroundStyle(accent)
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(accent.opacity(0.8))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2.5)
+                    .background(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.05))
+                    .clipShape(Capsule())
+                    .padding(6)
+                    .transition(.opacity.combined(with: .scale))
             }
-            .scaleEffect(isHovered ? 1 : 0.9)
-            .opacity(isHovered ? 1 : 0)
         }
-        .padding(.horizontal, AppTheme.Spacing.large)
-        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
     }
 
     @ViewBuilder
