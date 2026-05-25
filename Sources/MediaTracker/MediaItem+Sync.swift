@@ -130,7 +130,7 @@ extension MediaItem {
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
                 self.state = .completed
                 self.lastStateChangeDate = now
-            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+            } else if progress > 0 && progress < 1.0 && currentState == .wishlist {
                 self.state = .active
                 self.lastStateChangeDate = now
             }
@@ -160,12 +160,12 @@ extension MediaItem {
                     }
                 } else if tv.watchedEpisodesCount > 0 {
                     // Transition to active when a user starts watching
-                    if state == .wishlist {
+                    if state == .wishlist || state == .completed {
                         self.state = .active
                     }
                 } else if tv.watchedEpisodesCount == 0 {
                     // Revert to wishlist if they unwatch everything
-                    if state == .active {
+                    if state == .active || state == .completed {
                         self.state = .wishlist
                     }
                 }

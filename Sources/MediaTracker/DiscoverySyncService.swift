@@ -391,7 +391,7 @@ actor DiscoverySyncService {
 
                     // 2. Fetch Logo and Extract Color
                     guard let path = logoPath,
-                          let urlString = APIClient.tmdbImageURL(path: path, size: "w92"),
+                          let urlString = APIClient.tmdbImageURL(path: path, size: "w300"),
                           let url = URL(string: urlString) else {
                         return (id, nil)
                     }

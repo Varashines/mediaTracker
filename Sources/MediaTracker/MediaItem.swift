@@ -98,6 +98,7 @@ final class MediaItem: Identifiable {
                         }
                     }
                 }
+                try? self.modelContext?.save()
             }
         }
     }

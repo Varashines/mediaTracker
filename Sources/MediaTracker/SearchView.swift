@@ -71,6 +71,12 @@ struct SearchView: View {
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
+        .onChange(of: selectedType) { _, newType in
+            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
+            if !searchText.isEmpty {
+                Task { await searchVM.performSearch(text: searchText, selectedType: newType) }
+            }
+        }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }

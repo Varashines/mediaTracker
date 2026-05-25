@@ -72,7 +72,12 @@ extension MediaFilterActor {
         let now = Date()
         let activeItems = homeResults.filter { item in
             if item.stateValue == "Completed" || item.stateValue == "Dropped" || item.stateValue == "On Hold" { return false }
-            if item.storedIsUpcoming { return false }
+            if item.storedIsUpcoming {
+                let airDate = item.cachedNextAiringDate ?? .distantFuture
+                if airDate > now { return false }
+                let daysSinceAir = now.timeIntervalSince(airDate) / 86400
+                if daysSinceAir > 14 { return false }
+            }
             
             let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
             let nextAirDate = item.cachedNextAiringDate ?? .distantPast

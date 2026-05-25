@@ -12,9 +12,19 @@ struct DetailView: View {
     @State private var isCastExpanded = false
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
+    @State private var showDeleteConfirmation = false
+    @State private var showNavTitle = false
+    @State private var isCollHovered = false
+    @State private var isRefreshHovered = false
+    @State private var isDeleteHovered = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
+
+    struct ScrollOffsetPref: PreferenceKey {
+        static let defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {}
+    }
 
     init(item: MediaItem, namespace: Namespace.ID? = nil, onSearchActor: ((String) -> Void)? = nil)
     {
@@ -68,28 +78,35 @@ struct DetailView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
+                        .background(alignment: .top) {
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ScrollOffsetPref.self,
+                                    value: geo.frame(in: .named("detailScroll")).minY
+                                )
+                            }
+                        }
                     tmdbWarningSection
                     castAndTrackingSection
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
-                .padding(.bottom, 90) // Ensure scroll content doesn't get covered by floating bar
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            
-            // Floating Action Bar overlay at bottom
-            VStack {
-                Spacer()
-                DetailFloatingActionBar(
-                    viewModel: viewModel,
-                    onAddToCollection: { showingCollectionPicker = true },
-                    onRefresh: { viewModel.refreshData(force: true) },
-                    onDelete: deleteItem
-                )
                 .padding(.bottom, 24)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .saturation(showDeleteConfirmation ? 0 : 1)
+            .scaleEffect(showDeleteConfirmation ? 0.97 : 1)
+            .coordinateSpace(name: "detailScroll")
+            .onPreferenceChange(ScrollOffsetPref.self) { minY in
+                showNavTitle = minY < -50
+            }
+
+            if showDeleteConfirmation {
+                deleteConfirmationOverlay
+            }
         }
-        .navigationTitle("Details")
+        .animation(.easeInOut(duration: 0.2), value: showDeleteConfirmation)
+        .navigationTitle(showNavTitle ? viewModel.item.title : "Details")
         .toolbar { detailToolbar }
         .onAppear {
             viewModel.refreshData()
@@ -204,8 +221,163 @@ struct DetailView: View {
 
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Spacer()
+        ToolbarItemGroup(placement: .primaryAction) {
+            HStack(spacing: 14) {
+                Button {
+                    showingCollectionPicker = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isCollHovered ? Color.primary.opacity(0.1) : Color.clear)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 15))
+                    }
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
+                }
+
+                Button {
+                    viewModel.refreshData(force: true)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isRefreshHovered ? Color.primary.opacity(0.1) : Color.clear)
+                            .frame(width: 28, height: 28)
+                        if viewModel.isRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isRefreshing)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.easeInOut) { isRefreshHovered = hovering }
+                }
+
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isDeleteHovered ? Color.primary.opacity(0.1) : Color.clear)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "trash")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.red)
+                    }
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.easeInOut) { isDeleteHovered = hovering }
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var deleteConfirmationOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showDeleteConfirmation = false
+                    }
+                }
+                .transition(.opacity)
+
+            VStack(spacing: 14) {
+                Text("Are you sure?")
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(.red)
+
+                Text("This action will delete")
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text(viewModel.item.title)
+                    .font(AppTheme.Font.bodyBold)
+                    .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
+
+                Text("from the library")
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 24) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showDeleteConfirmation = false
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(.secondary.opacity(0.5))
+                            Text("Cancel")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(width: 56)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        deleteItem()
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(.red)
+                            Text("Delete")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.red)
+                        }
+                        .frame(width: 56)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
+            }
+            .padding(22)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                effectiveThemeColor.opacity(0.35),
+                                effectiveThemeColor.opacity(0.08),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                    .fill(effectiveThemeColor.opacity(0.08))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
+            .shadow(
+                color: .black.opacity(colorScheme == .dark ? 0.45 : 0.2),
+                radius: 30,
+                x: 0,
+                y: 15
+            )
+            .padding(.horizontal, 80)
+            .transition(.scale(scale: 0.94).combined(with: .opacity))
         }
     }
 

@@ -9,7 +9,7 @@ struct StatusPicker: View {
 
     var body: some View {
         if item.modelContext != nil {
-            let currentState = item.state ?? .wishlist
+            let currentState = MediaState(rawValue: item.stateValue) ?? .wishlist
             let accent = stateColor(for: currentState)
             
             Menu {

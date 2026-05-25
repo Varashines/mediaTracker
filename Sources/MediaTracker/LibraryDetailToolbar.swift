@@ -81,7 +81,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         } label: {
             ZStack {
                 Circle()
-                    .fill(isSyncHovered ? Color.primary.opacity(0.1) : Color.clear)
+                    .fill(Color.primary.opacity(isSyncHovered ? 0.1 : 0.06))
                     .frame(width: 32, height: 32)
 
                 if DataService.shared.isRefreshing {

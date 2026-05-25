@@ -18,7 +18,7 @@ struct DiscoveryCard: View {
             if let hex = node.themeColorHex, let color = Color(hex: hex) {
                 return color
             }
-            return .accentColor
+            return Color(red: 0.3, green: 0.3, blue: 0.3)
         }
         // Genre Color Coding
         if baseColor == .indigo {
@@ -41,7 +41,22 @@ struct DiscoveryCard: View {
     var body: some View {
         Button(action: action) {
             let cornerRadius: CGFloat = style == .logo ? AppTheme.Radius.medium : AppTheme.Radius.large
-            let bg = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.14 : 0.08) : (isHovered ? 0.12 : 0.07))
+            let bg: Color = {
+                let base = themeColor
+                if colorScheme == .dark {
+                    guard let nsColor = NSColor(base).usingColorSpace(.sRGB) else {
+                        return base.opacity(isHovered ? 0.12 : 0.07)
+                    }
+                    var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
+                    nsColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+                    let brightness = (r + g + b) / 3
+                    if brightness < 0.25 {
+                        return Color.white.opacity(isHovered ? 0.28 : 0.18)
+                    }
+                    return base.opacity(isHovered ? 0.12 : 0.07)
+                }
+                return base.opacity(isHovered ? 0.12 : 0.07)
+            }()
             let border = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12))
 
             ZStack {
@@ -58,12 +73,13 @@ struct DiscoveryCard: View {
                     textContent
                 }
             }
-            .frame(height: style == .logo ? 110 : 60)
+            .frame(height: style == .logo ? 90 : 60)
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .shadow(color: themeColor.opacity(isHovered ? 0.12 : 0.04), radius: isHovered ? 6 : 2, y: isHovered ? 3 : 1)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isHovered)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .offset(y: isHovered ? -3 : 0)
+        .shadow(color: themeColor.opacity(isHovered ? 0.15 : 0.04), radius: isHovered ? 10 : 2, y: isHovered ? 6 : 1)
+        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
         .onHover { isHovered = $0 }
     }
 
@@ -71,43 +87,53 @@ struct DiscoveryCard: View {
     private var logoContent: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         ZStack {
+            // Logo — fades on hover
             Group {
                 if let logo = node.logoPath, let urlString = APIClient.tmdbImageURL(path: logo, size: "w300"), let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 100, height: 50)) { _ in } placeholder: {
+                    CachedImage(url: url, targetSize: CGSize(width: 80, height: 40)) { _ in } placeholder: {
                         Color.secondary.opacity(0.1)
                     }
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 100, height: 50)
+                    .frame(width: 80, height: 40)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
                 } else {
-                    Text(node.name)
-                        .font(AppTheme.Font.title3)
-                        .foregroundStyle(accent)
-                        .multilineTextAlignment(.center)
+                    VStack(spacing: 6) {
+                        Image(systemName: "tv.fill")
+                            .font(.system(size: 22))
+                        Text(node.name)
+                            .font(AppTheme.Font.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(accent)
                 }
             }
-            .scaleEffect(isHovered ? 0.7 : 1.0)
-            .offset(y: isHovered ? -22 : 0)
+            .opacity(isHovered ? 0 : 1)
+            .scaleEffect(isHovered ? 0.8 : 1)
 
+            // Name + count — vertically centered on hover
             HStack(spacing: 0) {
                 Text(node.name)
-                    .font(AppTheme.Font.caption)
+                    .font(AppTheme.Font.bodyBold)
+                    .fontWeight(.heavy)
                     .foregroundStyle(accent)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 Text("\(node.count)")
-                    .font(AppTheme.Font.mono.weight(.bold))
-                    .foregroundStyle(accent.opacity(0.9))
+                    .font(AppTheme.Font.bodyBold)
+                    .fontWeight(.heavy)
+                    .foregroundStyle(accent)
             }
-            .padding(.horizontal, AppTheme.Spacing.large)
+            .scaleEffect(isHovered ? 1 : 0.9)
             .opacity(isHovered ? 1 : 0)
-            .offset(y: isHovered ? 28 : 45)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isHovered)
+        .padding(.horizontal, AppTheme.Spacing.large)
+        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
     }
 
     @ViewBuilder

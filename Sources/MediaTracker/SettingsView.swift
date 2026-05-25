@@ -32,7 +32,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // High-End Modern Tab Bar
-            HStack(spacing: 4) {
+            HStack {
                 Spacer()
                 HStack(spacing: 2) {
                     modernTabButton(title: "General", icon: "gearshape", index: 0)
@@ -40,55 +40,56 @@ struct SettingsView: View {
                     modernTabButton(title: "Engine", icon: "cpu", index: 2)
                     modernTabButton(title: "Vault", icon: "tray.full", index: 3)
                 }
+                .padding(4)
+                .background(.ultraThinMaterial.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Spacer()
             }
             .padding(.top, 14)
             .padding(.bottom, 12)
-            .background(Color(nsColor: .windowBackgroundColor))
 
             Divider().opacity(0.12)
 
             // Content Area
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-                    switch selectedTab {
-                    case 0:
-                        generalTab
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity.combined(with: .move(edge: .leading))
-                            ))
-                    case 1:
-                        connectivityTab
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity.combined(with: .move(edge: .leading))
-                            ))
-                    case 2:
-                        engineTab
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity.combined(with: .move(edge: .leading))
-                            ))
-                    case 3:
-                        vaultTab
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity.combined(with: .move(edge: .leading))
-                            ))
-                    default:
-                        EmptyView()
+                    Group {
+                        switch selectedTab {
+                        case 0: generalTab
+                        case 1: connectivityTab
+                        case 2: engineTab
+                        case 3: vaultTab
+                        default: EmptyView()
+                        }
                     }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .trailing)),
+                        removal: .opacity.combined(with: .move(edge: .leading))
+                    ))
                 }
                 .padding(.horizontal, AppTheme.Spacing.large)
                 .padding(.vertical, AppTheme.Spacing.large)
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 540, maxWidth: 650, minHeight: 520, maxHeight: 660)
+        .frame(minWidth: 480, maxWidth: 650, minHeight: 520)
         .fontDesign(.rounded)
         .animation(.spring(response: 0.3, dampingFraction: 0.78), value: selectedTab)
+        .onAppear {
+            Task {
+                guard !studioAliases.isEmpty else { return }
+                StudioAliasManagerView.migrateLegacyAliases(from: studioAliases, into: modelContext.container)
+                await MainActor.run { studioAliases = "" }
+            }
+        }
     }
+
+    private static let tabFillIcons: [String: String] = [
+        "gearshape": "gearshape.fill",
+        "tray.full": "tray.full.fill",
+        "cpu": "cpu.fill",
+        "network": "network",
+    ]
 
     private func modernTabButton(title: String, icon: String, index: Int) -> some View {
         Button {
@@ -98,15 +99,9 @@ struct SettingsView: View {
             FeedbackManager.shared.trigger(.click)
         } label: {
             HStack(spacing: 5) {
-                Image(
-                    systemName: selectedTab == index
-                        ? (icon == "gearshape"
-                            ? "gearshape.fill"
-                            : (icon == "tray.full"
-                                ? "tray.full.fill"
-                                : (icon == "cpu"
-                                    ? "cpu.fill"
-                                    : (icon == "network" ? "network" : "\(icon).fill")))) : icon
+                Image(systemName: selectedTab == index
+                    ? (Self.tabFillIcons[icon] ?? "\(icon).fill")
+                    : icon
                 )
                 .font(.system(size: 11, weight: .bold))
 
@@ -449,7 +444,7 @@ struct SettingsView: View {
                     showDivider: true
                 ) {
                     HStack(spacing: 8) {
-                        Button("Export") {
+                        capsuleButton("Export") {
                             let container = modelContext.container
                             Task {
                                 let context = ModelContext(container)
@@ -461,14 +456,9 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-
-                        Button("Import") {
+                        capsuleButton("Import") {
                             LibraryImportExportService.shared.importLibrary(modelContext: modelContext)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
                     }
                 }
 
@@ -477,15 +467,13 @@ struct SettingsView: View {
                     subtitle: "Show automatic backups in Finder.",
                     showDivider: true
                 ) {
-                    Button("Show in Finder") {
+                    capsuleButton("Show in Finder") {
                         let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
                         if !FileManager.default.fileExists(atPath: url.path) {
                             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                         }
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
 
                 modernRow(
@@ -493,11 +481,9 @@ struct SettingsView: View {
                     subtitle: "Fix relationships and legacy duplicates.",
                     showDivider: true
                 ) {
-                    Button("Start Repair") {
+                    capsuleButton("Start Repair") {
                         DataService.shared.runMaintenance(modelContext: modelContext)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
 
                 modernRow(
@@ -505,12 +491,9 @@ struct SettingsView: View {
                     subtitle: "Delete cached poster images.",
                     showDivider: false
                 ) {
-                    Button("Purge Cache") {
+                    capsuleButton("Purge Cache", color: .red) {
                         ImageCache.shared.clearFullCache()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .foregroundStyle(.red)
                 }
             }
 
@@ -567,12 +550,12 @@ struct SettingsView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
                     .shadow(
-                        color: (gradientColors.first ?? .clear).opacity(0.24),
-                        radius: 4,
+                        color: (gradientColors.first ?? .clear).opacity(0.3),
+                        radius: 5,
                         x: 0,
-                        y: 2
+                        y: 2.5
                     )
 
                 Image(systemName: icon)
@@ -636,164 +619,24 @@ struct SettingsView: View {
         }
     }
 
+    private func capsuleButton(_ title: String, color: Color = .accentColor, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(color.opacity(0.2), lineWidth: 0.5)
+            )
+    }
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "6.0.0"
     }
 }
 
-// Inline Group Container Card
-struct GroupContainer<Content: View>: View {
-    @Environment(\.colorScheme) var scheme
-    var customBorderColor: Color? = nil
-    var isDangerZone: Bool = false
-    @ViewBuilder let content: Content
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content
-        }
-        .padding(.vertical, AppTheme.Spacing.small)
-        .padding(.horizontal, AppTheme.Spacing.medium)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(scheme == .dark ? 0.28 : 0.52))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: strokeColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: isDangerZone ? 1.5 : 0.75
-                )
-        }
-        .shadow(
-            color: (scheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.04)),
-            radius: 8,
-            x: 0,
-            y: 4
-        )
-    }
 
-    private var strokeColors: [Color] {
-        if isDangerZone {
-            return [Color.red.opacity(0.6), Color.red.opacity(0.15)]
-        }
-        if let custom = customBorderColor {
-            return [custom.opacity(0.4), custom.opacity(0.08)]
-        }
-        if scheme == .dark {
-            return [.white.opacity(0.12), .white.opacity(0.03)]
-        } else {
-            return [.white.opacity(0.45), Color.primary.opacity(0.06)]
-        }
-    }
-}
-
-// Custom Slide segment picker for Appearance
-struct CustomThemePicker: View {
-    @Binding var selection: Int
-    @Namespace private var segmentNamespace
-    @Environment(\.colorScheme) var scheme
-
-    private let options = [
-        (0, "Auto", "aqi.medium"),
-        (1, "Light", "sun.max.fill"),
-        (2, "Dark", "moon.fill")
-    ]
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(options, id: \.0) { tag, title, icon in
-                Button {
-                    withAnimation(AppTheme.Animation.springSnappy) {
-                        selection = tag
-                    }
-                    FeedbackManager.shared.trigger(.click)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: icon)
-                            .font(.system(size: 10.5, weight: .semibold))
-                        Text(title)
-                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(minWidth: 64)
-                    .contentShape(Rectangle())
-                    .background {
-                        if selection == tag {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.accentColor)
-                                .matchedGeometryEffect(id: "active_theme_segment", in: segmentNamespace)
-                                .shadow(color: Color.accentColor.opacity(0.2), radius: 3, x: 0, y: 1)
-                        }
-                    }
-                    .foregroundStyle(selection == tag ? .white : .secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(Color.primary.opacity(scheme == .dark ? 0.055 : 0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
-// Custom Notification Checkbox
-struct CustomNotificationCheckbox: View {
-    let title: String
-    let icon: String
-    @Binding var isOn: Bool
-    @Environment(\.colorScheme) var scheme
-
-    var body: some View {
-        Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
-                isOn.toggle()
-            }
-            FeedbackManager.shared.trigger(.click)
-        } label: {
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(isOn ? Color.accentColor : Color.primary.opacity(0.04))
-                        .frame(width: 18, height: 18)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .stroke(isOn ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 0.75)
-                        )
-
-                    if isOn {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-
-                Label(title, systemImage: icon)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(isOn ? .primary : .secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isOn ? Color.accentColor.opacity(0.05) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isOn ? Color.accentColor.opacity(0.15) : Color.clear, lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-extension Color {
-    static let emerald = Color(red: 0.05, green: 0.74, blue: 0.44)
-}

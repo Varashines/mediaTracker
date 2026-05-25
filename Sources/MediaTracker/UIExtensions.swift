@@ -29,6 +29,8 @@ extension Color {
         }
     }
 
+    static let emerald = Color(red: 0.05, green: 0.74, blue: 0.44)
+
     /// Returns a Color that linearly interpolates from pure blue (progress=0) to pure green (progress=1).
     static func blueToGreen(progress: Double) -> Color {
         let p = min(max(progress, 0), 1)

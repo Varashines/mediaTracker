@@ -42,7 +42,7 @@ struct MetadataSection: View {
                 items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons")"))
             }
             if let e = tv.numberOfEpisodes, e > 0 {
-                items.append(MetadataItem(icon: "play.fill", value: "\(e) \(e == 1 ? "Ep" : "Eps")"))
+                items.append(MetadataItem(icon: "play.fill", value: "\(e) \(e == 1 ? "Episode" : "Episodes")"))
             }
         }
         
@@ -54,8 +54,8 @@ struct MetadataSection: View {
             items.append(MetadataItem(icon: "globe", value: LanguageUtils.languageName(for: lang)))
         }
         
-        if let firstGenre = item.cachedGenres.first {
-            items.append(MetadataItem(icon: "tag.fill", value: firstGenre))
+        for genre in item.cachedGenres {
+            items.append(MetadataItem(icon: "tag.fill", value: genre))
         }
         
         return items

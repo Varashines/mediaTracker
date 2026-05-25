@@ -6,29 +6,20 @@ struct StudioAliasManagerView: View {
     @Query(sort: \NetworkEntity.name) private var networks: [NetworkEntity]
     @Query(sort: \StudioAliasEntity.target) private var aliasEntities: [StudioAliasEntity]
     @AppStorage("studio_aliases") private var legacyAliases = ""
-    
-    @State private var availableNetworks: [String] = []
+
     @State private var showingAddGroup = false
     @State private var newGroupName = ""
-    @State private var isLoading = true
+    @State private var showAllNetworks = false
+
+    private var availableNetworks: [String] {
+        networks.map { $0.name }.filter { !$0.isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if isLoading {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .controlSize(.large)
-                    Text("Loading studio data…")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 200)
-            } else {
-                groupListSection
-                addButtonSection
-            }
+            groupListSection
+            addButtonSection
         }
-        .task { await loadData() }
     }
 
     @ViewBuilder
@@ -89,9 +80,10 @@ struct StudioAliasManagerView: View {
 
     @ViewBuilder
     private func sourcePicker(entity: StudioAliasEntity) -> some View {
+        let displayNetworks = showAllNetworks ? availableNetworks : Array(availableNetworks.prefix(20))
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(availableNetworks, id: \.self) { net in
+                ForEach(displayNetworks, id: \.self) { net in
                     let isSelected = entity.sources.contains(net)
                     Button {
                         if isSelected {
@@ -114,6 +106,19 @@ struct StudioAliasManagerView: View {
                                     Capsule().stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
                                 }
                             }
+                    }
+                    .buttonStyle(.plain)
+                }
+                if availableNetworks.count > 20 {
+                    Button {
+                        showAllNetworks.toggle()
+                        FeedbackManager.shared.trigger(.click)
+                    } label: {
+                        Text(showAllNetworks ? "Show Less" : "+\(availableNetworks.count - 20) More")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
                 }
@@ -192,43 +197,26 @@ struct StudioAliasManagerView: View {
         }
     }
     
-    private func loadData() async {
-        let allNets = networks.map { $0.name }
-        availableNetworks = allNets.filter { !$0.isEmpty }
+    static func migrateLegacyAliases(from legacy: String, into container: ModelContainer) {
+        guard !legacy.isEmpty else { return }
+        let ctx = ModelContext(container)
+        guard ((try? ctx.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []).isEmpty else { return }
 
-        guard aliasEntities.isEmpty && !legacyAliases.isEmpty else {
-            isLoading = false
-            return
-        }
-
-        let container = modelContext.container
-        let legacyData = legacyAliases
-        let context = ModelContext(container)
-
-        let lines = legacyData.components(separatedBy: .newlines)
+        let lines = legacy.components(separatedBy: .newlines)
         for line in lines where line.contains("=") {
             let mainParts = line.components(separatedBy: "|")
             let aliasPart = mainParts[0]
             let logoPart = mainParts.count > 1 ? mainParts[1] : nil
-
             let sides = aliasPart.components(separatedBy: "=")
             guard sides.count >= 2 else { continue }
-
             let target = sides[0].trimmingCharacters(in: .whitespaces)
             let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-
             var preferredLogoSource: String? = nil
             if let logoStr = logoPart, logoStr.contains("Logo:") {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
             }
-
-            context.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
+            ctx.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
         }
-        try? context.save()
-
-        await MainActor.run {
-            legacyAliases = ""
-            isLoading = false
-        }
+        try? ctx.save()
     }
 }

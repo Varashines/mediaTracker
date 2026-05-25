@@ -4,27 +4,29 @@ import SwiftData
 struct DiscoveryManagementView: View {
     @Query(sort: \NetworkEntity.name) private var networkEntities: [NetworkEntity]
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
-    @State private var availableNetworks: [String] = []
     @State private var networkSearchText = ""
     @Environment(\.colorScheme) var colorScheme
 
-    private var hiddenList: [String] {
+    var body: some View {
+        let availableNetworks = networkEntities
+            .filter { $0.count >= 4 }
+            .map { $0.name }
+            .sorted()
+        
         let allHidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
-        return allHidden.filter { name in
+        let hiddenList = allHidden.filter { name in
             networkEntities.first(where: { $0.name == name })?.count ?? 0 >= 4
         }.sorted()
-    }
-    
-    private var addableNetworks: [String] {
-        let filtered = availableNetworks.filter { !hiddenList.contains($0) }
-        if networkSearchText.isEmpty {
-            return filtered.sorted()
-        } else {
-            return filtered.filter { $0.localizedCaseInsensitiveContains(networkSearchText) }.sorted()
-        }
-    }
-
-    var body: some View {
+        
+        let addableNetworks: [String] = {
+            let filtered = availableNetworks.filter { !hiddenList.contains($0) }
+            if networkSearchText.isEmpty {
+                return filtered
+            } else {
+                return filtered.filter { $0.localizedCaseInsensitiveContains(networkSearchText) }
+            }
+        }()
+        
         VStack(alignment: .leading, spacing: 20) {
             // 1. Search and Add Section
             VStack(alignment: .leading, spacing: 12) {
@@ -118,7 +120,6 @@ struct DiscoveryManagementView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
-        .onAppear { calculateNetworks() }
     }
     
     private func toggleHidden(_ name: String) {
@@ -130,9 +131,5 @@ struct DiscoveryManagementView: View {
         }
         hiddenStudios = hidden.joined(separator: ",")
         LibraryStatsActor.clearCache()
-    }
-
-    private func calculateNetworks() {
-        availableNetworks = networkEntities.filter { $0.count >= 4 }.map { $0.name }.sorted()
     }
 }

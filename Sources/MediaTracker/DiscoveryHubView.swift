@@ -94,7 +94,10 @@ struct DiscoveryHubView: View {
         }
 
         if force {
-            Task { await DiscoveryHubCache.shared.invalidate() }
+            Task {
+                await MainActor.run { NetworkThemeManager.shared.resetAll() }
+                await DiscoveryHubCache.shared.invalidate()
+            }
         }
 
         Task {
