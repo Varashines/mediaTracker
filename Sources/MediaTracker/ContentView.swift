@@ -69,7 +69,7 @@ struct LibraryDetailView: View {
     
     @State private var isSyncHovered = false
     @State private var showingBulkManager = false
-    @State private var themeCoordinator = AppThemeCoordinator.shared
+    private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
 
     private var categoryMoodColor: Color {

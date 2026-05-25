@@ -40,7 +40,7 @@ final class MediaItem: Identifiable {
     var searchableText: String = ""
     var storedCast: [SimpleCastMember] = []
     
-    var collections: [MediaCollection]?
+    var collections: [MediaCollection] = []
 
     var displayCast: [SimpleCastMember] {
         return storedCast
@@ -54,9 +54,10 @@ final class MediaItem: Identifiable {
         self.backdropURL = backdropURL
         self.releaseDate = releaseDate
         self.typeValue = type?.rawValue ?? "Movie"
-        self.lastInteractionDate = Date()
-        self.lastStateChangeDate = Date()
-        self.dateAdded = Date()
+        let now = Date()
+        self.lastInteractionDate = now
+        self.lastStateChangeDate = now
+        self.dateAdded = now
     }
 
     var type: MediaType? {

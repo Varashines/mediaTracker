@@ -433,10 +433,10 @@ actor MediaFilterActor {
             SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
             SortDescriptor<MediaItem>(\.title, order: .forward)
         ]
-        recentDesc.fetchLimit = 15
+        recentDesc.fetchLimit = 12
         
         if let recentItems = try? modelContext.fetch(recentDesc) {
-            return recentItems.prefix(12).map { toMetadata($0) }
+            return recentItems.map { toMetadata($0) }
         }
         return []
     }
@@ -495,18 +495,16 @@ actor MediaFilterActor {
         badge: String? = nil,
         collectionID: UUID? = nil
     ) throws -> MediaThumbnailMetadata? {
-        guard let item = modelContext.model(for: id) as? MediaItem else { return nil }
-        
-        let stringID = item.id
-        let descriptor = FetchDescriptor<MediaItem>(
-            predicate: #Predicate<MediaItem> { $0.id == stringID }
-        )
-        guard let fetchedItem = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let fetchedItem = modelContext.model(for: id) as? MediaItem else { return nil }
         
         if let collectionID = collectionID {
             let collectionDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == collectionID })
             if let collection = try? modelContext.fetch(collectionDescriptor).first {
-                if !collection.items.contains(where: { $0.id == fetchedItem.id }) {
+                if collection.isSmart {
+                    if !applySmartRules([fetchedItem], rules: collection.smartRules).contains(where: { $0.id == fetchedItem.id }) {
+                        return nil
+                    }
+                } else if !collection.items.contains(where: { $0.id == fetchedItem.id }) {
                     return nil
                 }
             }

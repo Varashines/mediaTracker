@@ -69,7 +69,7 @@ extension MediaFilterActor {
             }
         }
         
-        let now = Date()
+        // Use the now parameter passed from filterAndSort
         let activeItems = homeResults.filter { item in
             if item.stateValue == "Completed" || item.stateValue == "Dropped" || item.stateValue == "On Hold" { return false }
             if item.storedIsUpcoming {

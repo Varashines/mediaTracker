@@ -18,8 +18,6 @@ class DataService {
 
     // Feedback State
     var isRunningMaintenance = false
-    var showMaintenanceComplete = false
-
     private var modelContainer: ModelContainer?
     private var tvShowCompletedObserver: Any?
 
@@ -52,7 +50,7 @@ class DataService {
     func stopProcessing(id: String) { itemsInProgress.remove(id) }
 
     func hasRefreshedThisSession(id: String) -> Bool {
-        return sessionRefreshedItems.contains(id)
+        sessionRefreshedItems.contains(id)
     }
 
     func markAsRefreshedThisSession(id: String) {
@@ -64,23 +62,23 @@ class DataService {
     }
 
     func refreshMetadata(forIDs ids: [String], modelContext: ModelContext, metadataOnly: Bool = false, force: Bool = false, skipDelay: Bool = false) {
-        // Skip if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
-        // Phase 4 Optimization: Coalesce into Batch Queue
-        pendingRefreshIDs.formUnion(ids)
+        let unrefreshedIDs = force ? ids : ids.filter { !hasRefreshedThisSession(id: $0) }
+        guard !unrefreshedIDs.isEmpty else { return }
+
+        pendingRefreshIDs.formUnion(unrefreshedIDs)
         refreshTask?.cancel()
 
         isRefreshing = true
 
         refreshTask = Task {
-            // Wait for potential rapid-fire calls to finish (e.g. during an import or scroll)
             if !skipDelay {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
-            if Task.isCancelled { 
-                await MainActor.run { self.isRefreshing = false }
-                return 
+            if Task.isCancelled {
+                self.isRefreshing = false
+                return
             }
 
             let idsToProcess = Array(pendingRefreshIDs)
@@ -89,11 +87,10 @@ class DataService {
             if !idsToProcess.isEmpty {
                 let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
                 await backgroundService.refreshMetadata(for: idsToProcess, metadataOnly: metadataOnly, force: force)
+                idsToProcess.forEach { markAsRefreshedThisSession(id: $0) }
             }
 
-            await MainActor.run {
-                self.isRefreshing = false
-            }
+            self.isRefreshing = false
         }
     }
     
@@ -108,7 +105,6 @@ class DataService {
                 try await service.performLibraryHeal()
                 await MainActor.run {
                     self.isRunningMaintenance = false
-                    self.showMaintenanceComplete = true
                     if !silent {
                         AppErrorState.shared.showToast("Library repair complete.", systemImage: "checkmark.circle.fill", type: .success)
                     }
@@ -126,16 +122,7 @@ class DataService {
 
     func refreshAllBadges(modelContext: ModelContext) {
         AppErrorState.shared.showToast("Recalculating badges...", systemImage: "sparkles", type: .info)
-        
-        let container = modelContext.container
-        Task.detached(priority: .background) {
-            let service = BackgroundDataService(modelContainer: container)
-            try? await service.performLibraryHeal()
-            
-            await MainActor.run {
-                AppErrorState.shared.showToast("All badges updated.", systemImage: "checkmark.circle.fill", type: .success)
-            }
-        }
+        runMaintenance(modelContext: modelContext, silent: false)
     }
 
     func clearDatabase(modelContext: ModelContext) {

@@ -10,8 +10,9 @@ final class MediaCollection: Identifiable {
     var notes: String? = ""
     var isPinned: Bool = false
     
-    var isSmart: Bool = false
-    var smartRulesData: Data? // Encoded [SmartRule]
+    var smartRulesData: Data?
+    
+    var isSmart: Bool { smartRulesData != nil }
     
     @Relationship(inverse: \MediaItem.collections)
     var items: [MediaItem]
@@ -21,7 +22,7 @@ final class MediaCollection: Identifiable {
         self.name = name
         self.systemImage = systemImage
         self.items = []
-        self.isSmart = isSmart
+        if isSmart { smartRulesData = Data() }
     }
     
     var smartRules: [SmartRule] {

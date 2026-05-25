@@ -56,7 +56,7 @@ struct CollectionToggleRow: View {
     let item: MediaItem
     
     var isInCollection: Bool {
-        item.collections?.contains(where: { $0.id == collection.id }) ?? false
+        item.collections.contains(where: { $0.id == collection.id })
     }
     
     var body: some View {
@@ -81,13 +81,10 @@ struct CollectionToggleRow: View {
     
     private func toggle() {
         if isInCollection {
-            item.collections?.removeAll(where: { $0.id == collection.id })
+            item.collections.removeAll(where: { $0.id == collection.id })
             collection.items.removeAll(where: { $0.id == item.id })
         } else {
-            if item.collections == nil {
-                item.collections = []
-            }
-            item.collections?.append(collection)
+            item.collections.append(collection)
             collection.items.append(item)
         }
         

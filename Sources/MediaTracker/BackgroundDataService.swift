@@ -211,10 +211,6 @@ actor BackgroundDataService {
                         }
                     }
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
-                } else if item.type == .movie {
-                    if let movieDetails = item.movieDetails, movieDetails.network == nil {
-                        _ = await self.refreshMovie(id: item.id, tmdbID: tmdbID)
-                    }
                 }
             }
             
@@ -635,6 +631,18 @@ actor BackgroundDataService {
                 mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
             }
 
+            // Pre-build maze dictionary for O(1) lookups
+            let mazeDict: [String: TVMazeEpisode] = {
+                var dict: [String: TVMazeEpisode] = [:]
+                dict.reserveCapacity(mazeEpisodes.count)
+                for ep in mazeEpisodes {
+                    if let s = ep.season, let n = ep.number {
+                        dict["\(s)_\(n)"] = ep
+                    }
+                }
+                return dict
+            }()
+
             // Update Cast (Always replace to ensure aggregate data and 10-member limit)
             let newCastResults = details.cast
             tvDetails.cast.forEach { modelContext.delete($0) }
@@ -673,7 +681,6 @@ actor BackgroundDataService {
                 for seasonData in seasonsToSync {
                     let sNum = seasonData.season_number
                     
-                    // Phase 5: Resiliency Check - Skip empty seasons listed in the brief
                     if seasonData.episode_count == 0 { continue }
                     
                     let seasonUniqueID = "\(tmdbID)_\(sNum)"
@@ -695,8 +702,7 @@ actor BackgroundDataService {
                             let epName = ep.name ?? "Episode \(ep.episodeNumber)"
                             let epOverview = ep.overview ?? ""
                             
-                            // Try to find matching TVMaze episode for high-precision airstamp
-                            let matchingMaze = mazeEpisodes.first { $0.season == sNum && $0.number == ep.episodeNumber }
+                            let matchingMaze = mazeDict["\(sNum)_\(ep.episodeNumber)"]
                             
                             let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
                             episode.showID = tmdbID
@@ -714,7 +720,6 @@ actor BackgroundDataService {
                             }
                         }
                     } catch {
-                        // Phase 5: Resilience - If one season fails, log it but continue with the rest of the show refresh
                         AppLogger.warning("⚠️ Failed to sync season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
                     }
                 }

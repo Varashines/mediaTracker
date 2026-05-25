@@ -59,12 +59,7 @@ actor DiscoverySyncService {
         return rules
     }
 
-    func syncLibrary(force: Bool) async {
-        // Clear cache at start of sync
-        await MainActor.run { Self.cachedRules = nil }
-
-        // Fetch alias rules once before batch loop
-        let rules = await fetchAliasRules()
+    private func buildAliasMaps(from rules: [AliasRule]) -> (sourceToTarget: [String: String], targetToLogoSource: [String: String]) {
         var sourceToTarget: [String: String] = [:]
         var targetToLogoSource: [String: String] = [:]
         for rule in rules {
@@ -76,6 +71,12 @@ actor DiscoverySyncService {
                 targetToLogoSource[rule.target] = pref
             }
         }
+        return (sourceToTarget, targetToLogoSource)
+    }
+
+    func syncLibrary(force: Bool) async {
+        let rules = await fetchAliasRules()
+        let (sourceToTarget, targetToLogoSource) = buildAliasMaps(from: rules)
 
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
@@ -211,16 +212,8 @@ actor DiscoverySyncService {
 
     func updateItemAdded(_ itemID: PersistentIdentifier) async {
         guard let item = modelContext.model(for: itemID) as? MediaItem else { return }
-        // Studio Aliases — normalize keys to lowercase+trimmed to match filter behavior
         let rules = await fetchAliasRules()
-        var sourceToTarget: [String: String] = [:]
-        for rule in rules {
-            for source in rule.sources {
-                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
-                sourceToTarget[normalizedSource] = rule.target
-            }
-        }
-
+        let (sourceToTarget, _) = buildAliasMaps(from: rules)
 
         // Incremental Network update
         if let rawName = item.cachedNetwork {
@@ -323,15 +316,8 @@ actor DiscoverySyncService {
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?) async {
-        // Studio Aliases — normalize keys to lowercase+trimmed to match filter behavior
         let rules = await fetchAliasRules()
-        var sourceToTarget: [String: String] = [:]
-        for rule in rules {
-            for source in rule.sources {
-                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
-                sourceToTarget[normalizedSource] = rule.target
-            }
-        }
+        let (sourceToTarget, _) = buildAliasMaps(from: rules)
 
         if let networkString = network {
             let networks = networkString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }

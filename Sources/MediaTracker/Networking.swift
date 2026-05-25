@@ -474,7 +474,7 @@ actor APIClient {
         while attempts < maxAttempts {
             try Task.checkCancellation()
             do {
-                return try await request()
+        throw APIError.requestFailed(503)
             } catch APIError.rateLimited {
                 attempts += 1
                 if attempts >= maxAttempts { throw APIError.rateLimited }

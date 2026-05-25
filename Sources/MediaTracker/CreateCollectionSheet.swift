@@ -139,7 +139,6 @@ struct CreateCollectionSheet: View {
                     if let editing = editingCollection {
                         editing.name = name
                         editing.systemImage = icon
-                        editing.isSmart = isSmart
                         editing.smartRules = smartRules
                     } else {
                         let newCollection = MediaCollection(name: name, systemImage: icon, isSmart: isSmart)

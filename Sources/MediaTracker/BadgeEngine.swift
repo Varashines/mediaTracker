@@ -22,6 +22,17 @@ struct BadgeEngine {
         let isSparkle: Bool
     }
 
+    private static let recentlyWatchedCutoff: TimeInterval = -172800
+    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...2592000
+    private static let newBadgeWindow: ClosedRange<TimeInterval> = -1209600...0
+    private static let soonBadgeWindow: ClosedRange<TimeInterval> = 0...172800
+    private static let premiereDaysWindow: ClosedRange<Double> = -30...3
+    private static let finaleDaysWindow: ClosedRange<Double> = -7...14
+    private static let milestoneDaysWindow: ClosedRange<Double> = -14...14
+    private static let behindWindowDays: Double = 7
+    private static let bingeEngagementThreshold: Int = 3
+    private static let bingeProgressThreshold: Double = 0.20
+
     /// Pre-computed episode scan data — extracted to a single pass.
     private struct EpisodeScan: Equatable, Sendable {
         let nextEpisodeNumber: Int
@@ -54,7 +65,7 @@ struct BadgeEngine {
         var nextAirDate: Date? = nil
         var airedOnSameDayCount = 0
         var recentlyWatchedCount = 0
-        let cutoff = now.addingTimeInterval(-172800)
+        let cutoff = now.addingTimeInterval(recentlyWatchedCutoff)
         var foundNext = false
 
         for season in tv.seasons.filter({ !$0.isDeleted && $0.modelContext != nil }).sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
@@ -90,14 +101,14 @@ struct BadgeEngine {
         guard let airDate = scan.nextAirDate else { return nil }
         let daysSinceAir = now.timeIntervalSince(airDate) / 86400
 
-        if scan.nextEpisodeNumber == 1 && daysSinceAir <= 3 && daysSinceAir >= -30 {
+        if scan.nextEpisodeNumber == 1 && premiereDaysWindow.contains(daysSinceAir) {
             return BadgeResult(label: .premiere, isSparkle: true)
         }
 
-        let inMilestoneWindow = daysSinceAir >= -14 && daysSinceAir <= 14
+        let inMilestoneWindow = milestoneDaysWindow.contains(daysSinceAir)
 
         if scan.nextEpisodeNumber == scan.nextSeasonEpisodeCount && scan.nextSeasonEpisodeCount > 0,
-           daysSinceAir >= -7 && daysSinceAir <= 14 {
+           finaleDaysWindow.contains(daysSinceAir) {
             return BadgeResult(label: .finale, isSparkle: true)
         }
 
@@ -112,13 +123,13 @@ struct BadgeEngine {
         guard let airDate = item.cachedNextAiringDate ?? item.releaseDate else { return nil }
         let timeToAir = airDate.timeIntervalSince(now)
 
-        if item.type == .movie && timeToAir >= -259200 && timeToAir <= 2592000 {
+        if item.type == .movie && moviePremiereWindow.contains(timeToAir) {
             return BadgeResult(label: .premiere, isSparkle: true)
         }
-        if timeToAir <= 0 && timeToAir >= -1209600 {
+        if newBadgeWindow.contains(timeToAir) {
             return BadgeResult(label: .new, isSparkle: true)
         }
-        if timeToAir > 0 && timeToAir <= 172800 {
+        if soonBadgeWindow.contains(timeToAir) {
             return BadgeResult(label: .soon, isSparkle: false)
         }
         return nil
@@ -129,7 +140,7 @@ struct BadgeEngine {
         let remainingCount = tv.remainingEpisodesCount ?? 0
         guard remainingCount > 0 else { return nil }
 
-        if scan.recentlyWatchedCount >= 3 {
+        if scan.recentlyWatchedCount >= bingeEngagementThreshold {
             return BadgeResult(label: .binge, isSparkle: true)
         }
 
@@ -138,14 +149,14 @@ struct BadgeEngine {
 
         if let nextAiring = item.cachedNextAiringDate {
             let daysToAiring = nextAiring.timeIntervalSince(now) / 86400
-            if daysToAiring > 0 && daysToAiring <= 7 {
+            if daysToAiring > 0 && daysToAiring <= behindWindowDays {
                 return BadgeResult(label: .behind, isSparkle: false)
             }
         }
 
         let total = tv.totalEpisodesCount
         let watched = tv.watchedEpisodesCount
-        if total > 0, Double(watched) / Double(total) >= 0.20 {
+        if total > 0, Double(watched) / Double(total) >= bingeProgressThreshold {
             return BadgeResult(label: .binge, isSparkle: false)
         }
 

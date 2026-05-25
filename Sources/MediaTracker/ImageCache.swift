@@ -117,9 +117,13 @@ class ImageCache: NSObject {
         urlToKeys.removeAll()
     }
     
+    private static func sha256Hash(_ string: String) -> String {
+        SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     func removeImage(forKey url: String?) async {
         guard let url, !url.isEmpty else { return }
-        let hash = SHA256.hash(data: Data(url.utf8)).map { String(format: "%02x", $0) }.joined()
+        let hash = Self.sha256Hash(url)
         
         if let keys = urlToKeys[url] {
             for key in keys {
@@ -161,9 +165,8 @@ class ImageCache: NSObject {
 
     func clearCache(forURLs urls: [String]) {
         let hashes = urls.map { url in
-            let h = SHA256.hash(data: Data(url.utf8)).map { String(format: "%02x", $0) }.joined()
+            let h = Self.sha256Hash(url)
             
-            // 1. Memory Clear
             if let keys = urlToKeys[url] {
                 for key in keys {
                     memoryCache.removeObject(forKey: key as NSString)
@@ -242,7 +245,7 @@ class ImageCache: NSObject {
     }
     
     private func fileName(for key: String, size: CGSize?) -> String {
-        let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        let hash = Self.sha256Hash(key)
         if let size = size {
             return "\(hash)_\(Int(size.width))_\(Int(size.height))"
         }
@@ -631,12 +634,7 @@ struct CachedImage<Placeholder: View>: View {
         }
         .animation(AppTheme.Animation.easeInOut, value: image == nil)
         .onAppear {
-            // 2. LISTEN-FIRST: Setup listener before any loading begins
             setupBroadcastListener()
-            
-            if image == nil && !isFastScrolling {
-                Task { await attemptLoad() }
-            }
         }
         .onDisappear {
             if let url = url {

@@ -24,14 +24,10 @@ actor SyncCoordinator {
         
         defer { inFlightTasks[key] = nil }
         
-        do {
-            let result = try await task.value
-            guard let castedResult = result as? T else {
-                 throw NSError(domain: "SyncCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Type mismatch for key: \(key)"])
-            }
-            return castedResult
-        } catch {
-            throw error
+        let result = try await task.value
+        guard let castedResult = result as? T else {
+             throw NSError(domain: "SyncCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Type mismatch for key: \(key)"])
         }
+        return castedResult
     }
 }
