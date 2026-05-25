@@ -311,4 +311,46 @@ final class StateTransitionTests: XCTestCase {
         let noProgress: [MediaState] = MediaItem.availableStates(for: .tvShow, progress: 0)
         XCTAssertEqual(noProgress, MediaState.allCases)
     }
+
+    @MainActor
+    func testRecalculateHealsDriftAndCompletesShow() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let context = container.mainContext
+
+        let item = MediaItem(id: "heal_drift", title: "Show", overview: "", type: .tvShow)
+        item.stateValue = "Active"
+        context.insert(item)
+        let tv = TVShowDetails(tmdbID: 1000)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(tv)
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 2)
+        season.tvShowDetails = tv
+        tv.seasons.append(season)
+        context.insert(season)
+
+        for i in 1...2 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "")
+            ep.season = season
+            season.episodes.append(ep)
+            context.insert(ep)
+            ep.markWatched(true)
+        }
+
+        try context.save()
+
+        // Simulate drift where cached/denormalized counts are completely wrong (due to duplicate mutations)
+        tv.watchedEpisodesCount = 1 // But we marked 2 as watched!
+        tv.totalEpisodesCount = 2
+
+        // Verify that recalculateCachedProperties(force: true) corrects the drift
+        tv.recalculateCachedProperties(triggerSync: true, force: true)
+        XCTAssertEqual(tv.watchedEpisodesCount, 2)
+        XCTAssertEqual(tv.totalEpisodesCount, 2)
+
+        // Verify overall completion transitions the state to completed
+        item.checkOverallCompletion()
+        XCTAssertEqual(item.state, .completed)
+    }
 }

@@ -301,7 +301,6 @@ private struct SeasonSection: View {
         let targetStatus = !isAllWatched
         // Defensive: skip deleted/detached episodes during concurrent merges
         let liveEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
-        let watchedBefore = liveEpisodes.filter { $0.isWatched }.count
         withAnimation {
             for episode in liveEpisodes {
                 episode.markWatched(targetStatus)
@@ -310,16 +309,6 @@ private struct SeasonSection: View {
         }
 
         Task { @MainActor in
-            if let tv = season.tvShowDetails {
-                let delta = targetStatus ? (liveEpisodes.count - watchedBefore) : -watchedBefore
-                tv.watchedEpisodesCount += delta
-                tv.remainingEpisodesCount = max(0, (tv.remainingEpisodesCount ?? 0) - delta)
-                if let item = tv.item {
-                    item.storedProgress = tv.totalEpisodesCount > 0
-                        ? Double(tv.watchedEpisodesCount) / Double(tv.totalEpisodesCount)
-                        : 0
-                }
-            }
             season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
@@ -343,24 +332,12 @@ private struct EpisodeCube: View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         let green = Color.semanticGreen(for: colorScheme)
         let unwatchedAccent = Color.blue
-
         ZStack(alignment: .bottomTrailing) {
             Button {
                 episode.markWatched(!episode.isWatched)
                 FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
 
-                let delta = episode.isWatched ? 1 : -1
-
                 Task { @MainActor in
-                    if let tv = episode.season?.tvShowDetails {
-                        tv.watchedEpisodesCount += delta
-                        tv.remainingEpisodesCount = max(0, (tv.remainingEpisodesCount ?? 0) - delta)
-                        if let item = tv.item {
-                            item.storedProgress = tv.totalEpisodesCount > 0
-                                ? Double(tv.watchedEpisodesCount) / Double(tv.totalEpisodesCount)
-                                : 0
-                        }
-                    }
                     onToggle()
                     episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
                     if let context = episode.modelContext {

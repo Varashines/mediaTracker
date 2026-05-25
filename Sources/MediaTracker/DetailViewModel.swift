@@ -257,7 +257,7 @@ class DetailViewModel {
             
             guard let self = self, self.item.modelContext != nil else { return }
             
-            self.item.tvShowDetails?.recalculateCachedProperties()
+            self.item.tvShowDetails?.recalculateCachedProperties(force: true)
             self.item.syncCachedProperties()
             
             if let context = self.item.modelContext {
