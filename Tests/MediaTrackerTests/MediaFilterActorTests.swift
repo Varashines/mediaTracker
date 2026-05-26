@@ -152,4 +152,65 @@ final class MediaFilterActorTests: XCTestCase {
         XCTAssertEqual(dayItems.count, 1)
         XCTAssertEqual(dayItems.first?.releaseContext, "S1 E1, E2")
     }
+
+    @MainActor
+    func testFetchMetadataIfMatchesReturnsItem() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let item = MediaItem(id: "1", title: "Test", overview: "", type: .movie)
+        context.insert(item)
+        try context.save()
+
+        let meta = try await actor.fetchMetadataIfMatches(for: item.persistentModelID, category: .all, searchText: "")
+
+        XCTAssertNotNil(meta)
+        XCTAssertEqual(meta?.title, "Test")
+    }
+
+    @MainActor
+    func testFetchMetadataIfMatchesReturnsNilForNoMatch() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let item = MediaItem(id: "1", title: "Test", overview: "", type: .movie)
+        context.insert(item)
+        try context.save()
+
+        // Search for something that doesn't match
+        let meta = try await actor.fetchMetadataIfMatches(for: item.persistentModelID, category: .all, searchText: "nonexistent")
+
+        XCTAssertNil(meta)
+    }
+
+    @MainActor
+    func testToMetadataProducesCorrectMapping() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let item = MediaItem(id: "1", title: "Test Movie", overview: "An overview", type: .movie)
+        item.stateValue = "Completed"
+        item.storedProgress = 1.0
+        item.storedSmartBadgeLabel = "NEW"
+        item.storedSmartBadgeIsSparkle = true
+        item.cachedGenres = ["Action"]
+        context.insert(item)
+        try context.save()
+
+        let meta = MediaThumbnailMetadata(item: item)
+
+        XCTAssertEqual(meta.title, "Test Movie")
+        XCTAssertEqual(meta.state, .completed)
+        XCTAssertEqual(meta.progress, 1.0)
+        XCTAssertEqual(meta.smartBadgeLabel, "NEW")
+        XCTAssertEqual(meta.genres, ["Action"])
+    }
 }

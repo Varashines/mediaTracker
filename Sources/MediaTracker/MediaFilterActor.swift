@@ -174,7 +174,7 @@ actor MediaFilterActor {
             if let collection = try? modelContext.fetch(colDescriptor).first, collection.isSmart {
                 smartRules = collection.smartRules
                 basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                    category: category, searchToken: searchToken, stateValue: stateRaw
+                    category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
                 )
             } else if let collection = try? modelContext.fetch(colDescriptor).first {
                 let itemIDs = collection.items.compactMap { $0.id }
@@ -187,12 +187,12 @@ actor MediaFilterActor {
                 }
             } else {
                 basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                    category: category, searchToken: searchToken, stateValue: stateRaw
+                    category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
                 )
             }
         } else {
             basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                category: category, searchToken: searchToken, stateValue: stateRaw
+                category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
             )
         }
 

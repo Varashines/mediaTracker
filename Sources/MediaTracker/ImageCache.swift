@@ -2,7 +2,6 @@ import SwiftUI
 import CryptoKit
 import Combine
 import UniformTypeIdentifiers
-import SwiftData
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage

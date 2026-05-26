@@ -24,7 +24,7 @@ actor APIClient {
     // Precomputed once at init to avoid repeated synchronous filesystem checks on every cache read/write
     nonisolated let cacheFolder: URL
     
-    private let session: URLSession = {
+    private(set) var session: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(
@@ -49,6 +49,16 @@ actor APIClient {
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
     private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
 
+    #if DEBUG
+    init(testing session: URLSession) {
+        self.session = session
+        let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        let base = paths.first ?? FileManager.default.temporaryDirectory
+        let folder = base.appendingPathComponent("api_details_cache_test")
+        self.cacheFolder = folder
+    }
+    #endif
+
     init() {
         // Compute and create the cache directory exactly once instead of on every getCachedData/saveToCache call
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -59,6 +69,12 @@ actor APIClient {
         }
         self.cacheFolder = folder
     }
+
+    #if DEBUG
+    func configureForTesting(session: URLSession) {
+        self.session = session
+    }
+    #endif
 
     private func clearSearchCache() {
         searchCache.removeAll()
