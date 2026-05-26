@@ -66,8 +66,7 @@ actor APIClient {
     }
 
     func clearMemoryCaches() {
-        searchCache.removeAll()
-        lastSearchTime.removeAll()
+        clearSearchCache()
     }
 
     nonisolated var isTMDBConfigured: Bool {

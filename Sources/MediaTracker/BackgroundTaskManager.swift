@@ -72,10 +72,10 @@ class BackgroundTaskManager {
         guard !isScheduled else { return }
         isScheduled = true
         
-        // Phase 4 Optimization: Proactive Startup Healer
-        // Ensures "SOON" transitions to "NEW" immediately when the app opens.
-        Task.detached(priority: .background) {
-            await self.refreshStaleBadges()
+        if !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) {
+            Task.detached(priority: .background) {
+                await self.refreshStaleBadges()
+            }
         }
         
         #if os(macOS)
@@ -113,8 +113,8 @@ class BackgroundTaskManager {
                     var watchedIDs: [String]? = nil
                     if item.type == .tvShow, let tv = item.tvShowDetails {
                         watchedIDs = tv.seasons
-                            .filter { !$0.isDeleted && $0.modelContext != nil }
-                            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+                            .liveModels
+                            .flatMap { $0.episodes.liveModels }
                             .filter { $0.isWatched }
                             .map { $0.uniqueID ?? "" }
                     }

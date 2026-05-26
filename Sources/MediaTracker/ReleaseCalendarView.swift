@@ -15,68 +15,76 @@ struct ReleaseCalendarView: View {
         return calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
     }()
     @State private var isLoading = true
+    @State private var fetchTask: Task<Void, Never>? = nil
     
     var body: some View {
-        HStack(spacing: 0) {
-            // 1. LEFT PANE: The Contribution Graph
-            ScrollView {
-                VStack(alignment: .leading, spacing: 30) {
-                    VStack(alignment: .leading, spacing: 15) {
-                        monthNavigation
-                    }
-                    .padding(.top, 30)
-                    
-                    if let data = calendarData {
-                        contributionGraph(data: data)
-                    } else if isLoading {
-                        ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .padding(.horizontal, 30)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(width: 320)
-            .background(.ultraThinMaterial)
-            
-            Divider()
-            
-            // 2. RIGHT PANE: Release Details
-            ScrollView {
-                VStack(alignment: .leading, spacing: 35) {
-                    if let data = calendarData {
-                        // NEW: WEEK FOCUS (Immediate temporal discovery)
-                        weekFocusRow(data: data)
-                        
-                        Divider().padding(.vertical, 10)
-
-                        if let date = selectedDate, let dayInfo = data.days[date] {
-                            // Specific Day View
-                            headerSection(date: date, count: dayInfo.items.count)
-                            if dayInfo.items.isEmpty {
-                                emptyDayView(date: date)
-                            } else {
-                                releasesList(items: dayInfo.items)
+        Group {
+            if isLoading && calendarData == nil {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
+            } else {
+                HStack(spacing: 0) {
+                    // 1. LEFT PANE: The Contribution Graph
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 30) {
+                            VStack(alignment: .leading, spacing: 15) {
+                                monthNavigation
                             }
-                        } else {
-                            // All Month View
-                            headerSection(date: currentDisplayMonth, count: data.allItems.count, isAllMonth: true)
-                            if data.allItems.isEmpty {
-                                emptyDayView(date: currentDisplayMonth, isAllMonth: true)
-                            } else {
-                                allMonthReleasesList(data: data)
+                            .padding(.top, 30)
+
+                            if let data = calendarData {
+                                contributionGraph(data: data)
                             }
                         }
+                        .padding(.horizontal, 30)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(width: 320)
+                    .background(.ultraThinMaterial)
+
+                    Divider()
+
+                    // 2. RIGHT PANE: Release Details
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 35) {
+                            if let data = calendarData {
+                                weekFocusRow(data: data)
+
+                                Divider().padding(.vertical, 10)
+
+                                if let date = selectedDate, let dayInfo = data.days[date] {
+                                    headerSection(date: date, count: dayInfo.items.count)
+                                    if dayInfo.items.isEmpty {
+                                        emptyDayView(date: date)
+                                    } else {
+                                        releasesList(items: dayInfo.items)
+                                    }
+                                } else {
+                                    headerSection(date: currentDisplayMonth, count: data.allItems.count, isAllMonth: true)
+                                    if data.allItems.isEmpty {
+                                        emptyDayView(date: currentDisplayMonth, isAllMonth: true)
+                                    } else {
+                                        allMonthReleasesList(data: data)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 30)
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 40)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.top, 30)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(maxWidth: .infinity)
         }
         .onAppear {
             refreshData(for: currentDisplayMonth)
+        }
+        .onDisappear {
+            fetchTask?.cancel()
+            fetchTask = nil
         }
     }
     
@@ -166,20 +174,30 @@ struct ReleaseCalendarView: View {
         isLoading = true
         
         // SAFETY TIMEOUT: Ensure loading indicator clears even if background task is slow/blocked
-        Task {
-            try? await Task.sleep(for: .seconds(6))
-            await MainActor.run {
-                if self.isLoading {
-                    AppLogger.warning("⚠️ Calendar: Loading took too long. Clearing spinner.", logger: AppLogger.ui)
-                    self.isLoading = false
+        // Track safety timeout task as part of the overall fetchTask parent context or internally
+        
+        fetchTask?.cancel()
+        fetchTask = Task {
+            let actor = CalendarFilterActor(modelContainer: modelContext.container)
+            
+            // Background safety timeout handler
+            let timeoutTask = Task {
+                try? await Task.sleep(for: .seconds(6))
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        if self.isLoading {
+                            AppLogger.warning("⚠️ Calendar: Loading took too long. Clearing spinner.", logger: AppLogger.ui)
+                            self.isLoading = false
+                        }
+                    }
                 }
             }
-        }
-
-        Task {
-            let actor = CalendarFilterActor(modelContainer: modelContext.container)
+            
             do {
                 let result = try await actor.fetchCalendarData(for: startOfMonth)
+                timeoutTask.cancel()
+                if Task.isCancelled { return }
+                
                 await MainActor.run {
                     viewModel.calendarCache[startOfMonth] = result
                     // RELIABILITY: Only update if the user hasn't moved to another month during fetch
@@ -190,7 +208,10 @@ struct ReleaseCalendarView: View {
                     preloadAdjacentMonths(around: startOfMonth)
                 }
             } catch {
-                AppErrorState.shared.surfaceError("Failed to load calendar: \(error.localizedDescription)")
+                timeoutTask.cancel()
+                if !(error is CancellationError) {
+                    AppErrorState.shared.surfaceError("Failed to load calendar: \(error.localizedDescription)")
+                }
                 await MainActor.run { 
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.isLoading = false 
@@ -336,7 +357,7 @@ struct ReleaseCalendarView: View {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Color.primary.opacity(0.06))
-                                        .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
+                                        .matchedGeometryEffect(id: "week_selection_bg", in: calendarNamespace)
                                         .overlay {
                                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                                 .stroke(accent.opacity(0.3), lineWidth: 0.8)

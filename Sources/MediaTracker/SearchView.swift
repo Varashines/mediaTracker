@@ -12,7 +12,6 @@ struct SearchView: View {
 
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
-    var submitTrigger: Int
     var viewModel: MediaViewModel
     
     @State private var searchVM: SearchViewModel
@@ -33,13 +32,12 @@ struct SearchView: View {
     }
 
     init(
-        searchText: Binding<String>, isSearchActive: Binding<Bool>, submitTrigger: Int,
+        searchText: Binding<String>, isSearchActive: Binding<Bool>,
         initialType: MediaType? = nil, viewModel: MediaViewModel, onSelectLocal: ((MediaItem) -> Void)? = nil,
         modelContainer: ModelContainer
     ) {
         self._searchText = searchText
         self._isSearchActive = isSearchActive
-        self.submitTrigger = submitTrigger
         self.viewModel = viewModel
         self.onSelectLocal = onSelectLocal
         self._searchVM = State(initialValue: SearchViewModel(modelContainer: modelContainer))
@@ -74,12 +72,14 @@ struct SearchView: View {
         .onChange(of: selectedType) { _, newType in
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             if !searchText.isEmpty {
-                Task { await searchVM.performSearch(text: searchText, selectedType: newType) }
+                searchVM.triggerSearch(text: searchText, selectedType: newType)
             }
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
-            Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
+            if !searchText.isEmpty {
+                searchVM.triggerSearch(text: searchText, selectedType: selectedType)
+            }
         }
         .onSubmit(of: .search) { addRecentSearch(searchText) }
         .alert("Search Error", isPresented: $searchVM.showError, presenting: searchVM.errorMessage) { _ in
@@ -90,8 +90,11 @@ struct SearchView: View {
         .onAppear {
             searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
             if !searchText.isEmpty {
-                Task { await searchVM.performSearch(text: searchText, selectedType: selectedType) }
+                searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
+        }
+        .onDisappear {
+            searchVM.cancelAllSearchOperations()
         }
     }
 
@@ -288,7 +291,6 @@ struct SearchView: View {
     SearchView(
         searchText: $searchText,
         isSearchActive: $isSearchActive,
-        submitTrigger: 0,
         viewModel: viewModel,
         modelContainer: container
     )

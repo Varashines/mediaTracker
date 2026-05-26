@@ -5,7 +5,6 @@ struct LibraryHeaderView: View {
     let selectedCategory: NavigationCategory
     let selectedNetworks: [String]?
     let isCategoryPage: Bool
-    let isMainSection: Bool
     let onNetworkSelected: ([String]) -> Void
     let onBack: (() -> Void)?
     var viewModel: MediaViewModel? = nil

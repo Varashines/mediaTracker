@@ -28,7 +28,6 @@ struct ContentView: View {
                             viewModel.selectedGenre = nil
                             viewModel.selectedYear = nil
                             viewModel.selectedState = nil
-                            viewModel.isInitialLoading = true
 
                             viewModel.selectedCollectionID = nil
                         case .collection(let id, let name, _):
@@ -38,7 +37,6 @@ struct ContentView: View {
                             viewModel.selectedGenre = nil
                             viewModel.selectedYear = nil
                             viewModel.selectedState = nil
-                            viewModel.isInitialLoading = true
                         }
 
                         viewModel.filterSubject.send()
@@ -134,21 +132,21 @@ struct LibraryDetailView: View {
                     filter: filter, namespace: posterNamespace,
                     isFastScrolling: $viewModel.isFastScrolling)
             }
+            .navigationDestination(for: ActorDestination.self) { dest in
+                ActorFilmographyView(actorName: dest.actorName)
+            }
             .searchable(
                 text: $viewModel.searchText, isPresented: $isSearchActive,
                 placement: .automatic, prompt: "Search movies & shows"
             )
-            .onSubmit(of: .search) {
-                viewModel.searchSubmitTrigger += 1
+            .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
+                if let itemID = MediaStateService.shared.lastChangedItemID {
+                    updateSingleItemInContentView(id: itemID)
+                }
             }
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
                 LibraryStatsActor.clearCache()
-                let itemID = MediaStateService.shared.lastChangedItemID
-                if let itemID = itemID {
-                    updateSingleItemInContentView(id: itemID)
-                } else {
-                    viewModel.filterSubject.send()
-                }
+                viewModel.filterSubject.send()
             }
             .task(id: viewModel.searchText) {
                 viewModel.filterSubject.send()
@@ -167,7 +165,17 @@ struct LibraryDetailView: View {
                 )
             }
             .background {
-                KeyboardShortcutsView(sidebarSelection: $sidebarSelection, isSearchActive: $isSearchActive)
+                Group {
+                    Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+                    Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
+                    Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+                }
+                .opacity(0)
             }
         }
         .sheet(isPresented: $showingBulkManager) {
@@ -178,15 +186,18 @@ struct LibraryDetailView: View {
         }
         .task {
             performUpdate()
-            checkAndRepairMissingMetadata()
-            checkAndRepairStaleMetadata()
-            
-            // Phase 6: Genre Deconstruction Migration
-            let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
-            if !migrated {
-                let service = BackgroundDataService(modelContainer: modelContext.container)
-                await service.deepHealGenres()
-                UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
+
+            if !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) {
+                checkAndRepairMissingMetadata()
+                checkAndRepairStaleMetadata()
+                
+                // Phase 6: Genre Deconstruction Migration
+                let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
+                if !migrated {
+                    let service = BackgroundDataService(modelContainer: modelContext.container)
+                    await service.deepHealGenres()
+                    UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
+                }
             }
         }
     }
@@ -198,24 +209,15 @@ struct LibraryDetailView: View {
         // Automatically heal stale "Coming Soon" items before sorting
         checkAndRepairStaleMetadata()
 
-        let currentSearchText = viewModel.searchText
-        let category = viewModel.selectedCategory
-        let sortOrder = viewModel.currentSortOrder
-        let networks = viewModel.selectedNetworks
-        let language = viewModel.selectedLanguage
-        let genre = viewModel.selectedGenre
-        let year = viewModel.selectedYear
-        let state = viewModel.selectedState
-        let groupBy = viewModel.currentGroupBy
-        let collectionID = viewModel.selectedCollectionID
+        let snapshot = FilterSnapshot(from: viewModel)
 
         updateTask?.cancel()
         updateTask = Task {
             // Optimization: Skip heavy data load if view handles its own data
-            if category == .discover || category == .insights || category == .upcoming || (category == .smartHub && collectionID == nil) { return }
+            if snapshot.category == .discover || snapshot.category == .insights || snapshot.category == .upcoming || (snapshot.category == .smartHub && snapshot.collectionID == nil) { return }
 
-            // Determine if this is a "Hard" update (category/filter change) vs a "Soft" update (data refresh)
-            let isSoftUpdate = !viewModel.displayedItems.isEmpty && !viewModel.isInitialLoading
+            // Soft update preserves existing items to avoid flickering during background syncs
+            let isSoftUpdate = !viewModel.displayedItems.isEmpty
 
             if !isSoftUpdate {
                 // Reset pagination only for "Hard" updates to avoid flickering during background syncs
@@ -232,17 +234,17 @@ struct LibraryDetailView: View {
                 // Phase 4 Optimization: Pagination limit
                 let limit = viewModel.pageSize
                 let result = try await filterActor.filterAndSort(
-                    category: category,
-                    searchText: currentSearchText,
-                    sortOrder: sortOrder,
-                    network: networks,
-                    language: language,
-                    genre: genre,
-                    year: year,
-                    state: state,
+                    category: snapshot.category,
+                    searchText: snapshot.searchText,
+                    sortOrder: snapshot.sortOrder,
+                    network: snapshot.networks,
+                    language: snapshot.language,
+                    genre: snapshot.genre,
+                    year: snapshot.year,
+                    state: snapshot.state,
                     badge: nil,
-                    groupBy: groupBy,
-                    collectionID: collectionID,
+                    groupBy: snapshot.groupBy,
+                    collectionID: snapshot.collectionID,
                     limit: limit,
                     offset: 0
                 )
@@ -268,7 +270,6 @@ struct LibraryDetailView: View {
                     viewModel.spotlightHero = result.spotlightHero
                     viewModel.groupedItems = result.grouped
                     viewModel.libraryTMDBIDs = allIDs
-                    viewModel.isInitialLoading = false
 
                     if let meta = metadata {
                         viewModel.cachedNetworks = meta.networks
@@ -281,7 +282,7 @@ struct LibraryDetailView: View {
                     themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
 
                     // Sync network/studio data on hard updates only
-                    if !isSoftUpdate && (category == .discover || category == .all) {
+                    if !isSoftUpdate && (snapshot.category == .discover || snapshot.category == .all) {
                         let container = modelContext.container
                         Task.detached(priority: .background) {
                             let sync = DiscoverySyncService(modelContainer: container)
@@ -291,7 +292,7 @@ struct LibraryDetailView: View {
                 }
 
                 // Async Recommendation Calculation (Only for Home view)
-                if category == .home {
+                if snapshot.category == .home {
                     // Spread the load: Wait 2 seconds before heavy taste analytics
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                     if Task.isCancelled { return }
@@ -309,6 +310,8 @@ struct LibraryDetailView: View {
                         }
                     }
                 }
+            } catch is CancellationError {
+                // Task was cancelled, ignore.
             } catch {
                 AppLogger.debug("Error filtering items: \(error)")
             }
@@ -321,34 +324,24 @@ struct LibraryDetailView: View {
 
         viewModel.isLoadingMore = true
         let nextOffset = viewModel.displayedItems.count
+        let snapshot = FilterSnapshot(from: viewModel)
 
         Task {
-            let currentSearchText = viewModel.searchText
-            let category = viewModel.selectedCategory
-            let sortOrder = viewModel.currentSortOrder
-            let networks = viewModel.selectedNetworks
-            let language = viewModel.selectedLanguage
-            let genre = viewModel.selectedGenre
-            let year = viewModel.selectedYear
-            let state = viewModel.selectedState
-            let groupBy = viewModel.currentGroupBy
-            let limit = viewModel.pageSize
-
             do {
                 let filterActor = MediaFilterActor(modelContainer: modelContext.container)
                 let result = try await filterActor.filterAndSort(
-                    category: category,
-                    searchText: currentSearchText,
-                    sortOrder: sortOrder,
-                    network: networks,
-                    language: language,
-                    genre: genre,
-                    year: year,
-                    state: state,
+                    category: snapshot.category,
+                    searchText: snapshot.searchText,
+                    sortOrder: snapshot.sortOrder,
+                    network: snapshot.networks,
+                    language: snapshot.language,
+                    genre: snapshot.genre,
+                    year: snapshot.year,
+                    state: snapshot.state,
                     badge: nil,
-                    groupBy: groupBy,
-                    collectionID: viewModel.selectedCollectionID,
-                    limit: limit,
+                    groupBy: snapshot.groupBy,
+                    collectionID: snapshot.collectionID,
+                    limit: viewModel.pageSize,
                     offset: nextOffset
                 )
 
@@ -419,8 +412,7 @@ struct LibraryDetailView: View {
     }
 
     private var isSystemSmartCategory: Bool {
-        let cat = viewModel.selectedCategory
-        return cat == .releaseRadar || cat == .smartUpcoming || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
+        viewModel.selectedCategory.isSmartCategory
     }
 
     private func updateSingleItemInContentView(id: PersistentIdentifier) {
@@ -491,25 +483,6 @@ struct LibraryDetailView: View {
                 AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
             }
         }
-    }
-}
-
-struct KeyboardShortcutsView: View {
-    @Binding var sidebarSelection: SidebarItem?
-    @Binding var isSearchActive: Bool
-    
-    var body: some View {
-        Group {
-            Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
-            Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
-            Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
-            Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
-            Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
-            Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
-            Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-            Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
-        }
-        .opacity(0)
     }
 }
 

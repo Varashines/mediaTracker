@@ -49,10 +49,23 @@ struct BulkCollectionManagerView: View {
                 .padding(.bottom, 12)
                 
                 if isLoading {
-                    Spacer()
-                    ProgressView("Loading library…")
-                        .controlSize(.large)
-                    Spacer()
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160))], spacing: 16) {
+                            ForEach(0..<12, id: \.self) { _ in
+                                VStack(spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .aspectRatio(2/3, contentMode: .fill)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.primary.opacity(0.04))
+                                        .frame(height: 10)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 } else {
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 160))], spacing: 16) {

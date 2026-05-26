@@ -38,9 +38,7 @@ struct SmartCollectionsHubView: View {
     @State private var customSmartCollections: [MediaCollection] = []
     @State private var manualCollections: [MediaCollection] = []
     
-    private let smartCategories: [NavigationCategory] = [
-        .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites
-    ]
+    private let smartCategories: [NavigationCategory] = NavigationCategory.allCases.filter(\.isSmartCategory)
     
     var body: some View {
         ScrollView {
@@ -464,7 +462,7 @@ private struct SmartCollectionCard: View {
                             .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.05), lineWidth: 0.8)
                     }
             }
-            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .scaleEffect(isHovered ? 1.04 : 1.0)
             .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
         .buttonStyle(.plain)
@@ -503,39 +501,5 @@ private struct SmartCollectionCard: View {
                 CreateCollectionSheet(editingCollection: collection)
             }
         }
-    }
-    
-    private func actionButtons(for collection: MediaCollection) -> some View {
-        HStack(spacing: 4) {
-            actionButton(icon: collection.isPinned ? "pin.fill" : "pin", color: collection.isPinned ? .blue : .primary) {
-                withAnimation { collection.isPinned.toggle() }
-            }
-            
-            actionButton(icon: "pencil", color: .primary) {
-                showingEditSheet = true
-            }
-            
-            actionButton(icon: "trash", color: .red) {
-                modelContext.delete(collection)
-            }
-        }
-        .padding(4)
-        .background {
-            Capsule().fill(.ultraThinMaterial)
-        }
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
-    }
-    
-    private func actionButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(color)
-                .frame(width: 28, height: 28)
-                .background(Color.primary.opacity(0.05))
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
     }
 }

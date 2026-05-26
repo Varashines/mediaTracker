@@ -22,7 +22,7 @@ struct TVTrackingView: View {
 
     private var sortedSeasons: [TVSeason] {
         tvDetails.seasons
-            .filter { !$0.isDeleted && $0.modelContext != nil }
+            .liveModels
             .sorted(by: { $0.seasonNumber < $1.seasonNumber })
     }
 
@@ -39,7 +39,7 @@ struct TVTrackingView: View {
             } else {
                 // Horizontal Season Selector
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    LazyHStack(spacing: 12) {
                         ForEach(sortedSeasons, id: \.seasonNumber) { season in
                             SeasonTab(
                                 season: season,
@@ -284,7 +284,7 @@ private struct SeasonSection: View {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
                         season.episodes
-                            .filter { !$0.isDeleted && $0.modelContext != nil }
+                            .liveModels
                             .sorted(by: { $0.episodeNumber < $1.episodeNumber }),
                         id: \.persistentModelID
                     ) { ep in
@@ -300,7 +300,7 @@ private struct SeasonSection: View {
     private func toggleSeasonWatchedStatus() {
         let targetStatus = !isAllWatched
         // Defensive: skip deleted/detached episodes during concurrent merges
-        let liveEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+        let liveEpisodes = season.episodes.liveModels
         withAnimation {
             for episode in liveEpisodes {
                 episode.markWatched(targetStatus)
@@ -503,7 +503,7 @@ private struct EpisodeCube: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.78), value: episode.isWatched)
-        .animation(.easeInOut(duration: 0.2), value: isHovering)
+        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: isHovering)
     }
 }
 

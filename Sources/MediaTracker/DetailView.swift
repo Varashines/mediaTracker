@@ -46,37 +46,12 @@ struct DetailView: View {
     @ViewBuilder
     private var contentOverlay: some View {
         ZStack {
-            Color(NSColor.windowBackgroundColor).ignoresSafeArea()
-            
-            // Dynamic Backdrop Gradient — full-view wash
-            GeometryReader { geo in
-                ZStack {
-                    RadialGradient(
-                        colors: [
-                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.22 : 0.18),
-                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.08 : 0.06),
-                            .clear
-                        ],
-                        center: .top,
-                        startRadius: 0,
-                        endRadius: min(geo.size.width, geo.size.height) * 1.5
-                    )
-                    RadialGradient(
-                        colors: [
-                            effectiveThemeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.08 : 0.06),
-                            .clear
-                        ],
-                        center: .bottom,
-                        startRadius: 0,
-                        endRadius: min(geo.size.width, geo.size.height) * 0.8
-                    )
-                }
+            let p = viewModel.vibrantThemeColor
+            Color(NSColor.windowBackgroundColor)
+                .overlay(p.opacity(0.12))
                 .ignoresSafeArea()
-            }
-            .animation(AppTheme.Animation.springGentle, value: effectiveThemeColor)
-            
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
                         .background(alignment: .top) {
                             GeometryReader { geo in
@@ -89,6 +64,7 @@ struct DetailView: View {
                     tmdbWarningSection
                     castAndTrackingSection
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
                 .padding(.bottom, 24)
@@ -131,6 +107,24 @@ struct DetailView: View {
             }
         }
         .tint(effectiveThemeColor)
+        .background {
+            Group {
+                Button("") {
+                    if viewModel.item.type == .tvShow {
+                        viewModel.markNextEpisodeWatched()
+                    } else {
+                        viewModel.toggleWatched()
+                    }
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                
+                Button("") {
+                    viewModel.cycleStatus()
+                }
+                .keyboardShortcut("w", modifiers: [])
+            }
+            .opacity(0)
+        }
     }
 
     private var effectiveThemeColor: Color {
@@ -235,6 +229,7 @@ struct DetailView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut("l", modifiers: [.command])
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
                 }
@@ -256,6 +251,7 @@ struct DetailView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isRefreshing)
+                .keyboardShortcut("r", modifiers: [.command])
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isRefreshHovered = hovering }
                 }
@@ -273,6 +269,7 @@ struct DetailView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.delete, modifiers: [.command])
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isDeleteHovered = hovering }
                 }

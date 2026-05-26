@@ -10,9 +10,40 @@ struct HomeViewSections: View {
     let isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
-    
+
+    @State private var showWatchedThisWeek = false
+
     var body: some View {
-        Group {
+        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            // 0. RECENTLY WATCHED TOGGLE
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        showWatchedThisWeek.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 10))
+                        Text(showWatchedThisWeek ? "Hide Recently Watched" : "Recently Watched")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, AppTheme.Spacing.pageMargin)
+            }
+
+            if showWatchedThisWeek {
+                WatchedThisWeek()
+                    .padding(.bottom, AppTheme.Spacing.small)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             // 1. CONTINUE WATCHING
             ContinueWatchingCarousel(
                 items: homeContinueWatching, namespace: namespace,

@@ -6,12 +6,16 @@ class DetailViewModel {
     var item: MediaItem
     var isRefreshing = false
     var themeColor: Color = Color.secondary.opacity(0.1)
+    var secondaryThemeColor: Color = Color.secondary.opacity(0.06)
     
     // Phase 5 Performance: Cache scheme-aware colors to avoid per-frame math in MeshGradient
     var vibrantThemeColor: Color = .clear
     var contrastThemeColor: Color = .clear
     var warmThemeColor: Color = .clear
     var coolThemeColor: Color = .clear
+    var secondaryVibrantThemeColor: Color = .clear
+    var secondaryWarmThemeColor: Color = .clear
+    var secondaryCoolThemeColor: Color = .clear
     
     init(item: MediaItem) {
         self.item = item
@@ -39,38 +43,44 @@ class DetailViewModel {
     
     func updateThemeColor() {
         // Skip if item is deleted or app is in sleep mode
-        guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
+        guard let context = item.modelContext, !SleepManager.shared.isAsleep else { return }
 
-        if let hex = item.themeColorHex, let cachedColor = Color(hex: hex) {
-            self.themeColor = cachedColor
-            self.recalculateVibrantPalette()
-            return
-        }
-        
-        // Extraction logic
-        if let posterURL = item.posterURL, let url = URL(string: posterURL) {
-            Task { [weak self] in
-                // Try to get from cache first
-                if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: .thumbMedium) {
-                    let extracted = await ColorExtractor.dominantColor(from: container.image)
-                    let hex = extracted.toHex()
-                    
-                    await MainActor.run { [weak self] in
-                        guard let self = self else { return }
-                        withAnimation(AppTheme.Animation.springGentle) {
-                            self.themeColor = extracted
-                            self.item.themeColorHex = hex
-                            self.recalculateVibrantPalette()
-                        }
-                    }
+        // Priority 1: Option B (Pre-calculated Poster Color from SwiftData)
+        if let hex = item.themeColorHex {
+            if hex.contains("|") {
+                let parts = hex.split(separator: "|", maxSplits: 1).map(String.init)
+                if parts.count == 2, let primary = Color(hex: parts[0]), let secondary = Color(hex: parts[1]) {
+                    self.themeColor = primary
+                    self.secondaryThemeColor = secondary
+                    self.recalculateVibrantPalette()
+                    return
                 }
+            } else if let cachedColor = Color(hex: hex) {
+                self.themeColor = cachedColor
+                self.recalculateVibrantPalette()
+                return
             }
         }
+
+        // Priority 2: Option A (Network/Studio Theme Color)
+        if let networkName = item.cachedNetwork {
+            let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
+            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate<NetworkEntity> { $0.name == first })
+            if let network = try? context.fetch(descriptor).first, let hex = network.themeColorHex, let netColor = Color(hex: hex) {
+                self.themeColor = netColor
+                self.secondaryThemeColor = netColor
+                self.recalculateVibrantPalette()
+                return
+            }
+        }
+        
+        // Priority 3: Fallback Default
+        self.themeColor = .accentColor
+        self.secondaryThemeColor = .accentColor.opacity(0.8)
+        self.recalculateVibrantPalette()
     }
 
     private func recalculateVibrantPalette() {
-        // Phase 5 Performance: Calculate scheme-aware colors once per theme update
-        // Use the current system appearance as a baseline for the initial calculation
         let isDark = NSApp.effectiveAppearance.name == .darkAqua
         let scheme: ColorScheme = isDark ? .dark : .light
         
@@ -78,6 +88,11 @@ class DetailViewModel {
         self.contrastThemeColor = themeColor.highContrastAccent(colorScheme: scheme)
         self.warmThemeColor = vibrantThemeColor.hueShift(by: 0.05)
         self.coolThemeColor = vibrantThemeColor.hueShift(by: -0.05)
+        
+        // Secondary color palette for 2-tone ambient background
+        self.secondaryVibrantThemeColor = secondaryThemeColor.luminousAccent(colorScheme: scheme)
+        self.secondaryWarmThemeColor = secondaryVibrantThemeColor.hueShift(by: 0.05)
+        self.secondaryCoolThemeColor = secondaryVibrantThemeColor.hueShift(by: -0.05)
     }
     
     private var needsOMDBData: Bool {
@@ -227,7 +242,7 @@ class DetailViewModel {
                             currentSeason.episodes.append(episode)
                         }
                         
-                        episode.isWatched = markAsWatched
+                        episode.markWatched(markAsWatched)
                     }
                     
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
@@ -286,7 +301,60 @@ class DetailViewModel {
                 }
             }
             
+ 
+        }
+    }
 
+    func markNextEpisodeWatched() {
+        guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
+        
+        // Optimize: Make sure seasons are loaded
+        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return }
+        
+        // Make sure episodes are loaded or fetched
+        if currentSeason.episodes.isEmpty {
+            fetchEpisodes(for: currentSeason)
+            return
+        }
+        
+        let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+        if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
+            next.markWatched(true)
+            item.lastInteractionDate = Date()
+            checkOverallCompletion()
+        }
+    }
+
+    func toggleWatched() {
+        guard item.modelContext != nil else { return }
+        if item.state == .completed {
+            item.state = .wishlist
+        } else {
+            item.state = .completed
+        }
+        item.lastInteractionDate = Date()
+        item.syncCachedProperties()
+        try? item.modelContext?.save()
+        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+    }
+
+    func cycleStatus() {
+        guard item.modelContext != nil else { return }
+        let allStates = MediaItem.availableStates(for: item.type ?? .movie, progress: item.storedProgress)
+        guard !allStates.isEmpty else { return }
+        
+        let currentIndex = allStates.firstIndex(of: item.state ?? .wishlist) ?? 0
+        let nextIndex = (currentIndex + 1) % allStates.count
+        let nextState = allStates[nextIndex]
+        
+        withAnimation {
+            item.state = nextState
+            item.lastUpdated = Date()
+            item.lastInteractionDate = Date()
+            item.syncCachedProperties()
+            try? item.modelContext?.save()
+            MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
         }
     }
 }

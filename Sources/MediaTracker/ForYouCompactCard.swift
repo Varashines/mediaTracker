@@ -67,16 +67,15 @@ struct ForYouCompactCard: View {
                 }
             }
             
-            HStack(spacing: 20) {
-                // 3. Floating Poster (The "Hero" element)
+            HStack(spacing: 0) {
+                // 3. Floating Poster on the extreme left
                 if let poster = metadata.posterURL, let url = URL(string: poster) {
                     CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
                     }
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-                    .shadow(color: .black.opacity(0.6), radius: 10, x: 5, y: 5)
+                    .frame(width: 133, height: cardHeight)
+                    .clipped()
                 }
 
                 // 4. Info Pane
@@ -91,9 +90,10 @@ struct ForYouCompactCard: View {
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.white.opacity(0.8))
                 }
+                .padding(.leading, 20)
                 .padding(.trailing, 20)
+                .padding(.vertical, 20)
             }
-            .padding(.leading, 20)
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
@@ -102,8 +102,8 @@ struct ForYouCompactCard: View {
                 .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
         }
         .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 8, y: 4)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(AppTheme.Animation.springDefault, value: isHovered)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .animation(AppTheme.Animation.springGentle, value: isHovered)
         .onHover { isHovered = $0 }
         .task {
             if let fetched = modelContext.model(for: metadata.id) as? MediaItem {

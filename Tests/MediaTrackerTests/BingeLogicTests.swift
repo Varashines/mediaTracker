@@ -327,6 +327,7 @@ final class BingeLogicTests: XCTestCase {
         let context = container.mainContext
 
         let item = MediaItem(id: "behavioral_binge", title: "Binge Show", overview: "", type: .tvShow)
+        item.state = .active
         context.insert(item)
         let tvDetails = TVShowDetails(tmdbID: 107)
         tvDetails.item = item
@@ -364,6 +365,8 @@ final class BingeLogicTests: XCTestCase {
         
         // Ensure denormalized counts are set for the mock time
         _ = tvDetails.calculateProgress(now: fixedNow)
+        
+        BadgeEngine.clearScanCache()
         
         // Manually trigger the sync with the fixed time
         item.syncCachedProperties(now: fixedNow)

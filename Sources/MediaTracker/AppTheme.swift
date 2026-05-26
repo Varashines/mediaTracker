@@ -54,11 +54,9 @@ struct AppTheme {
     }
 
     struct Animation {
-        static let springDefault: SwiftUI.Animation = .spring(response: 0.5, dampingFraction: 0.82)
         static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
-        static let smooth: SwiftUI.Animation = .easeInOut(duration: 0.3)
-        static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.2)
+        static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
     }
 
     struct Thumbnail {

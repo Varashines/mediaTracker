@@ -91,10 +91,3 @@ final class PersonImageEntity {
         self.profileURL = profileURL
     }
 }
-
-extension Notification.Name {
-    static let mediaItemRefreshed = Notification.Name("mediaItemRefreshed")
-    static let mediaItemsBulkRefreshed = Notification.Name("mediaItemsBulkRefreshed")
-    static let mediaStateChanged = Notification.Name("mediaStateChanged")
-    static let tvShowMarkedCompleted = Notification.Name("tvShowMarkedCompleted")
-}

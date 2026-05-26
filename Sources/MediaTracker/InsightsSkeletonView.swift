@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct InsightsSkeletonView: View {
-    @State private var opacity: Double = 0.5
 
     var body: some View {
         ScrollView {
@@ -10,18 +9,12 @@ struct InsightsSkeletonView: View {
                 heroGridSkeleton
                 tasteProfileSkeleton
                 castCrewSkeleton
-                recentlyWatchedSkeleton
             }
             .padding(.bottom, AppTheme.Spacing.section)
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .opacity(opacity)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                opacity = 1.0
-            }
-        }
+        .shimmering()
     }
 
     private var headerSkeleton: some View {
@@ -76,29 +69,68 @@ struct InsightsSkeletonView: View {
                 .redacted(reason: .placeholder)
 
             HStack(alignment: .center, spacing: AppTheme.Spacing.large) {
-                Circle()
-                    .stroke(Color.primary.opacity(0.06), lineWidth: 22)
-                    .frame(width: 150, height: 150)
+                // LEFT: Donut Chart Card Placeholder (Matching DashboardCard styling)
+                DashboardCard {
+                    HStack(spacing: AppTheme.Spacing.xLarge) {
+                        Circle()
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 22)
+                            .frame(width: 150, height: 150)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        HStack(spacing: AppTheme.Spacing.small) {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.primary.opacity(0.06))
-                                .frame(width: 12, height: 12)
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                HStack(spacing: AppTheme.Spacing.small) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 12, height: 12)
 
-                            Text("Love")
-                                .font(AppTheme.Font.bodyBold)
-                                .redacted(reason: .placeholder)
-                                .frame(width: 60, alignment: .leading)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 60, height: 12)
 
-                            Text("0")
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                .redacted(reason: .placeholder)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.primary.opacity(0.04))
+                                        .frame(width: 30, height: 12)
+                                }
+                            }
                         }
                     }
                 }
+                .frame(height: 198)
+
+                // RIGHT: TastePreferencesCard Placeholder (3 dynamic preference blocks)
+                VStack(spacing: AppTheme.Spacing.medium) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        HStack(spacing: AppTheme.Spacing.medium) {
+                            Circle()
+                                .fill(Color.primary.opacity(0.06))
+                                .frame(width: 36, height: 36)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 60, height: 8)
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.primary.opacity(0.08))
+                                    .frame(width: 120, height: 12)
+                            }
+
+                            Spacer()
+
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.primary.opacity(0.06))
+                                .frame(width: 50, height: 28)
+                        }
+                        .padding(12)
+                        .background(Color.primary.opacity(0.02))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.primary.opacity(0.04), lineWidth: 0.5)
+                        )
+                    }
+                }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
     }
@@ -108,24 +140,44 @@ struct InsightsSkeletonView: View {
             SectionHeader(title: "Cast & Crew", icon: "person.3.fill", iconColor: .teal)
                 .redacted(reason: .placeholder)
 
+            // Split Grid horizontal blocks matching TalentLedgerView / TalentCardView layout
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CAST")
                     .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .kerning(1.2)
                     .redacted(reason: .placeholder)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(0..<6, id: \.self) { _ in
-                            VStack(spacing: 8) {
-                                Circle()
+                        ForEach(0..<10, id: \.self) { _ in
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 44, height: 44)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 60, height: 10)
+                                    .frame(width: 44, height: 64)
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 24, height: 10)
+                                    
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 80, height: 14)
+                                }
+                                
+                                Spacer(minLength: 0)
                             }
-                            .frame(width: 80)
+                            .frame(width: 180, height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.primary.opacity(0.02))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.04), lineWidth: 0.7)
+                            )
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -136,21 +188,40 @@ struct InsightsSkeletonView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CREATORS")
                     .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .kerning(1.2)
                     .redacted(reason: .placeholder)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(0..<6, id: \.self) { _ in
-                            VStack(spacing: 8) {
-                                Circle()
+                        ForEach(0..<10, id: \.self) { _ in
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 44, height: 44)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 60, height: 10)
+                                    .frame(width: 44, height: 64)
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 24, height: 10)
+                                    
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.primary.opacity(0.06))
+                                        .frame(width: 80, height: 14)
+                                }
+                                
+                                Spacer(minLength: 0)
                             }
-                            .frame(width: 80)
+                            .frame(width: 180, height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.primary.opacity(0.02))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.04), lineWidth: 0.7)
+                            )
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -160,23 +231,5 @@ struct InsightsSkeletonView: View {
         }
     }
 
-    private var recentlyWatchedSkeleton: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            SectionHeader(title: "Recently Watched", icon: "play.circle.fill", iconColor: .blue)
-                .redacted(reason: .placeholder)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.small) {
-                    ForEach(0..<6, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                            .fill(Color.primary.opacity(0.06))
-                            .frame(width: 90, height: 135)
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.top, 4)
-                .padding(.bottom, 16)
-            }
-        }
-    }
 }
+

@@ -63,12 +63,9 @@ struct DiscoveryHubView: View {
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
                 } else {
-                    HStack {
-                        Spacer()
-                        ProgressView().controlSize(.small)
-                        Spacer()
-                    }
-                    .padding(.top, 100)
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 80)
                 }
             }
             .padding(.top, 30)
@@ -118,13 +115,12 @@ struct DiscoveryHubView: View {
                     viewModel.cachedLanguages = cached.languages
                     viewModel.cachedBadges = cached.badges
                     hasDataLoaded = true
-                    viewModel.isBatchRefreshing = false
                 }
                 prewarmLogos(networks: cached.networks)
                 return
             }
 
-            viewModel.isBatchRefreshing = true
+
             let container = modelContext.container
             let localHidden = hiddenStudios
             let syncService = DiscoverySyncService(modelContainer: container)
@@ -149,7 +145,6 @@ struct DiscoveryHubView: View {
                     self.viewModel.cachedLanguages = hubData.languages
                     self.viewModel.cachedBadges = hubData.badges
                     self.hasDataLoaded = true
-                    self.viewModel.isBatchRefreshing = false
                 }
             }
             prewarmLogos(networks: hubData.networks)

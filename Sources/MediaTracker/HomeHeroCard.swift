@@ -104,8 +104,8 @@ struct HomeHeroCard: View {
         .frame(width: 500, height: 280)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 10, y: 5)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(AppTheme.Animation.springDefault, value: isHovered)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .animation(AppTheme.Animation.springGentle, value: isHovered)
         .onHover { isHovered = $0 }
         .task {
             // Phase 2 Optimization: Lazy Load the full item for recommendation context
@@ -144,43 +144,3 @@ struct HomeHeroCard: View {
     }
 }
 
-struct HomeHeroCardPlaceholder: View {
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.secondary.opacity(colorScheme == .dark ? 0.2 : 0.15))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                }
-            
-            HStack(spacing: 24) {
-                // Vertical Poster Skeleton
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 140, height: 210)
-                
-                // Details Skeleton
-                VStack(alignment: .leading, spacing: 12) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 200, height: 24)
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.08))
-                        .frame(width: 120, height: 16)
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 30)
-                
-                Spacer()
-            }
-            .padding(24)
-        }
-        .frame(width: 500, height: 280)
-        .skeletonPulse()
-    }
-}

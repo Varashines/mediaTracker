@@ -27,7 +27,7 @@ struct TalentLedgerView: View {
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
+                        LazyHStack(spacing: 12) {
                             ForEach(Array(stats.topRatedActors.prefix(10).enumerated()), id: \.element.name) { index, person in
                                 TalentCardView(person: person, rank: index + 1, color: .orange)
                             }
@@ -61,7 +61,7 @@ struct TalentLedgerView: View {
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
+                        LazyHStack(spacing: 12) {
                             ForEach(Array(stats.topRatedCreators.prefix(10).enumerated()), id: \.element.name) { index, person in
                                 TalentCardView(person: person, rank: index + 1, color: .green)
                             }
@@ -151,7 +151,7 @@ struct TalentCardView: View {
                 )
         )
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 isHovered = hovering

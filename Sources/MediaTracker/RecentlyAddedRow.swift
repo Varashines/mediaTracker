@@ -9,7 +9,7 @@ struct RecentlyAddedRow: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(title: "Recently Added", icon: "clock.badge.checkmark", iconColor: .orange)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 20) {
+                LazyHStack(spacing: 20) {
                     ForEach(items) { metadata in
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling)

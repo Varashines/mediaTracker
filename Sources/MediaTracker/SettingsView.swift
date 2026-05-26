@@ -20,7 +20,6 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var selectedTab = 0
     @State private var showClearDatabaseConfirmation = false
-    @State private var showNotificationDebug = false
     @State private var isPulsing = false
     @Namespace private var headerNamespace
 
@@ -29,6 +28,7 @@ struct SettingsView: View {
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
     @AppStorage("notifications_time") private var notificationTime: Double = 9 * 3600
+    @AppStorage("skip_startup_background_tasks") private var skipStartupTasks = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -413,53 +413,31 @@ struct SettingsView: View {
 
                 modernRow(
                     title: "Scheduled Queue",
-                    subtitle: "Reset notifications or inspect queue.",
+                    subtitle: "Reset notifications.",
                     showDivider: false
                 ) {
-                    HStack(spacing: 12) {
-                        Button {
-                            Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "arrow.clockwise.circle.fill")
-                                Text("Reschedule All")
-                            }
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.accentColor.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
-                            )
+                    Button {
+                        Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                            Text("Reschedule All")
                         }
-                        .buttonStyle(.plain)
-                        .disabled(!notificationsEnabled)
-
-                        Button {
-                            showNotificationDebug = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text("Review Schedule")
-                                Image(systemName: "chevron.right")
-                            }
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.primary.opacity(0.04))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.accentColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
+                        )
                     }
+                    .buttonStyle(.plain)
+                    .disabled(!notificationsEnabled)
                 }
             }
         }
-        .sheet(isPresented: $showNotificationDebug) { NotificationDebugView() }
     }
 
     private var engineTab: some View {
@@ -484,6 +462,17 @@ struct SettingsView: View {
 
                 GroupContainer {
                     DiscoveryManagementView().padding(.vertical, 4)
+                }
+
+                Spacer().frame(height: 8)
+
+                GroupContainer {
+                    modernToggle(
+                        "Skip Startup Background Tasks",
+                        subtitle: "Disable automatic metadata repair on launch for faster startup.",
+                        showDivider: false,
+                        isOn: $skipStartupTasks
+                    )
                 }
             }
         }
@@ -668,7 +657,7 @@ struct SettingsView: View {
                 .labelsHidden()
         }
         .onTapGesture {
-            withAnimation(AppTheme.Animation.springDefault) {
+            withAnimation(AppTheme.Animation.springGentle) {
                 isOn.wrappedValue.toggle()
             }
             FeedbackManager.shared.trigger(.click)
@@ -691,6 +680,58 @@ struct SettingsView: View {
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "6.0.0"
+    }
+}
+
+struct CustomNotificationCheckbox: View {
+    let title: String
+    let icon: String
+    @Binding var isOn: Bool
+    @Environment(\.colorScheme) var scheme
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                isOn.toggle()
+            }
+            FeedbackManager.shared.trigger(.click)
+        } label: {
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isOn ? Color.accentColor : Color.primary.opacity(0.04))
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(isOn ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 0.75)
+                        )
+
+                    if isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                Label(title, systemImage: icon)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(isOn ? .primary : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .scaleEffect(isOn ? 1 : 0.975)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isOn)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isOn ? Color.accentColor.opacity(0.05) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isOn ? Color.accentColor.opacity(0.15) : Color.clear, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

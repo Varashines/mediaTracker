@@ -10,6 +10,7 @@ final class MediaStateService {
 
     // ContentView / LibraryGrid — trigger full library refresh
     private(set) var needsFullRefreshCount = 0
+    private(set) var needsSingleItemUpdateCount = 0
 
     // DetailView — trigger targeted item refresh
     private(set) var refreshedItemID: String?
@@ -18,24 +19,39 @@ final class MediaStateService {
     private(set) var lastChangedItemID: PersistentIdentifier?
 
     func postMediaStateChanged(itemID: PersistentIdentifier? = nil) {
-        needsFullRefreshCount += 1
-        lastChangedItemID = itemID
+        // Only trigger full refresh when no specific item is provided (bulk change)
+        if let itemID {
+            needsSingleItemUpdateCount += 1
+            lastChangedItemID = itemID
+        } else {
+            needsFullRefreshCount += 1
+            lastChangedItemID = nil
+        }
+        TasteActor.clearCache()
     }
 
     func postItemRefreshed(id: String, persistentID: PersistentIdentifier? = nil) {
-        needsFullRefreshCount += 1
-        refreshedItemID = id
         if let persistentID {
+            needsSingleItemUpdateCount += 1
+            refreshedItemID = id
             lastChangedItemID = persistentID
+        } else {
+            needsFullRefreshCount += 1
+            refreshedItemID = id
+            lastChangedItemID = nil
         }
+        TasteActor.clearCache()
     }
 
     func postBulkRefreshed() {
         needsFullRefreshCount += 1
         lastChangedItemID = nil
+        TasteActor.clearCache()
     }
 
     func postTVShowMarkedCompleted() {
         needsFullRefreshCount += 1
+        lastChangedItemID = nil
+        TasteActor.clearCache()
     }
 }

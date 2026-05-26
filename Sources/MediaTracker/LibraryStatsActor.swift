@@ -1,46 +1,42 @@
 import Foundation
 import SwiftData
 
-struct VisualPersonStat: Sendable {
+struct VisualPersonStat: Sendable, Codable {
     let name: String
     let profileURL: String?
     let score: Double
     let count: Int
 }
 
-struct WatchTimePoint: Sendable, Identifiable {
-    let id = UUID()
+struct WatchTimePoint: Sendable, Identifiable, Codable {
+    let id: UUID
     let date: Date
     let minutes: Int
+
+    init(id: UUID = UUID(), date: Date, minutes: Int) {
+        self.id = id
+        self.date = date
+        self.minutes = minutes
+    }
 }
 
-struct DecadeDistributionPoint: Sendable, Identifiable {
-    let id = UUID()
+struct DecadeDistributionPoint: Sendable, Identifiable, Codable {
+    let id: UUID
     let decade: String
     let count: Int
+
+    init(id: UUID = UUID(), decade: String, count: Int) {
+        self.id = id
+        self.decade = decade
+        self.count = count
+    }
 }
 
-struct BarcodeSlice: Sendable, Identifiable {
+struct BarcodeSlice: Sendable, Identifiable, Codable {
     let id: String
     let title: String
     let tasteValue: String
     let themeColorHex: String?
-}
-
-struct CompletedItemRepresentation: Sendable, Identifiable {
-    let id: String
-    let title: String
-    let posterURL: String?
-    let themeColorHex: String?
-    let completedDate: Date
-    let typeValue: String
-}
-
-struct CreatorCollaboration: Sendable, Identifiable {
-    let id: String
-    let actorName: String
-    let creatorName: String
-    let count: Int
 }
 
 struct LibraryStats: Sendable {
@@ -60,7 +56,6 @@ struct LibraryStats: Sendable {
     // Visual Hall of Fame (Highest Rated, min 5 titles)
     let topRatedActors: [VisualPersonStat]
     let topRatedCreators: [VisualPersonStat]
-    let topRatedGenres: [(name: String, score: Double)]
     let topRatedNetworks: [(name: String, score: Double)]
     let topRatedStudios: [(name: String, score: Double)]
     let topRatedLanguages: [(name: String, score: Double)]
@@ -72,8 +67,6 @@ struct LibraryStats: Sendable {
     let watchTimeHistory: [WatchTimePoint]
     let decadeDistribution: [DecadeDistributionPoint]
     
-    let collaborations: [CreatorCollaboration]
-    let completedItems: [CompletedItemRepresentation]
     let barcodeData: [BarcodeSlice]
 
     static let empty = LibraryStats(
@@ -86,7 +79,6 @@ struct LibraryStats: Sendable {
         genreDNA: [],
         topRatedActors: [],
         topRatedCreators: [],
-        topRatedGenres: [],
         topRatedNetworks: [],
         topRatedStudios: [],
         topRatedLanguages: [],
@@ -95,22 +87,230 @@ struct LibraryStats: Sendable {
         dislikedCount: 0,
         watchTimeHistory: [],
         decadeDistribution: [],
-        collaborations: [],
-        completedItems: [],
         barcodeData: []
     )
 }
 
+struct CodableLibraryStats: Codable {
+    struct NamePercentage: Codable {
+        let name: String
+        let percentage: Double
+    }
+    struct NameScore: Codable {
+        let name: String
+        let score: Double
+    }
+
+    let totalWatchTimeMinutes: Int
+    let totalMovies: Int
+    let completedMovies: Int
+    let totalTVShows: Int
+    let completedTVShows: Int
+    let totalEpisodesWatched: Int
+
+    let genreDNA: [NamePercentage]
+    let topRatedActors: [VisualPersonStat]
+    let topRatedCreators: [VisualPersonStat]
+    let topRatedNetworks: [NameScore]
+    let topRatedStudios: [NameScore]
+    let topRatedLanguages: [NameScore]
+
+    let lovedCount: Int
+    let likedCount: Int
+    let dislikedCount: Int
+    
+    let watchTimeHistory: [WatchTimePoint]
+    let decadeDistribution: [DecadeDistributionPoint]
+    let barcodeData: [BarcodeSlice]
+
+    init(_ stats: LibraryStats) {
+        self.totalWatchTimeMinutes = stats.totalWatchTimeMinutes
+        self.totalMovies = stats.totalMovies
+        self.completedMovies = stats.completedMovies
+        self.totalTVShows = stats.totalTVShows
+        self.completedTVShows = stats.completedTVShows
+        self.totalEpisodesWatched = stats.totalEpisodesWatched
+        self.genreDNA = stats.genreDNA.map { NamePercentage(name: $0.name, percentage: $0.percentage) }
+        self.topRatedActors = stats.topRatedActors
+        self.topRatedCreators = stats.topRatedCreators
+        self.topRatedNetworks = stats.topRatedNetworks.map { NameScore(name: $0.name, score: $0.score) }
+        self.topRatedStudios = stats.topRatedStudios.map { NameScore(name: $0.name, score: $0.score) }
+        self.topRatedLanguages = stats.topRatedLanguages.map { NameScore(name: $0.name, score: $0.score) }
+        self.lovedCount = stats.lovedCount
+        self.likedCount = stats.likedCount
+        self.dislikedCount = stats.dislikedCount
+        self.watchTimeHistory = stats.watchTimeHistory
+        self.decadeDistribution = stats.decadeDistribution
+        self.barcodeData = stats.barcodeData
+    }
+
+    func toLibraryStats() -> LibraryStats {
+        LibraryStats(
+            totalWatchTimeMinutes: totalWatchTimeMinutes,
+            totalMovies: totalMovies,
+            completedMovies: completedMovies,
+            totalTVShows: totalTVShows,
+            completedTVShows: completedTVShows,
+            totalEpisodesWatched: totalEpisodesWatched,
+            genreDNA: genreDNA.map { ($0.name, $0.percentage) },
+            topRatedActors: topRatedActors,
+            topRatedCreators: topRatedCreators,
+            topRatedNetworks: topRatedNetworks.map { ($0.name, $0.score) },
+            topRatedStudios: topRatedStudios.map { ($0.name, $0.score) },
+            topRatedLanguages: topRatedLanguages.map { ($0.name, $0.score) },
+            lovedCount: lovedCount,
+            likedCount: likedCount,
+            dislikedCount: dislikedCount,
+            watchTimeHistory: watchTimeHistory,
+            decadeDistribution: decadeDistribution,
+            barcodeData: barcodeData
+        )
+    }
+}
+
+struct CachedStatsWrapper: Codable {
+    let lastCalculationDate: Date
+    let stats: CodableLibraryStats
+}
+
 @ModelActor
 actor LibraryStatsActor {
-    @MainActor private static var cachedStats: LibraryStats?
+    @MainActor private static var cachedLightStats: LibraryStats?
+    @MainActor private static var cachedFullStats: LibraryStats?
+    @MainActor private static var cachedContainers: (RawStatsContainer, TasteMapsContainer)?
     @MainActor private static var lastCalculation: Date?
     private let cacheTTL: TimeInterval = 3600  // 1 hour
     
+    private static func getCacheURL(full: Bool) -> URL {
+        URL.applicationSupportDirectory.appendingPathComponent(full ? "LibraryStatsCache_full.json" : "LibraryStatsCache_light.json")
+    }
+
+    private static func loadPersistentStats(full: Bool, cacheTTL: TimeInterval) -> (LibraryStats, Date)? {
+        let url = getCacheURL(full: full)
+        guard let data = try? Data(contentsOf: url),
+              let wrapper = try? JSONDecoder().decode(CachedStatsWrapper.self, from: data) else {
+            return nil
+        }
+        if Date().timeIntervalSince(wrapper.lastCalculationDate) < cacheTTL {
+            return (wrapper.stats.toLibraryStats(), wrapper.lastCalculationDate)
+        }
+        return nil
+    }
+
+    private static func savePersistentStats(_ stats: LibraryStats, full: Bool, date: Date) {
+        let url = getCacheURL(full: full)
+        let wrapper = CachedStatsWrapper(lastCalculationDate: date, stats: CodableLibraryStats(stats))
+        if let data = try? JSONEncoder().encode(wrapper) {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    private static func deletePersistentStats() {
+        try? FileManager.default.removeItem(at: getCacheURL(full: true))
+        try? FileManager.default.removeItem(at: getCacheURL(full: false))
+    }
+
     @MainActor
     static func clearCache() {
-        cachedStats = nil
+        cachedLightStats = nil
+        cachedFullStats = nil
+        cachedContainers = nil
         lastCalculation = nil
+        deletePersistentStats()
+    }
+
+    func fetchStats(includeCinephileData: Bool = true) async throws -> LibraryStats {
+        try Task.checkCancellation()
+        let (cached, last) = await MainActor.run {
+            if includeCinephileData {
+                (Self.cachedFullStats, Self.lastCalculation)
+            } else {
+                (Self.cachedLightStats, Self.lastCalculation)
+            }
+        }
+        if let cached = cached, let last = last, Date().timeIntervalSince(last) < cacheTTL {
+            return cached
+        }
+
+        // Try load from persistent storage
+        if let (persistentStats, lastCalcDate) = Self.loadPersistentStats(full: includeCinephileData, cacheTTL: cacheTTL) {
+            await MainActor.run {
+                if includeCinephileData {
+                    Self.cachedFullStats = persistentStats
+                } else {
+                    Self.cachedLightStats = persistentStats
+                }
+                Self.lastCalculation = lastCalcDate
+            }
+            return persistentStats
+        }
+
+        var statsContainer = RawStatsContainer()
+        var tasteMaps = TasteMapsContainer()
+
+        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
+        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
+
+        // Single query pre-fetch of watched TV episodes to avoid N+1 traversals during stats calculations
+        var tvWatchedEpisodesMap: [Int: [TVEpisode]] = [:]
+        if includeCinephileData {
+            let epDescriptor = FetchDescriptor<TVEpisode>(
+                predicate: #Predicate<TVEpisode> { $0.isWatched }
+            )
+            if let watchedEpisodes = try? modelContext.fetch(epDescriptor) {
+                for ep in watchedEpisodes {
+                    if let showID = ep.showID {
+                        tvWatchedEpisodesMap[showID, default: []].append(ep)
+                    }
+                }
+            }
+        }
+
+        let batchSize = 500
+        var offset = 0
+        
+        while true {
+            try Task.checkCancellation()
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.fetchLimit = batchSize
+            descriptor.fetchOffset = offset
+            
+            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
+            
+            processBatch(items, stats: &statsContainer, taste: &tasteMaps, hiddenSet: hiddenSet, tvWatchedEpisodesMap: tvWatchedEpisodesMap, includeCinephileData: includeCinephileData)
+            
+            offset += batchSize
+        }
+
+        try Task.checkCancellation()
+        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: includeCinephileData)
+
+        let calculationDate = Date()
+        await MainActor.run {
+            if includeCinephileData {
+                Self.cachedFullStats = result
+                Self.cachedContainers = (statsContainer, tasteMaps)
+            } else {
+                Self.cachedLightStats = result
+                Self.cachedContainers = nil
+            }
+            Self.lastCalculation = calculationDate
+        }
+
+        Self.savePersistentStats(result, full: includeCinephileData, date: calculationDate)
+
+        return result
+    }
+
+    func fetchCinephileData() async throws -> LibraryStats? {
+        let (containers, last) = await MainActor.run { (Self.cachedContainers, Self.lastCalculation) }
+        if let (statsContainer, tasteMaps) = containers, let last = last, Date().timeIntervalSince(last) < cacheTTL {
+            let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: true)
+            await MainActor.run { Self.cachedContainers = nil }
+            return result
+        }
+        return try await fetchStats(includeCinephileData: true)
     }
 
     // Taste Affinity Helpers
@@ -140,45 +340,7 @@ actor LibraryStatsActor {
         let precomputedScore: Double
     }
 
-    func fetchStats() async -> LibraryStats {
-        // Check cache
-        let (cached, last) = await MainActor.run { (Self.cachedStats, Self.lastCalculation) }
-        if let cached = cached, let last = last, Date().timeIntervalSince(last) < cacheTTL {
-            return cached
-        }
 
-        var statsContainer = RawStatsContainer()
-        var tasteMaps = TasteMapsContainer()
-
-        // Compute hidden set once before batch loop
-        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
-        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
-
-        // Phase 5 Optimization: Batched Processing to prevent memory exhaustion
-        let batchSize = 500
-        var offset = 0
-        
-        while true {
-            var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.fetchLimit = batchSize
-            descriptor.fetchOffset = offset
-            
-            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
-            
-            processBatch(items, stats: &statsContainer, taste: &tasteMaps, hiddenSet: hiddenSet)
-            
-            offset += batchSize
-        }
-
-        let result = await finalizeStats(stats: statsContainer, taste: tasteMaps)
-
-        await MainActor.run {
-            Self.cachedStats = result
-            Self.lastCalculation = Date()
-        }
-
-        return result
-    }
 
     private struct RawStatsContainer {
         var watchTime = 0
@@ -192,8 +354,6 @@ actor LibraryStatsActor {
         var disliked = 0
         var history: [Date: Int] = [:]
         var decadeCounts: [String: Int] = [:]
-        var completedItemsList: [CompletedItemRepresentation] = []
-        var collaborationsCount: [String: Int] = [:]
         var barcodeData: [BarcodeSlice] = []
     }
 
@@ -221,18 +381,20 @@ actor LibraryStatsActor {
         map[key] = s
     }
 
-    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>) {
+    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>, tvWatchedEpisodesMap: [Int: [TVEpisode]], includeCinephileData: Bool = true) {
         let calendar = Calendar.current
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
 
-            stats.barcodeData.append(BarcodeSlice(
-                id: item.id,
-                title: item.title,
-                tasteValue: tasteValue,
-                themeColorHex: item.themeColorHex
-            ))
+            if includeCinephileData && stats.barcodeData.count < 200 {
+                stats.barcodeData.append(BarcodeSlice(
+                    id: item.id,
+                    title: item.title,
+                    tasteValue: tasteValue,
+                    themeColorHex: item.themeColorHex
+                ))
+            }
 
             // Taste counts
             if let taste = TasteValue(rawValue: tasteValue) {
@@ -252,7 +414,7 @@ actor LibraryStatsActor {
                     let runtime = item.cachedRuntime ?? 0
                     stats.watchTime += runtime
                     
-                    if let date = item.lastInteractionDate {
+                    if includeCinephileData, let date = item.lastInteractionDate {
                         let day = calendar.startOfDay(for: date)
                         stats.history[day, default: 0] += runtime
                     }
@@ -269,11 +431,11 @@ actor LibraryStatsActor {
                 stats.watchTime += runtime
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
                 
-                // Per-episode history using watchedDate for accurate daily breakdown
-                var hasWatchedDate = false
-                if let tv = item.tvShowDetails {
-                    for season in tv.seasons where !season.isDeleted && season.modelContext != nil {
-                        for ep in season.episodes where ep.isWatched && !ep.isDeleted && ep.modelContext != nil {
+                if includeCinephileData {
+                    var hasWatchedDate = false
+                    let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
+                    if let tmdbID = Int(tmdbIDString), let watchedEps = tvWatchedEpisodesMap[tmdbID] {
+                        for ep in watchedEps {
                             let epRuntime = ep.runtime ?? item.cachedEpisodeRuntime ?? 0
                             if let date = ep.watchedDate, epRuntime > 0 {
                                 let day = calendar.startOfDay(for: date)
@@ -282,13 +444,12 @@ actor LibraryStatsActor {
                             }
                         }
                     }
-                }
-                // Fallback for episodes without watchedDate (existing data before migration)
-                if !hasWatchedDate, let date = item.lastInteractionDate {
-                    let runtime = item.cachedRuntime ?? 0
-                    if runtime > 0 {
-                        let day = calendar.startOfDay(for: date)
-                        stats.history[day, default: 0] += runtime
+                    if !hasWatchedDate, let date = item.lastInteractionDate {
+                        let runtime = item.cachedRuntime ?? 0
+                        if runtime > 0 {
+                            let day = calendar.startOfDay(for: date)
+                            stats.history[day, default: 0] += runtime
+                        }
                     }
                 }
 
@@ -324,35 +485,16 @@ actor LibraryStatsActor {
                 }
             }
 
-            if let releaseDate = item.releaseDate {
+            if includeCinephileData, let releaseDate = item.releaseDate {
                 let year = calendar.component(.year, from: releaseDate)
                 let decadeStart = (year / 10) * 10
                 let decadeName = "\(decadeStart)s"
                 stats.decadeCounts[decadeName, default: 0] += 1
             }
-
-            if isCompleted {
-                let date = item.lastStateChangeDate ?? item.lastInteractionDate ?? Date()
-                stats.completedItemsList.append(CompletedItemRepresentation(
-                    id: item.id,
-                    title: item.title,
-                    posterURL: item.posterURL,
-                    themeColorHex: item.themeColorHex,
-                    completedDate: date,
-                    typeValue: item.typeValue
-                ))
-            }
-
-            for creator in item.cachedCreators {
-                for actor in item.displayCast.prefix(10) {
-                    let key = "\(actor.name)|\(creator)"
-                    stats.collaborationsCount[key, default: 0] += 1
-                }
-            }
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer) async -> LibraryStats {
+    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true) async throws -> LibraryStats {
         // 1. Process Genre DNA
         let genreDNAMap = taste.genreTaste.map { name, stats in
             (name, stats.affinity(cutoff: 5))
@@ -379,7 +521,7 @@ actor LibraryStatsActor {
         }
         let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
 
-        let visualActors = await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
+        let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
         
         let creatorWithScore: [(String, CategoryStats, Double)] = taste.creatorTaste.compactMap { name, val in
             let score = val.affinity(cutoff: 3)
@@ -387,32 +529,25 @@ actor LibraryStatsActor {
         }
         let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
 
-        let visualCreators = await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
+        let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
         
-        let history = stats.history.map { WatchTimePoint(date: $0.key, minutes: $0.value) }
-            .sorted { $0.date < $1.date }
+        let history: [WatchTimePoint]
+        let decadeDistribution: [DecadeDistributionPoint]
 
-        let decadeDistribution = stats.decadeCounts.map { DecadeDistributionPoint(decade: $0.key, count: $0.value) }
-            .sorted { $0.decade < $1.decade }
+        if includeCinephileData {
+            history = stats.history.map { WatchTimePoint(date: $0.key, minutes: $0.value) }
+                .sorted { $0.date < $1.date }
 
-        let topActorNames = Set(visualActors.map { $0.name })
-        let topCreatorNames = Set(visualCreators.map { $0.name })
-        let collaborations = stats.collaborationsCount.compactMap { key, count -> CreatorCollaboration? in
-            let parts = key.components(separatedBy: "|")
-            guard parts.count == 2 else { return nil }
-            let actor = parts[0]
-            let creator = parts[1]
-            guard topActorNames.contains(actor) && topCreatorNames.contains(creator) else { return nil }
-            return CreatorCollaboration(id: key, actorName: actor, creatorName: creator, count: count)
+            decadeDistribution = stats.decadeCounts.map { DecadeDistributionPoint(decade: $0.key, count: $0.value) }
+                .sorted { $0.decade < $1.decade }
+        } else {
+            history = []
+            decadeDistribution = []
         }
-
-        let completedItems = Array(stats.completedItemsList
-            .sorted { $0.completedDate > $1.completedDate }
-            .prefix(100))
 
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
@@ -424,7 +559,6 @@ actor LibraryStatsActor {
             genreDNA: Array(genreDNA),
             topRatedActors: visualActors,
             topRatedCreators: visualCreators,
-            topRatedGenres: mapTaste(taste.genreTaste),
             topRatedNetworks: mapTaste(taste.networkTaste),
             topRatedStudios: mapTaste(taste.studioTaste),
             topRatedLanguages: languageRankings,
@@ -433,19 +567,18 @@ actor LibraryStatsActor {
             dislikedCount: stats.disliked,
             watchTimeHistory: history,
             decadeDistribution: decadeDistribution,
-            collaborations: collaborations,
-            completedItems: completedItems,
             barcodeData: stats.barcodeData
         )
     }
 
     // Move CategoryStats inside scope helper if needed, or pass fields
-    private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async -> [VisualPersonStat] {
+    private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {
         var results: [VisualPersonStat] = []
 
         // Phase 5 Logic Fix: Throttle concurrent API calls to prevent 429 Rate Limiting
         let chunkSize = 5
         for i in stride(from: 0, to: people.count, by: chunkSize) {
+            try Task.checkCancellation()
             let end = min(i + chunkSize, people.count)
             let chunk = people[i..<end]
 

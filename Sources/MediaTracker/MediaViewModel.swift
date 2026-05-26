@@ -2,6 +2,33 @@ import SwiftData
 import SwiftUI
 import Combine
 
+struct FilterSnapshot: Sendable {
+    let category: NavigationCategory
+    let searchText: String
+    let sortOrder: SortOrder
+    let networks: [String]?
+    let language: String?
+    let genre: String?
+    let year: String?
+    let state: MediaState?
+    let groupBy: GroupBy
+    let collectionID: UUID?
+
+    @MainActor
+    init(from viewModel: MediaViewModel) {
+        self.category = viewModel.selectedCategory
+        self.searchText = viewModel.searchText
+        self.sortOrder = viewModel.currentSortOrder
+        self.networks = viewModel.selectedNetworks
+        self.language = viewModel.selectedLanguage
+        self.genre = viewModel.selectedGenre
+        self.year = viewModel.selectedYear
+        self.state = viewModel.selectedState
+        self.groupBy = viewModel.currentGroupBy
+        self.collectionID = viewModel.selectedCollectionID
+    }
+}
+
 @Observable
 @MainActor
 class MediaViewModel {
@@ -9,7 +36,6 @@ class MediaViewModel {
     var selectedCategory: NavigationCategory = .home
     var searchText: String = ""
     var navigationPath = NavigationPath()
-    var searchSubmitTrigger: Int = 0
 
     // Per-category view settings
     var categorySortOrders: [NavigationCategory: SortOrder] = [:]
@@ -29,9 +55,7 @@ class MediaViewModel {
     var selectedYear: String? = nil
     var selectedState: MediaState? = nil
     
-    var isBatchRefreshing: Bool = false
-    var isInitialLoading: Bool = true  // Track first load
-    var discoveryRefreshTrigger: Int = 0  // NEW: Trigger for Discovery Hub refresh
+    var discoveryRefreshTrigger: Int = 0  // Trigger for Discovery Hub refresh
 
     // Pagination State
     var totalItemCount: Int = 0
@@ -70,7 +94,6 @@ class MediaViewModel {
     var cachedGenres: [DiscoveryNode] = []
     var cachedLanguages: [DiscoveryNode] = []
     var cachedBadges: [DiscoveryNode] = []
-    var forYouRecommendations: [MediaThumbnailMetadata] = []
     var lastDiscoveryRefresh: Date?
 
     func navigationTitle(for category: NavigationCategory) -> String {

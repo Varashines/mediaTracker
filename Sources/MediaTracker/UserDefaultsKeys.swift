@@ -15,4 +15,5 @@ enum UserDefaultsKeys: String {
     case hapticsEnabled = "haptics_enabled"
     case audioEnabled = "audio_enabled"
     case studioAliases = "studio_aliases"
+    case skipStartupTasks = "skip_startup_background_tasks"
 }

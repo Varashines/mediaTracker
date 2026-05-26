@@ -4,53 +4,84 @@ import SwiftData
 struct CinephileLabDestination: Hashable {}
 
 struct CinephileLabView: View {
-    let stats: LibraryStats
-    let barcodeData: [BarcodeSlice]
-    let recentItems: [MediaItem]
+    @Environment(\.modelContext) private var modelContext
+    @State private var stats: LibraryStats?
+    @State private var recentItems: [MediaItem] = []
+    @State private var isLoading = true
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.section) {
-                // Cinephile Spectrum (Barcode)
-                CinephileBarcodeView(items: barcodeData)
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+        Group {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 80)
+            } else if let stats = stats {
+                ScrollView {
+                    VStack(spacing: AppTheme.Spacing.section) {
+                        // Cinephile Spectrum (Barcode)
+                        CinephileBarcodeView(items: stats.barcodeData)
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                // Weekly Watch Arc
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Weekly Activity", icon: "calendar.badge.clock", iconColor: .orange)
-                    WeeklyWatchArc(points: stats.watchTimeHistory, items: recentItems)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                }
+                        // Weekly Watch Arc
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                            SectionHeader(title: "Weekly Activity", icon: "calendar.badge.clock", iconColor: .orange)
+                            WeeklyWatchArc(points: stats.watchTimeHistory, items: recentItems)
+                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        }
 
-                // Top Genres
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: .indigo)
-                    TopGenresView(items: Array(stats.genreDNA.prefix(10)))
-                }
+                        // Top Genres
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                            SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: .indigo)
+                            TopGenresView(items: Array(stats.genreDNA.prefix(10)))
+                        }
 
-                // Decade Timeline (Release Era Distribution)
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: .accentColor)
-                    DecadeTimeline(decades: stats.decadeDistribution)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                }
+                        // Decade Timeline (Release Era Distribution)
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                            SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: .accentColor)
+                            DecadeTimeline(decades: stats.decadeDistribution)
+                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        }
 
-                // Top Studios
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Top Studios", icon: "building.2.fill", iconColor: .orange)
-                    TopBrandsHorizontalView(items: stats.topRatedStudios, color: .orange, icon: "building.2.fill")
-                }
+                        // Top Studios
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                            SectionHeader(title: "Top Studios", icon: "building.2.fill", iconColor: .orange)
+                            TopBrandsHorizontalView(items: stats.topRatedStudios, color: .orange, icon: "building.2.fill")
+                        }
 
-                // Top Networks
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Top Networks", icon: "antenna.radiowaves.left.and.right", iconColor: .teal)
-                    TopBrandsHorizontalView(items: stats.topRatedNetworks, color: .teal, icon: "antenna.radiowaves.left.and.right")
+                        // Top Networks
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                            SectionHeader(title: "Top Networks", icon: "antenna.radiowaves.left.and.right", iconColor: .teal)
+                            TopBrandsHorizontalView(items: stats.topRatedNetworks, color: .teal, icon: "antenna.radiowaves.left.and.right")
+                        }
+                    }
+                    .padding(.vertical, 24)
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .navigationTitle("Cinephile Lab")
             }
-            .padding(.vertical, 24)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .navigationTitle("Cinephile Lab")
+        .task { await fetchData() }
+    }
+
+    private func fetchData() async {
+        let actor = LibraryStatsActor(modelContainer: modelContext.container)
+        do {
+            if let fullStats = try await actor.fetchCinephileData() {
+                self.stats = fullStats
+            }
+        } catch {
+            AppLogger.debug("Error fetching cinephile data: \(error)")
+        }
+
+        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff },
+            sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
+        )
+        descriptor.fetchLimit = 50
+        self.recentItems = (try? modelContext.fetch(descriptor)) ?? []
+
+        withAnimation(.easeInOut(duration: 0.3)) { isLoading = false }
     }
 }
 
@@ -114,7 +145,7 @@ struct GalleryCardView: View {
                 )
         )
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 isHovered = hovering
@@ -439,28 +470,5 @@ private func formatWatchTimeMini(minutes: Int) -> String {
 }
 
 #Preview("Cinephile Lab") {
-    let stats = LibraryStats(
-        totalWatchTimeMinutes: 15000,
-        totalMovies: 120,
-        completedMovies: 95,
-        totalTVShows: 45,
-        completedTVShows: 30,
-        totalEpisodesWatched: 450,
-        genreDNA: [("Action", 0.25), ("Drama", 0.20), ("Comedy", 0.15), ("Sci-Fi", 0.12), ("Thriller", 0.10)],
-        topRatedActors: [],
-        topRatedCreators: [],
-        topRatedGenres: [("Action", 0.85), ("Drama", 0.72)],
-        topRatedNetworks: [("HBO", 0.90), ("Netflix", 0.78)],
-        topRatedStudios: [("Warner Bros", 0.85), ("Universal", 0.72)],
-        topRatedLanguages: [("English", 0.80)],
-        lovedCount: 50,
-        likedCount: 80,
-        dislikedCount: 10,
-        watchTimeHistory: [],
-        decadeDistribution: [],
-        collaborations: [],
-        completedItems: [],
-        barcodeData: []
-    )
-    CinephileLabView(stats: stats, barcodeData: [], recentItems: [])
+    CinephileLabView()
 }

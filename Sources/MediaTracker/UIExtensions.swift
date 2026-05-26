@@ -153,7 +153,6 @@ extension View {
 
 struct ShimmeringModifier: ViewModifier {
     @State private var phase: CGFloat = 0
-    @State private var hasAnimated = false
     
     func body(content: Content) -> some View {
         content
@@ -161,24 +160,19 @@ struct ShimmeringModifier: ViewModifier {
                 GeometryReader { geo in
                     let width = geo.size.width
                     LinearGradient(
-                        colors: [.clear, .white.opacity(0.1), .clear],
+                        colors: [.clear, .white.opacity(0.15), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                     .frame(width: width * 2)
-                    .offset(x: -width + (width * 2 * phase))
-                    .rotationEffect(.degrees(30))
+                    .offset(x: -width + (width * 2.5 * phase))
+                    .rotationEffect(.degrees(15))
                 }
                 .mask(content)
-                .opacity(hasAnimated ? 0 : 1)
             }
             .onAppear {
-                withAnimation(.linear(duration: 1.5).delay(0.3)) {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                     phase = 1
-                }
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2))
-                    hasAnimated = true
                 }
             }
     }

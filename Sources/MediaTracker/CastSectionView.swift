@@ -10,7 +10,7 @@ struct CastSectionView: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
+            LazyHStack(spacing: 16) {
                 ForEach(cast) { member in
                     CastMemberCard(member: member, themeColor: themeColor) {
                         onCastSelected?(member.name)
@@ -24,7 +24,7 @@ struct CastSectionView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .onAppear {
-            withAnimation(AppTheme.Animation.smooth) {
+            withAnimation(AppTheme.Animation.easeInOut) {
                 isVisible = true
             }
         }

@@ -26,10 +26,13 @@ struct CalendarResult: Sendable {
 @ModelActor
 actor CalendarFilterActor {
     func fetchCalendarData(for month: Date) throws -> CalendarResult {
+        try Task.checkCancellation()
         let calendar = Calendar.current
         let bounds = try calculateMonthBounds(for: month, calendar: calendar)
         
+        try Task.checkCancellation()
         let movies = try fetchMoviesInRange(bounds: bounds)
+        try Task.checkCancellation()
         let episodes = try fetchEpisodesInRange(bounds: bounds)
         
         var dailyItems: [Date: [CalendarReleaseItem]] = [:]
@@ -98,21 +101,40 @@ actor CalendarFilterActor {
             ep.airDateValue != nil && (ep.airDateValue ?? fallbackPast) >= startOfDay && (ep.airDateValue ?? fallbackFuture) <= endOfDay
         }
         var descriptor = FetchDescriptor<TVEpisode>(predicate: episodePredicate)
-        descriptor.fetchLimit = 500
+        descriptor.fetchLimit = 300
         var episodes = try modelContext.fetch(descriptor)
         
         let unindexedPredicate = #Predicate<TVEpisode> { ep in ep.airDateValue == nil }
-        let unindexed = (try? modelContext.fetch(FetchDescriptor<TVEpisode>(predicate: unindexedPredicate))) ?? []
+        let unindexedDescriptor = FetchDescriptor<TVEpisode>(predicate: unindexedPredicate)
+        let unindexed = (try? modelContext.fetch(unindexedDescriptor)) ?? []
         let matched = unindexed.filter { ep in
             guard let date = ep.airDateAsDate else { return false }
             return date >= startOfDay && date <= endOfDay
         }
         if !matched.isEmpty {
             episodes.append(contentsOf: matched)
-            Task.detached(priority: .background) { await self.healMissingDates() }
+            // Queue date healing in a detached non-actor task to avoid blocking calendar fetches
+            let container = modelContext.container
+            Task.detached(priority: .background) {
+                let ctx = ModelContext(container)
+                Self.healMissingDatesSync(context: ctx)
+            }
         }
         // Defensive: exclude any episodes deleted/detached during concurrent background merges
-        return episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+        return episodes.liveModels
+    }
+
+    private static func healMissingDatesSync(context: ModelContext) {
+        let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
+        guard let episodes = try? context.fetch(descriptor), !episodes.isEmpty else { return }
+        let batchSize = 50
+        for i in stride(from: 0, to: episodes.count, by: batchSize) {
+            let end = min(i + batchSize, episodes.count)
+            for ep in episodes[i..<end] {
+                ep.updateAirDateValue()
+            }
+            try? context.save()
+        }
     }
 
 
@@ -121,7 +143,7 @@ actor CalendarFilterActor {
             let date = movie.cachedNextAiringDate ?? movie.releaseDate ?? .distantPast
             if date != .distantPast {
                 let day = calendar.startOfDay(for: date)
-                let item = CalendarReleaseItem(metadata: toMetadata(movie), releaseContext: "Movie Premiere", date: date, weight: 1)
+                let item = CalendarReleaseItem(metadata: Self.toMetadata(movie), releaseContext: "Movie Premiere", date: date, weight: 1)
                 dailyItems[day, default: []].append(item)
                 allItems.append(item)
             }
@@ -151,7 +173,7 @@ actor CalendarFilterActor {
             let sorted = eps.sorted { $0.episodeNumber < $1.episodeNumber }
             let context = sorted.count > 3 ? "Season \(season)" : "S\(season) " + sorted.map { "E\($0.episodeNumber)" }.joined(separator: ", ")
             
-            let releaseItem = CalendarReleaseItem(metadata: toMetadata(foundItem), releaseContext: context, date: airDate, weight: eps.count)
+            let releaseItem = CalendarReleaseItem(metadata: Self.toMetadata(foundItem), releaseContext: context, date: airDate, weight: eps.count)
             dailyItems[day, default: []].append(releaseItem)
             allItems.append(releaseItem)
         }
@@ -181,30 +203,7 @@ actor CalendarFilterActor {
         return dayInfos
     }
 
-    private func healMissingDates() async {
-        let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
-        let episodes = (try? modelContext.fetch(descriptor)) ?? []
-        
-        if !episodes.isEmpty {
-            AppLogger.info("🔍 Calendar: Background date healing starting for \(episodes.count) episodes...", logger: AppLogger.background)
-            // Process in small batches and yield the actor to allow UI-critical fetches to run
-            let batchSize = 50
-            for i in stride(from: 0, to: episodes.count, by: batchSize) {
-                let end = min(i + batchSize, episodes.count)
-                let batch = episodes[i..<end]
-                
-                for episode in batch {
-                    episode.updateAirDateValue()
-                }
-                
-                try? modelContext.save()
-                await Task.yield()
-            }
-            AppLogger.info("✅ Calendar: Background date healing completed.", logger: AppLogger.background)
-        }
-    }
-
-    private func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
+    private static func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
         MediaThumbnailMetadata(item: item)
     }
 }

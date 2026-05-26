@@ -1,37 +1,12 @@
 import SwiftData
 import SwiftUI
 
-private final class StatsCache: @unchecked Sendable {
-    static let shared = StatsCache()
-    private var stats: LibraryStats?
-    private var savedAt: Date?
-    private let lock = NSLock()
-
-    func load() -> LibraryStats? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let savedAt, savedAt > Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? .distantPast else {
-            self.stats = nil
-            return nil
-        }
-        return stats
-    }
-
-    func save(_ s: LibraryStats) {
-        lock.lock()
-        defer { lock.unlock() }
-        stats = s
-        savedAt = Date()
-    }
-}
-
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
-
-    @State private var recentItems: [MediaItem] = []
+    @State private var statsTask: Task<Void, Never>? = nil
 
     var body: some View {
         ZStack {
@@ -98,76 +73,47 @@ struct InsightsView: View {
                             SectionHeader(title: "Cast & Crew", icon: "person.3.fill", iconColor: .teal)
                             TalentLedgerView(stats: stats)
                         }
-
-                        // 4. Recently Watched
-                        if !recentItems.isEmpty {
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                                SectionHeader(title: "Recently Watched", icon: "play.circle.fill", iconColor: .blue)
-                                RecentlyWatched(items: recentItems)
-                            }
-                        }
                     }
                     .padding(.bottom, AppTheme.Spacing.section)
                     .frame(maxWidth: .infinity)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .navigationDestination(for: CinephileLabDestination.self) { _ in
-                    CinephileLabView(stats: stats, barcodeData: stats.barcodeData, recentItems: recentItems)
+                    CinephileLabView()
                 }
             }
         }
         .onAppear(perform: refreshData)
+        .onDisappear {
+            statsTask?.cancel()
+            statsTask = nil
+        }
     }
 
     private func refreshData() {
-        if let cached = StatsCache.shared.load() {
-            let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
-            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
-            descriptor.fetchLimit = 50
-            let recent = (try? modelContext.fetch(descriptor)) ?? []
-            self.stats = cached
-            self.recentItems = recent
-            self.isLoading = false
-            return
-        }
-
         let container = modelContext.container
-        Task {
+        statsTask?.cancel()
+        statsTask = Task {
             await performFetch(container: container)
         }
     }
 
     private func performFetch(container: ModelContainer) async {
         let actor = LibraryStatsActor(modelContainer: container)
-        let result = await actor.fetchStats()
-        StatsCache.shared.save(result)
-
-        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
-        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
-        descriptor.fetchLimit = 50
-        let recent: [MediaItem]
         do {
-            let context = ModelContext(container)
-            recent = try context.fetch(descriptor)
+            let result = try await actor.fetchStats(includeCinephileData: false)
+            if Task.isCancelled { return }
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.stats = result
+                    self.isLoading = false
+                }
+            }
         } catch {
-            recent = []
-        }
-
-        await MainActor.run {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                self.stats = result
-                self.recentItems = recent
-                self.isLoading = false
+            if !(error is CancellationError) {
+                AppLogger.debug("Error fetching stats: \(error)")
             }
         }
-    }
-
-    @MainActor
-    private func fetchRecentItems() async -> [MediaItem] {
-        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
-        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { ($0.lastInteractionDate ?? cutoff) >= cutoff }, sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)])
-        descriptor.fetchLimit = 50
-        return (try? modelContext.fetch(descriptor)) ?? []
     }
 }
 
@@ -191,96 +137,6 @@ struct DashboardCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                     .stroke(Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04), lineWidth: 0.5)
             )
-    }
-}
-
-// MARK: - Activity Heatmap
-
-struct RecentlyWatched: View {
-    let items: [MediaItem]
-    @State private var hoveredItemID: String? = nil
-
-    private var recentItems: [MediaItem] {
-        let calendar = Calendar.current
-        let cutoff = calendar.date(byAdding: .day, value: -5, to: Date()) ?? Date()
-        return items
-            .filter { item in
-                guard let date = item.lastInteractionDate else { return false }
-                return date >= cutoff && item.stateValue != "Wishlist"
-            }
-            .sorted { a, b in
-                (a.lastInteractionDate ?? .distantPast) > (b.lastInteractionDate ?? .distantPast)
-            }
-    }
-
-    var body: some View {
-        if !recentItems.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppTheme.Spacing.small) {
-                        ForEach(recentItems) { item in
-                            titleCard(item: item)
-                        }
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.top, 4)
-                    .padding(.bottom, 16)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func titleCard(item: MediaItem) -> some View {
-        let isHovered = hoveredItemID == item.id
-
-        ZStack(alignment: .topTrailing) {
-            if let url = item.posterURL, let imageURL = URL(string: url) {
-                CachedImage(url: imageURL, targetSize: CGSize(width: 90, height: 135)) {
-                    ProgressView().controlSize(.small)
-                }
-                .scaledToFill()
-                .frame(width: 90, height: 135)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
-            } else {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                    .fill(Color.primary.opacity(0.06))
-                    .frame(width: 90, height: 135)
-                    .overlay(
-                        Image(systemName: "film")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.tertiary)
-                    )
-            }
-
-            if item.tasteValue != TasteValue.none.rawValue {
-                Text(tasteEmoji(item.tasteValue))
-                    .font(.system(size: 11))
-                    .padding(4)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-                    .padding(6)
-            }
-        }
-        .frame(width: 90, height: 135)
-        .shadow(color: .black.opacity(isHovered ? 0.25 : 0.1), radius: isHovered ? 8 : 4, x: 0, y: isHovered ? 4 : 2)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.springSnappy) {
-                hoveredItemID = hovering ? item.id : nil
-            }
-        }
-    }
-
-    private func tasteEmoji(_ taste: String) -> String {
-        guard let tasteVal = TasteValue(rawValue: taste) else { return "" }
-        switch tasteVal {
-        case .love: return "♥"
-        case .like: return "👍"
-        case .dislike: return "👎"
-        case .none: return ""
-        }
     }
 }
 
@@ -380,7 +236,7 @@ struct ClaymorphicHeroCard: View {
         .background(
             ClaymorphicCard(color: color, isHovered: isHovered)
         )
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
         .shadow(color: color.opacity(isHovered ? 0.15 : 0.0), radius: 10, x: 0, y: 5)
         .shadow(color: .black.opacity(isHovered ? 0.06 : 0.02), radius: isHovered ? 6 : 3, x: 0, y: isHovered ? 3 : 1)
         .onHover { hovering in
@@ -394,20 +250,18 @@ struct ClaymorphicHeroCard: View {
 struct HeroStatGrid: View {
     let stats: LibraryStats
 
-    var completionRate: Double {
-        let total = stats.totalMovies + stats.totalTVShows
-        guard total > 0 else { return 0 }
-        return Double(stats.completedMovies + stats.completedTVShows) / Double(total)
-    }
-
-    var overallAffinity: Double {
-        let totalRated = stats.lovedCount + stats.likedCount + stats.dislikedCount
-        guard totalRated > 0 else { return 0 }
-        let score = (3.0 * Double(stats.lovedCount) + 1.0 * Double(stats.likedCount) - 2.0 * Double(stats.dislikedCount)) / (3.0 * Double(totalRated))
-        return max(0, score)
-    }
-
     var body: some View {
+        let completionRate: Double = {
+            let total = stats.totalMovies + stats.totalTVShows
+            guard total > 0 else { return 0 }
+            return Double(stats.completedMovies + stats.completedTVShows) / Double(total)
+        }()
+        let overallAffinity: Double = {
+            let totalRated = stats.lovedCount + stats.likedCount + stats.dislikedCount
+            guard totalRated > 0 else { return 0 }
+            let score = (3.0 * Double(stats.lovedCount) + 1.0 * Double(stats.likedCount) - 2.0 * Double(stats.dislikedCount)) / (3.0 * Double(totalRated))
+            return max(0, score)
+        }()
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 24) {
                 ClaymorphicHeroCard(
@@ -569,7 +423,9 @@ struct DonutArc: View {
                 }
             }
             .onChange(of: end) { _, newValue in
-                animatedEnd = newValue
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                    animatedEnd = newValue
+                }
             }
     }
 }

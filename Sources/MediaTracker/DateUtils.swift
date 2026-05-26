@@ -74,10 +74,6 @@ struct DateUtils {
         return "\(minutes)m"
     }
 
-    static func parseFullDate(dateString: String, timeString: String, airstamp: String?, timezone: String?, serviceName: String?, item: MediaItem) -> Date? {
-        parseEpisodeDate(dateString, time: timeString, airstamp: airstamp, timezone: timezone, serviceName: serviceName)
-    }
-
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
         guard let dateString = dateString else { return nil }
         

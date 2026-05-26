@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 @MainActor @Observable
 class DataService {
@@ -19,30 +18,9 @@ class DataService {
     // Feedback State
     var isRunningMaintenance = false
     private var modelContainer: ModelContainer?
-    private var tvShowCompletedObserver: Any?
 
     func setModelContainer(_ container: ModelContainer) {
         self.modelContainer = container
-        setupNotificationObservers()
-    }
-
-    private func setupNotificationObservers() {
-        guard tvShowCompletedObserver == nil else { return }
-        
-        let container = self.modelContainer
-        tvShowCompletedObserver = NotificationCenter.default.addObserver(
-            forName: .tvShowMarkedCompleted,
-            object: nil,
-            queue: nil
-        ) { notification in
-            guard let itemID = notification.userInfo?["itemID"] as? String,
-                  let container = container else { return }
-            
-            Task.detached(priority: .userInitiated) {
-                let backgroundService = BackgroundDataService(modelContainer: container)
-                await backgroundService.markAllEpisodesAsWatched(itemID: itemID)
-            }
-        }
     }
 
     func isProcessing(id: String) -> Bool { itemsInProgress.contains(id) }

@@ -4,11 +4,10 @@ import SwiftData
 struct GroupedMediaGrid: View {
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let selectedCategoryRef: NavigationCategory?
-    let showingUpcomingOnly: Bool
     var viewModel: MediaViewModel
     let namespace: Namespace.ID
     let isFastScrolling: Bool
-    let useCompactCards: Bool
+    let disableHover: Bool
     let columns: [GridItem]
     
     @State private var completedIDs: Set<String> = []
@@ -55,27 +54,17 @@ struct GroupedMediaGrid: View {
     
     @ViewBuilder
     private func gridCell(for metadata: MediaThumbnailMetadata) -> some View {
-        if !useCompactCards {
-            MediaThumbnailView(
-                metadata: metadata,
-                mode: .grid,
-                showTypeBadge: viewModel.currentGroupBy != .category,
-                isUpcomingSection: showingUpcomingOnly,
-                namespace: namespace,
-                isFastScrolling: isFastScrolling,
-                isCompletedInCollection: completedIDs.contains(metadata.itemID),
-                selectedCollectionID: viewModel.selectedCollectionID
-            )
-            .id(metadata.versionHash)
-            .entranceStagger(index: 0)
-        } else {
-            CompactThumbnailView(
-                metadata: metadata,
-                isFastScrolling: isFastScrolling,
-                isCompletedInCollection: completedIDs.contains(metadata.itemID)
-            )
-            .id(metadata.versionHash)
-        }
+        MediaThumbnailView(
+            metadata: metadata,
+            mode: .grid,
+            showTypeBadge: viewModel.currentGroupBy != .category,
+            namespace: namespace,
+            isFastScrolling: isFastScrolling,
+            disableHover: disableHover,
+            isCompletedInCollection: completedIDs.contains(metadata.itemID),
+            selectedCollectionID: viewModel.selectedCollectionID
+        )
+        .id(metadata.versionHash)
     }
 
     @Environment(\.modelContext) private var modelContext

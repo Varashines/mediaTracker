@@ -65,11 +65,11 @@ final class TVShowDetails {
         // Ensure seasons are sorted for consistent traversal
         // Defensive: skip seasons/episodes deleted during background context merges
         let sortedSeasons = seasons
-            .filter { !$0.isDeleted && $0.modelContext != nil }
+            .liveModels
             .sorted { $0.seasonNumber < $1.seasonNumber }
         
         for season in sortedSeasons {
-            let seasonEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+            let seasonEpisodes = season.episodes.liveModels
             // Sync season counts
             season.totalEpisodesCount = max(season.episodeCount, seasonEpisodes.count)
             season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
@@ -128,8 +128,8 @@ final class TVShowDetails {
         
         // Fallback to relationship scan if context is unavailable
         return seasons
-            .filter { !$0.isDeleted && $0.modelContext != nil && $0.seasonNumber > 0 }
-            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+            .liveModels.filter { $0.seasonNumber > 0 }
+            .flatMap { $0.episodes.liveModels }
             .filter { !$0.isWatched }
             .sorted { 
                 if $0.seasonNumber != $1.seasonNumber {

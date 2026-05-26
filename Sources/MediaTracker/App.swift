@@ -54,9 +54,6 @@ struct MediaTrackerApp: App {
     }()
     
     init() {
-        // Initialize dynamic resource monitoring
-        _ = MemoryPressureMonitor.shared
-        
         // Hand off container for background actions
         NotificationManager.shared.setModelContainer(sharedModelContainer)
         

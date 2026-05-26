@@ -66,7 +66,7 @@ class AppErrorState {
             }
         }()
         
-        withAnimation(AppTheme.Animation.springDefault) {
+        withAnimation(AppTheme.Animation.springGentle) {
             currentToast = Toast(message: message, style: style, duration: duration)
         }
         
@@ -75,7 +75,7 @@ class AppErrorState {
             if Task.isCancelled { return }
             
             await MainActor.run {
-                withAnimation(AppTheme.Animation.springDefault) {
+                withAnimation(AppTheme.Animation.springGentle) {
                     self.currentToast = nil
                 }
             }

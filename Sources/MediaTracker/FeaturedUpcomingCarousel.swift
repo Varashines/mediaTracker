@@ -22,7 +22,7 @@ struct FeaturedUpcomingCarousel: View {
             )
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.large) {
+                LazyHStack(spacing: AppTheme.Spacing.large) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
@@ -34,29 +34,31 @@ struct FeaturedUpcomingCarousel: View {
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.medium - 1)
                 .background(
-                    GeometryReader { (geo: GeometryProxy) in
-                        let minX: CGFloat = geo.frame(in: .named(scrollSpace)).minX
+                    GeometryReader { geo in
+                         let minX = geo.frame(in: .named(scrollSpace)).minX
                         Color.clear
                             .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
                             .onAppear { contentWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { (_: CGFloat, newValue: CGFloat) in contentWidth = newValue }
+                            .onChange(of: geo.size.width) { _, nv in contentWidth = nv }
                     }
                 )
             }
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: scrollSpace)
             .background(
-                GeometryReader { (geo: GeometryProxy) in
+                GeometryReader { geo in
                     Color.clear
                         .onAppear { containerWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { (_: CGFloat, newValue: CGFloat) in containerWidth = newValue }
+                        .onChange(of: geo.size.width) { _, nv in containerWidth = nv }
                 }
             )
-            .onPreferenceChange(ScrollOffsetKey.self) { (dict: [String: CGFloat]) in
+            .onPreferenceChange(ScrollOffsetKey.self) { dict in
                 guard let minX = dict[scrollSpace] else { return }
                 let maxScroll = max(1, contentWidth - containerWidth)
-                let currentScroll = max(0, -minX)
-                scrollProgress = min(1.0, currentScroll / maxScroll)
+                let newProgress = min(1.0, Double(max(0, -minX) / maxScroll))
+                if newProgress == 0.0 || newProgress == 1.0 || abs(scrollProgress - newProgress) > 0.015 {
+                    scrollProgress = newProgress
+                }
             }
         }
         .scrollClipDisabled()

@@ -78,6 +78,15 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .smartUpcoming: return "calendar.badge.clock"
         }
     }
+
+    var isSmartCategory: Bool {
+        switch self {
+        case .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites, .stalled, .archive:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 enum SidebarItem: Hashable, Sendable {
@@ -121,6 +130,16 @@ enum MediaState: String, Codable, CaseIterable, Sendable {
         case .completed: return "checkmark.circle.fill"
         }
     }
+
+    var accentColor: Color {
+        switch self {
+        case .active, .rewatching: return Color.fromOKLCH(l: 0.55, c: 0.2, h: 250)
+        case .wishlist: return Color.fromOKLCH(l: 0.7, c: 0.18, h: 75)
+        case .onHold: return Color.fromOKLCH(l: 0.5, c: 0.05, h: 250)
+        case .dropped: return Color.fromOKLCH(l: 0.6, c: 0.15, h: 25)
+        case .completed: return Color.fromOKLCH(l: 0.65, c: 0.2, h: 145)
+        }
+    }
 }
 
 enum MediaType: String, Codable, CaseIterable, Sendable {
@@ -154,6 +173,24 @@ enum TasteValue: String, Codable, CaseIterable, Sendable {
         case .like: return "hand.thumbsup.fill"
         case .love: return "heart.fill"
         case .dislike: return "hand.thumbsdown.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .love: return .red
+        case .like: return .blue
+        case .dislike: return .orange
+        case .none: return .secondary
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .love: return "♥"
+        case .like: return "👍"
+        case .dislike: return "👎"
+        case .none: return ""
         }
     }
 }

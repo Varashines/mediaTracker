@@ -106,9 +106,9 @@ final class MediaItem: Identifiable {
 
     func markLoadedEpisodesAsWatched() {
         guard type == .tvShow, let details = tvShowDetails else { return }
-        let liveSeasons = details.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+        let liveSeasons = details.seasons.liveModels
         for season in liveSeasons {
-            let liveEpisodes = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+            let liveEpisodes = season.episodes.liveModels
             for episode in liveEpisodes {
                 episode.markWatched(true)
             }

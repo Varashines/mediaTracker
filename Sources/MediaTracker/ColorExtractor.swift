@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 import ImageIO
 
+struct DominantPair: Sendable, Equatable {
+    let primary: Color
+    let secondary: Color
+}
+
 /// Phase 2 Optimization: Off-thread Color Extraction
 enum ColorExtractor {
     /// Extracts the dominant color using high-performance ImageIO thumbnails to minimize memory pressure.
@@ -45,6 +50,14 @@ enum ColorExtractor {
     }
 
     static func dominantColor(from cgImage: CGImage) async -> Color {
+        let pair = await topTwoColors(from: cgImage)
+        return pair.primary
+    }
+
+    /// Returns the top 2 distinct colors from a CGImage using 512-bucket histogram.
+    /// The two colors are guaranteed to be at least 3 quantization levels apart to
+    /// avoid returning near-identical shades.
+    static func topTwoColors(from cgImage: CGImage) async -> DominantPair {
         let width = cgImage.width
         let height = cgImage.height
 
@@ -62,12 +75,12 @@ enum ColorExtractor {
                                       bytesPerRow: bytesPerRow,
                                       space: colorSpace,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else {
-            return Color(red: 0.3, green: 0.3, blue: 0.3)
+            return DominantPair(primary: Color(red: 0.3, green: 0.3, blue: 0.3),
+                                secondary: Color(red: 0.2, green: 0.2, blue: 0.2))
         }
 
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
 
-        // Histogram: quantize into 512 buckets (8 levels per channel)
         let levels = 8
         var histogram = [Int](repeating: 0, count: levels * levels * levels)
 
@@ -84,13 +97,46 @@ enum ColorExtractor {
             }
         }
 
-        guard let maxCount = histogram.max(), maxCount > 0 else { return Color(red: 0.3, green: 0.3, blue: 0.3) }
+        // Build ranked list of buckets sorted by population
+        let ranked = histogram.enumerated().filter { $0.element > 0 }
+            .sorted { $0.element > $1.element }
 
-        let maxIdx = histogram.firstIndex(of: maxCount) ?? 0
-        return Color(
-            red: Double(maxIdx / (levels * levels)) / Double(levels - 1),
-            green: Double((maxIdx / levels) % levels) / Double(levels - 1),
-            blue: Double(maxIdx % levels) / Double(levels - 1)
+        guard let first = ranked.first else {
+            return DominantPair(primary: Color(red: 0.3, green: 0.3, blue: 0.3),
+                                secondary: Color(red: 0.2, green: 0.2, blue: 0.2))
+        }
+
+        let idx1 = first.offset
+        let r1 = idx1 / (levels * levels)
+        let g1 = (idx1 / levels) % levels
+        let b1 = idx1 % levels
+
+        let primary = Color(
+            red: Double(r1) / Double(levels - 1),
+            green: Double(g1) / Double(levels - 1),
+            blue: Double(b1) / Double(levels - 1)
         )
+
+        // Find the next bucket at least 3 levels away in LAB distance to ensure visual distinction
+        let minLevelDistance = 3
+        var secondaryColor = primary
+        for bucket in ranked.dropFirst() {
+            let idx2 = bucket.offset
+            let r2 = idx2 / (levels * levels)
+            let g2 = (idx2 / levels) % levels
+            let b2 = idx2 % levels
+
+            let dist = abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2)
+            if dist >= minLevelDistance {
+                secondaryColor = Color(
+                    red: Double(r2) / Double(levels - 1),
+                    green: Double(g2) / Double(levels - 1),
+                    blue: Double(b2) / Double(levels - 1)
+                )
+                break
+            }
+        }
+
+        return DominantPair(primary: primary, secondary: secondaryColor)
     }
 }

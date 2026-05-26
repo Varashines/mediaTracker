@@ -41,6 +41,5 @@ struct MediaThumbnailPlaceholder: View {
             }
         }
         .frame(width: width, height: height)
-        .skeletonPulse()
     }
 }

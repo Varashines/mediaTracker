@@ -117,8 +117,7 @@ final class DateUtilsTests: XCTestCase {
     }
 
     func testParseFullDate() {
-        let item = MediaItem(id: "dummy", title: "Dummy", overview: "")
-        let date = DateUtils.parseFullDate(dateString: "2026-04-20", timeString: "20:00", airstamp: nil, timezone: nil, serviceName: nil, item: item)
+        let date = DateUtils.parseEpisodeDate("2026-04-20", time: "20:00")
         XCTAssertNotNil(date)
     }
 }

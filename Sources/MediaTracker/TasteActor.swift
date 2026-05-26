@@ -25,6 +25,11 @@ actor TasteActor {
     @MainActor private static var lastAffinityCalculation: Date?
     private let affinityCacheTTL: TimeInterval = 86400 // 24 hours
 
+    @MainActor static func clearCache() {
+        cachedAffinityMap = nil
+        lastAffinityCalculation = nil
+    }
+
     func fetchTasteInsights() async -> TasteInsights {
         let profile = await calculateAffinityMaps()
 
@@ -200,21 +205,15 @@ actor TasteActor {
 
     func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
         // Fetch Weights from UserDefaults (matches AppStorage keys in UI)
-        let wGenre =
-            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightGenre.rawValue) == 0
-            ? 15.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightGenre.rawValue)
-        let wCreator =
-            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCreator.rawValue) == 0
-            ? 20.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCreator.rawValue)
-        let wCast =
-            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCast.rawValue) == 0
-            ? 15.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightCast.rawValue)
-        let wNetwork =
-            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightNetwork.rawValue) == 0
-            ? 5.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightNetwork.rawValue)
-        let wLang =
-            UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightLang.rawValue) == 0
-            ? 10.0 : UserDefaults.standard.double(forKey: UserDefaultsKeys.tasteWeightLang.rawValue)
+        func weight(_ key: UserDefaultsKeys, default defaultVal: Double) -> Double {
+            let val = UserDefaults.standard.double(forKey: key.rawValue)
+            return val == 0 ? defaultVal : val
+        }
+        let wGenre = weight(.tasteWeightGenre, default: 15.0)
+        let wCreator = weight(.tasteWeightCreator, default: 20.0)
+        let wCast = weight(.tasteWeightCast, default: 15.0)
+        let wNetwork = weight(.tasteWeightNetwork, default: 5.0)
+        let wLang = weight(.tasteWeightLang, default: 10.0)
 
         let profile = await calculateAffinityMaps()
         let genreAffinity = profile.genre

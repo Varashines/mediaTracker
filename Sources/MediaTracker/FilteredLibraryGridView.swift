@@ -10,25 +10,42 @@ struct FilteredLibraryGridView: View {
     @State private var items: [MediaThumbnailMetadata] = []
     @State private var networkColor: Color? = nil
     @State private var isLoading = true
+    @State private var isLoadingMore = false
+    @State private var totalCount = 0
     @Environment(\.colorScheme) var colorScheme
+    @State private var fetchTask: Task<Void, Never>? = nil
+    @State private var updateTask: Task<Void, Never>? = nil
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+    private let pageSize = 50
 
     var body: some View {
         Group {
             if isLoading {
-                LoadingGridSkeleton(selectedCategory: .all, columns: columns)
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                            ForEach(items) { metadata in
+                            ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
                                 NavigationLink(value: metadata.id) {
                                     MediaThumbnailView(
                                         metadata: metadata, mode: .grid, namespace: namespace,
                                         isFastScrolling: isFastScrolling)
                                 }
                                 .buttonStyle(.interactive)
+                                .onAppear {
+                                    if idx == items.count - 1 {
+                                        loadMoreItems()
+                                    }
+                                }
+                            }
+                            if isLoadingMore {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 20)
                             }
                         }
                     }
@@ -58,6 +75,53 @@ struct FilteredLibraryGridView: View {
                 fetchNetworkColor()
             }
         }
+        .onDisappear {
+            fetchTask?.cancel()
+            fetchTask = nil
+            updateTask?.cancel()
+            updateTask = nil
+        }
+    }
+
+    private func loadMoreItems() {
+        guard !isLoadingMore && items.count < totalCount else { return }
+        isLoadingMore = true
+        let offset = items.count
+        let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+        var network: [String]? = nil
+        var language: String? = nil
+        var genre: String? = nil
+        var badge: String? = nil
+        var sortOrder: SortOrder = .alphabetical
+
+        switch filter.type {
+        case .studio: network = filter.sourceNames ?? [filter.name]
+        case .genre: genre = filter.name
+        case .language: language = filter.name
+        case .badge:
+            badge = filter.name
+            sortOrder = .recentInteraction
+        }
+
+        Task {
+            do {
+                let result = try await filterActor.filterAndSort(
+                    category: .all, searchText: "", sortOrder: sortOrder,
+                    network: network, language: language, genre: genre, badge: badge,
+                    limit: pageSize, offset: offset
+                )
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    items.append(contentsOf: result.displayed)
+                    isLoadingMore = false
+                }
+            } catch {
+                if !(error is CancellationError) {
+                    AppLogger.debug("Error loading more filtered items: \(error)")
+                }
+                await MainActor.run { isLoadingMore = false }
+            }
+        }
     }
 
     private func fetchNetworkColor() {
@@ -69,7 +133,8 @@ struct FilteredLibraryGridView: View {
     }
 
     private func fetchItems() {
-        Task {
+        fetchTask?.cancel()
+        fetchTask = Task {
             let filterActor = MediaFilterActor(modelContainer: modelContext.container)
             var network: [String]? = nil
             var language: String? = nil
@@ -88,24 +153,22 @@ struct FilteredLibraryGridView: View {
             
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: .all,
-                    searchText: "",
-                    sortOrder: sortOrder,
-                    network: network,
-                    language: language,
-                    genre: genre,
-                    badge: badge,
-                    limit: 1000,
-                    offset: 0
+                    category: .all, searchText: "", sortOrder: sortOrder,
+                    network: network, language: language, genre: genre, badge: badge,
+                    limit: pageSize, offset: 0
                 )
+                if Task.isCancelled { return }
                 await MainActor.run {
                     withAnimation {
                         self.items = result.displayed
+                        self.totalCount = result.totalCount
                         self.isLoading = false
                     }
                 }
             } catch {
-                AppLogger.debug("Error fetching filtered items: \(error)")
+                if !(error is CancellationError) {
+                    AppLogger.debug("Error fetching filtered items: \(error)")
+                }
             }
         }
     }
@@ -124,7 +187,8 @@ struct FilteredLibraryGridView: View {
         case .badge: badge = filter.name
         }
         
-        Task {
+        updateTask?.cancel()
+        updateTask = Task {
             do {
                 let filterActor = MediaFilterActor(modelContainer: container)
                 let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
@@ -136,6 +200,7 @@ struct FilteredLibraryGridView: View {
                     genre: genre,
                     badge: badge
                 )
+                if Task.isCancelled { return }
                 
                 await MainActor.run {
                     withAnimation(AppTheme.Animation.easeInOut) {
@@ -159,7 +224,9 @@ struct FilteredLibraryGridView: View {
                     }
                 }
             } catch {
-                AppLogger.debug("Error updating single item in FilteredLibraryGridView: \(error)")
+                if !(error is CancellationError) {
+                    AppLogger.debug("Error updating single item in FilteredLibraryGridView: \(error)")
+                }
             }
         }
     }

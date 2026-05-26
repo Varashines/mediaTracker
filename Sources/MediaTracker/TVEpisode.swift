@@ -79,16 +79,15 @@ final class TVEpisode {
         isUpdatingAirDateValue = true
         defer { isUpdatingAirDateValue = false }
         
-        self.airDateValue = DateUtils.parseEpisodeDate(
-            airDate, 
-            time: nil, 
-            airstamp: airstamp, 
-            timezone: season?.tvShowDetails?.timezone, 
-            serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork, 
+        if let parsed = DateUtils.parseEpisodeDate(
+            airDate,
+            time: nil,
+            airstamp: airstamp,
+            timezone: season?.tvShowDetails?.timezone,
+            serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork,
             for: season?.tvShowDetails
-        )
-        // Clear source strings after successful parse to save storage
-        if airDateValue != nil {
+        ) {
+            self.airDateValue = parsed
             airDate = nil
             airstamp = nil
         }

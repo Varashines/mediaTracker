@@ -44,7 +44,7 @@ class ImageCache: NSObject {
     
     // Phase 3 Optimization: In-Memory Disk Cache Index
     private var diskCacheIndex: Set<String> = []
-    private var activeProxyTasks: Set<String> = []
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
@@ -52,9 +52,18 @@ class ImageCache: NSObject {
     private let dbContainer: ModelContainer
 
     private override init() {
-        // Cost-based memory limit (Restored to 256MB for grid responsiveness)
-        memoryCache.totalCostLimit = 256 * 1024 * 1024
-        memoryCache.countLimit = 1500 // Allow more small thumbnails in memory
+        // Adaptive memory cache sizing based on system RAM
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        if physicalMemory >= 16_000_000_000 {
+            memoryCache.totalCostLimit = 256 * 1024 * 1024
+            memoryCache.countLimit = 1500
+        } else if physicalMemory >= 8_000_000_000 {
+            memoryCache.totalCostLimit = 128 * 1024 * 1024
+            memoryCache.countLimit = 800
+        } else {
+            memoryCache.totalCostLimit = 64 * 1024 * 1024
+            memoryCache.countLimit = 400
+        }
         
         // Initialize SwiftData SQLite DB for images
         let schema = Schema([ImageCacheEntity.self])
@@ -87,6 +96,15 @@ class ImageCache: NSObject {
         Task.detached(priority: .background) {
             await ImageCache.shared.pruneDiskCacheIfNeeded()
         }
+        
+        // Memory Pressure Monitoring
+        let memoryPressureSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        memoryPressureSource.setEventHandler { [weak self] in
+            let event = memoryPressureSource.data
+            self?.handleMemoryPressure(event: event)
+        }
+        memoryPressureSource.resume()
+        self.memoryPressureSource = memoryPressureSource
     }
     
     /// macOS 26 Tahoe inspired Memory Compaction
@@ -103,8 +121,18 @@ class ImageCache: NSObject {
             self.urlToKeys.removeAll()
         }
         Task {
-            await StringPool.shared.clear()
             await APIClient.shared.clearMemoryCaches()
+        }
+    }
+    
+    private func handleMemoryPressure(event: DispatchSource.MemoryPressureEvent) {
+        switch event {
+        case .warning:
+            performMemoryCompaction(level: .warning)
+        case .critical:
+            performMemoryCompaction(level: .critical)
+        default:
+            break
         }
     }
     
@@ -252,29 +280,6 @@ class ImageCache: NSObject {
         return "\(hash)"
     }
 
-    func getTinyProxy(forKey key: String) async -> ImageContainer? {
-        let tinySize = CGSize(width: 50, height: 75)
-        let tinyKey = generateCacheKey(key: key, size: tinySize)
-        
-        // 1. Memory Check
-        if let wrapper = memoryCache.object(forKey: tinyKey as NSString) {
-            return ImageContainer(image: wrapper.image)
-        }
-        
-        // 2. Disk Check (Optimized via Index)
-        let diskFileName = fileName(for: key, size: tinySize)
-        guard diskCacheIndex.contains(diskFileName) else { return nil }
-        
-        if let container = await loadFromDisk(diskFileName: diskFileName, targetSize: tinySize) {
-            let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: tinyKey)
-            memoryCache.setObject(wrapper, forKey: tinyKey as NSString, cost: cost(for: container.image))
-            registerKeyForURL(key, specificKey: tinyKey)
-            return container
-        }
-        
-        return nil
-    }
-
     func cancel(forKey key: String, targetSize: CGSize? = nil) {
         let fullKey = generateCacheKey(key: key, size: targetSize)
         activeTasks[fullKey]?.cancel()
@@ -382,11 +387,13 @@ class ImageCache: NSObject {
         return false
     }
 
-    func prewarmImages(urls: [URL], targetSize: CGSize, priority: ImagePriority = .low) {
+    @discardableResult
+    func prewarmImages(urls: [URL], targetSize: CGSize, priority: ImagePriority = .low) -> Task<Void, Never> {
         let taskPriority: TaskPriority = priority == .critical ? .userInitiated : .background
-        Task.detached(priority: taskPriority) {
+        return Task.detached(priority: taskPriority) {
             await withTaskGroup(of: Void.self) { group in
                 for url in urls {
+                    if Task.isCancelled { break }
                     group.addTask {
                         _ = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority)
                     }
@@ -399,7 +406,6 @@ class ImageCache: NSObject {
         guard let rawData = data else { return }
         let diskFileName = fileName(for: key, size: targetSize)
         let screenScale = self.screenScale
-        let tinyProxyFileName = fileName(for: key, size: CGSize(width: 50, height: 75))
         let container = self.dbContainer
         
         await Task.detached(priority: .background) {
@@ -439,43 +445,6 @@ class ImageCache: NSObject {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
             }
         }.value
-        
-        let shouldSaveProxy = !diskCacheIndex.contains(tinyProxyFileName) && !activeProxyTasks.contains(tinyProxyFileName)
-        
-        if shouldSaveProxy {
-            activeProxyTasks.insert(tinyProxyFileName)
-            
-            await Task.detached(priority: .background) {
-                defer {
-                    Task { @MainActor in
-                        ImageCache.shared.activeProxyTasks.remove(tinyProxyFileName)
-                    }
-                }
-                
-                let context = ModelContext(container)
-                guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
-                
-                let tinyMaxDim: CGFloat = 75 * screenScale
-                let tinyOptions = [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: tinyMaxDim
-                ] as CFDictionary
-                
-                if let tinyCG = CGImageSourceCreateThumbnailAtIndex(taskImageSource, 0, tinyOptions) {
-                    let alpha = tinyCG.alphaInfo
-                    let hasAlpha = alpha != .none && alpha != .noneSkipLast && alpha != .noneSkipFirst && alpha != .alphaOnly
-                    if let proxyData = Self.writeToDataStatic(image: tinyCG, usePNG: alwaysPreserveAlpha || hasAlpha) {
-                        let entity = ImageCacheEntity(id: tinyProxyFileName, data: proxyData, accessDate: Date(), size: Int64(proxyData.count))
-                        context.insert(entity)
-                        try? context.save()
-                        await MainActor.run {
-                            _ = ImageCache.shared.diskCacheIndex.insert(tinyProxyFileName)
-                        }
-                    }
-                }
-            }.value
-        }
     }
     
     private static nonisolated func writeToDataStatic(image: CGImage, usePNG: Bool) -> Data? {
@@ -577,171 +546,3 @@ extension ImageCache: NSCacheDelegate {
     }
 }
 
-struct CachedImage<Placeholder: View>: View {
-    let url: URL?
-    let targetSize: CGSize?
-    let priority: ImagePriority
-    var themeColor: Color? = nil
-    var isFastScrolling: Bool = false
-    var alwaysPreserveAlpha: Bool = false
-    var accessibilityLabel: String? = nil
-    var onImageLoaded: ((CGImage) -> Void)? = nil
-    @ViewBuilder let placeholder: Placeholder
-    
-    @State private var image: CGImage?
-    @State private var fuzzyMatch: CGImage?
-    @State private var isLoading = false
-    @State private var broadcastCancellable: AnyCancellable?
- 
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
-        self.url = url
-        self.targetSize = targetSize
-        self.priority = priority
-        self.themeColor = themeColor
-        self.isFastScrolling = isFastScrolling
-        self.alwaysPreserveAlpha = alwaysPreserveAlpha
-        self.accessibilityLabel = accessibilityLabel
-        self.onImageLoaded = onImageLoaded
-        self.placeholder = placeholder()
-        
-        // 1. SYNCHRONOUS SNAP: Check cache immediately in initializer
-        if let url = url, let container = ImageCache.shared.checkMemoryCache(forKey: url.absoluteString, targetSize: targetSize) {
-            let isExact = ImageCache.shared.isExactMatch(image: container.image, forURL: url.absoluteString, size: targetSize)
-            if isExact {
-                _image = State(initialValue: container.image)
-            } else {
-                _fuzzyMatch = State(initialValue: container.image)
-            }
-        }
-    }
-    
-    var body: some View {
-        Group {
-            if SleepManager.shared.isAsleep || (isFastScrolling && image == nil && fuzzyMatch == nil) {
-                staticPlaceholder
-            } else if let finalImage = image {
-                Image(finalImage, scale: 1.0, label: Text(accessibilityLabel ?? "Poster"))
-                    .resizable()
-                    .transition(.opacity)
-            } else if let lowRes = fuzzyMatch {
-                Image(lowRes, scale: 1.0, label: Text(accessibilityLabel ?? "Loading Poster"))
-                    .resizable()
-                    .blur(radius: 2)
-                    .transition(.opacity)
-            } else {
-                staticPlaceholder
-            }
-        }
-        .animation(AppTheme.Animation.easeInOut, value: image == nil)
-        .onAppear {
-            setupBroadcastListener()
-        }
-        .onDisappear {
-            if let url = url {
-                ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
-            }
-        }
-        .task(id: url) {
-            // Safety re-check on URL change
-            if !isFastScrolling {
-                await attemptLoad()
-            }
-        }
-        .onChange(of: isFastScrolling) { oldValue, newValue in
-            if !newValue && image == nil {
-                Task { await attemptLoad() }
-            }
-        }
-        .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
-            if isAsleep {
-                self.image = nil
-                self.fuzzyMatch = nil
-                self.broadcastCancellable?.cancel()
-            } else {
-                setupBroadcastListener()
-                Task { await attemptLoad() }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var staticPlaceholder: some View {
-        if let color = themeColor {
-            Rectangle()
-                .fill(color.opacity(0.15))
-                .overlay {
-                    Image(systemName: "film")
-                        .foregroundStyle(color.opacity(0.3))
-                        .font(.system(size: 24))
-                }
-        } else {
-            ZStack {
-                Color.secondary.opacity(0.1)
-                placeholder
-            }
-        }
-    }
-
-    private func setupBroadcastListener() {
-        guard let url = url else { return }
-        let key = url.absoluteString
-        
-        broadcastCancellable?.cancel()
-        broadcastCancellable = ImageCache.shared.updates
-            .filter { $0 == key || $0 == "CLEARED_ALL" }
-            .receive(on: DispatchQueue.main)
-            .sink { _ in
-                // If the whole cache was cleared, we MUST drop local state
-                if ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) == nil {
-                    self.image = nil
-                    self.fuzzyMatch = nil
-                }
-                Task { await attemptLoad() }
-            }
-    }
-
-    private func attemptLoad() async {
-        guard let url = url else { return }
-        let key = url.absoluteString
-        
-        if let container = ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) {
-            let isExact = ImageCache.shared.isExactMatch(image: container.image, forURL: key, size: targetSize)
-            
-            if isExact {
-                withAnimation(.easeIn(duration: 0.2)) {
-                    self.image = container.image
-                    self.fuzzyMatch = nil
-                }
-                return
-            } else {
-                self.fuzzyMatch = container.image
-            }
-        }
-        
-        // Fetch Tiny Proxy (Disk check included in getTinyProxy)
-        if fuzzyMatch == nil {
-            if let container = await ImageCache.shared.getTinyProxy(forKey: key) {
-                withAnimation(.easeIn(duration: 0.2)) {
-                    self.fuzzyMatch = container.image
-                }
-            }
-        }
-        
-        await loadImage()
-    }
-    
-    private func loadImage() async {
-        guard let url = url, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
-        
-        if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority, alwaysPreserveAlpha: alwaysPreserveAlpha) {
-            if Task.isCancelled { return }
-            withAnimation(.easeIn(duration: 0.25)) {
-                self.image = container.image
-                self.fuzzyMatch = nil
-            }
-            onImageLoaded?(container.image)
-        }
-    }
-}

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 // MARK: - Smart Badge Identifier
 
@@ -8,10 +9,8 @@ enum SmartBadge: String, CaseIterable, Sendable {
     case bingeDrop = "BINGE DROP"
     case binge = "BINGE"
     case behind = "BEHIND"
-    case catchUp = "CATCH UP"
     case new = "NEW"
     case soon = "SOON"
-    case recent = "RECENT"
 }
 
 // MARK: - Badge Logic Engine
@@ -44,10 +43,57 @@ struct BadgeEngine {
         static let empty = EpisodeScan(nextEpisodeNumber: 0, nextSeasonEpisodeCount: 0, nextAirDate: nil, airedOnSameDayCount: 0, recentlyWatchedCount: 0)
     }
 
+    /// Cache episode scans per show to avoid re-iterating all seasons/episodes on every badge call.
+    /// Cleared on episode state changes (see MediaItem.syncCachedProperties).
+    // Using os_unfair_lock for thread-safe access from any actor context.
+    nonisolated(unsafe) private static var scanCacheLock = os_unfair_lock()
+    nonisolated(unsafe) private static var episodeScanCache: [PersistentIdentifier: EpisodeScan] = [:]
+    nonisolated(unsafe) private static var episodeScanVersion: [PersistentIdentifier: Int] = [:]
+
+    nonisolated static func invalidateScan(for showID: PersistentIdentifier) {
+        print("DEBUG INVALIDATE: \(showID)")
+        os_unfair_lock_lock(&scanCacheLock)
+        episodeScanCache.removeValue(forKey: showID)
+        episodeScanVersion.removeValue(forKey: showID)
+        os_unfair_lock_unlock(&scanCacheLock)
+    }
+
+    nonisolated static func clearScanCache() {
+        os_unfair_lock_lock(&scanCacheLock)
+        episodeScanCache.removeAll()
+        episodeScanVersion.removeAll()
+        os_unfair_lock_unlock(&scanCacheLock)
+    }
+
+    nonisolated private static func readScanCache(_ showID: PersistentIdentifier) -> EpisodeScan? {
+        os_unfair_lock_lock(&scanCacheLock)
+        let result = episodeScanCache[showID]
+        os_unfair_lock_unlock(&scanCacheLock)
+        return result
+    }
+
+    nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan, version: Int) {
+        os_unfair_lock_lock(&scanCacheLock)
+        episodeScanCache[showID] = scan
+        episodeScanVersion[showID] = version
+        os_unfair_lock_unlock(&scanCacheLock)
+    }
+
     static func calculateBadge(for item: MediaItem, now: Date = Date()) -> BadgeResult? {
         guard item.state != .dropped else { return nil }
 
-        let scan = item.type == .tvShow ? scanEpisodes(for: item, now: now) : .empty
+        let scan: EpisodeScan
+        if item.type == .tvShow {
+            let pid = item.persistentModelID
+            if let cached = readScanCache(pid) {
+                scan = cached
+            } else {
+                scan = scanEpisodes(for: item, now: now)
+                writeScanCache(pid, scan: scan, version: item.lastInteractionDate?.timeIntervalSince1970.hashValue ?? 0)
+            }
+        } else {
+            scan = .empty
+        }
 
         if let result = milestoneBadge(for: item, scan: scan, now: now) { return result }
         if let result = releaseWindowBadge(for: item, now: now) { return result }
@@ -68,8 +114,8 @@ struct BadgeEngine {
         let cutoff = now.addingTimeInterval(recentlyWatchedCutoff)
         var foundNext = false
 
-        for season in tv.seasons.filter({ !$0.isDeleted && $0.modelContext != nil }).sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
-            for ep in season.episodes.filter({ !$0.isDeleted && $0.modelContext != nil }).sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
+        for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
+            for ep in season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
                 if !ep.isWatched {
                     if !foundNext {
                         nextEpisodeNumber = ep.episodeNumber

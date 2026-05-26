@@ -15,11 +15,15 @@ struct StatusPicker: View {
             Menu {
                 ForEach(availableStates, id: \.self) { state in
                     Button {
-                        withAnimation(AppTheme.Animation.smooth) {
+                        withAnimation(AppTheme.Animation.easeInOut) {
                             item.state = state
                             item.lastUpdated = Date()
                             onChange?(state)
-                            FeedbackManager.shared.trigger(.click)
+                            if state == .completed {
+                                FeedbackManager.shared.trigger(.markWatched)
+                            } else {
+                                FeedbackManager.shared.trigger(.stateChange)
+                            }
                         }
                     } label: {
                         Label(state.displayName, systemImage: state.iconName)
@@ -53,18 +57,7 @@ struct StatusPicker: View {
     }
     
     private func stateColor(for state: MediaState) -> Color {
-        switch state {
-        case .active, .rewatching:
-            return Color.fromOKLCH(l: 0.55, c: 0.2, h: 250) // Blue
-        case .wishlist:
-            return Color.fromOKLCH(l: 0.7, c: 0.18, h: 75)  // Amber/Gold
-        case .onHold:
-            return Color.fromOKLCH(l: 0.5, c: 0.05, h: 250) // Slate Gray
-        case .dropped:
-            return Color.fromOKLCH(l: 0.6, c: 0.15, h: 25)  // Soft Red
-        case .completed:
-            return Color.fromOKLCH(l: 0.65, c: 0.2, h: 145) // Emerald Green
-        }
+        return state.accentColor
     }
     
     private var availableStates: [MediaState] {

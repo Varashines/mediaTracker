@@ -2,19 +2,7 @@ import SwiftData
 import SwiftUI
 
 @MainActor
-struct MediaThumbnailView: View, Equatable {
-    nonisolated static func == (lhs: MediaThumbnailView, rhs: MediaThumbnailView) -> Bool {
-        return lhs.capturedID == rhs.capturedID && lhs.capturedItemID == rhs.capturedItemID
-            && lhs.capturedTitle == rhs.capturedTitle
-            && lhs.capturedPosterURL == rhs.capturedPosterURL
-            && lhs.capturedType == rhs.capturedType && lhs.capturedState == rhs.capturedState
-            && lhs.capturedProgress == rhs.capturedProgress
-            && lhs.isCompletedInCollection == rhs.isCompletedInCollection
-            && lhs.selectedCollectionID == rhs.selectedCollectionID
-            && lhs.capturedIsUpcoming == rhs.capturedIsUpcoming
-            && lhs.capturedGridBadgeText == rhs.capturedGridBadgeText
-    }
-
+struct MediaThumbnailView: View {
     enum DisplayMode {
         case grid
         case hero
@@ -31,6 +19,7 @@ struct MediaThumbnailView: View, Equatable {
     var namespace: Namespace.ID? = nil
     var staggerIndex: Int? = nil
     var isFastScrolling: Bool = false
+    var disableHover: Bool = false
     var action: (() -> Void)? = nil
 
     // Captured values for stability during background updates or deletion
@@ -48,6 +37,7 @@ struct MediaThumbnailView: View, Equatable {
     private let capturedIsUpcoming: Bool
     private let capturedGridBadgeText: String?
     private let capturedNextAiringDate: Date?
+    private let capturedDisplayYear: String?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -65,6 +55,7 @@ struct MediaThumbnailView: View, Equatable {
         item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
         isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        disableHover: Bool = false,
         isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
         action: (() -> Void)? = nil
     ) {
@@ -77,6 +68,7 @@ struct MediaThumbnailView: View, Equatable {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.disableHover = disableHover
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
@@ -96,12 +88,14 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedIsUpcoming = item.isUpcoming
         self.capturedGridBadgeText = item.badgeText
         self.capturedNextAiringDate = item.cachedNextAiringDate
+        self.capturedDisplayYear = item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
     }
 
     init(
         metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
         isUpcomingSection: Bool = false,
         namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        disableHover: Bool = false,
         isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
         action: (() -> Void)? = nil
     ) {
@@ -114,6 +108,7 @@ struct MediaThumbnailView: View, Equatable {
         self.namespace = namespace
         self.staggerIndex = staggerIndex
         self.isFastScrolling = isFastScrolling
+        self.disableHover = disableHover
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
         self.action = action
@@ -132,6 +127,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedIsUpcoming = metadata.isUpcoming
         self.capturedGridBadgeText = metadata.badgeText
         self.capturedNextAiringDate = metadata.nextAiringDate
+        self.capturedDisplayYear = metadata.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
@@ -158,6 +154,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedIsUpcoming = false
         self.capturedGridBadgeText = nil
         self.capturedNextAiringDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
+        self.capturedDisplayYear = capturedReleaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
     }
 
     private var width: CGFloat {
@@ -174,30 +171,23 @@ struct MediaThumbnailView: View, Equatable {
         }
     }
 
-    private var title: String { item?.title ?? capturedTitle }
-    private var posterURL: String? { item?.posterURL ?? capturedPosterURL }
-    private var type: MediaType { item?.type ?? capturedType }
-    private var safeState: MediaState { item?.state ?? capturedState }
-    private var safeProgress: Double? { item?.storedProgress ?? capturedProgress }
+    private var title: String { capturedTitle }
+    private var posterURL: String? { capturedPosterURL }
+    private var type: MediaType { capturedType }
+    private var safeState: MediaState { capturedState }
+    private var safeProgress: Double? { capturedProgress }
 
-    private var yearLabel: String? {
-        if let date = item?.releaseDate ?? capturedReleaseDate {
-            return Calendar.current.dateComponents([.year], from: date).year.map { String($0) }
-        }
-        return nil
-    }
+    private var yearLabel: String? { capturedDisplayYear }
 
     private var isAdded: Bool {
         return (item != nil || capturedID != nil) || isLocalInSearch
     }
 
-    private var nextEpisodeLabel: String? {
-        item?.storedNextEpisodeLabel ?? capturedNextEpisodeLabel
-    }
-    private var watchProgress: String? { item?.storedWatchProgressLabel ?? capturedWatchProgress }
-    private var isUpcoming: Bool { item?.isUpcoming ?? capturedIsUpcoming }
-    private var gridBadgeText: String? { item?.badgeText ?? capturedGridBadgeText }
-    private var nextAiringDate: Date? { item?.cachedNextAiringDate ?? capturedNextAiringDate }
+    private var nextEpisodeLabel: String? { capturedNextEpisodeLabel }
+    private var watchProgress: String? { capturedWatchProgress }
+    private var isUpcoming: Bool { capturedIsUpcoming }
+    private var gridBadgeText: String? { capturedGridBadgeText }
+    private var nextAiringDate: Date? { capturedNextAiringDate }
 
     var body: some View {
         Group {
@@ -338,8 +328,9 @@ struct MediaThumbnailView: View, Equatable {
         }
         .frame(width: width, height: height)
         .cornerRadius(AppTheme.Radius.medium)
+        .drawingGroup(opaque: false) // Batch composite overlay layers in grid mode
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
-        .scaleEffect(isHovered ? 1.02 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
+        .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         .onAppear {
             if isFastScrolling {
@@ -347,13 +338,16 @@ struct MediaThumbnailView: View, Equatable {
                 return
             }
             let delay = Double(staggerIndex ?? 0 % 15) * 0.05
-            withAnimation(AppTheme.Animation.springDefault.delay(delay)) {
+            withAnimation(AppTheme.Animation.springGentle.delay(delay)) {
                 isAppeared = true
             }
         }
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            guard !disableHover else { return }
+            isHovered = hovering
+        }
+        .animation(!disableHover ? AppTheme.Animation.springSnappy : nil, value: isHovered)
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {

@@ -14,7 +14,6 @@ struct CategoryRouterView: View {
             SearchView(
                 searchText: $viewModel.searchText,
                 isSearchActive: $isSearchActive,
-                submitTrigger: viewModel.searchSubmitTrigger,
                 initialType: currentMediaType,
                 viewModel: viewModel,
                 onSelectLocal: { item in
@@ -22,21 +21,16 @@ struct CategoryRouterView: View {
                 },
                 modelContainer: modelContainer
             )
-            .transition(.identity)
         } else if viewModel.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
-            .transition(.identity)
         } else if viewModel.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel)
-                .transition(.identity)
         } else if viewModel.selectedCategory == .insights {
             InsightsView()
-                .transition(.identity)
         } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
-                .transition(.identity)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,
@@ -46,7 +40,6 @@ struct CategoryRouterView: View {
                 groupedItems: viewModel.groupedItems,
                 recommendations: viewModel.recommendations,
                 selectedCategory: viewModel.selectedCategory,
-                showingUpcomingOnly: viewModel.selectedCategory == .upcoming,
                 searchText: viewModel.searchText,
                 selectedNetworks: viewModel.selectedNetworks,
                 namespace: posterNamespace,
@@ -75,7 +68,6 @@ struct CategoryRouterView: View {
                 onLoadMore: { onLoadMore?() },
                 viewModel: viewModel
             )
-            .transition(.identity)
         }
     }
 

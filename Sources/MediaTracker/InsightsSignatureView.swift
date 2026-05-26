@@ -32,12 +32,7 @@ struct CinephileBarcodeView: View {
                                 .font(AppTheme.Font.caption2)
                                 .foregroundStyle({
                                     guard let taste = TasteValue(rawValue: item.tasteValue) else { return Color.secondary }
-                                    switch taste {
-                                    case .love: return Color.red
-                                    case .like: return Color.blue
-                                    case .dislike: return Color.orange
-                                    case .none: return Color.secondary
-                                    }
+                                    return taste.color
                                 }())
                         }
                         .transition(.opacity)
@@ -64,17 +59,12 @@ struct CinephileBarcodeView: View {
                             Spacer(minLength: 0)
                             ForEach(validItems.prefix(100)) { item in
                                 let isCurrentHovered = hoveredItem?.id == item.id
-                                let barColor: Color = {
+                                    let barColor: Color = {
                                     if let hex = item.themeColorHex, let c = Color(hex: hex) {
                                         return c
                                     }
                                     guard let taste = TasteValue(rawValue: item.tasteValue) else { return .primary.opacity(0.15) }
-                                    switch taste {
-                                    case .love: return .red
-                                    case .like: return .blue
-                                    case .dislike: return .orange
-                                    case .none: return .primary.opacity(0.15)
-                                    }
+                                    return taste.color
                                 }()
 
                                 RoundedRectangle(cornerRadius: 1.0)

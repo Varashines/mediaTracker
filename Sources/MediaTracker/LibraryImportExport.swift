@@ -28,8 +28,8 @@ class LibraryImportExportService {
             var watchedIDs: [String]? = nil
             if item.type == .tvShow, let tv = item.tvShowDetails {
                 watchedIDs = tv.seasons
-                    .filter { !$0.isDeleted && $0.modelContext != nil }
-                    .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+                    .liveModels
+                    .flatMap { $0.episodes.liveModels }
                     .filter { $0.isWatched }
                     .map { $0.uniqueID ?? "" }
             }

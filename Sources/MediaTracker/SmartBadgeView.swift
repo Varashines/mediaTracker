@@ -17,9 +17,10 @@ struct SmartBadgeView: View {
         .new: (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), Color.black),
         .soon: (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), Color.black),
         .behind: (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), Color.white),
-        .catchUp: (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), Color.white),
-        .recent: (Color.secondary.opacity(0.8), Color.white),
+        .binge: (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), Color.white),
     ]
+
+    private static let bingeSolidColors: (bg: Color, fg: Color) = (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), Color.white)
 
     init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
         self.item = item
@@ -85,7 +86,7 @@ struct SmartBadgeView: View {
                 return config
             }
             if badgeLabel == .binge {
-                return isSparkle ? (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), Color.white) : (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), Color.white)
+                return isSparkle ? Self.badgeColors[.binge]! : Self.bingeSolidColors
             }
             return (Color.secondary.opacity(0.8), Color.white)
         }()
@@ -100,6 +101,7 @@ struct SmartBadgeView: View {
         .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
     }
 
+    @ViewBuilder
     private func statusUI(
         isUpcoming: Bool,
         state: MediaState?,
@@ -125,36 +127,22 @@ struct SmartBadgeView: View {
             if let override = themeColorOverride {
                 return override
             }
-            
-            switch currentState {
-            case .active, .rewatching:
-                // In Progress: Vibrant Blue
-                return Color.fromOKLCH(l: 0.55, c: 0.2, h: 250)
-            case .wishlist:
-                // Watchlist: Warm Amber/Gold
-                return Color.fromOKLCH(l: 0.7, c: 0.18, h: 75)
-            case .onHold:
-                // On Hold: Slate Gray
-                return Color.fromOKLCH(l: 0.5, c: 0.05, h: 250)
-            case .dropped:
-                // Dropped: Soft Red
-                return Color.fromOKLCH(l: 0.6, c: 0.15, h: 25)
-            case .completed:
-                // Completed: Emerald Green
-                return Color.fromOKLCH(l: 0.65, c: 0.2, h: 145)
-            }
+            return currentState.accentColor
         }()
 
         let isSolid = isAvailable || currentState == .active || currentState == .rewatching
 
-        return StatusBadgePrimitive(
-            label: displayLabel,
-            accentColor: finalAccent,
-            isSolid: isSolid,
-            progress: showProgressBar ? progress : nil,
-            foregroundColor: isSolid ? (finalAccent.isLightColor ? .black : .white) : nil
-        )
-        .opacity(currentState == .completed ? 0 : 1)
+        if currentState == .completed {
+            EmptyView()
+        } else {
+            StatusBadgePrimitive(
+                label: displayLabel,
+                accentColor: finalAccent,
+                isSolid: isSolid,
+                progress: showProgressBar ? progress : nil,
+                foregroundColor: isSolid ? (finalAccent.isLightColor ? .black : .white) : nil
+            )
+        }
     }
 
 }
@@ -178,4 +166,43 @@ struct SmartBadgeView: View {
     item.remainingEpisodesCount = 5
     context.insert(item)
     return SmartBadgeView(item: item)
+}
+
+struct StatusBadgePrimitive: View {
+    let label: String
+    let accentColor: Color
+    let isSolid: Bool
+    let progress: Double?
+    var isCompact: Bool = false
+    var foregroundColor: Color? = nil
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
+        
+        HStack(spacing: 0) {
+            if !label.isEmpty {
+                Text(label.uppercased())
+                    .font(.system(size: 7.5, weight: .semibold, design: .rounded))
+                    .kerning(1.0)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(minHeight: 20)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
+        .background(isSolid ? accentColor : accentColor.opacity(colorScheme == .dark ? 0.15 : 0.2))
+        .clipShape(Capsule())
+        .overlay {
+            if let progress = progress, progress > 0 && progress < 1.0 {
+                Capsule()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        Color.blueToGreen(progress: progress),
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
+                    )
+            }
+        }
+    }
 }

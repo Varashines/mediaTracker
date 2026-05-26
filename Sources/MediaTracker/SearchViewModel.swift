@@ -50,13 +50,26 @@ class SearchViewModel {
 
     func handleSearchTextChange(_ text: String, selectedType: SearchType) {
         if text.isEmpty {
-            searchTask?.cancel()
-            movieResults = []
-            tvResults = []
-            filteredLocalResults = []
+            cancelAllSearchOperations()
         } else {
             searchSubject.send((text, selectedType))
         }
+    }
+
+    func triggerSearch(text: String, selectedType: SearchType) {
+        searchTask?.cancel()
+        searchTask = Task {
+            await performSearch(text: text, selectedType: selectedType)
+        }
+    }
+    
+    func cancelAllSearchOperations() {
+        searchTask?.cancel()
+        searchTask = nil
+        movieResults = []
+        tvResults = []
+        filteredLocalResults = []
+        isSearching = false
     }
 
     func performSearch(text: String, selectedType: SearchType) async {
@@ -153,7 +166,7 @@ class SearchViewModel {
             year: nil,
             state: nil,
             badge: nil,
-            limit: 50,
+            limit: 200,
             offset: 0
         )
         return result?.displayed ?? []

@@ -9,7 +9,6 @@ struct MainLibraryView: View {
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recommendations: [MediaThumbnailMetadata]
     let selectedCategory: NavigationCategory
-    let showingUpcomingOnly: Bool
     let searchText: String
     let selectedNetworks: [String]?
     let namespace: Namespace.ID
@@ -29,10 +28,6 @@ struct MainLibraryView: View {
         return selectedCategory == .movie || selectedCategory == .tvShow
     }
 
-    var isMainSection: Bool {
-        return true
-    }
-
     var showsFilterBar: Bool {
         if viewModel.selectedCollectionID != nil { return true }
         switch selectedCategory {
@@ -43,14 +38,10 @@ struct MainLibraryView: View {
 
     var body: some View {
         GeometryReader { (mainGeo: GeometryProxy) in
-            let isSmartCategory: Bool = {
-                let cat = selectedCategory
-                return cat == .releaseRadar || cat == .smartUpcoming || cat == .catchUp || cat == .loved || cat == .binge || cat == .quickBites || cat == .stalled || cat == .archive
-            }()
-            let usePortraitCards = viewModel.selectedCollectionID != nil || isSmartCategory
+            let usePortraitCards = viewModel.selectedCollectionID != nil || selectedCategory.isSmartCategory
             let columns: [GridItem] = usePortraitCards
                 ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
-                : [GridItem(.adaptive(minimum: 210, maximum: 230), spacing: 10)]
+                : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
@@ -67,14 +58,6 @@ struct MainLibraryView: View {
                         )
                     }
 
-                    if showingUpcomingOnly && searchText.isEmpty && selectedNetworks == nil
-                        && !featuredCarouselItems.isEmpty
-                    {
-                        FeaturedUpcomingCarousel(
-                            items: featuredCarouselItems, namespace: namespace,
-                            isFastScrolling: isFastScrolling, onSelect: onSelectHero)
-                    }
-
                     if selectedCategory != .home {
                         Section {
                             LibraryGridSection(
@@ -83,11 +66,11 @@ struct MainLibraryView: View {
                                 recentlyAdded: recentlyAdded,
                                 featuredCarouselItems: featuredCarouselItems,
                                 selectedCategory: selectedCategory,
-                                showingUpcomingOnly: showingUpcomingOnly,
                                 searchText: searchText,
                                 selectedNetworks: selectedNetworks,
                                 namespace: namespace,
                                 isFastScrolling: isFastScrolling,
+                                disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
                                 columns: columns,
                                 viewModel: viewModel,
                                 onLoadMore: onLoadMore
@@ -97,7 +80,6 @@ struct MainLibraryView: View {
                                 LibraryHeaderView(
                                     selectedCategory: selectedCategory,
                                     selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                    isMainSection: isMainSection,
                                     onNetworkSelected: onNetworkSelected, onBack: onBack,
                                     viewModel: viewModel)
 
@@ -110,8 +92,6 @@ struct MainLibraryView: View {
                         }
                     }
                 }
-                .padding(.top, AppTheme.Spacing.medium)
-                .padding(.bottom, AppTheme.Spacing.large)
                 .background {
                     ScrollVelocityTracker(
                         isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)

@@ -7,6 +7,11 @@ extension MediaItem {
         // If details aren't loaded, don't force a sync unless explicitly requested.
         let currentState = state ?? .wishlist
 
+        // Invalidate badge scan cache since state/episodes may have changed
+        if type == .tvShow {
+            BadgeEngine.invalidateScan(for: persistentModelID)
+        }
+
         syncCastCache()
 
         if type == .movie {
@@ -54,7 +59,7 @@ extension MediaItem {
                 
                 // Defensive: skip any objects that were deleted/detached during a concurrent merge
                 let sortedRaw = castMembers
-                    .filter { !$0.isDeleted && $0.modelContext != nil }
+                    .liveModels
                     .filter { $0.characterName != "Creator" && $0.characterName != "Director" }
                     .sorted { $0.order < $1.order }
                 
@@ -98,9 +103,9 @@ extension MediaItem {
         let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
         if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
             // Defensive: skip deleted/detached seasons and episodes
-            let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+            let liveSeasons = tv.seasons.liveModels
             for season in liveSeasons {
-                let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+                let liveEps = season.episodes.liveModels
                 for ep in liveEps where !ep.isWatched {
                     ep.markWatched(true)
                 }
@@ -181,12 +186,20 @@ extension MediaItem {
             text += " \(cachedGenres.joined(separator: " "))"
         }
         
+        if !cachedCreators.isEmpty {
+            text += " \(cachedCreators.joined(separator: " "))"
+        }
+        
         if !storedCast.isEmpty {
             text += " \(storedCast.map { $0.name }.joined(separator: " "))"
         }
         
         if let network = cachedNetwork {
             text += " \(network)"
+        }
+        
+        if let lang = cachedLanguage {
+            text += " \(lang)"
         }
         
         self.searchableText = text.lowercased()

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import UserNotifications
+import AppKit
 
 @ModelActor
 actor BackgroundDataService {
@@ -39,6 +40,8 @@ actor BackgroundDataService {
             _ = await self.refreshTVShow(id: uniqueID, tmdbID: tmdbID)
         }
         
+        item.syncCachedProperties(force: true)
+        item.updateSearchableText()
         try? modelContext.save()
         return (item.persistentModelID, false)
     }
@@ -183,23 +186,23 @@ actor BackgroundDataService {
                     if autoMark && item.stateValue == "Completed" {
                         // Defensive: skip deleted/detached during concurrent merges
                         let liveEps = tv.seasons
-                            .filter { !$0.isDeleted && $0.modelContext != nil }
-                            .flatMap { $0.episodes.filter { !$0.isDeleted && $0.modelContext != nil } }
+                            .liveModels
+                            .flatMap { $0.episodes.liveModels }
                         for ep in liveEps where !ep.isWatched {
-                            ep.isWatched = true
+                            ep.markWatched(true)
                         }
                     }
 
                     // Standardize Seasons and Episodes
                     // Defensive: skip deleted/detached seasons and episodes
-                    let liveSeasons = tv.seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+                    let liveSeasons = tv.seasons.liveModels
                     for season in liveSeasons {
                         season.showID = tmdbID
                         if season.uniqueID == nil {
                             season.uniqueID = "\(tmdbID)_\(season.seasonNumber)"
                         }
                         
-                        let liveEps = season.episodes.filter { !$0.isDeleted && $0.modelContext != nil }
+                        let liveEps = season.episodes.liveModels
                         for episode in liveEps {
                             episode.showID = tmdbID
                             if episode.uniqueID == nil {
@@ -318,19 +321,43 @@ actor BackgroundDataService {
             AppLogger.warning("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.", logger: AppLogger.background)
             return
         }
-        
+
         var errorCount = 0
         var refreshedIDs: [String] = []
 
-        // Phase 5 Optimization: Serial Processing for Context Integrity
-        // While fetching in parallel is possible, applying updates to the same ModelContext
-        // from multiple tasks within a TaskGroup is unsafe. We serialize updates to guarantee integrity.
-        for id in itemIDs {
-            let success = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
-            if success {
-                refreshedIDs.append(id)
-            } else {
-                errorCount += 1
+        // Phase 2 Optimization: Controlled concurrent network calls.
+        // The @ModelActor serializes model context writes, but the async network
+        // calls inside refreshSingleItem release the actor, allowing other tasks
+        // to make progress. This gives us parallel network I/O with safe serial writes.
+        let maxConcurrent = 4
+        await withTaskGroup(of: (Int, Bool).self) { group in
+            var submitted = 0
+
+            for (index, id) in itemIDs.prefix(maxConcurrent).enumerated() {
+                group.addTask { [weak self] in
+                    guard let self else { return (index, false) }
+                    let ok = await self.refreshSingleItem(id: id, metadataOnly: metadataOnly, force: force, shouldSave: false)
+                    return (index, ok)
+                }
+                submitted += 1
+            }
+
+            for await (index, success) in group {
+                if success {
+                    refreshedIDs.append(itemIDs[index])
+                } else {
+                    errorCount += 1
+                }
+
+                if submitted < itemIDs.count {
+                    let nextIndex = submitted
+                    group.addTask { [weak self] in
+                        guard let self else { return (nextIndex, false) }
+                        let ok = await self.refreshSingleItem(id: itemIDs[nextIndex], metadataOnly: metadataOnly, force: force, shouldSave: false)
+                        return (nextIndex, ok)
+                    }
+                    submitted += 1
+                }
             }
         }
 
@@ -441,7 +468,7 @@ actor BackgroundDataService {
         // 2. Fetch and pre-populate missing episodes for seasons if needed
         let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
         if let seasons = try? modelContext.fetch(sDescriptor) {
-            let liveSeasons = seasons.filter { !$0.isDeleted && $0.modelContext != nil }
+            let liveSeasons = seasons.liveModels
             
             // N+1 Prevention: Prefetch all episodes for this show into a map
             let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
@@ -451,6 +478,33 @@ actor BackgroundDataService {
                 return (uid, ep)
             })
             
+            // Concurrent Fetching: Pre-fetch all missing season details in parallel to avoid sequential network bottleneck
+            var results: [Int: [TVEpisodeResult]] = [:]
+            await withTaskGroup(of: (Int, Result<[TVEpisodeResult], Error>).self) { group in
+                for season in liveSeasons {
+                    let sNum = season.seasonNumber
+                    if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
+                        group.addTask {
+                            do {
+                                let eps = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
+                                return (sNum, .success(eps))
+                            } catch {
+                                return (sNum, .failure(error))
+                            }
+                        }
+                    }
+                }
+                
+                for await (sNum, res) in group {
+                    switch res {
+                    case .success(let eps):
+                        results[sNum] = eps
+                    case .failure(let error):
+                        AppLogger.warning("⚠️ Failed to download details for season \(sNum) during auto-completion: \(error)", logger: AppLogger.background)
+                    }
+                }
+            }
+            
             for season in liveSeasons {
                 if season.tvShowDetails?.persistentModelID != tv.persistentModelID {
                     season.tvShowDetails = tv
@@ -459,8 +513,7 @@ actor BackgroundDataService {
                 let sNum = season.seasonNumber
                 // If season has no episodes, or is missing some, fetch and populate
                 if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
-                    do {
-                        let tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
+                    if let tmdbEpisodes = results[sNum] {
                         for ep in tmdbEpisodes {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
                             let epName = ep.name ?? "Episode \(ep.episodeNumber)"
@@ -486,8 +539,6 @@ actor BackgroundDataService {
                             }
                             episode.markWatched(true)
                         }
-                    } catch {
-                        AppLogger.warning("⚠️ Failed to download details for season \(sNum) during auto-completion: \(error)", logger: AppLogger.background)
                     }
                 } else {
                     for episode in season.episodes {
@@ -542,7 +593,7 @@ actor BackgroundDataService {
                 movieDetails.imdbRating = omdb.imdbRating
                 movieDetails.contentRating = omdb.contentRating
             }
-            movieDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
+            movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
             
             let prodNames = details.productionCompanies.map { $0.name }
@@ -577,6 +628,9 @@ actor BackgroundDataService {
             }
             
             if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
+            await extractAndSavePosterColor(for: item)
+            item.syncCachedProperties(force: true)
+            item.updateSearchableText()
             item.lastUpdated = Date()
             return true
         } catch {
@@ -626,7 +680,7 @@ actor BackgroundDataService {
                     tvDetails.nextEpisodeTime = airtime
                     
                     if let schedule = episode {
-                        tvDetails.nextEpisodeDate = DateUtils.parseFullDate(dateString: schedule.airdate, timeString: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, item: item)
+                        tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
                         
                         // Sync episode/season from TVMaze to match the more accurate date
                         if let sNum = schedule.season { tvDetails.nextSeasonNumber = sNum }
@@ -670,9 +724,9 @@ actor BackgroundDataService {
 
             if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
             tvDetails.item = item
-            tvDetails.status = await StringPool.shared.intern(details.status)
-            tvDetails.originalLanguage = await StringPool.shared.intern(details.originalLanguage)
-            tvDetails.network = await StringPool.shared.intern(details.network)
+            tvDetails.status = details.status
+            tvDetails.originalLanguage = details.originalLanguage
+            tvDetails.network = details.network
             tvDetails.voteAverage = details.voteAverage
             if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
                 tvDetails.imdbRating = omdb.imdbRating
@@ -738,10 +792,32 @@ actor BackgroundDataService {
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
             
+            await extractAndSavePosterColor(for: item)
+            item.syncCachedProperties(force: true)
+            item.updateSearchableText()
             item.lastUpdated = Date()
             return true
         } catch {
             return false
+        }
+    }
+
+    private func extractAndSavePosterColor(for item: MediaItem) async {
+        guard item.themeColorHex == nil,
+              let poster = item.posterURL,
+              let url = URL(string: poster) else { return }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let image = NSImage(data: data),
+               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let pair = await ColorExtractor.topTwoColors(from: cgImage)
+                let primaryHex = pair.primary.toHex()
+                let secondaryHex = pair.secondary.toHex()
+                item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+            }
+        } catch {
+            AppLogger.debug("Failed to extract poster color for item \(item.title): \(error)")
         }
     }
 }
