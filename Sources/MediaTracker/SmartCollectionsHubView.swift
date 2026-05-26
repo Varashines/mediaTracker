@@ -33,6 +33,9 @@ struct SmartCollectionsHubView: View {
     @State private var counts: [NavigationCategory: Int] = [:]
     @State private var customSmartCounts: [UUID: Int] = [:]
     @State private var countsLoaded = false
+    private func getFilterActor() -> MediaFilterActor {
+        MediaFilterActor.shared(modelContainer: modelContext.container)
+    }
     @State private var showingCreateSheet = false
     @State private var initialIsSmart = true
     @State private var customSmartCollections: [MediaCollection] = []
@@ -314,7 +317,7 @@ struct SmartCollectionsHubView: View {
     }
 
     private func fetchCounts() async {
-        let actor = MediaFilterActor(modelContainer: modelContext.container)
+        let actor = getFilterActor()
         var newCounts: [NavigationCategory: Int] = [:]
         var newCustomCounts: [UUID: Int] = [:]
         

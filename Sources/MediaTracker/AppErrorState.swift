@@ -22,13 +22,6 @@ class AppErrorState {
         }
     }
     
-    enum ToastType {
-        case info
-        case success
-        case warning
-        case error
-    }
-    
     enum ToastStyle {
         case info
         case success
@@ -54,17 +47,8 @@ class AppErrorState {
         }
     }
     
-    func showToast(_ message: String, systemImage: String? = nil, type: ToastType = .info, duration: Double = 3.5) {
+    func showToast(_ message: String, systemImage: String? = nil, style: ToastStyle = .info, duration: Double = 3.5) {
         dismissTask?.cancel()
-        
-        let style: ToastStyle = {
-            switch type {
-            case .info: return .info
-            case .success: return .success
-            case .warning: return .warning
-            case .error: return .error
-            }
-        }()
         
         withAnimation(AppTheme.Animation.springGentle) {
             currentToast = Toast(message: message, style: style, duration: duration)
@@ -83,7 +67,7 @@ class AppErrorState {
     }
     
     func surfaceError(_ message: String) {
-        showToast(message, type: .error)
+        showToast(message, style: .error)
     }
     
     func handleError(_ error: Error, message: String? = nil) {

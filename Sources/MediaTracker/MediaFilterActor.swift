@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     static func == (lhs: MediaThumbnailMetadata, rhs: MediaThumbnailMetadata) -> Bool {
@@ -782,5 +783,20 @@ extension MediaFilterActor {
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })], 
             totalCount: totalCount
         )
+    }
+}
+
+private let _filterActorCache = OSAllocatedUnfairLock<MediaFilterActor?>(uncheckedState: nil)
+
+extension MediaFilterActor {
+    static func shared(modelContainer: ModelContainer) -> MediaFilterActor {
+        _filterActorCache.withLockUnchecked { state in
+            if let existing = state {
+                return existing
+            }
+            let actor = MediaFilterActor(modelContainer: modelContainer)
+            state = actor
+            return actor
+        }
     }
 }

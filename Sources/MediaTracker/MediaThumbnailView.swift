@@ -242,10 +242,7 @@ struct MediaThumbnailView: View {
                 type: type,
                 isFastScrolling: isFastScrolling,
                 width: width,
-                height: height,
-                namespace: nil,  // Moved to root
-                capturedID: nil,
-                resultID: nil
+                height: height
             )
 
             // 2. Hover Metadata Pills (Floating capsules)
@@ -509,4 +506,86 @@ struct MediaThumbnailView: View {
     )
     .frame(width: 160)
     .modelContainer(container)
+}
+
+struct ThumbnailPosterLayer: View {
+    let posterURL: String?
+    let themeColorHex: String?
+    let mode: MediaThumbnailView.DisplayMode
+    let type: MediaType
+    let isFastScrolling: Bool
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Group {
+            if let urlString = posterURL, let url = URL(string: urlString) {
+                let baseColor = themeColorHex.flatMap { Color(hex: $0) }
+                let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
+
+                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
+                    _ in
+                } placeholder: {
+                    Rectangle().fill(Color.secondary.opacity(0.1))
+                        .overlay { ProgressView().controlSize(.small) }
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .overlay {
+                        Image(systemName: type == .movie ? "film" : "tv")
+                            .font(.system(size: mode == .hero ? 40 : 30))
+                            .foregroundStyle(.secondary.opacity(0.2))
+                    }
+                    .frame(width: width, height: height)
+            }
+        }
+    }
+}
+
+struct ThumbnailSearchOverlay: View {
+    let isAdded: Bool
+    let isLocalInSearch: Bool
+    let isHovered: Bool
+
+    var body: some View {
+        if isAdded {
+            ZStack {
+                if !isLocalInSearch {
+                    Rectangle()
+                        .fill(.black.opacity(0.6))
+
+                    VStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.green)
+                        Text("In Library")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                    }
+                } else if isHovered {
+                    Rectangle()
+                        .fill(.black.opacity(0.2))
+                }
+            }
+        } else if isHovered {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 4)
+                        .padding(12)
+                }
+            }
+            .background(
+                LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom)
+            )
+        }
+    }
 }

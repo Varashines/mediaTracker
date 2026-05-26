@@ -14,8 +14,7 @@ struct MediaTrackerApp: App {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self,
-            ImageCacheEntity.self
+            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self
         ])
         
         let modelConfiguration = ModelConfiguration(
@@ -28,7 +27,6 @@ struct MediaTrackerApp: App {
         do {
             return try ModelContainer(
                 for: schema,
-                migrationPlan: MediaTrackerMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -44,7 +42,6 @@ struct MediaTrackerApp: App {
                 AppLogger.info("Store deleted, recreating ModelContainer...")
                 return try ModelContainer(
                     for: schema,
-                    migrationPlan: MediaTrackerMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
             } catch {

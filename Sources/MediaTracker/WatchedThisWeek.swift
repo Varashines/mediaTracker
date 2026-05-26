@@ -23,8 +23,13 @@ struct WatchedThisWeek: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: AppTheme.Spacing.large) {
                         ForEach(0..<3, id: \.self) { _ in
-                            MediaThumbnailPlaceholder(mode: .grid)
-                                .frame(width: 160)
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.secondary.opacity(0.2))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                                }
+                                .frame(width: 160, height: 240)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)

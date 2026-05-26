@@ -70,6 +70,10 @@ struct LibraryDetailView: View {
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
 
+    private func getFilterActor() -> MediaFilterActor {
+        MediaFilterActor.shared(modelContainer: modelContext.container)
+    }
+
     private var categoryMoodColor: Color {
         if isSearchActive {
             return Color.blue
@@ -132,9 +136,6 @@ struct LibraryDetailView: View {
                     filter: filter, namespace: posterNamespace,
                     isFastScrolling: $viewModel.isFastScrolling)
             }
-            .navigationDestination(for: ActorDestination.self) { dest in
-                ActorFilmographyView(actorName: dest.actorName)
-            }
             .searchable(
                 text: $viewModel.searchText, isPresented: $isSearchActive,
                 placement: .automatic, prompt: "Search movies & shows"
@@ -145,6 +146,7 @@ struct LibraryDetailView: View {
                 }
             }
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+                viewModel.isLibraryMetadataDirty = true
                 LibraryStatsActor.clearCache()
                 viewModel.filterSubject.send()
             }
@@ -184,17 +186,21 @@ struct LibraryDetailView: View {
                 BulkCollectionManagerView(collection: collection)
             }
         }
-        .task {
+        .task(priority: .userInitiated) {
             performUpdate()
-
-            if !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) {
-                checkAndRepairMissingMetadata()
-                checkAndRepairStaleMetadata()
-                
-                // Phase 6: Genre Deconstruction Migration
-                let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
-                if !migrated {
-                    let service = BackgroundDataService(modelContainer: modelContext.container)
+        }
+        .task(priority: .background) {
+            guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            checkAndRepairMissingMetadata()
+            checkAndRepairStaleMetadata()
+            
+            // Phase 6: Genre Deconstruction Migration
+            let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
+            if !migrated {
+                let container = modelContext.container
+                Task.detached(priority: .background) {
+                    let service = BackgroundDataService(modelContainer: container)
                     await service.deepHealGenres()
                     UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
                 }
@@ -229,7 +235,7 @@ struct LibraryDetailView: View {
             }
 
             do {
-                let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+                let filterActor = getFilterActor()
 
                 // Phase 4 Optimization: Pagination limit
                 let limit = viewModel.pageSize
@@ -251,7 +257,8 @@ struct LibraryDetailView: View {
                 
                 let allIDs: Set<String>
                 let metadata: MediaFilterActor.LibraryMetadata?
-                if !isSoftUpdate {
+                let shouldFetchMetadata = !isSoftUpdate && viewModel.isLibraryMetadataDirty
+                if shouldFetchMetadata {
                     allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
                     metadata = try? await filterActor.fetchLibraryMetadata()
                 } else {
@@ -269,12 +276,15 @@ struct LibraryDetailView: View {
                     viewModel.homeContinueWatchingItems = result.homeContinueWatching
                     viewModel.spotlightHero = result.spotlightHero
                     viewModel.groupedItems = result.grouped
-                    viewModel.libraryTMDBIDs = allIDs
 
-                    if let meta = metadata {
-                        viewModel.cachedNetworks = meta.networks
-                        viewModel.cachedGenres = meta.genres
-                        viewModel.cachedLanguages = meta.languages
+                    if shouldFetchMetadata {
+                        viewModel.libraryTMDBIDs = allIDs
+                        viewModel.isLibraryMetadataDirty = false
+                        if let meta = metadata {
+                            viewModel.cachedNetworks = meta.networks
+                            viewModel.cachedGenres = meta.genres
+                            viewModel.cachedLanguages = meta.languages
+                        }
                     }
 
                     // Update Mood Theme based on current visible content
@@ -328,7 +338,7 @@ struct LibraryDetailView: View {
 
         Task {
             do {
-                let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+                let filterActor = getFilterActor()
                 let result = try await filterActor.filterAndSort(
                     category: snapshot.category,
                     searchText: snapshot.searchText,
@@ -425,11 +435,9 @@ struct LibraryDetailView: View {
         let state = viewModel.selectedState
         let collectionID = viewModel.selectedCollectionID
         
-        let container = modelContext.container
-        
         Task {
             do {
-                let filterActor = MediaFilterActor(modelContainer: container)
+                let filterActor = getFilterActor()
                 let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
                     for: id,
                     category: category,

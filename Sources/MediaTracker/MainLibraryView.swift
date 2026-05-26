@@ -29,7 +29,6 @@ struct MainLibraryView: View {
     }
 
     var showsFilterBar: Bool {
-        if viewModel.selectedCollectionID != nil { return true }
         switch selectedCategory {
         case .all, .movie, .tvShow, .completed: return true
         default: return false
@@ -59,7 +58,7 @@ struct MainLibraryView: View {
                     }
 
                     if selectedCategory != .home {
-                        Section {
+                        if viewModel.selectedCollectionID != nil || selectedCategory.isSmartCategory {
                             LibraryGridSection(
                                 items: items,
                                 groupedItems: groupedItems,
@@ -70,23 +69,41 @@ struct MainLibraryView: View {
                                 selectedNetworks: selectedNetworks,
                                 namespace: namespace,
                                 isFastScrolling: isFastScrolling,
-                                disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
+                                disableHover: false,
                                 columns: columns,
                                 viewModel: viewModel,
                                 onLoadMore: onLoadMore
                             )
-                        } header: {
-                            VStack(alignment: .leading, spacing: 0) {
-                                LibraryHeaderView(
+                        } else {
+                            Section {
+                                LibraryGridSection(
+                                    items: items,
+                                    groupedItems: groupedItems,
+                                    recentlyAdded: recentlyAdded,
+                                    featuredCarouselItems: featuredCarouselItems,
                                     selectedCategory: selectedCategory,
-                                    selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                    onNetworkSelected: onNetworkSelected, onBack: onBack,
-                                    viewModel: viewModel)
+                                    searchText: searchText,
+                                    selectedNetworks: selectedNetworks,
+                                    namespace: namespace,
+                                    isFastScrolling: isFastScrolling,
+                                    disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
+                                    columns: columns,
+                                    viewModel: viewModel,
+                                    onLoadMore: onLoadMore
+                                )
+                            } header: {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    LibraryHeaderView(
+                                        selectedCategory: selectedCategory,
+                                        selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
+                                        onNetworkSelected: onNetworkSelected, onBack: onBack,
+                                        viewModel: viewModel)
 
-                                if showsFilterBar {
-                                    LibraryFilterBar(viewModel: viewModel)
-                                        .padding(.top, AppTheme.Spacing.micro)
-                                        .padding(.bottom, AppTheme.Spacing.tiny)
+                                    if showsFilterBar {
+                                        LibraryFilterBar(viewModel: viewModel)
+                                            .padding(.top, AppTheme.Spacing.micro)
+                                            .padding(.bottom, AppTheme.Spacing.tiny)
+                                    }
                                 }
                             }
                         }

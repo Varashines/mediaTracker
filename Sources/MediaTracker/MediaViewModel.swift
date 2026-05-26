@@ -85,6 +85,7 @@ class MediaViewModel {
 
     /// Phase 2 Optimization: O(1) lookup for existing items during search
     var libraryTMDBIDs: Set<String> = []
+    var isLibraryMetadataDirty: Bool = true
 
     // Phase 3: Calendar Cache & Buffer
     var calendarCache: [Date: CalendarResult] = [:]

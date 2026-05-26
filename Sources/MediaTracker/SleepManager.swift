@@ -36,6 +36,7 @@ class SleepManager {
         if !isIdle && timeSinceInteraction >= idleThreshold {
             isIdle = true
             AppLogger.info("🕒 App became idle. Background tasks prioritized.", logger: AppLogger.background)
+            BackgroundTaskManager.shared.handleIdleStateChange(isIdle: true)
         } else if isIdle && timeSinceInteraction < idleThreshold {
             isIdle = false
         }
@@ -77,7 +78,7 @@ class SleepManager {
     
     private func setupInteractionMonitor() {
         #if os(macOS)
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown, .mouseMoved, .scrollWheel]) { [weak self] event in
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             // ONLY wake up if the user is interacting with the main window.
             // This allows the MenuBar dashboard to be used without waking the heavy main app view.
             guard let self = self, let main = NSApp.mainWindow, event.window == main else {

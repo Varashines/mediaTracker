@@ -14,18 +14,12 @@ class BackgroundTaskManager {
     
     private var isDripSyncing = false
     
-    private init() {
-        startIdleMonitor()
-    }
+    private init() {}
     
-    private func startIdleMonitor() {
-        // Monitor SleepManager for idle states to trigger drip syncing
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            Task { @MainActor in
-                let sleepManager = SleepManager.shared
-                if sleepManager.isIdle && !sleepManager.isAsleep && !self.isDripSyncing {
-                    await self.performDripSync()
-                }
+    func handleIdleStateChange(isIdle: Bool) {
+        if isIdle && !SleepManager.shared.isAsleep && !isDripSyncing {
+            Task {
+                await performDripSync()
             }
         }
     }

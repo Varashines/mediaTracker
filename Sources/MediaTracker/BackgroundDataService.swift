@@ -404,9 +404,6 @@ actor BackgroundDataService {
             
             if !success { return false }
             
-            item.syncCachedProperties(force: true)
-            item.updateSearchableText()
-            
             // Phase 5: Notification Scheduling
             if item.type == .movie {
                 // Clear old notifications before scheduling updated ones

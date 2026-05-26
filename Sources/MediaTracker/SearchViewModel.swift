@@ -29,6 +29,10 @@ class SearchViewModel {
     private var searchTask: Task<Void, Never>?
     private let modelContainer: ModelContainer
     private var cancellables = Set<AnyCancellable>()
+
+    private func getFilterActor() -> MediaFilterActor {
+        MediaFilterActor.shared(modelContainer: modelContainer)
+    }
     private let searchSubject = PassthroughSubject<(String, SearchType), Never>()
 
     init(modelContainer: ModelContainer) {
@@ -155,7 +159,7 @@ class SearchViewModel {
         case .movie: category = .movie
         case .tvShow: category = .tvShow
         }
-        let filterActor = MediaFilterActor(modelContainer: modelContainer)
+        let filterActor = getFilterActor()
         let result = try? await filterActor.filterAndSort(
             category: category,
             searchText: text,
@@ -249,7 +253,7 @@ class SearchViewModel {
             }.value
 
             if fetchResult.isExisting {
-                AppErrorState.shared.showToast("Title already in Library", systemImage: "info.circle.fill", type: .info)
+                AppErrorState.shared.showToast("Title already in Library", systemImage: "info.circle.fill", style: .info)
             }
             
             if let id = fetchResult.id, let item = modelContext.model(for: id) as? MediaItem {

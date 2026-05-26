@@ -15,6 +15,9 @@ struct FilteredLibraryGridView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var updateTask: Task<Void, Never>? = nil
+    private func getFilterActor() -> MediaFilterActor {
+        MediaFilterActor.shared(modelContainer: modelContext.container)
+    }
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
     private let pageSize = 50
@@ -87,7 +90,7 @@ struct FilteredLibraryGridView: View {
         guard !isLoadingMore && items.count < totalCount else { return }
         isLoadingMore = true
         let offset = items.count
-        let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+        let filterActor = getFilterActor()
         var network: [String]? = nil
         var language: String? = nil
         var genre: String? = nil
@@ -135,7 +138,7 @@ struct FilteredLibraryGridView: View {
     private func fetchItems() {
         fetchTask?.cancel()
         fetchTask = Task {
-            let filterActor = MediaFilterActor(modelContainer: modelContext.container)
+            let filterActor = getFilterActor()
             var network: [String]? = nil
             var language: String? = nil
             var genre: String? = nil
@@ -174,7 +177,6 @@ struct FilteredLibraryGridView: View {
     }
 
     private func updateSingleItem(id: PersistentIdentifier) {
-        let container = modelContext.container
         var network: [String]? = nil
         var language: String? = nil
         var genre: String? = nil
@@ -190,7 +192,7 @@ struct FilteredLibraryGridView: View {
         updateTask?.cancel()
         updateTask = Task {
             do {
-                let filterActor = MediaFilterActor(modelContainer: container)
+                let filterActor = getFilterActor()
                 let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
                     for: id,
                     category: .all,

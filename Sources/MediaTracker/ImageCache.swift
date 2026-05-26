@@ -49,7 +49,17 @@ class ImageCache: NSObject {
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
     
-    private let dbContainer: ModelContainer
+    private let cacheDirectory: URL
+    private let imageSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .useProtocolCachePolicy
+        config.urlCache = URLCache(
+            memoryCapacity: 32 * 1024 * 1024,
+            diskCapacity: 512 * 1024 * 1024,
+            directory: nil
+        )
+        return URLSession(configuration: config)
+    }()
 
     private override init() {
         // Adaptive memory cache sizing based on system RAM
@@ -65,31 +75,23 @@ class ImageCache: NSObject {
             memoryCache.countLimit = 400
         }
         
-        // Initialize SwiftData SQLite DB for images
-        let schema = Schema([ImageCacheEntity.self])
-        let cacheURL = URL.applicationSupportDirectory.appendingPathComponent("ImageCacheStore.sqlite")
-        let config = ModelConfiguration(schema: schema, url: cacheURL, allowsSave: true)
-        do {
-            self.dbContainer = try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("CRITICAL: Failed to initialize ImageCache ModelContainer. Error: \(error)")
-        }
+        let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        let appSupport = paths[0].appendingPathComponent("MediaTracker", isDirectory: true)
+        self.cacheDirectory = appSupport.appendingPathComponent("CachedImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: self.cacheDirectory, withIntermediateDirectories: true)
         
         super.init()
         
-        // Phase 3 Fix: Delegate to clean up urlToKeys leak
+        // Delegate to clean up urlToKeys leak
         self.memoryCache.delegate = self
         
-        // Phase 2 Optimization: Asynchronous Disk Indexing
-        let container = self.dbContainer
+        // Asynchronous Disk Indexing
+        let dir = self.cacheDirectory
         Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<ImageCacheEntity>()
-            if let entities = try? context.fetch(descriptor) {
-                let keys = Set(entities.map { $0.id })
-                await MainActor.run {
-                    ImageCache.shared.diskCacheIndex = keys
-                }
+            let fileURLs = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            let keys = Set(fileURLs.map { $0.lastPathComponent })
+            await MainActor.run {
+                ImageCache.shared.diskCacheIndex = keys
             }
         }
         
@@ -160,14 +162,9 @@ class ImageCache: NSObject {
             urlToKeys.removeValue(forKey: url)
         }
         
-        let container = self.dbContainer
+        let fileURL = self.cacheDirectory.appendingPathComponent(hash)
         Task.detached(priority: .background) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<ImageCacheEntity>(predicate: #Predicate { $0.id == hash })
-            if let entity = try? context.fetch(descriptor).first {
-                context.delete(entity)
-                try? context.save()
-            }
+            try? FileManager.default.removeItem(at: fileURL)
             await MainActor.run {
                 _ = ImageCache.shared.diskCacheIndex.remove(hash)
             }
@@ -177,15 +174,14 @@ class ImageCache: NSObject {
     func clearFullCache() {
         clearMemoryCache()
         
-        let container = self.dbContainer
+        let dir = self.cacheDirectory
         Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-            try? context.delete(model: ImageCacheEntity.self)
-            try? context.save()
-            
+            let urls = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            for url in urls {
+                try? FileManager.default.removeItem(at: url)
+            }
             await MainActor.run {
                 self.diskCacheIndex.removeAll()
-                // Force UI to refresh existing views
                 self.updates.send("CLEARED_ALL")
             }
         }
@@ -206,24 +202,18 @@ class ImageCache: NSObject {
         
         if hashes.isEmpty { return }
 
-        // 2. Disk Clear
-        let container = self.dbContainer
+        let dir = self.cacheDirectory
         Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<ImageCacheEntity>()
-            if let entities = try? context.fetch(descriptor) {
-                for entity in entities {
-                    if hashes.contains(where: { entity.id.hasPrefix($0) }) {
-                        let id = entity.id
-                        context.delete(entity)
-                        await MainActor.run {
-                            _ = ImageCache.shared.diskCacheIndex.remove(id)
-                        }
+            let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            for file in files {
+                let name = file.lastPathComponent
+                if hashes.contains(where: { name.hasPrefix($0) }) {
+                    try? FileManager.default.removeItem(at: file)
+                    await MainActor.run {
+                        _ = ImageCache.shared.diskCacheIndex.remove(name)
                     }
                 }
-                try? context.save()
             }
-            
             await MainActor.run {
                 for url in urls {
                     self.updates.send(url)
@@ -325,7 +315,7 @@ class ImageCache: NSObject {
             // Download logic
             do {
                 guard let url = URL(string: key) else { return }
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await self.imageSession.data(from: url)
                 if Task.isCancelled { return }
                 
                 guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else { return }
@@ -406,10 +396,9 @@ class ImageCache: NSObject {
         guard let rawData = data else { return }
         let diskFileName = fileName(for: key, size: targetSize)
         let screenScale = self.screenScale
-        let container = self.dbContainer
+        let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
         
         await Task.detached(priority: .background) {
-            let context = ModelContext(container)
             guard let taskImageSource = CGImageSourceCreateWithData(rawData as CFData, nil) else { return }
             
             if let targetSize = targetSize {
@@ -426,20 +415,15 @@ class ImageCache: NSObject {
                     let usePNG = alwaysPreserveAlpha || hasAlpha
                     
                     if let savedData = Self.writeToDataStatic(image: downsampledCG, usePNG: usePNG) {
-                        let entity = ImageCacheEntity(id: diskFileName, data: savedData, accessDate: Date(), size: Int64(savedData.count))
-                        context.insert(entity)
+                        try? savedData.write(to: fileURL)
                     }
                 } else {
-                    let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
-                    context.insert(entity)
+                    try? rawData.write(to: fileURL)
                 }
                 await Task.yield()
             } else {
-                let entity = ImageCacheEntity(id: diskFileName, data: rawData, accessDate: Date(), size: Int64(rawData.count))
-                context.insert(entity)
+                try? rawData.write(to: fileURL)
             }
-            
-            try? context.save()
 
             await MainActor.run {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
@@ -463,46 +447,49 @@ class ImageCache: NSObject {
     }
     
     nonisolated func pruneDiskCacheIfNeeded() async {
-        let container = self.dbContainer
+        let dir = self.cacheDirectory
         let maxDiskCacheSize = self.maxDiskCacheSize
         await Task.detached(priority: .background) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<ImageCacheEntity>()
-            guard let entities = try? context.fetch(descriptor) else { return }
+            let fileManager = FileManager.default
+            let urls = (try? fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])) ?? []
             
             var totalSize: Int64 = 0
-            for entity in entities {
-                totalSize += entity.size
+            var files: [(URL, Date, Int64)] = []
+            
+            for url in urls {
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                if let date = values?.contentModificationDate, let size = values?.fileSize {
+                    let fileSize = Int64(size)
+                    totalSize += fileSize
+                    files.append((url, date, fileSize))
+                }
             }
             
             if totalSize > maxDiskCacheSize {
-                let sortedEntities = entities.sorted(by: { $0.accessDate < $1.accessDate })
+                let sorted = files.sorted(by: { $0.1 < $1.1 })
                 var currentSize = totalSize
-                for entity in sortedEntities {
+                for (url, _, size) in sorted {
                     if currentSize <= (maxDiskCacheSize * 8 / 10) { break }
-                    let id = entity.id
-                    context.delete(entity)
-                    currentSize -= entity.size
-                    
+                    try? fileManager.removeItem(at: url)
+                    currentSize -= size
+                    let name = url.lastPathComponent
                     await MainActor.run {
-                        _ = ImageCache.shared.diskCacheIndex.remove(id)
+                        _ = ImageCache.shared.diskCacheIndex.remove(name)
                     }
                     await Task.yield()
                 }
-                try? context.save()
             }
         }.value
     }
 
     private func loadFromDisk(diskFileName: String, targetSize: CGSize?) async -> ImageContainer? {
         let screenScale = self.screenScale
-        let container = self.dbContainer
+        let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
         return await Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<ImageCacheEntity>(predicate: #Predicate { $0.id == diskFileName })
-            guard let entity = try? context.fetch(descriptor).first else { return nil }
+            guard let data = try? Data(contentsOf: fileURL) else { return nil }
             
-            let data = entity.data
+            // Touch access date (modification date)
+            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
             
             if let targetSize = targetSize {
                 let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
