@@ -398,7 +398,7 @@ private struct EpisodeCube: View {
                 .frame(maxWidth: .infinity, minHeight: 110)
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(colorScheme == .dark ? Color(white: 0.14) : Color(white: 0.93))
+                        .fill(AppTheme.Colors.cardFill(for: colorScheme))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .fill(themeColor.opacity(colorScheme == .dark ? 0.0 : 0.04))
@@ -525,7 +525,7 @@ private struct EpisodeCube: View {
             return d
         }()
 
-        return TVTrackingView(tvDetails: details, themeColor: .accentColor) {}
+        return TVTrackingView(tvDetails: details, themeColor: AppTheme.Colors.accent) {}
             .padding()
     }
 #endif

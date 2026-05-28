@@ -157,7 +157,7 @@ struct ConnectSection: View {
             HStack(spacing: 6) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : Color.secondary)
                 Text(title)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
@@ -166,7 +166,7 @@ struct ConnectSection: View {
             .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isOn.wrappedValue ? Color.accentColor.opacity(0.04) : Color.clear)
+                        .fill(isOn.wrappedValue ? AppTheme.Colors.accent.opacity(0.04) : Color.clear)
                 )
             .contentShape(Rectangle())
         }

@@ -20,7 +20,7 @@ struct HoverMetadataPills: View {
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Capsule().fill(.ultraThinMaterial))
+                .background(Capsule().fill(.thinMaterial))
                 .overlay(
                     Capsule()
                         .stroke(.white.opacity(colorScheme == .dark ? 0.15 : 0.45), lineWidth: 0.5)
@@ -35,7 +35,7 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                        .background(Capsule().fill(.thinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
@@ -47,7 +47,7 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                        .background(Capsule().fill(.thinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
@@ -59,7 +59,7 @@ struct HoverMetadataPills: View {
                         .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                        .background(Capsule().fill(.thinMaterial))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)

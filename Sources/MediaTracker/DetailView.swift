@@ -8,7 +8,6 @@ struct DetailView: View {
 
     @State private var viewModel: DetailViewModel
     @State private var isAppeared = false
-    @State private var isCastExpanded = false
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
@@ -69,8 +68,6 @@ struct DetailView: View {
                 .padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .saturation(showDeleteConfirmation ? 0 : 1)
-            .animation(.easeInOut(duration: 0.2), value: showDeleteConfirmation)
             .coordinateSpace(name: "detailScroll")
             .onPreferenceChange(ScrollOffsetPref.self) { minY in
                 showNavTitle = minY < -50
@@ -111,11 +108,7 @@ struct DetailView: View {
         .background {
             Group {
                 Button("") {
-                    if viewModel.item.type == .tvShow {
-                        viewModel.markNextEpisodeWatched()
-                    } else {
-                        viewModel.toggleWatched()
-                    }
+                    viewModel.toggleWatched()
                 }
                 .keyboardShortcut(.space, modifiers: [])
                 
@@ -371,10 +364,10 @@ struct DetailView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
             .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.45 : 0.2),
-                radius: 30,
+                color: .black.opacity(colorScheme == .dark ? 0.3 : 0.15),
+                radius: 8,
                 x: 0,
-                y: 15
+                y: 4
             )
             .padding(.horizontal, 80)
             .transition(.scale(scale: 0.94).combined(with: .opacity))

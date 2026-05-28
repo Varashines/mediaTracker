@@ -101,11 +101,11 @@ struct StudioAliasManagerView: View {
                             .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+                            .background(isSelected ? AppTheme.Colors.accent.opacity(0.15) : Color.primary.opacity(0.05))
                             .clipShape(Capsule())
                             .overlay {
                                 if isSelected {
-                                    Capsule().stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+                                    Capsule().stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 1)
                                 }
                             }
                     }
@@ -118,7 +118,7 @@ struct StudioAliasManagerView: View {
                     } label: {
                         Text(showAllNetworks ? "Show Less" : "+\(availableNetworks.count - 20) More")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(AppTheme.Colors.accent)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
@@ -150,7 +150,7 @@ struct StudioAliasManagerView: View {
                             Text(src)
                                 .font(.system(size: 11))
                         }
-                        .foregroundStyle(isLogo ? Color.accentColor : .secondary)
+                        .foregroundStyle(isLogo ? AppTheme.Colors.accent : .secondary)
                     }
                     .buttonStyle(.plain)
                 }

@@ -62,7 +62,7 @@ struct SmartCollectionsHubView: View {
                             icon: releaseRadar.icon,
                             description: description(for: releaseRadar),
                             count: countsLoaded ? counts[releaseRadar] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(releaseRadar.rawValue),
                             onPinToggle: { togglePinned(releaseRadar) }
                         ) {
@@ -77,7 +77,7 @@ struct SmartCollectionsHubView: View {
                             icon: smartUpcoming.icon,
                             description: description(for: smartUpcoming),
                             count: countsLoaded ? counts[smartUpcoming] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(smartUpcoming.rawValue),
                             onPinToggle: { togglePinned(smartUpcoming) }
                         ) {
@@ -93,7 +93,7 @@ struct SmartCollectionsHubView: View {
                             icon: catchUp.icon,
                             description: description(for: catchUp),
                             count: countsLoaded ? counts[catchUp] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(catchUp.rawValue),
                             onPinToggle: { togglePinned(catchUp) }
                         ) {
@@ -108,7 +108,7 @@ struct SmartCollectionsHubView: View {
                             icon: loved.icon,
                             description: description(for: loved),
                             count: countsLoaded ? counts[loved] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(loved.rawValue),
                             onPinToggle: { togglePinned(loved) }
                         ) {
@@ -124,7 +124,7 @@ struct SmartCollectionsHubView: View {
                             icon: binge.icon,
                             description: description(for: binge),
                             count: countsLoaded ? counts[binge] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(binge.rawValue),
                             onPinToggle: { togglePinned(binge) }
                         ) {
@@ -138,7 +138,7 @@ struct SmartCollectionsHubView: View {
                             icon: quickBites.icon,
                             description: description(for: quickBites),
                             count: countsLoaded ? counts[quickBites] : nil,
-                            accentColor: Color.accentColor,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(quickBites.rawValue),
                             onPinToggle: { togglePinned(quickBites) }
                         ) {

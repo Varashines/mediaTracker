@@ -92,9 +92,9 @@ struct CinephileBarcodeView: View {
 
                         if isScanning {
                             GeometryReader { geo in
-                                Color.accentColor.opacity(0.4)
+                                AppTheme.Colors.accent.opacity(0.4)
                                     .frame(width: 2, height: 44)
-                                    .shadow(color: Color.accentColor.opacity(0.9), radius: 6, x: 0, y: 0)
+                                    .shadow(color: AppTheme.Colors.accent.opacity(0.9), radius: 6, x: 0, y: 0)
                                     .offset(x: scanPosition * geo.size.width)
                                     .onAppear {
                                         scanPosition = 0.0

@@ -29,6 +29,9 @@ struct SettingsView: View {
     @Namespace private var tabNamespace
     @State private var selectedTab: SettingsTab = .general
     @State private var hoveredTab: SettingsTab? = nil
+    
+    @AppStorage("theme_preference") private var themePreference = 0
+    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,13 +52,13 @@ struct SettingsView: View {
                                 Text(tab.label)
                                     .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             }
-                            .foregroundStyle(selectedTab == tab ? Color.accentColor : .secondary)
+                            .foregroundStyle(selectedTab == tab ? AppTheme.Colors.accent : .secondary)
                             .frame(width: 90, height: 50)
                             .background {
                                 ZStack {
                                     if selectedTab == tab {
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .fill(Color.accentColor.opacity(scheme == .dark ? 0.15 : 0.08))
+                                            .fill(AppTheme.Colors.accent.opacity(scheme == .dark ? 0.15 : 0.08))
                                             .matchedGeometryEffect(id: "selected_settings_tab", in: tabNamespace)
                                     } else if hoveredTab == tab {
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -105,7 +108,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(AppTheme.Colors.background(for: scheme))
         .frame(maxWidth: 520, minHeight: 640)
         .fontDesign(.rounded)
         .onAppear {

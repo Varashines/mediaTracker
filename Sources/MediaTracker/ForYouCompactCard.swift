@@ -24,7 +24,7 @@ struct ForYouCompactCard: View {
         ZStack(alignment: .leading) {
             // 1. Background Layer (Backdrop with Glass)
             if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
-                CachedImage(url: url, targetSize: .backdropLarge, isFastScrolling: isFastScrolling) { _ in } placeholder: {
+                CachedImage(url: url, targetSize: .backdropCompact, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
                 }
                 .aspectRatio(contentMode: .fill)
@@ -54,7 +54,7 @@ struct ForYouCompactCard: View {
                         .background {
                             Capsule()
                                 .fill(themeColor.opacity(0.25))
-                                .background(.ultraThinMaterial)
+                                .background(.thinMaterial)
                         }
                         .clipShape(Capsule())
                         .overlay {

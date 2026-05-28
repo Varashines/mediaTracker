@@ -69,6 +69,9 @@ struct LibraryDetailView: View {
     @State private var showingBulkManager = false
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
+    
+    @AppStorage("theme_preference") private var themePreference = 0
+    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
 
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
@@ -76,19 +79,19 @@ struct LibraryDetailView: View {
 
     private var categoryMoodColor: Color {
         if isSearchActive {
-            return Color.blue
+            return Color.clear
         }
         switch viewModel.selectedCategory {
-        case .home: return Color.blue
+        case .home: return Color.clear
         case .discover: return Color.purple
         case .upcoming: return Color.orange
-        case .all: return Color.blue
+        case .all: return Color.clear
         case .movie: return Color.indigo
         case .tvShow: return Color.teal
         case .smartHub: return Color.purple
         case .insights: return Color.green
         case .releaseRadar: return Color.pink
-        default: return Color.blue
+        default: return Color.clear
         }
     }
     
@@ -113,7 +116,7 @@ struct LibraryDetailView: View {
                         .zIndex(100)
                 }
             }
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(AppTheme.Colors.background(for: colorScheme))
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
             .navigationTitle(
                 isSearchActive

@@ -76,9 +76,9 @@ struct ContinueWatchingCarousel: View {
                     HStack(spacing: AppTheme.Spacing.medium) {
                         Image(systemName: "sparkles.tv.fill")
                             .font(AppTheme.Font.title3)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(AppTheme.Colors.accent)
                             .frame(width: 54, height: 54)
-                            .background(Color.accentColor.opacity(0.12))
+                            .background(AppTheme.Colors.accent.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {

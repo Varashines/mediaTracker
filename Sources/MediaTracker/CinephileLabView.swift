@@ -37,7 +37,7 @@ struct CinephileLabView: View {
 
                         // Decade Timeline (Release Era Distribution)
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                            SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: .accentColor)
+                            SectionHeader(title: "Release Era", icon: "clock.arrow.circlepath", iconColor: AppTheme.Colors.accent)
                             DecadeTimeline(decades: stats.decadeDistribution)
                                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
@@ -133,14 +133,14 @@ struct GalleryCardView: View {
         .frame(width: 104, height: 90)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+                .fill(AppTheme.Colors.cardFill(for: colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(
                     isHovered
                         ? AnyShapeStyle(color.gradient)
-                        : AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)),
+                        : AnyShapeStyle(AppTheme.Colors.cardFill(for: colorScheme)),
                     lineWidth: isHovered ? 1.5 : 0.7
                 )
         )
@@ -368,16 +368,16 @@ struct DayCard: View {
             HStack(spacing: 2) {
                 Text(entry.dayName)
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(isToday ? Color.accentColor : .secondary)
+                    .foregroundStyle(isToday ? AppTheme.Colors.accent : .secondary)
                 Text("\(entry.dateNum)")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(isToday ? Color.accentColor : .primary)
+                    .foregroundStyle(isToday ? AppTheme.Colors.accent : .primary)
             }
 
             if entry.minutes > 0 {
                 Text(formatWatchTimeMini(minutes: entry.minutes))
                     .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(AppTheme.Colors.accent)
 
                 if !entry.dayItems.isEmpty {
                     HStack(spacing: 4) {
@@ -414,14 +414,14 @@ struct DayCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             isToday
-                ? Color.accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05)
+                ? Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.03)
                 : Color.primary.opacity(colorScheme == .dark ? 0.02 : 0.01)
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.small)
                 .stroke(
-                    isToday ? Color.accentColor.opacity(0.3) : Color.primary.opacity(0.04),
+                    isToday ? Color.primary.opacity(0.3) : Color.primary.opacity(0.04),
                     lineWidth: isToday ? 1.0 : 0.5
                 )
         )

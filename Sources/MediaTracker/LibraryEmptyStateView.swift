@@ -17,7 +17,7 @@ struct LibraryEmptyStateView: View {
                             .font(.headline)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
-                            .background(Color.accentColor)
+                            .background(AppTheme.Colors.accent)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }

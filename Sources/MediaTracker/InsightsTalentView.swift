@@ -139,14 +139,14 @@ struct TalentCardView: View {
         .frame(width: 180, height: 64)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+                .fill(AppTheme.Colors.cardFill(for: colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(
                     isHovered
                         ? AnyShapeStyle(color.gradient)
-                        : AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)),
+                        : AnyShapeStyle(AppTheme.Colors.cardFill(for: colorScheme)),
                     lineWidth: isHovered ? 1.5 : 0.7
                 )
         )

@@ -44,7 +44,7 @@ struct LibraryHeaderView: View {
                     
                     Text(title)
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppTheme.Colors.accent)
                     
                     Button { withAnimation { onNetworkSelected([]) } } label: {
                         Image(systemName: "xmark.circle.fill")

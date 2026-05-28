@@ -285,7 +285,7 @@ struct MediaThumbnailView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.white)
                                 .padding(4)
-                                .background(Color.accentColor)
+                                .background(AppTheme.Colors.accent)
                                 .clipShape(Circle())
                                 .shadow(radius: 2)
                         }
@@ -327,10 +327,9 @@ struct MediaThumbnailView: View {
         .cornerRadius(AppTheme.Radius.medium)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .stroke(disableHover && isHovered ? Color.accentColor.opacity(0.5) : .clear, lineWidth: 2)
+                .stroke(disableHover && isHovered ? AppTheme.Colors.accent.opacity(0.5) : .clear, lineWidth: 2)
                 .animation(.easeOut(duration: 0.15), value: isHovered)
         )
-        .drawingGroup(opaque: false)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
@@ -339,7 +338,7 @@ struct MediaThumbnailView: View {
                 isAppeared = true
                 return
             }
-            let delay = Double(staggerIndex ?? 0 % 15) * 0.05
+            let delay = Double((staggerIndex ?? 0) % 15) * 0.05
             withAnimation(AppTheme.Animation.springGentle.delay(delay)) {
                 isAppeared = true
             }

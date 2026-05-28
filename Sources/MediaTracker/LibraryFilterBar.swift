@@ -90,7 +90,7 @@ struct LibraryFilterBar: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .foregroundStyle(active ? Color.accentColor : .primary.opacity(0.7))
+            .foregroundStyle(active ? AppTheme.Colors.accent : .primary.opacity(0.7))
             .background {
                 ZStack {
                     Capsule()
@@ -105,7 +105,7 @@ struct LibraryFilterBar: View {
             }
             .overlay {
                 Capsule()
-                    .stroke(active ? Color.accentColor.opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
+                    .stroke(active ? AppTheme.Colors.accent.opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

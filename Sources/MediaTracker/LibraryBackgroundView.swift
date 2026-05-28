@@ -5,14 +5,17 @@ struct LibraryBackgroundView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        LinearGradient(
-            colors: [
-                colorScheme == .dark ? .clear : mood.opacity(0.03),
-                .clear
-            ],
-            startPoint: .topTrailing,
-            endPoint: .bottomLeading
-        )
-        .ignoresSafeArea()
+        AppTheme.Colors.background(for: colorScheme)
+            .ignoresSafeArea()
+            .overlay {
+                LinearGradient(
+                    colors: [
+                        mood.opacity(colorScheme == .dark ? 0.04 : 0.1),
+                        .clear
+                    ],
+                    startPoint: .topTrailing,
+                    endPoint: .bottomLeading
+                )
+            }
     }
 }

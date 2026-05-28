@@ -6,23 +6,28 @@ struct ThemePicker: View {
     @Namespace private var themeNamespace
     @State private var hoveredTag: Int? = nil
 
+    private let options: [(label: String, icon: String)] = [
+        ("System", "circle.lefthalf.filled"),
+        ("Light", "sun.max.fill"),
+        ("Dark", "moon.fill")
+    ]
+
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(0..<3, id: \.self) { tag in
-                let label = tag == 0 ? "System" : (tag == 1 ? "Light" : "Dark")
-                let icon = tag == 0 ? "circle.lefthalf.filled" : (tag == 1 ? "sun.max.fill" : "moon.fill")
+            ForEach(0..<options.count, id: \.self) { tag in
+                let option = options[tag]
                 let isSelected = themePreference == tag
                 let isHovered = hoveredTag == tag
-                
+
                 Button {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                         themePreference = tag
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: icon)
+                        Image(systemName: option.icon)
                             .font(.system(size: 11, weight: .semibold))
-                        Text(label)
+                        Text(option.label)
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                     }
                     .foregroundStyle(isSelected ? Color.accentColor : .secondary)

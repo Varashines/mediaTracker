@@ -3,14 +3,18 @@ import SwiftUI
 
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) var colorScheme
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
     @State private var statsTask: Task<Void, Never>? = nil
+    
+    @AppStorage("theme_preference") private var themePreference = 0
+    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
 
     var body: some View {
         ZStack {
-            Color(NSColor.windowBackgroundColor).ignoresSafeArea()
+            AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
 
             if isLoading {
                 InsightsSkeletonView()
@@ -32,11 +36,11 @@ struct InsightsView: View {
                                 .font(.system(size: 13, weight: .bold))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(Color.accentColor.opacity(0.12))
+                                .background(Color.primary.opacity(0.12))
                                 .clipShape(Capsule())
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
+                                        .stroke(Color.primary.opacity(0.2), lineWidth: 0.5)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -131,11 +135,11 @@ struct DashboardCard<Content: View>: View {
         content
             .padding(AppTheme.Spacing.medium)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+            .background(AppTheme.Colors.cardFill(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04), lineWidth: 0.5)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.05), lineWidth: 0.5)
             )
     }
 }

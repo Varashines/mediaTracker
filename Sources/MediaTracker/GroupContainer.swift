@@ -30,6 +30,6 @@ struct GroupContainer<Content: View>: View {
         if let custom = customBorderColor {
             return custom.opacity(0.3)
         }
-        return Color.primary.opacity(scheme == .dark ? 0.08 : 0.06)
+        return AppTheme.Colors.cardFill(for: scheme)
     }
 }

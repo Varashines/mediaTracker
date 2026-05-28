@@ -21,7 +21,7 @@ struct SettingsCard<Content: View>: View {
                 .stroke(
                     color != .clear 
                         ? color.opacity(scheme == .dark ? 0.25 : 0.12) 
-                        : Color.primary.opacity(scheme == .dark ? 0.08 : 0.04), 
+                        : Color.primary.opacity(scheme == .dark ? 0.08 : 0.04),
                     lineWidth: 0.8
                 )
         }
@@ -120,14 +120,14 @@ struct SettingsButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(AppTheme.Colors.accent)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(Color.accentColor.opacity(isHovered ? 0.12 : 0.06))
+                .background(AppTheme.Colors.accent.opacity(isHovered ? 0.12 : 0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.accentColor.opacity(isHovered ? 0.25 : 0.12), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.accent.opacity(isHovered ? 0.25 : 0.12), lineWidth: 0.5)
                 }
                 .scaleEffect(isHovered ? 1.02 : 1.0)
                 .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)

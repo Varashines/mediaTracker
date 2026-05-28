@@ -31,11 +31,11 @@ struct InsightsSkeletonView: View {
             .font(.system(size: 13, weight: .bold))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Color.accentColor.opacity(0.12))
+            .background(Color.primary.opacity(0.12))
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 0.5)
             )
             .redacted(reason: .placeholder)
         }

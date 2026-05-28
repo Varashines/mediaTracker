@@ -252,7 +252,7 @@ struct IconPickerGridView: View {
                     Image(systemName: iconName)
                         .font(.title3)
                         .frame(width: 44, height: 44)
-                        .background(selectedIcon == iconName ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                        .background(selectedIcon == iconName ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
                         .foregroundStyle(selectedIcon == iconName ? .white : .primary)
                         .cornerRadius(10)
                         .onTapGesture {

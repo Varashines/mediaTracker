@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct GeneralSection: View {
     @AppStorage("theme_preference") private var themePreference: Int = 0
+    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
@@ -14,6 +15,18 @@ struct GeneralSection: View {
             SettingsSectionHeader(text: "Appearance", icon: "paintbrush.fill", color: .blue)
             SettingsCard(color: .blue) {
                 ThemePicker(themePreference: $themePreference)
+                
+                if themePreference == 0 || themePreference == 2 {
+                    Divider().opacity(0.06).padding(.leading, 16)
+                    SettingsRow(title: "Dark Style", subtitle: "Choose Midnight Gray or Pure Black", showDivider: false) {
+                        Picker("", selection: $darkThemeStyle) {
+                            Text("Midnight").tag(0)
+                            Text("AMOLED").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
+                    }
+                }
             }
 
             SettingsSectionHeader(text: "Tracking", icon: "play.circle.fill", color: .green)

@@ -80,7 +80,7 @@ struct SidebarNavigation: View {
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
         let isSelected = selection == item
         
-        let activeColor = Color.accentColor
+        let activeColor = AppTheme.Colors.accent
 
         // Only append .fill if the icon name doesn't already contain it and it's a standard symbol
         let iconName: String

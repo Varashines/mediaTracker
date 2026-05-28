@@ -9,6 +9,7 @@ enum SearchType: String, CaseIterable {
 
 struct SearchView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) var colorScheme
 
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
@@ -135,7 +136,7 @@ struct SearchView: View {
 
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(AppTheme.Colors.background(for: colorScheme))
         .zIndex(10)
     }
 

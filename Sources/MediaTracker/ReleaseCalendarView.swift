@@ -41,7 +41,7 @@ struct ReleaseCalendarView: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(width: 320)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(AppTheme.Colors.background(for: colorScheme))
 
                     Divider()
 
@@ -113,7 +113,7 @@ struct ReleaseCalendarView: View {
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                     .background {
@@ -332,7 +332,7 @@ struct ReleaseCalendarView: View {
                     ForEach(next7Days, id: \.self) { date in
                         let dayInfo = data.days[date]
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
-                        let accent = Color.accentColor
+                        let accent = AppTheme.Colors.accent
 
                         Button {
                             withAnimation(.easeInOut(duration: 0.3)) { selectedDate = date }
@@ -348,7 +348,7 @@ struct ReleaseCalendarView: View {
                                 
                                 if let info = dayInfo, !info.items.isEmpty {
                                     Circle()
-                                        .fill(isSelected ? accent : Color.accentColor.opacity(0.5))
+                                        .fill(isSelected ? accent : Color.primary.opacity(0.5))
                                         .frame(width: 4, height: 4)
                                 }
                             }
@@ -386,7 +386,7 @@ struct ReleaseCalendarView: View {
                 return Color.secondary.opacity(0.1)
             }
             
-            let o = Color.accentColor.oklch
+            let o = AppTheme.Colors.accent.oklch
             if colorScheme == .dark {
                 // Light to Dark: L goes from 0.8 (Less) to 0.3 (More)
                 let l = 0.8 - (day.intensity * 0.5)
@@ -400,7 +400,7 @@ struct ReleaseCalendarView: View {
             }
         }()
         
-        let vibrantAccent = Color.accentColor
+        let vibrantAccent = AppTheme.Colors.accent
         
         RoundedRectangle(cornerRadius: 4)
             .fill(cellColor)
@@ -435,7 +435,7 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
+            let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(accent)
@@ -502,7 +502,7 @@ struct ReleaseCalendarView: View {
     }
     
     private static func legendColors(for colorScheme: ColorScheme) -> [Color] {
-        let o = Color.accentColor.oklch
+        let o = AppTheme.Colors.accent.oklch
         return (0..<5).map { i in
             if i == 0 { return Color.secondary.opacity(0.1) }
             let intensity = Double(i - 1) / 3.0
@@ -520,7 +520,7 @@ struct ReleaseCalendarView: View {
 
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
-        let accent = Color.accentColor.highContrastAccent(colorScheme: colorScheme)
+        let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
         VStack(alignment: .leading, spacing: 6) {
             MediaThumbnailView(metadata: item.metadata, mode: .grid)
             

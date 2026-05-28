@@ -11,7 +11,8 @@ struct DiscoverySection: View {
         switch title {
         case "Genres": return .indigo
         case "Languages": return .teal
-        default: return .accentColor
+        case "Recent Activity": return .purple
+        default: return .gray
         }
     }
     
@@ -19,8 +20,8 @@ struct DiscoverySection: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SectionHeader(title: title, icon: icon, iconColor: sectionColor)
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
-                ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
+                ForEach(nodes) { node in
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
                 }
             }

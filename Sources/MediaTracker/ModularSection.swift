@@ -29,12 +29,12 @@ struct ModularSection<Content: View>: View {
                 .padding(AppTheme.Spacing.medium)
                 .background {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(scheme == .dark ? Color(white: 0.1) : Color(white: 0.97))
+                        .fill(AppTheme.Colors.cardFill(for: scheme))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .stroke(Color.primary.opacity(scheme == .dark ? 0.06 : 0.04), lineWidth: 0.5)
+                        .stroke(Color.primary.opacity(scheme == .dark ? 0.08 : 0.05), lineWidth: 0.5)
                 )
         }
     }

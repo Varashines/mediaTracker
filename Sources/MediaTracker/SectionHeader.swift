@@ -44,7 +44,7 @@ struct SectionHeader: View {
                                 .frame(height: AppTheme.Spacing.micro)
                             
                             Capsule()
-                                .fill(Color.accentColor.gradient)
+                                .fill(AppTheme.Colors.accent.gradient)
                                 .frame(width: itemWidth, height: AppTheme.Spacing.micro)
                                 .offset(x: progress * scrollableTrackWidth)
                         }
