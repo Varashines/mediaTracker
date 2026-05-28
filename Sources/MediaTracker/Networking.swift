@@ -35,11 +35,12 @@ actor APIClient {
         return URLSession(configuration: config)
     }()
     
-    // Phase 2: Search Cache
+    // Phase 2: Search Cache (LRU-evicted, max 20 entries)
     private var inFlightTasks: [String: Task<[MediaSearchResult], Error>] = [:]
     private var searchCache: [String: [MediaSearchResult]] = [:]
     private var lastSearchTime: [String: Date] = [:]
     private let cacheExpiry: TimeInterval = 300 // 5 minutes
+    private let maxSearchCacheSize = 20
 
     // In-flight task coalescing: prevents concurrent duplicate network requests for the same resource
     private var inFlightMovieDetails: [Int: Task<MovieDetailsResult, Error>] = [:]
@@ -79,6 +80,12 @@ actor APIClient {
     private func clearSearchCache() {
         searchCache.removeAll()
         lastSearchTime.removeAll()
+    }
+
+    private func evictOldestSearchCacheEntry() {
+        guard let oldestKey = lastSearchTime.min(by: { $0.value < $1.value })?.key else { return }
+        searchCache.removeValue(forKey: oldestKey)
+        lastSearchTime.removeValue(forKey: oldestKey)
     }
 
     func clearMemoryCaches() {
@@ -198,6 +205,9 @@ actor APIClient {
         do {
             let results = try await task.value
             inFlightTasks[cacheKey] = nil
+            if searchCache.count >= maxSearchCacheSize {
+                evictOldestSearchCacheEntry()
+            }
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
             return results
@@ -236,10 +246,13 @@ actor APIClient {
         }
 
         inFlightTasks[cacheKey] = task
-        
+
         do {
             let results = try await task.value
             inFlightTasks[cacheKey] = nil
+            if searchCache.count >= maxSearchCacheSize {
+                evictOldestSearchCacheEntry()
+            }
             searchCache[cacheKey] = results
             lastSearchTime[cacheKey] = Date()
             return results

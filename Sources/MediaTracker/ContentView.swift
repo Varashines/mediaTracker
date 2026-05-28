@@ -113,7 +113,7 @@ struct LibraryDetailView: View {
                         .zIndex(100)
                 }
             }
-            .background(.ultraThinMaterial)
+            .background(Color(nsColor: .windowBackgroundColor))
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
             .navigationTitle(
                 isSearchActive
@@ -187,7 +187,24 @@ struct LibraryDetailView: View {
             }
         }
         .task(priority: .userInitiated) {
+            SleepManager.shared.purgeDataCache = {
+                ImageCache.shared.clearMemoryCache()
+                ImageCache.shared.clearDiskIndex()
+                Task { await APIClient.shared.clearMemoryCaches() }
+                TasteActor.clearCache()
+                BadgeEngine.clearScanCache()
+                URLCache.shared.removeAllCachedResponses()
+            }
             performUpdate()
+        }
+        .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
+            if isAsleep {
+                viewModel.purgeSleepCache()
+            } else {
+                Task { await DiscoveryHubCache.shared.invalidate() }
+                viewModel.isLibraryMetadataDirty = true
+                viewModel.filterSubject.send()
+            }
         }
         .task(priority: .background) {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }

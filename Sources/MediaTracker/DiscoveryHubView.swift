@@ -83,6 +83,11 @@ struct DiscoveryHubView: View {
         .onChange(of: viewModel.discoveryRefreshTrigger) {
             refreshData(force: true)
         }
+        .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
+            if !isAsleep {
+                hasDataLoaded = false
+            }
+        }
     }
     
     private func refreshData(force: Bool) {

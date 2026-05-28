@@ -273,6 +273,14 @@ actor LibraryStatsActor {
         while true {
             try Task.checkCancellation()
             var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.propertiesToFetch = [
+                \.id, \.title, \.releaseDate,
+                \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+                \.lastInteractionDate, \.lastStateChangeDate,
+                \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+                \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
+                \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast
+            ]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
@@ -290,7 +298,7 @@ actor LibraryStatsActor {
         await MainActor.run {
             if includeCinephileData {
                 Self.cachedFullStats = result
-                Self.cachedContainers = (statsContainer, tasteMaps)
+                Self.cachedContainers = nil  // Release intermediate containers after finalization
             } else {
                 Self.cachedLightStats = result
                 Self.cachedContainers = nil

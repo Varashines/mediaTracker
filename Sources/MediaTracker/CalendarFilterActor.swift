@@ -77,12 +77,22 @@ actor CalendarFilterActor {
             item.typeValue == "Movie" && item.cachedNextAiringDate != nil &&
             (item.cachedNextAiringDate ?? fallbackPast) >= startOfDay && (item.cachedNextAiringDate ?? fallbackFuture) <= endOfDay
         }
-        var movies = try modelContext.fetch(FetchDescriptor<MediaItem>(predicate: moviePredicate))
+        var movieDesc = FetchDescriptor<MediaItem>(predicate: moviePredicate)
+        movieDesc.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.releaseDate, \.typeValue, \.themeColorHex,
+            \.cachedNextAiringDate, \.cachedRuntime, \.storedProgress, \.stateValue
+        ]
+        var movies = try modelContext.fetch(movieDesc)
 
         let unindexedPredicate = #Predicate<MediaItem> { item in
             item.typeValue == "Movie" && item.cachedNextAiringDate == nil
         }
-        let unindexed = (try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: unindexedPredicate))) ?? []
+        var unindexedDesc = FetchDescriptor<MediaItem>(predicate: unindexedPredicate)
+        unindexedDesc.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.releaseDate, \.typeValue, \.themeColorHex,
+            \.cachedNextAiringDate, \.cachedRuntime, \.storedProgress, \.stateValue
+        ]
+        let unindexed = (try? modelContext.fetch(unindexedDesc)) ?? []
         let matched = unindexed.filter { movie in
             guard let date = movie.releaseDate else { return false }
             return date >= startOfDay && date <= endOfDay

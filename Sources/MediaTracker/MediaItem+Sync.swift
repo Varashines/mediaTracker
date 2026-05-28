@@ -179,7 +179,8 @@ extension MediaItem {
     }
 
     func updateSearchableText() {
-        var text = "\(title) \(overview)"
+        let truncatedOverview = String(overview.prefix(200))
+        var text = "\(title) \(truncatedOverview)"
         
         // Phase 4 Optimization: Use cached properties to avoid relationship faulting
         if !cachedGenres.isEmpty {

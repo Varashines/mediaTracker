@@ -7,7 +7,7 @@ struct LibraryBackgroundView: View {
     var body: some View {
         LinearGradient(
             colors: [
-                mood.opacity(colorScheme == .dark ? 0.06 : 0.03),
+                colorScheme == .dark ? .clear : mood.opacity(0.03),
                 .clear
             ],
             startPoint: .topTrailing,

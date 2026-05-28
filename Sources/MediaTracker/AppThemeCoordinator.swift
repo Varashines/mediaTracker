@@ -41,9 +41,9 @@ class AppThemeCoordinator {
         
         let finalColor = Color(nsColor: NSColor(
             calibratedHue: hue,
-            saturation: saturation * 0.4,
-            brightness: colorScheme == .dark ? 0.15 : 0.98,
-            alpha: 0.15
+            saturation: saturation * (colorScheme == .dark ? 0.15 : 0.4),
+            brightness: colorScheme == .dark ? 0.12 : 0.98,
+            alpha: colorScheme == .dark ? 0.04 : 0.15
         ))
         
         withAnimation(AppTheme.Animation.springGentle) {

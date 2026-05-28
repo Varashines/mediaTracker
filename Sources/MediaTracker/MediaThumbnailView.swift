@@ -325,7 +325,12 @@ struct MediaThumbnailView: View {
         }
         .frame(width: width, height: height)
         .cornerRadius(AppTheme.Radius.medium)
-        .drawingGroup(opaque: false) // Batch composite overlay layers in grid mode
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .stroke(disableHover && isHovered ? Color.accentColor.opacity(0.5) : .clear, lineWidth: 2)
+                .animation(.easeOut(duration: 0.15), value: isHovered)
+        )
+        .drawingGroup(opaque: false)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)

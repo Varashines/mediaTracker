@@ -102,7 +102,11 @@ class BackgroundTaskManager {
             // Automated Rolling Backup
             // Map MediaItem (non-Sendable) → LibraryBackup (Sendable) on the background context
             // BEFORE crossing into the @MainActor LibraryImportExportService boundary.
-            if let allItems = try? context.fetch(FetchDescriptor<MediaItem>()) {
+            var backupDesc = FetchDescriptor<MediaItem>()
+            backupDesc.propertiesToFetch = [
+                \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue
+            ]
+            if let allItems = try? context.fetch(backupDesc) {
                 let exportItems = allItems.map { item -> MediaItemData in
                     var watchedIDs: [String]? = nil
                     if item.type == .tvShow, let tv = item.tvShowDetails {

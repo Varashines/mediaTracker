@@ -41,7 +41,7 @@ struct ReleaseCalendarView: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(width: 320)
-                    .background(.ultraThinMaterial)
+                    .background(Color(nsColor: .windowBackgroundColor))
 
                     Divider()
 

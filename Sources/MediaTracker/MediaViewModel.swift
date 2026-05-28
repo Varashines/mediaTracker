@@ -110,4 +110,20 @@ class MediaViewModel {
         }
         return category.title
     }
+    
+    func purgeSleepCache() {
+        displayedItems = []
+        recentlyAddedItems = []
+        homeContinueWatchingItems = []
+        spotlightHero = nil
+        groupedItems = []
+        recommendations = []
+        featuredUpcomingItems = []
+        calendarCache = [:]
+        cachedNetworks = []
+        cachedGenres = []
+        cachedLanguages = []
+        cachedBadges = []
+        isLibraryMetadataDirty = true
+    }
 }

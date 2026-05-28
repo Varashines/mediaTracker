@@ -15,7 +15,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let title: String
     let posterURL: String?
     let backdropURL: String?
-    let overview: String
     let releaseDate: Date?
     let type: MediaType?
     let state: MediaState?
@@ -49,7 +48,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.title = item.title
         self.posterURL = item.posterURL
         self.backdropURL = item.backdropURL
-        self.overview = item.overview
         self.releaseDate = item.releaseDate
         self.type = item.type
         self.state = item.state
@@ -67,11 +65,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.genres = item.cachedGenres
         self.lastInteractionDate = item.lastInteractionDate
     }
-    init(id: PersistentIdentifier, title: String, overview: String) {
+    init(id: PersistentIdentifier, title: String) {
         self.id = id
         self.itemID = ""
         self.title = title
-        self.overview = overview
         self.posterURL = nil
         self.backdropURL = nil
         self.releaseDate = nil
@@ -109,7 +106,6 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.id = id
         self.itemID = ""
         self.title = title
-        self.overview = ""
         self.posterURL = posterURL
         self.backdropURL = nil
         self.releaseDate = nil
@@ -197,6 +193,17 @@ actor MediaFilterActor {
         }
 
         var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
+        descriptor.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+            \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+            \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+            \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+            \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+            \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+            \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+            \.searchableText
+        ]
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder, badge: badge)
 
         // Optimization: Only use SQLite pagination when no Swift-level refinement is needed.
@@ -397,6 +404,17 @@ actor MediaFilterActor {
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
         if category == .home { return [] }
         var recentDesc = FetchDescriptor<MediaItem>()
+        recentDesc.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+            \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+            \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+            \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+            \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+            \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+            \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+            \.searchableText
+        ]
         recentDesc.sortBy = [
             SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
             SortDescriptor<MediaItem>(\.title, order: .forward)
@@ -652,14 +670,47 @@ extension MediaFilterActor {
         }
         
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
+        descStreaming.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+            \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+            \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+            \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+            \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+            \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+            \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+            \.searchableText, \.storedCast
+        ]
         descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descStreaming.fetchLimit = 150
         
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
+        descTransition.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+            \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+            \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+            \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+            \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+            \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+            \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+            \.searchableText, \.storedCast
+        ]
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descTransition.fetchLimit = 50
         
         var descActiveOrRewatching = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
+        descActiveOrRewatching.propertiesToFetch = [
+            \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+            \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+            \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+            \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+            \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+            \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+            \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+            \.searchableText, \.storedCast
+        ]
         descActiveOrRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descActiveOrRewatching.fetchLimit = 200
         

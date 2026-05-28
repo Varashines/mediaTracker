@@ -135,7 +135,7 @@ struct SearchView: View {
 
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
-        .background(.ultraThinMaterial)
+        .background(Color(nsColor: .windowBackgroundColor))
         .zIndex(10)
     }
 

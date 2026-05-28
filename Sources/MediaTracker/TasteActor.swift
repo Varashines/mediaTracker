@@ -115,6 +115,12 @@ actor TasteActor {
         var offset = 0
         while true {
             var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.tasteValue != "None" })
+            descriptor.propertiesToFetch = [
+                \.id, \.title,
+                \.typeValue, \.stateValue, \.tasteValue,
+                \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
+                \.storedCast
+            ]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
@@ -222,7 +228,13 @@ actor TasteActor {
         let creatorAffinity = profile.creator
         let langAffinity = profile.language
 
-        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue == "Wishlist" })
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue == "Wishlist" })
+        descriptor.propertiesToFetch = [
+            \.id, \.title, \.releaseDate,
+            \.typeValue, \.stateValue, \.tasteValue,
+            \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
+            \.cachedNextAiringDate, \.storedCast
+        ]
         guard let wishlist = try? modelContext.fetch(descriptor) else { return [] }
         var recommendations: [(id: PersistentIdentifier, score: Double, reason: String)] = []
         let now = Date()
