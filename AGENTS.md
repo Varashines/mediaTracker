@@ -50,17 +50,26 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - Close overlays first, then dismiss after delay (`DispatchQueue.main.asyncAfter(deadline: .now() + 0.25)`)
 - Defer `MediaStateService.postMediaStateChanged()` until after dismiss animation completes
 - Use `AppTheme.Animation.springGentle` or `.springSnappy`
+- **Transition Delay for Progressive Content**: For detailed/heavy statistical screens (e.g., `CinephileLabView`), use a sleep of `try? await Task.sleep(nanoseconds: 350_000_000)` (350ms) to allow the macOS navigation slide-in animation to complete showing a shimmering skeleton (`.shimmering()`) before rendering the final layout.
 
 ### Theming
 - Accent colors via `AppTheme.Colors.accent` (reads dynamically from `AppThemeCoordinator.shared.accent`)
 - Backgrounds via `AppTheme.Colors.background(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.background`)
 - Card fills via `AppTheme.Colors.cardFill(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.cardFill`)
-- DetailView uses `Color(NSColor.windowBackgroundColor)` — do NOT apply theme background there
+- DetailView uses `AppTheme.Colors.background(for: colorScheme)` — integrates custom theme backgrounds with vibrant poster overlays
 - DiscoveryCard uses network's own theme color, not the global accent
+- **Custom Palettes**: Supports standard Accent (0), Earth Tones (1), and Cool Tones (2) resolved and propagated dynamically via the `@Observable AppThemeCoordinator`. Apply these to views using the `.adaptiveBackground()` modifier.
+- **Layout Squeezing Constraint**: In Settings panels, avoid horizontal layouts (side-by-side labels and wide pickers) that cause label text to wrap/clipping. Stack forms vertically (labels above pickers) to prevent truncation.
 - **Theme Transition Delay Bug**: SwiftUI on macOS has a known issue where dynamically transitioning `.preferredColorScheme` from a concrete value (`.light`/`.dark`) to `nil` (to follow the system) fails to immediately update the environment's `\.colorScheme`.
   - *Solution*: In `App.swift`, we subscribe to system appearance changes via `NSApp.publisher(for: \.effectiveAppearance)`. When the theme preference is set to System/Auto (`0`), we compute and return the concrete `systemColorScheme` (either `.dark` or `.light`) rather than `nil`. This forces SwiftUI to immediately redraw the view hierarchy without any lag.
 - **Reactive Theme & Palette Updates**: Static color queries normally do not register SwiftUI layout dependencies.
   - *Solution*: `AppTheme.Colors` properties read from the `@Observable @MainActor class AppThemeCoordinator`, which observes `UserDefaults.didChangeNotification`. When preference changes are detected, the coordinator updates its reactive properties, instantly forcing SwiftUI to redraw any view referencing these color tokens.
+
+### Keyboard Shortcuts & Interactions
+- **Contextual Shortcuts**: The spacebar shortcut (`.keyboardShortcut(.space, modifiers: [])`) in the detail view is contextual:
+  - TV Shows: Marks the next unwatched episode as seen via `viewModel.markNextEpisodeWatched()` and triggers haptic `.markWatched`.
+  - Movies: Toggles overall completion via `viewModel.toggleWatched()` and triggers haptic `.markWatched` / `.stateChange`.
+- **Status Cycling**: Use the `w` shortcut to cycle state (`viewModel.cycleStatus()`) with haptic responses.
 
 ### Time constants
 - Use `TimeInterval.days7`, `.days30`, `.secondsInDay` — never raw `86400`

@@ -52,7 +52,7 @@ struct VaultSection: View {
             }
 
             SettingsSectionHeader(text: "Danger Zone", icon: "exclamationmark.triangle.fill", color: .red)
-            SettingsCard(color: .red) {
+            GroupContainer(isDangerZone: true) {
                 SettingsRow(title: "Delete All Data", subtitle: "Permanently wipe your entire library", showDivider: false) {
                     Button {
                         showClearConfirmation = true

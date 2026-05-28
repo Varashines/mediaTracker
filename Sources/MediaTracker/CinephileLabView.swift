@@ -12,9 +12,7 @@ struct CinephileLabView: View {
     var body: some View {
         Group {
             if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 80)
+                CinephileLabSkeletonView()
             } else if let stats = stats {
                 ScrollView {
                     VStack(spacing: AppTheme.Spacing.section) {
@@ -81,6 +79,7 @@ struct CinephileLabView: View {
         descriptor.fetchLimit = 50
         self.recentItems = (try? modelContext.fetch(descriptor)) ?? []
 
+        try? await Task.sleep(nanoseconds: 350_000_000)
         withAnimation(.easeInOut(duration: 0.3)) { isLoading = false }
     }
 }
@@ -467,6 +466,109 @@ private func formatWatchTimeMini(minutes: Int) -> String {
     let hours = minutes / 60
     if hours > 0 { return "\(hours)h" }
     return "\(minutes)m"
+}
+
+struct CinephileLabSkeletonView: View {
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.section) {
+                // 1. Cinephile Spectrum (Barcode) Skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 140, height: 16)
+                        Spacer()
+                    }
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 60)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                // 2. Weekly Activity Arc Skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 120, height: 16)
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 180)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+
+                // 3. Top Genres Skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 100, height: 16)
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 104, height: 90)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    }
+                }
+
+                // 4. Decade Timeline Skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 110, height: 16)
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 140)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+
+                // 5. Top Studios/Networks Skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 130, height: 16)
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 180, height: 80)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    }
+                }
+            }
+            .padding(.vertical, 24)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .shimmering()
+    }
 }
 
 #Preview("Cinephile Lab") {

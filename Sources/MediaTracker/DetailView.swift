@@ -34,7 +34,7 @@ struct DetailView: View {
     var body: some View {
         ZStack {
             if viewModel.item.modelContext == nil {
-                Color(NSColor.windowBackgroundColor).ignoresSafeArea()
+                AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
             } else {
                 contentOverlay
             }
@@ -45,7 +45,7 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
-            Color(NSColor.windowBackgroundColor)
+            AppTheme.Colors.background(for: colorScheme)
                 .overlay(p.opacity(0.12))
                 .ignoresSafeArea()
             ScrollView {
@@ -108,7 +108,14 @@ struct DetailView: View {
         .background {
             Group {
                 Button("") {
-                    viewModel.toggleWatched()
+                    if viewModel.item.type == .tvShow {
+                        viewModel.markNextEpisodeWatched()
+                        FeedbackManager.shared.trigger(.markWatched)
+                    } else {
+                        viewModel.toggleWatched()
+                        let isCompleted = viewModel.item.state == .completed
+                        FeedbackManager.shared.trigger(isCompleted ? .markWatched : .stateChange)
+                    }
                 }
                 .keyboardShortcut(.space, modifiers: [])
                 
