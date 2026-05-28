@@ -31,7 +31,7 @@ struct SettingsView: View {
     @State private var hoveredTab: SettingsTab? = nil
     
     @AppStorage("theme_preference") private var themePreference = 0
-    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
+    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,7 +108,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(AppTheme.Colors.background(for: scheme))
+        .adaptiveBackground()
         .frame(maxWidth: 520, minHeight: 640)
         .fontDesign(.rounded)
         .onAppear {

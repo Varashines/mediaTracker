@@ -5,7 +5,8 @@ struct LibraryBackgroundView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        AppTheme.Colors.background(for: colorScheme)
+        Color.clear
+            .adaptiveBackground()
             .ignoresSafeArea()
             .overlay {
                 LinearGradient(

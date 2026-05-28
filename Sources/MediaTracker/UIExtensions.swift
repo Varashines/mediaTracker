@@ -307,5 +307,21 @@ extension View {
     func skeletonPulse() -> some View {
         self.modifier(SkeletonPulseModifier())
     }
+
+    func adaptiveBackground() -> some View {
+        self.modifier(AdaptiveBackgroundModifier())
+    }
+}
+
+struct AdaptiveBackgroundModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("theme_preference") private var themePreference = 0
+    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
+    @AppStorage("custom_theme_palette") private var customThemePalette = 0
+
+    func body(content: Content) -> some View {
+        content
+            .background(AppTheme.Colors.background(for: colorScheme))
+    }
 }
 

@@ -52,13 +52,15 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - Use `AppTheme.Animation.springGentle` or `.springSnappy`
 
 ### Theming
-- Accent colors via `AppTheme.Colors.accent` (reads `accent_theme_id` from UserDefaults)
-- Backgrounds via `AppTheme.Colors.background(for: colorScheme)`
-- Card fills via `AppTheme.Colors.cardFill(for: colorScheme)`
+- Accent colors via `AppTheme.Colors.accent` (reads dynamically from `AppThemeCoordinator.shared.accent`)
+- Backgrounds via `AppTheme.Colors.background(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.background`)
+- Card fills via `AppTheme.Colors.cardFill(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.cardFill`)
 - DetailView uses `Color(NSColor.windowBackgroundColor)` — do NOT apply theme background there
 - DiscoveryCard uses network's own theme color, not the global accent
 - **Theme Transition Delay Bug**: SwiftUI on macOS has a known issue where dynamically transitioning `.preferredColorScheme` from a concrete value (`.light`/`.dark`) to `nil` (to follow the system) fails to immediately update the environment's `\.colorScheme`.
   - *Solution*: In `App.swift`, we subscribe to system appearance changes via `NSApp.publisher(for: \.effectiveAppearance)`. When the theme preference is set to System/Auto (`0`), we compute and return the concrete `systemColorScheme` (either `.dark` or `.light`) rather than `nil`. This forces SwiftUI to immediately redraw the view hierarchy without any lag.
+- **Reactive Theme & Palette Updates**: Static color queries normally do not register SwiftUI layout dependencies.
+  - *Solution*: `AppTheme.Colors` properties read from the `@Observable @MainActor class AppThemeCoordinator`, which observes `UserDefaults.didChangeNotification`. When preference changes are detected, the coordinator updates its reactive properties, instantly forcing SwiftUI to redraw any view referencing these color tokens.
 
 ### Time constants
 - Use `TimeInterval.days7`, `.days30`, `.secondsInDay` — never raw `86400`

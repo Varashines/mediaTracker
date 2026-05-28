@@ -14,7 +14,7 @@ struct GroupContainer<Content: View>: View {
         .padding(.horizontal, AppTheme.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(scheme == .dark ? Color(white: 0.1) : Color(white: 0.97))
+                .fill(AppTheme.Colors.cardFill(for: scheme))
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .overlay {

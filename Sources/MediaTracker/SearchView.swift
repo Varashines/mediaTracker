@@ -136,7 +136,7 @@ struct SearchView: View {
 
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
-        .background(AppTheme.Colors.background(for: colorScheme))
+        .adaptiveBackground()
         .zIndex(10)
     }
 

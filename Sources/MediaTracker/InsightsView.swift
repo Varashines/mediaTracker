@@ -10,11 +10,13 @@ struct InsightsView: View {
     @State private var statsTask: Task<Void, Never>? = nil
     
     @AppStorage("theme_preference") private var themePreference = 0
-    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
+    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     var body: some View {
         ZStack {
-            AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
+            Color.clear
+                .adaptiveBackground()
+                .ignoresSafeArea()
 
             if isLoading {
                 InsightsSkeletonView()

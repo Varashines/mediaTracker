@@ -71,7 +71,7 @@ struct LibraryDetailView: View {
     @State private var updateTask: Task<Void, Never>?
     
     @AppStorage("theme_preference") private var themePreference = 0
-    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
+    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
@@ -116,7 +116,7 @@ struct LibraryDetailView: View {
                         .zIndex(100)
                 }
             }
-            .background(AppTheme.Colors.background(for: colorScheme))
+            .adaptiveBackground()
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
             .navigationTitle(
                 isSearchActive

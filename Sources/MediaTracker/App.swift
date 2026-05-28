@@ -9,6 +9,7 @@ import AppKit
 struct MediaTrackerApp: App {
     private let notificationManager = NotificationManager.shared
     @AppStorage("theme_preference") private var themePreference: Int = 0
+    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -83,6 +84,7 @@ struct MediaTrackerApp: App {
             .environment(\.sleepManager, SleepManager.shared)
             .sleepModeSupport()
             .preferredColorScheme(mappedScheme)
+            .tint(AppTheme.Colors.accent)
             .appErrorToast(state: errorState)
             .onAppear {
                 updateSystemColorScheme()
@@ -106,6 +108,7 @@ struct MediaTrackerApp: App {
         SettingsView()
             .modelContainer(sharedModelContainer)
             .preferredColorScheme(mappedScheme)
+            .tint(AppTheme.Colors.accent)
             .onAppear {
                 updateSystemColorScheme()
                 applyTheme(themePreference)
@@ -114,13 +117,6 @@ struct MediaTrackerApp: App {
     }
 
     private var mappedScheme: ColorScheme? {
-        if themePreference == 3 {
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(2, forKey: "theme_preference")
-                UserDefaults.standard.set(1, forKey: "dark_theme_style")
-            }
-            return .dark
-        }
         switch themePreference {
         case 1: return .light
         case 2: return .dark
@@ -147,9 +143,8 @@ struct MediaTrackerApp: App {
 
     private func applyTheme(_ preference: Int) {
         #if os(macOS)
-        let pref = preference == 3 ? 2 : preference
         let appearance = {
-            switch pref {
+            switch preference {
             case 1: return NSAppearance(named: .aqua)
             case 2: return NSAppearance(named: .darkAqua)
             default: return nil
