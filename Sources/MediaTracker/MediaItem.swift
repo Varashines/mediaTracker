@@ -164,6 +164,22 @@ extension MediaItem {
 
     var requiresMaintenanceRefresh: Bool {
         guard let last = lastUpdated else { return true }
-        return Date().timeIntervalSince(last) > (30 * 86400)
+        return Date().timeIntervalSince(last) > .days30
     }
+}
+
+extension MediaItem {
+    nonisolated(unsafe) static let thumbnailProperties: [PartialKeyPath<MediaItem>] = [
+        \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+        \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+        \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+        \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
+        \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+        \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+        \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
+        \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+        \.searchableText
+    ]
+
+    nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]
 }

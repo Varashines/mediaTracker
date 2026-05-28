@@ -88,6 +88,7 @@ actor DiscoverySyncService {
         
         while true {
             var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.storedSmartBadgeLabel]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             

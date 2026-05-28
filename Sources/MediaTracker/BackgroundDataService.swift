@@ -171,8 +171,6 @@ actor BackgroundDataService {
         
         // 2. Deduplicate and Standardize
         for item in items {
-            await Task.yield()
-            
             // Migrate legacy IDs
             if !item.id.contains("_") {
                 let typePrefix = item.type == .movie ? "movie" : "tv"

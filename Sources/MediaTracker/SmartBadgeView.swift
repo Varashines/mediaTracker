@@ -6,7 +6,6 @@ struct SmartBadgeView: View {
     let metadata: MediaThumbnailMetadata?
     let result: MediaSearchResult?
     let hideEpisodeProgress: Bool
-    let themeColorOverride: Color?
     
     @Environment(\.colorScheme) var colorScheme
 
@@ -20,22 +19,20 @@ struct SmartBadgeView: View {
         .binge: (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), Color.white),
     ]
 
-    private static let bingeSolidColors: (bg: Color, fg: Color) = (Color.fromOKLCH(l: 0.45, c: 0.18, h: 260), Color.white)
 
-    init(item: MediaItem, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
+
+    init(item: MediaItem, hideEpisodeProgress: Bool = false) {
         self.item = item
         self.metadata = nil
         self.result = nil
         self.hideEpisodeProgress = hideEpisodeProgress
-        self.themeColorOverride = themeColor
     }
     
-    init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false, themeColor: Color? = nil) {
+    init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false) {
         self.item = nil
         self.metadata = metadata
         self.result = nil
         self.hideEpisodeProgress = hideEpisodeProgress
-        self.themeColorOverride = themeColor
     }
 
     init(result: MediaSearchResult, hideEpisodeProgress: Bool = false) {
@@ -43,7 +40,6 @@ struct SmartBadgeView: View {
         self.metadata = nil
         self.result = result
         self.hideEpisodeProgress = hideEpisodeProgress
-        self.themeColorOverride = nil
     }
 
     var body: some View {
@@ -85,9 +81,6 @@ struct SmartBadgeView: View {
             if let label = badgeLabel, let config = Self.badgeColors[label] {
                 return config
             }
-            if badgeLabel == .binge {
-                return isSparkle ? Self.badgeColors[.binge]! : Self.bingeSolidColors
-            }
             return (Color.secondary.opacity(0.8), Color.white)
         }()
 
@@ -112,25 +105,15 @@ struct SmartBadgeView: View {
     ) -> some View {
         let currentState = state ?? .wishlist
 
-        // 1. Determine Availability
-        let badge = badgeText ?? ""
-        let isAvailable = isUpcoming && (badge.contains("Streaming") || badge.contains("Available"))
-
-        // 2. Determine Display Label (Used for accessibility, hidden in compact UI)
+        // Display Label (Used for accessibility, hidden in compact UI)
         let displayLabel = currentState.displayName
 
-        // 3. Progress Logic
+        // Progress Logic
         let isInProgress = (currentState == .active || currentState == .rewatching)
         let showProgressBar = !hideEpisodeProgress && !isUpcoming && isInProgress
 
-        let finalAccent: Color = {
-            if let override = themeColorOverride {
-                return override
-            }
-            return currentState.accentColor
-        }()
-
-        let isSolid = isAvailable || currentState == .active || currentState == .rewatching
+        let finalAccent = currentState.accentColor
+        let isSolid = true
 
         if currentState == .completed {
             EmptyView()
@@ -140,7 +123,7 @@ struct SmartBadgeView: View {
                 accentColor: finalAccent,
                 isSolid: isSolid,
                 progress: showProgressBar ? progress : nil,
-                foregroundColor: isSolid ? (finalAccent.isLightColor ? .black : .white) : nil
+                foregroundColor: finalAccent.isLightColor ? .black : .white
             )
         }
     }

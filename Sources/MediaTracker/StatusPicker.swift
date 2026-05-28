@@ -41,14 +41,14 @@ struct StatusPicker: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .foregroundStyle(accent)
+                .foregroundStyle(accent.isLightColor ? .black : .white)
                 .background {
                     Capsule()
-                        .fill(accent.opacity(isHovered ? 0.12 : 0.04))
+                        .fill(accent)
                 }
                 .overlay {
                     Capsule()
-                        .stroke(accent.opacity(isHovered ? 0.35 : 0.15), lineWidth: 0.8)
+                        .stroke(accent.opacity(0.3), lineWidth: 0.8)
                 }
             }
             .buttonStyle(.plain)

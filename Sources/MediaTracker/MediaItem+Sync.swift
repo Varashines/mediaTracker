@@ -205,4 +205,13 @@ extension MediaItem {
         
         self.searchableText = text.lowercased()
     }
+
+    @MainActor
+    func commitChange() {
+        syncCachedProperties()
+        if let context = modelContext {
+            SaveCoordinator.shared.requestSave(context)
+        }
+        MediaStateService.shared.postMediaStateChanged(itemID: persistentModelID)
+    }
 }

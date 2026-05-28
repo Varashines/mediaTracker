@@ -25,7 +25,10 @@ enum SettingsTab: Int, CaseIterable {
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) var scheme
+    @Namespace private var tabNamespace
     @State private var selectedTab: SettingsTab = .general
+    @State private var hoveredTab: SettingsTab? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,35 +38,55 @@ struct SettingsView: View {
                 HStack(spacing: 0) {
                     ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                                 selectedTab = tab
                             }
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: 5) {
                                 Image(systemName: tab.icon)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .scaleEffect(selectedTab == tab ? 1.05 : 1.0)
                                 Text(tab.label)
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             }
                             .foregroundStyle(selectedTab == tab ? Color.accentColor : .secondary)
-                            .frame(width: 90, height: 52)
+                            .frame(width: 90, height: 50)
                             .background {
-                                if selectedTab == tab {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.accentColor.opacity(0.12))
+                                ZStack {
+                                    if selectedTab == tab {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(Color.accentColor.opacity(scheme == .dark ? 0.15 : 0.08))
+                                            .matchedGeometryEffect(id: "selected_settings_tab", in: tabNamespace)
+                                    } else if hoveredTab == tab {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(Color.primary.opacity(scheme == .dark ? 0.05 : 0.03))
+                                    }
                                 }
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .onHover { isHovered in
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                hoveredTab = isHovered ? tab : nil
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(scheme == .dark ? 0.08 : 0.04), lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
                 Spacer()
             }
+            .padding(.top, 14)
             .padding(.bottom, 12)
 
             Divider().opacity(0.06)
@@ -77,7 +100,7 @@ struct SettingsView: View {
                     case .vault: VaultSection()
                     }
                 }
-                .padding(.horizontal, 28)
+                .padding(.horizontal, 24)
                 .padding(.vertical, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

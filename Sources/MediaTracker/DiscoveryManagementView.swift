@@ -120,6 +120,8 @@ struct DiscoveryManagementView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
     
     private func toggleHidden(_ name: String) {

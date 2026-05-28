@@ -8,21 +8,24 @@ struct SettingsCard<Content: View>: View {
     @Environment(\.colorScheme) var scheme
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 0) {
-                content()
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(scheme == .dark ? Color(white: 0.12) : Color(white: 0.96))
-            )
-
-            // Subtle colored accent strip
-            if color != .clear {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(color.opacity(0.2), lineWidth: 0.5)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            content()
         }
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.regularMaterial)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    color != .clear 
+                        ? color.opacity(scheme == .dark ? 0.25 : 0.12) 
+                        : Color.primary.opacity(scheme == .dark ? 0.08 : 0.04), 
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(color: .black.opacity(scheme == .dark ? 0.12 : 0.03), radius: 6, y: 3)
     }
 }
 
@@ -64,14 +67,21 @@ struct SettingsRow<Trailing: View>: View {
 
 struct SettingsSectionHeader: View {
     let text: String
+    var icon: String? = nil
     var color: Color = .primary
 
     var body: some View {
-        Text(text)
-            .font(.system(size: 13, weight: .bold, design: .rounded))
-            .foregroundStyle(color)
-            .padding(.horizontal, 4)
-            .padding(.bottom, 8)
+        HStack(spacing: 6) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(color)
+            }
+            Text(text)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+        .padding(.bottom, 6)
     }
 }
 
@@ -104,18 +114,26 @@ struct SettingsToggleRow: View {
 struct SettingsButton: View {
     let title: String
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(Color.accentColor.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(Color.accentColor.opacity(isHovered ? 0.12 : 0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.accentColor.opacity(isHovered ? 0.25 : 0.12), lineWidth: 0.5)
+                }
+                .scaleEffect(isHovered ? 1.02 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 

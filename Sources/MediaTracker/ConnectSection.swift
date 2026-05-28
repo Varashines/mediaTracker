@@ -10,15 +10,33 @@ struct ConnectSection: View {
     @AppStorage("notifications_time") private var notificationTime: Double = 9 * 3600
     @State private var isPulsing = false
 
+    @State private var showTMDBKey = false
+    @State private var showOMDBKey = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(text: "API Keys", color: .green)
+            SettingsSectionHeader(text: "API Keys", icon: "key.fill", color: .green)
             SettingsCard(color: .green) {
-                apiRow(name: "TMDB", subtitle: "Movie & TV metadata", apiKey: $tmdbApiKey, isConnected: !tmdbApiKey.isEmpty, link: URL(string: "https://www.themoviedb.org/settings/api")!)
-                apiRow(name: "OMDb", subtitle: "Rotten Tomatoes scores", apiKey: $omdbApiKey, isConnected: !omdbApiKey.isEmpty, link: URL(string: "https://www.omdbapi.com/apikey.aspx")!, showDivider: false)
+                apiRow(
+                    name: "TMDB", 
+                    subtitle: "Movie & TV metadata", 
+                    apiKey: $tmdbApiKey, 
+                    showKey: $showTMDBKey, 
+                    isConnected: !tmdbApiKey.isEmpty, 
+                    link: URL(string: "https://www.themoviedb.org/settings/api")!
+                )
+                apiRow(
+                    name: "OMDb", 
+                    subtitle: "Rotten Tomatoes scores", 
+                    apiKey: $omdbApiKey, 
+                    showKey: $showOMDBKey, 
+                    isConnected: !omdbApiKey.isEmpty, 
+                    link: URL(string: "https://www.omdbapi.com/apikey.aspx")!, 
+                    showDivider: false
+                )
             }
 
-            SettingsSectionHeader(text: "Notifications", color: .red)
+            SettingsSectionHeader(text: "Notifications", icon: "bell.badge.fill", color: .red)
             SettingsCard(color: .red) {
                 SettingsToggleRow(title: "Enable Notifications", subtitle: "Get notified about new episodes and movies", isOn: $notificationsEnabled)
                     .onChange(of: notificationsEnabled) { _, enabled in
@@ -33,14 +51,12 @@ struct ConnectSection: View {
                 if notificationsEnabled {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Channels")
-                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
-                            .padding(.leading, 16)
                         HStack(spacing: 10) {
                             channelButton(title: "Movies", icon: "film", isOn: $movieNotificationsEnabled)
                             channelButton(title: "TV Shows", icon: "tv", isOn: $tvNotificationsEnabled)
                         }
-                        .padding(.leading, 16)
                         .padding(.bottom, 8)
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -71,7 +87,15 @@ struct ConnectSection: View {
         .onAppear { isPulsing = true }
     }
 
-    private func apiRow(name: String, subtitle: String, apiKey: Binding<String>, isConnected: Bool, link: URL, showDivider: Bool = true) -> some View {
+    private func apiRow(
+        name: String, 
+        subtitle: String, 
+        apiKey: Binding<String>, 
+        showKey: Binding<Bool>, 
+        isConnected: Bool, 
+        link: URL, 
+        showDivider: Bool = true
+    ) -> some View {
         VStack(spacing: 0) {
             SettingsRow(title: name, subtitle: subtitle, showDivider: showDivider) {
                 HStack(spacing: 8) {
@@ -80,14 +104,32 @@ struct ConnectSection: View {
             }
 
             HStack(spacing: 8) {
-                SecureField("Enter API key...", text: apiKey)
-                    .textFieldStyle(.plain)
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-                    .background(Color.primary.opacity(0.02))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
-                    .font(.system(size: 10, design: .monospaced))
+                ZStack(alignment: .trailing) {
+                    if showKey.wrappedValue {
+                        TextField("Enter API key...", text: apiKey)
+                    } else {
+                        SecureField("Enter API key...", text: apiKey)
+                    }
+                }
+                .textFieldStyle(.plain)
+                .padding(.vertical, 5)
+                .padding(.leading, 10)
+                .padding(.trailing, 30)
+                .background(Color.primary.opacity(0.02))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
+                .font(.system(size: 10, design: .monospaced))
+                .overlay(alignment: .trailing) {
+                    Button {
+                        showKey.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: showKey.wrappedValue ? "eye.slash" : "eye")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .padding(.trailing, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 Link(destination: link) {
                     Image(systemName: "arrow.up.right.square")
@@ -98,7 +140,7 @@ struct ConnectSection: View {
                 .help("Get \(name) API key")
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.bottom, 12)
 
             if showDivider {
                 Divider().opacity(0.06).padding(.leading, 16)
@@ -114,18 +156,18 @@ struct ConnectSection: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14, weight: .regular))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
                 Text(title)
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isOn.wrappedValue ? Color.accentColor.opacity(0.04) : Color.clear)
-            )
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isOn.wrappedValue ? Color.accentColor.opacity(0.04) : Color.clear)
+                )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

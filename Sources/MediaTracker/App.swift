@@ -109,6 +109,8 @@ struct MediaTrackerApp: App {
         SettingsView()
             .modelContainer(sharedModelContainer)
             .preferredColorScheme(mappedScheme)
+            .onAppear { applyTheme(themePreference) }
+            .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
     }
     private var mappedScheme: ColorScheme? {
         switch themePreference {
@@ -124,10 +126,17 @@ struct MediaTrackerApp: App {
         // This ensures the window frame, title bar, and background layers
         // instantly react to theme changes without requiring window focus changes.
         DispatchQueue.main.async {
-            switch preference {
-            case 1: NSApp.appearance = NSAppearance(named: .aqua)
-            case 2: NSApp.appearance = NSAppearance(named: .darkAqua)
-            default: NSApp.appearance = nil // Revert to system default
+            let appearance = {
+                switch preference {
+                case 1: return NSAppearance(named: .aqua)
+                case 2: return NSAppearance(named: .darkAqua)
+                default: return nil
+                }
+            }()
+            
+            NSApp.appearance = appearance
+            for window in NSApp.windows {
+                window.appearance = appearance
             }
         }
         #endif

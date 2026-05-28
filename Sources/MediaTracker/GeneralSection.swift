@@ -11,12 +11,12 @@ struct GeneralSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(text: "Appearance", color: .blue)
+            SettingsSectionHeader(text: "Appearance", icon: "paintbrush.fill", color: .blue)
             SettingsCard(color: .blue) {
                 ThemePicker(themePreference: $themePreference)
             }
 
-            SettingsSectionHeader(text: "Tracking", color: .green)
+            SettingsSectionHeader(text: "Tracking", icon: "play.circle.fill", color: .green)
             SettingsCard(color: .green) {
                 SettingsToggleRow(
                     title: "Auto-Complete TV Shows",
@@ -25,7 +25,7 @@ struct GeneralSection: View {
                 )
             }
 
-            SettingsSectionHeader(text: "System", color: .purple)
+            SettingsSectionHeader(text: "System", icon: "gearshape.fill", color: .purple)
             SettingsCard(color: .purple) {
                 SettingsToggleRow(title: "Haptic Feedback", subtitle: "Vibrate on interactions", showDivider: true, isOn: $hapticsEnabled)
                 SettingsToggleRow(title: "Audio Feedback", subtitle: "Play sounds on actions", showDivider: true, isOn: $audioEnabled)

@@ -379,9 +379,12 @@ struct MediaThumbnailView: View {
         }
     }
 
-    @ViewBuilder
     private var typeBadge: some View {
-        Group {
+        let themeColor = item?.themeColorHex.flatMap { Color(hex: $0) } ?? capturedThemeColorHex.flatMap { Color(hex: $0) } ?? Color.accentColor
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+        let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
+        
+        return Group {
             switch type {
             case .movie:
                 Image(systemName: "film")
@@ -392,7 +395,14 @@ struct MediaThumbnailView: View {
         .font(.system(size: 9, weight: .bold))
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(Color.accentColor.opacity(0.4))
+        .foregroundStyle(accent)
+        .background {
+            Capsule()
+                .fill(bgAccent.opacity(colorScheme == .dark ? 0.25 : 0.35))
+        }
+        .overlay {
+            Capsule().stroke(accent.opacity(0.15), lineWidth: 0.5)
+        }
         .clipShape(Capsule())
     }
 

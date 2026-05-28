@@ -8,7 +8,6 @@ struct DetailView: View {
 
     @State private var viewModel: DetailViewModel
     @State private var isAppeared = false
-    @State private var isDeleted = false
     @State private var isCastExpanded = false
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
@@ -35,7 +34,7 @@ struct DetailView: View {
 
     var body: some View {
         ZStack {
-            if isDeleted || viewModel.item.modelContext == nil {
+            if viewModel.item.modelContext == nil {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
                 contentOverlay
@@ -71,17 +70,19 @@ struct DetailView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .saturation(showDeleteConfirmation ? 0 : 1)
-            .scaleEffect(showDeleteConfirmation ? 0.97 : 1)
+            .animation(.easeInOut(duration: 0.2), value: showDeleteConfirmation)
             .coordinateSpace(name: "detailScroll")
             .onPreferenceChange(ScrollOffsetPref.self) { minY in
                 showNavTitle = minY < -50
             }
 
+        }
+        .overlay {
             if showDeleteConfirmation {
                 deleteConfirmationOverlay
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showDeleteConfirmation)
         .navigationTitle(showNavTitle ? viewModel.item.title : "Details")
         .toolbar { detailToolbar }
         .onAppear {
@@ -257,7 +258,9 @@ struct DetailView: View {
                 }
 
                 Button(role: .destructive) {
-                    showDeleteConfirmation = true
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showDeleteConfirmation = true
+                    }
                 } label: {
                     ZStack {
                         Circle()
@@ -386,15 +389,16 @@ struct DetailView: View {
         let genres = itemToDelete.cachedGenres
         let lang = itemToDelete.cachedLanguage
         let badge = itemToDelete.storedSmartBadgeLabel
-        withAnimation {
-            isDeleted = true
-            FeedbackManager.shared.trigger(.removeFromLibrary)
+
+        showDeleteConfirmation = false
+        FeedbackManager.shared.trigger(.removeFromLibrary)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            dismiss()
         }
 
-        dismiss()
-
         Task {
-            try? await Task.sleep(for: .seconds(0.5))
+            try? await Task.sleep(for: .seconds(0.75))
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
             
             let container = modelContext.container
@@ -405,6 +409,7 @@ struct DetailView: View {
                 let sync = DiscoverySyncService(modelContainer: container)
                 await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
                 
+                try? await Task.sleep(for: .seconds(0.3))
                 await MainActor.run {
                     MediaStateService.shared.postMediaStateChanged()
                 }

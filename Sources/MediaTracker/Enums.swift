@@ -109,6 +109,13 @@ enum MediaState: String, Codable, CaseIterable, Sendable {
     case rewatching = "Re-watching"
     case completed = "Completed"
 
+    static let activeRaw = MediaState.active.rawValue
+    static let completedRaw = MediaState.completed.rawValue
+    static let wishlistRaw = MediaState.wishlist.rawValue
+    static let onHoldRaw = MediaState.onHold.rawValue
+    static let droppedRaw = MediaState.dropped.rawValue
+    static let rewatchingRaw = MediaState.rewatching.rawValue
+
     var displayName: String {
         switch self {
         case .wishlist: return String(localized: "Watchlist")
@@ -145,6 +152,9 @@ enum MediaState: String, Codable, CaseIterable, Sendable {
 enum MediaType: String, Codable, CaseIterable, Sendable {
     case movie = "Movie"
     case tvShow = "TV Show"
+
+    static let movieRaw = MediaType.movie.rawValue
+    static let tvShowRaw = MediaType.tvShow.rawValue
 
     var pluralName: String {
         switch self {

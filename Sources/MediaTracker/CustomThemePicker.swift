@@ -3,77 +3,63 @@ import SwiftUI
 struct ThemePicker: View {
     @Binding var themePreference: Int
     @Environment(\.colorScheme) var colorScheme
+    @Namespace private var themeNamespace
+    @State private var hoveredTag: Int? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
-            // System toggle
-            SettingsRow(title: "Use System Appearance", showDivider: themePreference != 0) {
-                Toggle("", isOn: Binding(
-                    get: { themePreference == 0 },
-                    set: { newValue in
-                        if newValue {
-                            themePreference = 0
-                        } else {
-                            themePreference = colorScheme == .dark ? 2 : 1
+        HStack(spacing: 0) {
+            ForEach(0..<3, id: \.self) { tag in
+                let label = tag == 0 ? "System" : (tag == 1 ? "Light" : "Dark")
+                let icon = tag == 0 ? "circle.lefthalf.filled" : (tag == 1 ? "sun.max.fill" : "moon.fill")
+                let isSelected = themePreference == tag
+                let isHovered = hoveredTag == tag
+                
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        themePreference = tag
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: icon)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(label)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(height: 28)
+                    .padding(.horizontal, 14)
+                    .background {
+                        ZStack {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                                    .matchedGeometryEffect(id: "selected_theme_tab", in: themeNamespace)
+                            } else if isHovered {
+                                Capsule()
+                                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.05 : 0.03))
+                            }
                         }
                     }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                    if themePreference == 0 {
-                        themePreference = colorScheme == .dark ? 2 : 1
-                    } else {
-                        themePreference = 0
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        hoveredTag = isHovered ? tag : nil
                     }
                 }
             }
-
-            // Light/Dark picker (only shown when System is off)
-            if themePreference != 0 {
-                HStack(spacing: 0) {
-                    Spacer().frame(width: 16)
-                    pickerButton(tag: 1, label: "Light", icon: "sun.max.fill")
-                    Spacer().frame(width: 8)
-                    pickerButton(tag: 2, label: "Dark", icon: "moon.fill")
-                    Spacer()
-                }
-                .padding(.vertical, 10)
-            }
         }
-    }
-
-    private func pickerButton(tag: Int, label: String, icon: String) -> some View {
-        let isSelected = themePreference == tag
-        return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                themePreference = tag
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                Text(label)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 0.5)
-            )
-            .contentShape(Rectangle())
+        .padding(4)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
         }
-        .buttonStyle(.plain)
+        .overlay {
+            Capsule()
+                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04), lineWidth: 0.5)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }

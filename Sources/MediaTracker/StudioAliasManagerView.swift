@@ -20,6 +20,8 @@ struct StudioAliasManagerView: View {
             groupListSection
             addButtonSection
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder

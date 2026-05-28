@@ -173,49 +173,70 @@ extension BackgroundDataService {
                 let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
                 let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
 
-                for seasonData in seasonsToSync {
-                    let sNum = seasonData.season_number
-                    
-                    if seasonData.episode_count == 0 { continue }
-                    
+                struct FetchedSeasonData {
+                    let seasonNumber: Int
+                    let name: String?
+                    let episodeCount: Int
+                    let airDate: String?
+                    let episodes: [TVEpisodeResult]
+                }
+
+                let fetchedSeasons: [FetchedSeasonData] = await withTaskGroup(of: FetchedSeasonData?.self) { group in
+                    for seasonData in seasonsToSync {
+                        let sNum = seasonData.season_number
+                        if seasonData.episode_count == 0 { continue }
+                        group.addTask {
+                            do {
+                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
+                            } catch {
+                                AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
+                                return nil
+                            }
+                        }
+                    }
+                    var results: [FetchedSeasonData] = []
+                    for await result in group {
+                        if let result { results.append(result) }
+                    }
+                    return results.sorted { $0.seasonNumber < $1.seasonNumber }
+                }
+
+                for seasonData in fetchedSeasons {
+                    let sNum = seasonData.seasonNumber
                     let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                    
+
                     let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                    let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episode_count, airDate: seasonData.air_date, showID: tmdbID)
+                    let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episodeCount, airDate: seasonData.airDate, showID: tmdbID)
                     season.showID = tmdbID
-                    
+
                     if season.modelContext == nil || season.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
                         season.tvShowDetails = tvDetails
                         modelContext.insert(season)
                     }
-                    
-                    do {
-                        let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
-                        for ep in episodes {
-                            let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
-                            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                            let epName = ep.name ?? "Episode \(ep.episodeNumber)"
-                            let epOverview = ep.overview ?? ""
-                            
-                            let matchingMaze = mazeDict["\(sNum)_\(ep.episodeNumber)"]
-                            
-                            let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
-                            episode.showID = tmdbID
-                            
-                            if episode.modelContext == nil || episode.season?.persistentModelID != season.persistentModelID {
-                                episode.season = season
-                                modelContext.insert(episode)
-                            } else {
-                                episode.name = epName
-                                episode.overview = epOverview
-                                episode.airDate = ep.airDate
-                                episode.airstamp = matchingMaze?.airstamp
-                                episode.runtime = ep.runtime
-                                episode.updateAirDateValue()
-                            }
+
+                    for ep in seasonData.episodes {
+                        let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
+                        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                        let epName = ep.name ?? "Episode \(ep.episodeNumber)"
+                        let epOverview = ep.overview ?? ""
+
+                        let matchingMaze = mazeDict["\(sNum)_\(ep.episodeNumber)"]
+
+                        let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
+                        episode.showID = tmdbID
+
+                        if episode.modelContext == nil || episode.season?.persistentModelID != season.persistentModelID {
+                            episode.season = season
+                            modelContext.insert(episode)
+                        } else {
+                            episode.name = epName
+                            episode.overview = epOverview
+                            episode.airDate = ep.airDate
+                            episode.airstamp = matchingMaze?.airstamp
+                            episode.runtime = ep.runtime
+                            episode.updateAirDateValue()
                         }
-                    } catch {
-                        AppLogger.warning("⚠️ Failed to sync season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
                     }
                 }
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
