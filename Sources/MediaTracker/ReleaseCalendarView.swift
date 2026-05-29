@@ -7,6 +7,7 @@ struct ReleaseCalendarView: View {
 
     @Namespace private var calendarNamespace
     var viewModel: MediaViewModel
+    var refreshID: Int = 0
     
     @State private var calendarData: CalendarResult?
     @State private var selectedDate: Date? = Calendar.current.startOfDay(for: Date())
@@ -80,6 +81,9 @@ struct ReleaseCalendarView: View {
             }
         }
         .onAppear {
+            refreshData(for: currentDisplayMonth)
+        }
+        .onChange(of: refreshID) { _, _ in
             refreshData(for: currentDisplayMonth)
         }
         .onDisappear {

@@ -100,11 +100,6 @@ final class MediaItem: Identifiable {
                         }
                     }
                 }
-                do {
-                    try self.modelContext?.save()
-                } catch {
-                    AppLogger.error("Failed to save state change for \(self.id): \(error)")
-                }
             }
         }
     }

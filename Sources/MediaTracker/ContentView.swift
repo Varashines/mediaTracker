@@ -67,6 +67,7 @@ struct LibraryDetailView: View {
     
     @State private var isSyncHovered = false
     @State private var showingBulkManager = false
+    @State private var refreshID = 0
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
     
@@ -107,7 +108,8 @@ struct LibraryDetailView: View {
                     posterNamespace: posterNamespace,
                     viewModel: viewModel,
                     modelContainer: modelContext.container,
-                    onLoadMore: loadMoreItems
+                    onLoadMore: loadMoreItems,
+                    refreshID: refreshID
                 )
 
                 if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
@@ -166,7 +168,8 @@ struct LibraryDetailView: View {
                     showingBulkManager: $showingBulkManager,
                     isSyncHovered: $isSyncHovered,
                     isSystemSmartCategory: isSystemSmartCategory,
-                    modelContext: modelContext
+                    modelContext: modelContext,
+                    onRefresh: refreshAction
                 )
             }
             .background {
@@ -204,9 +207,9 @@ struct LibraryDetailView: View {
             if isAsleep {
                 viewModel.purgeSleepCache()
             } else {
-                Task { await DiscoveryHubCache.shared.invalidate() }
                 viewModel.isLibraryMetadataDirty = true
                 viewModel.filterSubject.send()
+                checkAndRepairStaleMetadata()
             }
         }
         .task(priority: .background) {
@@ -231,9 +234,6 @@ struct LibraryDetailView: View {
     private func performUpdate() {
         // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
-
-        // Automatically heal stale "Coming Soon" items before sorting
-        checkAndRepairStaleMetadata()
 
         let snapshot = FilterSnapshot(from: viewModel)
 
@@ -438,6 +438,24 @@ struct LibraryDetailView: View {
                     DataService.shared.refreshMetadata(forIDs: idsArray, modelContext: modelContext, force: true)
                 }
             }
+        }
+    }
+
+    private var refreshAction: () -> Void {
+        switch viewModel.selectedCategory {
+        case .discover:
+            return {
+                ImageCache.shared.clearFullCache()
+                viewModel.discoveryRefreshTrigger += 1
+            }
+        case .upcoming:
+            return { refreshID += 1 }
+        case .insights:
+            return { refreshID += 1 }
+        case .smartHub where viewModel.selectedCollectionID == nil:
+            return { refreshID += 1 }
+        default:
+            return { viewModel.filterSubject.send() }
         }
     }
 

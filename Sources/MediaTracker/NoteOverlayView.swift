@@ -85,6 +85,6 @@ struct NoteOverlayView: View {
     
     private func saveNote(_ text: String) {
         targetCollection?.notes = text
-        try? modelContext.save()
+        SaveCoordinator.shared.requestSave(modelContext)
     }
 }

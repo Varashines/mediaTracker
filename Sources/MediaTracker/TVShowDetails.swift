@@ -139,10 +139,6 @@ final class TVShowDetails {
             }
             .first
     }
-
-    func refreshCounts(force: Bool = false) {
-        _ = calculateProgress(forceRecalculate: force)
-    }
     
     func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
         _ = calculateProgress(forceRecalculate: force)

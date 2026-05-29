@@ -368,7 +368,6 @@ struct MediaThumbnailView: View {
             next.markWatched(true)
             item.lastInteractionDate = Date()
             Task { @MainActor in
-                item.checkOverallCompletion()
                 item.syncCachedProperties()
                 if let context = item.modelContext {
                     SaveCoordinator.shared.requestSave(context)

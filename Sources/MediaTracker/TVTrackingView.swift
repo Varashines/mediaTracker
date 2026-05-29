@@ -398,7 +398,7 @@ private struct EpisodeCube: View {
                 .frame(maxWidth: .infinity, minHeight: 110)
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(AppTheme.Colors.cardFill(for: colorScheme))
+                        .fill(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .fill(themeColor.opacity(colorScheme == .dark ? 0.0 : 0.04))

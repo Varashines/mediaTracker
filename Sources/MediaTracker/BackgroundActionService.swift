@@ -17,7 +17,6 @@ actor BackgroundActionService {
                 for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
                     for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
                         episodeObj.markWatched(true)
-                        item.checkOverallCompletion()
                         break
                     }
                 }
@@ -25,7 +24,6 @@ actor BackgroundActionService {
         }
         
         item.syncCachedProperties()
-        item.updateSearchableText()
         try modelContext.save()
         
         // Notify UI

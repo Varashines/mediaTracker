@@ -35,6 +35,19 @@ extension MediaItem {
             }
         }
 
+        // Notify DiscoverySyncService about badge changes to keep hub counts accurate
+        let newLabel = storedSmartBadgeLabel
+        if oldLabel != newLabel {
+            if let container = modelContext?.container {
+                let capturedOld = oldLabel
+                let capturedNew = newLabel
+                Task.detached(priority: .background) {
+                    let sync = DiscoverySyncService(modelContainer: container)
+                    await sync.onBadgeChanged(oldBadge: capturedOld, newBadge: capturedNew)
+                }
+            }
+        }
+
         if let airDate = cachedNextAiringDate ?? releaseDate {
             self.storedIsUpcoming = airDate > now
         } else {
@@ -131,12 +144,15 @@ extension MediaItem {
             self.storedProgress = progress
             self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
 
-            // Auto-advance State
+            // Unified Auto-advance State Logic
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
                 self.state = .completed
                 self.lastStateChangeDate = now
-            } else if progress > 0 && progress < 1.0 && currentState == .wishlist {
+            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
                 self.state = .active
+                self.lastStateChangeDate = now
+            } else if progress == 0 && (currentState == .active || currentState == .completed) {
+                self.state = .wishlist
                 self.lastStateChangeDate = now
             }
             
@@ -152,29 +168,6 @@ extension MediaItem {
             self.storedWatchProgressLabel = nil
             self.storedNextEpisodeLabel = nil
             self.cachedNextAiringDate = tv.nextEpisodeDate
-        }
-    }
-
-    func checkOverallCompletion() {
-        if type == .tvShow, let tv = tvShowDetails {
-            // Use denormalized counts for O(1) check
-            if tv.totalEpisodesCount > 0 {
-                if tv.watchedEpisodesCount >= tv.totalEpisodesCount {
-                    if state != .completed && state != .rewatching {
-                        self.state = .completed
-                    }
-                } else if tv.watchedEpisodesCount > 0 {
-                    // Transition to active when a user starts watching
-                    if state == .wishlist || state == .completed {
-                        self.state = .active
-                    }
-                } else if tv.watchedEpisodesCount == 0 {
-                    // Revert to wishlist if they unwatch everything
-                    if state == .active || state == .completed {
-                        self.state = .wishlist
-                    }
-                }
-            }
         }
     }
 

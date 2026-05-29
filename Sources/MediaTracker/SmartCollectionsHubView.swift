@@ -25,6 +25,7 @@ private actor HubCountsCache {
 struct SmartCollectionsHubView: View {
     let namespace: Namespace.ID
     @Binding var selection: SidebarItem?
+    var refreshID: Int = 0
     
     @Environment(\.modelContext) private var modelContext
 
@@ -253,6 +254,13 @@ struct SmartCollectionsHubView: View {
             let itemID = MediaStateService.shared.lastChangedItemID
             if itemID == nil {
                 Task { await fetchCollections() }
+            }
+        }
+        .onChange(of: refreshID) { _, _ in
+            countsLoaded = false
+            Task {
+                await fetchCollections()
+                await fetchCounts()
             }
         }
     }

@@ -162,7 +162,7 @@ final class StateTransitionTests: XCTestCase {
         tv.totalEpisodesCount = 2
         tv.watchedEpisodesCount = 2
 
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .completed)
     }
 
@@ -197,7 +197,7 @@ final class StateTransitionTests: XCTestCase {
         tv.totalEpisodesCount = 2
         tv.watchedEpisodesCount = 2
 
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .rewatching)
     }
 
@@ -230,7 +230,7 @@ final class StateTransitionTests: XCTestCase {
         tv.totalEpisodesCount = 2
         tv.watchedEpisodesCount = 1
 
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .active)
     }
 
@@ -263,7 +263,7 @@ final class StateTransitionTests: XCTestCase {
         tv.totalEpisodesCount = 2
         tv.watchedEpisodesCount = 0
 
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .wishlist)
     }
 
@@ -296,7 +296,7 @@ final class StateTransitionTests: XCTestCase {
         tv.totalEpisodesCount = 2
         tv.watchedEpisodesCount = 1
 
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .onHold)
     }
 
@@ -350,7 +350,7 @@ final class StateTransitionTests: XCTestCase {
         XCTAssertEqual(tv.totalEpisodesCount, 2)
 
         // Verify overall completion transitions the state to completed
-        item.checkOverallCompletion()
+        item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .completed)
     }
 }

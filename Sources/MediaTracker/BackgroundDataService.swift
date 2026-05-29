@@ -5,8 +5,6 @@ import AppKit
 
 @ModelActor
 actor BackgroundDataService {
-    private let decoder = JSONDecoder()
-
     private var isThermalThrottled: Bool {
         // Phase 1 Optimization: Thermal Awareness for fanless M1 Air
         if ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical {
@@ -41,7 +39,6 @@ actor BackgroundDataService {
         }
         
         item.syncCachedProperties(force: true)
-        item.updateSearchableText()
         try? modelContext.save()
         return (item.persistentModelID, false)
     }
@@ -216,7 +213,6 @@ actor BackgroundDataService {
             }
             
             item.syncCachedProperties(force: true)
-            item.updateSearchableText()
         }
         
         try modelContext.save()
@@ -224,6 +220,10 @@ actor BackgroundDataService {
         // Phase 7: Global Notification Resync
         // After healing metadata and cached properties, ensure the system notification queue is up to date.
         await NotificationManager.shared.scheduleAllUpcomingNotifications()
+        
+        // Full recount to fix any drift from concurrent onBadgeChanged tasks
+        let sync = DiscoverySyncService(modelContainer: modelContext.container)
+        await sync.syncLibrary(force: false)
         
         AppLogger.info("✅ Maintenance: Library heal complete.", logger: AppLogger.background)
     }
@@ -295,7 +295,6 @@ actor BackgroundDataService {
         
         for item in items {
             item.syncCachedProperties(force: true)
-            item.updateSearchableText()
         }
         
         do {
@@ -546,8 +545,6 @@ actor BackgroundDataService {
         tv.recalculateCachedProperties(triggerSync: true, force: true)
         refreshedItem.lastInteractionDate = Date()
         refreshedItem.syncCachedProperties(force: true)
-        refreshedItem.updateSearchableText()
-        refreshedItem.checkOverallCompletion()
         
         do {
             try modelContext.save()

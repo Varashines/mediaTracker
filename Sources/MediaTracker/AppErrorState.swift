@@ -47,7 +47,7 @@ class AppErrorState {
         }
     }
     
-    func showToast(_ message: String, systemImage: String? = nil, style: ToastStyle = .info, duration: Double = 3.5) {
+    func showToast(_ message: String, style: ToastStyle = .info, duration: Double = 3.5) {
         dismissTask?.cancel()
         
         withAnimation(AppTheme.Animation.springGentle) {

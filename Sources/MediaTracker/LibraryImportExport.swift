@@ -141,7 +141,7 @@ class LibraryImportExportService {
                         let count = await backgroundService.importLibraryData(backup: backup)
 
                         AppLogger.info("✅ Library imported successfully: \(count) new items.", logger: AppLogger.data)
-                        AppErrorState.shared.showToast("Imported \(count) items.", systemImage: "tray.and.arrow.down.fill", style: .success)
+                        AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
                         
                         // Automatically start fetching metadata for everything in the library
                         let descriptor = FetchDescriptor<MediaItem>()

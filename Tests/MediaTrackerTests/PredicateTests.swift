@@ -20,54 +20,6 @@ final class PredicateTests: XCTestCase {
     }
 
     @MainActor
-    func testUpcomingPredicate() throws {
-        let container = makeContainer()
-        let predicate = MediaFilterPredicates.buildUpcomingPredicate()
-
-        let upcoming = MediaItem(id: "1", title: "Upcoming", overview: "", type: .movie)
-        upcoming.storedIsUpcoming = true
-        let not = MediaItem(id: "2", title: "Not", overview: "", type: .movie)
-        not.storedIsUpcoming = false
-
-        try insertItems([upcoming, not], into: container)
-        let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
-
-        XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result.first?.title, "Upcoming")
-    }
-
-    @MainActor
-    func testBasePredicateAllReturnsAll() throws {
-        let container = makeContainer()
-        // .all falls through to default case without search
-        let predicate = MediaFilterPredicates.buildBasePredicate(category: .all, searchToken: "")
-
-        let item1 = MediaItem(id: "1", title: "A", overview: "", type: .movie)
-        let item2 = MediaItem(id: "2", title: "B", overview: "", type: .tvShow)
-
-        try insertItems([item1, item2], into: container)
-        let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
-
-        XCTAssertEqual(result.count, 2)
-    }
-
-    @MainActor
-    func testBasePredicateSearchFilters() throws {
-        let container = makeContainer()
-        let predicate = MediaFilterPredicates.buildBasePredicate(category: .all, searchToken: "matrix")
-
-        let matching = MediaItem(id: "1", title: "The Matrix", overview: "")
-        matching.searchableText = "the matrix"
-        let not = MediaItem(id: "2", title: "Other", overview: "")
-        not.searchableText = "other"
-
-        try insertItems([matching, not], into: container)
-        let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
-
-        XCTAssertEqual(result.count, 1)
-    }
-
-    @MainActor
     func testFilteredPredicateUpcoming() throws {
         let container = makeContainer()
         let predicate = MediaFilterPredicates.buildFilteredPredicate(
@@ -120,6 +72,40 @@ final class PredicateTests: XCTestCase {
 
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result.first?.title, "Movie")
+    }
+
+    @MainActor
+    func testFilteredPredicateAllReturnsAll() throws {
+        let container = makeContainer()
+        let predicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: .all, searchToken: "", stateValue: nil
+        )
+
+        let item1 = MediaItem(id: "1", title: "A", overview: "", type: .movie)
+        let item2 = MediaItem(id: "2", title: "B", overview: "", type: .tvShow)
+
+        try insertItems([item1, item2], into: container)
+        let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
+
+        XCTAssertEqual(result.count, 2)
+    }
+
+    @MainActor
+    func testFilteredPredicateSearchFilters() throws {
+        let container = makeContainer()
+        let predicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: .all, searchToken: "matrix", stateValue: nil
+        )
+
+        let matching = MediaItem(id: "1", title: "The Matrix", overview: "")
+        matching.searchableText = "the matrix"
+        let not = MediaItem(id: "2", title: "Other", overview: "")
+        not.searchableText = "other"
+
+        try insertItems([matching, not], into: container)
+        let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
+
+        XCTAssertEqual(result.count, 1)
     }
 
     @MainActor
@@ -200,9 +186,11 @@ final class PredicateTests: XCTestCase {
     }
 
     @MainActor
-    func testInProgressPredicate() throws {
+    func testFilteredPredicateInProgress() throws {
         let container = makeContainer()
-        let predicate = MediaFilterPredicates.buildInProgressPredicate()
+        let predicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: .inProgress, searchToken: "", stateValue: nil
+        )
 
         let active = MediaItem(id: "1", title: "Active Show", overview: "", type: .tvShow)
         active.stateValue = "Active"
@@ -218,9 +206,11 @@ final class PredicateTests: XCTestCase {
     }
 
     @MainActor
-    func testBingePredicate() throws {
+    func testFilteredPredicateBinge() throws {
         let container = makeContainer()
-        let predicate = MediaFilterPredicates.buildBingePredicate()
+        let predicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: .binge, searchToken: "", stateValue: nil
+        )
 
         let binge = MediaItem(id: "1", title: "Binge Show", overview: "", type: .tvShow)
         binge.storedSmartBadgeLabel = "BINGE"

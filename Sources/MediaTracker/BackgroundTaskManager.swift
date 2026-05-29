@@ -184,6 +184,10 @@ class BackgroundTaskManager {
                 }
                 try context.save()
                 
+                // Full recount to fix any drift from concurrent onBadgeChanged tasks
+                let sync = DiscoverySyncService(modelContainer: container)
+                await sync.syncLibrary(force: false)
+                
                 // Broadcast to update UI
                 await MainActor.run {
                     MediaStateService.shared.postMediaStateChanged()

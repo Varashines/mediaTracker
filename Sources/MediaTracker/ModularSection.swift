@@ -29,7 +29,7 @@ struct ModularSection<Content: View>: View {
                 .padding(AppTheme.Spacing.medium)
                 .background {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(AppTheme.Colors.cardFill(for: scheme))
+                        .fill(Color.primary.opacity(scheme == .dark ? 0.04 : 0.02))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                 .overlay(

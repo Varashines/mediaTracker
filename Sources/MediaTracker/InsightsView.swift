@@ -8,6 +8,7 @@ struct InsightsView: View {
     @State private var stats: LibraryStats?
     @State private var isLoading = true
     @State private var statsTask: Task<Void, Never>? = nil
+    var refreshID: Int = 0
     
     @AppStorage("theme_preference") private var themePreference = 0
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
@@ -90,6 +91,7 @@ struct InsightsView: View {
             }
         }
         .onAppear(perform: refreshData)
+        .onChange(of: refreshID) { _, _ in refreshData() }
         .onDisappear {
             statsTask?.cancel()
             statsTask = nil

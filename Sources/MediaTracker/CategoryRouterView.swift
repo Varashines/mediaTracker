@@ -8,6 +8,7 @@ struct CategoryRouterView: View {
     @Bindable var viewModel: MediaViewModel
     var modelContainer: ModelContainer
     var onLoadMore: (() -> Void)?
+    var refreshID: Int = 0
 
     var body: some View {
         if isSearchActive {
@@ -26,11 +27,11 @@ struct CategoryRouterView: View {
                 viewModel.navigationPath.append(filter)
             }
         } else if viewModel.selectedCategory == .upcoming {
-            ReleaseCalendarView(viewModel: viewModel)
+            ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID)
         } else if viewModel.selectedCategory == .insights {
-            InsightsView()
+            InsightsView(refreshID: refreshID)
         } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
-            SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection)
+            SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection, refreshID: refreshID)
         } else {
             MainLibraryView(
                 items: viewModel.displayedItems,

@@ -260,16 +260,15 @@ extension BackgroundDataService {
                 }
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
-            
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
-            item.updateSearchableText()
             item.lastUpdated = Date()
             return true
         } catch {
             return false
         }
     }
+
 
     func extractAndSavePosterColor(for item: MediaItem) async {
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL

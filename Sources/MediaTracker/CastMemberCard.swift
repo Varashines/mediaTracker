@@ -29,7 +29,7 @@ struct CastMemberCard: View {
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .background {
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .fill(AppTheme.Colors.background(for: colorScheme))
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04))
                 .shadow(color: accent.opacity(colorScheme == .dark ? 0.15 : 0.12), radius: 6, x: 0, y: 3)
         }
         .overlay(borderOverlay())

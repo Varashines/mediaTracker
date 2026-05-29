@@ -146,7 +146,7 @@ actor DiscoverySyncService {
                 }
 
                 // Count Badges
-                if let badge = item.storedSmartBadgeLabel {
+                if let badge = item.storedSmartBadgeLabel, !badge.isEmpty {
                     badgeCounts[badge, default: 0] += 1
                 }
             }
@@ -201,7 +201,7 @@ actor DiscoverySyncService {
                 modelContext.insert(BadgeEntity(label: label, count: count))
             }
         }
-        for entity in existingBadges where badgeCounts[entity.label] == nil {
+        for entity in existingBadges where badgeCounts[entity.label] == nil || entity.label.isEmpty {
             modelContext.delete(entity)
         }
         
@@ -258,7 +258,7 @@ actor DiscoverySyncService {
         }
 
         // Incremental Badge update
-        if let badge = item.storedSmartBadgeLabel {
+        if let badge = item.storedSmartBadgeLabel, !badge.isEmpty {
             let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == badge })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count += 1
@@ -311,7 +311,7 @@ actor DiscoverySyncService {
             let name = LanguageUtils.languageName(for: $0.code)
             return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
         }
-        let snBadges = ((try? modelContext.fetch(badgeDescriptor)) ?? []).map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
+        let snBadges = ((try? modelContext.fetch(badgeDescriptor)) ?? []).filter { !$0.label.isEmpty }.map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
 
         return DiscoveryHubData(networks: snNets, genres: snGenres, languages: snLangs, badges: snBadges)
     }
@@ -353,7 +353,7 @@ actor DiscoverySyncService {
             }
         }
 
-        if let b = badge {
+        if let b = badge, !b.isEmpty {
             let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == b })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count -= 1
@@ -361,6 +361,25 @@ actor DiscoverySyncService {
             }
         }
         
+        try? modelContext.save()
+    }
+
+    func onBadgeChanged(oldBadge: String?, newBadge: String?) async {
+        if let old = oldBadge, !old.isEmpty {
+            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == old })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count -= 1
+                if existing.count <= 0 { modelContext.delete(existing) }
+            }
+        }
+        if let new = newBadge, !new.isEmpty {
+            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == new })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(BadgeEntity(label: new, count: 1))
+            }
+        }
         try? modelContext.save()
     }
 

@@ -48,10 +48,4 @@ final class MediaStateService {
         lastChangedItemID = nil
         TasteActor.clearCache()
     }
-
-    func postTVShowMarkedCompleted() {
-        needsFullRefreshCount += 1
-        lastChangedItemID = nil
-        TasteActor.clearCache()
-    }
 }

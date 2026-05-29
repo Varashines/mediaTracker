@@ -8,6 +8,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @Binding var isSyncHovered: Bool
     let isSystemSmartCategory: Bool
     let modelContext: ModelContext
+    let onRefresh: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
@@ -72,24 +73,15 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @ViewBuilder
     private var refreshButton: some View {
         Button {
-            if viewModel.selectedCategory == .discover {
-                ImageCache.shared.clearFullCache()
-                viewModel.discoveryRefreshTrigger += 1
-            } else {
-                performLibrarySync()
-            }
+            onRefresh()
         } label: {
             ZStack {
                 Circle()
                     .fill(Color.primary.opacity(isSyncHovered ? 0.1 : 0.06))
                     .frame(width: 32, height: 32)
 
-                if DataService.shared.isRefreshing {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(AppTheme.Font.heading)
-                }
+                Image(systemName: "arrow.clockwise")
+                    .font(AppTheme.Font.heading)
             }
         }
         .buttonStyle(.plain)
@@ -99,21 +91,5 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             }
         }
         .help("Sync Library")
-        .disabled(DataService.shared.isRefreshing)
-    }
-
-    private func performLibrarySync() {
-        guard !DataService.shared.isRefreshing else { return }
-
-        let container = modelContext.container
-        Task {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<MediaItem>()
-            guard let items = try? context.fetch(descriptor) else { return }
-            let ids = items.map(\.id)
-            await MainActor.run {
-                DataService.shared.refreshMetadata(forIDs: ids, modelContext: modelContext, force: true)
-            }
-        }
     }
 }

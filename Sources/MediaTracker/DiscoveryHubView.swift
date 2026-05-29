@@ -1,37 +1,6 @@
 import SwiftUI
 import SwiftData
 
-actor DiscoveryHubCache {
-    static let shared = DiscoveryHubCache()
-    private var networks: [DiscoveryNode]?
-    private var genres: [DiscoveryNode]?
-    private var languages: [DiscoveryNode]?
-    private var badges: [DiscoveryNode]?
-    private var savedAt: Date?
-
-    func load() -> (networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode], badges: [DiscoveryNode])? {
-        guard let savedAt, savedAt > Date().addingTimeInterval(-300) else {
-            networks = nil; genres = nil; languages = nil; badges = nil
-            return nil
-        }
-        guard let networks, let genres, let languages, let badges else { return nil }
-        return (networks, genres, languages, badges)
-    }
-
-    func save(networks: [DiscoveryNode], genres: [DiscoveryNode], languages: [DiscoveryNode], badges: [DiscoveryNode]) {
-        self.networks = networks
-        self.genres = genres
-        self.languages = languages
-        self.badges = badges
-        savedAt = Date()
-    }
-
-    func invalidate() {
-        networks = nil; genres = nil; languages = nil; badges = nil
-        savedAt = nil
-    }
-}
-
 struct DiscoveryHubView: View {
     @Environment(\.modelContext) private var modelContext
     let namespace: Namespace.ID
@@ -99,7 +68,6 @@ struct DiscoveryHubView: View {
         if force {
             Task {
                 await MainActor.run { NetworkThemeManager.shared.resetAll() }
-                await DiscoveryHubCache.shared.invalidate()
             }
         }
 
@@ -112,20 +80,6 @@ struct DiscoveryHubView: View {
                     }
                 }
             }
-
-            if !force, let cached = await DiscoveryHubCache.shared.load() {
-                await MainActor.run {
-                    viewModel.lastDiscoveryRefresh = Date()
-                    viewModel.cachedNetworks = cached.networks
-                    viewModel.cachedGenres = cached.genres
-                    viewModel.cachedLanguages = cached.languages
-                    viewModel.cachedBadges = cached.badges
-                    hasDataLoaded = true
-                }
-                prewarmLogos(networks: cached.networks)
-                return
-            }
-
 
             let container = modelContext.container
             let localHidden = hiddenStudios
@@ -141,7 +95,6 @@ struct DiscoveryHubView: View {
             }
 
             let hubData = await syncService.fetchHubData(hiddenStudios: localHidden)
-            await DiscoveryHubCache.shared.save(networks: hubData.networks, genres: hubData.genres, languages: hubData.languages, badges: hubData.badges)
 
             await MainActor.run {
                 withAnimation(AppTheme.Animation.springGentle) {

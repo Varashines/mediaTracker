@@ -84,7 +84,7 @@ class DataService {
                 await MainActor.run {
                     self.isRunningMaintenance = false
                     if !silent {
-                        AppErrorState.shared.showToast("Library repair complete.", systemImage: "checkmark.circle.fill", style: .success)
+                        AppErrorState.shared.showToast("Library repair complete.", style: .success)
                     }
                 }
             } catch {
@@ -99,7 +99,7 @@ class DataService {
     }
 
     func refreshAllBadges(modelContext: ModelContext) {
-        AppErrorState.shared.showToast("Recalculating badges...", systemImage: "sparkles", style: .info)
+        AppErrorState.shared.showToast("Recalculating badges...", style: .info)
         runMaintenance(modelContext: modelContext, silent: false)
     }
 
@@ -110,7 +110,7 @@ class DataService {
             await service.clearDatabase()
             
             await MainActor.run {
-                AppErrorState.shared.showToast("Database cleared successfully.", systemImage: "trash", style: .success)
+                AppErrorState.shared.showToast("Database cleared successfully.", style: .success)
                 MediaStateService.shared.postMediaStateChanged()
             }
         }

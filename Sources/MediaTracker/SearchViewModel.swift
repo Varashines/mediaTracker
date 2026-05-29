@@ -253,7 +253,7 @@ class SearchViewModel {
             }.value
 
             if fetchResult.isExisting {
-                AppErrorState.shared.showToast("Title already in Library", systemImage: "info.circle.fill", style: .info)
+                AppErrorState.shared.showToast("Title already in Library", style: .info)
             }
             
             if let id = fetchResult.id, let item = modelContext.model(for: id) as? MediaItem {

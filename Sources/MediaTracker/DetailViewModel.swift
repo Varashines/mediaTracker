@@ -73,9 +73,9 @@ class DetailViewModel {
             }
         }
 
-        // Priority 3: System accent color (fallback)
-        self.themeColor = .accentColor
-        self.secondaryThemeColor = .accentColor.opacity(0.8)
+        // Priority 3: Neutral fallback (never use global accent)
+        self.themeColor = Color.secondary.opacity(0.15)
+        self.secondaryThemeColor = Color.secondary.opacity(0.1)
         self.recalculateVibrantPalette()
     }
 
@@ -113,21 +113,6 @@ class DetailViewModel {
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         updateThemeColor()
-
-        // Lightweight extraction: if poster color is missing, extract it now
-        if item.themeColorHex == nil, let poster = item.posterURL, let url = URL(string: poster) {
-            Task { [weak self] in
-                guard let self else { return }
-                if let (data, _) = try? await URLSession.shared.data(from: url),
-                   let image = NSImage(data: data),
-                   let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                    self.item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
-                    self.item.themeColorSourceURL = poster
-                    self.updateThemeColor()
-                }
-            }
-        }
 
         let hasData = item.lastUpdated != nil
 
@@ -262,8 +247,7 @@ class DetailViewModel {
                     }
                     
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
-                    self.item.updateSearchableText()
-                    self.checkOverallCompletion()
+                    self.item.syncCachedProperties()
                 }
             }
         } catch {
@@ -280,7 +264,7 @@ class DetailViewModel {
         
         // 1. Instant Optimistic UI Update
         withAnimation {
-            item.checkOverallCompletion()
+            item.syncCachedProperties()
             item.lastStateChangeDate = Date() // Trigger grid refresh
             item.lastInteractionDate = Date() // Bump to top of Continue Watching
             
@@ -337,7 +321,7 @@ class DetailViewModel {
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
             item.lastInteractionDate = Date()
-            checkOverallCompletion()
+            item.syncCachedProperties()
         }
     }
 

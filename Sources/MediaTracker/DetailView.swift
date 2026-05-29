@@ -34,7 +34,7 @@ struct DetailView: View {
     var body: some View {
         ZStack {
             if viewModel.item.modelContext == nil {
-                AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
+                Color(white: colorScheme == .dark ? 0.11 : 0.96).ignoresSafeArea()
             } else {
                 contentOverlay
             }
@@ -45,7 +45,7 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
-            AppTheme.Colors.background(for: colorScheme)
+            Color(white: colorScheme == .dark ? 0.11 : 0.96)
                 .overlay(p.opacity(0.12))
                 .ignoresSafeArea()
             ScrollView {
@@ -182,7 +182,7 @@ struct DetailView: View {
                             tvDetails: tv,
                             themeColor: effectiveThemeColor,
                             isRefreshing: viewModel.isRefreshing,
-                            onWatchedToggle: { viewModel.checkOverallCompletion() },
+                            onWatchedToggle: { viewModel.item.syncCachedProperties() },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
                         )
                         .padding(.top, 4)
