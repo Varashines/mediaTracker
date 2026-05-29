@@ -42,10 +42,9 @@ class DetailViewModel {
     }
     
     func updateThemeColor() {
-        // Skip if item is deleted or app is in sleep mode
-        guard let context = item.modelContext, !SleepManager.shared.isAsleep else { return }
+        guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
-        // Priority 1: Option B (Pre-calculated Poster Color from SwiftData)
+        // Priority 1: Pre-calculated Poster Color from SwiftData
         if let hex = item.themeColorHex {
             if hex.contains("|") {
                 let parts = hex.split(separator: "|", maxSplits: 1).map(String.init)
@@ -62,19 +61,7 @@ class DetailViewModel {
             }
         }
 
-        // Priority 2: Option A (Network/Studio Theme Color)
-        if let networkName = item.cachedNetwork {
-            let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate<NetworkEntity> { $0.name == first })
-            if let network = try? context.fetch(descriptor).first, let hex = network.themeColorHex, let netColor = Color(hex: hex) {
-                self.themeColor = netColor
-                self.secondaryThemeColor = netColor
-                self.recalculateVibrantPalette()
-                return
-            }
-        }
-        
-        // Priority 3: Fallback Default
+        // Priority 2: System accent color (no poster color available)
         self.themeColor = .accentColor
         self.secondaryThemeColor = .accentColor.opacity(0.8)
         self.recalculateVibrantPalette()
@@ -115,8 +102,23 @@ class DetailViewModel {
 
         updateThemeColor()
 
+        // Lightweight extraction: if poster color is missing, extract it now
+        if item.themeColorHex == nil, let poster = item.posterURL, let url = URL(string: poster) {
+            Task { [weak self] in
+                guard let self else { return }
+                if let (data, _) = try? await URLSession.shared.data(from: url),
+                   let image = NSImage(data: data),
+                   let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let pair = await ColorExtractor.topTwoColors(from: cgImage)
+                    self.item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
+                    self.item.themeColorSourceURL = poster
+                    self.updateThemeColor()
+                }
+            }
+        }
+
         let hasData = item.lastUpdated != nil
-        
+
         if !force && DataService.shared.hasRefreshedThisSession(id: item.id) {
             return
         }
@@ -153,7 +155,7 @@ class DetailViewModel {
     func refreshLocalItem() {
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
-        
+
         updateThemeColor()
     }
 

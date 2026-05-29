@@ -104,6 +104,11 @@ struct DetailView: View {
                 viewModel.refreshLocalItem()
             }
         }
+        .onChange(of: viewModel.item.themeColorHex) { _, newHex in
+            if newHex != nil {
+                viewModel.updateThemeColor()
+            }
+        }
         .tint(effectiveThemeColor)
         .background {
             Group {

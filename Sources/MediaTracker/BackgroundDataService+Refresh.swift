@@ -253,10 +253,11 @@ extension BackgroundDataService {
     }
 
     func extractAndSavePosterColor(for item: MediaItem) async {
-        guard item.themeColorHex == nil,
+        let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
+        guard shouldExtract,
               let poster = item.posterURL,
               let url = URL(string: poster) else { return }
-        
+
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let image = NSImage(data: data),
@@ -265,6 +266,7 @@ extension BackgroundDataService {
                 let primaryHex = pair.primary.toHex()
                 let secondaryHex = pair.secondary.toHex()
                 item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+                item.themeColorSourceURL = poster
             }
         } catch {
             AppLogger.debug("Failed to extract poster color for item \(item.title): \(error)")

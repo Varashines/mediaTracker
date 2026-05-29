@@ -14,6 +14,7 @@ final class MediaItem: Identifiable {
     var stateValue: String = "Wishlist"
     var tasteValue: String = "None"
     var themeColorHex: String?
+    var themeColorSourceURL: String?
     var lastInteractionDate: Date?
     var lastStateChangeDate: Date?
     var dateAdded: Date?
@@ -171,7 +172,7 @@ extension MediaItem {
 extension MediaItem {
     nonisolated(unsafe) static let thumbnailProperties: [PartialKeyPath<MediaItem>] = [
         \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
-        \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
+        \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex, \.themeColorSourceURL,
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
         \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,

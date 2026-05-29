@@ -62,6 +62,40 @@ struct MediaTrackerApp: App {
         URLCache.shared = cache
 
         Task { await NotificationManager.shared.requestPermission() }
+
+        // Migration: Bulk re-extract poster colors with improved algorithm
+        let extractionVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
+        if extractionVersion < 3 {
+            let container = sharedModelContainer
+            Task { @MainActor in
+                let descriptor = FetchDescriptor<MediaItem>()
+                guard let items = try? container.mainContext.fetch(descriptor) else { return }
+
+                var processed = 0
+                for item in items {
+                    guard item.modelContext != nil, !item.isDeleted else { continue }
+                    let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
+                    guard shouldExtract, let poster = item.posterURL, let url = URL(string: poster) else { continue }
+
+                    if let (data, _) = try? await URLSession.shared.data(from: url),
+                       let image = NSImage(data: data),
+                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        let pair = await ColorExtractor.topTwoColors(from: cgImage)
+                        item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
+                        item.themeColorSourceURL = poster
+                        processed += 1
+                    }
+
+                    if processed % 5 == 0 {
+                        try? await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                }
+
+                try? container.mainContext.save()
+                UserDefaults.standard.set(3, forKey: "colorExtractionVersion")
+                AppLogger.info("🎨 Migration: Re-extracted poster colors for \(processed) items.", logger: AppLogger.background)
+            }
+        }
     }
 
     @Environment(\.scenePhase) private var scenePhase
