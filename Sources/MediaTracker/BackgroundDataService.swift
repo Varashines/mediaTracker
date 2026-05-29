@@ -327,7 +327,7 @@ actor BackgroundDataService {
         // The @ModelActor serializes model context writes, but the async network
         // calls inside refreshSingleItem release the actor, allowing other tasks
         // to make progress. This gives us parallel network I/O with safe serial writes.
-        let maxConcurrent = 4
+        let maxConcurrent = 8
         await withTaskGroup(of: (Int, Bool).self) { group in
             var submitted = 0
 

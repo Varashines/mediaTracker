@@ -119,13 +119,13 @@ actor APIClient {
     }
 
     // MARK: - Disk Cache Helpers
-    private func getCachedData(forKey key: String) async -> Data? {
+    private func getCachedData(forKey key: String, ttl: TimeInterval = 7 * 86400) async -> Data? {
         let fileURL = cacheFolder.appendingPathComponent(key)
-        
+
         return await FileIOActor.shared.run {
             guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
                   let modificationDate = attributes[.modificationDate] as? Date,
-                  Date().timeIntervalSince(modificationDate) < (7 * 86400) else { // 7 day cache
+                  Date().timeIntervalSince(modificationDate) < ttl else {
                 return nil
             }
             return try? Data(contentsOf: fileURL)
@@ -266,13 +266,15 @@ actor APIClient {
 
     func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        if !force, let cachedData = await getCachedData(forKey: cacheKey),
+        // With force: use 24h TTL instead of skipping cache entirely
+        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
         }
 
         // Coalesce concurrent in-flight requests for the same movie to share one network call
-        if !force, let existing = inFlightMovieDetails[tmdbID] {
+        if let existing = inFlightMovieDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<MovieDetailsResult, Error> {
@@ -338,13 +340,15 @@ actor APIClient {
 
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
-        if !force, let cachedData = await getCachedData(forKey: cacheKey),
+        // With force: use 24h TTL instead of skipping cache entirely
+        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             return processTVDetails(d)
         }
 
         // Coalesce concurrent in-flight requests for the same show to share one network call
-        if !force, let existing = inFlightTVDetails[tmdbID] {
+        if let existing = inFlightTVDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<TVDetailsResult, Error> {
@@ -419,12 +423,13 @@ actor APIClient {
         return "https://image.tmdb.org/t/p/\(size)\(path)"
     }
 
-    func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int) async throws -> [TVEpisodeResult] {
+    func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int, force: Bool = false) async throws -> [TVEpisodeResult] {
         let cacheKey = "season_details_\(tmdbID)_\(seasonNumber).json"
         let coalescingKey = cacheKey
 
-        // Check disk cache first (24h TTL for season data)
-        if let cachedData = await getCachedData(forKey: cacheKey),
+        // Check disk cache first (24h TTL for season data, or 7-day if not force)
+        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBSeasonResponse.self, from: cachedData) {
             return decoded.episodes.map {
                 TVEpisodeResult(episodeNumber: $0.episode_number, name: $0.name, overview: $0.overview, airDate: $0.air_date, runtime: $0.runtime)
@@ -476,25 +481,34 @@ actor APIClient {
     func fetchOMDBData(imdbID: String) async -> OMDBFullData? {
         let key = omdbApiKey
         guard !key.isEmpty else { return nil }
+
+        // Check disk cache first
+        let cacheKey = "omdb_\(imdbID)"
+        if let cachedData = await getCachedData(forKey: cacheKey),
+           let decoded = try? decoder.decode(OMDBResponse.self, from: cachedData),
+           let result = decoded.toFullData {
+            return result
+        }
+
         var components = URLComponents(string: "https://www.omdbapi.com")!
         components.queryItems = [
             URLQueryItem(name: "apikey", value: key),
             URLQueryItem(name: "i", value: imdbID)
         ]
         guard let url = components.url else { return nil }
-        
-        for _ in 0..<3 {
-            guard let (data, response) = try? await session.data(from: url),
-                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-                  let decoded = try? decoder.decode(OMDBResponse.self, from: data)
-            else {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                continue
+
+        return try? await executeWithRetry(maxAttempts: 3) {
+            let (data, response) = try await self.session.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
             }
-            if let result = decoded.toFullData { return result }
-            return nil
+            let decoded = try self.decoder.decode(OMDBResponse.self, from: data)
+            if let result = decoded.toFullData {
+                self.saveToCache(data: data, forKey: cacheKey)
+                return result
+            }
+            throw URLError(.cannotDecodeContentData)
         }
-        return nil
     }
 
     // MARK: - TVMaze Integration
@@ -513,21 +527,37 @@ actor APIClient {
     }
 
     func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?) {
+        // Check 24h disk cache
+        let cacheKey = "tvmaze_schedule_\(tvMazeID)"
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 86400),
+           let r = try? decoder.decode(TVMazeResponse.self, from: cachedData) {
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
+        }
+
         return try await executeWithRetry {
             let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let r = try self.decoder.decode(TVMazeResponse.self, from: data)
+            saveToCache(data: data, forKey: cacheKey)
             return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
         }
     }
 
     func fetchTVMazeEpisodes(tvMazeID: Int) async throws -> [TVMazeEpisode] {
+        // Check 24h disk cache
+        let cacheKey = "tvmaze_episodes_\(tvMazeID)"
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 86400) {
+            return try decoder.decode([TVMazeEpisode].self, from: cachedData)
+        }
+
         return try await executeWithRetry {
             let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes")!
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
-            return try self.decoder.decode([TVMazeEpisode].self, from: data)
+            let result = try self.decoder.decode([TVMazeEpisode].self, from: data)
+            saveToCache(data: data, forKey: cacheKey)
+            return result
         }
     }
 

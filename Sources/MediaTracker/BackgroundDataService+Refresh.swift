@@ -135,7 +135,14 @@ extension BackgroundDataService {
             }()
 
             let newCastResults = details.cast
-            tvDetails.cast.forEach { modelContext.delete($0) }
+            let currentCast = tvDetails.cast
+            let hasChanged = currentCast.count != newCastResults.count ||
+                            zip(currentCast.sorted(by: { $0.name < $1.name }),
+                                newCastResults.sorted(by: { $0.name < $1.name }))
+                            .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+
+            if hasChanged || tvDetails.cast.isEmpty {
+                tvDetails.cast.forEach { modelContext.delete($0) }
             
             var seen = Set<String>()
             var newCastList: [CastMember] = []
@@ -150,6 +157,7 @@ extension BackgroundDataService {
                 newCastList.append(member)
             }
             tvDetails.cast = newCastList
+            }
 
             if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
             tvDetails.item = item
@@ -170,7 +178,7 @@ extension BackgroundDataService {
             tvDetails.tvMazeID = tvMazeID
             
             if !metadataOnly {
-                let shouldFetchAll = force || item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
+                let shouldFetchAll = item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
                 let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
 
                 struct FetchedSeasonData {
@@ -185,9 +193,20 @@ extension BackgroundDataService {
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
                         if seasonData.episode_count == 0 { continue }
+
+                        // Skip seasons that already have episodes loaded unless force
+                        if !force {
+                            let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                            if let existing = try? modelContext.fetch(sDescriptor).first,
+                               existing.totalEpisodesCount > 0 {
+                                continue
+                            }
+                        }
+
                         group.addTask {
                             do {
-                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum)
+                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
                                 return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
                             } catch {
                                 AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)

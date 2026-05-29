@@ -109,7 +109,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         let center = UNUserNotificationCenter.current()
 
         let settings = await center.notificationSettings()
-        guard settings.authorizationStatus == .authorized else {
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
             AppLogger.debug("🔕 Skipping schedule \(identifier): notifications not authorized.", logger: AppLogger.notifications)
             return
         }

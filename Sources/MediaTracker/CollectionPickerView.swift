@@ -89,6 +89,8 @@ struct CollectionToggleRow: View {
         }
         
         // SwiftData might need explicit save or context refresh for relationships sometimes
-        try? item.modelContext?.save()
+        if let context = item.modelContext {
+            SaveCoordinator.shared.requestSave(context)
+        }
     }
 }

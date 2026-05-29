@@ -77,13 +77,21 @@ struct MediaTrackerApp: App {
                     let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
                     guard shouldExtract, let poster = item.posterURL, let url = URL(string: poster) else { continue }
 
-                    if let (data, _) = try? await URLSession.shared.data(from: url),
-                       let image = NSImage(data: data),
-                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                        let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                        item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
-                        item.themeColorSourceURL = poster
-                        processed += 1
+                    // Download and extract on background, update model on main
+                    if let (data, _) = try? await URLSession.shared.data(from: url) {
+                        let pair: DominantPair? = await Task.detached {
+                            if let image = NSImage(data: data),
+                               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                                return await ColorExtractor.topTwoColors(from: cgImage)
+                            }
+                            return nil
+                        }.value
+
+                        if let pair {
+                            item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
+                            item.themeColorSourceURL = poster
+                            processed += 1
+                        }
                     }
 
                     if processed % 5 == 0 {

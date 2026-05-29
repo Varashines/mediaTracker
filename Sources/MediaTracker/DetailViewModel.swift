@@ -29,7 +29,7 @@ class DetailViewModel {
         
         // Active TV shows should check for updates every 24 hours
         if item.type == .tvShow && item.state == .active {
-            return Date().timeIntervalSince(lastUpdated) > 86400
+            return Date().timeIntervalSince(lastUpdated) > TimeInterval.days1
         }
         
         // Maintenance rule for TV shows (30 days)
@@ -38,11 +38,11 @@ class DetailViewModel {
         }
         
         // Default 24h for movies
-        return Date().timeIntervalSince(lastUpdated) > 86400
+        return Date().timeIntervalSince(lastUpdated) > TimeInterval.days1
     }
     
     func updateThemeColor() {
-        guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
+        guard let context = item.modelContext, !SleepManager.shared.isAsleep else { return }
 
         // Priority 1: Pre-calculated Poster Color from SwiftData
         if let hex = item.themeColorHex {
@@ -61,7 +61,19 @@ class DetailViewModel {
             }
         }
 
-        // Priority 2: System accent color (no poster color available)
+        // Priority 2: Network/Studio Theme Color (backup)
+        if let networkName = item.cachedNetwork {
+            let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
+            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate<NetworkEntity> { $0.name == first })
+            if let network = try? context.fetch(descriptor).first, let hex = network.themeColorHex, let netColor = Color(hex: hex) {
+                self.themeColor = netColor
+                self.secondaryThemeColor = netColor
+                self.recalculateVibrantPalette()
+                return
+            }
+        }
+
+        // Priority 3: System accent color (fallback)
         self.themeColor = .accentColor
         self.secondaryThemeColor = .accentColor.opacity(0.8)
         self.recalculateVibrantPalette()
@@ -173,7 +185,9 @@ class DetailViewModel {
         if item.state != .completed {
             item.state = .completed
         }
-        try? item.modelContext?.save()
+        if let context = item.modelContext {
+            SaveCoordinator.shared.requestSave(context)
+        }
         MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
@@ -253,7 +267,6 @@ class DetailViewModel {
                 }
             }
         } catch {
-            AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")
             await MainActor.run {
                 AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")
             }
@@ -337,7 +350,9 @@ class DetailViewModel {
         }
         item.lastInteractionDate = Date()
         item.syncCachedProperties()
-        try? item.modelContext?.save()
+        if let context = item.modelContext {
+            SaveCoordinator.shared.requestSave(context)
+        }
         MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
@@ -355,7 +370,9 @@ class DetailViewModel {
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()
             item.syncCachedProperties()
-            try? item.modelContext?.save()
+            if let context = item.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
             MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
         }
     }
