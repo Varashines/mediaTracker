@@ -358,7 +358,7 @@ private struct EpisodeCube: View {
                         // Episode number
                         Text("E\(episode.episodeNumber)")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(episode.isWatched ? green : unwatchedAccent.opacity(colorScheme == .dark ? 0.7 : 0.9))
+                            .foregroundStyle(episode.isWatched ? .secondary : unwatchedAccent.opacity(colorScheme == .dark ? 0.7 : 0.9))
 
                         Spacer(minLength: 4)
 
@@ -462,7 +462,7 @@ private struct EpisodeCube: View {
                             if episode.isWatched {
                                 Text("WATCHED")
                                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(green)
+                                    .foregroundStyle(.secondary)
                                     .kerning(0.6)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2.5)

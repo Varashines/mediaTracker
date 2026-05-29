@@ -56,7 +56,7 @@ struct TitleSection: View {
 
                     if item.isUpcoming, let dateText = item.detailBadgeText {
                         let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
-                        let color = isStreaming ? Color.green : Color.orange
+                        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
                         HStack(spacing: 4) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
                                 .font(AppTheme.Font.tiny)
@@ -66,14 +66,14 @@ struct TitleSection: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .foregroundStyle(color)
+                        .foregroundStyle(accent)
                         .background {
                             Capsule()
-                                .fill(color.opacity(0.15))
+                                .fill(accent.opacity(0.15))
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(color.opacity(0.15), lineWidth: 0.5)
+                            Capsule().stroke(accent.opacity(0.15), lineWidth: 0.5)
                         }
                     }
                 }

@@ -28,7 +28,7 @@ struct TasteToggle: View {
                     label: "Dislike",
                     icon: "hand.thumbsdown",
                     isSelected: item.taste == .dislike,
-                    activeColor: .gray,
+                    activeColor: Color(white: 0.35),
                     action: { setTaste(.dislike) }
                 )
             }

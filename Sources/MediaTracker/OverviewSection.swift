@@ -12,7 +12,7 @@ struct OverviewSection: View {
             HStack(spacing: 8) {
                 Image(systemName: "quote.opening")
                     .font(AppTheme.Font.heading)
-                    .foregroundStyle(themeColor.gradient)
+                    .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
 
                 Text("SYNOPSIS")
                     .font(AppTheme.Font.bodyBold)
