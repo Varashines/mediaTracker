@@ -1,64 +1,155 @@
-# MediaTracker 🍿📺 [v6.0.0]
+# MediaTracker
 
-MediaTracker is a premium, native macOS application designed for media enthusiasts who demand both aesthetic perfection and functional precision. Built with **SwiftUI** and **SwiftData**, it offers an immersive, "Liquid Glass" experience for tracking your movies and TV shows, staying synchronized with global release schedules, and exploring your collection with unprecedented intelligence.
+Your entire movie and TV show collection, beautifully organized on your Mac. Track what you've watched, what you're watching, and what's coming next — all in one place.
 
-## ✨ The Premium Experience [New in v5.0]
+## What is MediaTracker?
 
-MediaTracker has evolved from a simple database into an intelligent media hub. Every corner of the app is now faster, smarter, and more reactive.
+MediaTracker is a native Mac app that helps you keep your viewing life in order. Add movies and TV shows, rate them, mark episodes as watched, and let the app do the rest. It knows your tastes, reminds you about upcoming releases, and tells you what to watch next.
 
-- **The Home Hub:** 
-    - A cinematic landing page featuring your "Featured" recommendation, a "Continue Watching" row with precise status, and a "Coming Soon" timeline for upcoming releases.
-    - All data is background-processed for a zero-lag experience.
-- **Universal Smart Badges:**
-    - The entire library now utilizes intelligent badges: **BINGE**, **FINALE**, **READY TO BINGE**, and **NEW**.
-    - These badges automatically detect binge-ready seasons and important series milestones.
-- **Immersive Contextual Moods:** 
-    - The app's background now dynamically averages the colors of visible media to create a soft, atmospheric "Category Mood" that shifts as you browse.
-- **The "Repair Library" Tool:** 
-    - A dedicated maintenance utility in Settings that assigns unique identifiers to legacy data, cleans up duplicates, and purges orphaned crew records to keep your database healthy.
-- **Redesigned Cinematic Details:**
-    - A completely overhauled Media Detail view with integrated "Liquid Glass" effects, dynamic color extraction from posters, and a more intuitive layout for seasons, episodes, and cast.
-- **Advanced Performance Guardrails:**
-    - **Memory Pressure Monitoring:** Real-time monitoring that automatically scales down cache usage during heavy system load.
-    - **Scroll Velocity Tracking:** Intelligent UI adjustments based on scroll speed to maintain perfect fluid motion even in large libraries.
+## Home
 
-## 🚀 Key Functional Features
+Your personal dashboard when you open the app:
 
-- **Continue Watching (Smart Filter):**
-    - Automatically shows exactly what to watch next for "Active" shows, but *only* if the episode has already aired.
-- **Binge-Mode Prioritization:**
-    - "In Progress" shows with fresh "Binge Drops" (entire seasons released at once) are automatically bubbled to the top of your list.
-- **Smart "Watch Next" (The Taste Engine):**
-    - A personalized recommendation algorithm that analyzes your "Completed" and "Liked" content to find hidden gems in your Watchlist.
-- **Pro-Grade Search:**
-    - Instant indexing by Title, Director, Creator, Network, or Language.
-- **Regional Accuracy:**
-    - Specialized logic for **India (IN)** release dates, prioritizing theatrical and digital availability for the region.
-- **Optimized TV Tracking:**
-    - Detailed season/episode breakdowns with "Quick Watch" one-click toggles and stable, text-based creator credits.
+- **Continue Watching** — Your active shows with unwatched episodes, ready to pick up right where you left off
+- **Coming Soon** — Upcoming releases you've added, so you never miss a premiere
+- **For You** — Personalized recommendations based on what you've loved and liked
+- **Recently Watched** — Quick access to what you've been enjoying
 
-## 🛠 Technology & Performance
+## Track Everything
 
-- **Language:** Swift 6.0 (Strict Concurrency Safe)
-- **UI:** Pure SwiftUI (Optimized for macOS 15+)
-- **Persistence:** SwiftData with explicit relationships and unique composite identifiers.
-- **Networking:** High-performance URLCache with ETag support for 304 "Not Modified" responses, drastically reducing parsing overhead.
-- **Performance Engine:**
-    - **Background Feed Actors:** Heavy calculations (Home Feed, Discovery, Recommendations) are isolated to background actors to ensure a fluid 60FPS UI.
-    - **Debounced Interactions:** Interaction-aware task management prevents lag during rapid typing or navigation.
+**Movies & TV Shows** — Add any title from a global database of thousands of movies and shows. Each one comes with a poster, cast info, ratings, and more.
 
-## 🚦 Getting Started
+**TV Episode Tracking** — See every season and episode at a glance. Toggle individual episodes as watched, or mark an entire season in one click.
 
-### **Prerequisites**
-- **macOS 15.0 (Sequoia)** or later.
-- **Xcode 16.0+** (if building from source).
+**Media States** — Organize your library the way you want:
+- Want to Watch
+- Active (currently watching)
+- On Hold
+- Dropped
+- Rewatching
+- Completed
 
-### **Installation**
-1. Clone the repository.
-2. Run `bash install.sh` to build and install to your `/Applications` folder.
+**Taste Ratings** — Rate titles as Loved, Liked, or Disliked. These ratings power the recommendation engine and your personal insights.
 
-### **Configuration**
-Enter your own **TMDB API Key** in **Settings > General** to enable metadata syncing and high-resolution posters.
+## Smart Badges
+
+Every item in your library gets an intelligent badge that updates automatically:
+
+- **Premiere** — A new season is about to start
+- **Finale** — A season finale is coming up
+- **Binge Drop** — A full season just landed at once
+- **Binge** — Multiple episodes ready for a marathon
+- **Behind** — You're falling behind on episodes
+- **New** — Recently added to your library
+- **Soon** — Releasing within 48 hours
+
+## Collections
+
+**Manual Collections** — Create your own themed lists. "90s Classics," "Rainy Day Movies," "Comfort Shows" — whatever you like. Pin them to the sidebar for quick access.
+
+**Smart Collections** — Rule-based lists that populate themselves. Set rules like "all completed movies I loved" or "all active shows on Netflix" and watch the collection fill up automatically.
+
+**Quick Add** — Press **Cmd+L** from any detail page to add it to a collection.
+
+## Search
+
+Find anything instantly:
+
+- **Library Search** — Search your own collection by title, cast, creator, network, or language
+- **Global Search** — Search the entire database to discover and add new titles
+- **Recent Searches** — Your last 10 searches are saved for quick access
+- **Year Filter** — Type `y:2023` to narrow results to a specific year
+
+## Release Calendar
+
+A visual calendar that shows you what's releasing and when:
+
+- Heatmap-style overview of release density across the month
+- Quick navigation between weeks
+- Detailed view for any day showing all your releases
+- Color-coded badges for premiere types
+
+## Cinema DNA (Insights)
+
+Discover patterns in your viewing habits:
+
+- **Hero Stats** — Total titles tracked, total watch time, completion rate
+- **Taste Profile** — Your love/like/dislike breakdown, top genres, top networks, top studios
+- **Cast & Crew** — Actors and creators you watch most
+- **Cinephile Lab** — Deep-dive analytics including weekly activity, genre breakdown, release era distribution, and more
+
+## Discovery Hub
+
+Browse and explore by category:
+
+- **Networks & Studios** — See what each streaming service or studio has in your library
+- **Genres** — Browse by genre with color-coded cards
+- **Languages** — Browse by language
+- **Recent Activity** — Filter by smart badges (premieres, finales, binge drops)
+
+## Notifications
+
+Stay on top of new releases:
+
+- Movie premiere alerts
+- TV episode air date notifications
+- Customizable delivery time (daily digest)
+- "Mark as Watched" action directly from the notification
+
+## Settings
+
+Personalize the app:
+
+- **Themes** — Light, Dark, or System mode with Standard, Earth Tones, or Cool Tones palettes
+- **Auto-Complete** — Automatically mark all episodes watched when you complete a show
+- **Haptic & Audio Feedback** — Tactile and sound responses on interactions
+- **Launch at Login** — Open automatically when you start your Mac
+- **Prevent Sleep** — Keep your Mac awake during background syncs
+
+## Backup & Restore
+
+Your data stays safe:
+
+- **Export** — Save your entire library as a backup file
+- **Import** — Restore from a backup whenever you need to
+- **Auto-Backups** — The app keeps rolling backups automatically
+- **Database Repair** — Fix duplicates and keep your data healthy
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| **Cmd+1–7** | Jump to sidebar sections |
+| **Cmd+F** | Open search |
+| **Space** | Mark watched / next episode (in detail view) |
+| **W** | Cycle status (in detail view) |
+| **Cmd+L** | Add to collection |
+| **Cmd+R** | Refresh metadata |
+| **Cmd+Delete** | Delete item |
+
+## Getting Started
+
+**Requirements:** macOS 15.0 (Sequoia) or later
+
+**Install from source:**
+```bash
+git clone <repo-url>
+bash install.sh
+```
+
+**Set up metadata:**
+1. Go to **Settings > Connect**
+2. Enter your **TMDB API Key** (free at [themoviedb.org](https://www.themoviedb.org/documentation/api))
+3. Optional: Add an **OMDb API Key** for Rotten Tomatoes and IMDb ratings
+
+## What Makes It Different
+
+- Native Mac app — fast, responsive, and feels right at home on macOS
+- No subscriptions, no accounts, no cloud dependency
+- Your data stays on your Mac
+- Smart features that learn your taste over time
+- Beautiful design that adapts to the media you're browsing
 
 ---
-*Built with ❤️ for those who love cinema as much as code.*
+
+*Built for people who love watching as much as tracking what they watch.*
