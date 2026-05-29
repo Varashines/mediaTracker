@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import ImageIO
+import CoreImage
 
 struct DominantPair: Sendable, Equatable {
     let primary: Color
@@ -8,41 +8,39 @@ struct DominantPair: Sendable, Equatable {
 }
 
 enum ColorExtractor {
+    private static let defaultGray = Color(red: 0.3, green: 0.3, blue: 0.3)
+    private static let secondaryGray = Color(red: 0.2, green: 0.2, blue: 0.2)
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
     static func dominantColor(from url: URL) async -> Color {
-        let options: [CFString: Any] = [
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 200
-        ]
-
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return Color(red: 0.3, green: 0.3, blue: 0.3)
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceShouldCache: false,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 200
+              ] as CFDictionary) else {
+            return defaultGray
         }
-
         return await dominantColor(from: cgImage)
     }
 
     static func dominantColor(from data: Data) async -> Color {
-        let options: [CFString: Any] = [
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 200
-        ]
-
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return Color(red: 0.3, green: 0.3, blue: 0.3)
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceShouldCache: false,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 200
+              ] as CFDictionary) else {
+            return defaultGray
         }
-
         return await dominantColor(from: cgImage)
     }
 
     static func dominantColor(from image: NSImage) async -> Color {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return Color(red: 0.3, green: 0.3, blue: 0.3)
+            return defaultGray
         }
         return await dominantColor(from: cgImage)
     }
@@ -53,158 +51,120 @@ enum ColorExtractor {
     }
 
     static func topTwoColors(from cgImage: CGImage) async -> DominantPair {
-        let width = cgImage.width
-        let height = cgImage.height
+        let ciImage = CIImage(cgImage: cgImage)
 
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bytesPerPixel = 4
-        let bytesPerRow = bytesPerPixel * width
-        let bitsPerComponent = 8
-
-        var rawData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-
-        guard let context = CGContext(data: &rawData,
-                                      width: width,
-                                      height: height,
-                                      bitsPerComponent: bitsPerComponent,
-                                      bytesPerRow: bytesPerRow,
-                                      space: colorSpace,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else {
-            return DominantPair(primary: Color(red: 0.3, green: 0.3, blue: 0.3),
-                                secondary: Color(red: 0.2, green: 0.2, blue: 0.2))
+        guard let scaledImage = ciContext.createCGImage(
+            ciImage,
+            from: CGRect(x: 0, y: 0, width: ciImage.extent.width, height: ciImage.extent.height),
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        ) else {
+            return DominantPair(primary: defaultGray, secondary: secondaryGray)
         }
 
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+        let width = scaledImage.width
+        let height = scaledImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        var rawData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
 
-        // Convert raw bytes to ARGB Ints
-        var pixels = [Int]()
+        guard let context = CGContext(
+            data: &rawData,
+            width: width, height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return DominantPair(primary: defaultGray, secondary: secondaryGray)
+        }
+
+        context.draw(scaledImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var pixels: [(r: Double, g: Double, b: Double)] = []
         pixels.reserveCapacity(width * height)
 
         for i in stride(from: 0, to: rawData.count, by: bytesPerPixel) {
-            guard rawData[i] > 30 else { continue }
-
-            let a = Int(rawData[i])
-            let r = Int(rawData[i + 1])
-            let g = Int(rawData[i + 2])
-            let b = Int(rawData[i + 3])
-
-            let argb = (a << 24) | (r << 16) | (g << 8) | b
-            pixels.append(argb)
+            let r = Double(rawData[i])
+            let g = Double(rawData[i + 1])
+            let b = Double(rawData[i + 2])
+            let a = Double(rawData[i + 3])
+            guard a > 30 else { continue }
+            let maxRGB = max(r, g, b)
+            guard maxRGB > 20 else { continue }
+            pixels.append((r, g, b))
         }
 
         guard !pixels.isEmpty else {
-            return DominantPair(primary: Color(red: 0.3, green: 0.3, blue: 0.3),
-                                secondary: Color(red: 0.2, green: 0.2, blue: 0.2))
+            return DominantPair(primary: defaultGray, secondary: secondaryGray)
         }
 
-        // Quantize using Material Color Utilities
-        let quantized = QuantizerCelebi().quantize(pixels, 16)
+        let avgR = pixels.map(\.r).reduce(0, +) / Double(pixels.count)
+        let avgG = pixels.map(\.g).reduce(0, +) / Double(pixels.count)
+        let avgB = pixels.map(\.b).reduce(0, +) / Double(pixels.count)
+        let range = max(avgR, avgG, avgB) - min(avgR, avgG, avgB)
 
-        // Check if the image is mostly grayscale (low chroma)
-        let isGrayscale = isGrayscaleImage(quantized: quantized)
-
-        if isGrayscale {
-            return extractGrayscaleColors(quantized: quantized)
+        if range < 25 {
+            let gray = avgR / 255.0
+            return DominantPair(
+                primary: Color(red: gray, green: gray, blue: gray),
+                secondary: Color(red: gray * 0.7, green: gray * 0.7, blue: gray * 0.7)
+            )
         }
 
-        // Normal color path: score for UI theme suitability
-        let scored = Score.score(quantized.colorToCount, desired: 4)
-
-        guard let primaryARGB = scored.first else {
-            return DominantPair(primary: Color(red: 0.3, green: 0.3, blue: 0.3),
-                                secondary: Color(red: 0.2, green: 0.2, blue: 0.2))
+        struct ColorCandidate {
+            let r: Double
+            let g: Double
+            let b: Double
+            let saturation: Double
         }
 
-        let primaryColor = Color(argb: primaryARGB)
+        var candidates: [ColorCandidate] = []
+        let step = max(1, pixels.count / 200)
+        for idx in stride(from: 0, to: pixels.count, by: step) {
+            let p = pixels[idx]
+            let maxC = max(p.r, p.g, p.b)
+            let minC = min(p.r, p.g, p.b)
+            let sat = maxC > 0 ? (maxC - minC) / maxC : 0
+            candidates.append(ColorCandidate(r: p.r, g: p.g, b: p.b, saturation: sat))
+        }
 
-        // Find a secondary color that is visually distinct
+        candidates.sort { $0.saturation > $1.saturation }
+
+        guard let top = candidates.first else {
+            return DominantPair(primary: defaultGray, secondary: secondaryGray)
+        }
+
+        let primaryColor = Color(red: top.r / 255.0, green: top.g / 255.0, blue: top.b / 255.0)
+
         var secondaryColor = primaryColor
-        if scored.count > 1 {
-            let primaryHct = Hct(primaryARGB)
-            for argb in scored.dropFirst() {
-                let candidateHct = Hct(argb)
-                let hueDiff = abs(primaryHct.hue - candidateHct.hue)
-                let chromaDiff = abs(primaryHct.chroma - candidateHct.chroma)
-                if hueDiff > 30 || chromaDiff > 20 {
-                    secondaryColor = Color(argb: argb)
-                    break
-                }
+        let primaryHue = rgbToHue(r: top.r / 255.0, g: top.g / 255.0, b: top.b / 255.0)
+
+        for candidate in candidates.dropFirst() {
+            let cHue = rgbToHue(r: candidate.r / 255.0, g: candidate.g / 255.0, b: candidate.b / 255.0)
+            let hueDiff = abs(primaryHue - cHue)
+            if hueDiff > 30 || (360 - hueDiff) > 30 {
+                secondaryColor = Color(red: candidate.r / 255.0, green: candidate.g / 255.0, blue: candidate.b / 255.0)
+                break
             }
         }
 
         return DominantPair(primary: primaryColor, secondary: secondaryColor)
     }
 
-    /// Detect if the quantized image is mostly grayscale
-    private static func isGrayscaleImage(quantized: QuantizerResult) -> Bool {
-        var totalChroma: Double = 0
-        var totalCount: Int = 0
-
-        for (argb, count) in quantized.colorToCount {
-            let hct = Hct(argb)
-            totalChroma += hct.chroma * Double(count)
-            totalCount += count
-        }
-
-        guard totalCount > 0 else { return true }
-        let averageChroma = totalChroma / Double(totalCount)
-
-        // If average chroma is below 12, treat as grayscale
-        // (normal colorful images typically have chroma > 20)
-        return averageChroma < 12
-    }
-
-    /// Extract colors from grayscale images using the most common gray tones
-    private static func extractGrayscaleColors(quantized: QuantizerResult) -> DominantPair {
-        // Sort quantized colors by population (most common first)
-        let sorted = quantized.colorToCount.sorted { $0.value > $1.value }
-
-        guard let dominantARGB = sorted.first?.key else {
-            return DominantPair(primary: Color(red: 0.5, green: 0.5, blue: 0.5),
-                                secondary: Color(red: 0.35, green: 0.35, blue: 0.35))
-        }
-
-        let dominantHct = Hct(dominantARGB)
-        let tone = dominantHct.tone
-
-        // Create a slightly tinted gray based on the tone
-        // Warm tint for lighter grays, cool tint for darker grays
-        let primaryColor: Color
-        if tone > 50 {
-            // Light gray → warm tint (slight sepia)
-            let r = min(1.0, Double((dominantARGB >> 16) & 0xFF) / 255.0 * 1.05)
-            let g = min(1.0, Double((dominantARGB >> 8) & 0xFF) / 255.0 * 1.0)
-            let b = Double(dominantARGB & 0xFF) / 255.0 * 0.95
-            primaryColor = Color(red: r, green: g, blue: b)
+    private static func rgbToHue(r: Double, g: Double, b: Double) -> Double {
+        let maxC = max(r, g, b)
+        let minC = min(r, g, b)
+        let delta = maxC - minC
+        guard delta > 0 else { return 0 }
+        let hue: Double
+        if maxC == r {
+            hue = 60 * (((g - b) / delta).truncatingRemainder(dividingBy: 6))
+        } else if maxC == g {
+            hue = 60 * (((b - r) / delta) + 2)
         } else {
-            // Dark gray → cool tint (slight blue cast)
-            let r = Double((dominantARGB >> 16) & 0xFF) / 255.0 * 0.95
-            let g = Double((dominantARGB >> 8) & 0xFF) / 255.0 * 0.98
-            let b = min(1.0, Double(dominantARGB & 0xFF) / 255.0 * 1.05)
-            primaryColor = Color(red: r, green: g, blue: b)
+            hue = 60 * (((r - g) / delta) + 4)
         }
-
-        // Secondary: slightly different gray tone
-        var secondaryColor = Color(red: 0.35, green: 0.35, blue: 0.35)
-        if sorted.count > 1, let secondARGB = sorted.dropFirst().first?.key {
-            let secondHct = Hct(secondARGB)
-            let secondTone = secondHct.tone
-            // Use a lighter or darker gray as secondary
-            let adjusted = secondTone > tone ? min(100, secondTone + 10) : max(0, secondTone - 10)
-            let sR = adjusted / 100.0
-            secondaryColor = Color(red: sR, green: sR, blue: sR)
-        }
-
-        return DominantPair(primary: primaryColor, secondary: secondaryColor)
-    }
-}
-
-private extension Color {
-    init(argb: Int) {
-        let a = Double((argb >> 24) & 0xFF) / 255.0
-        let r = Double((argb >> 16) & 0xFF) / 255.0
-        let g = Double((argb >> 8) & 0xFF) / 255.0
-        let b = Double(argb & 0xFF) / 255.0
-        self.init(red: r, green: g, blue: b, opacity: a)
+        return hue < 0 ? hue + 360 : hue
     }
 }

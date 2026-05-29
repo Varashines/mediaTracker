@@ -69,25 +69,19 @@ actor TasteActor {
     }
 
     private func resolvePersonImage(for name: String) async -> String? {
-        // 1. Check local Cache Entity
         let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
             predicate: #Predicate { $0.name == name })
         if let cached = try? modelContext.fetch(cacheDescriptor).first {
             return cached.profileURL
         }
 
-        // 2. Check Library CastMembers
         let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
-        if let member = try? modelContext.fetch(castDescriptor).first(where: {
-            $0.profileURL != nil
-        }) {
+        if let member = try? modelContext.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
             let url = member.profileURL
-            // Save to cache for next time
             modelContext.insert(PersonImageEntity(name: name, profileURL: url))
             return url
         }
 
-        // 2. On-Demand API Search
         if let path = try? await APIClient.shared.searchPerson(query: name) {
             let fullURL = APIClient.tmdbImageURL(path: path, size: "w185") ?? ""
             modelContext.insert(PersonImageEntity(name: name, profileURL: fullURL))
@@ -139,21 +133,6 @@ actor TasteActor {
         return result
     }
 
-    private struct CategoryStats {
-        var loved = 0
-        var liked = 0
-        var disliked = 0
-        var total = 0
-        func affinity(cutoff: Int = 5) -> Double {
-            guard total >= cutoff else { return 0 }
-            let lovedWeight = Double(3 * loved)
-            let likedWeight = Double(liked)
-            let dislikedWeight = Double(2 * disliked)
-            let totalWeight = Double(3 * total)
-            return (lovedWeight + likedWeight - dislikedWeight) / totalWeight
-        }
-    }
-
     private struct AffinityAccumulators {
         var genreStats: [String: CategoryStats] = [:]
         var networkStats: [String: CategoryStats] = [:]
@@ -162,37 +141,22 @@ actor TasteActor {
         var languageStats: [String: CategoryStats] = [:]
     }
 
-    private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String) {
-        var s = map[key, default: CategoryStats()]
-        s.total += 1
-        if let tasteVal = TasteValue(rawValue: taste) {
-            switch tasteVal {
-            case .love: s.loved += 1
-            case .like: s.liked += 1
-            case .dislike: s.disliked += 1
-            case .none: break
-            }
-        }
-        map[key] = s
-    }
-
     private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators) {
         for item in items {
             let taste = item.tasteValue
-            for g in item.cachedGenres { updateTaste(&acc.genreStats, g, taste) }
+            for g in item.cachedGenres { TasteMath.updateTaste(&acc.genreStats, g, taste) }
             if let rawNetwork = item.cachedNetwork {
                 let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 for n in networks where !n.isEmpty {
-                    updateTaste(&acc.networkStats, n, taste)
+                    TasteMath.updateTaste(&acc.networkStats, n, taste)
                 }
             }
-            if let l = item.cachedLanguage { updateTaste(&acc.languageStats, l, taste) }
+            if let l = item.cachedLanguage { TasteMath.updateTaste(&acc.languageStats, l, taste) }
 
             let limit = item.type == .movie ? 5 : 10
             let cast = item.displayCast.prefix(limit).map { $0.name }
-            for actor in cast { updateTaste(&acc.castStats, actor, taste) }
-            // Use the denormalized cachedCreators to avoid faulting movieDetails/tvShowDetails relationships
-            for creator in item.cachedCreators { updateTaste(&acc.creatorStats, creator, taste) }
+            for actor in cast { TasteMath.updateTaste(&acc.castStats, actor, taste) }
+            for creator in item.cachedCreators { TasteMath.updateTaste(&acc.creatorStats, creator, taste) }
         }
     }
 

@@ -1,5 +1,4 @@
 import SwiftUI
-import CryptoKit
 import Combine
 import UniformTypeIdentifiers
 
@@ -52,11 +51,7 @@ class ImageCache: NSObject {
     private let imageSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
-        config.urlCache = URLCache(
-            memoryCapacity: 32 * 1024 * 1024,
-            diskCapacity: 512 * 1024 * 1024,
-            directory: nil
-        )
+        config.urlCache = nil // ImageCache handles its own disk cache; avoid duplicate URLCache
         return URLSession(configuration: config)
     }()
 
@@ -121,9 +116,6 @@ class ImageCache: NSObject {
             self.memoryCache.removeAllObjects()
             self.urlToKeys.removeAll()
         }
-        Task {
-            await APIClient.shared.clearMemoryCaches()
-        }
     }
     
     private func handleMemoryPressure(event: DispatchSource.MemoryPressureEvent) {
@@ -150,13 +142,16 @@ class ImageCache: NSObject {
         diskCacheIndex.removeAll()
     }
     
-    private static func sha256Hash(_ string: String) -> String {
-        SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined()
+    private static func fileSafeKey(_ string: String) -> String {
+        // Simple filesystem-safe encoding: replace / and : with _, truncate to keep filenames short
+        let escaped = string.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
+        // Use a stable short hash to avoid excessively long filenames
+        let hash = escaped.hashValue
+        return "\(abs(hash))_\(escaped.prefix(80))"
     }
 
     func removeImage(forKey url: String?) async {
         guard let url, !url.isEmpty else { return }
-        let hash = Self.sha256Hash(url)
         
         if let keys = urlToKeys[url] {
             for key in keys {
@@ -165,11 +160,12 @@ class ImageCache: NSObject {
             urlToKeys.removeValue(forKey: url)
         }
         
-        let fileURL = self.cacheDirectory.appendingPathComponent(hash)
+        let fileKey = Self.fileSafeKey(url)
+        let fileURL = self.cacheDirectory.appendingPathComponent(fileKey)
         Task.detached(priority: .background) {
             try? FileManager.default.removeItem(at: fileURL)
             await MainActor.run {
-                _ = ImageCache.shared.diskCacheIndex.remove(hash)
+                _ = ImageCache.shared.diskCacheIndex.remove(fileKey)
             }
         }
     }
@@ -192,7 +188,7 @@ class ImageCache: NSObject {
 
     func clearCache(forURLs urls: [String]) {
         let hashes = urls.map { url in
-            let h = Self.sha256Hash(url)
+            let h = Self.fileSafeKey(url)
             
             if let keys = urlToKeys[url] {
                 for key in keys {
@@ -266,7 +262,7 @@ class ImageCache: NSObject {
     }
     
     private func fileName(for key: String, size: CGSize?) -> String {
-        let hash = Self.sha256Hash(key)
+        let hash = Self.fileSafeKey(key)
         if let size = size {
             return "\(hash)_\(Int(size.width))_\(Int(size.height))"
         }
@@ -323,14 +319,28 @@ class ImageCache: NSObject {
                 
                 guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else { return }
                 
+                // Save to disk in background (don't block memory cache)
                 await self.save(imageSource: imageSource, data: data, forKey: key, targetSize: targetSize, alwaysPreserveAlpha: alwaysPreserveAlpha)
                 
                 if Task.isCancelled { return }
 
-                // Re-load decoded version after save to verify
-                if let container = await self.loadFromDisk(diskFileName: diskFileName, targetSize: targetSize) {
-                    let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: specificKey)
-                    self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: container.image))
+                // Decode directly from downloaded data instead of re-reading from disk
+                let decodedImage: CGImage?
+                if let targetSize = targetSize {
+                    let maxDimension = max(targetSize.width, targetSize.height) * self.screenScale
+                    let downsampleOptions = [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: maxDimension
+                    ] as CFDictionary
+                    decodedImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions)
+                } else {
+                    decodedImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
+                }
+                
+                if let cgImage = decodedImage {
+                    let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: specificKey)
+                    self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: cgImage))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.updates.send(key)
                 }
@@ -490,9 +500,6 @@ class ImageCache: NSObject {
         let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
         return await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: fileURL) else { return nil }
-            
-            // Touch access date (modification date)
-            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
             
             if let targetSize = targetSize {
                 let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary

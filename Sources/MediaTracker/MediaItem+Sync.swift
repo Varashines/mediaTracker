@@ -53,11 +53,17 @@ extension MediaItem {
         } else {
             self.storedIsUpcoming = false
         }
-        updateSearchableText()
+        // Only rebuild searchable text if source fields may have changed
+        if force || oldLabel != newLabel {
+            updateSearchableText()
+        }
     }
 
     func syncCastCache() {
         guard let context = modelContext else { return }
+        
+        // Skip if cast is already populated and not a force refresh
+        if !storedCast.isEmpty { return }
         
         // Defensive: Use direct fetch instead of relationship to avoid "ghost objects" during background merges
         let currentID = self.id
@@ -145,14 +151,18 @@ extension MediaItem {
             self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
 
             // Unified Auto-advance State Logic
+            // Set stateValue directly to avoid re-triggering syncCachedProperties via the state setter
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
-                self.state = .completed
+                self.stateValue = MediaState.completed.rawValue
+                self.lastInteractionDate = now
                 self.lastStateChangeDate = now
             } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                self.state = .active
+                self.stateValue = MediaState.active.rawValue
+                self.lastInteractionDate = now
                 self.lastStateChangeDate = now
             } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                self.state = .wishlist
+                self.stateValue = MediaState.wishlist.rawValue
+                self.lastInteractionDate = now
                 self.lastStateChangeDate = now
             }
             

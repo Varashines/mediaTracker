@@ -30,7 +30,14 @@ extension BackgroundDataService {
             }
             movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
-            
+            // Skip OMDB for Wishlist items without taste ratings — minimal value
+            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue) {
+                if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
+                    movieDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+                    movieDetails.imdbRating = omdb.imdbRating
+                    movieDetails.contentRating = omdb.contentRating
+                }
+            }
             let prodNames = details.productionCompanies.map { $0.name }
             let prodLogos = details.productionCompanies.map { $0.logoPath ?? "" }
             movieDetails.network = prodNames.isEmpty ? nil : prodNames.joined(separator: ",")
@@ -38,7 +45,10 @@ extension BackgroundDataService {
             
             let newCastResults = details.cast
             let currentCast = item.displayCast
-            let hasChanged = currentCast.count != newCastResults.count || 
+            // Short-circuit: quick check before expensive sort-and-zip
+            let hasChanged = currentCast.count != newCastResults.count ||
+                            (currentCast.first?.name != newCastResults.first?.name) ||
+                            (currentCast.last?.name != newCastResults.last?.name) ||
                             zip(currentCast.sorted(by: { $0.name < $1.name }), 
                                 newCastResults.sorted(by: { $0.name < $1.name }))
                             .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
@@ -107,7 +117,11 @@ extension BackgroundDataService {
             }
             
             var mazeEpisodes: [TVMazeEpisode] = []
-            if let mID = tvMazeID {
+            // Skip TVMaze calls for completed/dropped shows with no upcoming episodes
+            let hasUpcomingEpisode = details.nextEpisodeDate != nil
+            let isActiveShow = item.state == .active || item.state == .rewatching
+            
+            if let mID = tvMazeID, (isActiveShow || hasUpcomingEpisode) {
                 if let (episode, timezone, service, airtime) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
@@ -120,7 +134,10 @@ extension BackgroundDataService {
                     }
                 }
                 
-                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
+                // Only fetch full episode list for active shows (airstamp data needed for scheduling)
+                if isActiveShow {
+                    mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
+                }
             }
 
             let mazeDict: [String: TVMazeEpisode] = {
@@ -136,7 +153,10 @@ extension BackgroundDataService {
 
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
+            // Short-circuit: quick check before expensive sort-and-zip
             let hasChanged = currentCast.count != newCastResults.count ||
+                            (currentCast.first?.name != newCastResults.first?.name) ||
+                            (currentCast.last?.name != newCastResults.last?.name) ||
                             zip(currentCast.sorted(by: { $0.name < $1.name }),
                                 newCastResults.sorted(by: { $0.name < $1.name }))
                             .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
@@ -165,10 +185,13 @@ extension BackgroundDataService {
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.network = details.network
             tvDetails.voteAverage = details.voteAverage
-            if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
-                tvDetails.imdbRating = omdb.imdbRating
-                tvDetails.contentRating = omdb.contentRating
-                tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+            // Skip OMDB for Wishlist items without taste ratings — minimal value
+            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue) {
+                if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
+                    tvDetails.imdbRating = omdb.imdbRating
+                    tvDetails.contentRating = omdb.contentRating
+                    tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+                }
             }
             tvDetails.genres = details.genres
             tvDetails.networkLogoPath = details.networkLogoPath
@@ -273,21 +296,24 @@ extension BackgroundDataService {
     func extractAndSavePosterColor(for item: MediaItem) async {
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
         guard shouldExtract,
-              let poster = item.posterURL,
-              let url = URL(string: poster) else { return }
+              let poster = item.posterURL else { return }
 
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let image = NSImage(data: data),
-               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                let primaryHex = pair.primary.toHex()
-                let secondaryHex = pair.secondary.toHex()
-                item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
-                item.themeColorSourceURL = poster
-            }
-        } catch {
-            AppLogger.debug("Failed to extract poster color for item \(item.title): \(error)")
+        // Try to get the image from cache first, avoiding a redundant network download
+        var cgImage: CGImage?
+        if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
+            cgImage = cached.image
+        } else if let url = URL(string: poster),
+                  let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = NSImage(data: data) {
+            cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+
+        if let cgImage {
+            let pair = await ColorExtractor.topTwoColors(from: cgImage)
+            let primaryHex = pair.primary.toHex()
+            let secondaryHex = pair.secondary.toHex()
+            item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+            item.themeColorSourceURL = poster
         }
     }
 }

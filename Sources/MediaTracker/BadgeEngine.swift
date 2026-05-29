@@ -48,62 +48,31 @@ struct BadgeEngine {
 
     /// Cache episode scans per show to avoid re-iterating all seasons/episodes on every badge call.
     /// Cleared on episode state changes (see MediaItem.syncCachedProperties).
-    /// Uses LRU eviction with a max capacity of 500 entries.
-    // Using os_unfair_lock for thread-safe access from any actor context.
     nonisolated(unsafe) private static var scanCacheLock = os_unfair_lock()
     nonisolated(unsafe) private static var episodeScanCache: [PersistentIdentifier: EpisodeScan] = [:]
-    nonisolated(unsafe) private static var episodeScanVersion: [PersistentIdentifier: Int] = [:]
-    nonisolated(unsafe) private static var episodeScanAccessOrder: [PersistentIdentifier] = []
-    private static let maxScanCacheSize = 500
 
     nonisolated static func invalidateScan(for showID: PersistentIdentifier) {
-        print("DEBUG INVALIDATE: \(showID)")
         os_unfair_lock_lock(&scanCacheLock)
         episodeScanCache.removeValue(forKey: showID)
-        episodeScanVersion.removeValue(forKey: showID)
-        episodeScanAccessOrder.removeAll { $0 == showID }
         os_unfair_lock_unlock(&scanCacheLock)
     }
 
     nonisolated static func clearScanCache() {
         os_unfair_lock_lock(&scanCacheLock)
         episodeScanCache.removeAll()
-        episodeScanVersion.removeAll()
-        episodeScanAccessOrder.removeAll()
         os_unfair_lock_unlock(&scanCacheLock)
     }
 
     nonisolated private static func readScanCache(_ showID: PersistentIdentifier) -> EpisodeScan? {
         os_unfair_lock_lock(&scanCacheLock)
         let result = episodeScanCache[showID]
-        if result != nil {
-            // Update access order for LRU
-            episodeScanAccessOrder.removeAll { $0 == showID }
-            episodeScanAccessOrder.append(showID)
-        }
         os_unfair_lock_unlock(&scanCacheLock)
         return result
     }
 
-    nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan, version: Int) {
+    nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan) {
         os_unfair_lock_lock(&scanCacheLock)
-        
-        // LRU eviction if at capacity
-        if episodeScanCache.count >= maxScanCacheSize && episodeScanCache[showID] == nil {
-            if let oldestID = episodeScanAccessOrder.first {
-                episodeScanCache.removeValue(forKey: oldestID)
-                episodeScanVersion.removeValue(forKey: oldestID)
-                episodeScanAccessOrder.removeFirst()
-            }
-        }
-        
         episodeScanCache[showID] = scan
-        episodeScanVersion[showID] = version
-        
-        // Update access order
-        episodeScanAccessOrder.removeAll { $0 == showID }
-        episodeScanAccessOrder.append(showID)
-        
         os_unfair_lock_unlock(&scanCacheLock)
     }
 
@@ -117,7 +86,7 @@ struct BadgeEngine {
                 scan = cached
             } else {
                 scan = scanEpisodes(for: item, now: now)
-                writeScanCache(pid, scan: scan, version: item.lastInteractionDate?.timeIntervalSince1970.hashValue ?? 0)
+                writeScanCache(pid, scan: scan)
             }
         } else {
             scan = .empty

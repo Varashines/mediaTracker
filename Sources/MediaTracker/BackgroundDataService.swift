@@ -287,32 +287,6 @@ actor BackgroundDataService {
         }
     }
 
-    func deepHealGenres() async {
-        let descriptor = FetchDescriptor<MediaItem>()
-        guard let items = try? modelContext.fetch(descriptor) else { return }
-        
-        AppLogger.info("🧬 Deep Heal: Starting genre deconstruction for \(items.count) items...", logger: AppLogger.background)
-        
-        for item in items {
-            item.syncCachedProperties(force: true)
-        }
-        
-        do {
-            try modelContext.save()
-                AppLogger.info("✅ Deep Heal: Genre deconstruction complete.", logger: AppLogger.background)
-            
-            // Re-sync discovery entities to reflect new atomic genres
-            let sync = DiscoverySyncService(modelContainer: modelContext.container)
-            await sync.syncLibrary(force: true)
-            
-            await MainActor.run {
-                MediaStateService.shared.postMediaStateChanged()
-            }
-        } catch {
-            Task { @MainActor in AppErrorState.shared.surfaceError("Library heal failed to save: \(error.localizedDescription)") }
-        }
-    }
-
     func refreshMetadata(for itemIDs: [String], metadataOnly: Bool = false, force: Bool = false) async {
         if isThermalThrottled {
             AppLogger.warning("🌡️ Thermal state serious or Low Power Mode active. Skipping background refresh.", logger: AppLogger.background)

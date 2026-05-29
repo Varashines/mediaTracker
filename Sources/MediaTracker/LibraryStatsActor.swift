@@ -312,35 +312,10 @@ actor LibraryStatsActor {
     }
 
     func fetchCinephileData() async throws -> LibraryStats? {
-        let (containers, last) = await MainActor.run { (Self.cachedContainers, Self.lastCalculation) }
-        if let (statsContainer, tasteMaps) = containers, let last = last, Date().timeIntervalSince(last) < cacheTTL {
-            let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: true)
-            await MainActor.run { Self.cachedContainers = nil }
-            return result
-        }
         return try await fetchStats(includeCinephileData: true)
     }
 
     // Taste Affinity Helpers
-    struct CategoryStats: Sendable {
-        var loved = 0
-        var liked = 0
-        var disliked = 0
-        var total = 0
-        var profileURL: String? = nil
-
-        var ratedCount: Int { loved + liked + disliked }
-
-        func affinity(cutoff: Int = 5) -> Double {
-            guard ratedCount >= cutoff else { return -1.0 }
-            let lovedWeight = Double(3 * loved)
-            let likedWeight = Double(liked)
-            let dislikedWeight = Double(2 * disliked)
-            let totalWeight = Double(3 * ratedCount)
-            let score = (lovedWeight + likedWeight - dislikedWeight) / totalWeight
-            return max(0, score)
-        }
-    }
 
     private struct PersonInput: Sendable {
         let name: String
@@ -372,21 +347,6 @@ actor LibraryStatsActor {
         var actorTaste: [String: CategoryStats] = [:]
         var creatorTaste: [String: CategoryStats] = [:]
         var languageTaste: [String: CategoryStats] = [:]
-    }
-
-    private func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ tasteValue: String, _ pURL: String? = nil) {
-        var s = map[key, default: CategoryStats()]
-        s.total += 1
-        if let taste = TasteValue(rawValue: tasteValue) {
-            switch taste {
-            case .love: s.loved += 1
-            case .like: s.liked += 1
-            case .dislike: s.disliked += 1
-            case .none: break
-            }
-        }
-        if let pURL = pURL { s.profileURL = pURL }
-        map[key] = s
     }
 
     private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>, tvWatchedEpisodesMap: [Int: [TVEpisode]], includeCinephileData: Bool = true) {
@@ -429,7 +389,7 @@ actor LibraryStatsActor {
                 }
 
                 for c in item.cachedCreators {
-                    updateTaste(&taste.creatorTaste, c, tasteValue)
+                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue)
                 }
             } else if item.type == .tvShow {
                 stats.tvCount += 1
@@ -462,34 +422,34 @@ actor LibraryStatsActor {
                 }
 
                 for c in item.cachedCreators {
-                    updateTaste(&taste.creatorTaste, c, tasteValue)
+                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue)
                 }
             }
 
             // Common traits (Volume & Quality)
             if item.stateValue != "Wishlist" || tasteValue != TasteValue.none.rawValue {
                 for g in item.cachedGenres {
-                    updateTaste(&taste.genreTaste, g, tasteValue)
+                    TasteMath.updateTaste(&taste.genreTaste, g, tasteValue)
                 }
                 if let rawNetwork = item.cachedNetwork {
                     let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                     for n in networks where !n.isEmpty {
                         if !hiddenSet.contains(n.lowercased()) {
                             if item.type == .movie {
-                                updateTaste(&taste.studioTaste, n, tasteValue)
+                                TasteMath.updateTaste(&taste.studioTaste, n, tasteValue)
                             } else {
-                                updateTaste(&taste.networkTaste, n, tasteValue)
+                                TasteMath.updateTaste(&taste.networkTaste, n, tasteValue)
                             }
                         }
                     }
                 }
                 if let lang = item.cachedLanguage {
-                    updateTaste(&taste.languageTaste, lang, tasteValue)
+                    TasteMath.updateTaste(&taste.languageTaste, lang, tasteValue)
                 }
 
                 let limit = item.type == .movie ? 5 : 10
                 for actor in item.displayCast.prefix(limit) {
-                    updateTaste(&taste.actorTaste, actor.name, tasteValue, actor.profileURL)
+                    TasteMath.updateTaste(&taste.actorTaste, actor.name, tasteValue, profileURL: actor.profileURL)
                 }
             }
 
@@ -522,12 +482,12 @@ actor LibraryStatsActor {
                 .map { $0 }
         }
 
-        // 3. Visual Stats Resolution
+        // 3. Visual Stats Resolution (capped at 5+5 to limit API calls)
         let actorWithScore: [(String, CategoryStats, Double)] = taste.actorTaste.compactMap { name, val in
             let score = val.affinity(cutoff: 5)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
+        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(5)
 
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
         
@@ -535,7 +495,7 @@ actor LibraryStatsActor {
             let score = val.affinity(cutoff: 3)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(10)
+        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(5)
 
         let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 
@@ -579,11 +539,9 @@ actor LibraryStatsActor {
         )
     }
 
-    // Move CategoryStats inside scope helper if needed, or pass fields
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {
         var results: [VisualPersonStat] = []
 
-        // Phase 5 Logic Fix: Throttle concurrent API calls to prevent 429 Rate Limiting
         let chunkSize = 5
         for i in stride(from: 0, to: people.count, by: chunkSize) {
             try Task.checkCancellation()
@@ -611,25 +569,31 @@ actor LibraryStatsActor {
 
         return results.sorted { $0.score > $1.score }
     }
+
     private func resolvePersonImage(for name: String, currentURL: String?) async -> String? {
         if let current = currentURL { return current }
 
-        // 1. Check local Cache Entity
         let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
             predicate: #Predicate { $0.name == name })
         if let items = try? modelContext.fetch(cacheDescriptor), let cached = items.first {
             return cached.profileURL
         }
 
-        // 2. On-Demand API Search
+        // Check local CastMember data before hitting the API
+        let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
+        if let member = try? modelContext.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
+            let url = member.profileURL
+            modelContext.insert(PersonImageEntity(name: name, profileURL: url))
+            return url
+        }
+
         if let path = try? await APIClient.shared.searchPerson(query: name) {
             let fullURL = APIClient.tmdbImageURL(path: path, size: "w185") ?? ""
-            
-            // Final check to prevent double-insert race condition
+
             if let items = try? modelContext.fetch(cacheDescriptor), let existing = items.first {
                 return existing.profileURL
             }
-            
+
             let newEntity = PersonImageEntity(name: name, profileURL: fullURL)
             modelContext.insert(newEntity)
             try? modelContext.save()

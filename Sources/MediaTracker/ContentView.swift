@@ -224,7 +224,7 @@ struct LibraryDetailView: View {
                 let container = modelContext.container
                 Task.detached(priority: .background) {
                     let service = BackgroundDataService(modelContainer: container)
-                    await service.deepHealGenres()
+                    try? await service.performLibraryHeal()
                     UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
                 }
             }

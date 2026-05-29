@@ -258,47 +258,6 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         onProgress?("🏁 Sync Complete")
     }
-
-    func runNuclearTest() async {
-        guard isProperlyBundled else { return }
-        let center = UNUserNotificationCenter.current()
-        
-        AppLogger.info("☢️ Running Nuclear Test (5 unique alerts)...", logger: AppLogger.notifications)
-        for i in 1...5 {
-            let content = UNMutableNotificationContent()
-            content.title = "Nuclear Test #\(i)"
-            content.body = "Random UUID: \(UUID().uuidString)"
-            content.sound = .default
-            
-            // Trigger 1 hour in future (incrementing)
-            let date = Date().addingTimeInterval(TimeInterval(3600 * i))
-            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            
-            let request = UNNotificationRequest(identifier: "nuclear-\(UUID().uuidString)", content: content, trigger: trigger)
-            try? await center.add(request)
-            AppLogger.info("☢️ Added nuclear-\(i)", logger: AppLogger.notifications)
-        }
-    }
-    
-    func sendTestNotification() {
-        guard isProperlyBundled else {
-            AppLogger.warning("❌ Cannot send test notification: App is not running as a bundle.", logger: AppLogger.notifications)
-            return
-        }
-        let content = UNMutableNotificationContent()
-        content.title = "Test: MediaTracker"
-        content.subtitle = "Rich Notification"
-        content.body = "This is what your alerts will look like! 🍿"
-        content.sound = .default
-        content.categoryIdentifier = "MOVIE_RELEASE" // Use an existing category to show actions
-        
-        // Use a generic placeholder or last item poster for test
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        let request = UNNotificationRequest(identifier: "test-\(UUID().uuidString)", content: content, trigger: trigger)
-        
-        UNUserNotificationCenter.current().add(request)
-    }
     
     // MARK: - UNUserNotificationCenterDelegate
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {

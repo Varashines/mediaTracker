@@ -266,21 +266,21 @@ actor APIClient {
 
     func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        // With force: use 24h TTL instead of skipping cache entirely
         let ttl: TimeInterval = force ? 86400 : 7 * 86400
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
         }
 
-        // Coalesce concurrent in-flight requests for the same movie to share one network call
         if let existing = inFlightMovieDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<MovieDetailsResult, Error> {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "credits,release_dates,external_ids")])
+                // Skip release_dates on non-force refreshes — release dates rarely change
+                let appendParts = force ? "credits,release_dates,external_ids" : "credits,external_ids"
+                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)

@@ -63,9 +63,9 @@ struct MediaTrackerApp: App {
 
         Task { await NotificationManager.shared.requestPermission() }
 
-        // Migration: Bulk re-extract poster colors with improved algorithm
+        // Migration: Bulk re-extract poster colors with CoreImage algorithm (v4)
         let extractionVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        if extractionVersion < 3 {
+        if extractionVersion < 4 {
             let container = sharedModelContainer
             Task { @MainActor in
                 let descriptor = FetchDescriptor<MediaItem>()
@@ -74,10 +74,9 @@ struct MediaTrackerApp: App {
                 var processed = 0
                 for item in items {
                     guard item.modelContext != nil, !item.isDeleted else { continue }
-                    let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
-                    guard shouldExtract, let poster = item.posterURL, let url = URL(string: poster) else { continue }
+                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
 
-                    // Download and extract on background, update model on main
+                    // Re-extract all items with new CoreImage algorithm
                     if let (data, _) = try? await URLSession.shared.data(from: url) {
                         let pair: DominantPair? = await Task.detached {
                             if let image = NSImage(data: data),
@@ -100,8 +99,8 @@ struct MediaTrackerApp: App {
                 }
 
                 try? container.mainContext.save()
-                UserDefaults.standard.set(3, forKey: "colorExtractionVersion")
-                AppLogger.info("🎨 Migration: Re-extracted poster colors for \(processed) items.", logger: AppLogger.background)
+                UserDefaults.standard.set(4, forKey: "colorExtractionVersion")
+                AppLogger.info("🎨 Migration v4: Re-extracted poster colors for \(processed) items with CoreImage.", logger: AppLogger.background)
             }
         }
     }

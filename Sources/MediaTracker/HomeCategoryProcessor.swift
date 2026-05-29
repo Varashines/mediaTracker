@@ -60,102 +60,23 @@ extension MediaFilterActor {
 
         let recentItems = try modelContext.fetch(recentDesc)
 
-        var homeResultsSet = Set<PersistentIdentifier>()
+        var seenIDs = Set<PersistentIdentifier>()
         var homeResults: [MediaItem] = []
-
         for item in (streamingItems + transitionItems + activeItemsRaw + recentItems) {
-            if !homeResultsSet.contains(item.persistentModelID) {
-                homeResultsSet.insert(item.persistentModelID)
+            if seenIDs.insert(item.persistentModelID).inserted {
                 homeResults.append(item)
             }
         }
 
-        let completedState = MediaState.completedRaw
-        let droppedState = MediaState.droppedRaw
-        let onHoldState = MediaState.onHoldRaw
-        let activeStateVal = MediaState.activeRaw
-        let rewatchingStateVal = MediaState.rewatchingRaw
-
-        let activeItems = homeResults.filter { item in
-            if item.stateValue == completedState || item.stateValue == droppedState || item.stateValue == onHoldState { return false }
-            if item.storedIsUpcoming {
-                let airDate = item.cachedNextAiringDate ?? .distantFuture
-                if airDate > now { return false }
-                let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
-                if daysSinceAir > 14 { return false }
+        let activeItems = homeResults.filter { isHomeEligible($0, now: now) }
+            .sorted { a, b in
+                let pa = homeSortPriority(a)
+                let pb = homeSortPriority(b)
+                if pa != pb { return pa > pb }
+                return (a.lastInteractionDate ?? .distantPast) > (b.lastInteractionDate ?? .distantPast)
             }
 
-            let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
-            let nextAirDate = item.cachedNextAiringDate ?? .distantPast
-            if isCaughtUp && nextAirDate > now && item.type == .tvShow {
-                return false
-            }
-
-            let isCurrentlyWatching = item.stateValue == activeStateVal || item.stateValue == rewatchingStateVal || (item.storedProgress ?? 0) > 0
-            if isCurrentlyWatching {
-                if (item.stateValue == activeStateVal || item.stateValue == rewatchingStateVal) && (item.storedProgress ?? 0) == 0 {
-                    let lastInter = item.lastInteractionDate ?? .distantPast
-                    let thirtyDaysAgo = now.addingTimeInterval(-.days30)
-                    if lastInter < thirtyDaysAgo {
-                        return false
-                    }
-                }
-                return true
-            }
-
-            let badge = item.storedSmartBadgeLabel
-            let isNewDrop = SmartBadge.radarBadges.contains(where: { $0.rawValue == badge })
-
-            if isNewDrop {
-                if item.stateValue == wishlistState && (item.storedProgress ?? 0) == 0 {
-                    let releaseDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
-                    let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
-                    if daysSinceRelease > 5 {
-                        return false
-                    }
-                }
-                return true
-            }
-            return false
-        }.sorted { (itemA: MediaItem, itemB: MediaItem) -> Bool in
-            let badgeA = itemA.storedSmartBadgeLabel
-            let isRecentA = SmartBadge.recentBadges.contains(where: { $0.rawValue == badgeA })
-            let badgeB = itemB.storedSmartBadgeLabel
-            let isRecentB = SmartBadge.recentBadges.contains(where: { $0.rawValue == badgeB })
-
-            if isRecentA != isRecentB { return isRecentA }
-
-            let isAActive = itemA.stateValue == activeStateVal || itemA.stateValue == rewatchingStateVal || (itemA.storedProgress ?? 0) > 0
-            let isBActive = itemB.stateValue == activeStateVal || itemB.stateValue == rewatchingStateVal || (itemB.storedProgress ?? 0) > 0
-            if isAActive != isBActive { return isAActive }
-
-            let isAPremiere = itemA.storedSmartBadgeLabel == SmartBadge.premiere.rawValue
-            let isBPremiere = itemB.storedSmartBadgeLabel == SmartBadge.premiere.rawValue
-            if isAPremiere != isBPremiere { return isAPremiere }
-
-            let isAStreaming = itemA.storedSmartBadgeLabel == SmartBadge.new.rawValue
-            let isBStreaming = itemB.storedSmartBadgeLabel == SmartBadge.new.rawValue
-            if isAStreaming != isBStreaming { return isAStreaming }
-
-            let isAFinale = itemA.storedSmartBadgeLabel == SmartBadge.finale.rawValue
-            let isBFinale = itemB.storedSmartBadgeLabel == SmartBadge.finale.rawValue
-            if isAFinale != isBFinale { return isAFinale }
-
-            let isABinge = itemA.storedSmartBadgeLabel == SmartBadge.bingeDrop.rawValue
-            let isBBinge = itemB.storedSmartBadgeLabel == SmartBadge.bingeDrop.rawValue
-            if isABinge != isBBinge { return isABinge }
-
-            let dateA = itemA.lastInteractionDate ?? .distantPast
-            let dateB = itemB.lastInteractionDate ?? .distantPast
-
-            if dateA != dateB {
-                return dateA > dateB
-            }
-
-            return itemA.title < itemB.title
-        }
-
-        let spotlight = activeItems.first { $0.stateValue == activeStateVal }
+        let spotlight = activeItems.first { $0.stateValue == MediaState.activeRaw }
         let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
 
         let comingSoonItems = homeResults.filter { item in
@@ -172,5 +93,65 @@ extension MediaFilterActor {
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })],
             totalCount: totalCount
         )
+    }
+
+    private func isHomeEligible(_ item: MediaItem, now: Date) -> Bool {
+        if item.stateValue == MediaState.completedRaw ||
+           item.stateValue == MediaState.droppedRaw ||
+           item.stateValue == MediaState.onHoldRaw { return false }
+
+        if item.storedIsUpcoming {
+            let airDate = item.cachedNextAiringDate ?? .distantFuture
+            if airDate > now { return false }
+            let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
+            if daysSinceAir > 14 { return false }
+        }
+
+        let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
+        let nextAirDate = item.cachedNextAiringDate ?? .distantPast
+        if isCaughtUp && nextAirDate > now && item.type == .tvShow { return false }
+
+        let isActive = item.stateValue == MediaState.activeRaw ||
+                       item.stateValue == MediaState.rewatchingRaw ||
+                       (item.storedProgress ?? 0) > 0
+        if isActive {
+            if (item.stateValue == MediaState.activeRaw || item.stateValue == MediaState.rewatchingRaw) &&
+               (item.storedProgress ?? 0) == 0 {
+                let lastInter = item.lastInteractionDate ?? .distantPast
+                if lastInter < now.addingTimeInterval(-.days30) { return false }
+            }
+            return true
+        }
+
+        let badge = item.storedSmartBadgeLabel
+        let isNewDrop = SmartBadge.radarBadges.contains(where: { $0.rawValue == badge })
+        if isNewDrop {
+            if item.stateValue == MediaState.wishlistRaw && (item.storedProgress ?? 0) == 0 {
+                let releaseDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
+                let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
+                if daysSinceRelease > 5 { return false }
+            }
+            return true
+        }
+        return false
+    }
+
+    private func homeSortPriority(_ item: MediaItem) -> Int {
+        let badge = item.storedSmartBadgeLabel
+        let isRecent = SmartBadge.recentBadges.contains(where: { $0.rawValue == badge })
+
+        if isRecent {
+            if badge == SmartBadge.premiere.rawValue { return 110 }
+            if badge == SmartBadge.new.rawValue { return 100 }
+            if badge == SmartBadge.finale.rawValue { return 95 }
+            if badge == SmartBadge.bingeDrop.rawValue { return 90 }
+            return 85
+        }
+
+        let isActive = item.stateValue == MediaState.activeRaw ||
+                       item.stateValue == MediaState.rewatchingRaw ||
+                       (item.storedProgress ?? 0) > 0
+        if isActive { return 80 }
+        return 0
     }
 }
