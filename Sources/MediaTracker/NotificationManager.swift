@@ -20,32 +20,27 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         return Bundle.main.bundleIdentifier != nil && !Bundle.main.bundlePath.hasSuffix(".xctest")
     }
 
-    func requestPermission() {
+    func requestPermission() async {
         guard isProperlyBundled else {
             AppLogger.warning("⚠️ Skipping notification permission request: App is not running from a proper .app bundle.", logger: AppLogger.notifications)
             return
         }
-        
-        Task {
-            let center = UNUserNotificationCenter.current()
-            center.delegate = self
-            
-            // Register Categories and Actions
-            let markWatchedAction = UNNotificationAction(identifier: "MARK_WATCHED_ACTION", title: "Mark as Watched", options: [])
-            
-            let movieCategory = UNNotificationCategory(identifier: "MOVIE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
-            let tvCategory = UNNotificationCategory(identifier: "TV_EPISODE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
-            
-            center.setNotificationCategories([movieCategory, tvCategory])
 
-            do {
-                let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
-                if granted {
-                    AppLogger.info("✅ Notification permission granted.", logger: AppLogger.notifications)
-                }
-            } catch {
-                AppErrorState.shared.surfaceError("Notification permission error: \(error.localizedDescription)")
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+
+        let markWatchedAction = UNNotificationAction(identifier: "MARK_WATCHED_ACTION", title: "Mark as Watched", options: [])
+        let movieCategory = UNNotificationCategory(identifier: "MOVIE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
+        let tvCategory = UNNotificationCategory(identifier: "TV_EPISODE_RELEASE", actions: [markWatchedAction], intentIdentifiers: [], options: [])
+        center.setNotificationCategories([movieCategory, tvCategory])
+
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            if granted {
+                AppLogger.info("✅ Notification permission granted.", logger: AppLogger.notifications)
             }
+        } catch {
+            AppErrorState.shared.surfaceError("Notification permission error: \(error.localizedDescription)")
         }
     }
     
@@ -112,6 +107,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
+
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized else {
+            AppLogger.debug("🔕 Skipping schedule \(identifier): notifications not authorized.", logger: AppLogger.notifications)
+            return
+        }
         
         // Ensure we use the user's current calendar to respect their local timezone (e.g., IST)
         let calendar = Calendar.current

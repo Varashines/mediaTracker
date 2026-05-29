@@ -41,8 +41,10 @@ struct ConnectSection: View {
                 SettingsToggleRow(title: "Enable Notifications", subtitle: "Get notified about new episodes and movies", isOn: $notificationsEnabled)
                     .onChange(of: notificationsEnabled) { _, enabled in
                         if enabled {
-                            NotificationManager.shared.requestPermission()
-                            Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
+                            Task {
+                                await NotificationManager.shared.requestPermission()
+                                await NotificationManager.shared.scheduleAllUpcomingNotifications()
+                            }
                         } else {
                             Task { UNUserNotificationCenter.current().removeAllPendingNotificationRequests() }
                         }

@@ -60,6 +60,8 @@ struct MediaTrackerApp: App {
         let cacheSizeDisk = 500 * 1024 * 1024
         let cache = URLCache(memoryCapacity: cacheSizeMemory, diskCapacity: cacheSizeDisk, directory: nil)
         URLCache.shared = cache
+
+        Task { await NotificationManager.shared.requestPermission() }
     }
 
     @Environment(\.scenePhase) private var scenePhase
