@@ -46,7 +46,7 @@ class AppThemeCoordinator {
         if customThemePalette == 1 {
             self.accent = isDark ? (Color(hex: "#C87A53") ?? .accentColor) : (Color(hex: "#5C8075") ?? .accentColor)
         } else if customThemePalette == 2 {
-            self.accent = Color(hex: "#5E81AC") ?? .accentColor
+            self.accent = Color(hex: "#6E7BB8") ?? .accentColor
         } else {
             self.accent = .accentColor
         }

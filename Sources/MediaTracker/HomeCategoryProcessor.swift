@@ -81,7 +81,7 @@ extension MediaFilterActor {
 
         let comingSoonItems = homeResults.filter { item in
             let airDate = item.cachedNextAiringDate ?? .distantPast
-            return airDate > now
+            return airDate > now && item.stateValue != MediaState.completedRaw
         }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
 
         return PaginatedResult(

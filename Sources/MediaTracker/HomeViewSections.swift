@@ -11,37 +11,45 @@ struct HomeViewSections: View {
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
 
-    @State private var showWatchedThisWeek = false
+    private enum HomeSection {
+        case forYou, recentlyWatched
+    }
+
+    @State private var visibleSection: HomeSection? = nil
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            // 0. RECENTLY WATCHED TOGGLE
-            HStack {
+            // 0. SECTION TOGGLES
+            HStack(spacing: 8) {
                 Spacer()
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                        showWatchedThisWeek.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.fill")
-                            .font(.system(size: 10))
-                        Text(showWatchedThisWeek ? "Hide Recently Watched" : "Recently Watched")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.06))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
+                sectionButton(
+                    section: .forYou,
+                    icon: "sparkles",
+                    label: "For You",
+                    isActive: visibleSection == .forYou
+                )
+                sectionButton(
+                    section: .recentlyWatched,
+                    icon: "clock.fill",
+                    label: "Recently Watched",
+                    isActive: visibleSection == .recentlyWatched
+                )
                 .padding(.trailing, AppTheme.Spacing.pageMargin)
             }
 
-            if showWatchedThisWeek {
+            if visibleSection == .recentlyWatched {
                 WatchedThisWeek()
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if visibleSection == .forYou {
+                ForYouCarousel(
+                    items: recommendations, namespace: namespace,
+                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                )
+                .padding(.bottom, AppTheme.Spacing.small)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             // 1. CONTINUE WATCHING
@@ -63,13 +71,30 @@ struct HomeViewSections: View {
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
             }
-
-            // 3. FOR YOU (Recommendations)
-            ForYouCarousel(
-                items: recommendations, namespace: namespace,
-                isFastScrolling: isFastScrolling, onSelect: onSelectHero
-            )
-            .padding(.bottom, AppTheme.Spacing.small)
         }
+    }
+
+    private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                if visibleSection == section {
+                    visibleSection = nil
+                } else {
+                    visibleSection = section
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(isActive ? "Hide \(label)" : label)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.06))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

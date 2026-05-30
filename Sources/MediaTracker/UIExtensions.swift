@@ -125,7 +125,7 @@ extension Color {
             return Color.fromOKLCH(l: max(o.l, 0.92), c: max(o.c, 0.3), h: o.h)
         } else {
             // On light backgrounds, ensure it's deep enough for WCAG contrast but highly saturated
-            return Color.fromOKLCH(l: min(o.l, 0.4), c: max(o.c, 0.45), h: o.h)
+            return Color.fromOKLCH(l: min(o.l, 0.45), c: max(o.c, 0.20), h: o.h)
         }
     }
 
