@@ -142,7 +142,7 @@ struct BadgeEngine {
 
     private static func milestoneBadge(for item: MediaItem, scan: EpisodeScan, now: Date) -> BadgeResult? {
         guard let airDate = scan.nextAirDate else { return nil }
-        let daysSinceAir = now.timeIntervalSince(airDate) / 86400
+        let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
 
         if scan.nextEpisodeNumber == 1 && premiereDaysWindow.contains(daysSinceAir) {
             return BadgeResult(label: .premiere, isSparkle: true)
@@ -191,7 +191,7 @@ struct BadgeEngine {
         guard isLikedOrLoved else { return nil }
 
         if let nextAiring = item.cachedNextAiringDate {
-            let daysToAiring = nextAiring.timeIntervalSince(now) / 86400
+            let daysToAiring = nextAiring.timeIntervalSince(now) / .secondsInDay
             if daysToAiring > 0 && daysToAiring <= behindWindowDays {
                 return BadgeResult(label: .behind, isSparkle: false)
             }

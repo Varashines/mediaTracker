@@ -23,11 +23,6 @@ extension BackgroundDataService {
             movieDetails.runtime = details.runtime
             movieDetails.genres = details.genres
             movieDetails.voteAverage = details.voteAverage
-            if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
-                movieDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
-                movieDetails.imdbRating = omdb.imdbRating
-                movieDetails.contentRating = omdb.contentRating
-            }
             movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
             // Skip OMDB for Wishlist items without taste ratings — minimal value
@@ -92,8 +87,9 @@ extension BackgroundDataService {
             tvDetails.item = item
             item.tvShowDetails = tvDetails
             
-            let totalCachedEpisodes = tvDetails.seasons.reduce(0) { $0 + $1.episodes.count }
-            let hasMissingEpisodes = tvDetails.seasons.contains(where: { $0.episodes.isEmpty }) && !tvDetails.seasons.isEmpty
+            let liveSeasons = tvDetails.seasons.liveModels
+            let totalCachedEpisodes = liveSeasons.reduce(0) { $0 + $1.episodes.count }
+            let hasMissingEpisodes = liveSeasons.contains(where: { $0.episodes.isEmpty }) && !liveSeasons.isEmpty
             
             if let newDate = DateUtils.parseDate(details.firstAirDate) {
                 item.releaseDate = newDate

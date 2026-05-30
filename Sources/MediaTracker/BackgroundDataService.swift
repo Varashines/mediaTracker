@@ -168,6 +168,7 @@ actor BackgroundDataService {
         
         // 2. Deduplicate and Standardize
         for item in items {
+            if Task.isCancelled { break }
             // Migrate legacy IDs
             if !item.id.contains("_") {
                 let typePrefix = item.type == .movie ? "movie" : "tv"
@@ -274,7 +275,7 @@ actor BackgroundDataService {
     }
     
     private func purgeStaleSearchCache() async {
-        let sevenDaysAgo = Date().addingTimeInterval(-7 * 86400)
+        let sevenDaysAgo = Date().addingTimeInterval(-.days7)
         let descriptor = FetchDescriptor<SearchCacheEntity>(
             predicate: #Predicate { $0.timestamp < sevenDaysAgo }
         )

@@ -31,7 +31,7 @@ class BackgroundTaskManager {
 
         let context = ModelContext(container)
         let now = Date()
-        let staleThreshold = now.addingTimeInterval(-30 * 86400) // 30 days stale
+        let staleThreshold = now.addingTimeInterval(-.days30)
 
         // Prioritize "Active" items that are stale
         let predicate = #Predicate<MediaItem> { item in
@@ -180,6 +180,7 @@ class BackgroundTaskManager {
             if !allStale.isEmpty {
                 AppLogger.info("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...", logger: AppLogger.background)
                 for item in allStale {
+                    try Task.checkCancellation()
                     item.syncCachedProperties(now: now)
                 }
                 try context.save()

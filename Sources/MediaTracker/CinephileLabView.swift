@@ -71,7 +71,7 @@ struct CinephileLabView: View {
             AppLogger.debug("Error fetching cinephile data: \(error)")
         }
 
-        let cutoff = Date(timeIntervalSinceNow: -30 * 86400)
+        let cutoff = Date(timeIntervalSinceNow: -.days30)
         var descriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { ($0.lastInteractionDate ?? cutoff) >= cutoff },
             sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]

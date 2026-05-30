@@ -23,7 +23,7 @@ actor TasteActor {
         creator: [String: Double], language: [String: Double]
     )?
     @MainActor private static var lastAffinityCalculation: Date?
-    private let affinityCacheTTL: TimeInterval = 86400 // 24 hours
+    private let affinityCacheTTL: TimeInterval = .secondsInDay
 
     @MainActor static func clearCache() {
         cachedAffinityMap = nil
@@ -279,7 +279,7 @@ actor TasteActor {
                 continue
             }
 
-            let daysDifference = abs(now.timeIntervalSince(targetDate)) / 86400.0
+            let daysDifference = abs(now.timeIntervalSince(targetDate)) / .secondsInDay
             // Inverse time decay: 1 / (1 + λ * days)
             // λ = 0.005 ensures ~21% score retention at 2 years (730 days)
             let timeDecay = 1.0 / (1.0 + 0.005 * daysDifference)

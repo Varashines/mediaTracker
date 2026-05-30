@@ -235,6 +235,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         let itemsToProcess = upcomingItems.prefix(limit)
         
         for item in itemsToProcess {
+            if Task.isCancelled { break }
             onProgress?("⏳ Processing \(item.title)...")
             
             // Sequential processing with a small breather for the system daemon

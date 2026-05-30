@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 @ModelActor
 actor DiscoverySyncService {

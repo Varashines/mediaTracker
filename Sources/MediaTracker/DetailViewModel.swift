@@ -29,7 +29,7 @@ class DetailViewModel {
         
         // Active TV shows should check for updates every 24 hours
         if item.type == .tvShow && item.state == .active {
-            return Date().timeIntervalSince(lastUpdated) > TimeInterval.days1
+            return Date().timeIntervalSince(lastUpdated) > TimeInterval.secondsInDay
         }
         
         // Maintenance rule for TV shows (30 days)
@@ -38,7 +38,7 @@ class DetailViewModel {
         }
         
         // Default 24h for movies
-        return Date().timeIntervalSince(lastUpdated) > TimeInterval.days1
+        return Date().timeIntervalSince(lastUpdated) > TimeInterval.secondsInDay
     }
     
     func updateThemeColor() {

@@ -119,7 +119,7 @@ actor APIClient {
     }
 
     // MARK: - Disk Cache Helpers
-    private func getCachedData(forKey key: String, ttl: TimeInterval = 7 * 86400) async -> Data? {
+    private func getCachedData(forKey key: String, ttl: TimeInterval = .days7) async -> Data? {
         let fileURL = cacheFolder.appendingPathComponent(key)
 
         return await FileIOActor.shared.run {
@@ -266,7 +266,7 @@ actor APIClient {
 
     func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
@@ -341,7 +341,7 @@ actor APIClient {
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
         // With force: use 24h TTL instead of skipping cache entirely
-        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             return processTVDetails(d)
@@ -428,7 +428,7 @@ actor APIClient {
         let coalescingKey = cacheKey
 
         // Check disk cache first (24h TTL for season data, or 7-day if not force)
-        let ttl: TimeInterval = force ? 86400 : 7 * 86400
+        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBSeasonResponse.self, from: cachedData) {
             return decoded.episodes.map {
@@ -490,7 +490,7 @@ actor APIClient {
             return result
         }
 
-        var components = URLComponents(string: "https://www.omdbapi.com")!
+        guard var components = URLComponents(string: "https://www.omdbapi.com") else { return nil }
         components.queryItems = [
             URLQueryItem(name: "apikey", value: key),
             URLQueryItem(name: "i", value: imdbID)
@@ -529,13 +529,13 @@ actor APIClient {
     func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?) {
         // Check 24h disk cache
         let cacheKey = "tvmaze_schedule_\(tvMazeID)"
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 86400),
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
            let r = try? decoder.decode(TVMazeResponse.self, from: cachedData) {
             return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
         }
 
         return try await executeWithRetry {
-            let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode")!
+            guard let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)?embed=nextepisode") else { throw URLError(.badURL) }
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let r = try self.decoder.decode(TVMazeResponse.self, from: data)
@@ -547,12 +547,12 @@ actor APIClient {
     func fetchTVMazeEpisodes(tvMazeID: Int) async throws -> [TVMazeEpisode] {
         // Check 24h disk cache
         let cacheKey = "tvmaze_episodes_\(tvMazeID)"
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 86400) {
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay) {
             return try decoder.decode([TVMazeEpisode].self, from: cachedData)
         }
 
         return try await executeWithRetry {
-            let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes")!
+            guard let url = URL(string: "https://api.tvmaze.com/shows/\(tvMazeID)/episodes") else { throw URLError(.badURL) }
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let result = try self.decoder.decode([TVMazeEpisode].self, from: data)

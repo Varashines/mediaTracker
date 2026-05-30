@@ -154,7 +154,7 @@ actor MediaFilterActor {
         try Task.checkCancellation()
 
         if category == .stalled {
-            let ninetyDaysAgo = Date().addingTimeInterval(-90 * 86400)
+            let ninetyDaysAgo = Date().addingTimeInterval(-.days90)
             refined = refined.filter { item in
                 if item.stateValue == "On Hold" || item.stateValue == "Dropped" {
                     return true

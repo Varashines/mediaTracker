@@ -42,6 +42,7 @@ struct ForYouCompactCard: View {
             
             // 2. Matching Your Taste Tag (Top Right)
             if let context = recommendationContext {
+                let accent = AppTheme.Colors.accent
                 VStack {
                     HStack {
                         Spacer()
@@ -54,15 +55,15 @@ struct ForYouCompactCard: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                        .foregroundStyle(colorScheme == .dark ? .white : .black)
                         .background {
                             Capsule()
-                                .fill(themeColor.opacity(0.25))
+                                .fill(accent.opacity(colorScheme == .dark ? 0.25 : 0.35))
                                 .background(.thinMaterial)
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(themeColor.opacity(0.4), lineWidth: 0.8)
+                            Capsule().stroke(accent.opacity(0.4), lineWidth: 0.8)
                         }
                         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                         .padding(12)
