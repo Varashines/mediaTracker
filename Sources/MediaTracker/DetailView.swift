@@ -200,6 +200,44 @@ struct DetailView: View {
                         }
                     }
                 }
+
+                // 3. RECOMMENDATIONS (Modular Card)
+                ModularSection(title: "You Might Also Like", icon: "sparkles", color: effectiveThemeColor) {
+                    if viewModel.isLoadingRecommendations {
+                        HStack {
+                            ProgressView().controlSize(.small)
+                            Text("Finding recommendations...")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                    } else if viewModel.recommendations.isEmpty {
+                        Button {
+                            viewModel.fetchRecommendations()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 13))
+                                Text("Discover similar shows")
+                                    .font(AppTheme.Font.caption)
+                            }
+                            .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(effectiveThemeColor.opacity(colorScheme == .dark ? 0.15 : 0.12))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        RecommendationSectionView(
+                            recommendations: viewModel.recommendations,
+                            themeColor: effectiveThemeColor
+                        ) { showName in
+                            onSearchActor?(showName)
+                        }
+                    }
+                }
             } else if viewModel.item.type == .tvShow || !viewModel.item.displayCast.isEmpty {
                 // SKELETON LOADER — only when content exists to reveal
                 VStack(spacing: AppTheme.Spacing.large) {

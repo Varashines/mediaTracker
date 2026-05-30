@@ -16,6 +16,8 @@ class DetailViewModel {
     var secondaryVibrantThemeColor: Color = .clear
     var secondaryWarmThemeColor: Color = .clear
     var secondaryCoolThemeColor: Color = .clear
+    var recommendations: [MooreMetricsRecommendation] = []
+    var isLoadingRecommendations = false
     
     init(item: MediaItem) {
         self.item = item
@@ -154,6 +156,72 @@ class DetailViewModel {
         item.tvShowDetails?.recalculateCachedProperties()
 
         updateThemeColor()
+    }
+
+    func fetchRecommendations() {
+        guard MooreMetricsService.shared.isConfigured else { return }
+        guard !item.title.isEmpty else { return }
+        guard recommendations.isEmpty else { return }
+
+        let title = item.title
+        let domain = item.type == .movie ? "moviedive" : "showdive"
+        let cacheKey = "\(domain)_\(title)"
+
+        // Check 30-day persisted cache
+        if let cached = loadCachedRecs(key: cacheKey), !cached.isEmpty {
+            recommendations = cached
+            return
+        }
+
+        isLoadingRecommendations = true
+
+        Task {
+            var results = await MooreMetricsService.shared.recommend(domain: domain, items: [title], limit: 10)
+
+            if results.count >= 3 {
+                let allCharacteristics = results.compactMap(\.characteristics)
+                let profile = MooreMetricsService.shared.computePreferenceProfile(from: allCharacteristics)
+                if !profile.isEmpty {
+                    let prefResults = await MooreMetricsService.shared.recommendByPreferences(
+                        domain: domain, preferences: profile, limit: 5
+                    )
+                    var seen = Set(results.map(\.name))
+                    for rec in prefResults where !seen.contains(rec.name) {
+                        results.append(rec)
+                        seen.insert(rec.name)
+                    }
+                }
+            }
+
+            let finalResults = Array(results.prefix(10))
+            saveCachedRecs(key: cacheKey, recommendations: finalResults)
+
+            await MainActor.run { [weak self] in
+                self?.recommendations = finalResults
+                self?.isLoadingRecommendations = false
+            }
+        }
+    }
+
+    private func saveCachedRecs(key: String, recommendations: [MooreMetricsRecommendation]) {
+        let prefix = "mm_rec_cache_detail_"
+        if let data = try? JSONEncoder().encode(recommendations) {
+            UserDefaults.standard.set(data, forKey: prefix + key)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: prefix + key + "_ts")
+        }
+    }
+
+    private func loadCachedRecs(key: String) -> [MooreMetricsRecommendation]? {
+        let prefix = "mm_rec_cache_detail_"
+        let thirtyDays: TimeInterval = 30 * 24 * 3600
+
+        guard let data = UserDefaults.standard.data(forKey: prefix + key),
+              let cached = try? JSONDecoder().decode([MooreMetricsRecommendation].self, from: data),
+              let timestamp = UserDefaults.standard.object(forKey: prefix + key + "_ts") as? TimeInterval,
+              Date().timeIntervalSince1970 - timestamp < thirtyDays else {
+            return nil
+        }
+        return cached
     }
 
     private func prewarmCast() {

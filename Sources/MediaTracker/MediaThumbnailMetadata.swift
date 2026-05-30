@@ -30,6 +30,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let genres: [String]
     let recommendationReason: String?
     let lastInteractionDate: Date?
+    let tasteValue: String?
 
     var versionHash: String { "\(id.hashValue)_\(progress ?? 0)" }
 
@@ -63,6 +64,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.recommendationReason = recommendationReason
         self.genres = item.cachedGenres
         self.lastInteractionDate = item.lastInteractionDate
+        self.tasteValue = item.tasteValue
     }
 
     init(id: PersistentIdentifier, title: String) {
@@ -87,6 +89,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.genres = []
         self.recommendationReason = nil
         self.lastInteractionDate = nil
+        self.tasteValue = nil
     }
 
     /// Preview/test initializer with full control over all fields
@@ -124,6 +127,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.genres = []
         self.recommendationReason = nil
         self.lastInteractionDate = nil
+        self.tasteValue = nil
     }
 }
 

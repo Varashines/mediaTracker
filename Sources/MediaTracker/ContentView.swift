@@ -139,7 +139,10 @@ struct LibraryDetailView: View {
             .navigationDestination(for: DiscoveryFilter.self) { filter in
                 FilteredLibraryGridView(
                     filter: filter, namespace: posterNamespace,
-                    isFastScrolling: $viewModel.isFastScrolling)
+                    isFastScrolling: $viewModel.isFastScrolling,
+                    isSearchActive: $isSearchActive,
+                    searchText: $viewModel.searchText,
+                    onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
             .searchable(
                 text: $viewModel.searchText, isPresented: $isSearchActive,

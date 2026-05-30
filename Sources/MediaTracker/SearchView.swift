@@ -97,6 +97,17 @@ struct SearchView: View {
         .onDisappear {
             searchVM.cancelAllSearchOperations()
         }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    isSearchActive = false
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(AppTheme.Font.heading)
+                }
+                .help("Go back")
+            }
+        }
     }
 
     @ViewBuilder

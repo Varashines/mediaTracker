@@ -36,8 +36,7 @@ struct MetadataSection: View {
         }
         
         if let date = item.releaseDate {
-            let year = Calendar.current.component(.year, from: date)
-            items.append(MetadataItem(icon: "calendar", value: String(year)))
+            items.append(MetadataItem(icon: "calendar", value: date.formatted(date: .abbreviated, time: .omitted)))
         }
         
         if item.type == .movie {

@@ -4,6 +4,7 @@ import UserNotifications
 struct ConnectSection: View {
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("omdb_api_key") private var omdbApiKey = ""
+    @AppStorage("mm_api_key") private var mmApiKey = ""
     @AppStorage("notifications_enabled") private var notificationsEnabled = true
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
@@ -12,6 +13,7 @@ struct ConnectSection: View {
 
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
+    @State private var showMMKey = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -32,6 +34,15 @@ struct ConnectSection: View {
                     showKey: $showOMDBKey, 
                     isConnected: !omdbApiKey.isEmpty, 
                     link: URL(string: "https://www.omdbapi.com/apikey.aspx")!, 
+                    showDivider: true
+                )
+                apiRow(
+                    name: "MooreMetrics",
+                    subtitle: "Show recommendations",
+                    apiKey: $mmApiKey,
+                    showKey: $showMMKey,
+                    isConnected: !mmApiKey.isEmpty,
+                    link: URL(string: "https://www.mooremetrics.com")!,
                     showDivider: false
                 )
             }
