@@ -55,7 +55,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
                 let hasNote = !viewModel.currentCollectionNote.isEmpty
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(hasNote ? Color.blue : Color.secondary)
             }
             .help("Collection Notes")
@@ -64,7 +64,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 showingBulkManager = true
             } label: {
                 Image(systemName: "plus.square.on.square")
-                    .font(.system(size: 14))
+                    .font(AppTheme.Font.body)
             }
             .help("Manage Items")
         }

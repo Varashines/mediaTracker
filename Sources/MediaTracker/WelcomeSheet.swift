@@ -39,11 +39,11 @@ struct WelcomeSheet: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "key.fill")
-                            .font(.system(size: 13))
+                            .font(AppTheme.Font.body)
                         Text("Get Free TMDB API Key")
                             .font(AppTheme.Font.bodyBold)
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 11))
+                            .font(AppTheme.Font.caption)
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
@@ -79,7 +79,7 @@ struct WelcomeSheet: View {
             Spacer()
 
             Text("You can always set this up later in Settings → Connect")
-                .font(.system(size: 11, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.tertiary)
                 .padding(.bottom, 24)
         }

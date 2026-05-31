@@ -26,9 +26,9 @@ struct ThemePicker: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: option.icon)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppTheme.Font.caption)
                         Text(option.label)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                     }
                     .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
                     .frame(height: 28)
@@ -93,9 +93,9 @@ struct PalettePicker: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: option.icon)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppTheme.Font.caption)
                         Text(option.label)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                     }
                     .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
                     .frame(height: 28)

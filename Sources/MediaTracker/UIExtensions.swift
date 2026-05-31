@@ -194,12 +194,12 @@ struct PageHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.title2)
                 .foregroundStyle(color.gradient)
             
             if let subtitle = subtitle {
                 Text(subtitle)
-                    .font(.system(size: 12))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
             }
         }
@@ -215,7 +215,7 @@ struct SubSectionHeader: View {
     
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 11, weight: .bold))
+            .font(AppTheme.Font.caption)
             .foregroundStyle(.secondary)
             .tracking(1.2)
     }

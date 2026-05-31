@@ -390,7 +390,7 @@ struct MediaThumbnailView: View {
                 Image(systemName: "tv")
             }
         }
-        .font(.system(size: 9, weight: .bold))
+        .font(AppTheme.Font.smallBold)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .foregroundStyle(accent)
@@ -582,7 +582,7 @@ struct ThumbnailSearchOverlay: View {
 
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 40))
+                            .font(AppTheme.Font.largeTitle)
                             .foregroundStyle(.green)
                         Text("In Library")
                             .font(.caption.bold())

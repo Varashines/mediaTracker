@@ -27,7 +27,7 @@ struct InsightsView: View {
                         // Title with Link to Cinephile Lab
                         HStack {
                             Text("Insights")
-                                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                                .font(AppTheme.Font.title)
                             
                             Spacer()
                             
@@ -36,7 +36,7 @@ struct InsightsView: View {
                                     Image(systemName: "chart.bar.doc.horizontal.fill")
                                     Text("Cinephile Lab")
                                 }
-                                .font(.system(size: 13, weight: .bold))
+                                .font(AppTheme.Font.bodyBold)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                                 .background(Color.primary.opacity(0.12))
@@ -234,7 +234,7 @@ struct ClaymorphicHeroCard: View {
                     .lineLimit(1)
 
                 Text(detail)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(AppTheme.Font.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -383,10 +383,10 @@ struct PreferenceBlock: View {
             if let score = score, score > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(String(format: "%.0f%%", score * 100))
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.title3)
                         .foregroundStyle(color)
                     Text("Affinity")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppTheme.Font.smallBold)
                         .foregroundStyle(.tertiary)
                         .textCase(.uppercase)
                 }

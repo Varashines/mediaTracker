@@ -166,7 +166,7 @@ struct StatusBadgePrimitive: View {
         HStack(spacing: 0) {
             if !label.isEmpty {
                 Text(label.uppercased())
-                    .font(.system(size: 7.5, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Font.badge)
                     .kerning(1.0)
                     .multilineTextAlignment(.center)
             }

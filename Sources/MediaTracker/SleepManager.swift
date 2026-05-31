@@ -123,7 +123,7 @@ struct SleepOverlayModifier: ViewModifier {
                     
                     VStack(spacing: 20) {
                         Image(systemName: "moon.stars.fill")
-                            .font(.system(size: 60))
+                            .font(AppTheme.Font.heroTitle)
                             .foregroundStyle(.secondary)
                         
                         Text("App is in Sleep Mode")

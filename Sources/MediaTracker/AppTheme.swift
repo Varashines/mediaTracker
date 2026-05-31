@@ -34,10 +34,16 @@ struct AppTheme {
         static let smallBold = SwiftUI.Font.system(size: 9, weight: .bold, design: .rounded)
         static let tiny = SwiftUI.Font.system(size: 8, weight: .bold, design: .rounded)
         static let badge = SwiftUI.Font.system(size: 7.5, weight: .semibold, design: .rounded)
-        static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
-        static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
-        static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
-    }
+    static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
+    static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
+    static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
+    static let monoSmall = SwiftUI.Font.system(size: 10, weight: .regular, design: .monospaced)
+    static let stat = SwiftUI.Font.system(size: 9.5, weight: .bold, design: .rounded).monospacedDigit()
+    static let subheading = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
+    static let bodySemibold = SwiftUI.Font.system(size: 13, weight: .semibold, design: .rounded)
+    static let medium = SwiftUI.Font.system(size: 11, weight: .medium, design: .rounded)
+    static let heavy = SwiftUI.Font.system(size: 11, weight: .heavy, design: .rounded)
+}
 
     struct ShadowConfig {
         let color: Color

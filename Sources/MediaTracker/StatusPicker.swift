@@ -32,9 +32,9 @@ struct StatusPicker: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: currentState.iconName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Font.heading)
                     Text(currentState.displayName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Font.heading)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .semibold))
                         .opacity(0.5)

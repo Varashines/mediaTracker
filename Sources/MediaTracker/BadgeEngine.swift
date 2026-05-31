@@ -102,13 +102,68 @@ struct BadgeEngine {
 
     private static func scanEpisodes(for item: MediaItem, now: Date) -> EpisodeScan {
         guard let tv = item.tvShowDetails else { return .empty }
+        let cutoff = now.addingTimeInterval(recentlyWatchedCutoff)
+
+        // Batch fetch all episodes for this show to avoid N+1 relationship faults
+        let batchResult = batchScan(tv: tv, now: now, cutoff: cutoff)
+        if let result = batchResult { return result }
+
+        // Fallback: relationship traversal (for contexts where showID isn't set, e.g., tests)
+        return relationshipScan(tv: tv, now: now, cutoff: cutoff)
+    }
+
+    private static func batchScan(tv: TVShowDetails, now: Date, cutoff: Date) -> EpisodeScan? {
+        guard let context = tv.modelContext else { return nil }
+        let tmdbID = tv.tmdbID
+        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
+        guard let allEpisodes = try? context.fetch(eDescriptor), !allEpisodes.isEmpty else { return nil }
 
         var nextEpisodeNumber = 0
         var nextSeasonEpisodeCount = 0
         var nextAirDate: Date? = nil
         var airedOnSameDayCount = 0
         var recentlyWatchedCount = 0
-        let cutoff = now.addingTimeInterval(recentlyWatchedCutoff)
+        var foundNext = false
+
+        var episodeMap: [Int: [TVEpisode]] = [:]
+        for ep in allEpisodes {
+            episodeMap[ep.seasonNumber, default: []].append(ep)
+        }
+
+        for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
+            guard let seasonEpisodes = episodeMap[season.seasonNumber] else { continue }
+            for ep in seasonEpisodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
+                if !ep.isWatched {
+                    if !foundNext {
+                        nextEpisodeNumber = ep.episodeNumber
+                        nextSeasonEpisodeCount = season.episodeCount
+                        nextAirDate = ep.airDateAsDate
+                        foundNext = true
+                        airedOnSameDayCount = 1
+                    } else if ep.airDateAsDate == nextAirDate {
+                        airedOnSameDayCount += 1
+                    }
+                } else if let lastWatched = ep.lastWatchedDate, lastWatched >= cutoff {
+                    recentlyWatchedCount += 1
+                }
+            }
+        }
+
+        return EpisodeScan(
+            nextEpisodeNumber: nextEpisodeNumber,
+            nextSeasonEpisodeCount: nextSeasonEpisodeCount,
+            nextAirDate: nextAirDate,
+            airedOnSameDayCount: airedOnSameDayCount,
+            recentlyWatchedCount: recentlyWatchedCount
+        )
+    }
+
+    private static func relationshipScan(tv: TVShowDetails, now: Date, cutoff: Date) -> EpisodeScan {
+        var nextEpisodeNumber = 0
+        var nextSeasonEpisodeCount = 0
+        var nextAirDate: Date? = nil
+        var airedOnSameDayCount = 0
+        var recentlyWatchedCount = 0
         var foundNext = false
 
         for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {

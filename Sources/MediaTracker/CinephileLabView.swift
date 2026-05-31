@@ -121,7 +121,7 @@ struct GalleryCardView: View {
             Spacer(minLength: 0)
 
             Text(name)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.primary.opacity(0.9))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -247,7 +247,7 @@ struct DecadeDistributionRow: View {
     var body: some View {
         HStack(spacing: AppTheme.Spacing.medium) {
             Text(decade)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(AppTheme.Font.monoSmall)
                 .foregroundStyle(.primary)
                 .frame(width: 50, alignment: .leading)
 
@@ -266,7 +266,7 @@ struct DecadeDistributionRow: View {
 
             HStack(spacing: 4) {
                 Text("\(count)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(AppTheme.Font.monoSmall)
                     .foregroundStyle(.secondary)
                 
                 Text(String(format: "(%.0f%%)", percentage * 100))
@@ -343,7 +343,7 @@ struct WeeklyWatchArc: View {
 
                 HStack {
                     Text("Total: \(formatWatchTimeCompact(minutes: totalMin))")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(AppTheme.Font.monoSmall)
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text("\(activeDays)/7 days active")
@@ -366,10 +366,10 @@ struct DayCard: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
             HStack(spacing: 2) {
                 Text(entry.dayName)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.smallBold)
                     .foregroundStyle(isToday ? AppTheme.Colors.accent : .secondary)
                 Text("\(entry.dateNum)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.smallBold)
                     .foregroundStyle(isToday ? AppTheme.Colors.accent : .primary)
             }
 
@@ -395,7 +395,7 @@ struct DayCard: View {
                 }
             } else {
                 Text("—")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(AppTheme.Font.monoSmall)
                     .foregroundStyle(.tertiary)
 
                 RoundedRectangle(cornerRadius: 3)

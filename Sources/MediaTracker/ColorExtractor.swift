@@ -10,7 +10,7 @@ struct DominantPair: Sendable, Equatable {
 enum ColorExtractor {
     private static let defaultGray = Color(red: 0.3, green: 0.3, blue: 0.3)
     private static let secondaryGray = Color(red: 0.2, green: 0.2, blue: 0.2)
-    private static nonisolated(unsafe) let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     static func dominantColor(from url: URL) async -> Color {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),

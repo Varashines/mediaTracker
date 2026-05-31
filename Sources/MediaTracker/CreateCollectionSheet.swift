@@ -63,7 +63,7 @@ struct CreateCollectionSheet: View {
                 // Name Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("NAME")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppTheme.Font.caption2)
                         .foregroundStyle(.secondary)
                         .kerning(1.2)
                     TextField("Collection Name", text: $name)
@@ -82,14 +82,14 @@ struct CreateCollectionSheet: View {
                                 .frame(width: 32, height: 32)
                             Image(systemName: "sparkles")
                                 .foregroundStyle(.purple)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(AppTheme.Font.heading)
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Smart Playlist")
-                                .font(.system(.headline, design: .rounded))
+                                .font(AppTheme.Font.bodyBold)
                             Text("Dynamic rules to group media.")
-                                .font(.system(size: 11, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -107,13 +107,13 @@ struct CreateCollectionSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("ICON")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(AppTheme.Font.caption2)
                             .foregroundStyle(.secondary)
                             .kerning(1.2)
                         Spacer()
                         TextField("Search symbols...", text: $iconSearchText)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 11, design: .rounded))
+                            .font(AppTheme.Font.caption)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Color.primary.opacity(0.05))
@@ -129,7 +129,7 @@ struct CreateCollectionSheet: View {
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
-                    .font(.system(.body, design: .rounded)).bold()
+                    .font(AppTheme.Font.bodyBold)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Color.primary.opacity(0.05))
@@ -149,7 +149,7 @@ struct CreateCollectionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(name.isEmpty)
-                .font(.system(.body, design: .rounded)).bold()
+                .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
                 .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(Color.blue))
@@ -177,7 +177,7 @@ struct CreateCollectionSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("RULES")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppTheme.Font.caption2)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                 Spacer()
@@ -186,7 +186,7 @@ struct CreateCollectionSheet: View {
             
             if smartRules.isEmpty {
                 Text("Includes everything in your library.")
-                    .font(.system(size: 12, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -197,7 +197,7 @@ struct CreateCollectionSheet: View {
                     ForEach(Array(smartRules.enumerated()), id: \.offset) { idx, rule in
                         HStack {
                             ruleLabel(for: rule)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(AppTheme.Font.body)
                             Spacer()
                             Button {
                                 smartRules.remove(at: idx)
@@ -322,7 +322,7 @@ struct RuleAddMenu: View {
             }
         } label: {
             Label("Add Rule", systemImage: "plus.circle")
-                .font(.system(size: 11, weight: .bold))
+                .font(AppTheme.Font.caption)
         }
     }
 }

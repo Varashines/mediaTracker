@@ -34,7 +34,7 @@ struct NoteOverlayView: View {
                     }
                     
                     TextEditor(text: $localNote)
-                        .font(.system(size: 13))
+                        .font(AppTheme.Font.body)
                         .scrollContentBackground(.hidden)
                         .background(Color.primary.opacity(0.03))
                         .cornerRadius(10)
@@ -43,7 +43,7 @@ struct NoteOverlayView: View {
                         .overlay(alignment: .topLeading) {
                             if localNote.isEmpty {
                                 Text("Add a note for this collection...")
-                                    .font(.system(size: 13))
+                                    .font(AppTheme.Font.body)
                                     .foregroundStyle(.secondary)
                                     .padding(.top, 8)
                                     .padding(.leading, 5)

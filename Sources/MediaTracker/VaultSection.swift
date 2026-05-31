@@ -59,9 +59,9 @@ struct VaultSection: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "trash")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(AppTheme.Font.caption)
                             Text("Delete")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                         }
                         .foregroundStyle(.red)
                         .padding(.horizontal, 10)

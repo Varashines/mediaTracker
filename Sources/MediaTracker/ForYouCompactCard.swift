@@ -48,9 +48,9 @@ struct ForYouCompactCard: View {
                         Spacer()
                         HStack(spacing: 4) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppTheme.Font.small)
                             Text(context.uppercased())
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppTheme.Font.small)
                                 .tracking(0.8)
                         }
                         .padding(.horizontal, 10)

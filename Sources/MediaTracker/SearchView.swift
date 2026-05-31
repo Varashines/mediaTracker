@@ -115,7 +115,7 @@ struct SearchView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("Media Type")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                 
                 Picker("", selection: $selectedType) {
@@ -129,7 +129,7 @@ struct SearchView: View {
                 
                 Button {} label: {
                     Image(systemName: "questionmark.circle")
-                        .font(.system(size: 12))
+                        .font(AppTheme.Font.body)
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
@@ -207,10 +207,10 @@ struct SearchView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 10))
+                                        .font(AppTheme.Font.caption2)
                                     Text(query)
                                 }
-                                .font(.system(size: 12, weight: .medium))
+                                .font(AppTheme.Font.body)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color.primary.opacity(0.06))

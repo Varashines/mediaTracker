@@ -63,7 +63,7 @@ struct ConnectSection: View {
                 if notificationsEnabled {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Channels")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                             .foregroundStyle(.secondary)
                         HStack(spacing: 10) {
                             channelButton(title: "Movies", icon: "film", isOn: $movieNotificationsEnabled)
@@ -140,13 +140,13 @@ struct ConnectSection: View {
                 .background(Color.primary.opacity(0.02))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
-                .font(.system(size: 10, design: .monospaced))
+                .font(AppTheme.Font.monoSmall)
                 .overlay(alignment: .trailing) {
                     Button {
                         showKey.wrappedValue.toggle()
                     } label: {
                         Image(systemName: showKey.wrappedValue ? "eye.slash" : "eye")
-                            .font(.system(size: 10))
+                            .font(AppTheme.Font.caption2)
                             .foregroundStyle(.secondary)
                             .padding(.trailing, 8)
                     }
@@ -155,7 +155,7 @@ struct ConnectSection: View {
 
                 Link(destination: link) {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 11, weight: .regular))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -178,10 +178,10 @@ struct ConnectSection: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : Color.secondary)
                 Text(title)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(AppTheme.Font.medium)
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
             }
             .padding(.horizontal, 10)

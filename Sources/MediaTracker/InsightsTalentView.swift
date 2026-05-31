@@ -111,14 +111,14 @@ struct TalentCardView: View {
                 ZStack(alignment: .leading) {
                     // Rank shown by default: e.g. "01"
                     Text(String(format: "%02d", rank))
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(color.gradient)
                         .opacity(isHovered ? 0.0 : 1.0)
                         .scaleEffect(isHovered ? 0.8 : 1.0)
 
                     // Percentage shown on hover: e.g. "85%"
                     Text(String(format: "%.0f%%", person.score * 100))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(AppTheme.Font.monoSmall)
                         .foregroundStyle(color)
                         .opacity(isHovered ? 1.0 : 0.0)
                         .scaleEffect(isHovered ? 1.0 : 1.2)
@@ -127,7 +127,7 @@ struct TalentCardView: View {
                 .frame(height: 14)
 
                 Text(person.name)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

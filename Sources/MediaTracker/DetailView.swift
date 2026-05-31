@@ -239,7 +239,7 @@ struct DetailView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 13))
+                                    .font(AppTheme.Font.body)
                                 Text("Discover similar shows")
                                     .font(AppTheme.Font.caption)
                             }
@@ -291,7 +291,7 @@ struct DetailView: View {
                             .fill(isCollHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15))
+                            .font(AppTheme.Font.bodyMedium)
                     }
                 }
                 .buttonStyle(.plain)
@@ -312,7 +312,7 @@ struct DetailView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 15))
+                                .font(AppTheme.Font.bodyMedium)
                         }
                     }
                 }
@@ -334,7 +334,7 @@ struct DetailView: View {
                             .fill(isCopyHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "doc.on.doc")
-                            .font(.system(size: 13))
+                            .font(AppTheme.Font.body)
                     }
                 }
                 .buttonStyle(.plain)
@@ -353,7 +353,7 @@ struct DetailView: View {
                             .fill(isDeleteHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "trash")
-                            .font(.system(size: 15))
+                            .font(AppTheme.Font.bodyMedium)
                             .foregroundStyle(.red)
                     }
                 }
@@ -406,10 +406,10 @@ struct DetailView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 26))
+                                .font(AppTheme.Font.title2)
                                 .foregroundStyle(.secondary.opacity(0.5))
                             Text("Cancel")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppTheme.Font.small)
                                 .foregroundStyle(.tertiary)
                         }
                         .frame(width: 56)
@@ -421,10 +421,10 @@ struct DetailView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 26))
+                                .font(AppTheme.Font.title2)
                                 .foregroundStyle(.red)
                             Text("Delete")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppTheme.Font.small)
                                 .foregroundStyle(.red)
                         }
                         .frame(width: 56)
