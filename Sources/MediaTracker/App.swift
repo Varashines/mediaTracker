@@ -5,6 +5,11 @@ import Combine
 import AppKit
 #endif
 
+extension Notification.Name {
+    static let showWelcome = Notification.Name("showWelcome")
+    static let openSettingsTab = Notification.Name("openSettingsTab")
+}
+
 @main
 struct MediaTrackerApp: App {
     private let notificationManager = NotificationManager.shared
@@ -77,7 +82,7 @@ struct MediaTrackerApp: App {
                     guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
 
                     // Re-extract all items with new CoreImage algorithm
-                    if let (data, _) = try? await URLSession.shared.data(from: url) {
+                    if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url) {
                         let pair: DominantPair? = await Task.detached {
                             if let image = NSImage(data: data),
                                let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {

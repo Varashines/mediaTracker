@@ -11,6 +11,16 @@ permissions:
 jobs:
   build:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+        include:
+          - arch: arm64
+            runner_arch: arm64
+            output_label: "Apple Silicon"
+          - arch: x86_64
+            runner_arch: x86_64
+            output_label: "Intel"
     
     steps:
       - name: Checkout code
@@ -24,17 +34,14 @@ jobs:
       - name: Build App Bundle
         run: |
           chmod +x install.sh
-          # We need to modify install.sh slightly or simulate its steps
-          # because install.sh moves to /Applications, which might require sudo
-          # and isn't what we want for a DMG.
           
           APP_NAME="MediaTracker"
           BUNDLE_ID="com.vara.mediatracker"
           EXECUTABLE_NAME="MediaTracker"
-          BUILD_DIR=".build/apple/Products/Release"
+          ARCH="${{ matrix.arch }}"
           
-          echo "🚀 Building $APP_NAME in Release mode..."
-          swift build -c release --arch arm64
+          echo "🚀 Building $APP_NAME for $ARCH..."
+          swift build -c release --arch $ARCH
           
           echo "🎨 Generating App Icon..."
           swift generate_icon.swift
@@ -49,7 +56,7 @@ jobs:
           mkdir -p "$MACOS_DIR"
           mkdir -p "$RESOURCES_DIR"
           
-          cp ".build/arm64-apple-macosx/release/$EXECUTABLE_NAME" "$MACOS_DIR/"
+          cp ".build/${ARCH}-apple-macosx/release/$EXECUTABLE_NAME" "$MACOS_DIR/"
           cp AppIcon.icns "$RESOURCES_DIR/"
           
           cat > "$CONTENTS_DIR/Info.plist" <<EOF
@@ -70,7 +77,7 @@ jobs:
               <key>CFBundleShortVersionString</key>
               <string>${GITHUB_REF_NAME#v}</string>
               <key>LSMinimumSystemVersion</key>
-              <string>15.0</string>
+              <string>14.0</string>
               <key>NSHighResolutionCapable</key>
               <true/>
           </dict>
@@ -82,16 +89,42 @@ jobs:
 
       - name: Create DMG
         run: |
+          ARCH="${{ matrix.arch }}"
+          LABEL="${{ matrix.output_label }}"
+          DMG_NAME="MediaTracker-${ARCH}"
+          
           mkdir -p dmg_folder
           cp -R "MediaTracker.app" dmg_folder/
           ln -s /Applications dmg_folder/Applications
-          hdiutil create -volname "MediaTracker" -srcfolder dmg_folder -ov -format UDZO "MediaTracker.dmg"
+          hdiutil create -volname "MediaTracker" -srcfolder dmg_folder -ov -format UDZO "${DMG_NAME}.dmg"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaTracker-${{ matrix.arch }}
+          path: MediaTracker-${{ matrix.arch }}.dmg
+          retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download all DMGs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: MediaTracker.dmg
+          files: artifacts/*.dmg
           draft: false
           prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

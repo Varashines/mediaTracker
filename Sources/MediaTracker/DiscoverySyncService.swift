@@ -412,7 +412,7 @@ actor DiscoverySyncService {
                     }
 
                     do {
-                        let (data, _) = try await URLSession.shared.data(from: url)
+                        let (data, _) = try await ImageCache.shared.imageSession.data(from: url)
                         let extractedColor = await ColorExtractor.dominantColor(from: data)
                         let hexString = extractedColor.toHex()
                         

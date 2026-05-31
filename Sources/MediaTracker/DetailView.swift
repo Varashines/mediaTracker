@@ -14,6 +14,7 @@ struct DetailView: View {
     @State private var showNavTitle = false
     @State private var isCollHovered = false
     @State private var isRefreshHovered = false
+    @State private var isCopyHovered = false
     @State private var isDeleteHovered = false
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -116,16 +117,25 @@ struct DetailView: View {
                     if viewModel.item.type == .tvShow {
                         viewModel.markNextEpisodeWatched()
                         FeedbackManager.shared.trigger(.markWatched)
+                        AppErrorState.shared.showToast("Next episode marked", style: .success)
                     } else {
                         viewModel.toggleWatched()
                         let isCompleted = viewModel.item.state == .completed
                         FeedbackManager.shared.trigger(isCompleted ? .markWatched : .stateChange)
+                        AppErrorState.shared.showToast(
+                            isCompleted ? "Marked as watched" : "Moved to wishlist",
+                            style: .success
+                        )
                     }
                 }
                 .keyboardShortcut(.space, modifiers: [])
                 
                 Button("") {
                     viewModel.cycleStatus()
+                    AppErrorState.shared.showToast(
+                        "Moved to \(viewModel.item.state?.displayName ?? "new status")",
+                        style: .success
+                    )
                 }
                 .keyboardShortcut("w", modifiers: [])
             }
@@ -182,7 +192,10 @@ struct DetailView: View {
                             tvDetails: tv,
                             themeColor: effectiveThemeColor,
                             isRefreshing: viewModel.isRefreshing,
-                            onWatchedToggle: { viewModel.item.syncCachedProperties() },
+                            onWatchedToggle: {
+                                viewModel.item.lastInteractionDate = Date()
+                                viewModel.item.syncCachedProperties()
+                            },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
                         )
                         .padding(.top, 4)
@@ -202,7 +215,15 @@ struct DetailView: View {
                 }
 
                 // 3. RECOMMENDATIONS (Modular Card)
-                ModularSection(title: "You Might Also Like", icon: "sparkles", color: effectiveThemeColor) {
+                if MooreMetricsService.shared.isConfigured {
+                    let detailTraits = viewModel.debugSelectedTraits
+                    let detailTitle: String = {
+                        if !detailTraits.isEmpty {
+                            return "You Might Also Like  ·  Top traits: \(detailTraits.joined(separator: ", "))"
+                        }
+                        return "You Might Also Like"
+                    }()
+                    ModularSection(title: detailTitle, icon: "sparkles", color: effectiveThemeColor) {
                     if viewModel.isLoadingRecommendations {
                         HStack {
                             ProgressView().controlSize(.small)
@@ -238,6 +259,7 @@ struct DetailView: View {
                         }
                     }
                 }
+            }
             } else if viewModel.item.type == .tvShow || !viewModel.item.displayCast.isEmpty {
                 // SKELETON LOADER — only when content exists to reveal
                 VStack(spacing: AppTheme.Spacing.large) {
@@ -274,6 +296,7 @@ struct DetailView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut("l", modifiers: [.command])
+                .help("Add to collection")
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
                 }
@@ -296,8 +319,28 @@ struct DetailView: View {
                 .buttonStyle(.plain)
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
+                .help("Refresh metadata")
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isRefreshHovered = hovering }
+                }
+
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(viewModel.item.title, forType: .string)
+                    AppErrorState.shared.showToast("Title copied", style: .success)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isCopyHovered ? Color.primary.opacity(0.1) : Color.clear)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 13))
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Copy title")
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.easeInOut) { isCopyHovered = hovering }
                 }
 
                 Button(role: .destructive) {
@@ -316,6 +359,7 @@ struct DetailView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.delete, modifiers: [.command])
+                .help("Delete from library")
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isDeleteHovered = hovering }
                 }

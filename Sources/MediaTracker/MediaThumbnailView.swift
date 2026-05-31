@@ -462,6 +462,15 @@ struct MediaThumbnailView: View {
             }
         }
 
+        Section("Actions") {
+            Button("Copy Title") {
+                let item = modelContext.model(for: itemID) as? MediaItem
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item?.title ?? "", forType: .string)
+                AppErrorState.shared.showToast("Title copied", style: .success)
+            }
+        }
+
         Section("Set Status") {
             ForEach(MediaItem.availableStates(for: type, progress: progress), id: \.self) {
                 targetState in

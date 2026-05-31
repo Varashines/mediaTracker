@@ -16,4 +16,7 @@ enum UserDefaultsKeys: String {
     case audioEnabled = "audio_enabled"
     case studioAliases = "studio_aliases"
     case skipStartupTasks = "skip_startup_background_tasks"
+    case mmDebugMode = "mm_debug_mode"
+    case mmAPIKey = "mm_api_key"
+    case hasSeenWelcome = "has_seen_welcome"
 }

@@ -7,6 +7,7 @@ struct RecommendationSheet: View {
     let recommendations: [MooreMetricsRecommendation]
     let onDismiss: () -> Void
     var onSearch: ((String) -> Void)? = nil
+    var debugTraits: [String] = []
 
     @Environment(\.colorScheme) var colorScheme
     @State private var addedIDs: Set<String> = []
@@ -42,9 +43,20 @@ struct RecommendationSheet: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
 
-            Text("\(recommendations.count) shows matched your taste")
-                .font(AppTheme.Font.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text("\(recommendations.count) shows matched your taste")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+
+                if !debugTraits.isEmpty {
+                    Text("·")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.tertiary)
+                    Text("Top traits: \(debugTraits.joined(separator: ", "))")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                }
+            }
         }
     }
 

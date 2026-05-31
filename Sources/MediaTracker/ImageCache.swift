@@ -43,15 +43,17 @@ class ImageCache: NSObject {
     // Phase 3 Optimization: In-Memory Disk Cache Index
     private var diskCacheIndex: Set<String> = []
     private var memoryPressureSource: DispatchSourceMemoryPressure?
+    private var saveCount: Int64 = 0
 
     // Detection for Retina displays
     private let screenScale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2.0
     
     private let cacheDirectory: URL
-    private let imageSession: URLSession = {
+    let imageSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
-        config.urlCache = nil // ImageCache handles its own disk cache; avoid duplicate URLCache
+        config.timeoutIntervalForRequest = 10
+        config.urlCache = nil
         return URLSession(configuration: config)
     }()
 
@@ -440,6 +442,11 @@ class ImageCache: NSObject {
 
             await MainActor.run {
                 _ = ImageCache.shared.diskCacheIndex.insert(diskFileName)
+            }
+
+            let count = await MainActor.run { ImageCache.shared.saveCount += 1; return ImageCache.shared.saveCount }
+            if count % 50 == 0 {
+                await ImageCache.shared.pruneDiskCacheIfNeeded()
             }
         }.value
     }

@@ -4,12 +4,11 @@ import UserNotifications
 struct ConnectSection: View {
     @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
     @AppStorage("omdb_api_key") private var omdbApiKey = ""
-    @AppStorage("mm_api_key") private var mmApiKey = ""
+    @AppStorage(UserDefaultsKeys.mmAPIKey.rawValue) private var mmApiKey = ""
     @AppStorage("notifications_enabled") private var notificationsEnabled = true
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
     @AppStorage("notifications_time") private var notificationTime: Double = 9 * 3600
-    @State private var isPulsing = false
 
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
@@ -20,20 +19,20 @@ struct ConnectSection: View {
             SettingsSectionHeader(text: "API Keys", icon: "key.fill", color: .green)
             SettingsCard(color: .green) {
                 apiRow(
-                    name: "TMDB", 
-                    subtitle: "Movie & TV metadata", 
-                    apiKey: $tmdbApiKey, 
-                    showKey: $showTMDBKey, 
-                    isConnected: !tmdbApiKey.isEmpty, 
+                    name: "TMDB",
+                    subtitle: "Movie & TV metadata",
+                    apiKey: $tmdbApiKey,
+                    showKey: $showTMDBKey,
+                    isConnected: !tmdbApiKey.isEmpty,
                     link: URL(string: "https://www.themoviedb.org/settings/api")!
                 )
                 apiRow(
-                    name: "OMDb", 
-                    subtitle: "Rotten Tomatoes scores", 
-                    apiKey: $omdbApiKey, 
-                    showKey: $showOMDBKey, 
-                    isConnected: !omdbApiKey.isEmpty, 
-                    link: URL(string: "https://www.omdbapi.com/apikey.aspx")!, 
+                    name: "OMDb",
+                    subtitle: "Rotten Tomatoes scores",
+                    apiKey: $omdbApiKey,
+                    showKey: $showOMDBKey,
+                    isConnected: !omdbApiKey.isEmpty,
+                    link: URL(string: "https://www.omdbapi.com/apikey.aspx")!,
                     showDivider: true
                 )
                 apiRow(
@@ -70,8 +69,9 @@ struct ConnectSection: View {
                             channelButton(title: "Movies", icon: "film", isOn: $movieNotificationsEnabled)
                             channelButton(title: "TV Shows", icon: "tv", isOn: $tvNotificationsEnabled)
                         }
-                        .padding(.bottom, 8)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
 
                     Divider().opacity(0.06).padding(.leading, 16)
@@ -96,17 +96,26 @@ struct ConnectSection: View {
                     }
                 }
             }
+
+            SettingsSectionHeader(text: "Help", icon: "questionmark.circle.fill", color: .teal)
+            SettingsCard(color: .teal) {
+                SettingsRow(title: "Welcome", subtitle: "Re-run the onboarding guide", showDivider: false) {
+                    SettingsButton(title: "Show Welcome Screen") {
+                        NotificationCenter.default.post(name: .showWelcome, object: nil)
+                        NSApp.keyWindow?.close()
+                    }
+                }
+            }
         }
-        .onAppear { isPulsing = true }
     }
 
     private func apiRow(
-        name: String, 
-        subtitle: String, 
-        apiKey: Binding<String>, 
-        showKey: Binding<Bool>, 
-        isConnected: Bool, 
-        link: URL, 
+        name: String,
+        subtitle: String,
+        apiKey: Binding<String>,
+        showKey: Binding<Bool>,
+        isConnected: Bool,
+        link: URL,
         showDivider: Bool = true
     ) -> some View {
         VStack(spacing: 0) {
@@ -177,10 +186,10 @@ struct ConnectSection: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isOn.wrappedValue ? AppTheme.Colors.accent.opacity(0.04) : Color.clear)
-                )
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isOn.wrappedValue ? AppTheme.Colors.accent.opacity(0.04) : Color.clear)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

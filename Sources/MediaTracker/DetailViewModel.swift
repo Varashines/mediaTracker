@@ -18,6 +18,7 @@ class DetailViewModel {
     var secondaryCoolThemeColor: Color = .clear
     var recommendations: [MooreMetricsRecommendation] = []
     var isLoadingRecommendations = false
+    var debugSelectedTraits: [String] = []
     
     init(item: MediaItem) {
         self.item = item
@@ -159,12 +160,13 @@ class DetailViewModel {
     }
 
     func fetchRecommendations() {
+        recsTask?.cancel()
         guard MooreMetricsService.shared.isConfigured else { return }
         guard !item.title.isEmpty else { return }
         guard recommendations.isEmpty else { return }
 
         let title = item.title
-        let domain = item.type == .movie ? "moviedive" : "showdive"
+        let domain = MooreMetricsService.recommendedDomain(for: item)
         let cacheKey = "\(domain)_\(title)"
 
         // Check 30-day persisted cache
@@ -175,28 +177,48 @@ class DetailViewModel {
 
         isLoadingRecommendations = true
 
-        Task {
-            var results = await MooreMetricsService.shared.recommend(domain: domain, items: [title], limit: 10)
+        recsTask = Task { [weak self] in
+            async let asyncLabels = MooreMetricsService.shared.fetchCharacteristics(for: domain)
+            var mutableResults = await MooreMetricsService.shared.recommend(domain: domain, items: [title], limit: 10, labels: await asyncLabels)
+            guard !mutableResults.isEmpty else {
+                await MainActor.run {
+                    AppErrorState.shared.showToast("No recommendations found", style: .info)
+                    self?.isLoadingRecommendations = false
+                }
+                return
+            }
+            guard !Task.isCancelled else { return }
 
-            if results.count >= 3 {
-                let allCharacteristics = results.compactMap(\.characteristics)
-                let profile = MooreMetricsService.shared.computePreferenceProfile(from: allCharacteristics)
-                if !profile.isEmpty {
+            if mutableResults.count >= 3 {
+                let topProfile = MooreMetricsService.shared.buildPreferenceProfile(
+                    from: mutableResults.map { ($0.characteristics, $0.score) }
+                )
+                if !topProfile.isEmpty {
+                    let debugMode = UserDefaults.standard.bool(forKey: UserDefaultsKeys.mmDebugMode.rawValue)
+                    if debugMode {
+                        await MainActor.run { [weak self] in
+                            self?.debugSelectedTraits = Array(topProfile.keys)
+                        }
+                    }
+
+                    guard !Task.isCancelled else { return }
+
                     let prefResults = await MooreMetricsService.shared.recommendByPreferences(
-                        domain: domain, preferences: profile, limit: 5
+                        domain: domain, preferences: topProfile, limit: 5, labels: await asyncLabels
                     )
-                    var seen = Set(results.map(\.name))
+                    var seen = Set(mutableResults.map(\.name))
                     for rec in prefResults where !seen.contains(rec.name) {
-                        results.append(rec)
+                        mutableResults.append(rec)
                         seen.insert(rec.name)
                     }
                 }
             }
 
-            let finalResults = Array(results.prefix(10))
-            saveCachedRecs(key: cacheKey, recommendations: finalResults)
+            let finalResults = Array(mutableResults.prefix(10))
+            self?.saveCachedRecs(key: cacheKey, recommendations: finalResults)
 
             await MainActor.run { [weak self] in
+                guard !Task.isCancelled else { return }
                 self?.recommendations = finalResults
                 self?.isLoadingRecommendations = false
             }
@@ -224,15 +246,6 @@ class DetailViewModel {
         return cached
     }
 
-    private func prewarmCast() {
-        guard item.modelContext != nil else { return }
-        let cast = item.storedCast
-        let urls = cast.prefix(15).compactMap { $0.profileURL }.compactMap { URL(string: $0) }
-        if !urls.isEmpty {
-            ImageCache.shared.prewarmImages(urls: urls, targetSize: CGSize(width: 120, height: 180), priority: .low)
-        }
-    }
-    
     func markAllAsWatched() {
         guard item.modelContext != nil else { return }
         if item.state != .completed {
@@ -325,6 +338,7 @@ class DetailViewModel {
         }
     }
     
+    private var recsTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
     func checkOverallCompletion() {

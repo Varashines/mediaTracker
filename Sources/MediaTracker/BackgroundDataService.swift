@@ -44,7 +44,8 @@ actor BackgroundDataService {
     }
 
     func importLibraryData(backup: LibraryBackup) async -> Int {
-        let descriptor = FetchDescriptor<MediaItem>()
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.propertiesToFetch = [\.id, \.typeValue]
         let existing = (try? modelContext.fetch(descriptor)) ?? []
         let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
         
@@ -163,7 +164,8 @@ actor BackgroundDataService {
         // 1.5. Purge stale search cache entries (older than 7 days)
         await purgeStaleSearchCache()
 
-        let descriptor = FetchDescriptor<MediaItem>()
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
         let items = try modelContext.fetch(descriptor)
         
         // 2. Deduplicate and Standardize
@@ -177,9 +179,12 @@ actor BackgroundDataService {
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
-                    // Force Watch State Consistency (only if auto-mark is enabled)
+                    // Recalculate progress to get current state
+                    tv.recalculateCachedProperties()
+                    // Auto-mark only if still actually completed (progress is 100%)
+                    // This prevents re-marking when user unmarked an episode
                     let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
-                    if autoMark && item.stateValue == "Completed" {
+                    if autoMark && item.stateValue == "Completed" && tv.watchedEpisodesCount < tv.totalEpisodesCount {
                         // Defensive: skip deleted/detached during concurrent merges
                         let liveEps = tv.seasons
                             .liveModels

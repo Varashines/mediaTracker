@@ -71,16 +71,30 @@ class MooreMetricsService {
     private let baseURL = "https://www.mooremetrics.com/wp-json/mooremetrics/v1"
     private let session = URLSession.shared
     private var cache: [String: (data: [MooreMetricsRecommendation], timestamp: Date)] = [:]
-    private let cacheTTL: TimeInterval = .secondsInDay
+
+    private var cacheTTL: TimeInterval {
+        UserDefaults.standard.bool(forKey: UserDefaultsKeys.mmDebugMode.rawValue) ? 30 : .secondsInDay
+    }
 
     private var characteristicsCache: [String: [CharacteristicInfo]] = [:]
 
     private var apiKey: String {
-        UserDefaults.standard.string(forKey: "mm_api_key") ?? ""
+        UserDefaults.standard.string(forKey: UserDefaultsKeys.mmAPIKey.rawValue) ?? ""
     }
 
     var isConfigured: Bool {
         !apiKey.isEmpty
+    }
+
+    static func recommendedDomain(for item: MediaItem) -> String {
+        item.type == .movie ? "moviedive" : "showdive"
+    }
+
+    static func recommendedDomain(for items: [MediaItem]) -> String {
+        let hasMovies = items.contains { $0.type == .movie }
+        let hasTV = items.contains { $0.type == .tvShow }
+        if hasMovies && !hasTV { return "moviedive" }
+        return "showdive"
     }
 
     // MARK: - Recommend by Items
@@ -89,7 +103,8 @@ class MooreMetricsService {
         domain: String = "showdive",
         items: [String],
         limit: Int = 10,
-        includeCharacteristics: Bool = true
+        includeCharacteristics: Bool = true,
+        labels: [CharacteristicInfo]? = nil
     ) async -> [MooreMetricsRecommendation] {
         guard isConfigured, !items.isEmpty else { return [] }
 
@@ -121,7 +136,12 @@ class MooreMetricsService {
         do {
             let (data, _) = try await session.data(for: request)
             let response = try JSONDecoder().decode(MooreMetricsResponse.self, from: data)
-            let labels = await fetchCharacteristics(for: domain)
+            let resolvedLabels: [CharacteristicInfo]
+            if let labels {
+                resolvedLabels = labels
+            } else {
+                resolvedLabels = await fetchCharacteristics(for: domain)
+            }
 
             let results = response.recommendations.map { rec in
                 MooreMetricsRecommendation(
@@ -129,7 +149,7 @@ class MooreMetricsService {
                     name: rec.name,
                     score: rec.score,
                     characteristics: rec.characteristics ?? [:],
-                    reason: deriveReason(from: rec.characteristics ?? [:], labels: labels)
+                    reason: deriveReason(from: rec.characteristics ?? [:], labels: resolvedLabels)
                 )
             }
 
@@ -147,7 +167,8 @@ class MooreMetricsService {
         domain: String = "showdive",
         preferences: [String: Double],
         limit: Int = 10,
-        includeCharacteristics: Bool = true
+        includeCharacteristics: Bool = true,
+        labels: [CharacteristicInfo]? = nil
     ) async -> [MooreMetricsRecommendation] {
         guard isConfigured, !preferences.isEmpty else { return [] }
 
@@ -179,7 +200,12 @@ class MooreMetricsService {
         do {
             let (data, _) = try await session.data(for: request)
             let response = try JSONDecoder().decode(MooreMetricsResponse.self, from: data)
-            let labels = await fetchCharacteristics(for: domain)
+            let resolvedLabels: [CharacteristicInfo]
+            if let labels {
+                resolvedLabels = labels
+            } else {
+                resolvedLabels = await fetchCharacteristics(for: domain)
+            }
 
             let results = response.recommendations.map { rec in
                 MooreMetricsRecommendation(
@@ -187,7 +213,7 @@ class MooreMetricsService {
                     name: rec.name,
                     score: rec.score,
                     characteristics: rec.characteristics ?? [:],
-                    reason: deriveReason(from: rec.characteristics ?? [:], labels: labels)
+                    reason: deriveReason(from: rec.characteristics ?? [:], labels: resolvedLabels)
                 )
             }
 
@@ -199,29 +225,97 @@ class MooreMetricsService {
         }
     }
 
-    // MARK: - Compute Preference Profile
+    // MARK: - Preference Profile Building
 
-    func computePreferenceProfile(from itemCharacteristics: [[String: Double]]) -> [String: Double] {
-        guard !itemCharacteristics.isEmpty else { return [:] }
+    func buildPreferenceProfile(from items: [(characteristics: [String: Double], score: Double)]) -> [String: Double] {
+        guard !items.isEmpty else { return [:] }
 
-        var sums: [String: Double] = [:]
-        var counts: [String: Int] = [:]
+        let totalWeight = items.reduce(0) { $0 + $1.score }
+        guard totalWeight > 0 else { return [:] }
 
-        for item in itemCharacteristics {
-            for (key, value) in item {
-                sums[key, default: 0] += value
-                counts[key, default: 0] += 1
+        // Step 1: weighted sums + prevalence counts
+        var weightedSums: [String: Double] = [:]
+        var prevalenceCounts: [String: Double] = [:]
+        var squaredDeviations: [String: Double] = [:]
+
+        for (characteristics, score) in items {
+            for (key, value) in characteristics {
+                weightedSums[key, default: 0] += value * score
+                prevalenceCounts[key, default: 0] += 1
             }
         }
 
+        let itemCount = Double(items.count)
         var averages: [String: Double] = [:]
-        for (key, sum) in sums {
-            if let count = counts[key], count > 0 {
-                averages[key] = sum / Double(count)
+        var prevalence: [String: Double] = [:]
+        for (key, sum) in weightedSums {
+            averages[key] = sum / totalWeight
+            prevalence[key] = prevalenceCounts[key]! / itemCount
+        }
+
+        // Step 2: weighted variance
+        for (characteristics, score) in items {
+            for (key, avg) in averages {
+                let diff = (characteristics[key] ?? 0) - avg
+                squaredDeviations[key, default: 0] += score * diff * diff
             }
         }
 
-        return averages
+        var variance: [String: Double] = [:]
+        for (key, sum) in squaredDeviations {
+            variance[key] = sum / totalWeight
+        }
+
+        // Normalize variance to [0, 1]
+        let maxVar = variance.values.max() ?? 1
+        if maxVar > 0 {
+            for key in variance.keys { variance[key]! /= maxVar }
+        }
+
+        // Step 3: composite score = avg × prevalence × (1 + normVar)
+        var composites: [(key: String, score: Double)] = averages.keys.map {
+            ($0, averages[$0]! * prevalence[$0]! * (1 + (variance[$0] ?? 0)))
+        }.sorted { $0.score > $1.score }
+
+        guard !composites.isEmpty else { return [:] }
+
+        // Step 4: boost top 2 by 1.5×
+        for i in 0..<min(2, composites.count) {
+            composites[i].score *= 1.5
+        }
+        composites.sort { $0.score > $1.score }
+
+        // Step 5: adaptive N — find elbow where drop ratio > 40%
+        let minTraits = 2
+        let maxTraits = 6
+        let traitCount: Int
+        if composites.count <= minTraits {
+            traitCount = composites.count
+        } else {
+            var maxDropRatio: Double = 0
+            var elbow = composites.count - 1
+            for i in 1..<composites.count where composites[i - 1].score > 0 {
+                let ratio = (composites[i - 1].score - composites[i].score) / composites[i - 1].score
+                if ratio > maxDropRatio {
+                    maxDropRatio = ratio
+                    elbow = i
+                }
+            }
+            traitCount = maxDropRatio > 0.4
+                ? min(max(elbow, minTraits), maxTraits)
+                : min(composites.count, maxTraits)
+        }
+
+        return composites.prefix(traitCount).reduce(into: [:]) { $0[$1.key] = $1.score }
+    }
+
+    func clearCache() {
+        cache.removeAll()
+        characteristicsCache.removeAll()
+        let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix("mm_rec_cache_") }
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     // MARK: - Characteristics
@@ -253,20 +347,10 @@ class MooreMetricsService {
     // MARK: - Reason Derivation
 
     func deriveReason(from characteristics: [String: Double], labels: [CharacteristicInfo] = []) -> String {
-        var traits: [(String, Double)] = []
-
-        for (key, value) in characteristics {
-            if value > 1.0 {
-                let label = characteristicLabel(key: key, labels: labels)
-                traits.append((label, value))
-            }
-        }
-
-        traits.sort { $0.1 > $1.1 }
-
-        if traits.isEmpty {
-            return "Similar taste"
-        }
-        return traits.prefix(2).map(\.0).joined(separator: " · ")
+        let top = characteristics
+            .sorted(by: { $0.value > $1.value })
+            .prefix(2)
+            .map { characteristicLabel(key: $0.key, labels: labels) }
+        return top.isEmpty ? "Similar taste" : top.joined(separator: " · ")
     }
 }

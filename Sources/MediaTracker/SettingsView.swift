@@ -111,6 +111,11 @@ struct SettingsView: View {
         .adaptiveBackground()
         .frame(maxWidth: 520, minHeight: 640)
         .fontDesign(.rounded)
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { notification in
+            if let tab = notification.object as? SettingsTab {
+                selectedTab = tab
+            }
+        }
         .onAppear {
             Task {
                 guard let aliases = UserDefaults.standard.string(forKey: "studio_aliases"),

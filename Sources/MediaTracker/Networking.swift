@@ -27,6 +27,7 @@ actor APIClient {
     private(set) var session: URLSession = {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
+        config.timeoutIntervalForRequest = 15
         config.urlCache = URLCache(
             memoryCapacity: 16 * 1024 * 1024,
             diskCapacity: 256 * 1024 * 1024,
@@ -484,7 +485,7 @@ actor APIClient {
 
         // Check disk cache first
         let cacheKey = "omdb_\(imdbID)"
-        if let cachedData = await getCachedData(forKey: cacheKey),
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .days30),
            let decoded = try? decoder.decode(OMDBResponse.self, from: cachedData),
            let result = decoded.toFullData {
             return result
@@ -574,11 +575,19 @@ actor APIClient {
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 try Task.checkCancellation()
             } catch {
-                // If it's a generic request failure, don't retry unless it's a timeout or network loss
-                if let urlError = error as? URLError, (urlError.code == .timedOut || urlError.code == .notConnectedToInternet) {
+                let shouldRetry: Bool
+                if let urlError = error as? URLError {
+                    shouldRetry = urlError.code == .timedOut || urlError.code == .notConnectedToInternet || urlError.code == .networkConnectionLost || urlError.code == .dnsLookupFailed || urlError.code == .cannotConnectToHost
+                } else if let apiError = error as? APIError, case .requestFailed(let code) = apiError {
+                    shouldRetry = code >= 500
+                } else {
+                    shouldRetry = false
+                }
+                if shouldRetry {
                     attempts += 1
                     if attempts >= maxAttempts { throw error }
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    let delay = pow(2.0, Double(attempts))
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
                 }
                 throw error

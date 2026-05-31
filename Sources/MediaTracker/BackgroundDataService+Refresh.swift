@@ -15,7 +15,7 @@ extension BackgroundDataService {
             }
             
             item.posterURL = APIClient.tmdbImageURL(path: details.posterPath) ?? item.posterURL
-            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
             
             let movieDetails = item.movieDetails ?? MovieDetails(tmdbID: tmdbID)
             movieDetails.item = item
@@ -99,7 +99,7 @@ extension BackgroundDataService {
             }
             
             item.posterURL = APIClient.tmdbImageURL(path: details.posterPath) ?? item.posterURL
-            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w780")
+            item.backdropURL = APIClient.tmdbImageURL(path: details.backdropPath, size: "w1280")
             
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber
@@ -299,7 +299,7 @@ extension BackgroundDataService {
         if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
             cgImage = cached.image
         } else if let url = URL(string: poster),
-                  let (data, _) = try? await URLSession.shared.data(from: url),
+                   let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
                   let image = NSImage(data: data) {
             cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         }

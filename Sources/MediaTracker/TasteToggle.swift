@@ -38,7 +38,8 @@ struct TasteToggle: View {
     private func setTaste(_ val: TasteValue) {
         guard item.modelContext != nil else { return }
         withAnimation(.easeInOut(duration: 0.3)) {
-            if item.taste == val {
+            let isRemoving = item.taste == val
+            if isRemoving {
                 item.tasteValue = TasteValue.none.rawValue
                 FeedbackManager.shared.trigger(.click)
             } else {
@@ -51,6 +52,10 @@ struct TasteToggle: View {
                 case .none: FeedbackManager.shared.trigger(.click)
                 }
             }
+            AppErrorState.shared.showToast(
+                isRemoving ? "Rating removed" : val.rawValue,
+                style: .success
+            )
         }
     }
 }

@@ -105,7 +105,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <key>CFBundleShortVersionString</key>
     <string>2.2.0</string>
     <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

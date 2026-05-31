@@ -74,7 +74,6 @@ struct DiscoveryCard: View {
                         isHovered ? themeColor.opacity(0.35) : Color.primary.opacity(0.06),
                         lineWidth: isHovered ? 1.0 : 0.8
                     )
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
             }
     }
 
@@ -89,7 +88,6 @@ struct DiscoveryCard: View {
                         themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12)),
                         lineWidth: isHovered ? 1.0 : 0.8
                     )
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
             }
     }
 

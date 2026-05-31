@@ -7,7 +7,6 @@ struct GeneralSection: View {
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
-    @AppStorage("auto_mark_episodes_watched") private var autoMarkEpisodesWatched = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -47,15 +46,6 @@ struct GeneralSection: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
                 }
-            }
-
-            SettingsSectionHeader(text: "Tracking", icon: "play.circle.fill", color: .green)
-            SettingsCard(color: .green) {
-                SettingsToggleRow(
-                    title: "Auto-Complete TV Shows",
-                    subtitle: "Marking a show completed marks all episodes watched",
-                    isOn: $autoMarkEpisodesWatched
-                )
             }
 
             SettingsSectionHeader(text: "System", icon: "gearshape.fill", color: .purple)

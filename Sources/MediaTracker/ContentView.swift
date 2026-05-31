@@ -71,6 +71,8 @@ struct LibraryDetailView: View {
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
     
+    @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
+    @State private var showWelcome = false
     @AppStorage("theme_preference") private var themePreference = 0
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
@@ -185,6 +187,10 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
                     Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+                    Button("") {
+                        viewModel.searchText = ""
+                        isSearchActive = false
+                    }.keyboardShortcut(.escape, modifiers: [])
                 }
                 .opacity(0)
             }
@@ -194,6 +200,17 @@ struct LibraryDetailView: View {
                let collection = collections.first(where: { $0.id == collectionID }) {
                 BulkCollectionManagerView(collection: collection)
             }
+        }
+        .sheet(isPresented: $showWelcome) {
+            WelcomeSheet()
+        }
+        .onAppear {
+            if !hasSeenWelcome && !APIClient.shared.isTMDBConfigured {
+                showWelcome = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showWelcome)) { _ in
+            showWelcome = true
         }
         .task(priority: .userInitiated) {
             SleepManager.shared.purgeDataCache = {
@@ -438,7 +455,7 @@ struct LibraryDetailView: View {
             if !missingIDs.isEmpty {
                 let idsArray = Array(missingIDs)
                 await MainActor.run {
-                    DataService.shared.refreshMetadata(forIDs: idsArray, modelContext: modelContext, force: true)
+                    DataService.shared.refreshMetadata(forIDs: idsArray, modelContext: container.mainContext, force: true)
                 }
             }
         }

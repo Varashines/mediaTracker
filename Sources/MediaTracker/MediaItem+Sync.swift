@@ -118,19 +118,6 @@ extension MediaItem {
     func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
         guard let tv = tvShowDetails else { return }
         
-        // Force consistency: If series is marked as Completed, all episodes MUST be watched (if enabled).
-        let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
-        if autoMark && currentState == .completed && tv.watchedEpisodesCount < tv.totalEpisodesCount {
-            // Defensive: skip deleted/detached seasons and episodes
-            let liveSeasons = tv.seasons.liveModels
-            for season in liveSeasons {
-                let liveEps = season.episodes.liveModels
-                for ep in liveEps where !ep.isWatched {
-                    ep.markWatched(true)
-                }
-            }
-        }
-
         self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
@@ -150,7 +137,7 @@ extension MediaItem {
             self.storedProgress = progress
             self.storedWatchProgressLabel = "\(progressResult.watchedCount)/\(progressResult.totalCount) EP"
 
-            // Unified Auto-advance State Logic
+            // Unified Auto-advance State Logic (runs before auto-mark so state is updated first)
             // Set stateValue directly to avoid re-triggering syncCachedProperties via the state setter
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
                 self.stateValue = MediaState.completed.rawValue
@@ -164,6 +151,21 @@ extension MediaItem {
                 self.stateValue = MediaState.wishlist.rawValue
                 self.lastInteractionDate = now
                 self.lastStateChangeDate = now
+            }
+
+            // Auto-mark: only if state is still Completed after auto-advance
+            // This prevents re-marking when user unmarks an episode (progress drops → state changes to Active)
+            if stateValue == "Completed" {
+                let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
+                if autoMark && tv.watchedEpisodesCount < tv.totalEpisodesCount {
+                    let liveSeasons = tv.seasons.liveModels
+                    for season in liveSeasons {
+                        let liveEps = season.episodes.liveModels
+                        for ep in liveEps where !ep.isWatched {
+                            ep.markWatched(true)
+                        }
+                    }
+                }
             }
             
             if let next = progressResult.firstUnwatched {
@@ -209,12 +211,4 @@ extension MediaItem {
         self.searchableText = text.lowercased()
     }
 
-    @MainActor
-    func commitChange() {
-        syncCachedProperties()
-        if let context = modelContext {
-            SaveCoordinator.shared.requestSave(context)
-        }
-        MediaStateService.shared.postMediaStateChanged(itemID: persistentModelID)
-    }
 }

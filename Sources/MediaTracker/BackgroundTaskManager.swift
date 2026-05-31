@@ -39,6 +39,7 @@ class BackgroundTaskManager {
         }
         
         var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
+        descriptor.propertiesToFetch = [\.id]
         descriptor.fetchLimit = 3 // Drip a small amount to keep it silent
         
         do {

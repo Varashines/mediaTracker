@@ -11,18 +11,30 @@ struct CategoryRouterView: View {
     var refreshID: Int = 0
 
     var body: some View {
-        if isSearchActive {
-            SearchView(
-                searchText: $viewModel.searchText,
-                isSearchActive: $isSearchActive,
-                initialType: currentMediaType,
-                viewModel: viewModel,
-                onSelectLocal: { item in
-                    viewModel.navigationPath.append(item.persistentModelID)
-                },
-                modelContainer: modelContainer
-            )
-        } else if viewModel.selectedCategory == .discover {
+        ZStack {
+            normalContent
+                .opacity(isSearchActive ? 0 : 1)
+
+            if isSearchActive {
+                SearchView(
+                    searchText: $viewModel.searchText,
+                    isSearchActive: $isSearchActive,
+                    initialType: currentMediaType,
+                    viewModel: viewModel,
+                    onSelectLocal: { item in
+                        viewModel.navigationPath.append(item.persistentModelID)
+                    },
+                    modelContainer: modelContainer
+                )
+                .transition(.opacity)
+                .zIndex(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var normalContent: some View {
+        if viewModel.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }

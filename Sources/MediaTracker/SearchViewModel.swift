@@ -254,6 +254,8 @@ class SearchViewModel {
 
             if fetchResult.isExisting {
                 AppErrorState.shared.showToast("Title already in Library", style: .info)
+            } else {
+                AppErrorState.shared.showToast("Added to Library", style: .success)
             }
             
             if let id = fetchResult.id, let item = modelContext.model(for: id) as? MediaItem {

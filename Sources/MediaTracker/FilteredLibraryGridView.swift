@@ -18,9 +18,11 @@ struct FilteredLibraryGridView: View {
     @State private var showRecommendations = false
     @State private var recommendations: [MooreMetricsRecommendation] = []
     @State private var isLoadingRecommendations = false
+    @State private var debugSelectedTraits: [String] = []
     @Environment(\.colorScheme) var colorScheme
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var updateTask: Task<Void, Never>? = nil
+    @State private var recsTask: Task<Void, Never>? = nil
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
     }
@@ -50,6 +52,12 @@ struct FilteredLibraryGridView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
+            } else if items.isEmpty && !isLoading {
+                ContentUnavailableView(
+                    "No items found",
+                    systemImage: "square.grid.3x3",
+                    description: Text("Try a different filter or add new titles to your library.")
+                )
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -105,6 +113,8 @@ struct FilteredLibraryGridView: View {
             fetchTask = nil
             updateTask?.cancel()
             updateTask = nil
+            recsTask?.cancel()
+            recsTask = nil
         }
         .overlay(alignment: .bottomTrailing) {
             if canShowRecommendations && !isLoading {
@@ -141,7 +151,8 @@ struct FilteredLibraryGridView: View {
                 onSearch: { name in
                     showRecommendations = false
                     onNavigateToSearch?(name)
-                }
+                },
+                debugTraits: debugSelectedTraits
             )
         }
     }
@@ -196,6 +207,7 @@ struct FilteredLibraryGridView: View {
     }
 
     private func fetchRecommendations() {
+        recsTask?.cancel()
         let titles = likedTitles
         let domain = recommendedDomain
         let cacheKey = "\(filter.type.rawValue)_\(filter.name)_\(titles.sorted().joined(separator: "|"))"
@@ -209,30 +221,47 @@ struct FilteredLibraryGridView: View {
 
         isLoadingRecommendations = true
 
-        Task {
-            var results = await MooreMetricsService.shared.recommend(domain: domain, items: titles, limit: 10)
+        recsTask = Task {
+            async let asyncLabels = MooreMetricsService.shared.fetchCharacteristics(for: domain)
+            var mutableResults = await MooreMetricsService.shared.recommend(domain: domain, items: titles, limit: 10, labels: await asyncLabels)
+            guard !mutableResults.isEmpty else {
+                await MainActor.run {
+                    AppErrorState.shared.showToast("No recommendations found", style: .info)
+                    isLoadingRecommendations = false
+                }
+                return
+            }
+            guard !Task.isCancelled else { return }
 
-            if results.count >= 3 {
-                let allCharacteristics = results.compactMap(\.characteristics)
-                let profile = MooreMetricsService.shared.computePreferenceProfile(from: allCharacteristics)
-                if !profile.isEmpty {
+            if mutableResults.count >= 3 {
+                let topProfile = MooreMetricsService.shared.buildPreferenceProfile(
+                    from: mutableResults.map { ($0.characteristics, $0.score) }
+                )
+                if !topProfile.isEmpty {
+                    let debugMode = UserDefaults.standard.bool(forKey: UserDefaultsKeys.mmDebugMode.rawValue)
+                    if debugMode {
+                        await MainActor.run { debugSelectedTraits = Array(topProfile.keys) }
+                    }
+
+                    guard !Task.isCancelled else { return }
+
                     let prefResults = await MooreMetricsService.shared.recommendByPreferences(
-                        domain: domain, preferences: profile, limit: 5
+                        domain: domain, preferences: topProfile, limit: 5, labels: await asyncLabels
                     )
-                    var seen = Set(results.map(\.name))
+                    var seen = Set(mutableResults.map(\.name))
                     for rec in prefResults where !seen.contains(rec.name) {
-                        results.append(rec)
+                        mutableResults.append(rec)
                         seen.insert(rec.name)
                     }
                 }
             }
 
             let inputCount = max(titles.count, 1)
-            let finalResults = Array(results.prefix(10)).map { rec in
+            let finalResults = Array(mutableResults.prefix(10)).map { rec in
                 MooreMetricsRecommendation(
                     id: rec.id,
                     name: rec.name,
-                    score: rec.score / Double(inputCount),
+                    score: inputCount > 1 ? rec.score / log2(Double(inputCount) + 1) : rec.score,
                     characteristics: rec.characteristics,
                     reason: rec.reason
                 )
