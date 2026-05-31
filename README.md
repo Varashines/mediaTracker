@@ -31,6 +31,15 @@ Your personal dashboard when you open the app:
 
 **Taste Ratings** — Rate titles as Loved, Liked, or Disliked. These ratings power the recommendation engine and your personal insights.
 
+## Recommendations
+
+MediaTracker uses a multi-layered recommendation engine to help you discover new content:
+
+- **MooreMetrics Integration** — Two-phase recommendation system that analyzes characteristics and preferences to surface relevant titles
+- **TasteActor** — Local taste-based matching using genre, creator, cast, and network affinities from your own library
+- **Smart Badges** — Intelligent badges that update automatically based on release schedules and viewing progress
+- **Continued Watching** — Items you've interacted with recently surface at the top
+
 ## Smart Badges
 
 Every item in your library gets an intelligent badge that updates automatically:
@@ -101,7 +110,6 @@ Stay on top of new releases:
 Personalize the app:
 
 - **Themes** — Light, Dark, or System mode with Standard, Earth Tones, or Cool Tones palettes
-- **Auto-Complete** — Automatically mark all episodes watched when you complete a show
 - **Haptic & Audio Feedback** — Tactile and sound responses on interactions
 - **Launch at Login** — Open automatically when you start your Mac
 - **Prevent Sleep** — Keep your Mac awake during background syncs
@@ -121,15 +129,26 @@ Your data stays safe:
 |----------|--------|
 | **Cmd+1–7** | Jump to sidebar sections |
 | **Cmd+F** | Open search |
+| **Escape** | Dismiss search + clear query |
 | **Space** | Mark watched / next episode (in detail view) |
 | **W** | Cycle status (in detail view) |
 | **Cmd+L** | Add to collection |
 | **Cmd+R** | Refresh metadata |
 | **Cmd+Delete** | Delete item |
 
+## Toast Feedback
+
+Every action gives you immediate feedback via toasts:
+
+- State changes via keyboard shortcuts
+- Taste rating toggles
+- Copy title to clipboard
+- Add to library
+- Mark watched / next episode
+
 ## Getting Started
 
-**Requirements:** macOS 15.0 (Sequoia) or later
+**Requirements:** macOS 14.0 (Sonoma) or later — works on both Apple Silicon and Intel Macs
 
 **Install from source:**
 ```bash
