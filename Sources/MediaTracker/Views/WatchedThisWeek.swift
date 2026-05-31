@@ -6,8 +6,6 @@ struct WatchedThisWeek: View {
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var scrollProgress: Double = 0
-    @State private var contentWidth: CGFloat = 0
-    @State private var containerWidth: CGFloat = 0
     private let scrollSpace = "WTW_Scroll"
 
     var body: some View {
@@ -39,58 +37,27 @@ struct WatchedThisWeek: View {
             } else if items.isEmpty {
                 HStack {
                     Text("Nothing watched this week")
-                        .font(.caption)
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, AppTheme.Spacing.small)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: AppTheme.Spacing.large) {
-                        ForEach(items, id: \.persistentModelID) { item in
-                            NavigationLink(value: item) {
-                                MediaThumbnailView(
-                                    item: item,
-                                    mode: .grid,
-                                    showTypeBadge: true,
-                                    isFastScrolling: false
-                                )
-                                .frame(width: 160)
-                            }
-                            .buttonStyle(.interactive)
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                    ForEach(items, id: \.persistentModelID) { item in
+                        NavigationLink(value: item) {
+                            MediaThumbnailView(
+                                item: item,
+                                mode: .grid,
+                                showTypeBadge: true,
+                                isFastScrolling: false
+                            )
+                            .frame(width: 160)
                         }
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.vertical, AppTheme.Spacing.medium - 1)
-                    .background(
-                        GeometryReader { geo in
-                            let minX = geo.frame(in: .named(scrollSpace)).minX
-                            Color.clear
-                                .preference(key: ScrollOffsetKey.self, value: [scrollSpace: minX])
-                                .onAppear { contentWidth = geo.size.width }
-                                .onChange(of: geo.size.width) { _, nv in contentWidth = nv }
-                        }
-                    )
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .coordinateSpace(name: scrollSpace)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { containerWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { _, nv in containerWidth = nv }
-                    }
-                )
-                .onPreferenceChange(ScrollOffsetKey.self) { dict in
-                    guard let minX = dict[scrollSpace] else { return }
-                    let maxScroll = max(1, contentWidth - containerWidth)
-                    let newProgress = min(1.0, Double(max(0, -minX) / maxScroll))
-                    if newProgress == 0.0 || newProgress == 1.0 || abs(scrollProgress - newProgress) > 0.015 {
-                        scrollProgress = newProgress
+                        .buttonStyle(.interactive)
                     }
                 }
-                .scrollClipDisabled()
             }
         }
         .compositingGroup()

@@ -83,7 +83,11 @@ class DetailViewModel {
     }
 
     private func recalculateVibrantPalette() {
-        let isDark = NSApp.effectiveAppearance.name == .darkAqua
+        #if os(macOS)
+        let isDark = NSApp?.effectiveAppearance.name == .darkAqua
+        #else
+        let isDark = false
+        #endif
         let scheme: ColorScheme = isDark ? .dark : .light
         
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
