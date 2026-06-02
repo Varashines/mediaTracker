@@ -17,7 +17,7 @@ struct CategoryRouterView: View {
 
             if isSearchActive {
                 SearchView(
-                    searchText: $viewModel.searchText,
+                    searchText: $viewModel.filter.searchText,
                     isSearchActive: $isSearchActive,
                     initialType: currentMediaType,
                     viewModel: viewModel,
@@ -34,29 +34,29 @@ struct CategoryRouterView: View {
 
     @ViewBuilder
     private var normalContent: some View {
-        if viewModel.selectedCategory == .discover {
+        if viewModel.filter.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
-        } else if viewModel.selectedCategory == .upcoming {
+        } else if viewModel.filter.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID)
-        } else if viewModel.selectedCategory == .insights {
+        } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
-        } else if viewModel.selectedCategory == .smartHub && viewModel.selectedCollectionID == nil {
+        } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection, refreshID: refreshID)
         } else {
             MainLibraryView(
-                items: viewModel.displayedItems,
-                featuredCarouselItems: viewModel.featuredUpcomingItems,
-                recentlyAdded: viewModel.recentlyAddedItems,
-                homeContinueWatching: viewModel.homeContinueWatchingItems,
-                groupedItems: viewModel.groupedItems,
-                recommendations: viewModel.recommendations,
-                selectedCategory: viewModel.selectedCategory,
-                searchText: viewModel.searchText,
-                selectedNetworks: viewModel.selectedNetworks,
+                items: viewModel.display.displayedItems,
+                featuredCarouselItems: viewModel.display.featuredUpcomingItems,
+                recentlyAdded: viewModel.display.recentlyAddedItems,
+                homeContinueWatching: viewModel.display.homeContinueWatchingItems,
+                groupedItems: viewModel.display.groupedItems,
+                recommendations: viewModel.display.recommendations,
+                selectedCategory: viewModel.filter.selectedCategory,
+                searchText: viewModel.filter.searchText,
+                selectedNetworks: viewModel.filter.selectedNetworks,
                 namespace: posterNamespace,
-                isFastScrolling: $viewModel.isFastScrolling,
+                isFastScrolling: $viewModel.pagination.isFastScrolling,
                 onSelectHero: { metadata in
                     if let item = modelContainer.mainContext.model(for: metadata.id) as? MediaItem {
                         viewModel.navigationPath.append(item)
@@ -64,7 +64,7 @@ struct CategoryRouterView: View {
                 },
                 onNetworkSelected: { networks in
                     withAnimation {
-                        viewModel.selectedNetworks = networks.isEmpty ? nil : networks
+                        viewModel.filter.selectedNetworks = networks.isEmpty ? nil : networks
                         viewModel.filterSubject.send()
                     }
                 },
@@ -85,6 +85,6 @@ struct CategoryRouterView: View {
     }
 
     private var currentMediaType: MediaType? {
-        MediaType(rawValue: viewModel.selectedCategory.rawValue)
+        MediaType(rawValue: viewModel.filter.selectedCategory.rawValue)
     }
 }

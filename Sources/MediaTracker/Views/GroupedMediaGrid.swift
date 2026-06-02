@@ -37,8 +37,8 @@ struct GroupedMediaGrid: View {
             }
         }
         .padding(.bottom, 24)
-        .task(id: viewModel.selectedCollectionID) {
-            guard let cid = viewModel.selectedCollectionID else {
+        .task(id: viewModel.collection.selectedCollectionID) {
+            guard let cid = viewModel.collection.selectedCollectionID else {
                 completedIDs = []
                 return
             }
@@ -57,12 +57,12 @@ struct GroupedMediaGrid: View {
         MediaThumbnailView(
             metadata: metadata,
             mode: .grid,
-            showTypeBadge: viewModel.currentGroupBy != .category,
+            showTypeBadge: viewModel.filter.currentGroupBy != .category,
             namespace: namespace,
             isFastScrolling: isFastScrolling,
             disableHover: disableHover,
             isCompletedInCollection: completedIDs.contains(metadata.itemID),
-            selectedCollectionID: viewModel.selectedCollectionID
+            selectedCollectionID: viewModel.collection.selectedCollectionID
         )
         .id(metadata.versionHash)
     }

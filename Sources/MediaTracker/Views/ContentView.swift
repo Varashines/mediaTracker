@@ -22,21 +22,21 @@ struct ContentView: View {
 
                         switch selection {
                         case .category(let category):
-                            viewModel.selectedCategory = category
-                            viewModel.selectedNetworks = nil
-                            viewModel.selectedLanguage = nil
-                            viewModel.selectedGenre = nil
-                            viewModel.selectedYear = nil
-                            viewModel.selectedState = nil
+                            viewModel.filter.selectedCategory = category
+                            viewModel.filter.selectedNetworks = nil
+                            viewModel.filter.selectedLanguage = nil
+                            viewModel.filter.selectedGenre = nil
+                            viewModel.filter.selectedYear = nil
+                            viewModel.filter.selectedState = nil
 
-                            viewModel.selectedCollectionID = nil
+                            viewModel.collection.selectedCollectionID = nil
                         case .collection(let id, let name, _):
-                            viewModel.selectedCategory = .smartHub
-                            viewModel.selectedCollectionID = id
-                            viewModel.selectedCollectionName = name
-                            viewModel.selectedGenre = nil
-                            viewModel.selectedYear = nil
-                            viewModel.selectedState = nil
+                            viewModel.filter.selectedCategory = .smartHub
+                            viewModel.collection.selectedCollectionID = id
+                            viewModel.collection.selectedCollectionName = name
+                            viewModel.filter.selectedGenre = nil
+                            viewModel.filter.selectedYear = nil
+                            viewModel.filter.selectedState = nil
                         }
 
                         viewModel.filterSubject.send()
@@ -84,7 +84,7 @@ struct LibraryDetailView: View {
         if isSearchActive {
             return Color.clear
         }
-        switch viewModel.selectedCategory {
+        switch viewModel.filter.selectedCategory {
         case .home: return Color.clear
         case .discover: return Color.purple
         case .upcoming: return Color.orange
@@ -114,7 +114,7 @@ struct LibraryDetailView: View {
                     refreshID: refreshID
                 )
 
-                if viewModel.showingNoteOverlay, let collectionID = viewModel.selectedCollectionID {
+                if viewModel.collection.showingNoteOverlay, let collectionID = viewModel.collection.selectedCollectionID {
                     NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .zIndex(100)
@@ -124,7 +124,7 @@ struct LibraryDetailView: View {
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
             .navigationTitle(
                 isSearchActive
-                    ? "Search" : viewModel.navigationTitle(for: viewModel.selectedCategory)
+                    ? "Search" : viewModel.navigationTitle(for: viewModel.filter.selectedCategory)
             )
             .navigationDestination(for: MediaItem.self) { item in
                 DetailView(item: item, namespace: posterNamespace) { actorName in
@@ -141,13 +141,13 @@ struct LibraryDetailView: View {
             .navigationDestination(for: DiscoveryFilter.self) { filter in
                 FilteredLibraryGridView(
                     filter: filter, namespace: posterNamespace,
-                    isFastScrolling: $viewModel.isFastScrolling,
+                    isFastScrolling: $viewModel.pagination.isFastScrolling,
                     isSearchActive: $isSearchActive,
-                    searchText: $viewModel.searchText,
+                    searchText: $viewModel.filter.searchText,
                     onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
             .searchable(
-                text: $viewModel.searchText, isPresented: $isSearchActive,
+                text: $viewModel.filter.searchText, isPresented: $isSearchActive,
                 placement: .automatic, prompt: "Search movies & shows"
             )
             .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
@@ -156,11 +156,11 @@ struct LibraryDetailView: View {
                 }
             }
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-                viewModel.isLibraryMetadataDirty = true
+                viewModel.display.isLibraryMetadataDirty = true
                 LibraryStatsActor.clearCache()
                 viewModel.filterSubject.send()
             }
-            .task(id: viewModel.searchText) {
+            .task(id: viewModel.filter.searchText) {
                 viewModel.filterSubject.send()
             }
             .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
@@ -188,7 +188,7 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
                     Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     Button("") {
-                        viewModel.searchText = ""
+                        viewModel.filter.searchText = ""
                         isSearchActive = false
                     }.keyboardShortcut(.escape, modifiers: [])
                 }
@@ -196,7 +196,7 @@ struct LibraryDetailView: View {
             }
         }
         .sheet(isPresented: $showingBulkManager) {
-            if let collectionID = viewModel.selectedCollectionID,
+            if let collectionID = viewModel.collection.selectedCollectionID,
                let collection = collections.first(where: { $0.id == collectionID }) {
                 BulkCollectionManagerView(collection: collection)
             }
@@ -227,7 +227,7 @@ struct LibraryDetailView: View {
             if isAsleep {
                 viewModel.purgeSleepCache()
             } else {
-                viewModel.isLibraryMetadataDirty = true
+                viewModel.display.isLibraryMetadataDirty = true
                 viewModel.filterSubject.send()
                 checkAndRepairStaleMetadata()
             }
@@ -263,14 +263,14 @@ struct LibraryDetailView: View {
             if snapshot.category == .discover || snapshot.category == .insights || snapshot.category == .upcoming || (snapshot.category == .smartHub && snapshot.collectionID == nil) { return }
 
             // Soft update preserves existing items to avoid flickering during background syncs
-            let isSoftUpdate = !viewModel.displayedItems.isEmpty
+            let isSoftUpdate = !viewModel.display.displayedItems.isEmpty
 
             if !isSoftUpdate {
                 // Reset pagination only for "Hard" updates to avoid flickering during background syncs
                 await MainActor.run {
-                    viewModel.displayedItems = []
-                    viewModel.currentOffset = 0
-                    viewModel.isLoadingMore = false
+                    viewModel.display.displayedItems = []
+                    viewModel.pagination.currentOffset = 0
+                    viewModel.pagination.isLoadingMore = false
                 }
             }
 
@@ -278,7 +278,7 @@ struct LibraryDetailView: View {
                 let filterActor = getFilterActor()
 
                 // Phase 4 Optimization: Pagination limit
-                let limit = viewModel.pageSize
+                let limit = viewModel.pagination.pageSize
                 let result = try await filterActor.filterAndSort(
                     category: snapshot.category,
                     searchText: snapshot.searchText,
@@ -297,33 +297,33 @@ struct LibraryDetailView: View {
                 
                 let allIDs: Set<String>
                 let metadata: MediaFilterActor.LibraryMetadata?
-                let shouldFetchMetadata = !isSoftUpdate && viewModel.isLibraryMetadataDirty
+                let shouldFetchMetadata = !isSoftUpdate && viewModel.display.isLibraryMetadataDirty
                 if shouldFetchMetadata {
                     allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
                     metadata = try? await filterActor.fetchLibraryMetadata()
                 } else {
-                    allIDs = viewModel.libraryTMDBIDs
+                    allIDs = viewModel.display.libraryTMDBIDs
                     metadata = nil
                 }
 
                 if Task.isCancelled { return }
 
                 await MainActor.run {
-                    viewModel.totalItemCount = result.totalCount
-                    viewModel.displayedItems = result.displayed
-                    viewModel.featuredUpcomingItems = result.featuredUpcoming
-                    viewModel.recentlyAddedItems = result.recentlyAdded
-                    viewModel.homeContinueWatchingItems = result.homeContinueWatching
-                    viewModel.spotlightHero = result.spotlightHero
-                    viewModel.groupedItems = result.grouped
+                    viewModel.pagination.totalItemCount = result.totalCount
+                    viewModel.display.displayedItems = result.displayed
+                    viewModel.display.featuredUpcomingItems = result.featuredUpcoming
+                    viewModel.display.recentlyAddedItems = result.recentlyAdded
+                    viewModel.display.homeContinueWatchingItems = result.homeContinueWatching
+                    viewModel.display.spotlightHero = result.spotlightHero
+                    viewModel.display.groupedItems = result.grouped
 
                     if shouldFetchMetadata {
-                        viewModel.libraryTMDBIDs = allIDs
-                        viewModel.isLibraryMetadataDirty = false
+                        viewModel.display.libraryTMDBIDs = allIDs
+                        viewModel.display.isLibraryMetadataDirty = false
                         if let meta = metadata {
-                            viewModel.cachedNetworks = meta.networks
-                            viewModel.cachedGenres = meta.genres
-                            viewModel.cachedLanguages = meta.languages
+                            viewModel.discovery.cachedNetworks = meta.networks
+                            viewModel.discovery.cachedGenres = meta.genres
+                            viewModel.discovery.cachedLanguages = meta.languages
                         }
                     }
 
@@ -352,7 +352,7 @@ struct LibraryDetailView: View {
 
                     await MainActor.run {
                         // Find metadata for these IDs
-                        self.viewModel.recommendations = recs.compactMap {
+                        self.viewModel.display.recommendations = recs.compactMap {
                             (id, reason) -> MediaThumbnailMetadata? in
                             guard let item = modelContext.model(for: id) as? MediaItem
                             else { return nil }
@@ -369,11 +369,11 @@ struct LibraryDetailView: View {
     }
 
     private func loadMoreItems() {
-        guard !viewModel.isLoadingMore && viewModel.displayedItems.count < viewModel.totalItemCount
+        guard !viewModel.pagination.isLoadingMore && viewModel.display.displayedItems.count < viewModel.pagination.totalItemCount
         else { return }
 
-        viewModel.isLoadingMore = true
-        let nextOffset = viewModel.displayedItems.count
+        viewModel.pagination.isLoadingMore = true
+        let nextOffset = viewModel.display.displayedItems.count
         let snapshot = FilterSnapshot(from: viewModel)
 
         Task {
@@ -391,25 +391,25 @@ struct LibraryDetailView: View {
                     badge: nil,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
-                    limit: viewModel.pageSize,
+                    limit: viewModel.pagination.pageSize,
                     offset: nextOffset
                 )
 
                 await MainActor.run {
-                    viewModel.displayedItems.append(contentsOf: result.displayed)
-                    viewModel.isLoadingMore = false
-                    viewModel.currentOffset = nextOffset
+                    viewModel.display.displayedItems.append(contentsOf: result.displayed)
+                    viewModel.pagination.isLoadingMore = false
+                    viewModel.pagination.currentOffset = nextOffset
                 }
             } catch {
                 AppLogger.debug("Error loading more: \(error)")
-                await MainActor.run { viewModel.isLoadingMore = false }
+                await MainActor.run { viewModel.pagination.isLoadingMore = false }
             }
         }
     }
 
     private func navigateToActorSearch(_ actorName: String) {
-        viewModel.selectedCategory = .all
-        viewModel.searchText = actorName
+        viewModel.filter.selectedCategory = .all
+        viewModel.filter.searchText = actorName
         viewModel.navigationPath = NavigationPath()
         isSearchActive = true
         viewModel.filterSubject.send()
@@ -462,17 +462,17 @@ struct LibraryDetailView: View {
     }
 
     private var refreshAction: () -> Void {
-        switch viewModel.selectedCategory {
+        switch viewModel.filter.selectedCategory {
         case .discover:
             return {
                 ImageCache.shared.clearFullCache()
-                viewModel.discoveryRefreshTrigger += 1
+                viewModel.filter.discoveryRefreshTrigger += 1
             }
         case .upcoming:
             return { refreshID += 1 }
         case .insights:
             return { refreshID += 1 }
-        case .smartHub where viewModel.selectedCollectionID == nil:
+        case .smartHub where viewModel.collection.selectedCollectionID == nil:
             return { refreshID += 1 }
         default:
             return { viewModel.filterSubject.send() }
@@ -480,18 +480,18 @@ struct LibraryDetailView: View {
     }
 
     private var isSystemSmartCategory: Bool {
-        viewModel.selectedCategory.isSmartCategory
+        viewModel.filter.selectedCategory.isSmartCategory
     }
 
     private func updateSingleItemInContentView(id: PersistentIdentifier) {
-        let category = viewModel.selectedCategory
-        let searchText = viewModel.searchText
-        let networks = viewModel.selectedNetworks
-        let language = viewModel.selectedLanguage
-        let genre = viewModel.selectedGenre
-        let year = viewModel.selectedYear
-        let state = viewModel.selectedState
-        let collectionID = viewModel.selectedCollectionID
+        let category = viewModel.filter.selectedCategory
+        let searchText = viewModel.filter.searchText
+        let networks = viewModel.filter.selectedNetworks
+        let language = viewModel.filter.selectedLanguage
+        let genre = viewModel.filter.selectedGenre
+        let year = viewModel.filter.selectedYear
+        let state = viewModel.filter.selectedState
+        let collectionID = viewModel.collection.selectedCollectionID
         
         Task {
             do {
@@ -520,28 +520,28 @@ struct LibraryDetailView: View {
                             }
                         }
                         
-                        updateList(&viewModel.displayedItems, updated: updatedMetadata)
-                        updateList(&viewModel.recentlyAddedItems, updated: updatedMetadata)
-                        updateList(&viewModel.homeContinueWatchingItems, updated: updatedMetadata)
-                        updateList(&viewModel.featuredUpcomingItems, updated: updatedMetadata)
+                        updateList(&viewModel.display.displayedItems, updated: updatedMetadata)
+                        updateList(&viewModel.display.recentlyAddedItems, updated: updatedMetadata)
+                        updateList(&viewModel.display.homeContinueWatchingItems, updated: updatedMetadata)
+                        updateList(&viewModel.display.featuredUpcomingItems, updated: updatedMetadata)
                         
-                        if viewModel.spotlightHero?.id == id {
-                            viewModel.spotlightHero = updatedMetadata
+                        if viewModel.display.spotlightHero?.id == id {
+                            viewModel.display.spotlightHero = updatedMetadata
                         }
                         
-                        for i in 0..<viewModel.groupedItems.count {
-                            var itemsInGroup = viewModel.groupedItems[i].1
+                        for i in 0..<viewModel.display.groupedItems.count {
+                            var itemsInGroup = viewModel.display.groupedItems[i].1
                             if let index = itemsInGroup.firstIndex(where: { $0.id == id }) {
                                 if let updated = updatedMetadata {
                                     itemsInGroup[index] = updated
                                 } else {
                                     itemsInGroup.remove(at: index)
                                 }
-                                viewModel.groupedItems[i].1 = itemsInGroup
+                                viewModel.display.groupedItems[i].1 = itemsInGroup
                             }
                         }
                         
-                        let moodColors = viewModel.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
+                        let moodColors = viewModel.display.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
                         themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
                     }
                 }

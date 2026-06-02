@@ -54,7 +54,7 @@ class SleepManager {
         lastInteractionDate = Date()
         if isIdle { isIdle = false }
         if isAsleep {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(.easeInOut(duration: 0.4)) {
                 isAsleep = false
             }
             AppLogger.info("🌅 App woke up from sleep mode.", logger: AppLogger.background)
@@ -67,11 +67,9 @@ class SleepManager {
     
     private func enterSleepMode() {
         guard !isAsleep else { return }
-        withAnimation(AppTheme.Animation.springGentle) {
+        withAnimation(.easeIn(duration: 0.6)) {
             isAsleep = true
         }
-        // Phase 4 Optimization: Removed aggressive manual cache purging.
-        // We now trust NSCache's native response to system memory pressure warnings.
         purgeDataCache?()
         AppLogger.info("💤 App entered sleep mode due to inactivity. UI interactions throttled.", logger: AppLogger.background)
     }
@@ -115,6 +113,7 @@ struct SleepOverlayModifier: ViewModifier {
                 .disabled(sleepManager.isAsleep)
                 .opacity(sleepManager.isAsleep ? 0 : 1)
                 .scaleEffect(sleepManager.isAsleep ? 0.98 : 1.0)
+                .animation(.easeInOut(duration: 0.6), value: sleepManager.isAsleep)
             
             if sleepManager.isAsleep {
                 ZStack {

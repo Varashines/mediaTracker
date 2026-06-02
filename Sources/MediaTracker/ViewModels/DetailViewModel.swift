@@ -252,8 +252,22 @@ class DetailViewModel {
 
     func markAllAsWatched() {
         guard item.modelContext != nil else { return }
+
+        if item.type == .tvShow {
+            item.markLoadedEpisodesAsWatched()
+            if let container = item.modelContext?.container {
+                let rawID = item.id
+                Task.detached(priority: .userInitiated) {
+                    let svc = BackgroundDataService(modelContainer: container)
+                    await svc.markAllEpisodesAsWatched(itemID: rawID)
+                }
+            }
+        }
+
         if item.state != .completed {
-            item.state = .completed
+            item.stateValue = MediaState.completed.rawValue
+            item.lastInteractionDate = Date()
+            item.lastStateChangeDate = Date()
         }
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)

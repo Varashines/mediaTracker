@@ -17,22 +17,22 @@ struct LibraryFilterBar: View {
             HStack(spacing: AppTheme.Spacing.small) {
                 // 1. GENRE FILTER
                 filterMenu(
-                    title: viewModel.selectedGenre ?? "All Genres",
+                    title: viewModel.filter.selectedGenre ?? "All Genres",
                     icon: "tag.fill",
-                    active: viewModel.selectedGenre != nil
+                    active: viewModel.filter.selectedGenre != nil
                 ) {
                     Button("All Genres") { updateGenre(nil) }
                     Divider()
-                    ForEach(viewModel.cachedGenres.map { $0.name }.sorted(), id: \.self) { genre in
+                    ForEach(viewModel.discovery.cachedGenres.map { $0.name }.sorted(), id: \.self) { genre in
                         Button(genre) { updateGenre(genre) }
                     }
                 }
                 
                 // 2. STATUS FILTER
                 filterMenu(
-                    title: viewModel.selectedState?.displayName ?? "All Status",
+                    title: viewModel.filter.selectedState?.displayName ?? "All Status",
                     icon: "clock.fill",
-                    active: viewModel.selectedState != nil
+                    active: viewModel.filter.selectedState != nil
                 ) {
                     Button("All Status") { updateState(nil) }
                     Divider()
@@ -45,9 +45,9 @@ struct LibraryFilterBar: View {
                 
                 // 3. YEAR FILTER
                 filterMenu(
-                    title: viewModel.selectedYear ?? "All Years",
+                    title: viewModel.filter.selectedYear ?? "All Years",
                     icon: "calendar",
-                    active: viewModel.selectedYear != nil
+                    active: viewModel.filter.selectedYear != nil
                 ) {
                     Button("All Years") { updateYear(nil) }
                     Divider()
@@ -112,7 +112,7 @@ struct LibraryFilterBar: View {
     }
     
     private var sortMenu: some View {
-        let currentSort = viewModel.currentSortOrder
+        let currentSort = viewModel.filter.currentSortOrder
         return filterMenu(
             title: currentSort.rawValue,
             icon: "arrow.up.arrow.down",
@@ -121,7 +121,7 @@ struct LibraryFilterBar: View {
             Picker("Sort By", selection: Binding(
                 get: { currentSort },
                 set: {
-                    viewModel.categorySortOrders[viewModel.selectedCategory] = $0
+                    viewModel.filter.categorySortOrders[viewModel.filter.selectedCategory] = $0
                     viewModel.filterSubject.send()
                 }
             )) {
@@ -133,7 +133,7 @@ struct LibraryFilterBar: View {
     }
 
     private var groupMenu: some View {
-        let currentGroup = viewModel.currentGroupBy
+        let currentGroup = viewModel.filter.currentGroupBy
         let isActive = currentGroup != .none
         
         return filterMenu(
@@ -144,7 +144,7 @@ struct LibraryFilterBar: View {
             Picker("Group By", selection: Binding(
                 get: { currentGroup },
                 set: {
-                    viewModel.categoryGroupBys[viewModel.selectedCategory] = $0
+                    viewModel.filter.categoryGroupBys[viewModel.filter.selectedCategory] = $0
                     viewModel.filterSubject.send()
                 }
             )) {
@@ -157,21 +157,21 @@ struct LibraryFilterBar: View {
     
     private func updateGenre(_ genre: String?) {
         withAnimation {
-            viewModel.selectedGenre = genre
+            viewModel.filter.selectedGenre = genre
             viewModel.filterSubject.send()
         }
     }
     
     private func updateState(_ state: MediaState?) {
         withAnimation {
-            viewModel.selectedState = state
+            viewModel.filter.selectedState = state
             viewModel.filterSubject.send()
         }
     }
     
     private func updateYear(_ year: String?) {
         withAnimation {
-            viewModel.selectedYear = year
+            viewModel.filter.selectedYear = year
             viewModel.filterSubject.send()
         }
     }

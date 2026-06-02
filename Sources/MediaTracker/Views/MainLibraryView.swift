@@ -37,7 +37,7 @@ struct MainLibraryView: View {
 
     var body: some View {
         GeometryReader { (mainGeo: GeometryProxy) in
-            let usePortraitCards = viewModel.selectedCollectionID != nil || selectedCategory.isSmartCategory
+            let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
             let columns: [GridItem] = usePortraitCards
                 ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
                 : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
@@ -58,7 +58,7 @@ struct MainLibraryView: View {
                     }
 
                     if selectedCategory != .home {
-                        if viewModel.selectedCollectionID != nil || selectedCategory.isSmartCategory {
+                        if viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory {
                             LibraryGridSection(
                                 items: items,
                                 groupedItems: groupedItems,

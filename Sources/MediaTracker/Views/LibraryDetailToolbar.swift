@@ -12,7 +12,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            if viewModel.selectedCollectionID != nil {
+            if viewModel.collection.selectedCollectionID != nil {
                 collectionNavigationToolbar
             } else if isSystemSmartCategory {
                 Button {
@@ -38,7 +38,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             Button {
                 withAnimation {
                     sidebarSelection = .category(.smartHub)
-                    viewModel.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionID = nil
                 }
                 viewModel.filterSubject.send()
             } label: {
@@ -49,11 +49,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
 
             Button {
                 withAnimation(AppTheme.Animation.springSnappy) {
-                    viewModel.showingNoteOverlay.toggle()
+                    viewModel.collection.showingNoteOverlay.toggle()
                 }
             } label: {
-                let icon = viewModel.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
-                let hasNote = !viewModel.currentCollectionNote.isEmpty
+                let icon = viewModel.collection.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
+                let hasNote = !viewModel.collection.currentCollectionNote.isEmpty
                 Image(systemName: icon)
                     .font(AppTheme.Font.body)
                     .foregroundStyle(hasNote ? Color.blue : Color.secondary)

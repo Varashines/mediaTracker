@@ -167,7 +167,7 @@ struct ReleaseCalendarView: View {
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
         
         // 1. Check Cache First
-        if let cached = viewModel.calendarCache[startOfMonth] {
+        if let cached = viewModel.display.calendarCache[startOfMonth] {
             self.calendarData = cached
             self.isLoading = false
             // Even if cached, we trigger background adjacent loads
@@ -203,7 +203,7 @@ struct ReleaseCalendarView: View {
                 if Task.isCancelled { return }
                 
                 await MainActor.run {
-                    viewModel.calendarCache[startOfMonth] = result
+                    viewModel.display.calendarCache[startOfMonth] = result
                     // RELIABILITY: Only update if the user hasn't moved to another month during fetch
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.calendarData = result
@@ -237,13 +237,13 @@ struct ReleaseCalendarView: View {
 
         let container = modelContext.container
         for date in adjacentDates {
-            guard viewModel.calendarCache[date] == nil else { continue }
+            guard viewModel.display.calendarCache[date] == nil else { continue }
             
             Task.detached(priority: .background) {
                 let actor = CalendarFilterActor(modelContainer: container)
                 if let result = try? await actor.fetchCalendarData(for: date) {
                     await MainActor.run {
-                        viewModel.calendarCache[date] = result
+                        viewModel.display.calendarCache[date] = result
                     }
                 }
             }

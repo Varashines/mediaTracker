@@ -122,7 +122,7 @@ struct DiscoveryCard: View {
                         .opacity(isHovered ? 1.0 : 0.0)
                 } else {
                     Text(node.name)
-                        .font(AppTheme.Font.title3)
+                        .font(AppTheme.Font.subheading)
                         .foregroundStyle(accent)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -149,7 +149,7 @@ struct DiscoveryCard: View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         HStack(spacing: 0) {
             Text(node.name)
-                .font(AppTheme.Font.title3)
+                .font(AppTheme.Font.subheading)
                 .foregroundStyle(accent)
                 .lineLimit(1)
                 .truncationMode(.tail)

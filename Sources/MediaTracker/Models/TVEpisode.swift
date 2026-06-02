@@ -44,7 +44,11 @@ final class TVEpisode {
             season?.watchedEpisodesCount += delta
             
             if let tv = season?.tvShowDetails {
-                tv.watchedEpisodesCount += delta
+                // Only count non-Specials episodes in show-level watched count
+                // (matches calculateProgress which excludes Season 0)
+                if season?.seasonNumber ?? 0 > 0 {
+                    tv.watchedEpisodesCount += delta
+                }
                 
                 // Update total watched runtime incrementally on the MediaItem
                 if let item = tv.item {

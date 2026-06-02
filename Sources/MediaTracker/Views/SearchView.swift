@@ -67,17 +67,17 @@ struct SearchView: View {
         .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
         .onChange(of: searchText) { oldValue, newValue in
-            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
+            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
         .onChange(of: selectedType) { _, newType in
-            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
+            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: newType)
             }
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
-            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
+            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
@@ -89,7 +89,7 @@ struct SearchView: View {
             Text(message)
         }
         .onAppear {
-            searchVM.libraryTMDBIDs = viewModel.libraryTMDBIDs
+            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }

@@ -451,7 +451,18 @@ struct MediaThumbnailView: View {
                 Button {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
                         withAnimation {
-                            item.state = .completed
+                            if item.type == .tvShow {
+                                item.markLoadedEpisodesAsWatched()
+                                let container = modelContext.container
+                                let rawID = item.id
+                                Task.detached(priority: .userInitiated) {
+                                    let svc = BackgroundDataService(modelContainer: container)
+                                    await svc.markAllEpisodesAsWatched(itemID: rawID)
+                                }
+                            }
+                            item.stateValue = MediaState.completed.rawValue
+                            item.lastInteractionDate = Date()
+                            item.lastStateChangeDate = Date()
                             item.lastUpdated = Date()
                             SaveCoordinator.shared.requestSave(modelContext)
                         }

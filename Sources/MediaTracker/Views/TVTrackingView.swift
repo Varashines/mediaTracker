@@ -364,7 +364,7 @@ private struct EpisodeCube: View {
 
                         // Title
                         Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                            .font(AppTheme.Font.heading)
+                            .font(AppTheme.Font.bodyBold)
                             .lineLimit(2)
                             .foregroundStyle(episode.isWatched ? .secondary : .primary)
 

@@ -14,21 +14,21 @@ struct DiscoveryHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 60) {
                 if hasDataLoaded {
-                    if !viewModel.cachedBadges.isEmpty {
-                        DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.cachedBadges, style: .text) { node in
+                    if !viewModel.discovery.cachedBadges.isEmpty {
+                        DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text) { node in
                             onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
                         }
                     }
 
-                    DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.cachedNetworks, style: .logo) { node in
+                    DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.discovery.cachedNetworks, style: .logo) { node in
                         onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
                     }
 
-                    DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.cachedGenres, style: .text) { node in
+                    DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                     }
 
-                    DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.cachedLanguages, style: .text) { node in
+                    DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text) { node in
                         onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                     }
                 } else {
@@ -49,7 +49,7 @@ struct DiscoveryHubView: View {
         .refreshable { 
             refreshData(force: true) 
         }
-        .onChange(of: viewModel.discoveryRefreshTrigger) {
+        .onChange(of: viewModel.filter.discoveryRefreshTrigger) {
             hasDataLoaded = false
             refreshData(force: false)
         }
@@ -61,7 +61,7 @@ struct DiscoveryHubView: View {
     }
     
     private func refreshData(force: Bool) {
-        if !force, hasDataLoaded, let last = viewModel.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 30 {
+        if !force, hasDataLoaded, let last = viewModel.discovery.lastDiscoveryRefresh, Date().timeIntervalSince(last) < 30 {
             return
         }
 
@@ -73,7 +73,7 @@ struct DiscoveryHubView: View {
 
         Task {
             if force {
-                let oldLogos = viewModel.cachedNetworks.compactMap(\.logoPath)
+                let oldLogos = viewModel.discovery.cachedNetworks.compactMap(\.logoPath)
                 for path in oldLogos {
                     if let url = APIClient.tmdbImageURL(path: path, size: "w300") {
                         await ImageCache.shared.removeImage(forKey: url)
@@ -98,11 +98,11 @@ struct DiscoveryHubView: View {
 
             await MainActor.run {
                 withAnimation(AppTheme.Animation.springGentle) {
-                    self.viewModel.lastDiscoveryRefresh = Date()
-                    self.viewModel.cachedNetworks = hubData.networks
-                    self.viewModel.cachedGenres = hubData.genres
-                    self.viewModel.cachedLanguages = hubData.languages
-                    self.viewModel.cachedBadges = hubData.badges
+                    self.viewModel.discovery.lastDiscoveryRefresh = Date()
+                    self.viewModel.discovery.cachedNetworks = hubData.networks
+                    self.viewModel.discovery.cachedGenres = hubData.genres
+                    self.viewModel.discovery.cachedLanguages = hubData.languages
+                    self.viewModel.discovery.cachedBadges = hubData.badges
                     self.hasDataLoaded = true
                 }
             }

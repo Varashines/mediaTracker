@@ -12,7 +12,7 @@ struct LibraryHeaderView: View {
     @State private var collectionName: String? = nil
 
     var pageTitle: String {
-        if viewModel?.selectedCollectionID != nil {
+        if viewModel?.collection.selectedCollectionID != nil {
             return collectionName ?? selectedCategory.title
         }
         return selectedCategory.title
@@ -58,8 +58,8 @@ struct LibraryHeaderView: View {
             }
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-        .task(id: viewModel?.selectedCollectionID) {
-            guard let collectionID = viewModel?.selectedCollectionID else {
+        .task(id: viewModel?.collection.selectedCollectionID) {
+            guard let collectionID = viewModel?.collection.selectedCollectionID else {
                 collectionName = nil
                 return
             }

@@ -24,7 +24,7 @@ struct NoteOverlayView: View {
                         Spacer()
                         Button {
                             withAnimation {
-                                viewModel.showingNoteOverlay = false
+                                viewModel.collection.showingNoteOverlay = false
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -78,7 +78,7 @@ struct NoteOverlayView: View {
             isFocused = true
         }
         .onChange(of: localNote) { _, newValue in
-            viewModel.currentCollectionNote = newValue
+            viewModel.collection.currentCollectionNote = newValue
             saveNote(newValue)
         }
     }

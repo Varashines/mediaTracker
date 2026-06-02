@@ -37,7 +37,7 @@ struct CachedImage<Placeholder: View>: View {
     
     var body: some View {
         Group {
-            if SleepManager.shared.isAsleep || (isFastScrolling && image == nil) {
+            if isFastScrolling && image == nil {
                 staticPlaceholder
             } else if let finalImage = image {
                 Image(finalImage, scale: 1.0, label: Text(accessibilityLabel ?? "Poster"))
@@ -69,7 +69,6 @@ struct CachedImage<Placeholder: View>: View {
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {
                 self.image = nil
-                self.broadcastCancellable?.cancel()
             } else {
                 setupBroadcastListener()
                 Task { await attemptLoad() }

@@ -25,7 +25,7 @@ struct LibraryGridSection: View {
             if items.isEmpty && groupedItems.isEmpty {
                 LibraryEmptyStateView(category: selectedCategory) {
                     withAnimation {
-                        viewModel.selectedCategory = .discover
+                        viewModel.filter.selectedCategory = .discover
                     }
                 }
             } else {
@@ -36,17 +36,17 @@ struct LibraryGridSection: View {
                         items: recentlyAdded, isFastScrolling: isFastScrolling)
                 }
 
-                if viewModel.currentGroupBy == .none {
+                if viewModel.filter.currentGroupBy == .none {
                     MainMediaGrid(
                         items: items,
                         featuredCount: 0,
                         isCategoryPage: isCategoryPage, namespace: namespace,
                         isFastScrolling: isFastScrolling,
                         disableHover: disableHover,
-                        selectedCollectionID: viewModel.selectedCollectionID,
+                        selectedCollectionID: viewModel.collection.selectedCollectionID,
                         onLoadMore: onLoadMore,
                         columns: columns,
-                        isLoadingMore: viewModel.isLoadingMore
+                        isLoadingMore: viewModel.pagination.isLoadingMore
                     )
                 } else {
                     GroupedMediaGrid(

@@ -131,6 +131,7 @@ struct BadgeEngine {
         }
 
         for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
+            guard season.seasonNumber > 0 else { continue }
             guard let seasonEpisodes = episodeMap[season.seasonNumber] else { continue }
             for ep in seasonEpisodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
                 if !ep.isWatched {
@@ -167,6 +168,7 @@ struct BadgeEngine {
         var foundNext = false
 
         for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
+            guard season.seasonNumber > 0 else { continue }
             for ep in season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
                 if !ep.isWatched {
                     if !foundNext {
