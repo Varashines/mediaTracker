@@ -31,7 +31,7 @@ struct DiscoveryManagementView: View {
             // 1. Search and Add Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Search & Add Networks")
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                 
                 TextField("Search all available networks...", text: $networkSearchText)
@@ -51,7 +51,7 @@ struct DiscoveryManagementView: View {
                                     HStack(spacing: 6) {
                                         Text(name)
                                         Image(systemName: "plus.circle.fill")
-                                            .font(AppTheme.Font.caption2)
+                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
@@ -67,7 +67,7 @@ struct DiscoveryManagementView: View {
                     .frame(height: 44)
                 } else if !networkSearchText.isEmpty {
                     Text("No matching networks found.")
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
                         .padding(.vertical, 8)
                 }
@@ -78,16 +78,16 @@ struct DiscoveryManagementView: View {
             // 2. Hidden Networks Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Hidden from Discovery")
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                 
                 VStack(spacing: 0) {
                     if hiddenList.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "eye.fill")
-                                .font(AppTheme.Font.title2)
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
                             Text("All networks are currently visible.")
-                                .font(AppTheme.Font.body)
+                                .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
@@ -96,7 +96,7 @@ struct DiscoveryManagementView: View {
                         ForEach(hiddenList, id: \.self) { name in
                             HStack {
                                 Text(name)
-                                    .font(AppTheme.Font.bodyMedium)
+                                    .font(.system(size: 14, weight: .medium))
                                 Spacer()
                                 Button { 
                                     toggleHidden(name) 

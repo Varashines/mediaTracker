@@ -42,11 +42,11 @@ struct SettingsRow<Trailing: View>: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
                     if let subtitle {
                         Text(subtitle)
-                            .font(AppTheme.Font.caption)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -74,11 +74,11 @@ struct SettingsSectionHeader: View {
         HStack(spacing: 6) {
             if let icon {
                 Image(systemName: icon)
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(color)
             }
             Text(text)
-                .font(AppTheme.Font.heading)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
         }
         .padding(.bottom, 6)
@@ -119,7 +119,7 @@ struct SettingsButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(AppTheme.Font.caption)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.Colors.accent)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
@@ -149,7 +149,7 @@ struct StatusBadge: View {
                 .fill(isActive ? Color.green : Color.red)
                 .frame(width: 5, height: 5)
             Text(text)
-                .font(AppTheme.Font.caption2)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(isActive ? Color.green : Color.red)
         }
         .padding(.horizontal, 8)

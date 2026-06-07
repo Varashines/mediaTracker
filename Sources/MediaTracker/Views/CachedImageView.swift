@@ -84,7 +84,7 @@ struct CachedImage<Placeholder: View>: View {
                 .overlay {
                     Image(systemName: "film")
                         .foregroundStyle(color.opacity(0.3))
-                        .font(AppTheme.Font.title2)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                 }
         } else {
             ZStack {

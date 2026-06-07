@@ -86,9 +86,9 @@ struct HomeViewSections: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(AppTheme.Font.caption2)
+                    .font(.system(size: 10))
                 Text(isActive ? "Hide \(label)" : label)
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)

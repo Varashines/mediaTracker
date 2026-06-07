@@ -25,4 +25,9 @@ class DisplayCache {
         isLibraryMetadataDirty = true
         calendarCache = [:]
     }
+
+    func trimCalendarCache(keepMonths: Int = 6) {
+        let cutoff = Calendar.current.date(byAdding: .month, value: -keepMonths, to: Date()) ?? Date()
+        calendarCache = calendarCache.filter { $0.key >= cutoff }
+    }
 }

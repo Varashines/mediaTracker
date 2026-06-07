@@ -26,6 +26,7 @@ class BackgroundTaskManager {
 
     private func performDripSync() async {
         guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else { return }
         isDripSyncing = true
         defer { isDripSyncing = false }
 
@@ -92,6 +93,10 @@ class BackgroundTaskManager {
     
     private func performBackgroundSync() async {
         guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else {
+            AppLogger.info("🔄 Background sync skipped — app is sleeping", logger: AppLogger.background)
+            return
+        }
         AppLogger.info("🔄 Background sync started...", logger: AppLogger.background)
         
         await refreshStaleBadges()
@@ -146,6 +151,7 @@ class BackgroundTaskManager {
     /// and triggers a badge recalculation so the UI is always accurate.
     func refreshStaleBadges() async {
         guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
         let now = Date()
         let twoDaysAgo = now.addingTimeInterval(-172800)

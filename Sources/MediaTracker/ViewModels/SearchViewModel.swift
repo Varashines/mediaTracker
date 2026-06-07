@@ -12,16 +12,17 @@ class SearchViewModel {
     var isOfflineResultsOnly = false
     var errorMessage: String?
     var showError = false
-    var libraryTMDBIDs: Set<String> = []
+    var displayCache: DisplayCache?
     
     var allWebResults: [MediaSearchResult] {
+        let ids = displayCache?.libraryTMDBIDs ?? []
         var results: [MediaSearchResult] = []
-        if libraryTMDBIDs.isEmpty {
+        if ids.isEmpty {
             results.append(contentsOf: movieResults.prefix(15))
             results.append(contentsOf: tvResults.prefix(15))
         } else {
-            results.append(contentsOf: movieResults.filter { !libraryTMDBIDs.contains("movie_\($0.id)") }.prefix(15))
-            results.append(contentsOf: tvResults.filter { !libraryTMDBIDs.contains("tv_\($0.id)") }.prefix(15))
+            results.append(contentsOf: movieResults.filter { !ids.contains("movie_\($0.id)") }.prefix(15))
+            results.append(contentsOf: tvResults.filter { !ids.contains("tv_\($0.id)") }.prefix(15))
         }
         return results
     }

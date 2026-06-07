@@ -111,16 +111,23 @@ extension BackgroundDataService {
             if let tvdbID = details.tvdbID, tvMazeID == nil {
                 tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
             }
+            if tvMazeID == nil {
+                tvMazeID = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title)
+            }
             
             var mazeEpisodes: [TVMazeEpisode] = []
+            var mazeGenres: [String]?
+            var mazeNetworkName: String?
             // Skip TVMaze calls for completed/dropped shows with no upcoming episodes
             let hasUpcomingEpisode = details.nextEpisodeDate != nil
             let isActiveShow = item.state == .active || item.state == .rewatching
             
             if let mID = tvMazeID, (isActiveShow || hasUpcomingEpisode) {
-                if let (episode, timezone, service, airtime) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
+                if let (episode, timezone, service, airtime, genres) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
+                    mazeGenres = genres
+                    mazeNetworkName = service
                     
                     if let schedule = episode {
                         tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
@@ -179,7 +186,6 @@ extension BackgroundDataService {
             tvDetails.item = item
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
-            tvDetails.network = details.network
             tvDetails.voteAverage = details.voteAverage
             // Skip OMDB for Wishlist items without taste ratings — minimal value
             if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue) {
@@ -189,7 +195,16 @@ extension BackgroundDataService {
                     tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
                 }
             }
-            tvDetails.genres = details.genres
+            // Merge TVMaze genres with TMDB genres (union, standardized)
+            let tmdbGenres = details.genres
+            if let mazeGenres, !mazeGenres.isEmpty {
+                let merged = GenreMapper.standardize(tmdbGenres + mazeGenres)
+                tvDetails.genres = merged
+            } else {
+                tvDetails.genres = tmdbGenres
+            }
+            // Prefer TVMaze network name (more accurate for non-US shows)
+            tvDetails.network = mazeNetworkName ?? details.network
             tvDetails.networkLogoPath = details.networkLogoPath
             tvDetails.numberOfSeasons = details.seasonsCount
             tvDetails.numberOfEpisodes = details.episodesCount
@@ -267,6 +282,7 @@ extension BackgroundDataService {
                         if episode.modelContext == nil || episode.season?.persistentModelID != season.persistentModelID {
                             episode.season = season
                             modelContext.insert(episode)
+                            episode.updateAirDateValue()
                         } else {
                             episode.name = epName
                             episode.overview = epOverview

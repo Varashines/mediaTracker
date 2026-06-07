@@ -15,7 +15,7 @@ struct TitleSection: View {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: 8) {
                     let titleView = Text(item.title)
-                        .font(AppTheme.Font.largeTitle)
+                        .font(.system(size: 40, weight: .heavy, design: .rounded))
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(.primary)
@@ -29,7 +29,7 @@ struct TitleSection: View {
                     let creators = item.cachedCreators
                     if !creators.isEmpty {
                         Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
-                            .font(AppTheme.Font.heading)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -40,7 +40,7 @@ struct TitleSection: View {
                     let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
                     
                     Text(item.type?.rawValue.uppercased() ?? "")
-                        .font(AppTheme.Font.caption2)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .kerning(1.2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -59,9 +59,9 @@ struct TitleSection: View {
                         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
                         HStack(spacing: 4) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
-                                .font(AppTheme.Font.tiny)
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
                             Text(dateText.uppercased())
-                                .font(AppTheme.Font.caption2)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .kerning(1.2)
                         }
                         .padding(.horizontal, 10)

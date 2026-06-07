@@ -37,7 +37,7 @@ struct WatchedThisWeek: View {
             } else if items.isEmpty {
                 HStack {
                     Text("Nothing watched this week")
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import UniformTypeIdentifiers
+import os
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage
@@ -23,6 +24,40 @@ enum ImagePriority {
     case low, normal, critical
 }
 
+/// Thread-safe dictionary for urlToKeys, accessible from both @MainActor and nonisolated contexts.
+private final class URLToKeysStore: @unchecked Sendable {
+    private var dict: [String: Set<String>] = [:]
+    private let lock = OSAllocatedUnfairLock(uncheckedState: ())
+
+    func get(_ url: String) -> Set<String>? {
+        lock.withLockUnchecked { dict[url] }
+    }
+
+    func insert(_ url: String, _ key: String) {
+        lock.withLockUnchecked {
+            if dict[url] == nil { dict[url] = [] }
+            dict[url]?.insert(key)
+        }
+    }
+
+    func remove(_ url: String) {
+        lock.withLockUnchecked { _ = dict.removeValue(forKey: url) }
+    }
+
+    func removeKey(_ url: String, _ key: String) {
+        lock.withLockUnchecked {
+            if var keys = dict[url] {
+                keys.remove(key)
+                if keys.isEmpty { dict.removeValue(forKey: url) } else { dict[url] = keys }
+            }
+        }
+    }
+
+    func removeAll() {
+        lock.withLockUnchecked { dict.removeAll() }
+    }
+}
+
 @MainActor
 class ImageCache: NSObject {
     static let shared = ImageCache()
@@ -38,7 +73,8 @@ class ImageCache: NSObject {
     private var activeTasks: [String: Task<Void, Never>] = [:]
     
     // Reverse lookup to find ANY size of an image URL in memory
-    private var urlToKeys: [String: Set<String>] = [:]
+    // Thread-safe: accessible from both @MainActor and NSCache delegate (arbitrary thread)
+    private let urlToKeys = URLToKeysStore()
     
     // Phase 3 Optimization: In-Memory Disk Cache Index
     private var diskCacheIndex: Set<String> = []
@@ -115,8 +151,8 @@ class ImageCache: NSObject {
         case .critical:
             self.memoryCache.totalCostLimit = 10 * 1024 * 1024
             self.memoryCache.countLimit = 10
-            self.memoryCache.removeAllObjects()
             self.urlToKeys.removeAll()
+            self.memoryCache.removeAllObjects()
         }
     }
     
@@ -155,11 +191,11 @@ class ImageCache: NSObject {
     func removeImage(forKey url: String?) async {
         guard let url, !url.isEmpty else { return }
         
-        if let keys = urlToKeys[url] {
+        if let keys = urlToKeys.get(url) {
             for key in keys {
                 memoryCache.removeObject(forKey: key as NSString)
             }
-            urlToKeys.removeValue(forKey: url)
+            urlToKeys.remove(url)
         }
         
         let fileKey = Self.fileSafeKey(url)
@@ -192,11 +228,11 @@ class ImageCache: NSObject {
         let hashes = urls.map { url in
             let h = Self.fileSafeKey(url)
             
-            if let keys = urlToKeys[url] {
+            if let keys = urlToKeys.get(url) {
                 for key in keys {
                     memoryCache.removeObject(forKey: key as NSString)
                 }
-                urlToKeys.removeValue(forKey: url)
+                urlToKeys.remove(url)
             }
             return h
         }
@@ -230,7 +266,7 @@ class ImageCache: NSObject {
         }
         
         // Return ANY size to let standard scale aspect fill, avoiding black layouts
-        if let keys = urlToKeys[key] {
+        if let keys = urlToKeys.get(key) {
             let matches = keys.compactMap { k -> (String, CGImage)? in
                 if let wrapper = memoryCache.object(forKey: k as NSString) {
                     return (k, wrapper.image)
@@ -364,8 +400,7 @@ class ImageCache: NSObject {
     }
     
     private func registerKeyForURL(_ url: String, specificKey: String) {
-        if urlToKeys[url] == nil { urlToKeys[url] = [] }
-        urlToKeys[url]?.insert(specificKey)
+        urlToKeys.insert(url, specificKey)
     }
 
     private func cost(for image: CGImage) -> Int {
@@ -506,26 +541,24 @@ class ImageCache: NSObject {
         let screenScale = self.screenScale
         let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
         return await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: fileURL) else { return nil }
+            // Use CGImageSourceCreateWithURL to let CoreGraphics memory-map the file
+            // instead of loading entire Data into RAM before decoding
+            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
             
             if let targetSize = targetSize {
-                let imageSourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-                if let imageSource = CGImageSourceCreateWithData(data as CFData, imageSourceOptions) {
-                    let maxDimension = max(targetSize.width, targetSize.height) * screenScale
-                    let downsampleOptions = [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceThumbnailMaxPixelSize: maxDimension
-                    ] as CFDictionary
-                    
-                    if let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
-                        return ImageContainer(image: cgImage)
-                    }
+                let maxDimension = max(targetSize.width, targetSize.height) * screenScale
+                let downsampleOptions = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxDimension
+                ] as CFDictionary
+                
+                if let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, downsampleOptions) {
+                    return ImageContainer(image: cgImage)
                 }
             }
             
-            guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
-                  let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
+            guard let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
             return ImageContainer(image: cgImage)
         }.value
     }
@@ -534,19 +567,8 @@ class ImageCache: NSObject {
 extension ImageCache: NSCacheDelegate {
     nonisolated func cache(_ cache: NSCache<AnyObject, AnyObject>, willEvictObject obj: Any) {
         guard let wrapper = obj as? CachedImageWrapper else { return }
-        let url = wrapper.urlString
-        let key = wrapper.cacheKey
-        
-        Task { @MainActor in
-            if var keys = urlToKeys[url] {
-                keys.remove(key)
-                if keys.isEmpty {
-                    urlToKeys.removeValue(forKey: url)
-                } else {
-                    urlToKeys[url] = keys
-                }
-            }
-        }
+        // Synchronous cleanup via thread-safe store — avoids async dispatch lag where stale keys persist
+        urlToKeys.removeKey(wrapper.urlString, wrapper.cacheKey)
     }
 }
 

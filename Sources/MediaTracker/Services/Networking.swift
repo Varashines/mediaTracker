@@ -24,18 +24,14 @@ actor APIClient {
     // Precomputed once at init to avoid repeated synchronous filesystem checks on every cache read/write
     nonisolated let cacheFolder: URL
     
-    private(set) var session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.requestCachePolicy = .useProtocolCachePolicy
-        config.timeoutIntervalForRequest = 15
-        config.urlCache = URLCache(
-            memoryCapacity: 16 * 1024 * 1024,
-            diskCapacity: 256 * 1024 * 1024,
-            directory: nil
-        )
-        return URLSession(configuration: config)
-    }()
+    private let apiURLCache = URLCache(
+        memoryCapacity: 16 * 1024 * 1024,
+        diskCapacity: 256 * 1024 * 1024,
+        directory: nil
+    )
     
+    private(set) var session: URLSession
+
     // Phase 2: Search Cache (LRU-evicted, max 20 entries)
     private var inFlightTasks: [String: Task<[MediaSearchResult], Error>] = [:]
     private var searchCache: [String: [MediaSearchResult]] = [:]
@@ -62,7 +58,12 @@ actor APIClient {
     #endif
 
     init() {
-        // Compute and create the cache directory exactly once instead of on every getCachedData/saveToCache call
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .useProtocolCachePolicy
+        config.timeoutIntervalForRequest = 15
+        config.urlCache = apiURLCache
+        self.session = URLSession(configuration: config)
+        
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let base = paths.first ?? FileManager.default.temporaryDirectory
         let folder = base.appendingPathComponent("api_details_cache")
@@ -91,6 +92,7 @@ actor APIClient {
 
     func clearMemoryCaches() {
         clearSearchCache()
+        apiURLCache.removeAllCachedResponses()
     }
 
     nonisolated var isTMDBConfigured: Bool {
@@ -527,12 +529,31 @@ actor APIClient {
         }
     }
 
-    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?) {
+    func lookupTVMazeIDByName(title: String) async throws -> Int? {
+        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))"
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
+           let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData),
+           let first = results.first {
+            return first.show.id
+        }
+
+        return try await executeWithRetry {
+            guard let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let url = URL(string: "https://api.tvmaze.com/search/shows?q=\(encoded)") else { throw URLError(.badURL) }
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let results = try self.decoder.decode([TVMazeSearchResult].self, from: data)
+            saveToCache(data: data, forKey: cacheKey)
+            return results.first?.show.id
+        }
+    }
+
+    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?, genres: [String]?) {
         // Check 24h disk cache
         let cacheKey = "tvmaze_schedule_\(tvMazeID)"
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
            let r = try? decoder.decode(TVMazeResponse.self, from: cachedData) {
-            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres)
         }
 
         return try await executeWithRetry {
@@ -541,7 +562,7 @@ actor APIClient {
             try self.validateResponse(response)
             let r = try self.decoder.decode(TVMazeResponse.self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres)
         }
     }
 

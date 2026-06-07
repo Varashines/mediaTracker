@@ -39,7 +39,7 @@ struct ContinueWatchingCarousel: View {
                 } label: {
                     HStack(spacing: AppTheme.Spacing.medium) {
                         Image(systemName: "sparkles.tv.fill")
-                            .font(AppTheme.Font.title3)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.Colors.accent)
                             .frame(width: 54, height: 54)
                             .background(AppTheme.Colors.accent.opacity(0.12))
@@ -47,10 +47,10 @@ struct ContinueWatchingCarousel: View {
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
                             Text("Ready to start watching?")
-                               .font(AppTheme.Font.title3)
+                               .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                             Text("Explore the Discovery Hub to find your next favorite show.")
-                                .font(AppTheme.Font.body)
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
 

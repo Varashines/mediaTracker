@@ -111,8 +111,8 @@ extension MediaItem {
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
         self.cachedRuntime = movie.runtime
-        self.cachedNetwork = movie.network
-        self.cachedNetworkLogoPath = movie.networkLogoPath
+        self.cachedNetwork = Self.normalizeCommaSeparated(movie.network)
+        self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(movie.networkLogoPath)
     }
 
     func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
@@ -121,8 +121,8 @@ extension MediaItem {
         self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
-        self.cachedNetwork = tv.network
-        self.cachedNetworkLogoPath = tv.networkLogoPath
+        self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
+        self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)
         
         // Use Unified Logic - Only force recalculate if explicitly requested to heal drift
         let progressResult = tv.calculateProgress(now: now, forceRecalculate: forceRecalculate)
@@ -209,6 +209,15 @@ extension MediaItem {
         }
         
         self.searchableText = text.lowercased()
+    }
+
+    private static func normalizeCommaSeparated(_ value: String?) -> String? {
+        guard let value else { return nil }
+        return value
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
 }

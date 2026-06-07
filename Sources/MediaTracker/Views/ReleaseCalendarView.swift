@@ -98,7 +98,7 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.03))
@@ -116,7 +116,7 @@ struct ReleaseCalendarView: View {
                 }
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -139,7 +139,7 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.03))
@@ -248,6 +248,7 @@ struct ReleaseCalendarView: View {
                 }
             }
         }
+        viewModel.display.trimCalendarCache()
     }
     
     // MARK: - Graph Components
@@ -327,7 +328,7 @@ struct ReleaseCalendarView: View {
         
         VStack(alignment: .leading, spacing: 15) {
             Text("NEXT 7 DAYS")
-                .font(AppTheme.Font.caption2)
+                .font(.system(size: 10, weight: .semibold))
                 .kerning(1.2)
                 .foregroundStyle(.secondary)
             
@@ -343,11 +344,11 @@ struct ReleaseCalendarView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                    .font(AppTheme.Font.small)
+                                    .font(.system(size: 9, weight: .semibold, design: .rounded))
                                     .foregroundStyle(isSelected ? accent : .secondary)
                                 
                                 Text(date.formatted(.dateTime.day()))
-                                    .font(AppTheme.Font.subheading)
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundStyle(isSelected ? accent : .primary)
                                 
                                 if let info = dayInfo, !info.items.isEmpty {
@@ -441,7 +442,7 @@ struct ReleaseCalendarView: View {
         VStack(alignment: .leading, spacing: 8) {
             let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
-                .font(AppTheme.Font.heading)
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(accent)
                 .kerning(1.2)
             
@@ -493,7 +494,7 @@ struct ReleaseCalendarView: View {
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {
                         Text(day.formatted(.dateTime.day().month()))
-                            .font(AppTheme.Font.title3)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                         Rectangle()
                             .fill(.secondary.opacity(0.2))
                             .frame(height: 1)

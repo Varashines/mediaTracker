@@ -175,7 +175,7 @@ struct DetailView: View {
         if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
                 Text("Please add your TMDB API Key in Settings to see more details.")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         }
@@ -228,7 +228,7 @@ struct DetailView: View {
                         HStack {
                             ProgressView().controlSize(.small)
                             Text("Finding recommendations...")
-                                .font(AppTheme.Font.caption)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,9 +239,9 @@ struct DetailView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
-                                    .font(AppTheme.Font.body)
+                                    .font(.system(size: 13, weight: .regular, design: .rounded))
                                 Text("Discover similar shows")
-                                    .font(AppTheme.Font.caption)
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
                             }
                             .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
                             .padding(.horizontal, 14)
@@ -291,7 +291,7 @@ struct DetailView: View {
                             .fill(isCollHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "folder.badge.plus")
-                            .font(AppTheme.Font.bodyMedium)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
                     }
                 }
                 .buttonStyle(.plain)
@@ -312,7 +312,7 @@ struct DetailView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(AppTheme.Font.bodyMedium)
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
                         }
                     }
                 }
@@ -334,7 +334,7 @@ struct DetailView: View {
                             .fill(isCopyHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "doc.on.doc")
-                            .font(AppTheme.Font.body)
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
                     }
                 }
                 .buttonStyle(.plain)
@@ -353,7 +353,7 @@ struct DetailView: View {
                             .fill(isDeleteHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "trash")
-                            .font(AppTheme.Font.bodyMedium)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.red)
                     }
                 }
@@ -383,19 +383,19 @@ struct DetailView: View {
 
             VStack(spacing: 14) {
                 Text("Are you sure?")
-                    .font(AppTheme.Font.title3)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.red)
 
                 Text("This action will delete")
-                    .font(AppTheme.Font.caption2)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 Text(viewModel.item.title)
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
 
                 Text("from the library")
-                    .font(AppTheme.Font.caption2)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 24) {
@@ -406,10 +406,10 @@ struct DetailView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(AppTheme.Font.title2)
+                                .font(.system(size: 26))
                                 .foregroundStyle(.secondary.opacity(0.5))
                             Text("Cancel")
-                                .font(AppTheme.Font.small)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.tertiary)
                         }
                         .frame(width: 56)
@@ -421,10 +421,10 @@ struct DetailView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(AppTheme.Font.title2)
+                                .font(.system(size: 26))
                                 .foregroundStyle(.red)
                             Text("Delete")
-                                .font(AppTheme.Font.small)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.red)
                         }
                         .frame(width: 56)

@@ -157,7 +157,7 @@ private struct SeasonTab: View {
 
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(AppTheme.Font.caption2)
+                        .font(.system(size: 10.5))
                         .foregroundStyle(Color.semanticGreen(for: colorScheme))
                 } else if progress > 0 {
                     Circle()
@@ -211,18 +211,18 @@ private struct SeasonSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
-                            .font(AppTheme.Font.title3)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
 
                         if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
                             Text(parsed.formatted(.dateTime.year()))
-                                .font(AppTheme.Font.subheading)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
                                 .foregroundStyle(.tertiary)
                         }
                     }
 
                     if season.episodeCount > 0 {
                         Text("\(season.episodeCount) EPISODES")
-                            .font(AppTheme.Font.caption2)
+                            .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .kerning(1.2)
                     }
@@ -240,7 +240,7 @@ private struct SeasonSection: View {
                                 ? "arrow.counterclockwise" : "checkmark.seal.fill")
                         Text(isAllWatched ? "Reset" : "Mark All")
                     }
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(isAllWatched ? themeColor.opacity(colorScheme == .dark ? 0.1 : 0.05) : accent.opacity(colorScheme == .dark ? 0.15 : 0.12))
@@ -269,7 +269,7 @@ private struct SeasonSection: View {
                                 ProgressView().controlSize(.small)
                             } else {
                                 Label("Fetch Episodes", systemImage: "arrow.down.circle.fill")
-                                    .font(AppTheme.Font.bodyBold)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -357,14 +357,14 @@ private struct EpisodeCube: View {
                     VStack(alignment: .leading, spacing: 0) {
                         // Episode number
                         Text("E\(episode.episodeNumber)")
-                            .font(AppTheme.Font.monoSmall)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(episode.isWatched ? .secondary : unwatchedAccent.opacity(colorScheme == .dark ? 0.7 : 0.9))
 
                         Spacer(minLength: 4)
 
                         // Title
                         Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                            .font(AppTheme.Font.bodyBold)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                             .lineLimit(2)
                             .foregroundStyle(episode.isWatched ? .secondary : .primary)
 
@@ -436,7 +436,7 @@ private struct EpisodeCube: View {
                     showingOverview.toggle()
                 } label: {
                     Image(systemName: "info.circle.fill")
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(accent.opacity(showingOverview ? 1.0 : 0.3))
                         .padding(8)
                         .contentShape(Rectangle())
@@ -453,7 +453,7 @@ private struct EpisodeCube: View {
                                     .kerning(0.8)
 
                                 Text(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name)
-                                    .font(AppTheme.Font.bodyBold)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundStyle(.primary)
                             }
 
@@ -482,7 +482,7 @@ private struct EpisodeCube: View {
                                 }
                                 if let runStr = runtimeString { Text(runStr) }
                             }
-                            .font(AppTheme.Font.caption2)
+                            .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                         }
 

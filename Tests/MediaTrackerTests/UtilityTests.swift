@@ -5,21 +5,31 @@ import SwiftData
 final class SyncCoordinatorTests: XCTestCase {
     func testSyncCoordinatorDeduplicates() async throws {
         let coordinator = SyncCoordinator.shared
+        let opStarted = XCTestExpectation(description: "Operation started")
 
-        // Two concurrent calls with the same key
-        async let r1 = coordinator.perform(key: "test_key") {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            return "result1"
+        // Task 1: calls coordinator.perform — registers the task in inFlightTasks
+        let task1 = Task {
+            try await coordinator.perform(key: "dedup_key") {
+                opStarted.fulfill()
+                try await Task.sleep(nanoseconds: 200_000_000)
+                return "result1"
+            }
         }
 
-        async let r2 = coordinator.perform(key: "test_key") {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            return "result2"
+        // Wait until task1's operation is actually running (registered in the actor)
+        await fulfillment(of: [opStarted], timeout: 1.0)
+        // Small delay to ensure the actor has stored the task reference
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        // Task 2: finds the existing task in inFlightTasks and deduplicates
+        let task2 = Task {
+            try await coordinator.perform(key: "dedup_key") {
+                return "result2"
+            }
         }
 
-        // Since they share the same key, both should get "result1"
-        let result1 = try await r1
-        let result2 = try await r2
+        let result1 = try await task1.value
+        let result2 = try await task2.value
 
         XCTAssertEqual(result1, "result1")
         XCTAssertEqual(result2, "result1")

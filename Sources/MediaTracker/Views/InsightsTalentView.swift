@@ -8,7 +8,7 @@ struct TalentLedgerView: View {
             // Actors Column / Row
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CAST")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -18,7 +18,7 @@ struct TalentLedgerView: View {
                         HStack {
                             Spacer()
                             Text("No actor data")
-                                .font(AppTheme.Font.body)
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -42,7 +42,7 @@ struct TalentLedgerView: View {
             // Creators Column / Row
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CREATORS")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -52,7 +52,7 @@ struct TalentLedgerView: View {
                         HStack {
                             Spacer()
                             Text("No creator data")
-                                .font(AppTheme.Font.body)
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -111,14 +111,14 @@ struct TalentCardView: View {
                 ZStack(alignment: .leading) {
                     // Rank shown by default: e.g. "01"
                     Text(String(format: "%02d", rank))
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(color.gradient)
                         .opacity(isHovered ? 0.0 : 1.0)
                         .scaleEffect(isHovered ? 0.8 : 1.0)
 
                     // Percentage shown on hover: e.g. "85%"
                     Text(String(format: "%.0f%%", person.score * 100))
-                        .font(AppTheme.Font.monoSmall)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(color)
                         .opacity(isHovered ? 1.0 : 0.0)
                         .scaleEffect(isHovered ? 1.0 : 1.2)
@@ -127,7 +127,7 @@ struct TalentCardView: View {
                 .frame(height: 14)
 
                 Text(person.name)
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

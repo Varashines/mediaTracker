@@ -85,7 +85,7 @@ struct TastePill: View {
                 Image(systemName: isSelected ? "\(icon).fill" : icon)
                 Text(label)
             }
-            .font(AppTheme.Font.bodyBold)
+            .font(.system(size: 13, weight: .bold, design: .rounded))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(isSelected ? .white : .primary.opacity(0.8))

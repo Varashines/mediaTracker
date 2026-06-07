@@ -86,6 +86,11 @@ class MooreMetricsService {
         !apiKey.isEmpty
     }
 
+    private func evictStaleCache() {
+        let now = Date()
+        cache = cache.filter { now.timeIntervalSince($0.value.timestamp) < cacheTTL }
+    }
+
     static func recommendedDomain(for item: MediaItem) -> String {
         item.type == .movie ? "moviedive" : "showdive"
     }
@@ -107,6 +112,7 @@ class MooreMetricsService {
         labels: [CharacteristicInfo]? = nil
     ) async -> [MooreMetricsRecommendation] {
         guard isConfigured, !items.isEmpty else { return [] }
+        evictStaleCache()
 
         let cacheKey = "\(domain)_\(items.sorted().joined(separator: ","))"
         if let cached = cache[cacheKey], Date().timeIntervalSince(cached.timestamp) < cacheTTL {
@@ -171,6 +177,7 @@ class MooreMetricsService {
         labels: [CharacteristicInfo]? = nil
     ) async -> [MooreMetricsRecommendation] {
         guard isConfigured, !preferences.isEmpty else { return [] }
+        evictStaleCache()
 
         let cacheKey = "pref_\(domain)_\(preferences.map { "\($0.key):\($0.value)" }.sorted().joined(separator: ","))"
         if let cached = cache[cacheKey], Date().timeIntervalSince(cached.timestamp) < cacheTTL {

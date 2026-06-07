@@ -63,7 +63,7 @@ struct RatingDonutChart: View {
                             .font(.system(size: 30, weight: .heavy, design: .rounded))
                             .foregroundStyle(.primary)
                         Text("TOTAL\nRATED")
-                            .font(AppTheme.Font.mono)
+                            .font(.system(size: 9, weight: .regular, design: .monospaced))
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
                     }
@@ -78,7 +78,7 @@ struct RatingDonutChart: View {
                                 .frame(width: 12, height: 12)
 
                             Text(seg.label)
-                                .font(AppTheme.Font.bodyBold)
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                                 .frame(width: 60, alignment: .leading)
 

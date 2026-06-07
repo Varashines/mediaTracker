@@ -16,7 +16,7 @@ struct HoverMetadataPills: View {
             
             // Row 1: Name Pill
             Text(title)
-                .font(AppTheme.Font.caption2)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -32,7 +32,7 @@ struct HoverMetadataPills: View {
             HStack(spacing: 6) {
                 if let year = year {
                     Text(year)
-                        .font(AppTheme.Font.small)
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(.thinMaterial))
@@ -44,7 +44,7 @@ struct HoverMetadataPills: View {
                 
                 if let episode = nextEpisodeLabel {
                     Text(episode)
-                        .font(AppTheme.Font.small)
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(.thinMaterial))
@@ -56,7 +56,7 @@ struct HoverMetadataPills: View {
                 
                 if let nextDate = nextAiringDate, nextDate > Date() {
                     Text(nextDate.formatted(.dateTime.month().day()))
-                        .font(AppTheme.Font.small)
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(.thinMaterial))

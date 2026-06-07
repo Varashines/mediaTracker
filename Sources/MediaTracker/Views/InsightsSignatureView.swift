@@ -12,7 +12,7 @@ struct CinephileBarcodeView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 HStack {
                     Text("CINEPHILE SPECTRUM")
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .kerning(1.2)
 
@@ -21,15 +21,15 @@ struct CinephileBarcodeView: View {
                     if let item = hoveredItem {
                         HStack(spacing: 4) {
                             Text(item.title)
-                                .font(AppTheme.Font.caption)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                             Text("·")
-                                .font(AppTheme.Font.caption)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundStyle(.secondary)
                             let isNone = item.tasteValue == TasteValue.none.rawValue
                             Text(isNone ? "UNRATED" : item.tasteValue.uppercased())
-                                .font(AppTheme.Font.caption2)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle({
                                     guard let taste = TasteValue(rawValue: item.tasteValue) else { return Color.secondary }
                                     return taste.color
@@ -38,7 +38,7 @@ struct CinephileBarcodeView: View {
                         .transition(.opacity)
                     } else {
                         Text("HOVER TO SCAN")
-                            .font(AppTheme.Font.mono)
+                            .font(.system(size: 9, weight: .regular, design: .monospaced))
                             .foregroundStyle(.secondary.opacity(0.4))
                     }
                 }
@@ -48,7 +48,7 @@ struct CinephileBarcodeView: View {
                     HStack {
                         Spacer()
                         Text("Add rated or themed titles to generate signature")
-                            .font(AppTheme.Font.body)
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
                             .foregroundStyle(.secondary)
                         Spacer()
                     }

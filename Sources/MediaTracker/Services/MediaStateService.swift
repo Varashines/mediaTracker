@@ -19,7 +19,6 @@ final class MediaStateService {
     private(set) var lastChangedItemID: PersistentIdentifier?
 
     func postMediaStateChanged(itemID: PersistentIdentifier? = nil) {
-        // Only trigger full refresh when no specific item is provided (bulk change)
         if let itemID {
             needsSingleItemUpdateCount += 1
             lastChangedItemID = itemID

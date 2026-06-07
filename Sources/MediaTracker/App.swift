@@ -124,6 +124,8 @@ struct MediaTrackerApp: App {
         Settings {
             settingsContent
         }
+
+
     }
 
     @ViewBuilder

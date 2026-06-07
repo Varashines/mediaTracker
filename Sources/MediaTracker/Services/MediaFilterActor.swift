@@ -76,6 +76,8 @@ actor MediaFilterActor {
         if !needsSwiftRefinement && groupBy == .none {
             descriptor.fetchLimit = limit
             descriptor.fetchOffset = offset
+        } else {
+            descriptor.fetchLimit = 2000
         }
 
         try Task.checkCancellation()
@@ -183,11 +185,10 @@ actor MediaFilterActor {
         }
 
         if let nets = network, !nets.isEmpty {
-            let normalizedNets = Set(nets.map { $0.lowercased().trimmingCharacters(in: CharacterSet.whitespaces) })
+            let normalizedNets = Set(nets.map { $0.lowercased() })
             refined = refined.filter { item in
                 guard let rawNets = item.cachedNetwork else { return false }
-                let itemNets = rawNets.components(separatedBy: ",").map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
-                return itemNets.contains { normalizedNets.contains($0) }
+                return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.contains { normalizedNets.contains($0.lowercased()) }
             }
         }
         

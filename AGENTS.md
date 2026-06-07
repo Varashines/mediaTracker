@@ -7,13 +7,10 @@ Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 15+, Swift 
 ```bash
 swift build                          # debug build
 swift build -c release               # release build
-swift test                           # run all tests (163 tests, XCTest)
+swift test                           # run all tests (172 tests, XCTest)
 swift test --filter <TestCase>       # run single test class
 ```
 
-Install to /Applications: `bash install.sh` (release) or `bash install.sh --debug`
-
-**Known flaky test:** `SyncCoordinatorTests.testSyncCoordinatorDeduplicates` — 2 assertion failures on main. Investigate before adding sync-related tests.
 
 ## Architecture
 

@@ -27,7 +27,7 @@ struct InsightsView: View {
                         // Title with Link to Cinephile Lab
                         HStack {
                             Text("Insights")
-                                .font(AppTheme.Font.title)
+                                .font(.system(size: 32, weight: .heavy, design: .rounded))
                             
                             Spacer()
                             
@@ -36,7 +36,7 @@ struct InsightsView: View {
                                     Image(systemName: "chart.bar.doc.horizontal.fill")
                                     Text("Cinephile Lab")
                                 }
-                                .font(AppTheme.Font.bodyBold)
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                                 .background(Color.primary.opacity(0.12))
@@ -234,7 +234,7 @@ struct ClaymorphicHeroCard: View {
                     .lineLimit(1)
 
                 Text(detail)
-                    .font(AppTheme.Font.monoSmall)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -368,12 +368,12 @@ struct PreferenceBlock: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(AppTheme.Font.caption2)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 
                 Text(value)
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
             }
@@ -383,10 +383,10 @@ struct PreferenceBlock: View {
             if let score = score, score > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(String(format: "%.0f%%", score * 100))
-                        .font(AppTheme.Font.title3)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundStyle(color)
                     Text("Affinity")
-                        .font(AppTheme.Font.smallBold)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
                         .foregroundStyle(.tertiary)
                         .textCase(.uppercase)
                 }

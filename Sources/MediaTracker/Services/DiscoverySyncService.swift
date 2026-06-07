@@ -74,6 +74,8 @@ actor DiscoverySyncService {
     }
 
     func syncLibrary(force: Bool) async {
+        let isAsleep = await SleepManager.shared.isAsleep
+        guard !isAsleep else { return }
         let rules = await fetchAliasRules()
         let (sourceToTarget, targetToLogoSource) = buildAliasMaps(from: rules)
 
@@ -231,8 +233,13 @@ actor DiscoverySyncService {
                 let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
                 if let existing = try? modelContext.fetch(descriptor).first {
                     existing.count += 1
+                    if !existing.sourceNames.contains(originalName) {
+                        existing.sourceNames.append(originalName)
+                    }
                 } else {
-                    modelContext.insert(NetworkEntity(name: name, logoPath: itemLogo, count: 1))
+                    let entity = NetworkEntity(name: name, logoPath: itemLogo, count: 1)
+                    entity.sourceNames = [originalName]
+                    modelContext.insert(entity)
                 }
             }
         }

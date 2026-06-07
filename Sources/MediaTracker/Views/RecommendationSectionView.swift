@@ -61,7 +61,7 @@ struct RecommendationCard: View {
                 Spacer()
 
                 Text(String(format: "%.0f%%", rec.score * 100))
-                    .font(AppTheme.Font.heavy)
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -73,7 +73,7 @@ struct RecommendationCard: View {
 
             // Reason / characteristics (2 lines)
             Text(rec.reason)
-                .font(AppTheme.Font.body)
+                .font(.system(size: 12, weight: .medium))
                 .lineLimit(2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

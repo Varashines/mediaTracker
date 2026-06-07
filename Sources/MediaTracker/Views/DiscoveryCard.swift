@@ -114,7 +114,7 @@ struct DiscoveryCard: View {
                     .scaleEffect(isHovered ? 0.95 : 1.0)
 
                     Text(node.name)
-                        .font(AppTheme.Font.bodyBold)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(accent)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -122,7 +122,7 @@ struct DiscoveryCard: View {
                         .opacity(isHovered ? 1.0 : 0.0)
                 } else {
                     Text(node.name)
-                        .font(AppTheme.Font.subheading)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(accent)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -133,7 +133,7 @@ struct DiscoveryCard: View {
 
             if isHovered {
                 Text("\(node.count)")
-                    .font(AppTheme.Font.stat)
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(accent.opacity(0.8))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2.5)
@@ -149,7 +149,7 @@ struct DiscoveryCard: View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         HStack(spacing: 0) {
             Text(node.name)
-                .font(AppTheme.Font.subheading)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundStyle(accent)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -157,7 +157,7 @@ struct DiscoveryCard: View {
             if isHovered {
                 Spacer(minLength: 4)
                 Text("\(node.count)")
-                    .font(AppTheme.Font.caption.monospacedDigit())
+                    .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(accent)
             }
         }

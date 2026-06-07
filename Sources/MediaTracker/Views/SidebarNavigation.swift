@@ -102,7 +102,7 @@ struct SidebarNavigation: View {
         } label: {
             HStack(spacing: AppTheme.Spacing.small) {
                 Image(systemName: iconName)
-                    .font(AppTheme.Font.bodyMedium)
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: AppTheme.Spacing.large)
 

@@ -84,9 +84,9 @@ struct LibraryFilterBar: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                 Text(title)
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

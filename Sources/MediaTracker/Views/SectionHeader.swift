@@ -19,11 +19,11 @@ struct SectionHeader: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(AppTheme.Font.title)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                     
                     if let subtitle = subtitle {
                         Text(subtitle)
-                            .font(AppTheme.Font.bodyBold)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
                             .kerning(1.0)

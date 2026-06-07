@@ -67,17 +67,17 @@ struct SearchView: View {
         .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
         .onChange(of: searchText) { oldValue, newValue in
-            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
+            searchVM.displayCache = viewModel.display
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
         .onChange(of: selectedType) { _, newType in
-            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
+            searchVM.displayCache = viewModel.display
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: newType)
             }
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
-            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
+            searchVM.displayCache = viewModel.display
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
@@ -89,7 +89,7 @@ struct SearchView: View {
             Text(message)
         }
         .onAppear {
-            searchVM.libraryTMDBIDs = viewModel.display.libraryTMDBIDs
+            searchVM.displayCache = viewModel.display
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
@@ -103,7 +103,7 @@ struct SearchView: View {
                     isSearchActive = false
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(AppTheme.Font.heading)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                 }
                 .help("Go back")
             }
@@ -115,7 +115,7 @@ struct SearchView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("Media Type")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                 
                 Picker("", selection: $selectedType) {
@@ -129,7 +129,7 @@ struct SearchView: View {
                 
                 Button {} label: {
                     Image(systemName: "questionmark.circle")
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
@@ -207,10 +207,10 @@ struct SearchView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(AppTheme.Font.caption2)
+                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                                     Text(query)
                                 }
-                                .font(AppTheme.Font.body)
+                                .font(.system(size: 12, weight: .medium))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color.primary.opacity(0.06))

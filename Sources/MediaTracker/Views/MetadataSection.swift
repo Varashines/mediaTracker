@@ -100,7 +100,7 @@ struct MetadataSection: View {
                 .font(.system(size: 9))
                 .foregroundStyle(accent)
             Text(meta.value)
-                .font(AppTheme.Font.medium)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
         }
         .padding(.horizontal, 10)

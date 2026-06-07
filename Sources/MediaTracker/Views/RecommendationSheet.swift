@@ -45,15 +45,15 @@ struct RecommendationSheet: View {
 
             HStack(spacing: 6) {
                 Text("\(recommendations.count) shows matched your taste")
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 if !debugTraits.isEmpty {
                     Text("·")
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.tertiary)
                     Text("Top traits: \(debugTraits.joined(separator: ", "))")
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.Colors.accent)
                 }
             }

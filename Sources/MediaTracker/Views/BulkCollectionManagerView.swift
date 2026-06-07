@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+struct BulkItem: Identifiable {
+    let id: String
+    let title: String
+    let posterURL: String?
+    let typeValue: String?
+}
+
 struct BulkCollectionManagerView: View {
     let collection: MediaCollection
     @Environment(\.modelContext) private var modelContext
@@ -8,10 +15,10 @@ struct BulkCollectionManagerView: View {
     
     @State private var searchText = ""
     @State private var selectedItemIDs: Set<String> = []
-    @State private var allItems: [MediaItem] = []
+    @State private var allItems: [BulkItem] = []
     @State private var isLoading = true
     
-    var filteredItems: [MediaItem] {
+    var filteredItems: [BulkItem] {
         if searchText.isEmpty {
             return allItems
         } else {
@@ -35,10 +42,10 @@ struct BulkCollectionManagerView: View {
                 
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                     TextField("Search your library...", text: $searchText)
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 13))
                         .textFieldStyle(.plain)
                 }
                 .padding(.horizontal, 12)
@@ -101,10 +108,12 @@ struct BulkCollectionManagerView: View {
             .task {
                 let container = modelContext.container
                 let context = ModelContext(container)
-                let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                var descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                descriptor.propertiesToFetch = [\.id, \.title, \.posterURL, \.typeValue]
                 let items = (try? context.fetch(descriptor)) ?? []
+                let bulkItems = items.map { BulkItem(id: $0.id, title: $0.title, posterURL: $0.posterURL, typeValue: $0.typeValue) }
                 await MainActor.run {
-                    allItems = items
+                    allItems = bulkItems
                     isLoading = false
                 }
             }
@@ -112,7 +121,7 @@ struct BulkCollectionManagerView: View {
         .frame(minWidth: 600, minHeight: 450, maxHeight: 650)
     }
     
-    private func toggleSelection(for item: MediaItem) {
+    private func toggleSelection(for item: BulkItem) {
         if selectedItemIDs.contains(item.id) {
             selectedItemIDs.remove(item.id)
         } else {
@@ -125,11 +134,14 @@ struct BulkCollectionManagerView: View {
             !selectedItemIDs.contains(item.id)
         }
         
-        for id in selectedItemIDs {
-            if !collection.items.contains(where: { $0.id == id }) {
-                if let item = allItems.first(where: { $0.id == id }) {
-                    collection.items.append(item)
-                }
+        let idsToAdd = selectedItemIDs.filter { id in
+            !collection.items.contains(where: { $0.id == id })
+        }
+        
+        if !idsToAdd.isEmpty {
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { idsToAdd.contains($0.id) })
+            if let itemsToAdd = try? modelContext.fetch(descriptor) {
+                collection.items.append(contentsOf: itemsToAdd)
             }
         }
         
@@ -139,7 +151,7 @@ struct BulkCollectionManagerView: View {
 }
 
 struct BulkItemCard: View {
-    let item: MediaItem
+    let item: BulkItem
     let isSelected: Bool
     let onToggle: () -> Void
     
@@ -164,7 +176,7 @@ struct BulkItemCard: View {
                         .fill(Color.primary.opacity(0.1))
                         .frame(width: 120, height: 180)
                         .overlay {
-                            Image(systemName: item.type == .movie ? "film" : "tv")
+                            Image(systemName: item.typeValue == "Movie" ? "film" : "tv")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
                         }
@@ -176,7 +188,7 @@ struct BulkItemCard: View {
                     .frame(width: 24, height: 24)
                     .overlay {
                         Image(systemName: isSelected ? "checkmark" : "plus")
-                            .font(AppTheme.Font.caption)
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.white)
                     }
                     .padding(8)

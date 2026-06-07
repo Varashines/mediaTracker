@@ -97,12 +97,15 @@ struct LibraryDetailView: View {
         default: return Color.clear
         }
     }
+
+    private var effectiveMoodColor: Color {
+        themeCoordinator.categoryMoodColor == .clear ? categoryMoodColor : themeCoordinator.categoryMoodColor
+    }
     
     var body: some View {
         NavigationStack(path: $viewModel.navigationPath) {
             ZStack {
-                let mood = themeCoordinator.categoryMoodColor == .clear ? categoryMoodColor : themeCoordinator.categoryMoodColor
-                LibraryBackgroundView(mood: mood)
+                LibraryBackgroundView(mood: effectiveMoodColor)
 
                 CategoryRouterView(
                     sidebarSelection: $sidebarSelection,
@@ -219,6 +222,8 @@ struct LibraryDetailView: View {
                 Task { await APIClient.shared.clearMemoryCaches() }
                 TasteActor.clearCache()
                 BadgeEngine.clearScanCache()
+                LibraryStatsActor.clearCache()
+                PrefetchManager.shared.cancel()
                 URLCache.shared.removeAllCachedResponses()
             }
             performUpdate()
@@ -235,6 +240,7 @@ struct LibraryDetailView: View {
         .task(priority: .background) {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !SleepManager.shared.isAsleep else { return }
             checkAndRepairMissingMetadata()
             checkAndRepairStaleMetadata()
             

@@ -50,7 +50,7 @@ struct CastMemberCard: View {
                     Color.secondary.opacity(0.1)
                     Image(systemName: "person.fill")
                         .foregroundStyle(.secondary)
-                        .font(AppTheme.Font.title2)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                 }
             }
         }
@@ -63,13 +63,13 @@ struct CastMemberCard: View {
     private var textSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(member.name)
-                .font(AppTheme.Font.bodyBold)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
 
             Text(member.characterName)
-                .font(AppTheme.Font.caption)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)

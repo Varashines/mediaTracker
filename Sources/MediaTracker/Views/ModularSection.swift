@@ -12,10 +12,10 @@ struct ModularSection<Content: View>: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     Image(systemName: icon)
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                     Text(title.uppercased())
-                        .font(AppTheme.Font.caption)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .kerning(0.8)
                 }

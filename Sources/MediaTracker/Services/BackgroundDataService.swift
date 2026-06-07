@@ -152,6 +152,8 @@ actor BackgroundDataService {
     private var lastHealedDate: Date?
 
     func performLibraryHeal() async throws {
+        let isAsleep = await SleepManager.shared.isAsleep
+        guard !isAsleep else { return }
         if let lastHealed = lastHealedDate, Date().timeIntervalSince(lastHealed) < 300 {
             AppLogger.debug("⏭️ Skipping library heal — last heal was \(Int(Date().timeIntervalSince(lastHealed)))s ago", logger: AppLogger.background)
             return
@@ -171,6 +173,10 @@ actor BackgroundDataService {
         // 2. Deduplicate and Standardize
         for item in items {
             if Task.isCancelled { break }
+            if isThermalThrottled {
+                AppLogger.warning("🌡️ Thermal throttle during library heal. Stopping early.", logger: AppLogger.background)
+                break
+            }
             // Migrate legacy IDs
             if !item.id.contains("_") {
                 let typePrefix = item.type == .movie ? "movie" : "tv"
@@ -324,6 +330,12 @@ actor BackgroundDataService {
                     refreshedIDs.append(itemIDs[index])
                 } else {
                     errorCount += 1
+                }
+
+                // Check thermal state mid-batch to prevent overheating during large refreshes
+                if isThermalThrottled {
+                    AppLogger.warning("🌡️ Thermal throttle detected mid-batch. Aborting remaining refreshes.", logger: AppLogger.background)
+                    break
                 }
 
                 if submitted < itemIDs.count {
@@ -480,6 +492,10 @@ actor BackgroundDataService {
             }
             
             for season in liveSeasons {
+                if isThermalThrottled {
+                    AppLogger.warning("🌡️ Thermal throttle during episode marking. Stopping early.", logger: AppLogger.background)
+                    break
+                }
                 if season.tvShowDetails?.persistentModelID != tv.persistentModelID {
                     season.tvShowDetails = tv
                 }

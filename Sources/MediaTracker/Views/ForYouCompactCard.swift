@@ -48,9 +48,9 @@ struct ForYouCompactCard: View {
                         Spacer()
                         HStack(spacing: 4) {
                             Image(systemName: "wand.and.stars")
-                                .font(AppTheme.Font.small)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
                             Text(context.uppercased())
-                                .font(AppTheme.Font.small)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
                                 .tracking(0.8)
                         }
                         .padding(.horizontal, 10)
@@ -99,13 +99,13 @@ struct ForYouCompactCard: View {
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
                         Text(metadata.title)
-                            .font(AppTheme.Font.title3)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(2)
                             .shadow(radius: 2)
                         
                         Text(metadata.formattedMetadata)
-                            .font(AppTheme.Font.caption)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.8))
                     }
                     .padding(.leading, 8)

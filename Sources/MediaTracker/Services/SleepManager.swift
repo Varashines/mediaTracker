@@ -57,6 +57,8 @@ class SleepManager {
             withAnimation(.easeInOut(duration: 0.4)) {
                 isAsleep = false
             }
+            // Restart timer after waking from sleep
+            startIdleTimer()
             AppLogger.info("🌅 App woke up from sleep mode.", logger: AppLogger.background)
         }
     }
@@ -70,6 +72,9 @@ class SleepManager {
         withAnimation(.easeIn(duration: 0.6)) {
             isAsleep = true
         }
+        // Stop polling timer — no need to check idle state while asleep
+        timer?.cancel()
+        timer = nil
         purgeDataCache?()
         AppLogger.info("💤 App entered sleep mode due to inactivity. UI interactions throttled.", logger: AppLogger.background)
     }
@@ -122,7 +127,7 @@ struct SleepOverlayModifier: ViewModifier {
                     
                     VStack(spacing: 20) {
                         Image(systemName: "moon.stars.fill")
-                            .font(AppTheme.Font.heroTitle)
+                            .font(.system(size: 60))
                             .foregroundStyle(.secondary)
                         
                         Text("App is in Sleep Mode")

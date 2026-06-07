@@ -267,7 +267,7 @@ struct SmartCollectionsHubView: View {
     
     private func sectionHeaderMini(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(AppTheme.Font.caption)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
             .foregroundStyle(.secondary)
             .kerning(1.2)
     }
@@ -276,9 +276,9 @@ struct SmartCollectionsHubView: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(.headline, design: .rounded))
                 Text(subtitle)
-                    .font(AppTheme.Font.body)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
             }
             .padding(20)
@@ -428,7 +428,7 @@ private struct SmartCollectionCard: View {
                     if let count {
                         if count > 0 {
                             Text("\(count)")
-                                .font(AppTheme.Font.smallBold)
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .foregroundStyle(accentColor)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
@@ -436,7 +436,7 @@ private struct SmartCollectionCard: View {
                                 .clipShape(Capsule())
                         } else {
                             Text("0")
-                                .font(AppTheme.Font.body)
+                                .font(.system(.subheadline, design: .rounded))
                                 .fontWeight(.bold)
                                 .foregroundStyle(.secondary.opacity(0.4))
                         }
@@ -450,10 +450,10 @@ private struct SmartCollectionCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(AppTheme.Font.bodyBold)
+                        .font(.system(.headline, design: .rounded))
                     
                     Text(description)
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)

@@ -17,7 +17,7 @@ struct WelcomeSheet: View {
             }
 
             Text("Welcome to")
-                .font(AppTheme.Font.title3)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
 
             Text("MediaTracker")
@@ -26,7 +26,7 @@ struct WelcomeSheet: View {
                 .padding(.bottom, 24)
 
             Text("Track every movie and TV show you watch.\nGet personalized recommendations and never miss an episode.")
-                .font(AppTheme.Font.body)
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
@@ -39,11 +39,11 @@ struct WelcomeSheet: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "key.fill")
-                            .font(AppTheme.Font.body)
+                            .font(.system(size: 13))
                         Text("Get Free TMDB API Key")
-                            .font(AppTheme.Font.bodyBold)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                         Image(systemName: "arrow.up.right")
-                            .font(AppTheme.Font.caption)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
@@ -58,7 +58,7 @@ struct WelcomeSheet: View {
                     dismiss()
                 } label: {
                     Text("I already have a key")
-                        .font(AppTheme.Font.bodyMedium)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.Colors.accent)
                         .padding(.vertical, 8)
                 }
@@ -69,7 +69,7 @@ struct WelcomeSheet: View {
                     dismiss()
                 } label: {
                     Text("Explore in Demo Mode")
-                        .font(AppTheme.Font.body)
+                        .font(.system(size: 13))
                         .foregroundStyle(.tertiary)
                         .padding(.vertical, 8)
                 }
@@ -79,7 +79,7 @@ struct WelcomeSheet: View {
             Spacer()
 
             Text("You can always set this up later in Settings → Connect")
-                .font(AppTheme.Font.caption)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(.tertiary)
                 .padding(.bottom, 24)
         }

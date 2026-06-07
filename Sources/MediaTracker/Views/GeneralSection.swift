@@ -17,10 +17,10 @@ struct GeneralSection: View {
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Theme Mode")
-                                .font(AppTheme.Font.bodySemibold)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.primary)
                             Text("Follow system or force light/dark appearance")
-                                .font(AppTheme.Font.caption)
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -34,10 +34,10 @@ struct GeneralSection: View {
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Theme Palette")
-                                .font(AppTheme.Font.bodySemibold)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.primary)
                             Text("Choose custom background and accent variations")
-                                .font(AppTheme.Font.caption)
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         

@@ -105,7 +105,7 @@ struct ToastView: View {
                 .font(.system(size: 18, weight: .bold))
             
             Text(toast.message)
-                .font(AppTheme.Font.heading)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
         }
         .padding(.horizontal, 20)

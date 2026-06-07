@@ -128,7 +128,7 @@ struct FilteredLibraryGridView: View {
                             Image(systemName: "sparkles")
                         }
                         Text("Discover More")
-                            .font(AppTheme.Font.bodySemibold)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)

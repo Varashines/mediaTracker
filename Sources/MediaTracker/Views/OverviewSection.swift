@@ -11,17 +11,17 @@ struct OverviewSection: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             HStack(spacing: 8) {
                 Image(systemName: "quote.opening")
-                    .font(AppTheme.Font.heading)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
 
                 Text("SYNOPSIS")
-                    .font(AppTheme.Font.bodyBold)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
             }
 
             Text(overview)
-                .font(AppTheme.Font.bodyMedium)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
                 .lineSpacing(8)
                 .foregroundStyle(.primary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
