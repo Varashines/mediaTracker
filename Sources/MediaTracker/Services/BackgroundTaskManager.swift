@@ -18,16 +18,18 @@ class BackgroundTaskManager {
     
     func handleIdleStateChange(isIdle: Bool) {
         if isIdle && !SleepManager.shared.isAsleep && !isDripSyncing {
+            isDripSyncing = true
             Task {
                 await performDripSync()
             }
+        } else if !isIdle {
+            isDripSyncing = false
         }
     }
 
     private func performDripSync() async {
-        guard let container = container else { return }
-        guard !SleepManager.shared.isAsleep else { return }
-        isDripSyncing = true
+        guard let container = container else { isDripSyncing = false; return }
+        guard !SleepManager.shared.isAsleep else { isDripSyncing = false; return }
         defer { isDripSyncing = false }
 
         let context = ModelContext(container)

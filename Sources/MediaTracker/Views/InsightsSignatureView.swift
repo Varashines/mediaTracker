@@ -12,7 +12,7 @@ struct CinephileBarcodeView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 HStack {
                     Text("CINEPHILE SPECTRUM")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                         .kerning(1.2)
 
@@ -21,15 +21,15 @@ struct CinephileBarcodeView: View {
                     if let item = hoveredItem {
                         HStack(spacing: 4) {
                             Text(item.title)
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                             Text("·")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                             let isNone = item.tasteValue == TasteValue.none.rawValue
                             Text(isNone ? "UNRATED" : item.tasteValue.uppercased())
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.caption2)
                                 .foregroundStyle({
                                     guard let taste = TasteValue(rawValue: item.tasteValue) else { return Color.secondary }
                                     return taste.color
@@ -38,7 +38,7 @@ struct CinephileBarcodeView: View {
                         .transition(.opacity)
                     } else {
                         Text("HOVER TO SCAN")
-                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                            .font(AppTheme.Font.mono)
                             .foregroundStyle(.secondary.opacity(0.4))
                     }
                 }
@@ -48,7 +48,7 @@ struct CinephileBarcodeView: View {
                     HStack {
                         Spacer()
                         Text("Add rated or themed titles to generate signature")
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .font(AppTheme.Font.body)
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -71,8 +71,8 @@ struct CinephileBarcodeView: View {
                                     .fill(isCurrentHovered ? barColor : barColor.opacity(0.8))
                                     .frame(height: 32)
                                     .frame(minWidth: 1.5, maxWidth: 6)
-                                    .scaleEffect(y: isCurrentHovered ? 1.3 : 1.0)
-                                    .shadow(color: isCurrentHovered ? barColor.opacity(0.8) : Color.clear, radius: isCurrentHovered ? 6 : 0)
+                                    .scaleEffect(y: isCurrentHovered ? 1.15 : 1.0)
+                                    .shadow(color: isCurrentHovered ? barColor.opacity(0.5) : Color.clear, radius: isCurrentHovered ? 6 : 0)
                                     .contentShape(Rectangle())
                                     .onHover { isHovered in
                                         withAnimation(AppTheme.Animation.springSnappy) {
@@ -94,7 +94,7 @@ struct CinephileBarcodeView: View {
                             GeometryReader { geo in
                                 AppTheme.Colors.accent.opacity(0.4)
                                     .frame(width: 2, height: 44)
-                                    .shadow(color: AppTheme.Colors.accent.opacity(0.9), radius: 6, x: 0, y: 0)
+                                    .shadow(color: AppTheme.Colors.accent.opacity(0.5), radius: 6, x: 0, y: 0)
                                     .offset(x: scanPosition * geo.size.width)
                                     .onAppear {
                                         scanPosition = 0.0

@@ -16,13 +16,16 @@ struct DetailView: View {
     @State private var isRefreshHovered = false
     @State private var isCopyHovered = false
     @State private var isDeleteHovered = false
+    @State private var isTrailerHovered = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
 
     struct ScrollOffsetPref: PreferenceKey {
         static let defaultValue: CGFloat = 0
-        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {}
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
     }
 
     init(item: MediaItem, namespace: Namespace.ID? = nil, onSearchActor: ((String) -> Void)? = nil)
@@ -35,7 +38,7 @@ struct DetailView: View {
     var body: some View {
         ZStack {
             if viewModel.item.modelContext == nil {
-                Color(white: colorScheme == .dark ? 0.11 : 0.96).ignoresSafeArea()
+                AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
             } else {
                 contentOverlay
             }
@@ -46,8 +49,8 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
-            Color(white: colorScheme == .dark ? 0.11 : 0.96)
-                .overlay(p.opacity(0.12))
+            AppTheme.Colors.background(for: colorScheme)
+                .overlay(p.opacity(colorScheme == .dark ? 0.06 : 0.12))
                 .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -74,7 +77,17 @@ struct DetailView: View {
                 showNavTitle = minY < -50
             }
 
+            // Bottom action bar
+            VStack {
+                Spacer()
+                bottomActionBar
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.bottom, 16)
+            }
+
         }
+        .saturation(showDeleteConfirmation ? 0.3 : 1)
+        .blur(radius: showDeleteConfirmation ? 2 : 0)
         .overlay {
             if showDeleteConfirmation {
                 deleteConfirmationOverlay
@@ -175,7 +188,7 @@ struct DetailView: View {
         if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
                 Text("Please add your TMDB API Key in Settings to see more details.")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -228,7 +241,7 @@ struct DetailView: View {
                         HStack {
                             ProgressView().controlSize(.small)
                             Text("Finding recommendations...")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,9 +252,9 @@ struct DetailView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                                    .font(AppTheme.Font.body)
                                 Text("Discover similar shows")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .font(AppTheme.Font.caption)
                             }
                             .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
                             .padding(.horizontal, 14)
@@ -284,24 +297,6 @@ struct DetailView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             HStack(spacing: 14) {
                 Button {
-                    showingCollectionPicker = true
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isCollHovered ? Color.primary.opacity(0.1) : Color.clear)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                    }
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut("l", modifiers: [.command])
-                .help("Add to collection")
-                .onHover { hovering in
-                    withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
-                }
-
-                Button {
                     viewModel.refreshData(force: true)
                 } label: {
                     ZStack {
@@ -312,7 +307,7 @@ struct DetailView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .font(AppTheme.Font.bodyMedium)
                         }
                     }
                 }
@@ -322,25 +317,6 @@ struct DetailView: View {
                 .help("Refresh metadata")
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.easeInOut) { isRefreshHovered = hovering }
-                }
-
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(viewModel.item.title, forType: .string)
-                    AppErrorState.shared.showToast("Title copied", style: .success)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isCopyHovered ? Color.primary.opacity(0.1) : Color.clear)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
-                    }
-                }
-                .buttonStyle(.plain)
-                .help("Copy title")
-                .onHover { hovering in
-                    withAnimation(AppTheme.Animation.easeInOut) { isCopyHovered = hovering }
                 }
 
                 Button(role: .destructive) {
@@ -353,7 +329,7 @@ struct DetailView: View {
                             .fill(isDeleteHovered ? Color.primary.opacity(0.1) : Color.clear)
                             .frame(width: 28, height: 28)
                         Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .font(AppTheme.Font.bodyMedium)
                             .foregroundStyle(.red)
                     }
                 }
@@ -368,10 +344,77 @@ struct DetailView: View {
         }
     }
 
+    // MARK: - Bottom Action Bar
+
+    @ViewBuilder
+    private var bottomActionBar: some View {
+        HStack(spacing: 0) {
+            if let trailerKey = viewModel.trailerKey {
+                Button {
+                    if let url = URL(string: "https://www.youtube.com/watch?v=\(trailerKey)") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Play Trailer", systemImage: "play.fill")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(isTrailerHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.easeInOut) { isTrailerHovered = hovering }
+                }
+
+                Divider()
+                    .frame(height: 20)
+            }
+
+            Button {
+                showingCollectionPicker = true
+            } label: {
+                Label("Add to Collection", systemImage: "folder.badge.plus")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(isCollHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("l", modifiers: [.command])
+            .onHover { hovering in
+                withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
+            }
+
+            Divider()
+                .frame(height: 20)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(viewModel.item.title, forType: .string)
+                AppErrorState.shared.showToast("Title copied", style: .success)
+            } label: {
+                Label("Copy Title", systemImage: "doc.on.doc")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(isCopyHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(AppTheme.Animation.easeInOut) { isCopyHovered = hovering }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.15 : 0.08), radius: 6, y: 3)
+    }
+
     @ViewBuilder
     private var deleteConfirmationOverlay: some View {
         ZStack {
-            Color.black.opacity(0.2)
+            Color.primary.opacity(0.2)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -382,21 +425,14 @@ struct DetailView: View {
                 .transition(.opacity)
 
             VStack(spacing: 14) {
-                Text("Are you sure?")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.red)
+                Label("Are you sure?", systemImage: "exclamationmark.triangle.fill")
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(.primary)
 
-                Text("This action will delete")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                Text("Delete \"\(viewModel.item.title)\" from your library?")
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
-
-                Text(viewModel.item.title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
-
-                Text("from the library")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
                 HStack(spacing: 24) {
                     Button {
@@ -406,10 +442,10 @@ struct DetailView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 26))
+                                .font(AppTheme.Font.titleLarge)
                                 .foregroundStyle(.secondary.opacity(0.5))
                             Text("Cancel")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.small)
                                 .foregroundStyle(.tertiary)
                         }
                         .frame(width: 56)
@@ -420,11 +456,11 @@ struct DetailView: View {
                         deleteItem()
                     } label: {
                         VStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 26))
+                            Image(systemName: "trash.fill")
+                                .font(AppTheme.Font.titleLarge)
                                 .foregroundStyle(.red)
                             Text("Delete")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.small)
                                 .foregroundStyle(.red)
                         }
                         .frame(width: 56)

@@ -7,6 +7,7 @@ class AppErrorState {
     static let shared = AppErrorState()
     
     var currentToast: Toast?
+    var isImporting = false
     private var dismissTask: Task<Void, Never>?
     
     private init() {}
@@ -48,20 +49,20 @@ class AppErrorState {
     }
     
     func showToast(_ message: String, style: ToastStyle = .info, duration: Double = 3.5) {
+        let toast = Toast(message: message, style: style, duration: duration)
         dismissTask?.cancel()
         
         withAnimation(AppTheme.Animation.springGentle) {
-            currentToast = Toast(message: message, style: style, duration: duration)
+            currentToast = toast
         }
         
+        let toastID = toast.id
         dismissTask = Task {
             try? await Task.sleep(for: .seconds(duration))
-            if Task.isCancelled { return }
+            guard !Task.isCancelled, self.currentToast?.id == toastID else { return }
             
-            await MainActor.run {
-                withAnimation(AppTheme.Animation.springGentle) {
-                    self.currentToast = nil
-                }
+            withAnimation(AppTheme.Animation.springGentle) {
+                self.currentToast = nil
             }
         }
     }

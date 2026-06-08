@@ -19,7 +19,7 @@ struct InsightsSkeletonView: View {
     private var headerSkeleton: some View {
         HStack {
             Text("Insights")
-                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                .font(AppTheme.Font.display)
                 .redacted(reason: .placeholder)
 
             Spacer()
@@ -28,7 +28,7 @@ struct InsightsSkeletonView: View {
                 Image(systemName: "chart.bar.doc.horizontal.fill")
                 Text("Cinephile Lab")
             }
-            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .font(AppTheme.Font.bodyBold)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.primary.opacity(0.12))
@@ -139,7 +139,7 @@ struct InsightsSkeletonView: View {
 
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CAST")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .redacted(reason: .placeholder)
@@ -183,7 +183,7 @@ struct InsightsSkeletonView: View {
 
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CREATORS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .redacted(reason: .placeholder)

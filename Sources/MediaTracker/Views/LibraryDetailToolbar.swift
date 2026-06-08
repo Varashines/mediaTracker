@@ -21,7 +21,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(AppTheme.Icon.medium)
                 }
                 .help("Back to Smart Hub")
             }
@@ -43,7 +43,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 viewModel.filterSubject.send()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Icon.medium)
             }
             .help("Go Back")
 
@@ -55,8 +55,8 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 let icon = viewModel.collection.showingNoteOverlay ? "bubble.left.and.bubble.right.fill" : "bubble.left.fill"
                 let hasNote = !viewModel.collection.currentCollectionNote.isEmpty
                 Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(hasNote ? Color.blue : Color.secondary)
+                    .font(AppTheme.Icon.medium)
+                    .foregroundStyle(hasNote ? AppTheme.Colors.accent : Color.secondary)
             }
             .help("Collection Notes")
 
@@ -64,7 +64,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 showingBulkManager = true
             } label: {
                 Image(systemName: "plus.square.on.square")
-                    .font(.system(size: 14))
+                    .font(AppTheme.Icon.medium)
             }
             .help("Manage Items")
         }
@@ -81,7 +81,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Icon.medium)
             }
         }
         .buttonStyle(.plain)

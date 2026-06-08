@@ -42,10 +42,10 @@ struct BulkCollectionManagerView: View {
                 
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13))
+                        .font(AppTheme.Font.body)
                         .foregroundStyle(.secondary)
                     TextField("Search your library...", text: $searchText)
-                        .font(.system(size: 13))
+                        .font(AppTheme.Font.body)
                         .textFieldStyle(.plain)
                 }
                 .padding(.horizontal, 12)
@@ -184,11 +184,11 @@ struct BulkItemCard: View {
                 
                 // Selection Indicator
                 Circle()
-                    .fill(isSelected ? Color.blue : Color.black.opacity(0.3))
+                    .fill(isSelected ? AppTheme.Colors.accent : Color.black.opacity(0.3))
                     .frame(width: 24, height: 24)
                     .overlay {
                         Image(systemName: isSelected ? "checkmark" : "plus")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppTheme.Font.label)
                             .foregroundStyle(.white)
                     }
                     .padding(8)
@@ -203,7 +203,7 @@ struct BulkItemCard: View {
             onToggle()
         }
         .padding(4)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .background(isSelected ? AppTheme.Colors.accent.opacity(0.1) : Color.clear)
         .cornerRadius(16)
     }
 }

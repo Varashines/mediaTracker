@@ -15,7 +15,7 @@ struct GlassCard<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.1 : 0.08), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
             )
     }
 }

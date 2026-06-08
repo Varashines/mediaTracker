@@ -8,7 +8,7 @@ struct TalentLedgerView: View {
             // Actors Column / Row
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CAST")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -18,7 +18,7 @@ struct TalentLedgerView: View {
                         HStack {
                             Spacer()
                             Text("No actor data")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -42,7 +42,7 @@ struct TalentLedgerView: View {
             // Creators Column / Row
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 Text("TOP RATED CREATORS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -52,7 +52,7 @@ struct TalentLedgerView: View {
                         HStack {
                             Spacer()
                             Text("No creator data")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -99,7 +99,7 @@ struct TalentCardView: View {
                         Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.03)
                         Image(systemName: "person.fill")
                             .foregroundStyle(.secondary)
-                            .font(.system(size: 16))
+                            .font(AppTheme.Font.subtitle)
                     }
                     .frame(width: 44, height: 64)
                 }
@@ -111,23 +111,23 @@ struct TalentCardView: View {
                 ZStack(alignment: .leading) {
                     // Rank shown by default: e.g. "01"
                     Text(String(format: "%02d", rank))
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(color.gradient)
                         .opacity(isHovered ? 0.0 : 1.0)
-                        .scaleEffect(isHovered ? 0.8 : 1.0)
+                        .scaleEffect(1.0)
 
                     // Percentage shown on hover: e.g. "85%"
                     Text(String(format: "%.0f%%", person.score * 100))
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(color)
                         .opacity(isHovered ? 1.0 : 0.0)
-                        .scaleEffect(isHovered ? 1.0 : 1.2)
+                        .scaleEffect(1.0)
                 }
-                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+                .animation(AppTheme.Animation.springSnappy, value: isHovered)
                 .frame(height: 14)
 
                 Text(person.name)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -153,7 +153,7 @@ struct TalentCardView: View {
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
         .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { hovering in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 isHovered = hovering
             }
         }

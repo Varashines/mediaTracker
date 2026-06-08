@@ -42,7 +42,7 @@ struct CollectionPickerView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 40)
             .padding(.vertical, 12)
-            .background(Color.blue)
+            .background(AppTheme.Colors.accent)
             .foregroundStyle(.white)
             .cornerRadius(AppTheme.Radius.medium)
         }

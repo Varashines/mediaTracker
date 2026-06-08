@@ -14,7 +14,7 @@ struct MediaHeaderView: View {
             HStack(alignment: .top, spacing: AppTheme.Spacing.section) {
                 PosterView(item: item, themeColor: themeColor, namespace: namespace)
                 
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
                     TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
                     
                     MetadataSection(item: item, themeColor: themeColor)

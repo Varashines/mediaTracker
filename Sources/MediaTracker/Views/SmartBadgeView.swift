@@ -91,7 +91,7 @@ struct SmartBadgeView: View {
             progress: progress,
             foregroundColor: badgeConfig.fg
         )
-        .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.5) : .black.opacity(0.1), radius: isSparkle ? 6 : 3, y: 2)
+        .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.3) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: isSparkle ? 6 : 3, y: 2)
     }
 
     @ViewBuilder
@@ -166,7 +166,7 @@ struct StatusBadgePrimitive: View {
         HStack(spacing: 0) {
             if !label.isEmpty {
                 Text(label.uppercased())
-                    .font(.system(size: 7.5, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Font.badge)
                     .kerning(1.0)
                     .multilineTextAlignment(.center)
             }

@@ -54,7 +54,7 @@ struct RecommendationCard: View {
             // Header: name + match badge
             HStack(alignment: .top) {
                 Text(rec.name)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(AppTheme.Font.subtitle)
                     .lineLimit(2)
                     .foregroundStyle(.primary)
 
@@ -73,7 +73,7 @@ struct RecommendationCard: View {
 
             // Reason / characteristics (2 lines)
             Text(rec.reason)
-                .font(.system(size: 12, weight: .medium))
+                .font(AppTheme.Font.caption)
                 .lineLimit(2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -101,14 +101,14 @@ struct RecommendationCard: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-            .fill(colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
     }
 
     private func borderOverlay(accent: Color) -> some View {
         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
             .stroke(
                 LinearGradient(
-                    colors: [accent.opacity(0.2), Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.06)],
+                    colors: [accent.opacity(0.2), AppTheme.Colors.strokeDefault(for: colorScheme)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),

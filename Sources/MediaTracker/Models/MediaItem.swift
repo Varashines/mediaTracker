@@ -40,6 +40,7 @@ final class MediaItem: Identifiable {
     var storedProgress: Double?
     var searchableText: String = ""
     var storedCast: [SimpleCastMember] = []
+    var cachedTrailerKey: String?
     
     var collections: [MediaCollection] = []
 

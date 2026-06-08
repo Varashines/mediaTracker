@@ -8,8 +8,10 @@ struct EngineSection: View {
             SettingsSectionHeader(text: "Data Processing", icon: "cpu", color: .teal)
             SettingsCard(color: .teal) {
                 StudioAliasManagerView()
-            }
-            SettingsCard(color: .teal) {
+                Rectangle()
+                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16)
                 DiscoveryManagementView()
             }
 
@@ -19,4 +21,6 @@ struct EngineSection: View {
             }
         }
     }
+
+    @Environment(\.colorScheme) var scheme
 }

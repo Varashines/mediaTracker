@@ -71,7 +71,7 @@ struct DiscoveryCard: View {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isHovered ? themeColor.opacity(0.35) : Color.primary.opacity(0.06),
+                        isHovered ? themeColor.opacity(0.35) : AppTheme.Colors.strokeDefault(for: colorScheme),
                         lineWidth: isHovered ? 1.0 : 0.8
                     )
             }
@@ -100,7 +100,7 @@ struct DiscoveryCard: View {
                     ZStack {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Color.white)
-                            .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.06), radius: 2, y: 1)
+                            .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: 2, y: 1)
 
                         CachedImage(url: url, targetSize: CGSize(width: 75, height: 32)) { _ in } placeholder: {
                             Color.secondary.opacity(0.1)
@@ -114,7 +114,7 @@ struct DiscoveryCard: View {
                     .scaleEffect(isHovered ? 0.95 : 1.0)
 
                     Text(node.name)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.bodyBold)
                         .foregroundStyle(accent)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)

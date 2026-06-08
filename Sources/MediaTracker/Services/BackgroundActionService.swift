@@ -14,10 +14,10 @@ actor BackgroundActionService {
         } else if type == "tvShow", let s = season, let e = episode {
             // Find specific episode
             if let tvDetails = item.tvShowDetails {
-                for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
+                seasonLoop: for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
                     for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
                         episodeObj.markWatched(true)
-                        break
+                        break seasonLoop
                     }
                 }
             }

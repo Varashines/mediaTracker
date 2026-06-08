@@ -32,17 +32,13 @@ struct MainMediaGrid: View {
         }
         .padding(AppTheme.Spacing.pageMargin)
         .task(id: selectedCollectionID) {
-            guard let cid = selectedCollectionID else {
-                completedIDs = []
-                return
-            }
-            let descriptor = FetchDescriptor<MediaCollection>(
-                predicate: #Predicate { $0.id == cid },
-                sortBy: [SortDescriptor(\.name)]
-            )
-            if let collection = try? modelContext.fetch(descriptor).first {
-                completedIDs = Set(collection.completedItemIDs)
-            }
+            await loadCompletedIDs()
+        }
+        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
+            Task { await loadCompletedIDs() }
+        }
+        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+            Task { await loadCompletedIDs() }
         }
     }
 
@@ -76,6 +72,20 @@ struct MainMediaGrid: View {
                     }
                 }
             }
+        }
+    }
+
+    private func loadCompletedIDs() async {
+        guard let cid = selectedCollectionID else {
+            completedIDs = []
+            return
+        }
+        let descriptor = FetchDescriptor<MediaCollection>(
+            predicate: #Predicate { $0.id == cid },
+            sortBy: [SortDescriptor(\.name)]
+        )
+        if let collection = try? modelContext.fetch(descriptor).first {
+            completedIDs = Set(collection.completedItemIDs)
         }
     }
 

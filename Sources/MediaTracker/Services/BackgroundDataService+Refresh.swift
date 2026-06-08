@@ -54,8 +54,9 @@ extension BackgroundDataService {
                 var seen = Set<String>()
                 var newCastList: [CastMember] = []
                 for c in newCastResults {
-                    if seen.contains(c.name) { continue }
-                    seen.insert(c.name)
+                    let key = "\(c.name)|\(c.character)"
+                    if seen.contains(key) { continue }
+                    seen.insert(key)
                     
                     let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                     let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
@@ -67,6 +68,7 @@ extension BackgroundDataService {
             }
             
             if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
+            item.cachedTrailerKey = details.trailerKey
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.updateSearchableText()
@@ -86,10 +88,6 @@ extension BackgroundDataService {
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
             tvDetails.item = item
             item.tvShowDetails = tvDetails
-            
-            let liveSeasons = tvDetails.seasons.liveModels
-            let totalCachedEpisodes = liveSeasons.reduce(0) { $0 + $1.episodes.count }
-            let hasMissingEpisodes = liveSeasons.contains(where: { $0.episodes.isEmpty }) && !liveSeasons.isEmpty
             
             if let newDate = DateUtils.parseDate(details.firstAirDate) {
                 item.releaseDate = newDate
@@ -117,7 +115,6 @@ extension BackgroundDataService {
             
             var mazeEpisodes: [TVMazeEpisode] = []
             var mazeGenres: [String]?
-            var mazeNetworkName: String?
             // Skip TVMaze calls for completed/dropped shows with no upcoming episodes
             let hasUpcomingEpisode = details.nextEpisodeDate != nil
             let isActiveShow = item.state == .active || item.state == .rewatching
@@ -127,7 +124,6 @@ extension BackgroundDataService {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
                     mazeGenres = genres
-                    mazeNetworkName = service
                     
                     if let schedule = episode {
                         tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
@@ -170,8 +166,9 @@ extension BackgroundDataService {
             var seen = Set<String>()
             var newCastList: [CastMember] = []
             for c in newCastResults {
-                if seen.contains(c.name) { continue }
-                seen.insert(c.name)
+                let key = "\(c.name)|\(c.character)"
+                if seen.contains(key) { continue }
+                seen.insert(key)
                 
                 let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                 let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
@@ -203,17 +200,17 @@ extension BackgroundDataService {
             } else {
                 tvDetails.genres = tmdbGenres
             }
-            // Prefer TVMaze network name (more accurate for non-US shows)
-            tvDetails.network = mazeNetworkName ?? details.network
+            // Use TMDB network name and logo (consistent single source)
+            tvDetails.network = details.network
             tvDetails.networkLogoPath = details.networkLogoPath
             tvDetails.numberOfSeasons = details.seasonsCount
             tvDetails.numberOfEpisodes = details.episodesCount
             tvDetails.creators = details.creators.map { $0.name }
             tvDetails.tvMazeID = tvMazeID
+            item.cachedTrailerKey = details.trailerKey
             
             if !metadataOnly {
-                let shouldFetchAll = item.state == .active || item.state == .rewatching || tvDetails.seasons.isEmpty || hasMissingEpisodes || totalCachedEpisodes == 0 || (details.episodesCount < 30)
-                let seasonsToSync = shouldFetchAll ? details.seasons : details.seasons.suffix(2)
+                let seasonsToSync = details.seasons
 
                 struct FetchedSeasonData {
                     let seasonNumber: Int
@@ -263,9 +260,11 @@ extension BackgroundDataService {
                     let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episodeCount, airDate: seasonData.airDate, showID: tmdbID)
                     season.showID = tmdbID
 
-                    if season.modelContext == nil || season.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
-                        season.tvShowDetails = tvDetails
+                    if season.modelContext == nil {
                         modelContext.insert(season)
+                    }
+                    if season.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
+                        season.tvShowDetails = tvDetails
                     }
 
                     for ep in seasonData.episodes {
@@ -279,11 +278,14 @@ extension BackgroundDataService {
                         let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
                         episode.showID = tmdbID
 
-                        if episode.modelContext == nil || episode.season?.persistentModelID != season.persistentModelID {
+                        if episode.modelContext == nil {
                             episode.season = season
                             modelContext.insert(episode)
                             episode.updateAirDateValue()
                         } else {
+                            if episode.season?.persistentModelID != season.persistentModelID {
+                                episode.season = season
+                            }
                             episode.name = epName
                             episode.overview = epOverview
                             episode.airDate = ep.airDate

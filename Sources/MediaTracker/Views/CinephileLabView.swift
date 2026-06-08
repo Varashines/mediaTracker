@@ -80,25 +80,25 @@ struct GalleryCardView: View {
             ZStack {
                 // Rank number shown by default
                 Text(String(format: "%02d", rank))
-                    .font(.system(size: 26, weight: .black, design: .rounded))
+                    .font(AppTheme.Font.titleLarge)
                     .foregroundStyle(color.gradient)
                     .opacity(isHovered ? 0.0 : 1.0)
-                    .scaleEffect(isHovered ? 0.8 : 1.0)
+                    .scaleEffect(1.0)
 
                 // Percentage shown on hover
                 Text(String(format: "%.0f%%", value * 100))
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundStyle(color)
                     .opacity(isHovered ? 1.0 : 0.0)
-                    .scaleEffect(isHovered ? 1.0 : 1.2)
+                    .scaleEffect(1.0)
             }
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
             .frame(height: 32)
 
             Spacer(minLength: 0)
 
             Text(name)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.primary.opacity(0.9))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -123,7 +123,7 @@ struct GalleryCardView: View {
         .shadow(color: color.opacity(isHovered ? 0.12 : 0.0), radius: 6, x: 0, y: 3)
         .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { hovering in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 isHovered = hovering
             }
         }
@@ -142,7 +142,7 @@ struct TopGenresView: View {
             HStack {
                 Spacer()
                 Text("No genre data")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -176,7 +176,7 @@ struct TopBrandsHorizontalView: View {
             HStack {
                 Spacer()
                 Text("No statistics available")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
                 Spacer()
             }

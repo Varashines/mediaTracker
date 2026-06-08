@@ -41,6 +41,7 @@ struct MovieDetailsResult {
     let cast: [CastMemberResult]
     let directors: [CastMemberResult]
     let productionCompanies: [ProductionCompanyResult]
+    let trailerKey: String?
 }
 
 struct TVDetailsResult {
@@ -55,6 +56,7 @@ struct TVDetailsResult {
     let overview: String?
     let network: String?
     let networkLogoPath: String?
+    let networkLogos: [String: String]
     let originalLanguage: String?
     let seasons: [TMDBSeasonBrief]
     let firstAirDate: String?
@@ -64,4 +66,5 @@ struct TVDetailsResult {
     let tvdbID: Int?
     let cast: [CastMemberResult]
     let creators: [CastMemberResult]
+    let trailerKey: String?
 }

@@ -18,12 +18,14 @@ class DetailViewModel {
     var secondaryCoolThemeColor: Color = .clear
     var recommendations: [MooreMetricsRecommendation] = []
     var isLoadingRecommendations = false
+    var trailerKey: String?
     var debugSelectedTraits: [String] = []
     
     init(item: MediaItem) {
         self.item = item
         // Initial pre-warm for cached data removed to speed up transitions.
         // Will be triggered lazily if needed.
+        trailerKey = item.cachedTrailerKey
         updateThemeColor()
     }
     
@@ -159,7 +161,7 @@ class DetailViewModel {
     func refreshLocalItem() {
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
-
+        trailerKey = item.cachedTrailerKey
         updateThemeColor()
     }
 
@@ -422,6 +424,10 @@ class DetailViewModel {
             next.markWatched(true)
             item.lastInteractionDate = Date()
             item.syncCachedProperties()
+            if let context = item.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
         }
     }
 
@@ -454,10 +460,10 @@ class DetailViewModel {
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()
             item.syncCachedProperties()
-            if let context = item.modelContext {
-                SaveCoordinator.shared.requestSave(context)
-            }
-            MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
         }
+        if let context = item.modelContext {
+            SaveCoordinator.shared.requestSave(context)
+        }
+        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 }

@@ -17,7 +17,7 @@ struct DetailFloatingActionBar: View {
                     Image(systemName: "folder.badge.plus")
                     Text("Collection")
                 }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -37,7 +37,7 @@ struct DetailFloatingActionBar: View {
                     }
                     Text("Refresh")
                 }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -53,7 +53,7 @@ struct DetailFloatingActionBar: View {
                     Image(systemName: "trash")
                     Text("Remove")
                 }
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.red)
                 .contentShape(Rectangle())
             }

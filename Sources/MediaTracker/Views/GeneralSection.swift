@@ -2,6 +2,7 @@ import SwiftUI
 import ServiceManagement
 
 struct GeneralSection: View {
+    @Environment(\.colorScheme) var scheme
     @AppStorage("theme_preference") private var themePreference: Int = 0
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
@@ -9,42 +10,48 @@ struct GeneralSection: View {
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
+    private var followSystem: Bool {
+        themePreference == 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSectionHeader(text: "Appearance", icon: "paintbrush.fill", color: .blue)
             SettingsCard(color: .blue) {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Theme Mode")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            Text("Follow system or force light/dark appearance")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        ThemePicker(themePreference: $themePreference)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Follow System toggle
+                    SettingsRow(title: "Follow System", subtitle: "Automatically match macOS appearance", showDivider: !followSystem) {
+                        Toggle("", isOn: Binding(
+                            get: { followSystem },
+                            set: { isOn in
+                                if isOn {
+                                    themePreference = 0
+                                } else {
+                                    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                                    themePreference = isDark ? 1 : 2
+                                }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-                    
-                    Divider().opacity(0.06).padding(.horizontal, 16)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Theme Palette")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            Text("Choose custom background and accent variations")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
+
+                    if !followSystem {
+                        // Light/Dark picker
+                        SettingsRow(title: "Appearance", subtitle: nil, showDivider: true) {
+                            LightDarkPicker(themePreference: $themePreference)
                         }
-                        
-                        PalettePicker(customThemePalette: $customThemePalette)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
+
+                    // Color Palette — always visible, independent of system/manual mode
+                    SettingsRow(title: "Color Palette", subtitle: "Choose accent and background style", showDivider: false) {
+                        HStack(spacing: 16) {
+                            paletteCircle(index: 0, accent: .accentColor)
+                            paletteCircle(index: 1, accent: Color(hex: "#9B7B6B") ?? .accentColor)
+                            paletteCircle(index: 2, accent: Color(hex: "#6E7BB8") ?? .accentColor)
+                        }
+                    }
                 }
             }
 
@@ -68,5 +75,29 @@ struct GeneralSection: View {
                 SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: false, isOn: $preventSleepMode)
             }
         }
+    }
+
+    private func paletteCircle(index: Int, accent: Color) -> some View {
+        let isSelected = customThemePalette == index
+        return Button {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                customThemePalette = index
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(accent)
+                if isSelected {
+                    Circle()
+                        .stroke(accent.opacity(0.7), lineWidth: 2.5)
+                } else {
+                    Circle()
+                        .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+                }
+            }
+            .frame(width: 28, height: 28)
+            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
     }
 }

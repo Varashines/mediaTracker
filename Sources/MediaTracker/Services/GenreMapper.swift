@@ -43,7 +43,7 @@ struct GenreMapper {
         let lower = genre.lowercased()
         
         switch lower {
-        case "sci-fi", "science fiction":
+        case "sci-fi", "science fiction", "science-fiction":
             return "Science Fiction"
         case "tv movie":
             return "TV Movie"

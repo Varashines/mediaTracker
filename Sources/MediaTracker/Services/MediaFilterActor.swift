@@ -252,6 +252,11 @@ actor MediaFilterActor {
                     return item.taste == taste
                 case .badge(let badge):
                     return item.storedSmartBadgeLabel == badge
+                case .network(let network):
+                    guard let rawNets = item.cachedNetwork else { return false }
+                    return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.contains(network.lowercased())
+                case .language(let language):
+                    return item.cachedLanguage?.lowercased() == language.lowercased()
                 }
             }
         }
@@ -267,10 +272,38 @@ actor MediaFilterActor {
         ]
         recentDesc.fetchLimit = 12
         
+        // Apply category-specific filter so Recently Added respects the current view scope
+        if let categoryPredicate = categoryFilterPredicate(category: category) {
+            recentDesc.predicate = categoryPredicate
+        }
+        
         if let recentItems = try? modelContext.fetch(recentDesc) {
             return recentItems.map { toMetadata($0) }
         }
         return []
+    }
+    
+    private func categoryFilterPredicate(category: NavigationCategory) -> Predicate<MediaItem>? {
+        switch category {
+        case .movie:
+            return #Predicate { $0.typeValue == "Movie" }
+        case .tvShow:
+            return #Predicate { $0.typeValue == "TV Show" }
+        case .completed:
+            return #Predicate { $0.stateValue == "Completed" }
+        case .inProgress:
+            return #Predicate { $0.stateValue == "Active" && $0.storedIsUpcoming == false }
+        case .watchlist:
+            return #Predicate { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false }
+        case .loved:
+            return #Predicate { $0.tasteValue == "Love" }
+        case .disliked:
+            return #Predicate { $0.tasteValue == "Dislike" }
+        case .archive:
+            return #Predicate { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching" }
+        default:
+            return nil
+        }
     }
 
     func allLibraryTMDBIDs() throws -> Set<String> {

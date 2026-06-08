@@ -32,7 +32,7 @@ struct MetadataSection: View {
             items.append(MetadataItem(icon: icon, value: "\(rt)%"))
         }
         if let rated = item.movieDetails?.contentRating ?? item.tvShowDetails?.contentRating, !rated.isEmpty, rated != "N/A" {
-            items.append(MetadataItem(icon: rated.contains("TV") ? "tv" : "film.fill", value: rated))
+            items.append(MetadataItem(icon: rated.contains("TV") ? "tv.fill" : "film.fill", value: rated))
         }
         
         if let date = item.releaseDate {
@@ -97,10 +97,10 @@ struct MetadataSection: View {
     private func pillView(_ meta: MetadataItem, accent: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: meta.icon)
-                .font(.system(size: 9))
+                .font(AppTheme.Font.small)
                 .foregroundStyle(accent)
             Text(meta.value)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(.primary)
         }
         .padding(.horizontal, 10)
@@ -113,6 +113,5 @@ struct MetadataSection: View {
             Capsule()
                 .stroke(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.20), lineWidth: 0.5)
         }
-        .clipShape(Capsule())
     }
 }

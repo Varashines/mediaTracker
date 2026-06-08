@@ -167,8 +167,25 @@ extension MediaItem {
                     }
                 }
             }
-            
-            if let next = progressResult.firstUnwatched {
+
+            // Recalculate progress after auto-mark so cached properties reflect actual state
+            let finalProgress = if stateValue == "Completed" && UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
+                tv.calculateProgress(now: now, forceRecalculate: true)
+            } else {
+                progressResult
+            }
+            self.cachedRuntime = finalProgress.totalRuntime
+            self.cachedWatchedEpisodeCount = finalProgress.watchedCount
+            self.remainingEpisodesCount = finalProgress.remainingCount
+
+            if finalProgress.totalCount > 0 {
+                self.cachedEpisodeRuntime = finalProgress.totalRuntime / finalProgress.totalCount
+                let finalProgressVal = Double(finalProgress.watchedCount) / Double(finalProgress.totalCount)
+                self.storedProgress = finalProgressVal
+                self.storedWatchProgressLabel = "\(finalProgress.watchedCount)/\(finalProgress.totalCount) EP"
+            }
+
+            if let next = finalProgress.firstUnwatched ?? progressResult.firstUnwatched {
                 self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
                 self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
             } else {

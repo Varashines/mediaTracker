@@ -98,7 +98,7 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.03))
@@ -116,7 +116,7 @@ struct ReleaseCalendarView: View {
                 }
             } label: {
                 Text(currentDisplayMonth.formatted(.dateTime.month(.wide).year()))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -139,7 +139,7 @@ struct ReleaseCalendarView: View {
                 changeMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.03))
@@ -344,11 +344,11 @@ struct ReleaseCalendarView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                    .font(AppTheme.Font.small)
                                     .foregroundStyle(isSelected ? accent : .secondary)
                                 
                                 Text(date.formatted(.dateTime.day()))
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .font(AppTheme.Font.subtitle)
                                     .foregroundStyle(isSelected ? accent : .primary)
                                 
                                 if let info = dayInfo, !info.items.isEmpty {
@@ -447,7 +447,7 @@ struct ReleaseCalendarView: View {
                 .kerning(1.2)
             
             Text(isAllMonth ? date.formatted(.dateTime.month(.wide).year()) : "\(count) Releases")
-                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                .font(AppTheme.Font.largeTitle)
             
             if isAllMonth {
                 Text("\(count) total releases this month")
@@ -461,7 +461,7 @@ struct ReleaseCalendarView: View {
     private func emptyDayView(date: Date, isAllMonth: Bool = false) -> some View {
         VStack(spacing: 20) {
             Image(systemName: "calendar.badge.minus")
-                .font(.system(size: 50))
+                .font(AppTheme.Font.heroTitle)
                 .foregroundStyle(.secondary.opacity(0.3))
             
             Text(isAllMonth ? "No releases tracked for this month." : "No premieres or episodes tracked for this day.")
@@ -494,7 +494,7 @@ struct ReleaseCalendarView: View {
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {
                         Text(day.formatted(.dateTime.day().month()))
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.subtitle)
                         Rectangle()
                             .fill(.secondary.opacity(0.2))
                             .frame(height: 1)
@@ -530,7 +530,7 @@ struct ReleaseCalendarView: View {
             MediaThumbnailView(metadata: item.metadata, mode: .grid)
             
             Text(item.releaseContext)
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(AppTheme.Font.small)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3.5)
                 .background(accent.opacity(0.12))

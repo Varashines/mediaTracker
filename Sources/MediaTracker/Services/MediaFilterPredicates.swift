@@ -30,15 +30,15 @@ enum MediaFilterPredicates {
             return #Predicate { $0.storedIsUpcoming == true }
 
         case .inProgress:
-            if hasSearch && hasState { return #Predicate { $0.stateValue == "Active" && $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch && hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
             if hasSearch { return #Predicate { $0.stateValue == "Active" && $0.storedIsUpcoming == false && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { $0.stateValue == "Active" && $0.storedIsUpcoming == false && $0.stateValue == state } }
+            if hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state } }
             return #Predicate { $0.stateValue == "Active" && $0.storedIsUpcoming == false }
 
         case .watchlist:
-            if hasSearch && hasState { return #Predicate { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch && hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
             if hasSearch { return #Predicate { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && $0.stateValue == state } }
+            if hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state } }
             return #Predicate { $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false }
 
         case .loved:
@@ -54,9 +54,9 @@ enum MediaFilterPredicates {
             return #Predicate { $0.stateValue == "Completed" && (badgeVal == nil || $0.storedSmartBadgeLabel == badgeVal) && (langVal == nil || $0.cachedLanguage == langVal) }
 
         case .archive:
-            if hasSearch && hasState { return #Predicate { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch && hasState { return #Predicate { $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
             if hasSearch { return #Predicate { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && $0.stateValue == state } }
+            if hasState { return #Predicate { $0.stateValue == state } }
             return #Predicate { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching" }
 
         case .disliked:
@@ -90,9 +90,9 @@ enum MediaFilterPredicates {
             return #Predicate { ($0.cachedRuntime ?? 0) > 0 || ($0.cachedEpisodeRuntime ?? 0) > 0 }
 
         case .stalled:
-            if hasSearch && hasState { return #Predicate { ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch && hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
             if hasSearch { return #Predicate { ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false && $0.stateValue == state } }
+            if hasState { return #Predicate { $0.storedIsUpcoming == false && $0.stateValue == state } }
             return #Predicate { ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false }
 
         case .smartUpcoming:

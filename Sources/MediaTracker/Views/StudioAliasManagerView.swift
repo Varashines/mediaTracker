@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct StudioAliasManagerView: View {
+    @Environment(\.colorScheme) var scheme
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \NetworkEntity.name) private var networks: [NetworkEntity]
     @Query(sort: \StudioAliasEntity.target) private var aliasEntities: [StudioAliasEntity]
@@ -41,9 +42,9 @@ struct StudioAliasManagerView: View {
     private var emptyGroupsView: some View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.3.group")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.title2)
             Text("No studio groups created.")
-                .font(.system(size: 12, weight: .medium))
+                .font(AppTheme.Font.label)
         }
         .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity)
@@ -57,23 +58,23 @@ struct StudioAliasManagerView: View {
             sourcePicker(entity: entity)
             logoPicker(entity: entity)
         }
-        .padding(16)
-        .background(Color.primary.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(AppTheme.Spacing.medium)
+        .background(AppTheme.Colors.surfaceGhost(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
     }
 
     @ViewBuilder
     private func groupHeader(entity: StudioAliasEntity) -> some View {
         HStack {
             Text(entity.target)
-                .font(.system(size: 14, weight: .bold))
+                .font(AppTheme.Font.settingsRowTitle.bold())
             Spacer()
             Button { 
                 modelContext.delete(entity)
                 try? modelContext.save()
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.red.opacity(0.8))
             }
             .buttonStyle(.plain)
@@ -98,10 +99,10 @@ struct StudioAliasManagerView: View {
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         Text(net)
-                            .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                            .font(isSelected ? AppTheme.Font.caption : AppTheme.Font.label)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(isSelected ? AppTheme.Colors.accent.opacity(0.15) : Color.primary.opacity(0.05))
+                            .background(isSelected ? AppTheme.Colors.accent.opacity(0.15) : AppTheme.Colors.surfaceGhost(for: scheme))
                             .clipShape(Capsule())
                             .overlay {
                                 if isSelected {
@@ -117,7 +118,7 @@ struct StudioAliasManagerView: View {
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         Text(showAllNetworks ? "Show Less" : "+\(availableNetworks.count - 20) More")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                             .foregroundStyle(AppTheme.Colors.accent)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -134,7 +135,7 @@ struct StudioAliasManagerView: View {
         if !entity.sources.isEmpty {
             HStack(spacing: 10) {
                 Text("Logo Source:")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                 
                 ForEach(entity.sources.sorted(), id: \.self) { src in
@@ -146,9 +147,9 @@ struct StudioAliasManagerView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: isLogo ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.caption2)
                             Text(src)
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                         }
                         .foregroundStyle(isLogo ? AppTheme.Colors.accent : .secondary)
                     }
@@ -183,7 +184,7 @@ struct StudioAliasManagerView: View {
                 
                 Button("Cancel") { showingAddGroup = false }
                     .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
             }
             .transition(.move(edge: .top).combined(with: .opacity))
@@ -192,8 +193,8 @@ struct StudioAliasManagerView: View {
                 withAnimation { showingAddGroup = true }
             } label: {
                 Label("Add New Group", systemImage: "plus.circle.fill")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.blue)
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(AppTheme.Colors.accent)
             }
             .buttonStyle(.plain)
         }

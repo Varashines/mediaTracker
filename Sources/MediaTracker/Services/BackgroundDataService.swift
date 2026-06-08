@@ -43,13 +43,21 @@ actor BackgroundDataService {
         return (item.persistentModelID, false)
     }
 
-    func importLibraryData(backup: LibraryBackup) async -> Int {
+    static func importLibraryData(backup: LibraryBackup, modelContainer: ModelContainer) async -> Int {
+        let context = ModelContext(modelContainer)
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id, \.typeValue]
-        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        let existing = (try? context.fetch(descriptor)) ?? []
         let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
         
         var importedCount = 0
+        var lastProgressReport = 0
+        
+        let totalCount = backup.items.count
+        if totalCount > 0 {
+            await MainActor.run { AppErrorState.shared.showToast("Importing \(totalCount) items...", style: .info) }
+        }
+        
         for itemData in backup.items {
             let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
             let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
@@ -57,6 +65,11 @@ actor BackgroundDataService {
             let key = "\(uniqueID)_\(itemData.type)"
             
             if !existingKeys.contains(key) {
+                if importedCount > 0 && importedCount - lastProgressReport >= 5 {
+                    lastProgressReport = importedCount
+                    await MainActor.run { AppErrorState.shared.showToast("Importing \(importedCount) of \(totalCount)...", style: .info) }
+                }
+
                 let item = MediaItem(
                     id: uniqueID,
                     title: itemData.title,
@@ -68,45 +81,105 @@ actor BackgroundDataService {
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
                 item.dateAdded = itemData.dateAdded
                 item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
-                modelContext.insert(item)
+                item.syncCachedProperties(force: true)
+                context.insert(item)
                 importedCount += 1
 
-                // Restore Episode Progress
+                // Restore Episode Progress — fetch real TMDB data instead of stubs
                 if item.type == .tvShow, let watchedIDs = itemData.watchedEpisodeIDs, let tmdbID = Int(tmdbIDPart) {
+                    await MainActor.run { AppErrorState.shared.showToast("Downloading episodes for \"\(itemData.title)\"...", style: .info) }
+                    // Group watched episodes by season
+                    var seasonEpisodes: [Int: Set<Int>] = [:]
                     for epID in watchedIDs {
-                        // epID format: "tmdbID_season_episode"
                         let parts = epID.split(separator: "_")
-                        if parts.count == 3, 
-                           let sNum = Int(parts[1]), 
+                        if parts.count == 3,
+                           let sNum = Int(parts[1]),
                            let eNum = Int(parts[2]) {
-                            
-                            let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
-                            // Skip if episode already exists (uniqueID collision)
-                            let existingDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                            if let existing = try? modelContext.fetch(existingDescriptor).first, existing.modelContext != nil {
+                            seasonEpisodes[sNum, default: []].insert(eNum)
+                        }
+                    }
+
+                    // Fetch real episode data for each season
+                    for (sNum, watchedNumbers) in seasonEpisodes {
+                        let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                        let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                        let season = (try? context.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: "Season \(sNum)", episodeCount: 0, airDate: nil)
+                        if season.modelContext == nil {
+                            season.uniqueID = seasonUniqueID
+                            season.showID = tmdbID
+                            season.tvShowDetails = nil
+                            context.insert(season)
+                        }
+
+                        guard let seasonData = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) else {
+                            // API unavailable — create stubs for watched episodes
+                            for eNum in watchedNumbers {
+                                let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
+                                let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                                if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
+                                    existing.markWatched(true)
+                                    continue
+                                }
+                                let episode = TVEpisode(
+                                    episodeNumber: eNum, seasonNumber: sNum,
+                                    name: "Episode \(eNum)", overview: "",
+                                    airDate: nil, runtime: nil,
+                                    isWatched: true, showID: tmdbID
+                                )
+                                episode.uniqueID = epUniqueID
+                                episode.season = season
+                                if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
+                                    season.episodes.append(episode)
+                                }
+                                context.insert(episode)
+                            }
+                            continue
+                        }
+
+                        season.episodeCount = seasonData.count
+
+                        for epData in seasonData {
+                            let epUniqueID = "\(tmdbID)_\(sNum)_\(epData.episodeNumber)"
+                            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
+                            if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
+                                // Update metadata on existing episodes (fixes stubs from previous imports)
+                                existing.name = epData.name ?? "Episode \(epData.episodeNumber)"
+                                existing.overview = epData.overview ?? ""
+                                if let runtime = epData.runtime { existing.runtime = runtime }
+                                if let airDate = epData.airDate { existing.airDate = airDate }
+                                existing.season = season
+                                if watchedNumbers.contains(epData.episodeNumber) {
+                                    existing.markWatched(true)
+                                }
+                                if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
+                                    season.episodes.append(existing)
+                                }
                                 continue
                             }
-                            
-                            let stubEpisode = TVEpisode(
-                                episodeNumber: eNum, 
-                                seasonNumber: sNum, 
-                                name: "Episode \(eNum)", 
-                                overview: "", 
-                                airDate: nil, 
-                                runtime: nil, 
-                                isWatched: true,
+
+                            let episode = TVEpisode(
+                                episodeNumber: epData.episodeNumber,
+                                seasonNumber: sNum,
+                                name: epData.name ?? "Episode \(epData.episodeNumber)",
+                                overview: epData.overview ?? "",
+                                airDate: epData.airDate,
+                                runtime: epData.runtime,
+                                isWatched: watchedNumbers.contains(epData.episodeNumber),
                                 showID: tmdbID
                             )
-                            stubEpisode.uniqueID = epUniqueID
-                            modelContext.insert(stubEpisode)
-                            // The background sync will later link these to seasons and details via uniqueID
+                            episode.uniqueID = epUniqueID
+                            episode.season = season
+                            if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
+                                season.episodes.append(episode)
+                            }
+                            context.insert(episode)
                         }
                     }
                 }
             }
         }
         
-        try? modelContext.save()
+        try? context.save()
         return importedCount
     }
 
@@ -221,6 +294,12 @@ actor BackgroundDataService {
                         }
                     }
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
+
+                    // Refresh network info from TMDB (fixes logo mismatches)
+                    if let netDetails = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
+                        tv.network = netDetails.network
+                        tv.networkLogoPath = netDetails.networkLogoPath
+                    }
                 }
             }
             

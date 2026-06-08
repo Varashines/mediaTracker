@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 import os
+import CryptoKit
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage
@@ -181,11 +182,12 @@ class ImageCache: NSObject {
     }
     
     private static func fileSafeKey(_ string: String) -> String {
-        // Simple filesystem-safe encoding: replace / and : with _, truncate to keep filenames short
+        // Use SHA256 for a stable hash across process launches (unlike hashValue which is not guaranteed stable)
+        let inputData = Data(string.utf8)
+        let digest = SHA256.hash(data: inputData)
+        let hashString = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
         let escaped = string.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
-        // Use a stable short hash to avoid excessively long filenames
-        let hash = escaped.hashValue
-        return "\(abs(hash))_\(escaped.prefix(80))"
+        return "\(hashString)_\(escaped.prefix(80))"
     }
 
     func removeImage(forKey url: String?) async {

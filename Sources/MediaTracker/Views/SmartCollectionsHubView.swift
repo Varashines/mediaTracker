@@ -267,7 +267,7 @@ struct SmartCollectionsHubView: View {
     
     private func sectionHeaderMini(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .font(AppTheme.Font.caption)
             .foregroundStyle(.secondary)
             .kerning(1.2)
     }
@@ -278,7 +278,7 @@ struct SmartCollectionsHubView: View {
                 Text(title)
                     .font(.system(.headline, design: .rounded))
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
             }
             .padding(20)
@@ -450,10 +450,10 @@ private struct SmartCollectionCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(.headline, design: .rounded))
+.font(AppTheme.Font.heading)
                     
                     Text(description)
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
+.font(AppTheme.Font.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)

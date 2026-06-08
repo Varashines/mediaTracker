@@ -63,12 +63,12 @@ struct CreateCollectionSheet: View {
                 // Name Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("NAME")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(AppTheme.Font.caption2)
                         .foregroundStyle(.secondary)
                         .kerning(1.2)
                     TextField("Collection Name", text: $name)
                         .textFieldStyle(.plain)
-                        .font(.system(.body, design: .rounded))
+                        .font(AppTheme.Font.body)
                         .padding()
                         .background(Color.primary.opacity(0.05))
                         .cornerRadius(AppTheme.Radius.medium)
@@ -82,14 +82,14 @@ struct CreateCollectionSheet: View {
                                 .frame(width: 32, height: 32)
                             Image(systemName: "sparkles")
                                 .foregroundStyle(.purple)
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.heading)
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Smart Playlist")
                                 .font(.system(.headline, design: .rounded))
                             Text("Dynamic rules to group media.")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -107,13 +107,13 @@ struct CreateCollectionSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("ICON")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .font(AppTheme.Font.caption2)
                             .foregroundStyle(.secondary)
                             .kerning(1.2)
                         Spacer()
                         TextField("Search symbols...", text: $iconSearchText)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Color.primary.opacity(0.05))
@@ -129,7 +129,7 @@ struct CreateCollectionSheet: View {
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
-                    .font(.system(.body, design: .rounded)).bold()
+                    .font(AppTheme.Font.bodyBold)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Color.primary.opacity(0.05))
@@ -149,10 +149,10 @@ struct CreateCollectionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(name.isEmpty)
-                .font(.system(.body, design: .rounded)).bold()
+                .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(Color.blue))
+                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(AppTheme.Colors.accent))
                 .foregroundStyle(.white)
                 .cornerRadius(AppTheme.Radius.medium)
             }
@@ -177,7 +177,7 @@ struct CreateCollectionSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("RULES")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Font.caption2)
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                 Spacer()
@@ -186,7 +186,7 @@ struct CreateCollectionSheet: View {
             
             if smartRules.isEmpty {
                 Text("Includes everything in your library.")
-                    .font(.system(size: 12, design: .rounded))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -197,7 +197,7 @@ struct CreateCollectionSheet: View {
                     ForEach(Array(smartRules.enumerated()), id: \.offset) { idx, rule in
                         HStack {
                             ruleLabel(for: rule)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(AppTheme.Font.label)
                             Spacer()
                             Button {
                                 smartRules.remove(at: idx)
@@ -237,6 +237,10 @@ struct CreateCollectionSheet: View {
             Label("Taste: \(taste.rawValue)", systemImage: taste.iconName)
         case .badge(let b):
             Label("Badge: \(b)", systemImage: "sparkles")
+        case .network(let n):
+            Label("Network: \(n)", systemImage: "antenna.radiowaves.left.and.right")
+        case .language(let l):
+            Label("Language: \(LanguageUtils.languageName(for: l))", systemImage: "character.bubble.fill")
         }
     }
 }
@@ -320,9 +324,40 @@ struct RuleAddMenu: View {
                 Button("Finale") { smartRules.append(.badge("FINALE")) }
                 Button("Returning") { smartRules.append(.badge("RETURNING")) }
             }
+            Menu("Network") {
+                Button("Netflix") { smartRules.append(.network("Netflix")) }
+                Button("Apple TV+") { smartRules.append(.network("Apple TV+")) }
+                Button("Disney+") { smartRules.append(.network("Disney+")) }
+                Button("HBO / Max") { smartRules.append(.network("HBO")) }
+                Button("Amazon Prime") { smartRules.append(.network("Amazon")) }
+                Button("Hulu") { smartRules.append(.network("Hulu")) }
+                Button("Paramount+") { smartRules.append(.network("Paramount")) }
+                Button("Peacock") { smartRules.append(.network("Peacock")) }
+                Button("BBC") { smartRules.append(.network("BBC")) }
+                Button("CBS") { smartRules.append(.network("CBS")) }
+                Button("NBC") { smartRules.append(.network("NBC")) }
+                Button("ABC") { smartRules.append(.network("ABC")) }
+                Button("FOX") { smartRules.append(.network("FOX")) }
+            }
+            Menu("Language") {
+                Button("English") { smartRules.append(.language("en")) }
+                Button("Hindi") { smartRules.append(.language("hi")) }
+                Button("Spanish") { smartRules.append(.language("es")) }
+                Button("French") { smartRules.append(.language("fr")) }
+                Button("Japanese") { smartRules.append(.language("ja")) }
+                Button("Korean") { smartRules.append(.language("ko")) }
+                Button("Thai") { smartRules.append(.language("th")) }
+                Button("Malayalam") { smartRules.append(.language("ml")) }
+                Button("Tamil") { smartRules.append(.language("ta")) }
+                Button("Telugu") { smartRules.append(.language("te")) }
+                Button("German") { smartRules.append(.language("de")) }
+                Button("Italian") { smartRules.append(.language("it")) }
+                Button("Portuguese") { smartRules.append(.language("pt")) }
+                Button("Chinese") { smartRules.append(.language("zh")) }
+            }
         } label: {
             Label("Add Rule", systemImage: "plus.circle")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.caption)
         }
     }
 }

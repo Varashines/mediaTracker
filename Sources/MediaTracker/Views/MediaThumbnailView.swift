@@ -390,7 +390,7 @@ struct MediaThumbnailView: View {
                 Image(systemName: "tv")
             }
         }
-        .font(.system(size: 9, weight: .bold, design: .rounded))
+        .font(AppTheme.Icon.small)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .foregroundStyle(accent)
@@ -507,7 +507,7 @@ struct MediaThumbnailView: View {
                 let id = item.id
                 NotificationManager.shared.cancelNotification(id: id, type: type)
                 modelContext.delete(item)
-
+                SaveCoordinator.shared.requestSave(modelContext)
             }
         } label: {
             Label("Remove", systemImage: "trash")

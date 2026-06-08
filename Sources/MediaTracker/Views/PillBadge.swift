@@ -18,7 +18,7 @@ struct PillBadge: View {
                     .font(.system(size: 7, weight: .semibold))
             }
             Text(text)
-                .font(.system(size: 7.5, weight: .semibold, design: .rounded))
+                .font(AppTheme.Font.badge)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)

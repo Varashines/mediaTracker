@@ -282,7 +282,7 @@ actor APIClient {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
             return try await self.executeWithRetry {
                 // Skip release_dates on non-force refreshes — release dates rarely change
-                let appendParts = force ? "credits,release_dates,external_ids" : "credits,external_ids"
+                let appendParts = force ? "credits,release_dates,external_ids,videos" : "credits,external_ids,videos"
                 let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
@@ -323,6 +323,7 @@ actor APIClient {
         } ?? []
         
         let imdbID = details.external_ids?.imdb_id
+        let trailerKey = Self.extractTrailerKey(from: details.videos)
 
         return MovieDetailsResult(
             runtime: details.runtime, 
@@ -337,8 +338,24 @@ actor APIClient {
             originalLanguage: details.original_language, 
             cast: Array(cast), 
             directors: directors,
-            productionCompanies: productionCompanies
+            productionCompanies: productionCompanies,
+            trailerKey: trailerKey
         )
+    }
+
+    private static func extractTrailerKey(from videoResponse: TMDBVideoResponse?) -> String? {
+        guard let videos = videoResponse?.results else {
+            AppLogger.debug("🎬 No video response", logger: AppLogger.network)
+            return nil
+        }
+        AppLogger.debug("🎬 Found \(videos.count) videos: \(videos.map { "\($0.type)|\($0.site)|\($0.official ?? false)" })", logger: AppLogger.network)
+        let trailer = videos.first { $0.site == "YouTube" && $0.type == "Trailer" && $0.official == true }
+            ?? videos.first { $0.site == "YouTube" && $0.type == "Trailer" }
+            ?? videos.first { $0.site == "YouTube" && $0.type == "Teaser" && $0.official == true }
+            ?? videos.first { $0.site == "YouTube" && $0.type == "Teaser" }
+            ?? videos.first { $0.site == "YouTube" }
+        AppLogger.debug("🎬 Selected trailer: \(trailer?.key ?? "none")", logger: AppLogger.network)
+        return trailer?.key
     }
 
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
@@ -357,7 +374,7 @@ actor APIClient {
         let task = Task<TVDetailsResult, Error> {
             defer { self.inFlightTVDetails.removeValue(forKey: tmdbID) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits")])
+                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits,videos")])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
@@ -390,7 +407,13 @@ actor APIClient {
         } ?? []
         let network = d.networks?.first
         
+        var networkLogos: [String: String] = [:]
+        for net in d.networks ?? [] {
+            networkLogos[net.name] = net.logo_path
+        }
+        
         let imdbID = d.external_ids?.imdb_id
+        let trailerKey = Self.extractTrailerKey(from: d.videos)
 
         return TVDetailsResult(
             seasonsCount: d.number_of_seasons,
@@ -404,6 +427,7 @@ actor APIClient {
             overview: d.overview,
             network: network?.name,
             networkLogoPath: network?.logo_path,
+            networkLogos: networkLogos,
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
             firstAirDate: d.first_air_date,
@@ -412,7 +436,8 @@ actor APIClient {
             nextSeasonNumber: d.next_episode_to_air?.season_number,
             tvdbID: d.external_ids?.tvdb_id,
             cast: Array(cast),
-            creators: creators
+            creators: creators,
+            trailerKey: trailerKey
         )
     }
     

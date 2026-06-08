@@ -48,9 +48,9 @@ struct ForYouCompactCard: View {
                         Spacer()
                         HStack(spacing: 4) {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.small)
                             Text(context.uppercased())
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(AppTheme.Font.small)
                                 .tracking(0.8)
                         }
                         .padding(.horizontal, 10)
@@ -65,7 +65,7 @@ struct ForYouCompactCard: View {
                         .overlay {
                             Capsule().stroke(accent.opacity(0.4), lineWidth: 0.8)
                         }
-                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                        .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 6, y: 3)
                         .padding(12)
                     }
                     Spacer()
@@ -78,8 +78,8 @@ struct ForYouCompactCard: View {
                     ZStack {
                         // Glow behind poster (visible on hover)
                         RoundedRectangle(cornerRadius: posterCornerRadius + 2, style: .continuous)
-                            .fill(themeColor.opacity(isHovered ? 0.3 : 0))
-                            .shadow(color: themeColor.opacity(isHovered ? 0.25 : 0), radius: isHovered ? 14 : 0, y: 0)
+                            .fill(themeColor.opacity(isHovered ? 0.15 : 0))
+                            .shadow(color: themeColor.opacity(isHovered ? 0.15 : 0), radius: isHovered ? 10 : 0, y: 0)
                             .frame(width: posterWidth + 4, height: posterHeight + 4)
 
                         // Poster image
@@ -90,7 +90,7 @@ struct ForYouCompactCard: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: posterWidth, height: posterHeight)
                         .clipShape(RoundedRectangle(cornerRadius: posterCornerRadius, style: .continuous))
-                        .shadow(color: .black.opacity(isHovered ? 0.4 : 0.2), radius: isHovered ? 10 : 5, y: isHovered ? 6 : 2)
+                        .shadow(color: .black.opacity(isHovered ? 0.25 : 0.2), radius: isHovered ? 7 : 5, y: isHovered ? 3 : 2)
                     }
                     .padding(.leading, posterPadding)
                     .padding(.vertical, posterPadding)
@@ -99,13 +99,13 @@ struct ForYouCompactCard: View {
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
                         Text(metadata.title)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.title3)
                             .foregroundStyle(.white)
                             .lineLimit(2)
                             .shadow(radius: 2)
                         
                         Text(metadata.formattedMetadata)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption)
                             .foregroundStyle(.white.opacity(0.8))
                     }
                     .padding(.leading, 8)
@@ -120,8 +120,8 @@ struct ForYouCompactCard: View {
             RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                 .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
         }
-        .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: 8, y: 4)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .shadow(color: isHovered ? AppTheme.Colors.shadowElevated(for: colorScheme) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 8, y: 4)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(AppTheme.Animation.springGentle, value: isHovered)
         .onHover { isHovered = $0 }
         .task {

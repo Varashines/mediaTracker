@@ -127,8 +127,10 @@ class LibraryImportExportService {
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 let container = modelContext.container
+                AppErrorState.shared.isImporting = true
 
-                Task {
+                Task.detached(priority: .userInitiated) {
+                    defer { Task { @MainActor in AppErrorState.shared.isImporting = false } }
                     do {
                         // 1. Offload Heavy File I/O and Decoding
                         let backup = try await Task.detached(priority: .userInitiated) {
@@ -136,21 +138,24 @@ class LibraryImportExportService {
                             return try JSONDecoder().decode(LibraryBackup.self, from: data)
                         }.value
 
-                        // 2. Hand over to Background Actor for DB Inserts
-                        let backgroundService = BackgroundDataService(modelContainer: container)
-                        let count = await backgroundService.importLibraryData(backup: backup)
+                        // 2. Import on background thread (uses its own ModelContext)
+                        let count = await BackgroundDataService.importLibraryData(backup: backup, modelContainer: container)
 
                         AppLogger.info("✅ Library imported successfully: \(count) new items.", logger: AppLogger.data)
-                        AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
-                        
-                        // Automatically start fetching metadata for everything in the library
-                        let descriptor = FetchDescriptor<MediaItem>()
-                        if let allItems = try? modelContext.fetch(descriptor) {
-                            DataService.shared.refreshMetadata(for: allItems, modelContext: modelContext, force: true)
+
+                        await MainActor.run {
+                            AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
+
+                            // 3. Automatically start fetching metadata for everything in the library
+                            let context = ModelContext(container)
+                            let descriptor = FetchDescriptor<MediaItem>()
+                            if let allItems = try? context.fetch(descriptor) {
+                                DataService.shared.refreshMetadata(for: allItems, modelContext: context, force: false)
+                            }
+
+                            // 4. Run a silent repair to catch any duplicates from the import
+                            DataService.shared.runMaintenance(modelContext: context, silent: true)
                         }
-                        
-                        // Run a silent repair to catch any duplicates from the import
-                        DataService.shared.runMaintenance(modelContext: modelContext, silent: true)
                     } catch {
                         await MainActor.run {
                             AppErrorState.shared.surfaceError("Import failed: \(error.localizedDescription)")

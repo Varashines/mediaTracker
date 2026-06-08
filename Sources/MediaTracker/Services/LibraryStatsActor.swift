@@ -413,7 +413,7 @@ actor LibraryStatsActor {
                         }
                     }
                     if !hasWatchedDate, let date = item.lastInteractionDate {
-                        let runtime = item.cachedRuntime ?? 0
+                        let runtime = item.type == .tvShow ? (item.cachedEpisodeRuntime ?? 0) : (item.cachedRuntime ?? 0)
                         if runtime > 0 {
                             let day = calendar.startOfDay(for: date)
                             stats.history[day, default: 0] += runtime

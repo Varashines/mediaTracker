@@ -102,7 +102,7 @@ struct SidebarNavigation: View {
         } label: {
             HStack(spacing: AppTheme.Spacing.small) {
                 Image(systemName: iconName)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AppTheme.Icon.medium)
                     .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: AppTheme.Spacing.large)
 
@@ -131,7 +131,7 @@ struct SidebarNavigation: View {
 
     private func sidebarSectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 9.5, weight: .bold))
+            .font(AppTheme.Font.smallBold)
             .kerning(1.2)
             .foregroundStyle(.secondary.opacity(0.7))
             .padding(.leading, AppTheme.Spacing.small)

@@ -92,8 +92,6 @@ final class TVEpisode {
             for: season?.tvShowDetails
         ) {
             self.airDateValue = parsed
-            airDate = nil
-            airstamp = nil
         }
     }
     

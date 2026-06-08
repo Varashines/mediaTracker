@@ -21,21 +21,44 @@ struct AppTheme {
     }
 
     struct Font {
+        // Display sizes
+        static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
+        static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
+        static let display = SwiftUI.Font.system(size: 32, weight: .heavy, design: .rounded)
+
+        // Title sizes
         static let title = SwiftUI.Font.system(size: 28, weight: .bold, design: .rounded)
+        static let titleLarge = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded)
         static let title2 = SwiftUI.Font.system(size: 24, weight: .bold, design: .rounded)
+        static let titleAccent = SwiftUI.Font.system(size: 22, weight: .bold, design: .rounded)
         static let title3 = SwiftUI.Font.system(size: 20, weight: .bold, design: .rounded)
+
+        // Heading / subtitle
+        static let subtitle = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
         static let heading = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
-        static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
+
+        // Body sizes
         static let bodyMedium = SwiftUI.Font.system(size: 15, weight: .medium, design: .rounded)
+        static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
         static let bodyBold = SwiftUI.Font.system(size: 13, weight: .bold, design: .rounded)
+
+        // Label / caption sizes
+        static let label = SwiftUI.Font.system(size: 12, weight: .regular, design: .rounded)
         static let caption = SwiftUI.Font.system(size: 11, weight: .bold, design: .rounded)
         static let caption2 = SwiftUI.Font.system(size: 10, weight: .semibold, design: .rounded)
+
+        // Small sizes
         static let small = SwiftUI.Font.system(size: 9, weight: .semibold, design: .rounded)
         static let smallBold = SwiftUI.Font.system(size: 9, weight: .bold, design: .rounded)
         static let tiny = SwiftUI.Font.system(size: 8, weight: .bold, design: .rounded)
         static let badge = SwiftUI.Font.system(size: 7.5, weight: .semibold, design: .rounded)
-        static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
-        static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
+
+        // Settings
+        static let settingsSectionHeader = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
+        static let settingsRowTitle = SwiftUI.Font.system(size: 14, weight: .medium, design: .rounded)
+        static let settingsSubtitle = SwiftUI.Font.system(size: 11, weight: .regular, design: .rounded)
+
+        // Monospaced
         static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
     }
 
@@ -67,5 +90,24 @@ struct AppTheme {
         static let compact = CGSize(width: 210, height: 105)
         static let backdropLarge = CGSize(width: 2000, height: 1125)
         static let backdropCompact = CGSize(width: 400, height: 226)
+    }
+
+    /// Semantic opacity levels for consistent layering
+    struct Opacity {
+        static let ghost: Double = 0.04
+        static let subtle: Double = 0.08
+        static let faint: Double = 0.12
+        static let muted: Double = 0.25
+        static let dimmed: Double = 0.5
+        static let solid: Double = 1.0
+    }
+
+    /// Standardized icon sizes
+    struct Icon {
+        static let micro = SwiftUI.Font.system(size: 8, weight: .medium)
+        static let small = SwiftUI.Font.system(size: 11, weight: .medium)
+        static let medium = SwiftUI.Font.system(size: 14, weight: .medium)
+        static let large = SwiftUI.Font.system(size: 18, weight: .medium)
+        static let action = SwiftUI.Font.system(size: 22, weight: .medium)
     }
 }

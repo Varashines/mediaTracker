@@ -85,7 +85,7 @@ struct TastePill: View {
                 Image(systemName: isSelected ? "\(icon).fill" : icon)
                 Text(label)
             }
-            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .font(AppTheme.Font.bodyBold)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(isSelected ? .white : .primary.opacity(0.8))
@@ -99,10 +99,10 @@ struct TastePill: View {
             }
             .clipShape(Capsule())
             .scaleEffect(isHovered ? 1.04 : 1.0)
-            .shadow(color: isSelected ? activeColor.opacity(isHovered ? 0.45 : 0.3) : .clear, radius: isHovered ? 12 : 8, x: 0, y: isHovered ? 6 : 4)
+            .shadow(color: isSelected ? activeColor.opacity(isHovered ? 0.35 : 0.3) : .clear, radius: isHovered ? 10 : 8, x: 0, y: isHovered ? 6 : 4)
         }
         .buttonStyle(.interactive(feedback: nil))
         .onHover { isHovered = $0 }
-        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isHovered)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
     }
 }

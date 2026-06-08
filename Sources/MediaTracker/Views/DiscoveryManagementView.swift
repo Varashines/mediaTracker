@@ -31,7 +31,7 @@ struct DiscoveryManagementView: View {
             // 1. Search and Add Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Search & Add Networks")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.secondary)
                 
                 TextField("Search all available networks...", text: $networkSearchText)
@@ -50,12 +50,13 @@ struct DiscoveryManagementView: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Text(name)
+                                            .font(AppTheme.Font.label)
                                         Image(systemName: "plus.circle.fill")
-                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                            .font(AppTheme.Font.caption2)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(Color.primary.opacity(0.08))
+                                    .background(AppTheme.Colors.surfaceMuted(for: colorScheme))
                                     .clipShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
@@ -67,7 +68,7 @@ struct DiscoveryManagementView: View {
                     .frame(height: 44)
                 } else if !networkSearchText.isEmpty {
                     Text("No matching networks found.")
-                        .font(.system(size: 12))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(.tertiary)
                         .padding(.vertical, 8)
                 }
@@ -78,16 +79,16 @@ struct DiscoveryManagementView: View {
             // 2. Hidden Networks Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Hidden from Discovery")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.secondary)
                 
                 VStack(spacing: 0) {
                     if hiddenList.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "eye.fill")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.title2)
                             Text("All networks are currently visible.")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(AppTheme.Font.label)
                         }
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
@@ -96,7 +97,7 @@ struct DiscoveryManagementView: View {
                         ForEach(hiddenList, id: \.self) { name in
                             HStack {
                                 Text(name)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(AppTheme.Font.settingsRowTitle)
                                 Spacer()
                                 Button { 
                                     toggleHidden(name) 
@@ -111,13 +112,16 @@ struct DiscoveryManagementView: View {
                             .padding(.vertical, 12)
                             
                             if name != hiddenList.last {
-                                Divider().padding(.leading, 16)
+                                Rectangle()
+                                    .fill(AppTheme.Colors.strokeDefault(for: colorScheme))
+                                    .frame(height: 1)
+                                    .padding(.leading, 16)
                             }
                         }
                     }
                 }
-                .background(Color.primary.opacity(0.03))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
             }
         }
         .padding(.horizontal, 16)

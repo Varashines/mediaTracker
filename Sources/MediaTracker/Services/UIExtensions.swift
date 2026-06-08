@@ -12,7 +12,6 @@ extension CGSize {
 }
 
 extension Color {
-    static let detailAccent = Color.blue
     static let vibrantDarkBlue = Color(red: 0.05, green: 0.4, blue: 0.95)
 
     static func semanticGreen(for colorScheme: ColorScheme) -> Color {

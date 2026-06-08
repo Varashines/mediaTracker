@@ -16,7 +16,7 @@ struct HoverMetadataPills: View {
             
             // Row 1: Name Pill
             Text(title)
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .font(AppTheme.Font.caption2)
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

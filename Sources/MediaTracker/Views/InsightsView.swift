@@ -36,7 +36,7 @@ struct InsightsView: View {
                                     Image(systemName: "chart.bar.doc.horizontal.fill")
                                     Text("Cinephile Lab")
                                 }
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+.font(AppTheme.Font.bodyBold)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                                 .background(Color.primary.opacity(0.12))
@@ -213,11 +213,7 @@ struct ClaymorphicHeroCard: View {
         HStack(spacing: 16) {
             // Left: Cute Mascot Emoji
             Text(emoji)
-                .font(.system(size: 32))
-                .scaleEffect(isHovered ? 1.2 : 1.0)
-                .rotationEffect(Angle(degrees: isHovered ? -10 : 0))
-                .offset(y: isHovered ? -4 : 0)
-                .animation(.spring(response: 0.35, dampingFraction: 0.5), value: isHovered)
+                .font(AppTheme.Font.display)
                 .frame(width: 44, height: 44)
 
             // Right: Text Details
@@ -229,7 +225,7 @@ struct ClaymorphicHeroCard: View {
                     .lineLimit(1)
                 
                 Text(value)
-                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .font(AppTheme.Font.titleAccent)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
@@ -363,17 +359,17 @@ struct PreferenceBlock: View {
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
                     .foregroundStyle(color)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(AppTheme.Font.subtitle)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(AppTheme.Font.caption2)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 
                 Text(value)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
             }
@@ -383,10 +379,10 @@ struct PreferenceBlock: View {
             if let score = score, score > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(String(format: "%.0f%%", score * 100))
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.title3)
                         .foregroundStyle(color)
                     Text("Affinity")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.smallBold)
                         .foregroundStyle(.tertiary)
                         .textCase(.uppercase)
                 }
@@ -397,11 +393,11 @@ struct PreferenceBlock: View {
             }
         }
         .padding(12)
-        .background(Color.primary.opacity(colorScheme == .dark ? 0.04 : 0.02))
+        .background(AppTheme.Colors.surfaceGhost(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04), lineWidth: 0.5)
+                .stroke(AppTheme.Colors.surfaceSubtle(for: colorScheme), lineWidth: 0.5)
         )
     }
 }

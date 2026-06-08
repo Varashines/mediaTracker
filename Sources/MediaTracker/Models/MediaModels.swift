@@ -56,6 +56,7 @@ struct TMDBMovieDetailsResponse: Codable {
     let release_dates: TMDBReleaseDatesResponse?
     let production_companies: [TMDBProductionCompany]?
     let external_ids: TMDBExternalIDs?
+    let videos: TMDBVideoResponse?
 }
 
 struct OMDBFullData: Sendable {
@@ -137,6 +138,7 @@ struct TMDBTVDetailsResponse: Codable {
     let networks: [TMDBNetwork]?
     let created_by: [TMDBPerson]?
     let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?, aggregate_credits: TMDBAggregateCreditsResponse?
+    let videos: TMDBVideoResponse?
 }
 
 // MARK: - TV Season (Database Model)

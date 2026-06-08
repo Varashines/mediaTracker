@@ -142,6 +142,9 @@ final class TVShowDetails {
     
     func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
         _ = calculateProgress(forceRecalculate: force)
-        if triggerSync { item?.syncCachedProperties(force: force) }
+        if triggerSync {
+            // Pass force: false to avoid redundant full scan — denormalized counts are already updated by calculateProgress
+            item?.syncCachedProperties(force: false)
+        }
     }
 }

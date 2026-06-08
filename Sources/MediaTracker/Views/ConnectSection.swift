@@ -48,7 +48,7 @@ struct ConnectSection: View {
 
             SettingsSectionHeader(text: "Notifications", icon: "bell.badge.fill", color: .red)
             SettingsCard(color: .red) {
-                SettingsToggleRow(title: "Enable Notifications", subtitle: "Get notified about new episodes and movies", isOn: $notificationsEnabled)
+                SettingsToggleRow(title: "Enable Notifications", subtitle: "Get notified about new episodes and movies", showDivider: false, isOn: $notificationsEnabled)
                     .onChange(of: notificationsEnabled) { _, enabled in
                         if enabled {
                             Task {
@@ -63,7 +63,7 @@ struct ConnectSection: View {
                 if notificationsEnabled {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Channels")
-                            .font(.system(size: 11, weight: .regular))
+                            .font(AppTheme.Font.settingsSubtitle)
                             .foregroundStyle(.secondary)
                         HStack(spacing: 10) {
                             channelButton(title: "Movies", icon: "film", isOn: $movieNotificationsEnabled)
@@ -73,9 +73,9 @@ struct ConnectSection: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
-                    Divider().opacity(0.06).padding(.leading, 16)
-
+                if notificationsEnabled {
                     SettingsRow(title: "Delivery Time", subtitle: "Daily notification schedule", showDivider: true) {
                         DatePicker("", selection: Binding(
                             get: { Date(timeIntervalSince1970: notificationTime) },
@@ -87,8 +87,6 @@ struct ConnectSection: View {
                 }
 
                 if notificationsEnabled {
-                    Divider().opacity(0.06).padding(.leading, 16)
-
                     SettingsRow(title: "Reschedule", subtitle: "Refresh notification queue", showDivider: false) {
                         SettingsButton(title: "Reschedule All") {
                             Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
@@ -119,7 +117,7 @@ struct ConnectSection: View {
         showDivider: Bool = true
     ) -> some View {
         VStack(spacing: 0) {
-            SettingsRow(title: name, subtitle: subtitle, showDivider: showDivider) {
+            SettingsRow(title: name, subtitle: subtitle, showDivider: false) {
                 HStack(spacing: 8) {
                     StatusBadge(text: isConnected ? "Connected" : "Missing", isActive: isConnected)
                 }
@@ -140,13 +138,13 @@ struct ConnectSection: View {
                 .background(Color.primary.opacity(0.02))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(AppTheme.Font.body)
                 .overlay(alignment: .trailing) {
                     Button {
                         showKey.wrappedValue.toggle()
                     } label: {
                         Image(systemName: showKey.wrappedValue ? "eye.slash" : "eye")
-                            .font(.system(size: 10))
+                            .font(AppTheme.Font.caption2)
                             .foregroundStyle(.secondary)
                             .padding(.trailing, 8)
                     }
@@ -155,7 +153,7 @@ struct ConnectSection: View {
 
                 Link(destination: link) {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 11, weight: .regular))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -165,10 +163,15 @@ struct ConnectSection: View {
             .padding(.bottom, 12)
 
             if showDivider {
-                Divider().opacity(0.06).padding(.leading, 16)
+                Rectangle()
+                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16)
             }
         }
     }
+
+    @Environment(\.colorScheme) var scheme
 
     private func channelButton(title: String, icon: String, isOn: Binding<Bool>) -> some View {
         Button {
@@ -178,10 +181,10 @@ struct ConnectSection: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : Color.secondary)
                 Text(title)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
             }
             .padding(.horizontal, 10)

@@ -92,11 +92,10 @@ class SearchViewModel {
             let local = await performLocalSearch(text: text, selectedType: selectedType)
             self.filteredLocalResults = local
             
-            self.isSearching = false
-            self.isOfflineResultsOnly = true // Mark as offline if we didn't hit network yet
-            
-            // If cache is very fresh (e.g. < 5 mins), skip network. Otherwise, continue in background.
+            // If cache is very fresh (e.g. < 5 mins), skip network and show offline results.
             if let first = aliasSearchTimestamp[text], Date().timeIntervalSince(first) < 300 {
+                self.isSearching = false
+                self.isOfflineResultsOnly = true
                 return 
             }
         }
@@ -259,8 +258,12 @@ class SearchViewModel {
                 AppErrorState.shared.showToast("Added to Library", style: .success)
             }
             
-            if let id = fetchResult.id, let item = modelContext.model(for: id) as? MediaItem {
-                onSuccess(item)
+            if fetchResult.id != nil {
+                var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == uniqueID })
+                descriptor.fetchLimit = 1
+                if let item = try? modelContext.fetch(descriptor).first {
+                    onSuccess(item)
+                }
             }
         }
     }

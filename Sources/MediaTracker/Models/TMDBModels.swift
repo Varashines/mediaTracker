@@ -120,3 +120,14 @@ struct TMDBRole: Codable {
     let character: String?
     let episode_count: Int
 }
+
+// MARK: - Video/Trailer
+struct TMDBVideoResponse: Codable {
+    let results: [TMDBVideo]?
+}
+struct TMDBVideo: Codable {
+    let key: String
+    let site: String
+    let type: String
+    let official: Bool?
+}
