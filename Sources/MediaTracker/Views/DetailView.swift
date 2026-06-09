@@ -21,13 +21,6 @@ struct DetailView: View {
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
 
-    struct ScrollOffsetPref: PreferenceKey {
-        static let defaultValue: CGFloat = 0
-        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-            value = nextValue()
-        }
-    }
-
     init(item: MediaItem, namespace: Namespace.ID? = nil, onSearchActor: ((String) -> Void)? = nil)
     {
         _viewModel = State(initialValue: DetailViewModel(item: item))
@@ -57,10 +50,14 @@ struct DetailView: View {
                     headerSection
                         .background(alignment: .top) {
                             GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: ScrollOffsetPref.self,
-                                    value: geo.frame(in: .named("detailScroll")).minY
-                                )
+                                let frame = geo.frame(in: .named("detailScroll"))
+                                Color.clear
+                                    .onChange(of: frame.minY) { _, newValue in
+                                        showNavTitle = newValue < -50
+                                    }
+                                    .onAppear {
+                                        showNavTitle = frame.minY < -50
+                                    }
                             }
                         }
                     tmdbWarningSection
@@ -73,9 +70,6 @@ struct DetailView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: "detailScroll")
-            .onPreferenceChange(ScrollOffsetPref.self) { minY in
-                showNavTitle = minY < -50
-            }
 
             // Bottom action bar
             VStack {

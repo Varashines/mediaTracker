@@ -124,6 +124,7 @@ struct LibraryDetailView: View {
                 }
             }
             .adaptiveBackground()
+            .toolbarBackground(.hidden, for: .windowToolbar)
             .animation(AppTheme.Animation.springGentle, value: isSearchActive)
             .navigationTitle(
                 isSearchActive
