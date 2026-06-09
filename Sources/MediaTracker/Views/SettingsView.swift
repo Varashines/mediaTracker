@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 enum SettingsTab: Int, CaseIterable {
-    case general, connect, engine, vault
+    case general, connect, engine, vault, shortcuts
 
     var label: String {
         switch self {
@@ -10,6 +10,7 @@ enum SettingsTab: Int, CaseIterable {
         case .connect: "Connect"
         case .engine: "Engine"
         case .vault: "Vault"
+        case .shortcuts: "Shortcuts"
         }
     }
 
@@ -19,6 +20,7 @@ enum SettingsTab: Int, CaseIterable {
         case .connect: "antenna.radiowaves.left.and.right"
         case .engine: "cpu"
         case .vault: "tray"
+        case .shortcuts: "command"
         }
     }
 }
@@ -84,6 +86,7 @@ struct SettingsView: View {
                     case .connect: ConnectSection()
                     case .engine: EngineSection()
                     case .vault: VaultSection()
+                    case .shortcuts: ShortcutsSection()
                     }
                 }
                 .padding(.horizontal, 24)

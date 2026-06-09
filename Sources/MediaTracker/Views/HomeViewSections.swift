@@ -72,6 +72,7 @@ struct HomeViewSections: View {
                 .padding(.bottom, AppTheme.Spacing.small)
             }
         }
+        .padding(.top, AppTheme.Spacing.medium)
     }
 
     private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {

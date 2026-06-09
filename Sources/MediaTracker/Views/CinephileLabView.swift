@@ -5,6 +5,8 @@ struct CinephileLabDestination: Hashable {}
 
 struct CinephileLabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) var scheme
+    @Environment(\.dismiss) private var dismiss
     @State private var stats: LibraryStats?
     @State private var isLoading = true
 

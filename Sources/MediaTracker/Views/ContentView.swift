@@ -51,7 +51,6 @@ struct ContentView: View {
             )
         }
         .frame(minWidth: 900, minHeight: 600)
-        .animation(.easeInOut(duration: 0.3), value: isSearchActive)
     }
 }
 
@@ -124,8 +123,7 @@ struct LibraryDetailView: View {
                 }
             }
             .adaptiveBackground()
-            .toolbarBackground(.hidden, for: .windowToolbar)
-            .animation(AppTheme.Animation.springGentle, value: isSearchActive)
+            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
             .navigationTitle(
                 isSearchActive
                     ? "Search" : viewModel.navigationTitle(for: viewModel.filter.selectedCategory)
@@ -191,6 +189,7 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
                     Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+                    Button("") { viewModel.navigationPath.removeLast() }.keyboardShortcut(.leftArrow, modifiers: .command)
                     Button("") {
                         viewModel.filter.searchText = ""
                         isSearchActive = false

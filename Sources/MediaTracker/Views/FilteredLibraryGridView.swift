@@ -8,7 +8,9 @@ struct FilteredLibraryGridView: View {
     @Binding var isSearchActive: Bool
     @Binding var searchText: String
     var onNavigateToSearch: ((String) -> Void)? = nil
+    @Environment(\.colorScheme) var scheme
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
 
     @State private var items: [MediaThumbnailMetadata] = []
     @State private var networkColor: Color? = nil

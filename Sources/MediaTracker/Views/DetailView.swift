@@ -7,7 +7,6 @@ struct DetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel: DetailViewModel
-    @State private var isAppeared = false
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
@@ -88,22 +87,15 @@ struct DetailView: View {
                     .transition(.opacity)
             }
         }
-        .navigationTitle(showNavTitle ? viewModel.item.title : "Details")
         .toolbar { detailToolbar }
+        .navigationTitle(showNavTitle ? viewModel.item.title : "Details")
         .onAppear {
             viewModel.refreshData()
-            withAnimation(AppTheme.Animation.springGentle.delay(0.1)) {
-                isAppeared = true
-            }
-            
             Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    showHeavyContent = true
-                }
+                showHeavyContent = true
             }
         }
-        .onDisappear { isAppeared = false }
         .sheet(isPresented: $showingCollectionPicker) {
             CollectionPickerView(item: viewModel.item)
         }

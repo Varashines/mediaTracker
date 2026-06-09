@@ -89,7 +89,10 @@ struct GeneralSection: View {
                     .fill(accent)
                 if isSelected {
                     Circle()
-                        .stroke(accent.opacity(0.7), lineWidth: 2.5)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 2.5)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
                 } else {
                     Circle()
                         .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
@@ -97,6 +100,7 @@ struct GeneralSection: View {
             }
             .frame(width: 28, height: 28)
             .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
     }
