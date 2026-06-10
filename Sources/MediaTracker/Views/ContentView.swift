@@ -12,7 +12,6 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarNavigation(selection: $sidebarSelection)
                 .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
@@ -149,9 +148,14 @@ struct LibraryDetailView: View {
                     onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
             .searchable(
-                text: $viewModel.filter.searchText, isPresented: $isSearchActive,
-                placement: .automatic, prompt: "Search movies & shows"
+                text: $viewModel.filter.searchText,
+                placement: .toolbar, prompt: "Search movies & shows"
             )
+            .onChange(of: viewModel.filter.searchText) { _, newValue in
+                if !newValue.isEmpty {
+                    isSearchActive = true
+                }
+            }
             .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
                 if let itemID = MediaStateService.shared.lastChangedItemID {
                     updateSingleItemInContentView(id: itemID)
@@ -322,6 +326,7 @@ struct LibraryDetailView: View {
                     viewModel.display.homeContinueWatchingItems = result.homeContinueWatching
                     viewModel.display.spotlightHero = result.spotlightHero
                     viewModel.display.groupedItems = result.grouped
+                    viewModel.display.pickOfTheDay = result.pickOfTheDay
 
                     if shouldFetchMetadata {
                         viewModel.display.libraryTMDBIDs = allIDs

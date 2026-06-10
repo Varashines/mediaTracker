@@ -6,13 +6,14 @@ struct HomeViewSections: View {
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recommendations: [MediaThumbnailMetadata]
+    let pickOfTheDay: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
 
     private enum HomeSection {
-        case forYou, recentlyWatched
+        case forYou, recentlyWatched, pickOfTheDay
     }
 
     @State private var visibleSection: HomeSection? = nil
@@ -34,7 +35,15 @@ struct HomeViewSections: View {
                     label: "Recently Watched",
                     isActive: visibleSection == .recentlyWatched
                 )
-                .padding(.trailing, AppTheme.Spacing.pageMargin)
+                if !pickOfTheDay.isEmpty {
+                    sectionButton(
+                        section: .pickOfTheDay,
+                        icon: "star.fill",
+                        label: "Pick of the Day",
+                        isActive: visibleSection == .pickOfTheDay
+                    )
+                    .padding(.trailing, AppTheme.Spacing.pageMargin)
+                }
             }
 
             if visibleSection == .recentlyWatched {
@@ -46,6 +55,15 @@ struct HomeViewSections: View {
             if visibleSection == .forYou {
                 ForYouCarousel(
                     items: recommendations, namespace: namespace,
+                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                )
+                .padding(.bottom, AppTheme.Spacing.small)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if visibleSection == .pickOfTheDay {
+                PickOfDayCarousel(
+                    items: pickOfTheDay, namespace: namespace,
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)

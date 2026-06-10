@@ -31,11 +31,11 @@ actor BackgroundDataService {
         item.dateAdded = Date()
         modelContext.insert(item)
 
-        // 3. Fetch full details immediately
+        // 3. Fetch full details immediately (force: true to avoid cached nil-poster responses)
         if type == .movie {
-            _ = await self.refreshMovie(id: uniqueID, tmdbID: tmdbID)
+            _ = await self.refreshMovie(id: uniqueID, tmdbID: tmdbID, force: true)
         } else if type == .tvShow {
-            _ = await self.refreshTVShow(id: uniqueID, tmdbID: tmdbID)
+            _ = await self.refreshTVShow(id: uniqueID, tmdbID: tmdbID, force: true)
         }
         
         item.syncCachedProperties(force: true)

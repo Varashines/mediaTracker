@@ -8,6 +8,7 @@ struct MainLibraryView: View {
     let homeContinueWatching: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recommendations: [MediaThumbnailMetadata]
+    let pickOfTheDay: [MediaThumbnailMetadata]
     let selectedCategory: NavigationCategory
     let searchText: String
     let selectedNetworks: [String]?
@@ -50,6 +51,7 @@ struct MainLibraryView: View {
                             featuredCarouselItems: featuredCarouselItems,
                             groupedItems: groupedItems,
                             recommendations: recommendations,
+                            pickOfTheDay: pickOfTheDay,
                             namespace: namespace,
                             isFastScrolling: isFastScrolling,
                             onSelectHero: onSelectHero,

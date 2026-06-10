@@ -84,6 +84,8 @@ extension MediaFilterActor {
             return airDate > now && item.stateValue != MediaState.completedRaw
         }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
 
+        let pickOfDay = fetchPickOfTheDay(now: now)
+
         return PaginatedResult(
             displayed: [],
             featuredUpcoming: [],
@@ -91,8 +93,51 @@ extension MediaFilterActor {
             homeContinueWatching: homeContinueWatching,
             spotlightHero: spotlight.map { toMetadata($0) },
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })],
+            pickOfTheDay: pickOfDay,
             totalCount: totalCount
         )
+    }
+
+    private func fetchPickOfTheDay(now: Date) -> [MediaThumbnailMetadata] {
+        let loveLabel = TasteValue.love.rawValue
+        let pLoved = #Predicate<MediaItem> { item in
+            item.tasteValue == loveLabel
+        }
+
+        var lovedDesc = FetchDescriptor<MediaItem>(predicate: pLoved)
+        lovedDesc.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+        lovedDesc.fetchLimit = 200
+
+        guard let lovedItems = try? modelContext.fetch(lovedDesc), !lovedItems.isEmpty else {
+            return []
+        }
+
+        let calendar = Calendar.current
+        let isWeekend = calendar.component(.weekday, from: now) >= 6
+        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: now) ?? 0
+
+        let filtered = lovedItems.filter { item in
+            isWeekend ? true : item.typeValue == "Movie"
+        }
+
+        guard !filtered.isEmpty else { return [] }
+
+        let pickCount = min(3, filtered.count)
+        var indices = Set<Int>()
+        var picks: [MediaItem] = []
+
+        var seed = dayOfYear
+        while indices.count < pickCount {
+            seed = (seed &* 1103515245 &+ 12345) & 0x7FFFFFFF
+            let idx = seed % filtered.count
+            if indices.insert(idx).inserted {
+                picks.append(filtered[idx])
+            }
+        }
+
+        return picks.map { item in
+            MediaThumbnailMetadata(item: item, recommendationReason: "Pick of the Day")
+        }
     }
 
     private func isHomeEligible(_ item: MediaItem, now: Date) -> Bool {

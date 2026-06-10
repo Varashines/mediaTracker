@@ -128,6 +128,7 @@ actor MediaFilterActor {
             homeContinueWatching: [],
             spotlightHero: nil,
             grouped: finalGroupedItems,
+            pickOfTheDay: [],
             totalCount: totalCount
         )
     }

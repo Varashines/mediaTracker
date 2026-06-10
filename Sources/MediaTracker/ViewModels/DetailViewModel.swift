@@ -159,6 +159,17 @@ class DetailViewModel {
     }
 
     func refreshLocalItem() {
+        if let context = item.modelContext {
+            let currentID = item.id
+            let tempContext = ModelContext(context.container)
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == currentID })
+            if let fresh = try? tempContext.fetch(descriptor).first {
+                self.item.posterURL = fresh.posterURL ?? self.item.posterURL
+                self.item.backdropURL = fresh.backdropURL ?? self.item.backdropURL
+                self.item.themeColorHex = fresh.themeColorHex ?? self.item.themeColorHex
+                self.item.themeColorSourceURL = fresh.themeColorSourceURL ?? self.item.themeColorSourceURL
+            }
+        }
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
         trailerKey = item.cachedTrailerKey

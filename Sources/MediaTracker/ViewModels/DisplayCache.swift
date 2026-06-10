@@ -8,6 +8,8 @@ class DisplayCache {
     var spotlightHero: MediaThumbnailMetadata? = nil
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
+    var pickOfTheDay: [MediaThumbnailMetadata] = []
+    var pickOfTheDayDate: Date? = nil
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
     var libraryTMDBIDs: Set<String> = []
     var isLibraryMetadataDirty: Bool = true
@@ -20,6 +22,8 @@ class DisplayCache {
         spotlightHero = nil
         groupedItems = []
         recommendations = []
+        pickOfTheDay = []
+        pickOfTheDayDate = nil
         featuredUpcomingItems = []
         libraryTMDBIDs = []
         isLibraryMetadataDirty = true

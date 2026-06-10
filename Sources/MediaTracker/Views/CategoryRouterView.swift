@@ -52,6 +52,7 @@ struct CategoryRouterView: View {
                 homeContinueWatching: viewModel.display.homeContinueWatchingItems,
                 groupedItems: viewModel.display.groupedItems,
                 recommendations: viewModel.display.recommendations,
+                pickOfTheDay: viewModel.display.pickOfTheDay,
                 selectedCategory: viewModel.filter.selectedCategory,
                 searchText: viewModel.filter.searchText,
                 selectedNetworks: viewModel.filter.selectedNetworks,

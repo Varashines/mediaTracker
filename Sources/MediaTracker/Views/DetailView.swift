@@ -306,7 +306,7 @@ struct DetailView: View {
                 }
 
                 Button(role: .destructive) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         showDeleteConfirmation = true
                     }
                 } label: {
@@ -400,7 +400,7 @@ struct DetailView: View {
     @ViewBuilder
     private var deleteConfirmationOverlay: some View {
         ZStack {
-            Color.primary.opacity(0.2)
+            Color.black.opacity(colorScheme == .dark ? 0.4 : 0.25)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -410,15 +410,30 @@ struct DetailView: View {
                 }
                 .transition(.opacity)
 
-            VStack(spacing: 14) {
-                Label("Are you sure?", systemImage: "exclamationmark.triangle.fill")
-                    .font(AppTheme.Font.title3)
+            VStack(spacing: 10) {
+                if let posterURL = viewModel.item.posterURL, let url = URL(string: posterURL) {
+                    CachedImage(url: url, targetSize: AppTheme.Thumbnail.tiny) { _ in } placeholder: {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.secondary.opacity(0.1))
+                    }
+                    .frame(width: 80, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.bottom, 4)
+                }
+
+                Text("Are you sure?")
+                    .font(AppTheme.Font.subtitle)
                     .foregroundStyle(.primary)
 
-                Text("Delete \"\(viewModel.item.title)\" from your library?")
+                Text(viewModel.item.title)
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(effectiveThemeColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+
+                Text("will be removed")
                     .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
 
                 HStack(spacing: 24) {
                     Button {
@@ -426,36 +441,29 @@ struct DetailView: View {
                             showDeleteConfirmation = false
                         }
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(AppTheme.Font.titleLarge)
-                                .foregroundStyle(.secondary.opacity(0.5))
-                            Text("Cancel")
-                                .font(AppTheme.Font.small)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(width: 56)
+                        Text("No")
+                            .font(AppTheme.Font.bodyMedium)
+                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
                     }
                     .buttonStyle(.plain)
 
                     Button {
                         deleteItem()
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "trash.fill")
-                                .font(AppTheme.Font.titleLarge)
-                                .foregroundStyle(.red)
-                            Text("Delete")
-                                .font(AppTheme.Font.small)
-                                .foregroundStyle(.red)
-                        }
-                        .frame(width: 56)
+                        Text("Yes")
+                            .font(AppTheme.Font.bodyMedium)
+                            .foregroundStyle(Color.semanticRed(for: colorScheme))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
             }
-            .padding(22)
+            .padding(20)
+            .frame(maxWidth: 280)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04))
+            )
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                     .fill(.ultraThinMaterial)
