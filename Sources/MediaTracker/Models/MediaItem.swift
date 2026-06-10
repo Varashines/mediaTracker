@@ -62,6 +62,16 @@ final class MediaItem: Identifiable {
         self.dateAdded = now
     }
 
+    func commitChange() {
+        syncCachedProperties(force: true)
+        guard let context = modelContext else { return }
+        try? context.save()
+        let pid = persistentModelID
+        Task { @MainActor in
+            MediaStateService.shared.postMediaStateChanged(itemID: pid)
+        }
+    }
+
     var type: MediaType? {
         get { MediaType(rawValue: typeValue) }
         set { typeValue = newValue?.rawValue ?? "Movie" }

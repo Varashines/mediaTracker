@@ -505,9 +505,19 @@ struct MediaThumbnailView: View {
 
             if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
                 let id = item.id
+                let network = item.cachedNetwork
+                let genres = item.cachedGenres
+                let lang = item.cachedLanguage
+                let badge = item.storedSmartBadgeLabel
                 NotificationManager.shared.cancelNotification(id: id, type: type)
                 modelContext.delete(item)
                 SaveCoordinator.shared.requestSave(modelContext)
+
+                let container = modelContext.container
+                Task.detached(priority: .background) {
+                    let sync = DiscoverySyncService(modelContainer: container)
+                    await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
+                }
             }
         } label: {
             Label("Remove", systemImage: "trash")

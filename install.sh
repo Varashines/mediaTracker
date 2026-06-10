@@ -9,6 +9,7 @@ INSTALL_DIR="/Applications"
 BUILD_MODE="release"
 BUILD_CONFIG="release"
 DO_CLEAN=false
+FORCE=false
 
 # Parse arguments
 for arg in "$@"; do
@@ -17,33 +18,47 @@ for arg in "$@"; do
         BUILD_CONFIG="debug"
     elif [ "$arg" == "--clean" ]; then
         DO_CLEAN=true
+    elif [ "$arg" == "--force" ] || [ "$arg" == "-f" ]; then
+        FORCE=true
     elif [ "$arg" == "--help" ] || [ "$arg" == "-h" ]; then
         echo "Usage: ./install.sh [options]"
         echo ""
         echo "Options:"
         echo "  --clean    Perform a full clean build (removes .build directory)"
         echo "  --debug    Build in debug mode"
+        echo "  --force,-f Build and install even if no source changes detected"
         echo "  --help     Show this help message"
         exit 0
     fi
 done
 
+# Compute source hash (all tracked .swift files + Package.swift)
+SOURCE_HASH=$(git ls-files '*.swift' 'Package.swift' 'Package.resolved' 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+
+HASH_FILE=".build/.source_hash_$BUILD_CONFIG"
+mkdir -p .build
+
+# Check if sources have changed
+if [ "$FORCE" = false ] && [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" == "$SOURCE_HASH" ]; then
+    echo "✨ No source changes detected. Skipping build."
+
+    # Still verify the binary exists before skipping to packaging
+    BINARY_PATH=$(swift build -c "$BUILD_CONFIG" --arch arm64 --show-bin-path 2>/dev/null)/$EXECUTABLE_NAME
+    if [ -f "$BINARY_PATH" ]; then
+        echo "📦 Binary is up-to-date. Skipping packaging."
+        exit 0
+    fi
+    echo "⚠️  Binary missing. Forcing rebuild."
+fi
+
 if [ "$DO_CLEAN" = true ]; then
     echo "🧹 Performing full clean build..."
-    # Full clean: Swift package clean + remove build directory
     swift package clean
     rm -rf .build
 fi
 
 echo "🚀 Building $APP_NAME in $BUILD_MODE mode..."
 
-# 1. Capture binary state before build
-# Use --show-bin-path to be robust across Swift versions and platforms
-BINARY_PATH=$(swift build -c "$BUILD_CONFIG" --arch arm64 --show-bin-path 2>/dev/null)/$EXECUTABLE_NAME
-PRE_BUILD_STAT=$(stat -f "%m%z" "$BINARY_PATH" 2>/dev/null || echo "none")
-
-# 2. Build the executable
-# -c release already includes -O optimization
 swift build -c "$BUILD_CONFIG" --arch arm64 -j $(sysctl -n hw.ncpu) -Xswiftc -index-ignore-system-modules
 
 if [ $? -ne 0 ]; then
@@ -51,10 +66,18 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 3. Capture binary state after build
-POST_BUILD_STAT=$(stat -f "%m%z" "$BINARY_PATH" 2>/dev/null || echo "none")
+# Save source hash for next run
+echo "$SOURCE_HASH" > "$HASH_FILE"
 
-# 4. Optimized Icon Generation (Cached)
+# Resolve binary path after a successful build
+BINARY_PATH=$(swift build -c "$BUILD_CONFIG" --arch arm64 --show-bin-path 2>/dev/null)/$EXECUTABLE_NAME
+
+if [ ! -f "$BINARY_PATH" ]; then
+    echo "❌ Binary not found at $BINARY_PATH"
+    exit 1
+fi
+
+# Optimized Icon Generation (Cached)
 # Only regenerate if missing or if the source script is newer than the icns
 if [ ! -f "AppIcon.icns" ] || [ "generate_icon.swift" -nt "AppIcon.icns" ]; then
     echo "🎨 Generating App Icon..."
@@ -63,18 +86,13 @@ if [ ! -f "AppIcon.icns" ] || [ "generate_icon.swift" -nt "AppIcon.icns" ]; then
     rm -rf AppIcon.iconset
 fi
 
-# 5. Skip packaging if no changes detected
+echo "📦 Packaging into $APP_NAME.app..."
+
+# Define app bundle paths
 APP_BUNDLE="$APP_NAME.app"
 INSTALLED_APP="$INSTALL_DIR/$APP_BUNDLE"
 
-if [ "$PRE_BUILD_STAT" == "$POST_BUILD_STAT" ] && [ -d "$INSTALLED_APP" ]; then
-    echo "✨ No changes detected in binary. Skipping packaging."
-    exit 0
-fi
-
-echo "📦 Packaging into $APP_NAME.app..."
-
-# 6. Create the .app bundle structure
+# Create the .app bundle structure
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"

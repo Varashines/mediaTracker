@@ -60,6 +60,7 @@ class SleepManager {
             }
             // Restart timer after waking from sleep
             startIdleTimer()
+            updateWindowChrome()
             AppLogger.info("🌅 App woke up from sleep mode.", logger: AppLogger.background)
         }
     }
@@ -77,6 +78,7 @@ class SleepManager {
         timer?.cancel()
         timer = nil
         purgeDataCache?()
+        updateWindowChrome()
         AppLogger.info("💤 App entered sleep mode due to inactivity. UI interactions throttled.", logger: AppLogger.background)
     }
     
@@ -93,6 +95,22 @@ class SleepManager {
             
             self.resetTimer()
             return event
+        }
+        #endif
+    }
+
+    @MainActor
+    private func updateWindowChrome() {
+        #if os(macOS)
+        guard let window = NSApp.mainWindow else { return }
+        if isAsleep {
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.toolbar?.isVisible = false
+        } else {
+            window.titlebarAppearsTransparent = false
+            window.titleVisibility = .visible
+            window.toolbar?.isVisible = true
         }
         #endif
     }

@@ -100,13 +100,13 @@ class BackgroundTaskManager {
             return
         }
         AppLogger.info("🔄 Background sync started...", logger: AppLogger.background)
-        
+
         await refreshStaleBadges()
-        
+
         // Secondary Background Tasks
         Task.detached(priority: .background) {
             let context = ModelContext(container)
-            
+
             // Automated Rolling Backup
             // Map MediaItem (non-Sendable) → LibraryBackup (Sendable) on the background context
             // BEFORE crossing into the @MainActor LibraryImportExportService boundary.
@@ -137,14 +137,15 @@ class BackgroundTaskManager {
                 let backup = LibraryBackup(items: exportItems)
                 await LibraryImportExportService.shared.automatedBackup(backup: backup)
             }
-            
-            // Also run a library discovery sync if needed
-            let syncService = DiscoverySyncService(modelContainer: container)
-            await syncService.syncLibrary(force: false)
-            
-            // Run Maintenance/Heal
-            let maintenance = BackgroundDataService(modelContainer: container)
-            try? await maintenance.performLibraryHeal()
+
+            // Serialize sync + heal through the gate to prevent overlapping operations
+            try? await BackgroundOperationGate.shared.performBoth(label: "backgroundSync", container: container) {
+                let syncService = DiscoverySyncService(modelContainer: container)
+                await syncService.syncLibrary(force: false)
+            } sync: {
+                let maintenance = BackgroundDataService(modelContainer: container)
+                try await maintenance.performLibraryHeal()
+            }
         }
     }
 
@@ -195,8 +196,12 @@ class BackgroundTaskManager {
                 try context.save()
                 
                 // Full recount to fix any drift from concurrent onBadgeChanged tasks
-                let sync = DiscoverySyncService(modelContainer: container)
-                await sync.syncLibrary(force: false)
+                Task.detached(priority: .background) {
+                    try? await BackgroundOperationGate.shared.performSync(label: "refreshStaleBadges", container: container) {
+                        let sync = DiscoverySyncService(modelContainer: container)
+                        await sync.syncLibrary(force: false)
+                    }
+                }
                 
                 // Broadcast to update UI
                 await MainActor.run {

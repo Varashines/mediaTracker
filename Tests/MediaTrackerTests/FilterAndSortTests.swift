@@ -3,11 +3,20 @@ import SwiftData
 @testable import MediaTracker
 
 final class FilterAndSortTests: XCTestCase {
+    private var testContainer: ModelContainer?
+
+    override func tearDown() {
+        testContainer = nil
+        super.tearDown()
+    }
+
     @MainActor
     func makeContainer() -> ModelContainer {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        testContainer = container
+        return container
     }
 
     @MainActor

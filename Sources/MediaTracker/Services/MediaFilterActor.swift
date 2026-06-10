@@ -432,16 +432,22 @@ actor MediaFilterActor {
     }
 }
 
-private let _filterActorCache = OSAllocatedUnfairLock<MediaFilterActor?>(uncheckedState: nil)
+private struct CachedFilterActor {
+    let containerID: ObjectIdentifier
+    let actor: MediaFilterActor
+}
+
+private let _filterActorCache = OSAllocatedUnfairLock<CachedFilterActor?>(uncheckedState: nil)
 
 extension MediaFilterActor {
     static func shared(modelContainer: ModelContainer) -> MediaFilterActor {
-        _filterActorCache.withLockUnchecked { state in
-            if let existing = state {
-                return existing
+        let containerID = ObjectIdentifier(modelContainer)
+        return _filterActorCache.withLockUnchecked { state in
+            if let cached = state, cached.containerID == containerID {
+                return cached.actor
             }
             let actor = MediaFilterActor(modelContainer: modelContainer)
-            state = actor
+            state = CachedFilterActor(containerID: containerID, actor: actor)
             return actor
         }
     }

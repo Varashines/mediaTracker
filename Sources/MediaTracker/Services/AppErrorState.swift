@@ -8,6 +8,7 @@ class AppErrorState {
     
     var currentToast: Toast?
     var isImporting = false
+    var storeRecoveredFromMigrationFailure = false
     private var dismissTask: Task<Void, Never>?
     
     private init() {}

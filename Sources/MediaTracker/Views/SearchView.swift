@@ -1,12 +1,6 @@
 import SwiftData
 import SwiftUI
 
-enum SearchType: String, CaseIterable {
-    case all = "All"
-    case movie = "Movies"
-    case tvShow = "TV Shows"
-}
-
 struct SearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -14,10 +8,14 @@ struct SearchView: View {
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
     var viewModel: MediaViewModel
-    
+
     @State private var searchVM: SearchViewModel
-    @State private var selectedType: SearchType = .all
     @AppStorage("recent_searches") private var recentSearchesData: String = ""
+
+    private var selectedType: SearchType {
+        get { viewModel.filter.searchTypeFilter }
+        nonmutating set { viewModel.filter.searchTypeFilter = newValue }
+    }
 
     private var recentSearches: [String] {
         recentSearchesData.split(separator: "\n").map(String.init)
@@ -42,16 +40,14 @@ struct SearchView: View {
         self.viewModel = viewModel
         self.onSelectLocal = onSelectLocal
         self._searchVM = State(initialValue: SearchViewModel(modelContainer: modelContainer))
-        
+
         if let type = initialType {
             let searchType: SearchType
             switch type {
             case .movie: searchType = .movie
             case .tvShow: searchType = .tvShow
             }
-            _selectedType = State(initialValue: searchType)
-        } else {
-            _selectedType = State(initialValue: .all)
+            viewModel.filter.searchTypeFilter = searchType
         }
     }
 
@@ -66,12 +62,13 @@ struct SearchView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
-        .onChange(of: searchText) { oldValue, newValue in
+        .onChange(of: searchText) { _, newValue in
             searchVM.displayCache = viewModel.display
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
         .onChange(of: selectedType) { _, newType in
             searchVM.displayCache = viewModel.display
+            searchVM.clearWebResults()
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: newType)
             }
@@ -97,15 +94,14 @@ struct SearchView: View {
         .onDisappear {
             searchVM.cancelAllSearchOperations()
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    isSearchActive = false
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(AppTheme.Font.heading)
+        .background {
+            if isSearchActive {
+                Group {
+                    Button("") { viewModel.filter.searchTypeFilter = .all }.keyboardShortcut("1", modifiers: [.command, .option])
+                    Button("") { viewModel.filter.searchTypeFilter = .movie }.keyboardShortcut("2", modifiers: [.command, .option])
+                    Button("") { viewModel.filter.searchTypeFilter = .tvShow }.keyboardShortcut("3", modifiers: [.command, .option])
                 }
-                .help("Go back")
+                .opacity(0)
             }
         }
     }
@@ -114,29 +110,22 @@ struct SearchView: View {
     private var headerSection: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text("Media Type")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary)
-                
-                Picker("", selection: $selectedType) {
+                Spacer()
+
+                Picker("", selection: Binding(
+                    get: { viewModel.filter.searchTypeFilter },
+                    set: { viewModel.filter.searchTypeFilter = $0 }
+                )) {
                     ForEach(SearchType.allCases, id: \.self) { type in
                         Text(type.rawValue).tag(type)
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(maxWidth: 200)
-                
-                Button {} label: {
-                    Image(systemName: "questionmark.circle")
-                        .font(AppTheme.Font.label)
-                        .foregroundStyle(.secondary.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .help("Tip: Use \"y:2023\" to filter results by release year.")
-                
+                .frame(maxWidth: 240)
+
                 Spacer()
-                
+
                 if searchVM.isSearching {
                     ProgressView()
                         .controlSize(.small)
@@ -149,6 +138,7 @@ struct SearchView: View {
         }
         .adaptiveBackground()
         .zIndex(10)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     @ViewBuilder

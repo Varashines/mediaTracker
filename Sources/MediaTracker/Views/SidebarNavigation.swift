@@ -1,5 +1,8 @@
 import SwiftData
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 @MainActor
 struct SidebarNavigation: View {
@@ -75,6 +78,7 @@ struct SidebarNavigation: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 16)
         }
+        .background(SidebarVisualEffectView())
     }
 
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
@@ -138,3 +142,17 @@ struct SidebarNavigation: View {
             .padding(.bottom, AppTheme.Spacing.micro)
     }
 }
+
+#if os(macOS)
+struct SidebarVisualEffectView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+#endif

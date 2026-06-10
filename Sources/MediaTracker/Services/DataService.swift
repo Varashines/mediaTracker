@@ -75,12 +75,14 @@ class DataService {
     func runMaintenance(modelContext: ModelContext, silent: Bool = false) {
         guard !isRunningMaintenance else { return }
         isRunningMaintenance = true
-        
+
         let container = modelContext.container
         Task.detached(priority: .background) {
             let service = BackgroundDataService(modelContainer: container)
             do {
-                try await service.performLibraryHeal()
+                try await BackgroundOperationGate.shared.performHeal(label: "runMaintenance", container: container) {
+                    try await service.performLibraryHeal()
+                }
                 await MainActor.run {
                     self.isRunningMaintenance = false
                     if !silent {

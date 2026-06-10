@@ -1,5 +1,11 @@
 import SwiftUI
 
+enum SearchType: String, CaseIterable {
+    case all = "All"
+    case movie = "Movies"
+    case tvShow = "TV Shows"
+}
+
 @Observable @MainActor
 class FilterState {
     var selectedCategory: NavigationCategory = .home
@@ -9,6 +15,7 @@ class FilterState {
     var selectedGenre: String? = nil
     var selectedYear: String? = nil
     var selectedState: MediaState? = nil
+    var searchTypeFilter: SearchType = .all
     var discoveryRefreshTrigger: Int = 0
     var categorySortOrders: [NavigationCategory: SortOrder] = [:]
     var categoryGroupBys: [NavigationCategory: GroupBy] = [:]

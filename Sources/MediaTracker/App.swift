@@ -36,7 +36,7 @@ struct MediaTrackerApp: App {
                 configurations: [modelConfiguration]
             )
         } catch {
-            AppLogger.error("SwiftData migration failed, attempting store recovery: \(error)")
+            AppLogger.error("CRITICAL: SwiftData migration failed — all data will be lost: \(error)")
 
             let storeURL = modelConfiguration.url
             try? FileManager.default.removeItem(at: storeURL)
@@ -45,10 +45,14 @@ struct MediaTrackerApp: App {
 
             do {
                 AppLogger.info("Store deleted, recreating ModelContainer...")
-                return try ModelContainer(
+                let container = try ModelContainer(
                     for: schema,
                     configurations: [modelConfiguration]
                 )
+                Task { @MainActor in
+                    AppErrorState.shared.storeRecoveredFromMigrationFailure = true
+                }
+                return container
             } catch {
                 fatalError("CRITICAL: Failed to initialize SwiftData ModelContainer even after store recovery. Error: \(error)")
             }

@@ -7,23 +7,26 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @Binding var showingBulkManager: Bool
     @Binding var isSyncHovered: Bool
     let isSystemSmartCategory: Bool
+    let isSearchActive: Bool
     let modelContext: ModelContext
     let onRefresh: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            if viewModel.collection.selectedCollectionID != nil {
-                collectionNavigationToolbar
-            } else if isSystemSmartCategory {
-                Button {
-                    withAnimation {
-                        sidebarSelection = .category(.smartHub)
+            if !isSearchActive {
+                if viewModel.collection.selectedCollectionID != nil {
+                    collectionNavigationToolbar
+                } else if isSystemSmartCategory {
+                    Button {
+                        withAnimation {
+                            sidebarSelection = .category(.smartHub)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(AppTheme.Icon.medium)
                     }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(AppTheme.Icon.medium)
+                    .help("Back to Smart Hub")
                 }
-                .help("Back to Smart Hub")
             }
         }
 

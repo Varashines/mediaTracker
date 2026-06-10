@@ -324,39 +324,97 @@ actor BackgroundDataService {
         let allSeasons = try modelContext.fetch(sDesc)
         let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
-        
-        // Fix for Crash: Safely handle duplicate tmdbIDs if they exist in the DB
-        let tvMap = Dictionary(allTVDetails.map { ($0.tmdbID, $0) }, uniquingKeysWith: { first, second in
-            // Logic to keep the one that actually has a MediaItem attached
-            if first.item != nil { 
-                if second.item == nil {
-                    modelContext.delete(second) // Clean up the orphaned duplicate
+
+        // Group TVShowDetails by tmdbID to find duplicates
+        var grouped: [Int: [TVShowDetails]] = [:]
+        for details in allTVDetails {
+            grouped[details.tmdbID, default: []].append(details)
+        }
+
+        var tvMap: [Int: TVShowDetails] = [:]
+        for (tmdbID, duplicates) in grouped {
+            if duplicates.count == 1 {
+                tvMap[tmdbID] = duplicates[0]
+                continue
+            }
+
+            // Multiple TVShowDetails for the same tmdbID — find the primary (most complete)
+            AppLogger.warning("🔍 Found \(duplicates.count) TVShowDetails duplicates for tmdbID=\(tmdbID)", logger: AppLogger.background)
+
+            // Score each duplicate: seasons, cast, item relationship
+            var best: (index: Int, score: Int) = (0, 0)
+            for (i, d) in duplicates.enumerated() {
+                var score = 0
+                let liveSeasons = d.seasons.liveModels
+                score += liveSeasons.count * 10
+                score += d.cast.liveModels.count * 5
+                if d.nextEpisodeDate != nil { score += 3 }
+                if d.status != nil { score += 1 }
+
+                // Confirm item relationship via direct fetch (not relying on faulting)
+                if let context = d.modelContext {
+                    let itemDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == "tv_\(tmdbID)" || $0.id == "\(tmdbID)" })
+                    if let item = try? context.fetch(itemDesc).first {
+                        // Verify the relationship points back
+                        if item.tvShowDetails?.persistentModelID == d.persistentModelID {
+                            score += 50
+                        }
+                    }
                 }
-                return first 
+
+                if score > best.score {
+                    best = (i, score)
+                }
             }
-            if second.item != nil { 
-                modelContext.delete(first) // Clean up the orphaned duplicate
-                return second 
+
+            let primary = duplicates[best.index]
+            tvMap[tmdbID] = primary
+
+            // Merge data from secondary duplicates into primary, then delete secondaries
+            for (i, secondary) in duplicates.enumerated() where i != best.index {
+                let liveSeasons = secondary.seasons.liveModels
+                for season in liveSeasons {
+                    if season.tvShowDetails?.persistentModelID != primary.persistentModelID {
+                        season.tvShowDetails = primary
+                    }
+                    if !primary.seasons.contains(where: { $0.persistentModelID == season.persistentModelID }) {
+                        primary.seasons.append(season)
+                    }
+                }
+
+                let liveCast = secondary.cast.liveModels
+                for member in liveCast {
+                    if member.tvShowDetails?.persistentModelID != primary.persistentModelID {
+                        member.tvShowDetails = primary
+                    }
+                }
+
+                // Transfer item relationship if primary doesn't have one
+                if primary.item == nil, let attachedItem = secondary.item {
+                    attachedItem.tvShowDetails = primary
+                }
+
+                modelContext.delete(secondary)
+                AppLogger.info("🧹 Merged and deleted duplicate TVShowDetails for tmdbID=\(tmdbID)", logger: AppLogger.background)
             }
-            return first
-        })
-        
+        }
+
         for season in allSeasons {
             if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
                 season.tvShowDetails = parent
             }
         }
-        
+
         let eDesc = FetchDescriptor<TVEpisode>()
         let allEpisodes = try modelContext.fetch(eDesc)
-        
+
         var seasonMap: [Int: [Int: TVSeason]] = [:]
         for season in allSeasons {
             guard let showID = season.showID else { continue }
             if seasonMap[showID] == nil { seasonMap[showID] = [:] }
             seasonMap[showID]?[season.seasonNumber] = season
         }
-        
+
         for episode in allEpisodes {
             if episode.season == nil, let showID = episode.showID, let parentSeason = seasonMap[showID]?[episode.seasonNumber] {
                 episode.season = parentSeason

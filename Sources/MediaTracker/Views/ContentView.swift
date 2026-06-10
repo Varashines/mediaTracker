@@ -11,7 +11,6 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarNavigation(selection: $sidebarSelection)
-                .listStyle(.sidebar)
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
@@ -61,6 +60,7 @@ struct LibraryDetailView: View {
     
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sleepManager) private var sleepManager
     @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
     
     @State private var isSyncHovered = false
@@ -96,6 +96,14 @@ struct LibraryDetailView: View {
         }
     }
 
+    private var searchPlaceholder: String {
+        switch viewModel.filter.searchTypeFilter {
+        case .all: return "Search movies & shows"
+        case .movie: return "Search movies"
+        case .tvShow: return "Search TV shows"
+        }
+    }
+
     private var effectiveMoodColor: Color {
         themeCoordinator.categoryMoodColor == .clear ? categoryMoodColor : themeCoordinator.categoryMoodColor
     }
@@ -122,10 +130,16 @@ struct LibraryDetailView: View {
                 }
             }
             .adaptiveBackground()
+            .searchable(
+                text: $viewModel.filter.searchText,
+                isPresented: $isSearchActive,
+                placement: .toolbar,
+                prompt: searchPlaceholder
+            )
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
             .navigationTitle(
-                isSearchActive
-                    ? "Search" : viewModel.navigationTitle(for: viewModel.filter.selectedCategory)
+                sleepManager.isAsleep ? ""
+                : viewModel.navigationTitle(for: viewModel.filter.selectedCategory)
             )
             .navigationDestination(for: MediaItem.self) { item in
                 DetailView(item: item, namespace: posterNamespace) { actorName in
@@ -147,15 +161,6 @@ struct LibraryDetailView: View {
                     searchText: $viewModel.filter.searchText,
                     onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
-            .searchable(
-                text: $viewModel.filter.searchText,
-                placement: .toolbar, prompt: "Search movies & shows"
-            )
-            .onChange(of: viewModel.filter.searchText) { _, newValue in
-                if !newValue.isEmpty {
-                    isSearchActive = true
-                }
-            }
             .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
                 if let itemID = MediaStateService.shared.lastChangedItemID {
                     updateSingleItemInContentView(id: itemID)
@@ -173,18 +178,22 @@ struct LibraryDetailView: View {
                 performUpdate()
             }
             .toolbar {
+
                 LibraryDetailToolbarContent(
                     viewModel: viewModel,
                     sidebarSelection: $sidebarSelection,
                     showingBulkManager: $showingBulkManager,
                     isSyncHovered: $isSyncHovered,
                     isSystemSmartCategory: isSystemSmartCategory,
+                    isSearchActive: isSearchActive,
                     modelContext: modelContext,
                     onRefresh: refreshAction
                 )
             }
+            .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
             .background {
                 Group {
+                    Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
                     Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
                     Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
@@ -192,12 +201,7 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                    Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
                     Button("") { viewModel.navigationPath.removeLast() }.keyboardShortcut(.leftArrow, modifiers: .command)
-                    Button("") {
-                        viewModel.filter.searchText = ""
-                        isSearchActive = false
-                    }.keyboardShortcut(.escape, modifiers: [])
                 }
                 .opacity(0)
             }
@@ -214,6 +218,13 @@ struct LibraryDetailView: View {
         .onAppear {
             if !hasSeenWelcome && !APIClient.shared.isTMDBConfigured {
                 showWelcome = true
+            }
+            if AppErrorState.shared.storeRecoveredFromMigrationFailure {
+                AppErrorState.shared.showToast(
+                    "Database migration failed. Library was rebuilt empty — data may have been lost.",
+                    style: .error, duration: 10.0
+                )
+                AppErrorState.shared.storeRecoveredFromMigrationFailure = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showWelcome)) { _ in
@@ -253,8 +264,10 @@ struct LibraryDetailView: View {
             if !migrated {
                 let container = modelContext.container
                 Task.detached(priority: .background) {
-                    let service = BackgroundDataService(modelContainer: container)
-                    try? await service.performLibraryHeal()
+                    try? await BackgroundOperationGate.shared.performHeal(label: "genreMigration", container: container) {
+                        let service = BackgroundDataService(modelContainer: container)
+                        try await service.performLibraryHeal()
+                    }
                     UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
                 }
             }
@@ -346,8 +359,10 @@ struct LibraryDetailView: View {
                     if !isSoftUpdate && (snapshot.category == .discover || snapshot.category == .all) {
                         let container = modelContext.container
                         Task.detached(priority: .background) {
-                            let sync = DiscoverySyncService(modelContainer: container)
-                            await sync.syncLibrary(force: false)
+                            try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
+                                let sync = DiscoverySyncService(modelContainer: container)
+                                await sync.syncLibrary(force: false)
+                            }
                         }
                     }
                 }

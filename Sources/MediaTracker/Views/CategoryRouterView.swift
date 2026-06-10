@@ -26,7 +26,7 @@ struct CategoryRouterView: View {
                     },
                     modelContainer: modelContainer
                 )
-                .transition(.opacity)
+                .transition(.move(edge: .top).combined(with: .opacity))
                 .zIndex(1)
             }
         }

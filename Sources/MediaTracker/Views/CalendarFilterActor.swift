@@ -125,7 +125,7 @@ actor CalendarFilterActor {
             episodes.append(contentsOf: matched)
             // Queue date healing in a detached non-actor task to avoid blocking calendar fetches
             let container = modelContext.container
-            Task.detached(priority: .background) {
+            Task.detached(priority: .background) { [container] in
                 let ctx = ModelContext(container)
                 Self.healMissingDatesSync(context: ctx)
             }

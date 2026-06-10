@@ -5,6 +5,7 @@ struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.sleepManager) private var sleepManager
 
     @State private var viewModel: DetailViewModel
     @State private var showHeavyContent = false
@@ -88,7 +89,8 @@ struct DetailView: View {
             }
         }
         .toolbar { detailToolbar }
-        .navigationTitle(showNavTitle ? viewModel.item.title : "Details")
+        .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
+        .navigationTitle(sleepManager.isAsleep ? "" : showNavTitle ? viewModel.item.title : "Details")
         .onAppear {
             viewModel.refreshData()
             Task {

@@ -68,6 +68,11 @@ class SearchViewModel {
         }
     }
     
+    func clearWebResults() {
+        movieResults = []
+        tvResults = []
+    }
+
     func cancelAllSearchOperations() {
         searchTask?.cancel()
         searchTask = nil
