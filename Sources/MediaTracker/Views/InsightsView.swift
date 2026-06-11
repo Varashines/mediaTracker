@@ -41,16 +41,14 @@ struct InsightsView: View {
                             .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         // 5. Studios & Networks
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                            SectionHeader(title: "Studios & Networks", icon: "building.2.fill", iconColor: .orange)
-                            TopBrandsHorizontalView(items: stats.topRatedStudios, color: .orange, icon: "building.2.fill")
-                            TopBrandsHorizontalView(items: stats.topRatedNetworks, color: .teal, icon: "antenna.radiowaves.left.and.right")
-                        }
+                        StudiosNetworksSection(stats: stats, modelContext: modelContext)
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         // 6. Cast & Crew
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                             SectionHeader(title: "Cast & Crew", icon: "person.3.fill", iconColor: .teal)
                             TalentLedgerView(stats: stats)
+                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                     }
                     .padding(.vertical, 24)
@@ -101,38 +99,11 @@ struct HeroStatGrid: View {
         let totalRated = stats.lovedCount + stats.likedCount + stats.dislikedCount
         let affinity = totalRated > 0 ? max(0, (3.0 * Double(stats.lovedCount) + 1.0 * Double(stats.likedCount) - 2.0 * Double(stats.dislikedCount)) / (3.0 * Double(totalRated))) : 0
 
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                StatCard(
-                    icon: "film.stack.fill",
-                    value: "\(total)",
-                    label: "Titles",
-                    detail: "\(stats.totalMovies) Movies · \(stats.totalTVShows) Shows",
-                    color: .pink
-                )
-                StatCard(
-                    icon: "clock.fill",
-                    value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
-                    label: "Watch Time",
-                    detail: "\(stats.totalEpisodesWatched) episodes",
-                    color: .orange
-                )
-                StatCard(
-                    icon: "checkmark.circle.fill",
-                    value: String(format: "%.0f%%", completionRate * 100),
-                    label: "Completion",
-                    detail: "\(completed)/\(total)",
-                    color: .teal
-                )
-                StatCard(
-                    icon: "heart.fill",
-                    value: String(format: "%.0f%%", affinity * 100),
-                    label: "Affinity",
-                    detail: "\(stats.lovedCount)♥ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
-                    color: .purple
-                )
-            }
-            .padding(.vertical, 8)
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatCard(icon: "film.stack.fill", value: "\(total)", label: "Titles", detail: "\(stats.totalMovies) Movies · \(stats.totalTVShows) Shows", color: .pink)
+            StatCard(icon: "clock.fill", value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes), label: "Watch Time", detail: "\(stats.totalEpisodesWatched) episodes", color: .orange)
+            StatCard(icon: "checkmark.circle.fill", value: String(format: "%.0f%%", completionRate * 100), label: "Completion", detail: "\(completed)/\(total)", color: .teal)
+            StatCard(icon: "heart.fill", value: String(format: "%.0f%%", affinity * 100), label: "Affinity", detail: "\(stats.lovedCount)♥ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎", color: .purple)
         }
     }
 }
@@ -150,27 +121,26 @@ struct StatCard: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(color)
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(value)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
                 Text(label.uppercased())
                     .font(.system(size: 10, weight: .black, design: .rounded))
                     .kerning(0.8)
                     .foregroundStyle(color.opacity(0.8))
-
-                Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-
                 Text(detail)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 20)
-        .frame(width: 240, height: 80, alignment: .leading)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 82)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(color.opacity(colorScheme == .dark ? 0.08 : 0.05))
@@ -179,7 +149,7 @@ struct StatCard: View {
                         .stroke(color.opacity(colorScheme == .dark ? 0.2 : 0.12), lineWidth: 0.5)
                 )
         )
-        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .shadow(color: color.opacity(isHovered ? 0.1 : 0), radius: 8, x: 0, y: 4)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
@@ -193,41 +163,70 @@ struct TasteBreakdownView: View {
     let stats: LibraryStats
 
     var body: some View {
-        HStack(spacing: 12) {
-            TasteBar(label: "Loved", count: stats.lovedCount, color: .pink)
-            TasteBar(label: "Liked", count: stats.likedCount, color: .green)
-            TasteBar(label: "Disliked", count: stats.dislikedCount, color: .red)
+        let total = Double(stats.lovedCount + stats.likedCount + stats.dislikedCount)
+        let lovedPct = total > 0 ? Double(stats.lovedCount) / total : 0
+        let likedPct = total > 0 ? Double(stats.likedCount) / total : 0
+        let dislikedPct = total > 0 ? Double(stats.dislikedCount) / total : 0
+
+        HStack(spacing: 24) {
+            ZStack {
+                DonutSegment(startAngle: -90, endAngle: -90 + lovedPct * 360)
+                    .fill(.pink)
+                DonutSegment(startAngle: -90 + lovedPct * 360, endAngle: -90 + (lovedPct + likedPct) * 360)
+                    .fill(.green)
+                DonutSegment(startAngle: -90 + (lovedPct + likedPct) * 360, endAngle: -90 + 360)
+                    .fill(.red.opacity(0.7))
+            }
+            .frame(width: 100, height: 100)
+            .overlay {
+                VStack(spacing: 0) {
+                    Text("\(stats.lovedCount + stats.likedCount + stats.dislikedCount)")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                    Text("Rated")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                tasteLegend(color: .pink, label: "Loved", count: stats.lovedCount, pct: lovedPct)
+                tasteLegend(color: .green, label: "Liked", count: stats.likedCount, pct: likedPct)
+                tasteLegend(color: .red, label: "Disliked", count: stats.dislikedCount, pct: dislikedPct)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    func tasteLegend(color: Color, label: String, count: Int, pct: Double) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 60, alignment: .leading)
+            Text("\(count)")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+            Text(String(format: "(%.0f%%)", pct * 100))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
         }
     }
 }
 
-struct TasteBar: View {
-    let label: String
-    let count: Int
-    let color: Color
+struct DonutSegment: Shape {
+    let startAngle: Double
+    let endAngle: Double
 
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Text("\(count)")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(color.opacity(colorScheme == .dark ? 0.08 : 0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(color.opacity(0.15), lineWidth: 0.5)
-                )
-        )
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let innerRadius = radius * 0.55
+        var path = Path()
+        path.addArc(center: center, radius: radius, startAngle: .degrees(startAngle), endAngle: .degrees(endAngle), clockwise: false)
+        path.addArc(center: center, radius: innerRadius, startAngle: .degrees(endAngle), endAngle: .degrees(startAngle), clockwise: true)
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -252,17 +251,69 @@ struct TopGenresView: View {
             .frame(height: 50)
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(Array(items.prefix(10).enumerated()), id: \.element.name) { idx, item in
-                        let color = palette[idx % palette.count]
-                        GalleryCardView(name: item.name, value: item.percentage, rank: idx + 1, color: color)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(Array(items.prefix(10).enumerated()), id: \.element.name) { idx, item in
+                    let color = palette[idx % palette.count]
+                    GenreGridCard(name: item.name, percentage: item.percentage, rank: idx + 1, color: color)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+        }
+    }
+}
+
+struct GenreGridCard: View {
+    let name: String
+    let percentage: Double
+    let rank: Int
+    let color: Color
+
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(rank)")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color.opacity(0.15))
+                            .frame(height: 4)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color.gradient)
+                            .frame(width: geo.size.width * percentage, height: 4)
                     }
                 }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.vertical, 8)
+                .frame(height: 4)
             }
-            .scrollBounceBehavior(.basedOnSize)
+
+            Text(String(format: "%.0f%%", percentage * 100))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppTheme.Colors.cardFill(for: colorScheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isHovered ? color.opacity(0.3) : Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
         }
     }
 }
@@ -324,35 +375,77 @@ struct GalleryCardView: View {
     }
 }
 
-// MARK: - Top Brands Horizontal
+// MARK: - Studios & Networks Section
 
-struct TopBrandsHorizontalView: View {
-    let items: [(name: String, score: Double)]
-    let color: Color
-    let icon: String
+struct StudiosNetworksSection: View {
+    let stats: LibraryStats
+    let modelContext: ModelContext
+
+    @State private var logoMap: [String: String] = [:]
+    @State private var colorMap: [String: String] = [:]
 
     var body: some View {
-        if items.isEmpty {
-            HStack {
-                Spacer()
-                Text("No data available")
-                    .font(AppTheme.Font.body)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .frame(height: 50)
-            .padding(.horizontal, AppTheme.Spacing.pageMargin)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(Array(items.prefix(10).enumerated()), id: \.element.name) { idx, item in
-                        GalleryCardView(name: item.name, value: item.score, rank: idx + 1, color: color)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            SectionHeader(title: "Studios & Networks", icon: "building.2.fill", iconColor: .orange)
+
+            if !stats.topRatedStudios.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("STUDIOS")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.orange)
+                        .kerning(1.2)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)], spacing: 16) {
+                        ForEach(Array(stats.topRatedStudios.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                            let node = DiscoveryNode(
+                                name: item.name,
+                                logoPath: logoMap[item.name],
+                                count: idx + 1,
+                                themeColorHex: colorMap[item.name]
+                            )
+                            DiscoveryCard(node: node, style: .logo) { }
+                        }
                     }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.vertical, 8)
             }
-            .scrollBounceBehavior(.basedOnSize)
+
+            if !stats.topRatedNetworks.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("NETWORKS")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.teal)
+                        .kerning(1.2)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)], spacing: 16) {
+                        ForEach(Array(stats.topRatedNetworks.prefix(8).enumerated()), id: \.element.name) { idx, item in
+                            let node = DiscoveryNode(
+                                name: item.name,
+                                logoPath: logoMap[item.name],
+                                count: idx + 1,
+                                themeColorHex: colorMap[item.name]
+                            )
+                            DiscoveryCard(node: node, style: .logo) { }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+            }
+        }
+        .task {
+            let descriptor = FetchDescriptor<NetworkEntity>()
+            if let networks = try? modelContext.fetch(descriptor) {
+                var logoMap: [String: String] = [:]
+                var colorMap: [String: String] = [:]
+                for net in networks {
+                    if let path = net.logoPath { logoMap[net.name] = path }
+                    if let hex = net.themeColorHex { colorMap[net.name] = hex }
+                }
+                self.logoMap = logoMap
+                self.colorMap = colorMap
+            }
         }
     }
 }
@@ -470,30 +563,24 @@ struct TalentLedgerView: View {
     let stats: LibraryStats
 
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.section) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                Text("TOP RATED CAST")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary)
-                    .kerning(1.2)
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+        VStack(spacing: AppTheme.Spacing.medium) {
+            if !stats.topRatedActors.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("TOP RATED CAST")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.orange)
+                        .kerning(1.2)
 
-                if stats.topRatedActors.isEmpty {
-                    DashboardCard {
-                        HStack {
-                            Spacer()
-                            Text("No actor data")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .frame(height: 80)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 12) {
-                            ForEach(Array(stats.topRatedActors.prefix(10).enumerated()), id: \.element.name) { index, person in
-                                TalentCardView(person: person, rank: index + 1, color: .orange)
+                            ForEach(Array(stats.topRatedActors.prefix(8).enumerated()), id: \.element.name) { index, person in
+                                InsightCard(
+                                    title: person.name,
+                                    subtitle: "Rank #\(index + 1)  ·  \(String(format: "%.0f%%", person.score * 100))",
+                                    imageURL: person.profileURL,
+                                    fallbackIcon: "person.fill",
+                                    fallbackColor: .orange
+                                )
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -503,29 +590,23 @@ struct TalentLedgerView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                Text("TOP RATED CREATORS")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary)
-                    .kerning(1.2)
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            if !stats.topRatedCreators.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("TOP RATED CREATORS")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.green)
+                        .kerning(1.2)
 
-                if stats.topRatedCreators.isEmpty {
-                    DashboardCard {
-                        HStack {
-                            Spacer()
-                            Text("No creator data")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .frame(height: 80)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 12) {
-                            ForEach(Array(stats.topRatedCreators.prefix(10).enumerated()), id: \.element.name) { index, person in
-                                TalentCardView(person: person, rank: index + 1, color: .green)
+                            ForEach(Array(stats.topRatedCreators.prefix(8).enumerated()), id: \.element.name) { index, person in
+                                InsightCard(
+                                    title: person.name,
+                                    subtitle: "Rank #\(index + 1)  ·  \(String(format: "%.0f%%", person.score * 100))",
+                                    imageURL: person.profileURL,
+                                    fallbackIcon: "person.fill",
+                                    fallbackColor: .green
+                                )
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -535,74 +616,72 @@ struct TalentLedgerView: View {
                 }
             }
         }
+        .padding(.bottom, 8)
     }
 }
 
-struct TalentCardView: View {
-    let person: VisualPersonStat
-    let rank: Int
-    let color: Color
+// MARK: - Insight Card
+
+struct InsightCard: View {
+    let title: String
+    let subtitle: String
+    let imageURL: String?
+    let fallbackIcon: String
+    let fallbackColor: Color
+    var metadataOnHover: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
             Group {
-                if let urlString = person.profileURL, let url = URL(string: urlString) {
-                    CachedImage(url: url, targetSize: CGSize(width: 44, height: 64), priority: .low, themeColor: color) {
+                if let urlString = imageURL, let url = URL(string: urlString) {
+                    CachedImage(url: url, targetSize: CGSize(width: 60, height: 90)) { _ in
+                    } placeholder: {
                         ProgressView().controlSize(.small)
                     }
                     .scaledToFill()
-                    .frame(width: 44, height: 64)
                 } else {
                     ZStack {
-                        Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.03)
-                        Image(systemName: "person.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 18))
+                        fallbackColor.opacity(0.12)
+                        Image(systemName: fallbackIcon)
+                            .font(.title3)
+                            .foregroundStyle(fallbackColor)
                     }
-                    .frame(width: 44, height: 64)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(width: 60, height: 90)
+            .clipped()
 
-            VStack(alignment: .leading, spacing: 2) {
-                ZStack(alignment: .leading) {
-                    Text(String(format: "%02d", rank))
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(color.gradient)
-                        .opacity(isHovered ? 0 : 1)
-
-                    Text(String(format: "%.0f%%", person.score * 100))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(color)
-                        .opacity(isHovered ? 1 : 0)
-                }
-                .animation(AppTheme.Animation.springSnappy, value: isHovered)
-                .frame(height: 14)
-
-                Text(person.name)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
                     .font(AppTheme.Font.bodyBold)
-                    .foregroundStyle(.primary)
                     .lineLimit(2)
-            }
-            .padding(.trailing, 8)
+                    .minimumScaleFactor(0.8)
+                    .opacity(metadataOnHover ? (isHovered ? 1 : 0) : 1)
 
-            Spacer(minLength: 0)
+                Text(subtitle)
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(fallbackColor)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .opacity(metadataOnHover ? (isHovered ? 1 : 0) : 1)
+            }
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(width: 140, alignment: .leading)
         }
-        .frame(width: 180, height: 64)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppTheme.Colors.cardFill(for: colorScheme))
-        )
+        .frame(width: 200, height: 90)
+        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isHovered ? color : Color.clear, lineWidth: 1)
-                .opacity(0.5)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .stroke(isHovered ? fallbackColor.opacity(0.3) : Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
         )
-        .shadow(color: color.opacity(isHovered ? 0.1 : 0), radius: 6, x: 0, y: 3)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
+        .shadow(color: fallbackColor.opacity(isHovered ? 0.1 : 0), radius: isHovered ? 8 : 0, x: 0, y: isHovered ? 4 : 0)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
         }
@@ -638,34 +717,42 @@ struct InsightsSkeletonView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.section) {
-                // Hero skeleton
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.primary.opacity(0.06))
-                                .frame(width: 240, height: 80)
-                        }
+                // Hero skeleton — 2x2 grid
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(height: 82)
                     }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                // Genres skeleton
+                // Taste DNA skeleton
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.primary.opacity(0.06))
                         .frame(width: 100, height: 16)
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(0..<5, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 100, height: 88)
-                            }
-                        }
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 120)
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+
+                // Genres skeleton — 2x5 grid
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: 100, height: 16)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(0..<6, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.primary.opacity(0.06))
+                                .frame(height: 38)
+                        }
                     }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
 
                 // Barcode skeleton
@@ -680,7 +767,26 @@ struct InsightsSkeletonView: View {
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
 
-                // Talent skeleton
+                // Studios & Networks skeleton
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: 160, height: 16)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 200, height: 90)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.vertical, 8)
+                    }
+                }
+
+                // Cast & Crew skeleton
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.primary.opacity(0.06))
@@ -688,13 +794,14 @@ struct InsightsSkeletonView: View {
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(0..<5, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            ForEach(0..<4, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                                     .fill(Color.primary.opacity(0.06))
-                                    .frame(width: 180, height: 64)
+                                    .frame(width: 200, height: 90)
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.vertical, 8)
                     }
                 }
             }
