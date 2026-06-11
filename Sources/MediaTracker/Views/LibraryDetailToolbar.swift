@@ -78,21 +78,14 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         Button {
             onRefresh()
         } label: {
-            ZStack {
-                Circle()
-                    .fill(Color.primary.opacity(isSyncHovered ? 0.1 : 0.06))
-                    .frame(width: 32, height: 32)
-
-                Image(systemName: "arrow.clockwise")
-                    .font(AppTheme.Icon.medium)
-            }
+            Image(systemName: "arrow.clockwise")
+                .font(AppTheme.Icon.medium)
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isSyncHovered = hovering
-            }
-        }
+        .background(Capsule().fill(.ultraThinMaterial))
+        .clipShape(.capsule)
+        .frame(width: 32, height: 32)
         .help("Sync Library")
     }
 }

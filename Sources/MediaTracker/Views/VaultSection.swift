@@ -1,12 +1,27 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct VaultSection: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) var scheme
     @State private var showClearConfirmation = false
+    @State private var exportData: Data?
+    @State private var showExportDialog = false
+    @State private var showImportDialog = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            SettingsSectionHeader(text: "Data Processing", icon: "cpu", color: .teal)
+            SettingsCard(color: .teal) {
+                StudioAliasManagerView()
+                Rectangle()
+                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16)
+                DiscoveryManagementView()
+            }
+
             SettingsSectionHeader(text: "Backup", icon: "tray.and.arrow.down.fill", color: .blue)
             SettingsCard(color: .blue) {
                 SettingsRow(title: "Export Library", subtitle: "Save a backup of your collection", showDivider: true) {
@@ -16,14 +31,16 @@ struct VaultSection: View {
                             let context = ModelContext(container)
                             let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
                             if let items = try? context.fetch(descriptor) {
-                                await MainActor.run { LibraryImportExportService.shared.exportLibrary(items: items) }
+                                let exportItems = LibraryImportExportService.shared.prepareExportData(items: items)
+                                exportData = exportItems
+                                showExportDialog = true
                             }
                         }
                     }
                 }
                 SettingsRow(title: "Import Library", subtitle: "Restore from a backup file", showDivider: true) {
                     SettingsButton(title: "Import") {
-                        LibraryImportExportService.shared.importLibrary(modelContext: modelContext)
+                        showImportDialog = true
                     }
                 }
                 SettingsRow(title: "Auto Backups", subtitle: "View automatic backup folder", showDivider: false) {
@@ -80,6 +97,40 @@ struct VaultSection: View {
         .confirmationDialog("Delete Everything?", isPresented: $showClearConfirmation) {
             Button("Delete All Library Data", role: .destructive) {
                 DataService.shared.clearDatabase(modelContext: modelContext)
+            }
+        }
+        .fileExporter(isPresented: $showExportDialog, document: exportData.map { JSONFileDocument(data: $0) }, contentType: .json, defaultFilename: "MediaTracker_Backup") { result in
+            if case .failure(let error) = result {
+                AppErrorState.shared.surfaceError("Export failed: \(error.localizedDescription)")
+            }
+            exportData = nil
+        }
+        .fileImporter(isPresented: $showImportDialog, allowedContentTypes: [.json]) { result in
+            switch result {
+            case .success(let url):
+                let container = modelContext.container
+                Task.detached(priority: .userInitiated) {
+                    do {
+                        let data = try Data(contentsOf: url)
+                        let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
+                        let count = await BackgroundDataService.importLibraryData(backup: backup, modelContainer: container)
+                        await MainActor.run {
+                            AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
+                            let context = ModelContext(container)
+                            let descriptor = FetchDescriptor<MediaItem>()
+                            if let allItems = try? context.fetch(descriptor) {
+                                DataService.shared.refreshMetadata(for: allItems, modelContext: context, force: false)
+                            }
+                            DataService.shared.runMaintenance(modelContext: context, silent: true)
+                        }
+                    } catch {
+                        await MainActor.run {
+                            AppErrorState.shared.surfaceError("Import failed: \(error.localizedDescription)")
+                        }
+                    }
+                }
+            case .failure(let error):
+                AppErrorState.shared.surfaceError("Import cancelled: \(error.localizedDescription)")
             }
         }
     }

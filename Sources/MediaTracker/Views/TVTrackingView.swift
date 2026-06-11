@@ -438,13 +438,7 @@ private struct EpisodeCube: View {
                         .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(themeColor.opacity(0.04))
-                        }
-                        .overlay {
-                            if episode.isWatched {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(green.opacity(0.04))
-                            }
+                                .fill(episode.isWatched ? green.opacity(0.12) : Color.blue.opacity(0.05))
                         }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -452,7 +446,7 @@ private struct EpisodeCube: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             episode.isWatched
-                                ? green.opacity(0.22)
+                                ? green.opacity(0.3)
                                 : (isHovering
                                     ? accent.opacity(0.25)
                                     : AppTheme.Colors.strokeDefault(for: colorScheme)),

@@ -94,18 +94,8 @@ struct ConnectSection: View {
                     }
                 }
             }
-
-            SettingsSectionHeader(text: "Help", icon: "questionmark.circle.fill", color: .teal)
-            SettingsCard(color: .teal) {
-                SettingsRow(title: "Welcome", subtitle: "Re-run the onboarding guide", showDivider: false) {
-                    SettingsButton(title: "Show Welcome Screen") {
-                        NotificationCenter.default.post(name: .showWelcome, object: nil)
-                        NSApp.keyWindow?.close()
-                    }
-                }
-            }
-        }
     }
+}
 
     private func apiRow(
         name: String,

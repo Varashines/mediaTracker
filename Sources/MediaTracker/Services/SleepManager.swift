@@ -132,7 +132,7 @@ extension EnvironmentValues {
 
 struct SleepOverlayModifier: ViewModifier {
     @Environment(\.sleepManager) var sleepManager
-    
+
     func body(content: Content) -> some View {
         ZStack {
             content
@@ -140,21 +140,20 @@ struct SleepOverlayModifier: ViewModifier {
                 .opacity(sleepManager.isAsleep ? 0 : 1)
                 .scaleEffect(sleepManager.isAsleep ? 0.98 : 1.0)
                 .animation(.easeInOut(duration: 0.6), value: sleepManager.isAsleep)
-            
+
             if sleepManager.isAsleep {
                 ZStack {
                     Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    
+
                     VStack(spacing: 20) {
                         Image(systemName: "moon.stars.fill")
                             .font(.system(size: 60))
                             .foregroundStyle(.secondary)
-                        
+
                         Text("App is in Sleep Mode")
                             .font(.title2.bold())
                             .foregroundStyle(.secondary)
-                        
+
                         Text("Click or press any key to wake up")
                             .font(.subheadline)
                             .foregroundStyle(.tertiary)
@@ -169,10 +168,9 @@ struct SleepOverlayModifier: ViewModifier {
                             .stroke(.white.opacity(0.1), lineWidth: 1)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.all)
                 .transition(.opacity)
-                .onTapGesture {
-                    sleepManager.resetTimer()
-                }
             }
         }
     }

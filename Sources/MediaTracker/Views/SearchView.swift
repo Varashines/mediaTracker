@@ -55,13 +55,21 @@ struct SearchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerSection
+            filterBar
             offlineWarningSection
             resultsScrollView
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Search movies and shows")
         .background(Color.clear)
+        .searchSuggestions {
+            if searchText.isEmpty {
+                ForEach(recentSearches.prefix(10), id: \.self) { query in
+                    Text(query)
+                        .searchCompletion(query)
+                }
+            }
+        }
         .onChange(of: searchText) { _, newValue in
             searchVM.displayCache = viewModel.display
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
@@ -96,49 +104,49 @@ struct SearchView: View {
         }
         .background {
             if isSearchActive {
-                Group {
-                    Button("") { viewModel.filter.searchTypeFilter = .all }.keyboardShortcut("1", modifiers: [.command, .option])
-                    Button("") { viewModel.filter.searchTypeFilter = .movie }.keyboardShortcut("2", modifiers: [.command, .option])
-                    Button("") { viewModel.filter.searchTypeFilter = .tvShow }.keyboardShortcut("3", modifiers: [.command, .option])
-                }
-                .opacity(0)
+                Button("") { viewModel.filter.searchTypeFilter = .all }
+                    .opacity(0)
+                    .keyboardShortcut("1", modifiers: [.command, .option])
+            }
+        }
+        .background {
+            if isSearchActive {
+                Button("") { viewModel.filter.searchTypeFilter = .movie }
+                    .opacity(0)
+                    .keyboardShortcut("2", modifiers: [.command, .option])
+            }
+        }
+        .background {
+            if isSearchActive {
+                Button("") { viewModel.filter.searchTypeFilter = .tvShow }
+                    .opacity(0)
+                    .keyboardShortcut("3", modifiers: [.command, .option])
             }
         }
     }
 
     @ViewBuilder
-    private var headerSection: some View {
+    private var filterBar: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack {
                 Spacer()
-
                 Picker("", selection: Binding(
                     get: { viewModel.filter.searchTypeFilter },
                     set: { viewModel.filter.searchTypeFilter = $0 }
                 )) {
-                    ForEach(SearchType.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
-                    }
+                    Text("All").tag(SearchType.all)
+                    Text("Movies").tag(SearchType.movie)
+                    Text("TV Shows").tag(SearchType.tvShow)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 240)
-
                 Spacer()
-
-                if searchVM.isSearching {
-                    ProgressView()
-                        .controlSize(.small)
-                }
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
-            .padding(.vertical, 12)
-
+            .padding(.vertical, 10)
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
-        .adaptiveBackground()
-        .zIndex(10)
-        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     @ViewBuilder
@@ -160,59 +168,12 @@ struct SearchView: View {
     private var resultsScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                recentSearchesSection
                 localResultsSection
                 webResultsSection
             }
             .padding(.vertical, 30)
         }
         .scrollBounceBehavior(.basedOnSize)
-    }
-
-    @ViewBuilder
-    private var recentSearchesSection: some View {
-        let recent = recentSearches
-        if searchText.isEmpty && !recent.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Recent Searches")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .kerning(1.2)
-                    Spacer()
-                    Button("Clear") {
-                        recentSearchesData = ""
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(recent, id: \.self) { query in
-                            Button {
-                                searchText = query
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                        .font(AppTheme.Font.caption2)
-                                    Text(query)
-                                }
-                                .font(AppTheme.Font.label)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.primary.opacity(0.06))
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                }
-            }
-        }
     }
 
     @ViewBuilder

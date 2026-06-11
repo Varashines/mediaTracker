@@ -71,6 +71,7 @@ struct LibraryDetailView: View {
     
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     @State private var showWelcome = false
+    @State private var showDataRecoveryAlert = false
     @AppStorage("theme_preference") private var themePreference = 0
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
@@ -136,7 +137,15 @@ struct LibraryDetailView: View {
                 placement: .toolbar,
                 prompt: searchPlaceholder
             )
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            .toolbarTitleMenuIfAvailable {
+                Button("Home") { viewModel.filter.selectedCategory = .home }
+                Button("Discovery Hub") { viewModel.filter.selectedCategory = .discover }
+                Button("Release Calendar") { viewModel.filter.selectedCategory = .upcoming }
+                Divider()
+                Button("Library") { viewModel.filter.selectedCategory = .all }
+                Button("Movies") { viewModel.filter.selectedCategory = .movie }
+                Button("TV Shows") { viewModel.filter.selectedCategory = .tvShow }
+            }
             .navigationTitle(
                 sleepManager.isAsleep ? ""
                 : viewModel.navigationTitle(for: viewModel.filter.selectedCategory)
@@ -190,6 +199,7 @@ struct LibraryDetailView: View {
                     onRefresh: refreshAction
                 )
             }
+            .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
             .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
             .background {
                 Group {
@@ -202,6 +212,13 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
                     Button("") { viewModel.navigationPath.removeLast() }.keyboardShortcut(.leftArrow, modifiers: .command)
+                    Button("") {
+                        if !viewModel.filter.searchText.isEmpty {
+                            viewModel.filter.searchText = ""
+                        } else {
+                            isSearchActive = false
+                        }
+                    }.keyboardShortcut(.escape, modifiers: [])
                 }
                 .opacity(0)
             }
@@ -215,20 +232,19 @@ struct LibraryDetailView: View {
         .sheet(isPresented: $showWelcome) {
             WelcomeSheet()
         }
+        .alert("Data Lost", isPresented: $showDataRecoveryAlert) {
+            Button("OK") {}
+        } message: {
+            Text("The database was corrupted and had to be rebuilt. Your library appears empty.\n\nTo restore, go to Settings → Vault → Import Library and select your latest backup.\n\nA backup of the old corrupted database was saved to your Application Support folder.")
+        }
         .onAppear {
             if !hasSeenWelcome && !APIClient.shared.isTMDBConfigured {
                 showWelcome = true
             }
             if AppErrorState.shared.storeRecoveredFromMigrationFailure {
-                AppErrorState.shared.showToast(
-                    "Database migration failed. Library was rebuilt empty — data may have been lost.",
-                    style: .error, duration: 10.0
-                )
+                showDataRecoveryAlert = true
                 AppErrorState.shared.storeRecoveredFromMigrationFailure = false
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showWelcome)) { _ in
-            showWelcome = true
         }
         .task(priority: .userInitiated) {
             SleepManager.shared.purgeDataCache = {

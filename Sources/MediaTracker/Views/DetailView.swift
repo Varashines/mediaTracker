@@ -13,9 +13,7 @@ struct DetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
     @State private var isCollHovered = false
-    @State private var isRefreshHovered = false
     @State private var isCopyHovered = false
-    @State private var isDeleteHovered = false
     @State private var isTrailerHovered = false
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -43,7 +41,7 @@ struct DetailView: View {
         ZStack {
             let p = viewModel.vibrantThemeColor
             AppTheme.Colors.background(for: colorScheme)
-                .overlay(p.opacity(colorScheme == .dark ? 0.06 : 0.12))
+                .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
                 .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -71,14 +69,9 @@ struct DetailView: View {
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: "detailScroll")
 
-            // Bottom action bar
-            VStack {
-                Spacer()
-                bottomActionBar
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.bottom, 16)
-            }
-
+        }
+        .bottomActionBarOverlay {
+            bottomActionBar
         }
         .saturation(showDeleteConfirmation ? 0.3 : 1)
         .blur(radius: showDeleteConfirmation ? 2 : 0)
@@ -89,6 +82,7 @@ struct DetailView: View {
             }
         }
         .toolbar { detailToolbar }
+        .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
         .navigationTitle(sleepManager.isAsleep ? "" : showNavTitle ? viewModel.item.title : "Details")
         .onAppear {
@@ -283,52 +277,41 @@ struct DetailView: View {
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            HStack(spacing: 14) {
+            HStack(spacing: 6) {
                 Button {
                     viewModel.refreshData(force: true)
                 } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isRefreshHovered ? Color.primary.opacity(0.1) : Color.clear)
+                    if viewModel.isRefreshing {
+                        ProgressView().controlSize(.small)
                             .frame(width: 28, height: 28)
-                        if viewModel.isRefreshing {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(AppTheme.Font.bodyMedium)
-                        }
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .frame(width: 28, height: 28)
                     }
                 }
                 .buttonStyle(.plain)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .clipShape(.capsule)
+                .frame(width: 32, height: 32)
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
                 .help("Refresh metadata")
-                .onHover { hovering in
-                    withAnimation(AppTheme.Animation.easeInOut) { isRefreshHovered = hovering }
-                }
 
                 Button(role: .destructive) {
                     withAnimation(AppTheme.Animation.springSnappy) {
                         showDeleteConfirmation = true
                     }
                 } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isDeleteHovered ? Color.primary.opacity(0.1) : Color.clear)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "trash")
-                            .font(AppTheme.Font.bodyMedium)
-                            .foregroundStyle(.red)
-                    }
+                    Image(systemName: "trash")
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .clipShape(.capsule)
+                .frame(width: 32, height: 32)
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .help("Delete from library")
-                .onHover { hovering in
-                    withAnimation(AppTheme.Animation.easeInOut) { isDeleteHovered = hovering }
-                }
             }
-            .padding(.horizontal, 2)
         }
     }
 

@@ -8,43 +8,20 @@ struct GeneralSection: View {
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
+    @AppStorage("skip_startup_background_tasks") private var skipStartupTasks = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-
-    private var followSystem: Bool {
-        themePreference == 0
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSectionHeader(text: "Appearance", icon: "paintbrush.fill", color: .blue)
             SettingsCard(color: .blue) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Follow System toggle
-                    SettingsRow(title: "Follow System", subtitle: "Automatically match macOS appearance", showDivider: !followSystem) {
-                        Toggle("", isOn: Binding(
-                            get: { followSystem },
-                            set: { isOn in
-                                if isOn {
-                                    themePreference = 0
-                                } else {
-                                    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                                    themePreference = isDark ? 1 : 2
-                                }
-                            }
-                        ))
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
+                    // Unified Light/Dark/System picker
+                    SettingsRow(title: "Theme", subtitle: "Choose light, dark, or system appearance", showDivider: true) {
+                        ThemePicker(themePreference: $themePreference)
                     }
 
-                    if !followSystem {
-                        // Light/Dark picker
-                        SettingsRow(title: "Appearance", subtitle: nil, showDivider: true) {
-                            LightDarkPicker(themePreference: $themePreference)
-                        }
-                    }
-
-                    // Color Palette — always visible, independent of system/manual mode
+                    // Color Palette — always visible
                     SettingsRow(title: "Color Palette", subtitle: "Choose accent and background style", showDivider: false) {
                         HStack(spacing: 16) {
                             paletteCircle(index: 0, accent: .accentColor)
@@ -72,7 +49,8 @@ struct GeneralSection: View {
                         }
                         launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
-                SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: false, isOn: $preventSleepMode)
+                SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: true, isOn: $preventSleepMode)
+                SettingsToggleRow(title: "Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", showDivider: false, isOn: $skipStartupTasks)
             }
         }
     }

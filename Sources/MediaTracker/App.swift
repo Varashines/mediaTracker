@@ -6,7 +6,6 @@ import AppKit
 #endif
 
 extension Notification.Name {
-    static let showWelcome = Notification.Name("showWelcome")
     static let openSettingsTab = Notification.Name("openSettingsTab")
 }
 
@@ -17,11 +16,7 @@ struct MediaTrackerApp: App {
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self,
-            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self, MediaCollection.self
-        ])
+        let schema = Schema(AppSchemaV1.models)
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -33,12 +28,23 @@ struct MediaTrackerApp: App {
         do {
             return try ModelContainer(
                 for: schema,
+                migrationPlan: AppMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
-            AppLogger.error("CRITICAL: SwiftData migration failed — all data will be lost: \(error)")
+            AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(error)")
 
             let storeURL = modelConfiguration.url
+
+            // 1. Backup the corrupted store before deletion
+            let backupName = "default_corrupted_\(Int(Date().timeIntervalSince1970)).store"
+            let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
+            try? FileManager.default.copyItem(at: storeURL, to: backupURL)
+            try? FileManager.default.copyItem(at: storeURL.appendingPathExtension("wal"), to: backupURL.appendingPathExtension("wal"))
+            try? FileManager.default.copyItem(at: storeURL.appendingPathExtension("shm"), to: backupURL.appendingPathExtension("shm"))
+            AppLogger.error("📦 Corrupted store backed up to: \(backupURL.path)")
+
+            // 2. Delete the corrupted store
             try? FileManager.default.removeItem(at: storeURL)
             try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
             try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
@@ -47,6 +53,7 @@ struct MediaTrackerApp: App {
                 AppLogger.info("Store deleted, recreating ModelContainer...")
                 let container = try ModelContainer(
                     for: schema,
+                    migrationPlan: AppMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
                 Task { @MainActor in

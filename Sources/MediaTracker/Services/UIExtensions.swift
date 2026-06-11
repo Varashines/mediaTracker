@@ -310,8 +310,64 @@ extension View {
     func adaptiveBackground() -> some View {
         self.modifier(AdaptiveBackgroundModifier())
     }
+
+    @ViewBuilder
+    func glassButtonStyle() -> some View {
+        if #available(macOS 26, *) {
+            self.buttonStyle(.glass)
+        } else {
+            self.buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    func glassProminentButtonStyle() -> some View {
+        if #available(macOS 26, *) {
+            self.buttonStyle(.glassProminent)
+        } else {
+            self.buttonStyle(.borderedProminent)
+        }
+    }
 }
 
+struct BottomBarModifier<Bar: View>: ViewModifier {
+    @ViewBuilder let bar: () -> Bar
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content
+                .safeAreaBar(edge: .bottom, spacing: 0) {
+                    bar()
+                        .padding(.bottom, 12)
+                }
+        } else {
+            ZStack {
+                content
+                VStack {
+                    Spacer()
+                    bar()
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.bottom, 16)
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    func bottomActionBarOverlay<Bar: View>(@ViewBuilder bar: @escaping () -> Bar) -> some View {
+        modifier(BottomBarModifier(bar: bar))
+    }
+
+    @ViewBuilder
+    func toolbarTitleMenuIfAvailable<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
+        if #available(macOS 15, *) {
+            self.toolbarTitleMenu(content: content)
+        } else {
+            self
+        }
+    }
+}
 struct AdaptiveBackgroundModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("theme_preference") private var themePreference = 0

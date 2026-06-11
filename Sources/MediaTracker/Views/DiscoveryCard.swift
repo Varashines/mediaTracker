@@ -53,6 +53,7 @@ struct DiscoveryCard: View {
             .frame(height: style == .logo ? 90 : 60)
         }
         .buttonStyle(.plain)
+        .glassButtonStyle()
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
         .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
