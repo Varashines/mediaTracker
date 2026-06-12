@@ -63,11 +63,23 @@ struct LibraryStats: Sendable {
     let lovedCount: Int
     let likedCount: Int
     let dislikedCount: Int
-    
+    let unratedCount: Int
+
     let watchTimeHistory: [WatchTimePoint]
     let decadeDistribution: [DecadeDistributionPoint]
-    
+
     let barcodeData: [BarcodeSlice]
+
+    // Passport personality
+    let currentStreak: Int
+    let longestStreak: Int
+    let ratingPersonality: String
+    let archetype: String
+    let movieWatchTimeMinutes: Int
+    let tvWatchTimeMinutes: Int
+    let watchVelocityMinutesPerDay: Int
+    let favoriteEra: String?
+    let memberSince: Date?
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -85,9 +97,19 @@ struct LibraryStats: Sendable {
         lovedCount: 0,
         likedCount: 0,
         dislikedCount: 0,
+        unratedCount: 0,
         watchTimeHistory: [],
         decadeDistribution: [],
-        barcodeData: []
+        barcodeData: [],
+        currentStreak: 0,
+        longestStreak: 0,
+        ratingPersonality: "",
+        archetype: "",
+        movieWatchTimeMinutes: 0,
+        tvWatchTimeMinutes: 0,
+        watchVelocityMinutesPerDay: 0,
+        favoriteEra: nil,
+        memberSince: nil
     )
 }
 
@@ -118,10 +140,21 @@ struct CodableLibraryStats: Codable {
     let lovedCount: Int
     let likedCount: Int
     let dislikedCount: Int
-    
+    let unratedCount: Int
+
     let watchTimeHistory: [WatchTimePoint]
     let decadeDistribution: [DecadeDistributionPoint]
     let barcodeData: [BarcodeSlice]
+
+    let currentStreak: Int
+    let longestStreak: Int
+    let ratingPersonality: String
+    let archetype: String
+    let movieWatchTimeMinutes: Int
+    let tvWatchTimeMinutes: Int
+    let watchVelocityMinutesPerDay: Int
+    let favoriteEra: String?
+    let memberSince: Date?
 
     init(_ stats: LibraryStats) {
         self.totalWatchTimeMinutes = stats.totalWatchTimeMinutes
@@ -139,9 +172,19 @@ struct CodableLibraryStats: Codable {
         self.lovedCount = stats.lovedCount
         self.likedCount = stats.likedCount
         self.dislikedCount = stats.dislikedCount
+        self.unratedCount = stats.unratedCount
         self.watchTimeHistory = stats.watchTimeHistory
         self.decadeDistribution = stats.decadeDistribution
         self.barcodeData = stats.barcodeData
+        self.currentStreak = stats.currentStreak
+        self.longestStreak = stats.longestStreak
+        self.ratingPersonality = stats.ratingPersonality
+        self.archetype = stats.archetype
+        self.movieWatchTimeMinutes = stats.movieWatchTimeMinutes
+        self.tvWatchTimeMinutes = stats.tvWatchTimeMinutes
+        self.watchVelocityMinutesPerDay = stats.watchVelocityMinutesPerDay
+        self.favoriteEra = stats.favoriteEra
+        self.memberSince = stats.memberSince
     }
 
     func toLibraryStats() -> LibraryStats {
@@ -161,9 +204,19 @@ struct CodableLibraryStats: Codable {
             lovedCount: lovedCount,
             likedCount: likedCount,
             dislikedCount: dislikedCount,
+            unratedCount: unratedCount,
             watchTimeHistory: watchTimeHistory,
             decadeDistribution: decadeDistribution,
-            barcodeData: barcodeData
+            barcodeData: barcodeData,
+            currentStreak: currentStreak,
+            longestStreak: longestStreak,
+            ratingPersonality: ratingPersonality,
+            archetype: archetype,
+            movieWatchTimeMinutes: movieWatchTimeMinutes,
+            tvWatchTimeMinutes: tvWatchTimeMinutes,
+            watchVelocityMinutesPerDay: watchVelocityMinutesPerDay,
+            favoriteEra: favoriteEra,
+            memberSince: memberSince
         )
     }
 }
@@ -335,9 +388,14 @@ actor LibraryStatsActor {
         var loved = 0
         var liked = 0
         var disliked = 0
+        var unrated = 0
         var history: [Date: Int] = [:]
         var decadeCounts: [String: Int] = [:]
         var barcodeData: [BarcodeSlice] = []
+        var movieWatchTime = 0
+        var tvWatchTime = 0
+        var interactionDates: Set<Date> = []
+        var earliestDateAdded: Date?
     }
 
     private struct TasteMapsContainer {
@@ -370,7 +428,22 @@ actor LibraryStatsActor {
                 case .love: stats.loved += 1
                 case .like: stats.liked += 1
                 case .dislike: stats.disliked += 1
-                case .none: break
+                case .none: stats.unrated += 1
+                }
+            }
+
+            // Streak & member since tracking
+            if let interactionDate = item.lastInteractionDate {
+                let day = calendar.startOfDay(for: interactionDate)
+                stats.interactionDates.insert(day)
+            }
+            if let dateAdded = item.dateAdded {
+                if let earliest = stats.earliestDateAdded {
+                    if dateAdded < earliest {
+                        stats.earliestDateAdded = dateAdded
+                    }
+                } else {
+                    stats.earliestDateAdded = dateAdded
                 }
             }
 
@@ -381,6 +454,7 @@ actor LibraryStatsActor {
                     stats.movieCompleted += 1
                     let runtime = item.cachedRuntime ?? 0
                     stats.watchTime += runtime
+                    stats.movieWatchTime += runtime
                     
                     if includeCinephileData, let date = item.lastInteractionDate {
                         let day = calendar.startOfDay(for: date)
@@ -397,6 +471,7 @@ actor LibraryStatsActor {
                 
                 let runtime = item.cachedRuntime ?? 0
                 stats.watchTime += runtime
+                stats.tvWatchTime += runtime
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
                 
                 if includeCinephileData {
@@ -408,6 +483,7 @@ actor LibraryStatsActor {
                             if let date = ep.watchedDate, epRuntime > 0 {
                                 let day = calendar.startOfDay(for: date)
                                 stats.history[day, default: 0] += epRuntime
+                                stats.tvWatchTime += epRuntime
                                 hasWatchedDate = true
                             }
                         }
@@ -490,7 +566,7 @@ actor LibraryStatsActor {
         let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(5)
 
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
-        
+
         let creatorWithScore: [(String, CategoryStats, Double)] = taste.creatorTaste.compactMap { name, val in
             let score = val.affinity(cutoff: 3)
             return score >= 0 ? (name, val, score) : nil
@@ -502,7 +578,7 @@ actor LibraryStatsActor {
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
-        
+
         let history: [WatchTimePoint]
         let decadeDistribution: [DecadeDistributionPoint]
 
@@ -516,6 +592,23 @@ actor LibraryStatsActor {
             history = []
             decadeDistribution = []
         }
+
+        // 4. Compute personality & passport stats
+        let (currentStreak, longestStreak) = computeStreaks(from: stats.interactionDates)
+        let ratingPersonality = computeRatingPersonality(loved: stats.loved, liked: stats.liked, disliked: stats.disliked, unrated: stats.unrated)
+        let archetype = computeArchetype(
+            totalMovies: stats.movieCount,
+            completedMovies: stats.movieCompleted,
+            totalTV: stats.tvCount,
+            completedTV: stats.tvCompleted,
+            loved: stats.loved,
+            liked: stats.liked,
+            disliked: stats.disliked,
+            tvWatchTime: stats.tvWatchTime,
+            totalWatchTime: stats.watchTime
+        )
+        let velocity = computeWatchVelocity(history: history)
+        let favoriteEra = stats.decadeCounts.max { $0.value < $1.value }?.key
 
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
@@ -533,10 +626,99 @@ actor LibraryStatsActor {
             lovedCount: stats.loved,
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
+            unratedCount: stats.unrated,
             watchTimeHistory: history,
             decadeDistribution: decadeDistribution,
-            barcodeData: stats.barcodeData
+            barcodeData: stats.barcodeData,
+            currentStreak: currentStreak,
+            longestStreak: longestStreak,
+            ratingPersonality: ratingPersonality,
+            archetype: archetype,
+            movieWatchTimeMinutes: stats.movieWatchTime,
+            tvWatchTimeMinutes: stats.tvWatchTime,
+            watchVelocityMinutesPerDay: velocity,
+            favoriteEra: favoriteEra,
+            memberSince: stats.earliestDateAdded
         )
+    }
+
+    private func computeStreaks(from dates: Set<Date>) -> (current: Int, longest: Int) {
+        guard !dates.isEmpty else { return (0, 0) }
+        let sorted = dates.sorted()
+        let calendar = Calendar.current
+        var longest = 1
+        var current = 1
+        var currentRun = 1
+        for i in 1..<sorted.count {
+            if let next = calendar.date(byAdding: .day, value: 1, to: sorted[i - 1]),
+               calendar.isDate(next, inSameDayAs: sorted[i]) {
+                currentRun += 1
+                longest = max(longest, currentRun)
+            } else {
+                currentRun = 1
+            }
+        }
+        // Check if today or yesterday is in the set for current streak
+        let today = calendar.startOfDay(for: Date())
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today) {
+            if dates.contains(today) {
+                current = streakRunCount(from: today, dates: dates, calendar: calendar)
+            } else if dates.contains(yesterday) {
+                current = streakRunCount(from: yesterday, dates: dates, calendar: calendar)
+            } else {
+                current = 0
+            }
+        }
+        return (current, longest)
+    }
+
+    private func streakRunCount(from date: Date, dates: Set<Date>, calendar: Calendar) -> Int {
+        var count = 0
+        var currentDate = date
+        while dates.contains(currentDate) {
+            count += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: currentDate) else { break }
+            currentDate = prev
+        }
+        return count
+    }
+
+    private func computeRatingPersonality(loved: Int, liked: Int, disliked: Int, unrated: Int) -> String {
+        let rated = loved + liked + disliked
+        guard rated > 0 else { return "Mystery Critic" }
+        let lovedPct = Double(loved) / Double(rated)
+        let dislikedPct = Double(disliked) / Double(rated)
+        if lovedPct > 0.55 { return "Hopeless Romantic" }
+        if dislikedPct > 0.25 { return "Harsh Critic" }
+        if loved > 0 && liked > 0 && disliked == 0 { return "Enthusiast" }
+        return "Balanced"
+    }
+
+    private func computeArchetype(totalMovies: Int, completedMovies: Int, totalTV: Int, completedTV: Int, loved: Int, liked: Int, disliked: Int, tvWatchTime: Int, totalWatchTime: Int) -> String {
+        let total = totalMovies + totalTV
+        let completed = completedMovies + completedTV
+        let completionRate = total > 0 ? Double(completed) / Double(total) : 0
+        let rated = loved + liked + disliked
+        let lovedPct = rated > 0 ? Double(loved) / Double(rated) : 0
+        let tvPct = totalWatchTime > 0 ? Double(tvWatchTime) / Double(totalWatchTime) : 0
+
+        if completionRate > 0.8 && lovedPct > 0.5 { return "The Completionist" }
+        if total > 50 && completionRate < 0.5 { return "The Explorer" }
+        if tvPct > 0.7 && totalTV > 20 { return "The Binger" }
+        if lovedPct > 0.6 && completionRate > 0.6 { return "The Curator" }
+        if total < 20 { return "The Newcomer" }
+        return "The Enthusiast"
+    }
+
+    private func computeWatchVelocity(history: [WatchTimePoint]) -> Int {
+        guard !history.isEmpty else { return 0 }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today) else { return 0 }
+        let recent = history.filter { $0.date >= thirtyDaysAgo }
+        let totalMinutes = recent.reduce(0) { $0 + $1.minutes }
+        let days = max(1, calendar.dateComponents([.day], from: thirtyDaysAgo, to: today).day ?? 30)
+        return totalMinutes / days
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

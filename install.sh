@@ -32,6 +32,11 @@ for arg in "$@"; do
     fi
 done
 
+# If --clean is set, force rebuild to bypass the hash check
+if [ "$DO_CLEAN" = true ]; then
+    FORCE=true
+fi
+
 # Compute source hash (all tracked .swift files + Package.swift)
 SOURCE_HASH=$(git ls-files '*.swift' 'Package.swift' 'Package.resolved' 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
 

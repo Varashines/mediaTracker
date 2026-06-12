@@ -51,6 +51,7 @@ struct DiscoveryCard: View {
                 }
             }
             .frame(height: style == .logo ? 90 : 60)
+            .compositingGroup()
         }
         .buttonStyle(.plain)
         .glassButtonStyle()

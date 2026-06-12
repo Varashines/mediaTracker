@@ -55,23 +55,28 @@ struct CastMemberCard: View {
 
     @ViewBuilder
     private var textSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let hasCharacterName = !member.characterName.isEmpty
+
+        VStack(alignment: .leading, spacing: hasCharacterName ? 4 : 0) {
             Text(member.name)
                 .font(AppTheme.Font.bodyBold)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
 
-            Text(member.characterName)
-                .font(AppTheme.Font.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .multilineTextAlignment(.leading)
+            if hasCharacterName {
+                Text(member.characterName)
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.leading)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: 140, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: hasCharacterName ? .top : .center)
     }
 
     private func borderOverlay() -> some View {
