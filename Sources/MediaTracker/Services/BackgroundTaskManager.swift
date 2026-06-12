@@ -17,7 +17,7 @@ class BackgroundTaskManager {
     private init() {}
     
     func handleIdleStateChange(isIdle: Bool) {
-        if isIdle && !SleepManager.shared.isAsleep && !isDripSyncing {
+        if isIdle && !isDripSyncing {
             isDripSyncing = true
             Task {
                 await performDripSync()
@@ -29,7 +29,6 @@ class BackgroundTaskManager {
 
     private func performDripSync() async {
         guard let container = container else { isDripSyncing = false; return }
-        guard !SleepManager.shared.isAsleep else { isDripSyncing = false; return }
         defer { isDripSyncing = false }
 
         let context = ModelContext(container)
@@ -61,7 +60,7 @@ class BackgroundTaskManager {
                 }
             }
         } catch {
-            AppErrorState.shared.surfaceError("Background sync failed: \(error.localizedDescription)")
+            AppLogger.error("💧 Drip Sync failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 
@@ -209,7 +208,7 @@ class BackgroundTaskManager {
                 }
             }
         } catch {
-            AppErrorState.shared.surfaceError("Badge update failed: \(error.localizedDescription)")
+            AppLogger.error("♻️ Badge update failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 }

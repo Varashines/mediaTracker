@@ -11,12 +11,15 @@ struct HomeViewSections: View {
     let isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
+    let onTrendingAdd: ((MediaSearchResult) -> Void)?
 
     private enum HomeSection {
-        case forYou, recentlyWatched, pickOfTheDay
+        case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
     }
 
     @State private var visibleSection: HomeSection? = nil
+    @State private var trendingMovies: [MediaSearchResult] = []
+    @State private var trendingShows: [MediaSearchResult] = []
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -42,9 +45,22 @@ struct HomeViewSections: View {
                         label: "Pick of the Day",
                         isActive: visibleSection == .pickOfTheDay
                     )
-                    .padding(.trailing, AppTheme.Spacing.pageMargin)
                 }
+                sectionButton(
+                    section: .trendingMovies,
+                    icon: "flame.fill",
+                    label: "Trending Movies",
+                    isActive: visibleSection == .trendingMovies
+                )
+                sectionButton(
+                    section: .trendingShows,
+                    icon: "flame.fill",
+                    label: "Trending Shows",
+                    isActive: visibleSection == .trendingShows
+                )
+                Spacer()
             }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
             if visibleSection == .recentlyWatched {
                 WatchedThisWeek()
@@ -70,6 +86,23 @@ struct HomeViewSections: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
 
+            if visibleSection == .trendingMovies || visibleSection == .trendingShows {
+                if visibleSection == .trendingMovies {
+                    TrendingCarousel(items: trendingMovies, title: "Trending Movies") { result in
+                        onTrendingAdd?(result)
+                    }
+                    .padding(.bottom, AppTheme.Spacing.small)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                if visibleSection == .trendingShows {
+                    TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
+                        onTrendingAdd?(result)
+                    }
+                    .padding(.bottom, AppTheme.Spacing.small)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+
             // 1. CONTINUE WATCHING
             ContinueWatchingCarousel(
                 items: homeContinueWatching, namespace: namespace,
@@ -91,6 +124,12 @@ struct HomeViewSections: View {
             }
         }
         .padding(.top, AppTheme.Spacing.medium)
+        .task {
+            async let movies = APIClient.shared.fetchTrendingMovies()
+            async let shows = APIClient.shared.fetchTrendingTVShows()
+            trendingMovies = (try? await movies) ?? []
+            trendingShows = (try? await shows) ?? []
+        }
     }
 
     private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
@@ -106,12 +145,13 @@ struct HomeViewSections: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(AppTheme.Font.caption2)
-                Text(isActive ? "Hide \(label)" : label)
+                Text(label)
                     .font(AppTheme.Font.caption)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color.primary.opacity(0.06))
+            .background(isActive ? AppTheme.Colors.accent : Color.primary.opacity(0.06))
+            .foregroundStyle(isActive ? .white : .primary)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)

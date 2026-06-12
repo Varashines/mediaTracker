@@ -80,6 +80,36 @@ struct CategoryRouterView: View {
                     }
                 },
                 onLoadMore: { onLoadMore?() },
+                onTrendingAdd: { result in
+                    let typePrefix = result.type == .movie ? "movie" : "tv"
+                    let uniqueID = "\(typePrefix)_\(result.id)"
+                    let container = modelContainer
+                    let viewModelCopy = viewModel
+
+                    Task {
+                        let service = BackgroundDataService(modelContainer: container)
+                        let (id, isExisting) = await service.createNewMediaItem(
+                            uniqueID: uniqueID,
+                            tmdbID: Int(result.id) ?? 0,
+                            type: result.type,
+                            title: result.title,
+                            overview: result.overview,
+                            posterURL: result.posterURL,
+                            releaseDateString: result.releaseDate
+                        )
+                        if isExisting {
+                            AppErrorState.shared.showToast("Already in Library", style: .info)
+                        } else {
+                            AppErrorState.shared.showToast("Added to Library", style: .success)
+                            FeedbackManager.shared.trigger(.addToLibrary)
+                        }
+                        if let id = id {
+                            await MainActor.run {
+                                viewModelCopy.navigationPath.append(id)
+                            }
+                        }
+                    }
+                },
                 viewModel: viewModel
             )
         }

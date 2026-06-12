@@ -12,16 +12,6 @@ struct VaultSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(text: "Data Processing", icon: "cpu", color: .teal)
-            SettingsCard(color: .teal) {
-                StudioAliasManagerView()
-                Rectangle()
-                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16)
-                DiscoveryManagementView()
-            }
-
             SettingsSectionHeader(text: "Backup", icon: "tray.and.arrow.down.fill", color: .blue)
             SettingsCard(color: .blue) {
                 SettingsRow(title: "Export Library", subtitle: "Save a backup of your collection", showDivider: true) {

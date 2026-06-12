@@ -48,7 +48,7 @@ struct InsightsView: View {
                         SpectrumView(items: stats.barcodeData)
 
                         // Section 7: Studios, Networks & Languages
-                        StudiosNetworksSection(stats: stats, modelContext: modelContext)
+                        StudiosNetworksView(stats: stats, modelContext: modelContext)
 
                         // Section 8: Hall of Fame
                         HallOfFameView(stats: stats)
@@ -93,16 +93,5 @@ struct InsightsView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Backwards-compatible Studio/Networks wrapper
-
-struct StudiosNetworksSection: View {
-    let stats: LibraryStats
-    let modelContext: ModelContext
-
-    var body: some View {
-        StudiosNetworksView(stats: stats, modelContext: modelContext)
     }
 }

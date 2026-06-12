@@ -189,6 +189,8 @@ actor BackgroundDataService {
         
         let posterURL = item.posterURL
         let backdropURL = item.backdropURL
+        let typePrefix = item.type == .movie ? "movie" : "tv"
+        let tmdbID = item.id.split(separator: "_").last ?? ""
         
         modelContext.delete(item)
         
@@ -201,6 +203,11 @@ actor BackgroundDataService {
         
         await ImageCache.shared.removeImage(forKey: posterURL)
         await ImageCache.shared.removeImage(forKey: backdropURL)
+        
+        // Purge API detail cache so re-adding fetches fresh data
+        if !tmdbID.isEmpty {
+            APIClient.shared.removeCachedResponse(forKey: "\(typePrefix)_details_\(tmdbID).json")
+        }
         
         Task { @MainActor in
             await SpotlightIndexService.shared.deleteItem(identifier: id)

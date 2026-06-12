@@ -47,6 +47,11 @@ actor APIClient {
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
     private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
 
+    // Trending cache (1-hour TTL)
+    private var trendingMoviesCache: (data: [MediaSearchResult], timestamp: Date)?
+    private var trendingTVCache: (data: [MediaSearchResult], timestamp: Date)?
+    private let trendingCacheTTL: TimeInterval = 3600
+
     #if DEBUG
     init(testing session: URLSession) {
         self.session = session
@@ -92,6 +97,8 @@ actor APIClient {
 
     func clearMemoryCaches() {
         clearSearchCache()
+        trendingMoviesCache = nil
+        trendingTVCache = nil
         apiURLCache.removeAllCachedResponses()
     }
 
@@ -142,6 +149,11 @@ actor APIClient {
                 try? data.write(to: fileURL, options: .atomic)
             }
         }
+    }
+
+    nonisolated func removeCachedResponse(forKey key: String) {
+        let fileURL = cacheFolder.appendingPathComponent(key)
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     // MARK: - Generic Search
@@ -269,8 +281,8 @@ actor APIClient {
 
     func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
         let cacheKey = "movie_details_\(tmdbID).json"
-        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             return processMovieDetails(details)
         }
@@ -281,7 +293,6 @@ actor APIClient {
         let task = Task<MovieDetailsResult, Error> {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
             return try await self.executeWithRetry {
-                // Skip release_dates on non-force refreshes — release dates rarely change
                 let appendParts = force ? "credits,release_dates,external_ids,videos" : "credits,external_ids,videos"
                 let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
                 let (data, response) = try await self.session.data(from: url)
@@ -360,9 +371,8 @@ actor APIClient {
 
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_\(tmdbID).json"
-        // With force: use 24h TTL instead of skipping cache entirely
-        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             return processTVDetails(d)
         }
@@ -606,6 +616,32 @@ actor APIClient {
             saveToCache(data: data, forKey: cacheKey)
             return result
         }
+    }
+
+    func fetchTrendingMovies() async throws -> [MediaSearchResult] {
+        if let cached = trendingMoviesCache, Date().timeIntervalSince(cached.timestamp) < trendingCacheTTL {
+            return cached.data
+        }
+        let url = try tmdbURL(path: "/trending/movie/day")
+        let (data, response) = try await session.data(from: url)
+        try validateResponse(response)
+        let decoded = try decoder.decode(TMDBGenericResponse<TMDBMovie>.self, from: data)
+        let results = decoded.results.map { $0.toSearchResult() }
+        trendingMoviesCache = (results, Date())
+        return results
+    }
+
+    func fetchTrendingTVShows() async throws -> [MediaSearchResult] {
+        if let cached = trendingTVCache, Date().timeIntervalSince(cached.timestamp) < trendingCacheTTL {
+            return cached.data
+        }
+        let url = try tmdbURL(path: "/trending/tv/day")
+        let (data, response) = try await session.data(from: url)
+        try validateResponse(response)
+        let decoded = try decoder.decode(TMDBGenericResponse<TMDBTV>.self, from: data)
+        let results = decoded.results.map { $0.toSearchResult() }
+        trendingTVCache = (results, Date())
+        return results
     }
 
     private func executeWithRetry<T: Sendable>(maxAttempts: Int = 5, request: @Sendable () async throws -> T) async throws -> T {

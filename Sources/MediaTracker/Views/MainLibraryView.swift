@@ -19,6 +19,7 @@ struct MainLibraryView: View {
     let onCategorySelected: (NavigationCategory) -> Void
     let onBack: (() -> Void)?
     let onLoadMore: () -> Void
+    let onTrendingAdd: ((MediaSearchResult) -> Void)?
     var viewModel: MediaViewModel
 
     @Environment(\.modelContext) private var modelContext
@@ -55,7 +56,8 @@ struct MainLibraryView: View {
                             namespace: namespace,
                             isFastScrolling: isFastScrolling,
                             onSelectHero: onSelectHero,
-                            onCategorySelected: onCategorySelected
+                            onCategorySelected: onCategorySelected,
+                            onTrendingAdd: onTrendingAdd
                         )
                     }
 

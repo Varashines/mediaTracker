@@ -21,20 +21,6 @@ struct CuteEmptyState: View {
     }
 }
 
-struct MedalBadge: View {
-    let rank: Int
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(rank == 1 ? Color.yellow.opacity(0.2) : rank == 2 ? Color.gray.opacity(0.2) : rank == 3 ? Color.orange.opacity(0.2) : Color.clear)
-                .frame(width: 22, height: 22)
-            Text(rank == 1 ? "🥇" : rank == 2 ? "🥈" : rank == 3 ? "🥉" : "\(rank)")
-                .font(.system(size: rank <= 3 ? 12 : 10, weight: .bold, design: .rounded))
-        }
-    }
-}
-
 struct ArchetypeBadge: View {
     let archetype: String
     @Environment(\.colorScheme) var colorScheme
