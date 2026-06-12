@@ -70,6 +70,16 @@ final class MediaItem: Identifiable {
         Task { @MainActor in
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
         }
+        let itemID = id
+        Task { @MainActor in
+            guard let container = SpotlightIndexService.modelContainer else { return }
+            let ctx = ModelContext(container)
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
+            descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+            if let item = try? ctx.fetch(descriptor).first {
+                await SpotlightIndexService.shared.indexItem(item)
+            }
+        }
     }
 
     var type: MediaType? {

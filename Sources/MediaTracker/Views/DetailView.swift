@@ -92,6 +92,13 @@ struct DetailView: View {
                 showHeavyContent = true
             }
         }
+        .userActivity("com.vara.MediaTracker.viewItem") { activity in
+            activity.title = viewModel.item.title
+            activity.userInfo = ["id": viewModel.item.id]
+            activity.isEligibleForSearch = true
+            activity.persistentIdentifier = viewModel.item.id
+            activity.requiredUserInfoKeys = ["id"]
+        }
         .sheet(isPresented: $showingCollectionPicker) {
             CollectionPickerView(item: viewModel.item)
         }
@@ -497,6 +504,10 @@ struct DetailView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             dismiss()
+        }
+
+        Task {
+            await SpotlightIndexService.shared.deleteItem(identifier: itemID)
         }
 
         Task {

@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @Namespace private var posterNamespace
     @State private var viewModel = MediaViewModel()
     @State private var sidebarSelection: SidebarItem? = .category(.home)
@@ -49,6 +50,22 @@ struct ContentView: View {
             )
         }
         .frame(minWidth: 900, minHeight: 600)
+        .onAppear {
+            handleAppIntentLaunch()
+        }
+    }
+
+    private func handleAppIntentLaunch() {
+        if let query = UserDefaults.standard.string(forKey: "spotlight_search_query") {
+            UserDefaults.standard.removeObject(forKey: "spotlight_search_query")
+            viewModel.filter.selectedCategory = .all
+            viewModel.filter.searchText = query
+            isSearchActive = true
+            viewModel.filterSubject.send()
+        } else if let openID = UserDefaults.standard.string(forKey: "spotlight_open_id") {
+            UserDefaults.standard.removeObject(forKey: "spotlight_open_id")
+            NavigationRouter.shared.pendingSpotlightItemID = openID
+        }
     }
 }
 
@@ -268,6 +285,11 @@ struct LibraryDetailView: View {
                 checkAndRepairStaleMetadata()
             }
         }
+        .onChange(of: NavigationRouter.shared.pendingSpotlightItemID) { _, newID in
+            guard let id = newID else { return }
+            NavigationRouter.shared.pendingSpotlightItemID = nil
+            navigateToSpotlightItem(id)
+        }
         .task(priority: .background) {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -455,6 +477,13 @@ struct LibraryDetailView: View {
         viewModel.navigationPath = NavigationPath()
         isSearchActive = true
         viewModel.filterSubject.send()
+    }
+
+    private func navigateToSpotlightItem(_ identifier: String) {
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == identifier })
+        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+        guard let item = try? modelContext.fetch(descriptor).first else { return }
+        viewModel.navigationPath.append(item)
     }
 
     private func checkAndRepairStaleMetadata() {

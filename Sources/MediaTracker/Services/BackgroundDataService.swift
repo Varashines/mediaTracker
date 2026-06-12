@@ -201,6 +201,10 @@ actor BackgroundDataService {
         
         await ImageCache.shared.removeImage(forKey: posterURL)
         await ImageCache.shared.removeImage(forKey: backdropURL)
+        
+        Task { @MainActor in
+            await SpotlightIndexService.shared.deleteItem(identifier: id)
+        }
     }
 
     func clearDatabase() async {
@@ -215,6 +219,11 @@ actor BackgroundDataService {
             // Clear caches as well
             await ImageCache.shared.clearFullCache()
             URLCache.shared.removeAllCachedResponses()
+            
+            Task { @MainActor in
+                await SpotlightIndexService.shared.deleteAllItems()
+                PosterCacheService.shared.clearAll()
+            }
             
             AppLogger.info("✅ Database cleared successfully.", logger: AppLogger.background)
         } catch {

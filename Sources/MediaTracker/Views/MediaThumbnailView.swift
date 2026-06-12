@@ -513,6 +513,10 @@ struct MediaThumbnailView: View {
                 modelContext.delete(item)
                 SaveCoordinator.shared.requestSave(modelContext)
 
+                Task { @MainActor in
+                    await SpotlightIndexService.shared.deleteItem(identifier: id)
+                }
+
                 let container = modelContext.container
                 Task.detached(priority: .background) {
                     let sync = DiscoverySyncService(modelContainer: container)

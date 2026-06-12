@@ -156,3 +156,5 @@ struct SidebarVisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 #endif
+
+

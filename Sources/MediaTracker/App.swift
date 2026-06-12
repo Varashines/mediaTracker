@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import CoreSpotlight
 #if os(macOS)
 import AppKit
 #endif
@@ -71,6 +72,7 @@ struct MediaTrackerApp: App {
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
         BackgroundTaskManager.shared.start(container: sharedModelContainer)
+        SpotlightIndexService.modelContainer = sharedModelContainer
 
         let cacheSizeMemory = 10 * 1024 * 1024
         let cacheSizeDisk = 500 * 1024 * 1024
@@ -119,6 +121,20 @@ struct MediaTrackerApp: App {
                 AppLogger.info("🎨 Migration v4: Re-extracted poster colors for \(processed) items with CoreImage.", logger: AppLogger.background)
             }
         }
+
+        // Spotlight: initial bulk indexing
+        let spotContainer = sharedModelContainer
+        Task { @MainActor in
+            let indexVersion = UserDefaults.standard.integer(forKey: "spotlightIndexVersion")
+            guard indexVersion < 1 else { return }
+            let context = ModelContext(spotContainer)
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+            if let items = try? context.fetch(descriptor), !items.isEmpty {
+                await SpotlightIndexService.shared.reindexAll(items)
+            }
+            UserDefaults.standard.set(1, forKey: "spotlightIndexVersion")
+        }
     }
 
     @Environment(\.scenePhase) private var scenePhase
@@ -161,6 +177,14 @@ struct MediaTrackerApp: App {
                         await BackgroundTaskManager.shared.refreshStaleBadges()
                     }
                 }
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
+                NavigationRouter.shared.pendingSpotlightItemID = identifier
+            }
+            .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
+                guard let id = activity.userInfo?["id"] as? String else { return }
+                NavigationRouter.shared.pendingSpotlightItemID = id
             }
     }
 
