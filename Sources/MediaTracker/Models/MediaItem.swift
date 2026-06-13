@@ -19,6 +19,8 @@ final class MediaItem: Identifiable {
     var lastStateChangeDate: Date?
     var dateAdded: Date?
     var lastUpdated: Date?
+    var isSoftDeleted: Bool = false
+    var softDeletedAt: Date?
     
     // Cached values for filtering/grid
     var cachedGenres: [String] = []
@@ -69,16 +71,6 @@ final class MediaItem: Identifiable {
         let pid = persistentModelID
         Task { @MainActor in
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
-        }
-        let itemID = id
-        Task { @MainActor in
-            guard let container = SpotlightIndexService.modelContainer else { return }
-            let ctx = ModelContext(container)
-            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
-            descriptor.propertiesToFetch = MediaItem.thumbnailProperties
-            if let item = try? ctx.fetch(descriptor).first {
-                await SpotlightIndexService.shared.indexItem(item)
-            }
         }
     }
 
@@ -137,6 +129,42 @@ final class MediaItem: Identifiable {
         details.recalculateCachedProperties(triggerSync: true)
     }
 
+    func applyStateChange(_ newState: MediaState) {
+        let didChange = stateValue != newState.rawValue
+        state = newState
+        if didChange {
+            lastUpdated = Date()
+            commitChange()
+        }
+    }
+
+    func applyTasteChange(_ newTaste: TasteValue) {
+        let didChange = tasteValue != newTaste.rawValue
+        taste = newTaste
+        if didChange {
+            commitChange()
+        }
+    }
+
+    /// Marks this item as soft-deleted. The item is hidden from grid views but can be restored
+    /// within the undo window by calling `restoreFromSoftDelete()`. A background purge task
+    /// hard-deletes items older than the undo window.
+    func softDelete(now: Date = Date()) {
+        guard !isSoftDeleted else { return }
+        isSoftDeleted = true
+        softDeletedAt = now
+        lastInteractionDate = now
+        commitChange()
+    }
+
+    func restoreFromSoftDelete() {
+        guard isSoftDeleted else { return }
+        isSoftDeleted = false
+        softDeletedAt = nil
+        lastInteractionDate = Date()
+        commitChange()
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?
     @Relationship(deleteRule: .cascade, inverse: \TVShowDetails.item) var tvShowDetails: TVShowDetails?
     
@@ -190,6 +218,7 @@ extension MediaItem {
         \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
         \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex, \.themeColorSourceURL,
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
+        \.isSoftDeleted, \.softDeletedAt,
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
         \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,

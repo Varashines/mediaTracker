@@ -65,7 +65,7 @@ struct HomeViewSections: View {
             if visibleSection == .recentlyWatched {
                 WatchedThisWeek()
                     .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.opacity)
             }
 
             if visibleSection == .forYou {
@@ -74,7 +74,7 @@ struct HomeViewSections: View {
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.opacity)
             }
 
             if visibleSection == .pickOfTheDay {
@@ -83,7 +83,7 @@ struct HomeViewSections: View {
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.opacity)
             }
 
             if visibleSection == .trendingMovies || visibleSection == .trendingShows {
@@ -92,14 +92,14 @@ struct HomeViewSections: View {
                         onTrendingAdd?(result)
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.opacity)
                 }
                 if visibleSection == .trendingShows {
                     TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
                         onTrendingAdd?(result)
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.opacity)
                 }
             }
 

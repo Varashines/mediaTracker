@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct RecommendationSheet: View {
     let filterName: String

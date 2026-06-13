@@ -70,24 +70,11 @@ struct MetadataSection: View {
 
     var body: some View {
         let items = metadataItems
-        let mid = item.type == .movie || item.cachedGenres.count >= 5 ? min(5, items.count) : min(4, items.count)
-        let firstRow = Array(items.prefix(mid))
-        let secondRow = Array(items.suffix(from: mid))
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
 
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                ForEach(firstRow) { meta in
-                    pillView(meta, accent: accent)
-                }
-            }
-
-            if !secondRow.isEmpty {
-                HStack(spacing: 10) {
-                    ForEach(secondRow) { meta in
-                        pillView(meta, accent: accent)
-                    }
-                }
+        FlowLayout(spacing: 10) {
+            ForEach(items) { meta in
+                pillView(meta, accent: accent)
             }
         }
         .padding(.vertical, 6)

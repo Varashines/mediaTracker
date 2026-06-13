@@ -72,6 +72,7 @@ struct WatchedThisWeek: View {
         var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
         descriptor.fetchLimit = 20
         descriptor.sortBy = [SortDescriptor(\.lastInteractionDate, order: .reverse)]
+        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
 
         items = (try? modelContext.fetch(descriptor)) ?? []
         withAnimation(.easeInOut(duration: 0.25)) { isLoading = false }

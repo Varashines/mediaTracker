@@ -109,31 +109,42 @@ class AppThemeCoordinator {
         }
 
         let intensity = UserDefaults.standard.double(forKey: "background_intensity")
+        let isDark = (colorScheme == .dark)
 
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
-        for color in colors {
-            guard let nsColor = NSColor(color).usingColorSpace(.sRGB) else { continue }
-            r += nsColor.redComponent
-            g += nsColor.greenComponent
-            b += nsColor.blueComponent
-        }
+        // Move the (potentially expensive) sRGB + HSB math off the main actor. We capture
+        // the color components on a background task, then commit the final Color back on
+        // main with the gentle animation.
+        let nsColors: [NSColor] = colors.compactMap { NSColor($0).usingColorSpace(.sRGB) }
+        let isDarkSnapshot = isDark
+        let intensitySnapshot = intensity
 
-        let count = CGFloat(colors.count)
-        let avgColor = NSColor(red: r/count, green: g/count, blue: b/count, alpha: 1)
+        Task.detached(priority: .utility) {
+            guard !nsColors.isEmpty else { return }
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+            for c in nsColors {
+                r += c.redComponent
+                g += c.greenComponent
+                b += c.blueComponent
+            }
+            let count = CGFloat(nsColors.count)
+            let avgColor = NSColor(red: r/count, green: g/count, blue: b/count, alpha: 1)
 
-        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-        avgColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+            avgColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
 
-        let scaledAlpha = (colorScheme == .dark ? 0.04 : 0.15) * intensity
-        let finalColor = Color(nsColor: NSColor(
-            calibratedHue: hue,
-            saturation: saturation * (colorScheme == .dark ? 0.15 : 0.4),
-            brightness: colorScheme == .dark ? 0.12 : 0.98,
-            alpha: scaledAlpha
-        ))
+            let scaledAlpha = (isDarkSnapshot ? 0.04 : 0.15) * intensitySnapshot
+            let finalColor = Color(nsColor: NSColor(
+                calibratedHue: hue,
+                saturation: saturation * (isDarkSnapshot ? 0.15 : 0.4),
+                brightness: isDarkSnapshot ? 0.12 : 0.98,
+                alpha: scaledAlpha
+            ))
 
-        withAnimation(AppTheme.Animation.springGentle) {
-            self.categoryMoodColor = finalColor
+            await MainActor.run {
+                withAnimation(AppTheme.Animation.springGentle) {
+                    self.categoryMoodColor = finalColor
+                }
+            }
         }
     }
 }

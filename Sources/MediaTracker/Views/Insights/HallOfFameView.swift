@@ -29,7 +29,6 @@ struct HallOfFameView: View {
                                     order: index
                                 )
                                 CastMemberCard(member: member, themeColor: .orange)
-                                    .hoverScale(shadowColor: .orange)
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -63,7 +62,6 @@ struct HallOfFameView: View {
                                     order: index
                                 )
                                 CastMemberCard(member: member, themeColor: .green)
-                                    .hoverScale(shadowColor: .green)
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)

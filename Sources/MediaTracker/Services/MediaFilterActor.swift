@@ -135,132 +135,126 @@ actor MediaFilterActor {
 
     private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) throws -> [MediaItem] {
         try Task.checkCancellation()
-        var refined = results
-        
-        if !smartRules.isEmpty {
-            refined = applySmartRules(refined, rules: smartRules)
-        }
+        let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
+        let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
+        let now = Date()
+        let ninetyDaysAgo = now.addingTimeInterval(-.days90)
+        let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
 
-        if category == .quickBites {
-            refined = refined.filter { item in
+        return results.filter { item in
+            // Smart rules
+            if !smartRules.isEmpty {
+                guard applySmartRule(item, rules: smartRules) else { return false }
+            }
+
+            // Category filter: quickBites
+            if category == .quickBites {
                 if item.typeValue == "Movie" {
                     let runtime = item.cachedRuntime ?? 0
-                    return runtime > 0 && runtime < 90
+                    guard runtime > 0 && runtime < 90 else { return false }
                 } else if item.typeValue == "TV Show" {
                     let epRuntime = item.cachedEpisodeRuntime ?? 0
-                    return epRuntime > 0 && epRuntime < 25
+                    guard epRuntime > 0 && epRuntime < 25 else { return false }
+                } else {
+                    return false
                 }
-                return false
             }
-        }
 
-        try Task.checkCancellation()
-
-        if category == .stalled {
-            let ninetyDaysAgo = Date().addingTimeInterval(-.days90)
-            refined = refined.filter { item in
-                if item.stateValue == "On Hold" || item.stateValue == "Dropped" {
-                    return true
-                }
+            // Category filter: stalled
+            if category == .stalled {
+                if item.stateValue == "On Hold" || item.stateValue == "Dropped" { return true }
                 let lastChange = item.lastStateChangeDate ?? .distantPast
                 let lastInter = item.lastInteractionDate ?? .distantPast
-                return lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo
+                guard lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo else { return false }
             }
-        } else if category == .releaseRadar {
-            let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
-            let now = Date()
-            refined = refined.filter { item in
-                // 1. Must have a valid radar badge
-                guard let badge = item.storedSmartBadgeLabel, radarBadges.contains(badge) else { return false }
-                
-                // 2. Must have already aired/released (Prevents future hype-badges from appearing in the Radar)
+
+            // Category filter: releaseRadar
+            if category == .releaseRadar {
+                guard let b = item.storedSmartBadgeLabel, radarBadges.contains(b) else { return false }
                 let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
-                return airDate <= now
+                guard airDate <= now else { return false }
             }
-        }
 
-        try Task.checkCancellation()
+            // Badge filter
+            if let b = badge {
+                guard item.storedSmartBadgeLabel == b else { return false }
+            }
 
-        if let b = badge {
-            refined = refined.filter { $0.storedSmartBadgeLabel == b }
-        }
-
-        if let nets = network, !nets.isEmpty {
-            let normalizedNets = Set(nets.map { $0.lowercased() })
-            refined = refined.filter { item in
+            // Network filter
+            if let nets = normalizedNets {
                 guard let rawNets = item.cachedNetwork else { return false }
-                return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.contains { normalizedNets.contains($0.lowercased()) }
+                let itemNets = rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                guard itemNets.contains(where: { nets.contains($0.lowercased()) }) else { return false }
             }
-        }
-        
-        try Task.checkCancellation()
 
-        if let lang = language, !lang.isEmpty {
-            refined = refined.filter { $0.cachedLanguage == lang }
-        }
-        
-        if let g = genre, !g.isEmpty {
-            refined = refined.filter { $0.cachedGenres.contains(g) }
-        }
+            // Language filter
+            if let lang = language, !lang.isEmpty {
+                guard item.cachedLanguage == lang else { return false }
+            }
 
-        if let y = year, !y.isEmpty {
-            refined = refined.filter { item in
+            // Genre filter
+            if let g = genre, !g.isEmpty {
+                guard item.cachedGenres.contains(g) else { return false }
+            }
+
+            // Year filter
+            if let y = year, !y.isEmpty {
                 guard let date = item.releaseDate else { return false }
                 let itemYear = Calendar.current.component(.year, from: date)
-                return String(itemYear) == y
+                guard String(itemYear) == y else { return false }
             }
-        }
 
-        try Task.checkCancellation()
+            // State filter
+            if let s = state {
+                guard item.state == s else { return false }
+            }
 
-        if let s = state {
-            refined = refined.filter { $0.state == s }
-        }
-
-        if !searchText.isEmpty {
-            let tokens = searchText.split(separator: " ").map(String.init)
-            refined = refined.filter { item in
+            // Search text filter
+            if let tokens = searchTokens {
                 let target = item.searchableText
-                return tokens.allSatisfy { target.localizedStandardContains($0) }
+                guard tokens.allSatisfy({ target.localizedStandardContains($0) }) else { return false }
+            }
+
+            return true
+        }
+    }
+
+    private func applySmartRule(_ item: MediaItem, rules: [SmartRule]) -> Bool {
+        rules.allSatisfy { rule in
+            switch rule {
+            case .genre(let g):
+                return item.cachedGenres.contains(g)
+            case .releaseYear(let year, let comp):
+                guard let releaseDate = item.releaseDate else { return false }
+                let itemYear = Calendar.current.component(.year, from: releaseDate)
+                switch comp {
+                case .equals: return itemYear == year
+                case .after: return itemYear > year
+                case .before: return itemYear < year
+                }
+            case .releaseYearRange(let start, let end):
+                guard let releaseDate = item.releaseDate else { return false }
+                let itemYear = Calendar.current.component(.year, from: releaseDate)
+                return itemYear >= start && itemYear <= end
+            case .mediaType(let type):
+                return item.type == type
+            case .state(let state):
+                return item.state == state
+            case .taste(let taste):
+                return item.taste == taste
+            case .badge(let badge):
+                return item.storedSmartBadgeLabel == badge
+            case .network(let network):
+                guard let rawNets = item.cachedNetwork else { return false }
+                return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.contains(network.lowercased())
+            case .language(let language):
+                return item.cachedLanguage?.lowercased() == language.lowercased()
             }
         }
-        return refined
     }
 
     private func applySmartRules(_ items: [MediaItem], rules: [SmartRule]) -> [MediaItem] {
-        items.filter { item in
-            rules.allSatisfy { rule in
-                switch rule {
-                case .genre(let g):
-                    return item.cachedGenres.contains(g)
-                case .releaseYear(let year, let comp):
-                    guard let releaseDate = item.releaseDate else { return false }
-                    let itemYear = Calendar.current.component(.year, from: releaseDate)
-                    switch comp {
-                    case .equals: return itemYear == year
-                    case .after: return itemYear > year
-                    case .before: return itemYear < year
-                    }
-                case .releaseYearRange(let start, let end):
-                    guard let releaseDate = item.releaseDate else { return false }
-                    let itemYear = Calendar.current.component(.year, from: releaseDate)
-                    return itemYear >= start && itemYear <= end
-                case .mediaType(let type):
-                    return item.type == type
-                case .state(let state):
-                    return item.state == state
-                case .taste(let taste):
-                    return item.taste == taste
-                case .badge(let badge):
-                    return item.storedSmartBadgeLabel == badge
-                case .network(let network):
-                    guard let rawNets = item.cachedNetwork else { return false }
-                    return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.contains(network.lowercased())
-                case .language(let language):
-                    return item.cachedLanguage?.lowercased() == language.lowercased()
-                }
-            }
-        }
+        items.filter { applySmartRule($0, rules: rules) }
     }
 
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {

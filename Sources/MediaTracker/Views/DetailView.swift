@@ -68,13 +68,13 @@ struct DetailView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: "detailScroll")
+            .saturation(showDeleteConfirmation ? 0.3 : 1)
+            .blur(radius: showDeleteConfirmation ? 2 : 0)
 
         }
         .bottomActionBarOverlay {
             bottomActionBar
         }
-        .saturation(showDeleteConfirmation ? 0.3 : 1)
-        .blur(radius: showDeleteConfirmation ? 2 : 0)
         .overlay {
             if showDeleteConfirmation {
                 deleteConfirmationOverlay
@@ -263,20 +263,10 @@ struct DetailView: View {
                 }
             }
             } else if viewModel.item.type == .tvShow || !viewModel.item.displayCast.isEmpty {
-                // SKELETON LOADER — only when content exists to reveal
-                VStack(spacing: AppTheme.Spacing.large) {
-                    if viewModel.item.type == .tvShow {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                            .fill(Color.primary.opacity(0.04))
-                            .frame(height: 180)
-                    }
-                    if !viewModel.item.displayCast.isEmpty {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                            .fill(Color.primary.opacity(0.04))
-                            .frame(height: 140)
-                    }
-                }
-                .shimmering()
+                DetailSkeletonView(
+                    needsTV: viewModel.item.type == .tvShow,
+                    hasCast: !viewModel.item.displayCast.isEmpty
+                )
             }
         }
     }
@@ -454,29 +444,18 @@ struct DetailView: View {
             .frame(maxWidth: 280)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04))
-            )
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                     .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                effectiveThemeColor.opacity(0.35),
-                                effectiveThemeColor.opacity(0.08),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .fill(effectiveThemeColor.opacity(0.08))
                     )
-            )
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                    .fill(effectiveThemeColor.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .strokeBorder(LinearGradient(
+                                colors: [effectiveThemeColor.opacity(0.35), effectiveThemeColor.opacity(0.08)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            ), lineWidth: 1)
+                    )
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
             .shadow(
@@ -504,10 +483,6 @@ struct DetailView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             dismiss()
-        }
-
-        Task {
-            await SpotlightIndexService.shared.deleteItem(identifier: itemID)
         }
 
         Task {

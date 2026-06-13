@@ -5,33 +5,11 @@ import SwiftUI
 struct SettingsCard<Content: View>: View {
     var color: Color = .clear
     @ViewBuilder let content: () -> Content
-    @Environment(\.colorScheme) var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        GlassCard(color: color) {
             content()
         }
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(color != .clear ? color.opacity(scheme == .dark ? 0.04 : 0.02) : .clear)
-                .allowsHitTesting(false)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .stroke(
-                    color != .clear 
-                        ? color.opacity(scheme == .dark ? 0.25 : 0.12) 
-                        : AppTheme.Colors.strokeDefault(for: scheme),
-                    lineWidth: 0.8
-                )
-        }
-        .shadow(color: AppTheme.Colors.shadowAmbient(for: scheme), radius: 6, y: 3)
     }
 }
 
@@ -123,6 +101,54 @@ struct SettingsToggleRow: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .labelsHidden()
+        }
+    }
+}
+
+// MARK: - SettingsLabeledRow
+//
+// Use this instead of `SettingsRow` whenever the trailing control is a `Picker`,
+// `DatePicker`, `Stepper`, or `Slider`. Those controls expand to the trailing edge
+// and squeeze the label horizontally. This variant stacks the title above the control
+// so the label can never wrap or clip, per the design rules in AGENTS.md.
+
+struct SettingsLabeledRow<Trailing: View>: View {
+    let title: String
+    var subtitle: String? = nil
+    var showDivider: Bool = true
+    @ViewBuilder var trailing: () -> Trailing
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let subtitle {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(AppTheme.Font.settingsRowTitle)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(AppTheme.Font.settingsSubtitle)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text(title)
+                    .font(AppTheme.Font.settingsRowTitle)
+                    .foregroundStyle(.primary)
+            }
+            HStack {
+                trailing()
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            if showDivider {
+                Rectangle()
+                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
+                    .frame(height: 1)
+                    .padding(.leading, 16)
+            }
         }
     }
 }

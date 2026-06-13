@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 import Combine
-import CoreSpotlight
 #if os(macOS)
 import AppKit
 #endif
@@ -14,7 +13,6 @@ extension Notification.Name {
 struct MediaTrackerApp: App {
     private let notificationManager = NotificationManager.shared
     @AppStorage("theme_preference") private var themePreference: Int = 0
-    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(AppSchemaV1.models)
@@ -36,19 +34,40 @@ struct MediaTrackerApp: App {
             AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(error)")
 
             let storeURL = modelConfiguration.url
-
-            // 1. Backup the corrupted store before deletion
-            let backupName = "default_corrupted_\(Int(Date().timeIntervalSince1970)).store"
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let backupName = "default_corrupted_\(timestamp).store"
             let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
-            try? FileManager.default.copyItem(at: storeURL, to: backupURL)
-            try? FileManager.default.copyItem(at: storeURL.appendingPathExtension("wal"), to: backupURL.appendingPathExtension("wal"))
-            try? FileManager.default.copyItem(at: storeURL.appendingPathExtension("shm"), to: backupURL.appendingPathExtension("shm"))
-            AppLogger.error("📦 Corrupted store backed up to: \(backupURL.path)")
+            let logURL = backupURL.deletingPathExtension().appendingPathExtension("recovery.log")
 
-            // 2. Delete the corrupted store
-            try? FileManager.default.removeItem(at: storeURL)
-            try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
-            try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+            // 1. Backup the corrupted store before deletion. Surface failures to a recovery log
+            //    so we never silently destroy user data on a permission/disk error.
+            var backupSucceeded = true
+            do {
+                try FileManager.default.copyItem(at: storeURL, to: backupURL)
+            } catch {
+                backupSucceeded = false
+                try? "store copy failed: \(error)".write(to: logURL, atomically: true, encoding: .utf8)
+                AppLogger.error("📦 Failed to back up corrupted store: \(error)")
+            }
+            if backupSucceeded {
+                let wal = storeURL.appendingPathExtension("wal")
+                let shm = storeURL.appendingPathExtension("shm")
+                try? FileManager.default.copyItem(at: wal, to: backupURL.appendingPathExtension("wal"))
+                try? FileManager.default.copyItem(at: shm, to: backupURL.appendingPathExtension("shm"))
+                AppLogger.error("📦 Corrupted store backed up to: \(backupURL.path)")
+            }
+
+            // 2. Only delete if backup succeeded; otherwise bail to fatalError with context.
+            if backupSucceeded {
+                try? FileManager.default.removeItem(at: storeURL)
+                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
+                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+            } else {
+                try? "store recovery aborted: backup failed; refusing to delete original store".write(
+                    to: logURL, atomically: true, encoding: .utf8
+                )
+                fatalError("CRITICAL: Corrupted store could not be backed up; refusing to delete it. See \(logURL.path). Error: \(error)")
+            }
 
             do {
                 AppLogger.info("Store deleted, recreating ModelContainer...")
@@ -72,7 +91,6 @@ struct MediaTrackerApp: App {
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
         BackgroundTaskManager.shared.start(container: sharedModelContainer)
-        SpotlightIndexService.modelContainer = sharedModelContainer
 
         let cacheSizeMemory = 10 * 1024 * 1024
         let cacheSizeDisk = 500 * 1024 * 1024
@@ -80,61 +98,6 @@ struct MediaTrackerApp: App {
         URLCache.shared = cache
 
         Task { await NotificationManager.shared.requestPermission() }
-
-        // Migration: Bulk re-extract poster colors with CoreImage algorithm (v4)
-        let extractionVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        if extractionVersion < 4 {
-            let container = sharedModelContainer
-            Task { @MainActor in
-                let descriptor = FetchDescriptor<MediaItem>()
-                guard let items = try? container.mainContext.fetch(descriptor) else { return }
-
-                var processed = 0
-                for item in items {
-                    guard item.modelContext != nil, !item.isDeleted else { continue }
-                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
-
-                    // Re-extract all items with new CoreImage algorithm
-                    if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url) {
-                        let pair: DominantPair? = await Task.detached {
-                            if let image = NSImage(data: data),
-                               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                                return await ColorExtractor.topTwoColors(from: cgImage)
-                            }
-                            return nil
-                        }.value
-
-                        if let pair {
-                            item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
-                            item.themeColorSourceURL = poster
-                            processed += 1
-                        }
-                    }
-
-                    if processed % 5 == 0 {
-                        try? await Task.sleep(nanoseconds: 10_000_000)
-                    }
-                }
-
-                try? container.mainContext.save()
-                UserDefaults.standard.set(4, forKey: "colorExtractionVersion")
-                AppLogger.info("🎨 Migration v4: Re-extracted poster colors for \(processed) items with CoreImage.", logger: AppLogger.background)
-            }
-        }
-
-        // Spotlight: initial bulk indexing
-        let spotContainer = sharedModelContainer
-        Task { @MainActor in
-            let indexVersion = UserDefaults.standard.integer(forKey: "spotlightIndexVersion")
-            guard indexVersion < 1 else { return }
-            let context = ModelContext(spotContainer)
-            var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = MediaItem.thumbnailProperties
-            if let items = try? context.fetch(descriptor), !items.isEmpty {
-                await SpotlightIndexService.shared.reindexAll(items)
-            }
-            UserDefaults.standard.set(1, forKey: "spotlightIndexVersion")
-        }
     }
 
     @Environment(\.scenePhase) private var scenePhase
@@ -177,10 +140,6 @@ struct MediaTrackerApp: App {
                         await BackgroundTaskManager.shared.refreshStaleBadges()
                     }
                 }
-            }
-            .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
-                NavigationRouter.shared.pendingSpotlightItemID = identifier
             }
             .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
                 guard let id = activity.userInfo?["id"] as? String else { return }

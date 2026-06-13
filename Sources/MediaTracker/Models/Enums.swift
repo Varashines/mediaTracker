@@ -117,13 +117,18 @@ enum MediaState: String, Codable, CaseIterable, Sendable {
     static let rewatchingRaw = MediaState.rewatching.rawValue
 
     var displayName: String {
+        // We pass an English default to String(localized:) so the UI always renders
+        // sensibly even on devices that don't ship a matching localization. We do
+        // not ship a Localizable.xcstrings, so these calls are effectively a no-op
+        // today; the pattern is in place to switch to key-based localization later
+        // by replacing the defaults with key names.
         switch self {
-        case .wishlist: return String(localized: "Watchlist")
-        case .active: return String(localized: "In Progress")
-        case .onHold: return String(localized: "On Hold")
-        case .dropped: return String(localized: "Dropped")
-        case .rewatching: return String(localized: "Re-watching")
-        case .completed: return String(localized: "Completed")
+        case .wishlist: return String(localized: "Watchlist", defaultValue: "Watchlist")
+        case .active: return String(localized: "In Progress", defaultValue: "In Progress")
+        case .onHold: return String(localized: "On Hold", defaultValue: "On Hold")
+        case .dropped: return String(localized: "Dropped", defaultValue: "Dropped")
+        case .rewatching: return String(localized: "Re-watching", defaultValue: "Re-watching")
+        case .completed: return String(localized: "Completed", defaultValue: "Completed")
         }
     }
 
@@ -157,9 +162,10 @@ enum MediaType: String, Codable, CaseIterable, Sendable {
     static let tvShowRaw = MediaType.tvShow.rawValue
 
     var pluralName: String {
+        // See MediaState.displayName for the localization pattern note.
         switch self {
-        case .movie: return String(localized: "Movies")
-        case .tvShow: return String(localized: "TV Shows")
+        case .movie: return String(localized: "Movies", defaultValue: "Movies")
+        case .tvShow: return String(localized: "TV Shows", defaultValue: "TV Shows")
         }
     }
 }

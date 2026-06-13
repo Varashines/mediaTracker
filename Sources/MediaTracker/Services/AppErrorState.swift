@@ -14,11 +14,20 @@ class AppErrorState {
     private init() {}
     
     struct Toast: Identifiable, Equatable {
-        let id = UUID()
+        let id: UUID
         let message: String
         let style: ToastStyle
         let duration: Double
-        
+        let undoAction: (@MainActor () -> Void)?
+
+        init(message: String, style: ToastStyle, duration: Double, undoAction: (@MainActor () -> Void)? = nil) {
+            self.id = UUID()
+            self.message = message
+            self.style = style
+            self.duration = duration
+            self.undoAction = undoAction
+        }
+
         static func == (lhs: Toast, rhs: Toast) -> Bool {
             lhs.id == rhs.id
         }
@@ -49,19 +58,19 @@ class AppErrorState {
         }
     }
     
-    func showToast(_ message: String, style: ToastStyle = .info, duration: Double = 3.5) {
-        let toast = Toast(message: message, style: style, duration: duration)
+    func showToast(_ message: String, style: ToastStyle = .info, duration: Double = 3.5, undoAction: (@MainActor () -> Void)? = nil) {
+        let toast = Toast(message: message, style: style, duration: duration, undoAction: undoAction)
         dismissTask?.cancel()
-        
+
         withAnimation(AppTheme.Animation.springGentle) {
             currentToast = toast
         }
-        
+
         let toastID = toast.id
         dismissTask = Task {
             try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled, self.currentToast?.id == toastID else { return }
-            
+
             withAnimation(AppTheme.Animation.springGentle) {
                 self.currentToast = nil
             }
@@ -70,6 +79,13 @@ class AppErrorState {
     
     func surfaceError(_ message: String) {
         showToast(message, style: .error)
+    }
+
+    func dismissCurrentToast() {
+        dismissTask?.cancel()
+        withAnimation(AppTheme.Animation.springGentle) {
+            currentToast = nil
+        }
     }
     
     func handleError(_ error: Error, message: String? = nil) {
@@ -99,16 +115,28 @@ extension View {
 
 struct ToastView: View {
     let toast: AppErrorState.Toast
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: toast.style.icon)
                 .foregroundStyle(toast.style.color)
                 .font(.system(size: 18, weight: .bold))
-            
+
             Text(toast.message)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
+
+            if let undo = toast.undoAction {
+                Button {
+                    undo()
+                    AppErrorState.shared.dismissCurrentToast()
+                } label: {
+                    Text("Undo")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(toast.style.color)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

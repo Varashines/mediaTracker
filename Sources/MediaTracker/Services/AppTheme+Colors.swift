@@ -46,17 +46,7 @@ extension AppTheme {
         }
 
         /// Hover border — interactive elements on hover
-        @MainActor
-        static func strokeHover(for colorScheme: ColorScheme) -> Color {
-            Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.12)
-        }
-
         /// Accent-colored border — selected, active, themed elements
-        @MainActor
-        static func strokeAccent(color: Color, for colorScheme: ColorScheme) -> Color {
-            color.opacity(colorScheme == .dark ? 0.3 : 0.25)
-        }
-
         // MARK: - Semantic Shadows
 
         /// Ambient shadow — resting cards, subtle depth
@@ -80,9 +70,5 @@ extension AppTheme {
         }
 
         /// Active / in-progress status
-        @MainActor
-        static func statusActive(for colorScheme: ColorScheme) -> Color {
-            accent
-        }
     }
 }

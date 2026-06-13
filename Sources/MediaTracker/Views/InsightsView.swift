@@ -52,13 +52,6 @@ struct InsightsView: View {
 
                         // Section 8: Hall of Fame
                         HallOfFameView(stats: stats)
-
-                        // Section 9: Streak & Velocity
-                        StreakVelocityView(
-                            currentStreak: stats.currentStreak,
-                            longestStreak: stats.longestStreak,
-                            velocity: stats.watchVelocityMinutesPerDay
-                        )
                     }
                     .padding(.vertical, 24)
                     .frame(maxWidth: .infinity)

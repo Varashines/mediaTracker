@@ -57,64 +57,6 @@ struct ArchetypeBadge: View {
     }
 }
 
-struct SparklineShape: Shape {
-    let data: [Double]
-    let maxValue: Double?
-
-    func path(in rect: CGRect) -> Path {
-        guard data.count > 1 else { return Path() }
-        let max = maxValue ?? data.max() ?? 1
-        guard max > 0 else { return Path() }
-        let stepX = rect.width / CGFloat(data.count - 1)
-        var path = Path()
-        for (i, value) in data.enumerated() {
-            let x = CGFloat(i) * stepX
-            let y = rect.height - (CGFloat(value) / CGFloat(max)) * rect.height
-            let point = CGPoint(x: x, y: y)
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        return path
-    }
-}
-
-struct MiniBarChart: View {
-    let items: [(label: String, value: Int, color: Color)]
-    let maxValue: Int
-
-    var body: some View {
-        let max = maxValue > 0 ? maxValue : items.map { $0.value }.max() ?? 1
-        VStack(spacing: 8) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(spacing: 8) {
-                    Text(item.label)
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 50, alignment: .leading)
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color.primary.opacity(0.06))
-                                .frame(height: 8)
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(item.color.gradient)
-                                .frame(width: geo.size.width * CGFloat(item.value) / CGFloat(max), height: 8)
-                        }
-                    }
-                    .frame(height: 8)
-                    Text("\(item.value)")
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, alignment: .trailing)
-                }
-            }
-        }
-    }
-}
-
 struct PersonalityBadge: View {
     let personality: String
 

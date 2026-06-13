@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct PosterView: View {
     let item: MediaItem
@@ -20,7 +19,7 @@ struct PosterView: View {
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 
-                let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .critical, themeColor: themeColor) { _ in
+                let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
                     } placeholder: {
                         Rectangle().fill(Color.secondary.opacity(0.1))
                     }

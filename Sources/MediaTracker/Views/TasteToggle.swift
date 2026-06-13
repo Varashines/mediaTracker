@@ -40,11 +40,10 @@ struct TasteToggle: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             let isRemoving = item.taste == val
             if isRemoving {
-                item.tasteValue = TasteValue.none.rawValue
+                item.applyTasteChange(.none)
                 FeedbackManager.shared.trigger(.click)
             } else {
-                item.tasteValue = val.rawValue
-                
+                item.applyTasteChange(val)
                 switch val {
                 case .love: FeedbackManager.shared.trigger(.tasteLove)
                 case .like: FeedbackManager.shared.trigger(.tasteLike)

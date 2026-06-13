@@ -5,26 +5,10 @@ struct RecommendationSectionView: View {
     let themeColor: Color
     var onSelected: ((String) -> Void)? = nil
 
-    @State private var isVisible = false
-
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
-                ForEach(recommendations) { rec in
-                    RecommendationCard(rec: rec, themeColor: themeColor) {
-                        onSelected?(rec.name)
-                    }
-                    .offset(x: isVisible ? 0 : 20)
-                    .opacity(isVisible ? 1 : 0)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .onAppear {
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isVisible = true
+        AnimatedCarousel(items: recommendations) { rec in
+            RecommendationCard(rec: rec, themeColor: themeColor) {
+                onSelected?(rec.name)
             }
         }
     }

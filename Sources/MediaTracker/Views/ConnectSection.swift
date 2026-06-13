@@ -76,7 +76,7 @@ struct ConnectSection: View {
                 }
 
                 if notificationsEnabled {
-                    SettingsRow(title: "Delivery Time", subtitle: "Daily notification schedule", showDivider: true) {
+                    SettingsLabeledRow(title: "Delivery Time", subtitle: "Daily notification schedule", showDivider: true) {
                         DatePicker("", selection: Binding(
                             get: { Date(timeIntervalSince1970: notificationTime) },
                             set: { notificationTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: 86400) }

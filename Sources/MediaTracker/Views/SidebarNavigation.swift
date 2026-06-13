@@ -49,11 +49,11 @@ struct SidebarNavigation: View {
                     sidebarRow(
                         title: NavigationCategory.smartHub.title,
                         icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
-                    
+
                     let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
                         .map(String.init)
                         .compactMap { NavigationCategory(rawValue: $0) }
-                    
+
                     ForEach(pinnedSystemList) { category in
                         sidebarRow(
                             title: category.title,

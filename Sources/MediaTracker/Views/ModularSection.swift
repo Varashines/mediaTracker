@@ -5,7 +5,6 @@ struct ModularSection<Content: View>: View {
     let icon: String
     let color: Color
     @ViewBuilder let content: Content
-    @Environment(\.colorScheme) var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -25,17 +24,10 @@ struct ModularSection<Content: View>: View {
                 Spacer()
             }
 
-            content
-                .padding(AppTheme.Spacing.medium)
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
-                )
+            GlassCard(material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: false) {
+                content
+                    .padding(AppTheme.Spacing.medium)
+            }
         }
     }
 }

@@ -6,16 +6,9 @@ class DetailViewModel {
     var item: MediaItem
     var isRefreshing = false
     var themeColor: Color = Color.secondary.opacity(0.1)
-    var secondaryThemeColor: Color = Color.secondary.opacity(0.06)
     
     // Phase 5 Performance: Cache scheme-aware colors to avoid per-frame math in MeshGradient
     var vibrantThemeColor: Color = .clear
-    var contrastThemeColor: Color = .clear
-    var warmThemeColor: Color = .clear
-    var coolThemeColor: Color = .clear
-    var secondaryVibrantThemeColor: Color = .clear
-    var secondaryWarmThemeColor: Color = .clear
-    var secondaryCoolThemeColor: Color = .clear
     var recommendations: [MooreMetricsRecommendation] = []
     var isLoadingRecommendations = false
     var trailerKey: String?
@@ -53,9 +46,8 @@ class DetailViewModel {
         if let hex = item.themeColorHex {
             if hex.contains("|") {
                 let parts = hex.split(separator: "|", maxSplits: 1).map(String.init)
-                if parts.count == 2, let primary = Color(hex: parts[0]), let secondary = Color(hex: parts[1]) {
+                if parts.count == 2, let primary = Color(hex: parts[0]) {
                     self.themeColor = primary
-                    self.secondaryThemeColor = secondary
                     self.recalculateVibrantPalette()
                     return
                 }
@@ -72,7 +64,6 @@ class DetailViewModel {
             let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate<NetworkEntity> { $0.name == first })
             if let network = try? context.fetch(descriptor).first, let hex = network.themeColorHex, let netColor = Color(hex: hex) {
                 self.themeColor = netColor
-                self.secondaryThemeColor = netColor
                 self.recalculateVibrantPalette()
                 return
             }
@@ -80,7 +71,6 @@ class DetailViewModel {
 
         // Priority 3: Neutral fallback (never use global accent)
         self.themeColor = Color.secondary.opacity(0.15)
-        self.secondaryThemeColor = Color.secondary.opacity(0.1)
         self.recalculateVibrantPalette()
     }
 
@@ -91,16 +81,7 @@ class DetailViewModel {
         let isDark = false
         #endif
         let scheme: ColorScheme = isDark ? .dark : .light
-        
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
-        self.contrastThemeColor = themeColor.highContrastAccent(colorScheme: scheme)
-        self.warmThemeColor = vibrantThemeColor.hueShift(by: 0.05)
-        self.coolThemeColor = vibrantThemeColor.hueShift(by: -0.05)
-        
-        // Secondary color palette for 2-tone ambient background
-        self.secondaryVibrantThemeColor = secondaryThemeColor.luminousAccent(colorScheme: scheme)
-        self.secondaryWarmThemeColor = secondaryVibrantThemeColor.hueShift(by: 0.05)
-        self.secondaryCoolThemeColor = secondaryVibrantThemeColor.hueShift(by: -0.05)
     }
     
     private var needsOMDBData: Bool {
@@ -371,51 +352,6 @@ class DetailViewModel {
     
     private var recsTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
-
-    func checkOverallCompletion() {
-        guard item.modelContext != nil else { return }
-        
-        // 1. Instant Optimistic UI Update
-        withAnimation {
-            item.syncCachedProperties()
-            item.lastStateChangeDate = Date() // Trigger grid refresh
-            item.lastInteractionDate = Date() // Bump to top of Continue Watching
-            
-            // Broadcast the change so the Main Page also updates its badge immediately
-            if let posterURL = item.posterURL {
-                ImageCache.shared.ping(url: posterURL)
-            }
-        }
-        
-        // 2. Debounce the heavy database sync and global broadcast
-        saveTask?.cancel()
-        let itemID = item.persistentModelID
-        let container = item.modelContext?.container
-        
-        saveTask = Task { @MainActor [weak self] in
-            // Wait 0.5s to see if the user taps another episode
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            if Task.isCancelled { return }
-            
-            guard let self = self, self.item.modelContext != nil else { return }
-            
-            self.item.tvShowDetails?.recalculateCachedProperties(force: true)
-            self.item.syncCachedProperties()
-            
-            if let context = self.item.modelContext {
-                SaveCoordinator.shared.requestSave(context)
-            }
-            
-            Task.detached {
-                if let container = container {
-                    let sync = DiscoverySyncService(modelContainer: container)
-                    await sync.updateItemAdded(itemID)
-                }
-            }
-            
- 
-        }
-    }
 
     func markNextEpisodeWatched() {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }

@@ -24,20 +24,4 @@ actor FileIOActor {
 
         return try await work()
     }
-
-    func read(at url: URL) -> Data? {
-        try? Data(contentsOf: url)
-    }
-
-    func write(_ data: Data, to url: URL) {
-        try? data.write(to: url, options: .atomic)
-    }
-
-    func exists(at url: URL) -> Bool {
-        FileManager.default.fileExists(atPath: url.path)
-    }
-
-    func attributes(at url: URL) -> [FileAttributeKey: Any]? {
-        try? FileManager.default.attributesOfItem(atPath: url.path)
-    }
 }

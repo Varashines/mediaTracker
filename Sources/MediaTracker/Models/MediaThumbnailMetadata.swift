@@ -31,8 +31,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let recommendationReason: String?
     let lastInteractionDate: Date?
     let tasteValue: String?
-
-    var versionHash: String { "\(id.hashValue)_\(progress ?? 0)" }
+    /// Pre-computed once in the initializer. Used as a stable identity for SwiftUI's ForEach
+    /// so cells aren't recreated when other (unrelated) fields change. Avoids the cost of
+    /// re-interpolating on every body re-evaluation.
+    let versionHash: String
 
     var formattedMetadata: String {
         let year = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? ""
@@ -40,6 +42,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
             return "\(year) • \(firstGenre)"
         }
         return year
+    }
+
+    static func makeHash(id: PersistentIdentifier, progress: Double?) -> String {
+        "\(id.hashValue)_\(progress ?? 0)"
     }
 
     init(item: MediaItem, recommendationReason: String? = nil) {
@@ -65,6 +71,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.genres = item.cachedGenres
         self.lastInteractionDate = item.lastInteractionDate
         self.tasteValue = item.tasteValue
+        self.versionHash = Self.makeHash(id: item.persistentModelID, progress: item.storedProgress)
     }
 
     init(id: PersistentIdentifier, title: String) {
@@ -90,6 +97,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.recommendationReason = nil
         self.lastInteractionDate = nil
         self.tasteValue = nil
+        self.versionHash = Self.makeHash(id: id, progress: nil)
     }
 
     /// Preview/test initializer with full control over all fields
@@ -128,6 +136,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.recommendationReason = nil
         self.lastInteractionDate = nil
         self.tasteValue = nil
+        self.versionHash = Self.makeHash(id: id, progress: progress)
     }
 }
 

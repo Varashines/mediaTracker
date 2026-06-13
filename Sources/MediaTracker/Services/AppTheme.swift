@@ -24,13 +24,11 @@ struct AppTheme {
         // Display sizes
         static let heroTitle = SwiftUI.Font.system(size: 60, weight: .heavy, design: .rounded)
         static let largeTitle = SwiftUI.Font.system(size: 40, weight: .heavy, design: .rounded)
-        static let display = SwiftUI.Font.system(size: 32, weight: .heavy, design: .rounded)
 
         // Title sizes
         static let title = SwiftUI.Font.system(size: 28, weight: .bold, design: .rounded)
         static let titleLarge = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded)
         static let title2 = SwiftUI.Font.system(size: 24, weight: .bold, design: .rounded)
-        static let titleAccent = SwiftUI.Font.system(size: 22, weight: .bold, design: .rounded)
         static let title3 = SwiftUI.Font.system(size: 20, weight: .bold, design: .rounded)
 
         // Heading / subtitle
@@ -72,8 +70,6 @@ struct AppTheme {
     struct Shadow {
         static let card = ShadowConfig(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
         static let elevated = ShadowConfig(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
-        static let floating = ShadowConfig(color: .black.opacity(0.25), radius: 16, x: 0, y: 6)
-        static let glow = ShadowConfig(color: .black.opacity(0.1), radius: 24, x: 0, y: 8)
     }
 
     struct Animation {
@@ -92,22 +88,9 @@ struct AppTheme {
         static let backdropCompact = CGSize(width: 400, height: 226)
     }
 
-    /// Semantic opacity levels for consistent layering
-    struct Opacity {
-        static let ghost: Double = 0.04
-        static let subtle: Double = 0.08
-        static let faint: Double = 0.12
-        static let muted: Double = 0.25
-        static let dimmed: Double = 0.5
-        static let solid: Double = 1.0
-    }
-
     /// Standardized icon sizes
     struct Icon {
-        static let micro = SwiftUI.Font.system(size: 8, weight: .medium)
         static let small = SwiftUI.Font.system(size: 11, weight: .medium)
         static let medium = SwiftUI.Font.system(size: 14, weight: .medium)
-        static let large = SwiftUI.Font.system(size: 18, weight: .medium)
-        static let action = SwiftUI.Font.system(size: 22, weight: .medium)
     }
 }

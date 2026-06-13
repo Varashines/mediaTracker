@@ -69,10 +69,7 @@ struct DiscoveryCard: View {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(themeColor.opacity(isHovered ? 0.16 : 0.08))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
+                    .strokeBorder(
                         isHovered ? themeColor.opacity(0.35) : AppTheme.Colors.strokeDefault(for: colorScheme),
                         lineWidth: isHovered ? 1.0 : 0.8
                     )
@@ -104,7 +101,7 @@ struct DiscoveryCard: View {
                             .fill(Color.white)
                             .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: 2, y: 1)
 
-                        CachedImage(url: url, targetSize: CGSize(width: 75, height: 32)) { _ in } placeholder: {
+                        CachedImage(url: url, targetSize: CGSize(width: 75, height: 32), priority: .low) { _ in } placeholder: {
                             Color.secondary.opacity(0.1)
                         }
                         .aspectRatio(contentMode: .fit)

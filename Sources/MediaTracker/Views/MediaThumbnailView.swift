@@ -38,6 +38,7 @@ struct MediaThumbnailView: View {
     private let capturedGridBadgeText: String?
     private let capturedNextAiringDate: Date?
     private let capturedDisplayYear: String?
+    private let capturedThemeColor: Color
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -89,6 +90,7 @@ struct MediaThumbnailView: View {
         self.capturedGridBadgeText = item.badgeText
         self.capturedNextAiringDate = item.cachedNextAiringDate
         self.capturedDisplayYear = item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
+        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
     }
 
     init(
@@ -128,6 +130,7 @@ struct MediaThumbnailView: View {
         self.capturedGridBadgeText = metadata.badgeText
         self.capturedNextAiringDate = metadata.nextAiringDate
         self.capturedDisplayYear = metadata.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
+        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
@@ -155,6 +158,7 @@ struct MediaThumbnailView: View {
         self.capturedGridBadgeText = nil
         self.capturedNextAiringDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
         self.capturedDisplayYear = capturedReleaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
+        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
     }
 
     private var width: CGFloat {
@@ -324,6 +328,7 @@ struct MediaThumbnailView: View {
             }
         }
         .frame(width: width, height: height)
+        .compositingGroup()
         .cornerRadius(AppTheme.Radius.medium)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
@@ -378,7 +383,7 @@ struct MediaThumbnailView: View {
     }
 
     private var typeBadge: some View {
-        let themeColor = item?.themeColorHex.flatMap { Color(hex: $0) } ?? capturedThemeColorHex.flatMap { Color(hex: $0) } ?? Color.accentColor
+        let themeColor = capturedThemeColor
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
         
@@ -503,22 +508,39 @@ struct MediaThumbnailView: View {
                 FeedbackManager.shared.trigger(.removeFromLibrary)
             }
 
-            if let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted {
-                let id = item.id
-                let network = item.cachedNetwork
-                let genres = item.cachedGenres
-                let lang = item.cachedLanguage
-                let badge = item.storedSmartBadgeLabel
-                NotificationManager.shared.cancelNotification(id: id, type: type)
-                modelContext.delete(item)
-                SaveCoordinator.shared.requestSave(modelContext)
+            guard let item = modelContext.model(for: itemID) as? MediaItem, !item.isDeleted else { return }
+            let snapshotID = item.id
+            let itemID = item.persistentModelID
+            let network = item.cachedNetwork
+            let genres = item.cachedGenres
+            let lang = item.cachedLanguage
+            let badge = item.storedSmartBadgeLabel
 
-                Task { @MainActor in
-                    await SpotlightIndexService.shared.deleteItem(identifier: id)
-                }
+            // Soft-delete so the user can undo within the 5s window.
+            item.softDelete()
+            NotificationManager.shared.cancelNotification(id: snapshotID, type: type)
 
-                let container = modelContext.container
-                Task.detached(priority: .background) {
+            // Build the undo closure on the main actor; it captures the PID.
+            let undo: @MainActor () -> Void = { [modelContext] in
+                guard let live = modelContext.model(for: itemID) as? MediaItem, !live.isDeleted else { return }
+                live.restoreFromSoftDelete()
+            }
+
+            AppErrorState.shared.showToast(
+                "Removed \"\(item.title)\"",
+                style: .warning,
+                duration: 5,
+                undoAction: undo
+            )
+
+            // Discovery entity counts are only adjusted after the undo window closes,
+            // so an undo within 5s leaves the hub counts intact.
+            let container = modelContext.container
+            Task.detached(priority: .background) {
+                try? await Task.sleep(for: .seconds(5))
+                if Task.isCancelled { return }
+                let context = ModelContext(container)
+                if let live = context.model(for: itemID) as? MediaItem, live.isSoftDeleted {
                     let sync = DiscoverySyncService(modelContainer: container)
                     await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
                 }

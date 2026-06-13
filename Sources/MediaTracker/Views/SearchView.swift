@@ -104,23 +104,15 @@ struct SearchView: View {
         }
         .background {
             if isSearchActive {
-                Button("") { viewModel.filter.searchTypeFilter = .all }
-                    .opacity(0)
-                    .keyboardShortcut("1", modifiers: [.command, .option])
-            }
-        }
-        .background {
-            if isSearchActive {
-                Button("") { viewModel.filter.searchTypeFilter = .movie }
-                    .opacity(0)
-                    .keyboardShortcut("2", modifiers: [.command, .option])
-            }
-        }
-        .background {
-            if isSearchActive {
-                Button("") { viewModel.filter.searchTypeFilter = .tvShow }
-                    .opacity(0)
-                    .keyboardShortcut("3", modifiers: [.command, .option])
+                Group {
+                    Button("") { viewModel.filter.searchTypeFilter = .all }
+                        .keyboardShortcut("1", modifiers: [.command, .option])
+                    Button("") { viewModel.filter.searchTypeFilter = .movie }
+                        .keyboardShortcut("2", modifiers: [.command, .option])
+                    Button("") { viewModel.filter.searchTypeFilter = .tvShow }
+                        .keyboardShortcut("3", modifiers: [.command, .option])
+                }
+                .opacity(0)
             }
         }
     }

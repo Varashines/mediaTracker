@@ -23,7 +23,7 @@ struct MediaItemEntity: AppEntity, Identifiable {
 struct MediaItemEntityQuery: EntityQuery, Sendable {
     @MainActor
     func entities(for identifiers: [MediaItemEntity.ID]) async throws -> [MediaItemEntity] {
-        guard let container = SpotlightIndexService.modelContainer else { return [] }
+        guard let container = DataService.modelContainer else { return [] }
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { identifiers.contains($0.id) }
@@ -35,7 +35,7 @@ struct MediaItemEntityQuery: EntityQuery, Sendable {
 
     @MainActor
     func suggestedEntities() async throws -> [MediaItemEntity] {
-        guard let container = SpotlightIndexService.modelContainer else { return [] }
+        guard let container = DataService.modelContainer else { return [] }
         let context = ModelContext(container)
         let activeRaw = MediaState.activeRaw
         var descriptor = FetchDescriptor<MediaItem>(
@@ -96,7 +96,7 @@ struct MarkWatchedIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        guard let container = SpotlightIndexService.modelContainer else {
+        guard let container = DataService.modelContainer else {
             return .result()
         }
         let context = ModelContext(container)

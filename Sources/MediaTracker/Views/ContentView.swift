@@ -355,10 +355,14 @@ struct LibraryDetailView: View {
                     limit: limit,
                     offset: 0
                 )
-                
+
+                // Phase 2.2: Only refetch library metadata + run discovery sync on hard updates.
+                // A "soft" update just refreshes the displayed grid; everything else is unchanged.
+                let shouldFetchMetadata = !isSoftUpdate
+                let shouldRunDiscoverySync = !isSoftUpdate && (snapshot.category == .discover || snapshot.category == .all)
+
                 let allIDs: Set<String>
                 let metadata: MediaFilterActor.LibraryMetadata?
-                let shouldFetchMetadata = !isSoftUpdate && viewModel.display.isLibraryMetadataDirty
                 if shouldFetchMetadata {
                     allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
                     metadata = try? await filterActor.fetchLibraryMetadata()
@@ -369,9 +373,13 @@ struct LibraryDetailView: View {
 
                 if Task.isCancelled { return }
 
+                // Phase 2.1: Single MainActor hop to commit all the new state at once.
+                let displayedItems = result.displayed
+                let newMoodColors = displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
+
                 await MainActor.run {
                     viewModel.pagination.totalItemCount = result.totalCount
-                    viewModel.display.displayedItems = result.displayed
+                    viewModel.display.displayedItems = displayedItems
                     viewModel.display.featuredUpcomingItems = result.featuredUpcoming
                     viewModel.display.recentlyAddedItems = result.recentlyAdded
                     viewModel.display.homeContinueWatchingItems = result.homeContinueWatching
@@ -389,18 +397,16 @@ struct LibraryDetailView: View {
                         }
                     }
 
-                    // Update Mood Theme based on current visible content
-                    let moodColors = result.displayed.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
-                    themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
+                    themeCoordinator.updateMood(for: Array(newMoodColors), colorScheme: colorScheme)
+                }
 
-                    // Sync network/studio data on hard updates only
-                    if !isSoftUpdate && (snapshot.category == .discover || snapshot.category == .all) {
-                        let container = modelContext.container
-                        Task.detached(priority: .background) {
-                            try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
-                                let sync = DiscoverySyncService(modelContainer: container)
-                                await sync.syncLibrary(force: false)
-                            }
+                // Sync network/studio data on hard updates only
+                if shouldRunDiscoverySync {
+                    let container = modelContext.container
+                    Task.detached(priority: .background) {
+                        try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
+                            let sync = DiscoverySyncService(modelContainer: container)
+                            await sync.syncLibrary(force: false)
                         }
                     }
                 }
@@ -414,6 +420,7 @@ struct LibraryDetailView: View {
                     let tasteActor = TasteActor(modelContainer: modelContext.container)
                     let recs = await tasteActor.calculateRecommendations()
 
+                    // Resolve metadata on the main actor (we need modelContext for `model(for:)`).
                     await MainActor.run {
                         // Find metadata for these IDs
                         self.viewModel.display.recommendations = recs.compactMap {
@@ -563,7 +570,7 @@ struct LibraryDetailView: View {
         let year = viewModel.filter.selectedYear
         let state = viewModel.filter.selectedState
         let collectionID = viewModel.collection.selectedCollectionID
-        
+
         Task {
             do {
                 let filterActor = getFilterActor()
@@ -578,43 +585,11 @@ struct LibraryDetailView: View {
                     state: state,
                     collectionID: collectionID
                 )
-                
+
+                let newMoodColors = viewModel.display.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
                 await MainActor.run {
-                    withAnimation(AppTheme.Animation.easeInOut) {
-                        func updateList(_ list: inout [MediaThumbnailMetadata], updated: MediaThumbnailMetadata?) {
-                            if let index = list.firstIndex(where: { $0.id == id }) {
-                                if let updated = updated {
-                                    list[index] = updated
-                                } else {
-                                    list.remove(at: index)
-                                }
-                            }
-                        }
-                        
-                        updateList(&viewModel.display.displayedItems, updated: updatedMetadata)
-                        updateList(&viewModel.display.recentlyAddedItems, updated: updatedMetadata)
-                        updateList(&viewModel.display.homeContinueWatchingItems, updated: updatedMetadata)
-                        updateList(&viewModel.display.featuredUpcomingItems, updated: updatedMetadata)
-                        
-                        if viewModel.display.spotlightHero?.id == id {
-                            viewModel.display.spotlightHero = updatedMetadata
-                        }
-                        
-                        for i in 0..<viewModel.display.groupedItems.count {
-                            var itemsInGroup = viewModel.display.groupedItems[i].1
-                            if let index = itemsInGroup.firstIndex(where: { $0.id == id }) {
-                                if let updated = updatedMetadata {
-                                    itemsInGroup[index] = updated
-                                } else {
-                                    itemsInGroup.remove(at: index)
-                                }
-                                viewModel.display.groupedItems[i].1 = itemsInGroup
-                            }
-                        }
-                        
-                        let moodColors = viewModel.display.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
-                        themeCoordinator.updateMood(for: Array(moodColors), colorScheme: colorScheme)
-                    }
+                    viewModel.display.applyUpdate(updatedMetadata, id: id)
+                    themeCoordinator.updateMood(for: Array(newMoodColors), colorScheme: colorScheme)
                 }
             } catch {
                 AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")

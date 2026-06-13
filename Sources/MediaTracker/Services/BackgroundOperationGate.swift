@@ -6,6 +6,7 @@ actor BackgroundOperationGate {
 
     private var isHealing = false
     private var isSyncing = false
+    private var isExtracting = false
 
     func performHeal(label: String = "heal", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
         guard !isHealing else {
@@ -24,6 +25,16 @@ actor BackgroundOperationGate {
         }
         isSyncing = true
         defer { isSyncing = false }
+        try await operation()
+    }
+
+    func performExtract(label: String = "extract", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
+        guard !isExtracting else {
+            AppLogger.debug("⏭️ Skipping extract (\(label)) — another extract is already running", logger: AppLogger.background)
+            return
+        }
+        isExtracting = true
+        defer { isExtracting = false }
         try await operation()
     }
 

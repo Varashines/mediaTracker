@@ -12,7 +12,6 @@ extension CGSize {
 }
 
 extension Color {
-    static let vibrantDarkBlue = Color(red: 0.05, green: 0.4, blue: 0.95)
 
     static func semanticGreen(for colorScheme: ColorScheme) -> Color {
         if colorScheme == .dark {
@@ -30,7 +29,6 @@ extension Color {
         }
     }
 
-    static let emerald = Color(red: 0.05, green: 0.74, blue: 0.44)
 
     /// Returns a Color that linearly interpolates from pure blue (progress=0) to pure green (progress=1).
     static func blueToGreen(progress: Double) -> Color {
@@ -55,8 +53,19 @@ extension Color {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
 
+        // Accept #RGB (3 hex digits) and expand to #RRGGBB.
+        if hexSanitized.count == 3 {
+            hexSanitized = hexSanitized.map { "\($0)\($0)" }.joined()
+        }
+
+        // Accept 6- or 8-digit hex. 8-digit includes alpha which we drop (we always
+        // render opaque in the theme system).
+        guard hexSanitized.count == 6 || hexSanitized.count == 8 else {
+            return nil
+        }
+
         var rgb: UInt64 = 0
-        Scanner(string: hexSanitized).scanHexInt64(&rgb)
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
 
         let r = Double((rgb & 0xFF0000) >> 16) / 255.0
         let g = Double((rgb & 0x00FF00) >> 8) / 255.0
@@ -76,13 +85,7 @@ extension Color {
             format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
     }
 
-    static func randomVibrant(for colorScheme: ColorScheme) -> Color {
-        let hues: [Double] = [0.0, 0.1, 0.15, 0.45, 0.55, 0.65, 0.75, 0.85]
-        let randomHue = hues.randomElement() ?? 0.5
-        let saturation: Double = colorScheme == .dark ? 0.25 : 0.35
-        let brightness: Double = colorScheme == .dark ? 0.95 : 0.8
-        return Color(hue: randomHue, saturation: saturation, brightness: brightness)
-    }
+
 
     /// Returns a version of the color optimized for background washes and gradients.
     func luminousAccent(colorScheme: ColorScheme) -> Color {
@@ -177,33 +180,7 @@ struct ShimmeringModifier: ViewModifier {
     }
 }
 
-// MARK: - Standardized Page Components
 
-struct PageHeader: View {
-    let title: String
-    let subtitle: String?
-    let color: Color
-    
-    init(_ title: String, subtitle: String? = nil, color: Color = .primary) {
-        self.title = title
-        self.subtitle = subtitle
-        self.color = color
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(color.gradient)
-            
-            if let subtitle = subtitle {
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
 
 struct SubSectionHeader: View {
     let title: String
@@ -320,14 +297,7 @@ extension View {
         }
     }
 
-    @ViewBuilder
-    func glassProminentButtonStyle() -> some View {
-        if #available(macOS 26, *) {
-            self.buttonStyle(.glassProminent)
-        } else {
-            self.buttonStyle(.borderedProminent)
-        }
-    }
+
 }
 
 struct BottomBarModifier<Bar: View>: ViewModifier {

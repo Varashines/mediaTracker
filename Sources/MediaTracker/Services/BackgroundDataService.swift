@@ -208,10 +208,6 @@ actor BackgroundDataService {
         if !tmdbID.isEmpty {
             APIClient.shared.removeCachedResponse(forKey: "\(typePrefix)_details_\(tmdbID).json")
         }
-        
-        Task { @MainActor in
-            await SpotlightIndexService.shared.deleteItem(identifier: id)
-        }
     }
 
     func clearDatabase() async {
@@ -226,11 +222,6 @@ actor BackgroundDataService {
             // Clear caches as well
             await ImageCache.shared.clearFullCache()
             URLCache.shared.removeAllCachedResponses()
-            
-            Task { @MainActor in
-                await SpotlightIndexService.shared.deleteAllItems()
-                PosterCacheService.shared.clearAll()
-            }
             
             AppLogger.info("✅ Database cleared successfully.", logger: AppLogger.background)
         } catch {

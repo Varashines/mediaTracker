@@ -137,17 +137,6 @@ struct InsightsSkeletonView: View {
                         .padding(.vertical, 4)
                     }
                 }
-
-                // Streak skeleton
-                HStack(spacing: AppTheme.Spacing.medium) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
-                        .frame(height: 70)
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
-                        .frame(height: 70)
-                }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
             .padding(.vertical, 24)
         }
@@ -155,3 +144,4 @@ struct InsightsSkeletonView: View {
         .shimmering()
     }
 }
+
