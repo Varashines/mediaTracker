@@ -55,6 +55,7 @@ struct MainMediaGrid: View {
             isCompletedInCollection: completedIDs.contains(metadata.itemID),
             selectedCollectionID: selectedCollectionID
         )
+        .equatable()
         .id(metadata.versionHash)
         .onAppear {
             if metadata.id == items.last?.id {

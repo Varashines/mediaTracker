@@ -6,18 +6,20 @@ struct PosterView: View {
     var namespace: Namespace.ID? = nil
 
     private let posterFrame = CGSize(width: 260, height: 390)
+    @State private var glowPulse = false
 
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
-                // 1. Aurora Glow Background
+                // 1. Aurora Glow Background — animated radius for breathing effect
                 RadialGradient(
                     colors: [themeColor.opacity(0.5), .clear],
                     center: .center,
-                    startRadius: 20,
-                    endRadius: 250
+                    startRadius: glowPulse ? 25 : 20,
+                    endRadius: glowPulse ? 260 : 250
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
+                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: glowPulse)
                 
                 let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
                     } placeholder: {
@@ -47,6 +49,7 @@ struct PosterView: View {
                 }
             }
             .compositingGroup()
+            .onAppear { glowPulse = true }
         }
     }
 }

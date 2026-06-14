@@ -54,6 +54,24 @@ struct TitleSection: View {
                             Capsule().stroke(accent.opacity(0.1), lineWidth: 0.5)
                         }
 
+                    // TMDB Status pill (beside TV SHOW/MOVIE pill)
+                    if let status = item.cachedTMDBStatus, !status.isEmpty {
+                        Text(status.uppercased())
+                            .font(AppTheme.Font.caption2)
+                            .kerning(1.2)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .foregroundStyle(accent)
+                            .background {
+                                Capsule()
+                                    .fill(accent.opacity(0.12))
+                            }
+                            .clipShape(Capsule())
+                            .overlay {
+                                Capsule().stroke(accent.opacity(0.1), lineWidth: 0.5)
+                            }
+                    }
+
                     if item.isUpcoming, let dateText = item.detailBadgeText {
                         let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
                         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)

@@ -5,10 +5,6 @@ import Combine
 import AppKit
 #endif
 
-extension Notification.Name {
-    static let openSettingsTab = Notification.Name("openSettingsTab")
-}
-
 @main
 struct MediaTrackerApp: App {
     private let notificationManager = NotificationManager.shared

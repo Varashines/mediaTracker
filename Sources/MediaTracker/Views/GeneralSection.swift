@@ -11,32 +11,82 @@ struct GeneralSection: View {
     @AppStorage("skip_startup_background_tasks") private var skipStartupTasks = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(text: "Appearance", icon: "paintbrush.fill", color: .blue)
-            SettingsCard(color: .blue) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Unified Light/Dark/System picker
-                    SettingsRow(title: "Theme", subtitle: "Choose light, dark, or system appearance", showDivider: true) {
-                        ThemePicker(themePreference: $themePreference)
-                    }
+    private var isSystem: Bool { themePreference == 0 }
 
-                    // Color Palette — always visible
-                    SettingsRow(title: "Color Palette", subtitle: "Choose accent and background style", showDivider: false) {
-                        HStack(spacing: 16) {
-                            paletteCircle(index: 0, accent: .accentColor)
-                            paletteCircle(index: 1, accent: Color(hex: "#9B7B6B") ?? .accentColor)
-                            paletteCircle(index: 2, accent: Color(hex: "#6E7BB8") ?? .accentColor)
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
+            SettingsSectionHeader(text: "Theme", icon: "paintbrush", color: .blue)
+
+            SettingsCard(color: .blue) {
+                VStack(spacing: 0) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Follow System")
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .foregroundStyle(.primary)
+                            Text("Automatically match macOS appearance")
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .foregroundStyle(.secondary)
                         }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { themePreference == 0 },
+                            set: { isSystem in
+                                withAnimation(AppTheme.Animation.springSnappy) {
+                                    if isSystem {
+                                        themePreference = 0
+                                    } else {
+                                        themePreference = scheme == .dark ? 1 : 2
+                                    }
+                                }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+
+                    Divider()
+                        .overlay(AppTheme.Colors.strokeDefault(for: scheme))
+                        .padding(.leading, 14)
+
+                    HStack {
+                        Text("Appearance")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        LightDarkPicker(themePreference: $themePreference)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .opacity(isSystem ? 0.4 : 1.0)
+                    .allowsHitTesting(!isSystem)
                 }
             }
 
-            SettingsSectionHeader(text: "System", icon: "gearshape.fill", color: .purple)
+            SettingsSectionHeader(text: "Color Palette", icon: "paintbrush", color: .purple)
+
             SettingsCard(color: .purple) {
-                SettingsToggleRow(title: "Haptic Feedback", subtitle: "Vibrate on interactions", showDivider: true, isOn: $hapticsEnabled)
-                SettingsToggleRow(title: "Audio Feedback", subtitle: "Play sounds on actions", showDivider: true, isOn: $audioEnabled)
-                SettingsToggleRow(title: "Launch at Login", subtitle: "Open automatically when you log in", showDivider: true, isOn: $launchAtLogin)
+                HStack(spacing: 14) {
+                    paletteDot(index: 0, accent: .accentColor, label: "Standard")
+                    paletteDot(index: 1, accent: Color(hex: "#9B7B6B") ?? .accentColor, label: "Earth")
+                    paletteDot(index: 2, accent: Color(hex: "#6E7BB8") ?? .accentColor, label: "Cool")
+                    paletteDot(index: 3, accent: Color(hex: "#059669") ?? .accentColor, label: "Forest")
+                    paletteDot(index: 4, accent: Color(hex: "#2563EB") ?? .accentColor, label: "Ocean")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 14)
+            }
+
+            SettingsSectionHeader(text: "System", icon: "gearshape", color: .purple)
+
+            SettingsCard(color: .purple) {
+                toggleRow("Haptic Feedback", subtitle: "Vibrate on interactions", isOn: $hapticsEnabled, showDivider: true)
+                toggleRow("Audio Feedback", subtitle: "Play sounds on actions", isOn: $audioEnabled, showDivider: true)
+                toggleRow("Launch at Login", subtitle: "Open automatically when you log in", isOn: $launchAtLogin, showDivider: true)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
                             if newValue {
@@ -49,37 +99,60 @@ struct GeneralSection: View {
                         }
                         launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
-                SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: true, isOn: $preventSleepMode)
-                SettingsToggleRow(title: "Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", showDivider: false, isOn: $skipStartupTasks)
+                toggleRow("Prevent Sleep", subtitle: "Keep Mac awake for background sync", isOn: $preventSleepMode, showDivider: true)
+                toggleRow("Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", isOn: $skipStartupTasks, showDivider: false)
             }
         }
     }
 
-    private func paletteCircle(index: Int, accent: Color) -> some View {
+    private func toggleRow(_ title: String, subtitle: String, isOn: Binding<Bool>, showDivider: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: isOn)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            if showDivider {
+                Divider()
+                    .overlay(AppTheme.Colors.strokeDefault(for: scheme))
+                    .padding(.leading, 14)
+            }
+        }
+    }
+
+    private func paletteDot(index: Int, accent: Color, label: String) -> some View {
         let isSelected = customThemePalette == index
         return Button {
             withAnimation(AppTheme.Animation.springSnappy) {
                 customThemePalette = index
             }
         } label: {
-            ZStack {
-                Circle()
-                    .fill(accent)
-                if isSelected {
-                    Circle()
-                        .stroke(Color.white.opacity(0.6), lineWidth: 2.5)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                } else {
-                    Circle()
-                        .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+            Circle()
+                .fill(accent)
+                .frame(width: 24, height: 24)
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 8, height: 8)
+                    }
                 }
-            }
-            .frame(width: 28, height: 28)
-            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-            .contentShape(Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .help(label)
     }
 }

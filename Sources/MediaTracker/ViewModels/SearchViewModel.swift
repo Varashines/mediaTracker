@@ -5,16 +5,18 @@ import Combine
 @MainActor
 @Observable
 class SearchViewModel {
-    var movieResults: [MediaSearchResult] = []
-    var tvResults: [MediaSearchResult] = []
+    var movieResults: [MediaSearchResult] = [] { didSet { recomputeAllWebResults() } }
+    var tvResults: [MediaSearchResult] = [] { didSet { recomputeAllWebResults() } }
     var filteredLocalResults: [MediaThumbnailMetadata] = []
     var isSearching = false
     var isOfflineResultsOnly = false
     var errorMessage: String?
     var showError = false
-    var displayCache: DisplayCache?
+    var displayCache: DisplayCache? { didSet { recomputeAllWebResults() } }
     
-    var allWebResults: [MediaSearchResult] {
+    private(set) var allWebResults: [MediaSearchResult] = []
+    
+    private func recomputeAllWebResults() {
         let ids = displayCache?.libraryTMDBIDs ?? []
         var results: [MediaSearchResult] = []
         if ids.isEmpty {
@@ -24,7 +26,7 @@ class SearchViewModel {
             results.append(contentsOf: movieResults.filter { !ids.contains("movie_\($0.id)") }.prefix(15))
             results.append(contentsOf: tvResults.filter { !ids.contains("tv_\($0.id)") }.prefix(15))
         }
-        return results
+        allWebResults = results
     }
     
     private var searchTask: Task<Void, Never>?

@@ -69,15 +69,35 @@ struct MetadataSection: View {
     }
 
     var body: some View {
-        let items = metadataItems
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
 
-        FlowLayout(spacing: 10) {
-            ForEach(items) { meta in
-                pillView(meta, accent: accent)
+        VStack(alignment: .leading, spacing: 8) {
+            // Row 1: Primary info (what is this?)
+            HStack(spacing: 10) {
+                ForEach(firstRowItems) { meta in
+                    pillView(meta, accent: accent)
+                }
+            }
+            // Row 2: Secondary info (details)
+            if !secondRowItems.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(secondRowItems) { meta in
+                        pillView(meta, accent: accent)
+                    }
+                }
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private var firstRowItems: [MetadataItem] {
+        // Primary: status, rating, RT, content rating, date
+        Array(metadataItems.prefix(5))
+    }
+
+    private var secondRowItems: [MetadataItem] {
+        // Secondary: seasons/runtime, network, language, genres
+        Array(metadataItems.dropFirst(5))
     }
 
     @ViewBuilder

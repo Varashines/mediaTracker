@@ -43,28 +43,40 @@ class DisplayCache {
     /// `FilteredLibraryGridView.updateSingleItem`. If `updated` is nil the item is
     /// removed from all lists.
     func applyUpdate(_ updated: MediaThumbnailMetadata?, id: PersistentIdentifier, animated: Bool = true) {
-        let work = {
-            self.replaceInList(&self.displayedItems, id: id, updated: updated)
-            self.replaceInList(&self.recentlyAddedItems, id: id, updated: updated)
-            self.replaceInList(&self.homeContinueWatchingItems, id: id, updated: updated)
-            self.replaceInList(&self.featuredUpcomingItems, id: id, updated: updated)
-            self.replaceInList(&self.recommendations, id: id, updated: updated)
-            self.replaceInList(&self.pickOfTheDay, id: id, updated: updated)
+        // Track which lists actually changed to avoid animating 7+ lists for a single-item update
+        var changedLists: [String] = []
 
-            if let updated, self.spotlightHero?.id == id {
-                self.spotlightHero = updated
-            } else if self.spotlightHero?.id == id && updated == nil {
-                self.spotlightHero = nil
-            }
-
-            for i in 0..<self.groupedItems.count {
-                self.replaceInList(&self.groupedItems[i].1, id: id, updated: updated)
-            }
+        let track = { (name: String, list: inout [MediaThumbnailMetadata]) in
+            let before = list.count
+            self.replaceInList(&list, id: id, updated: updated)
+            if list.count != before { changedLists.append(name) }
         }
+
+        track("displayed", &displayedItems)
+        track("recentlyAdded", &recentlyAddedItems)
+        track("continueWatching", &homeContinueWatchingItems)
+        track("featuredUpcoming", &featuredUpcomingItems)
+        track("recommendations", &recommendations)
+        track("pickOfTheDay", &pickOfTheDay)
+
+        if let updated, self.spotlightHero?.id == id {
+            self.spotlightHero = updated
+            changedLists.append("spotlight")
+        } else if self.spotlightHero?.id == id && updated == nil {
+            self.spotlightHero = nil
+            changedLists.append("spotlight")
+        }
+
+        for i in 0..<self.groupedItems.count {
+            let before = self.groupedItems[i].1.count
+            self.replaceInList(&self.groupedItems[i].1, id: id, updated: updated)
+            if self.groupedItems[i].1.count != before { changedLists.append("grouped_\(i)") }
+        }
+
+        // Only animate if lists actually changed — avoids 7+ simultaneous animations
+        guard !changedLists.isEmpty else { return }
         if animated {
-            withAnimation(AppTheme.Animation.easeInOut) { work() }
-        } else {
-            work()
+            withAnimation(AppTheme.Animation.easeInOut) { }
         }
     }
 

@@ -20,6 +20,7 @@ struct HomeViewSections: View {
     @State private var visibleSection: HomeSection? = nil
     @State private var trendingMovies: [MediaSearchResult] = []
     @State private var trendingShows: [MediaSearchResult] = []
+    @Namespace private var pillNamespace
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -134,7 +135,7 @@ struct HomeViewSections: View {
 
     private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
         Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 if visibleSection == section {
                     visibleSection = nil
                 } else {
@@ -150,7 +151,17 @@ struct HomeViewSections: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isActive ? AppTheme.Colors.accent : Color.primary.opacity(0.06))
+            .background {
+                Capsule()
+                    .fill(isActive ? AppTheme.Colors.accent : Color.primary.opacity(0.06))
+                    .overlay {
+                        if isActive {
+                            Capsule()
+                                .fill(AppTheme.Colors.accent)
+                                .matchedGeometryEffect(id: "homePill", in: pillNamespace)
+                        }
+                    }
+            }
             .foregroundStyle(isActive ? .white : .primary)
             .clipShape(Capsule())
         }

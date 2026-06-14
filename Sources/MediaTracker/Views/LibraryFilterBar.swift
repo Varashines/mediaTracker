@@ -156,23 +156,26 @@ struct LibraryFilterBar: View {
     }
     
     private func updateGenre(_ genre: String?) {
-        withAnimation {
+        withAnimation(AppTheme.Animation.springSnappy) {
             viewModel.filter.selectedGenre = genre
             viewModel.filterSubject.send()
         }
+        FeedbackManager.shared.trigger(.click)
     }
     
     private func updateState(_ state: MediaState?) {
-        withAnimation {
+        withAnimation(AppTheme.Animation.springSnappy) {
             viewModel.filter.selectedState = state
             viewModel.filterSubject.send()
         }
+        FeedbackManager.shared.trigger(.click)
     }
     
     private func updateYear(_ year: String?) {
-        withAnimation {
+        withAnimation(AppTheme.Animation.springSnappy) {
             viewModel.filter.selectedYear = year
             viewModel.filterSubject.send()
         }
+        FeedbackManager.shared.trigger(.click)
     }
 }

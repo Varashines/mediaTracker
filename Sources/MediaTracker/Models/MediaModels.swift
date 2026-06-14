@@ -14,6 +14,7 @@ final class MovieDetails {
     var contentRating: String?
     var originalLanguage: String?
     var creators: [String] = []
+    var status: String?
     @Relationship(deleteRule: .cascade, inverse: \CastMember.movieDetails) var cast: [CastMember] = []
     var network: String?
     var networkLogoPath: String?
@@ -52,6 +53,7 @@ struct TMDBMovieDetailsResponse: Codable {
     let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, backdrop_path: String?, poster_path: String?
     let overview: String?
     let original_language: String?
+    let status: String?
     let credits: TMDBCreditsResponse?
     let release_dates: TMDBReleaseDatesResponse?
     let production_companies: [TMDBProductionCompany]?

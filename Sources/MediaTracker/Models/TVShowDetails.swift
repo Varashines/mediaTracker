@@ -142,6 +142,11 @@ final class TVShowDetails {
     
     func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
         _ = calculateProgress(forceRecalculate: force)
+        // Invalidate badge scan cache when episodes change — this is the correct
+        // place since episode state is what makes the scan stale.
+        if let showID = item?.persistentModelID {
+            BadgeEngine.invalidateScan(for: showID)
+        }
         if triggerSync {
             // Pass force: false to avoid redundant full scan — denormalized counts are already updated by calculateProgress
             item?.syncCachedProperties(force: false)

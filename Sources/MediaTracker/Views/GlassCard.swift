@@ -8,6 +8,7 @@ struct GlassCard<Content: View>: View {
     var material: Material = .ultraThinMaterial
     var cornerRadius: CGFloat = AppTheme.Radius.medium
     var shadowed: Bool = true
+    var isHovered: Bool = false
     @ViewBuilder let content: () -> Content
     @Environment(\.colorScheme) private var scheme
 
@@ -20,11 +21,6 @@ struct GlassCard<Content: View>: View {
                 .fill(material)
                 .allowsHitTesting(false)
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(color != .clear ? color.opacity(scheme == .dark ? 0.04 : 0.02) : .clear)
-                .allowsHitTesting(false)
-        }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -35,6 +31,14 @@ struct GlassCard<Content: View>: View {
                     lineWidth: 0.8
                 )
         }
-        .shadow(color: shadowed ? AppTheme.Colors.shadowAmbient(for: scheme) : .clear, radius: 6, y: 3)
+        .shadow(
+            color: shadowed
+                ? (isHovered
+                    ? AppTheme.Colors.shadowElevated(for: scheme)
+                    : AppTheme.Colors.shadowAmbient(for: scheme))
+                : .clear,
+            radius: isHovered ? AppTheme.Shadow.elevated.radius : AppTheme.Shadow.card.radius,
+            y: isHovered ? AppTheme.Shadow.elevated.y : AppTheme.Shadow.card.y
+        )
     }
 }

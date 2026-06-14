@@ -71,7 +71,7 @@ struct StudioAliasManagerView: View {
             Spacer()
             Button { 
                 modelContext.delete(entity)
-                try? modelContext.save()
+                SaveCoordinator.shared.requestSave(modelContext)
             } label: {
                 Image(systemName: "trash")
                     .font(AppTheme.Font.caption)
@@ -95,7 +95,7 @@ struct StudioAliasManagerView: View {
                         } else {
                             entity.sources.append(net)
                         }
-                        try? modelContext.save()
+                        SaveCoordinator.shared.requestSave(modelContext)
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         Text(net)
@@ -142,7 +142,7 @@ struct StudioAliasManagerView: View {
                     let isLogo = entity.preferredLogoSource == src
                     Button {
                         entity.preferredLogoSource = src
-                        try? modelContext.save()
+                        SaveCoordinator.shared.requestSave(modelContext)
                         FeedbackManager.shared.trigger(.click)
                     } label: {
                         HStack(spacing: 4) {
@@ -174,7 +174,7 @@ struct StudioAliasManagerView: View {
                     if !newGroupName.isEmpty {
                         let newEntity = StudioAliasEntity(target: newGroupName)
                         modelContext.insert(newEntity)
-                        try? modelContext.save()
+                        SaveCoordinator.shared.requestSave(modelContext)
                         newGroupName = ""
                         showingAddGroup = false
                     }
@@ -190,7 +190,7 @@ struct StudioAliasManagerView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
         } else {
             Button {
-                withAnimation { showingAddGroup = true }
+                withAnimation(AppTheme.Animation.springSnappy) { showingAddGroup = true }
             } label: {
                 Label("Add New Group", systemImage: "plus.circle.fill")
                     .font(AppTheme.Font.body)

@@ -139,12 +139,20 @@ struct CreateCollectionSheet: View {
                     if let editing = editingCollection {
                         editing.name = name
                         editing.systemImage = icon
-                        editing.smartRules = smartRules
+                        // Bug fix: only set rules if smart, otherwise clear the data
+                        // to prevent manual collections from silently converting to smart
+                        if isSmart {
+                            editing.smartRules = smartRules
+                        } else {
+                            editing.smartRulesData = nil
+                        }
                     } else {
                         let newCollection = MediaCollection(name: name, systemImage: icon, isSmart: isSmart)
                         if isSmart { newCollection.smartRules = smartRules }
                         modelContext.insert(newCollection)
                     }
+                    // Trigger refresh so the grid updates with new rules/items
+                    MediaStateService.shared.postMediaStateChanged()
                     dismiss()
                 }
                 .buttonStyle(.plain)

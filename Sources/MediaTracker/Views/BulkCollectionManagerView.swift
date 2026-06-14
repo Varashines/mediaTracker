@@ -130,6 +130,12 @@ struct BulkCollectionManagerView: View {
     }
     
     private func saveChanges() {
+        // Clean up completedItemIDs for removed items
+        let removedIDs = collection.items.filter { !selectedItemIDs.contains($0.id) }.map { $0.id }
+        for id in removedIDs {
+            collection.completedItemIDs.removeAll { $0 == id }
+        }
+        
         collection.items.removeAll { item in
             !selectedItemIDs.contains(item.id)
         }
@@ -145,7 +151,7 @@ struct BulkCollectionManagerView: View {
             }
         }
         
-        try? modelContext.save()
+        SaveCoordinator.shared.requestSave(modelContext)
         MediaStateService.shared.postMediaStateChanged()
     }
 }
@@ -160,14 +166,10 @@ struct BulkItemCard: View {
             ZStack(alignment: .topTrailing) {
                 // Poster
                 if let posterURL = item.posterURL, let url = URL(string: "https://image.tmdb.org/t/p/w300\(posterURL)") {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            Color.primary.opacity(0.1)
-                        }
+                    CachedImage(url: url, targetSize: CGSize(width: 120, height: 180)) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.1))
+                            .frame(width: 120, height: 180)
                     }
                     .frame(width: 120, height: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 16))

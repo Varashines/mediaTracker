@@ -11,6 +11,12 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     let modelContext: ModelContext
     let onRefresh: () -> Void
 
+    private var isSmartCollection: Bool {
+        guard let cid = viewModel.collection.selectedCollectionID else { return false }
+        let descriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
+        return (try? modelContext.fetch(descriptor).first?.isSmart) ?? false
+    }
+
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             if !isSearchActive {
@@ -18,7 +24,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                     collectionNavigationToolbar
                 } else if isSystemSmartCategory {
                     Button {
-                        withAnimation {
+                        withAnimation(AppTheme.Animation.springSnappy) {
                             sidebarSelection = .category(.smartHub)
                         }
                     } label: {
@@ -39,7 +45,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     private var collectionNavigationToolbar: some View {
         HStack(spacing: AppTheme.Spacing.micro) {
             Button {
-                withAnimation {
+                withAnimation(AppTheme.Animation.springSnappy) {
                     sidebarSelection = .category(.smartHub)
                     viewModel.collection.selectedCollectionID = nil
                 }
@@ -69,13 +75,15 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 Image(systemName: "plus.square.on.square")
                     .font(AppTheme.Icon.medium)
             }
-            .help("Manage Items")
+            .disabled(isSmartCollection)
+            .help(isSmartCollection ? "Cannot manage items in smart collections" : "Manage Items")
         }
     }
 
     @ViewBuilder
     private var refreshButton: some View {
         Button {
+            FeedbackManager.shared.trigger(.click)
             onRefresh()
         } label: {
             Image(systemName: "arrow.clockwise")

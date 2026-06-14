@@ -314,7 +314,7 @@ private struct SeasonSection: View {
         let targetStatus = !isAllWatched
         // Defensive: skip deleted/detached episodes during concurrent merges
         let liveEpisodes = season.episodes.liveModels
-        withAnimation {
+        withAnimation(AppTheme.Animation.springSnappy) {
             for episode in liveEpisodes {
                 episode.markWatched(targetStatus)
             }

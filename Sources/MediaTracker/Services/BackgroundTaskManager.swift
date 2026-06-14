@@ -274,7 +274,7 @@ class BackgroundTaskManager {
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
         let now = Date()
-        let twoDaysAgo = now.addingTimeInterval(-172800)
+        let twoDaysAgo = now.addingTimeInterval(-TimeInterval.days2)
         
         let distantFuture = Date.distantFuture
         // Phase 5 Performance: Split complex predicates to avoid compiler timeouts

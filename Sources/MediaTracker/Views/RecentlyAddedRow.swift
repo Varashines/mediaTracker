@@ -13,6 +13,7 @@ struct RecentlyAddedRow: View {
                     ForEach(items) { metadata in
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling)
+                                .equatable()
                                 .id(metadata.versionHash)
                         }
                         .buttonStyle(.interactive)

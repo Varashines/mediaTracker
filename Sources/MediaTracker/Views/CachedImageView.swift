@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 struct CachedImage<Placeholder: View>: View {
     let url: URL?
@@ -14,7 +13,8 @@ struct CachedImage<Placeholder: View>: View {
     
     @State private var image: CGImage?
     @State private var isLoading = false
-    @State private var broadcastCancellable: AnyCancellable?
+    @State private var observer: NSObjectProtocol?
+    @State private var clearObserver: NSObjectProtocol?
  
     init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
@@ -52,6 +52,7 @@ struct CachedImage<Placeholder: View>: View {
             setupBroadcastListener()
         }
         .onDisappear {
+            removeObservers()
             if let url = url {
                 ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
             }
@@ -97,17 +98,49 @@ struct CachedImage<Placeholder: View>: View {
     private func setupBroadcastListener() {
         guard let url = url else { return }
         let key = url.absoluteString
+        let cachedTargetSize = self.targetSize
         
-        broadcastCancellable?.cancel()
-        broadcastCancellable = ImageCache.shared.updates
-            .filter { $0 == key || $0 == "CLEARED_ALL" }
-            .receive(on: DispatchQueue.main)
-            .sink { _ in
-                if ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) == nil {
+        removeObservers()
+        
+        // Per-key notification — only fires when THIS specific image is updated.
+        // The closure is @Sendable so we capture only Sendable values and dispatch
+        // all MainActor work through Task.
+        observer = NotificationCenter.default.addObserver(
+            forName: .imageCacheUpdated,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let updatedKey = notification.userInfo?["key"] as? String, updatedKey == key else { return }
+            Task { @MainActor in
+                if ImageCache.shared.checkMemoryCache(forKey: key, targetSize: cachedTargetSize) == nil {
                     self.image = nil
                 }
-                Task { await attemptLoad() }
+                await self.attemptLoad()
             }
+        }
+        
+        // Global cache clear — fires when any cache is wiped
+        clearObserver = NotificationCenter.default.addObserver(
+            forName: .imageCacheCleared,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                self.image = nil
+                await self.attemptLoad()
+            }
+        }
+    }
+    
+    private func removeObservers() {
+        if let obs = observer {
+            NotificationCenter.default.removeObserver(obs)
+            observer = nil
+        }
+        if let obs = clearObserver {
+            NotificationCenter.default.removeObserver(obs)
+            clearObserver = nil
+        }
     }
 
     private func attemptLoad() async {

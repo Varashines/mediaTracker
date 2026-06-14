@@ -37,6 +37,7 @@ extension BackgroundDataService {
             let prodLogos = details.productionCompanies.map { $0.logoPath ?? "" }
             movieDetails.network = prodNames.isEmpty ? nil : prodNames.joined(separator: ",")
             movieDetails.networkLogoPath = prodLogos.isEmpty ? nil : prodLogos.joined(separator: ",")
+            movieDetails.status = details.status
             
             let newCastResults = details.cast
             let currentCast = item.displayCast

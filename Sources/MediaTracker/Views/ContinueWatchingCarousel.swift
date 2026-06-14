@@ -27,6 +27,7 @@ struct ContinueWatchingCarousel: View {
                             MediaThumbnailView(
                                 metadata: metadata, mode: .hero, namespace: namespace,
                                 isFastScrolling: isFastScrolling)
+                            .equatable()
                         }
                         .buttonStyle(.interactive)
                     }

@@ -128,9 +128,6 @@ actor BackgroundDataService {
                                 )
                                 episode.uniqueID = epUniqueID
                                 episode.season = season
-                                if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
-                                    season.episodes.append(episode)
-                                }
                                 context.insert(episode)
                             }
                             continue
@@ -151,9 +148,6 @@ actor BackgroundDataService {
                                 if watchedNumbers.contains(epData.episodeNumber) {
                                     existing.markWatched(true)
                                 }
-                                if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
-                                    season.episodes.append(existing)
-                                }
                                 continue
                             }
 
@@ -169,9 +163,6 @@ actor BackgroundDataService {
                             )
                             episode.uniqueID = epUniqueID
                             episode.season = season
-                            if !season.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
-                                season.episodes.append(episode)
-                            }
                             context.insert(episode)
                         }
                     }
@@ -191,6 +182,14 @@ actor BackgroundDataService {
         let backdropURL = item.backdropURL
         let typePrefix = item.type == .movie ? "movie" : "tv"
         let tmdbID = item.id.split(separator: "_").last ?? ""
+        
+        // Clean up completedItemIDs in all collections before delete
+        let allCollectionsDescriptor = FetchDescriptor<MediaCollection>()
+        if let allCollections = try? modelContext.fetch(allCollectionsDescriptor) {
+            for collection in allCollections {
+                collection.completedItemIDs.removeAll { $0 == id }
+            }
+        }
         
         modelContext.delete(item)
         
@@ -322,6 +321,11 @@ actor BackgroundDataService {
         // Full recount to fix any drift from concurrent onBadgeChanged tasks
         let sync = DiscoverySyncService(modelContainer: modelContext.container)
         await sync.syncLibrary(force: false)
+        
+        // Broadcast so UI refreshes with healed data
+        await MainActor.run {
+            MediaStateService.shared.postMediaStateChanged()
+        }
         
         AppLogger.info("✅ Maintenance: Library heal complete.", logger: AppLogger.background)
     }
@@ -685,6 +689,9 @@ actor BackgroundDataService {
         tv.recalculateCachedProperties(triggerSync: true, force: true)
         refreshedItem.lastInteractionDate = Date()
         refreshedItem.syncCachedProperties(force: true)
+        
+        // Invalidate badge scan cache since episodes changed
+        BadgeEngine.invalidateScan(for: refreshedItem.persistentModelID)
         
         do {
             try modelContext.save()

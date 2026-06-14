@@ -162,7 +162,7 @@ struct ShimmeringModifier: ViewModifier {
                 GeometryReader { geo in
                     let width = geo.size.width
                     LinearGradient(
-                        colors: [.clear, .white.opacity(0.15), .clear],
+                        colors: [.clear, .white.opacity(0.22), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -300,35 +300,7 @@ extension View {
 
 }
 
-struct BottomBarModifier<Bar: View>: ViewModifier {
-    @ViewBuilder let bar: () -> Bar
-
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content
-                .safeAreaBar(edge: .bottom, spacing: 0) {
-                    bar()
-                        .padding(.bottom, 12)
-                }
-        } else {
-            ZStack {
-                content
-                VStack {
-                    Spacer()
-                    bar()
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        .padding(.bottom, 16)
-                }
-            }
-        }
-    }
-}
-
 extension View {
-    func bottomActionBarOverlay<Bar: View>(@ViewBuilder bar: @escaping () -> Bar) -> some View {
-        modifier(BottomBarModifier(bar: bar))
-    }
-
     @ViewBuilder
     func toolbarTitleMenuIfAvailable<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
         if #available(macOS 15, *) {

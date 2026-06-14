@@ -40,15 +40,18 @@ class AppThemeCoordinator {
     }
 
     func updateThemeColors() {
-        let isDark = isDarkActive
-        
         // Compute Accent
-        if customThemePalette == 1 {
-            self.accent = isDark ? (Color(hex: "#C87A53") ?? .accentColor) : (Color(hex: "#5C8075") ?? .accentColor)
-        } else if customThemePalette == 2 {
-            self.accent = Color(hex: "#6E7BB8") ?? .accentColor
-        } else {
-            self.accent = .accentColor
+        switch customThemePalette {
+        case 1:
+            self.accent = Color(hex: "#9B7B6B") ?? .accentColor  // Earth
+        case 2:
+            self.accent = Color(hex: "#6E7BB8") ?? .accentColor  // Cool
+        case 3:
+            self.accent = Color(hex: "#059669") ?? .accentColor  // Forest
+        case 4:
+            self.accent = Color(hex: "#2563EB") ?? .accentColor  // Ocean
+        default:
+            self.accent = .accentColor  // Standard
         }
     }
 
@@ -65,31 +68,28 @@ class AppThemeCoordinator {
 
     func background(for colorScheme: ColorScheme) -> Color {
         let isDark = isDarkActive
-        if isDark {
-            if customThemePalette == 1 {
-                return Color(hex: "#19221F") ?? Color(white: 0.11)
-            } else if customThemePalette == 2 {
-                return Color(hex: "#151C25") ?? Color(white: 0.11)
-            }
-            return Color(white: 0.11)
-        } else {
-            if customThemePalette == 1 {
-                return Color(hex: "#FAF6EE") ?? Color(white: 0.96)
-            } else if customThemePalette == 2 {
-                return Color(hex: "#F3F5F7") ?? Color(white: 0.96)
-            }
-            return Color(white: 0.96)
+        switch customThemePalette {
+        case 1: // Earth — barely warm tint
+            return Color(hex: isDark ? "#1E1C1A" : "#F9F6F3") ?? Color(white: isDark ? 0.11 : 0.96)
+        case 2: // Cool — barely cool tint
+            return Color(hex: isDark ? "#1A1B20" : "#F6F7FA") ?? Color(white: isDark ? 0.11 : 0.96)
+        case 3: // Forest — barely green tint
+            return Color(hex: isDark ? "#181C1A" : "#F7FAF8") ?? Color(white: isDark ? 0.11 : 0.96)
+        case 4: // Ocean — barely blue tint
+            return Color(hex: isDark ? "#181A20" : "#F5F7FC") ?? Color(white: isDark ? 0.11 : 0.96)
+        default: // Standard — neutral
+            return Color(white: isDark ? 0.11 : 0.96)
         }
     }
 
     func cardFill(for colorScheme: ColorScheme) -> Color {
         let isDark = isDarkActive
-        if customThemePalette == 1 {
-            return Color(hex: isDark ? "#222B28" : "#F1EBE0") ?? Color.primary.opacity(isDark ? 0.04 : 0.02)
-        } else if customThemePalette == 2 {
-            return Color(hex: isDark ? "#1E2633" : "#E8ECEF") ?? Color.primary.opacity(isDark ? 0.04 : 0.02)
+        switch customThemePalette {
+        case 1, 2, 3, 4: // All tinted palettes — subtle card fill
+            return Color.primary.opacity(isDark ? 0.05 : 0.03)
+        default: // Standard — neutral card fill
+            return Color.primary.opacity(isDark ? 0.04 : 0.02)
         }
-        return Color.primary.opacity(isDark ? 0.04 : 0.02)
     }
 
     func updateMood(for colors: [Color], colorScheme: ColorScheme, force: Bool = false) {

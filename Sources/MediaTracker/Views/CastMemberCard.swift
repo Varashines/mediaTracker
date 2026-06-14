@@ -76,7 +76,7 @@ struct CastMemberCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: 140, alignment: .leading)
-        .frame(maxHeight: .infinity, alignment: hasCharacterName ? .top : .center)
+        .frame(maxHeight: .infinity, alignment: .center)
     }
 
     private func borderOverlay() -> some View {

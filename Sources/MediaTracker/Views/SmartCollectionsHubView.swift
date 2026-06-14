@@ -251,10 +251,10 @@ struct SmartCollectionsHubView: View {
             }
         }
         .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-            let itemID = MediaStateService.shared.lastChangedItemID
-            if itemID == nil {
-                Task { await fetchCollections() }
-            }
+            Task { await fetchCollections() }
+            // Also refresh counts when items change
+            countsLoaded = false
+            Task { await fetchCounts() }
         }
         .onChange(of: refreshID) { _, _ in
             countsLoaded = false
@@ -326,57 +326,61 @@ struct SmartCollectionsHubView: View {
 
     private func fetchCounts() async {
         let actor = getFilterActor()
-        var newCounts: [NavigationCategory: Int] = [:]
-        var newCustomCounts: [UUID: Int] = [:]
         
-        for cat in smartCategories {
-            do {
-                let result = try await actor.filterAndSort(
-                    category: cat,
-                    searchText: "",
-                    sortOrder: .alphabetical,
-                    network: nil,
-                    language: nil,
-                    genre: nil,
-                    year: nil,
-                    state: nil,
-                    badge: nil,
-                    limit: 1,
-                    offset: 0
-                )
-                newCounts[cat] = result.totalCount
-            } catch {
-                AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
+        // Parallelize smart category counts using TaskGroup
+        let smartCounts = await withTaskGroup(of: (NavigationCategory, Int)?.self, returning: [NavigationCategory: Int].self) { group in
+            for cat in smartCategories {
+                group.addTask {
+                    do {
+                        let result = try await actor.filterAndSort(
+                            category: cat, searchText: "", sortOrder: .alphabetical,
+                            network: nil, language: nil, genre: nil, year: nil,
+                            state: nil, badge: nil, limit: 1, offset: 0
+                        )
+                        return (cat, result.totalCount)
+                    } catch {
+                        AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
+                        return nil
+                    }
+                }
             }
+            var counts: [NavigationCategory: Int] = [:]
+            for await result in group {
+                if let (cat, count) = result { counts[cat] = count }
+            }
+            return counts
         }
         
-        for collection in customSmartCollections {
-            do {
-                let result = try await actor.filterAndSort(
-                    category: .all,
-                    searchText: "",
-                    sortOrder: .alphabetical,
-                    network: nil,
-                    language: nil,
-                    genre: nil,
-                    year: nil,
-                    state: nil,
-                    badge: nil,
-                    collectionID: collection.id,
-                    limit: 1,
-                    offset: 0
-                )
-                newCustomCounts[collection.id] = result.totalCount
-            } catch {
-                AppLogger.debug("Error fetching count for smart collection \(collection.name): \(error)")
+        // Parallelize custom collection counts
+        let customCollectionIDs = customSmartCollections.map { ($0.id, $0.name) }
+        let customCounts = await withTaskGroup(of: (UUID, Int)?.self, returning: [UUID: Int].self) { group in
+            for (collectionID, collectionName) in customCollectionIDs {
+                group.addTask {
+                    do {
+                        let result = try await actor.filterAndSort(
+                            category: .all, searchText: "", sortOrder: .alphabetical,
+                            network: nil, language: nil, genre: nil, year: nil,
+                            state: nil, badge: nil, collectionID: collectionID, limit: 1, offset: 0
+                        )
+                        return (collectionID, result.totalCount)
+                    } catch {
+                        AppLogger.debug("Error fetching count for smart collection \(collectionName): \(error)")
+                        return nil
+                    }
+                }
             }
+            var counts: [UUID: Int] = [:]
+            for await result in group {
+                if let (id, count) = result { counts[id] = count }
+            }
+            return counts
         }
         
-        await HubCountsCache.shared.save(counts: newCounts, customCounts: newCustomCounts)
+        await HubCountsCache.shared.save(counts: smartCounts, customCounts: customCounts)
         await MainActor.run {
             withAnimation(.easeInOut(duration: 0.3)) {
-                self.counts = newCounts
-                self.customSmartCounts = newCustomCounts
+                self.counts = smartCounts
+                self.customSmartCounts = customCounts
                 self.countsLoaded = true
             }
         }
@@ -481,7 +485,7 @@ private struct SmartCollectionCard: View {
         .contextMenu {
             if let collection = collection {
                 Button {
-                    withAnimation { collection.isPinned.toggle() }
+                    withAnimation(AppTheme.Animation.springSnappy) { collection.isPinned.toggle() }
                 } label: {
                     Label(collection.isPinned ? "Unpin from Sidebar" : "Pin to Sidebar", systemImage: collection.isPinned ? "pin.slash.fill" : "pin")
                 }
@@ -496,6 +500,8 @@ private struct SmartCollectionCard: View {
                 
                 Button(role: .destructive) {
                     modelContext.delete(collection)
+                    SaveCoordinator.shared.requestSave(modelContext)
+                    MediaStateService.shared.postMediaStateChanged()
                 } label: {
                     Label("Delete Collection", systemImage: "trash")
                 }

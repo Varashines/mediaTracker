@@ -23,7 +23,7 @@ struct NoteOverlayView: View {
                             .font(.headline)
                         Spacer()
                         Button {
-                            withAnimation {
+                            withAnimation(AppTheme.Animation.springSnappy) {
                                 viewModel.collection.showingNoteOverlay = false
                             }
                         } label: {

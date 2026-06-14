@@ -382,7 +382,7 @@ actor MediaFilterActor {
         case .completed:
             if fetchedItem.stateValue != "Completed" { return nil }
         case .archive:
-            if fetchedItem.stateValue != "Archive" { return nil }
+            if fetchedItem.stateValue != "On Hold" && fetchedItem.stateValue != "Dropped" && fetchedItem.stateValue != "Re-watching" { return nil }
         case .disliked:
             if fetchedItem.tasteValue != TasteValue.dislike.rawValue { return nil }
         case .binge:

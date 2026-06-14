@@ -48,11 +48,11 @@ struct ReleaseCalendarView: View {
 
                     // 2. RIGHT PANE: Release Details
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 35) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
                             if let data = calendarData {
                                 weekFocusRow(data: data)
 
-                                Divider().padding(.vertical, 10)
+                                Divider().padding(.vertical, AppTheme.Spacing.small)
 
                                 if let date = selectedDate, let dayInfo = data.days[date] {
                                     headerSection(date: date, count: dayInfo.items.count)
@@ -71,9 +71,9 @@ struct ReleaseCalendarView: View {
                                 }
                             }
                         }
-                        .padding(.top, 30)
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 40)
+                        .padding(.top, AppTheme.Spacing.large)
+                        .padding(.horizontal, AppTheme.Spacing.xLarge)
+                        .padding(.bottom, AppTheme.Spacing.xLarge)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(maxWidth: .infinity)
@@ -101,7 +101,7 @@ struct ReleaseCalendarView: View {
                     .font(AppTheme.Font.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.03))
+                    .background(Color.primary.opacity(0.06))
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -111,7 +111,7 @@ struct ReleaseCalendarView: View {
             let isSelected = selectedDate == nil
             
             Button {
-                withAnimation(.easeInOut(duration: 0.3)) {
+                withAnimation(AppTheme.Animation.springSnappy) {
                     selectedDate = nil
                 }
             } label: {
@@ -135,6 +135,28 @@ struct ReleaseCalendarView: View {
             
             Spacer()
             
+            // Today button — jump back to current month
+            let isCurrentMonth = Calendar.current.isDate(currentDisplayMonth, equalTo: Date(), toGranularity: .month)
+            if !isCurrentMonth {
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        let calendar = Calendar.current
+                        currentDisplayMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+                        selectedDate = Date()
+                    }
+                    refreshData(for: currentDisplayMonth)
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(AppTheme.Font.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Jump to current month")
+            }
+            
             Button {
                 changeMonth(by: 1)
             } label: {
@@ -142,7 +164,7 @@ struct ReleaseCalendarView: View {
                     .font(AppTheme.Font.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.03))
+                    .background(Color.primary.opacity(0.06))
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -154,9 +176,9 @@ struct ReleaseCalendarView: View {
             let calendar = Calendar.current
             let newMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: newDate)) ?? newDate
             
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 currentDisplayMonth = newMonth
-                selectedDate = nil // Reset to All Month view when navigating
+                selectedDate = nil
             }
             refreshData(for: newMonth)
         }
@@ -258,13 +280,12 @@ struct ReleaseCalendarView: View {
         let calendar = Calendar.current
         let sortedDays = data.days.values.sorted { $0.date < $1.date }
         
-        // Group by weeks for the GitHub look, but aligned to actual weekdays
         let weeks: [[CalendarDayInfo?]] = {
             var res: [[CalendarDayInfo?]] = []
             var currentWeek: [CalendarDayInfo?] = Array(repeating: nil, count: 7)
             
             for day in sortedDays {
-                let weekday = calendar.component(.weekday, from: day.date) // 1 = Sunday, 7 = Saturday
+                let weekday = calendar.component(.weekday, from: day.date)
                 currentWeek[weekday - 1] = day
                 
                 if weekday == 7 {
@@ -279,42 +300,40 @@ struct ReleaseCalendarView: View {
         }()
         
         VStack(alignment: .leading, spacing: 15) {
-            // Weekday labels
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
                     Text(day)
-                        .font(.system(size: 10, weight: .bold))
-                        .frame(width: 32)
+                        .font(AppTheme.Font.small)
+                        .frame(width: 38)
                         .foregroundStyle(.secondary)
                 }
             }
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(weeks.indices, id: \.self) { weekIdx in
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         ForEach(0..<7) { dayIdx in
                             if let day = weeks[weekIdx][dayIdx] {
                                 calendarCell(day: day)
                             } else {
-                                RoundedRectangle(cornerRadius: 3)
+                                RoundedRectangle(cornerRadius: 5)
                                     .fill(Color.clear)
-                                    .frame(width: 32, height: 32)
+                                    .frame(width: 38, height: 38)
                             }
                         }
                     }
                 }
             }
             
-            // Legend
             HStack(spacing: 4) {
-                Text("Less").font(.caption2).foregroundStyle(.secondary)
+                Text("Less").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
                 let legendColors = Self.legendColors(for: colorScheme)
                 ForEach(0..<5) { i in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(legendColors[i])
                         .frame(width: 10, height: 10)
                 }
-                Text("More").font(.caption2).foregroundStyle(.secondary)
+                Text("More").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
             }
             .padding(.top, 10)
         }
@@ -326,21 +345,22 @@ struct ReleaseCalendarView: View {
         let today = calendar.startOfDay(for: Date())
         let next7Days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
         
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             Text("NEXT 7 DAYS")
-                .font(.system(size: 10, weight: .semibold))
-                .kerning(1.2)
+                .font(AppTheme.Font.caption2)
+                .kerning(AppTheme.Kerning.wide)
                 .foregroundStyle(.secondary)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: AppTheme.Spacing.small) {
                     ForEach(next7Days, id: \.self) { date in
                         let dayInfo = data.days[date]
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
                         let accent = AppTheme.Colors.accent
+                        let itemCount = dayInfo?.items.count ?? 0
 
                         Button {
-                            withAnimation(.easeInOut(duration: 0.3)) { selectedDate = date }
+                            withAnimation(AppTheme.Animation.springSnappy) { selectedDate = date }
                         } label: {
                             VStack(spacing: 6) {
                                 Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
@@ -351,24 +371,30 @@ struct ReleaseCalendarView: View {
                                     .font(AppTheme.Font.subtitle)
                                     .foregroundStyle(isSelected ? accent : .primary)
                                 
-                                if let info = dayInfo, !info.items.isEmpty {
-                                    Circle()
-                                        .fill(isSelected ? accent : Color.primary.opacity(0.5))
-                                        .frame(width: 4, height: 4)
+                                // Count badge instead of dot
+                                if itemCount > 0 {
+                                    Text("\(itemCount)")
+                                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                                        .foregroundStyle(isSelected ? .white : accent)
+                                        .frame(width: 16, height: 16)
+                                        .background(isSelected ? accent : accent.opacity(0.15))
+                                        .clipShape(Circle())
+                                } else {
+                                    Color.clear.frame(width: 16, height: 16)
                                 }
                             }
-                            .frame(width: 50, height: 72)
+                            .frame(width: 50, height: 80)
                             .background {
                                 if isSelected {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                                         .fill(Color.primary.opacity(0.06))
                                         .matchedGeometryEffect(id: "week_selection_bg", in: calendarNamespace)
                                         .overlay {
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                                                 .stroke(accent.opacity(0.3), lineWidth: 0.8)
                                         }
                                 } else {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                                         .fill(Color.primary.opacity(0.03))
                                 }
                             }
@@ -393,12 +419,10 @@ struct ReleaseCalendarView: View {
             
             let o = AppTheme.Colors.accent.oklch
             if colorScheme == .dark {
-                // Light to Dark: L goes from 0.8 (Less) to 0.3 (More)
                 let l = 0.8 - (day.intensity * 0.5)
                 let c = (o.c * 0.5) + (day.intensity * (o.c * 0.5))
                 return Color.fromOKLCH(l: l, c: c, h: o.h)
             } else {
-                // Light to Dark: L goes from 0.95 (Less) to 0.4 (More)
                 let l = 0.95 - (day.intensity * 0.55)
                 let c = (o.c * 0.6) + (day.intensity * (o.c * 0.4))
                 return Color.fromOKLCH(l: l, c: c, h: o.h)
@@ -407,51 +431,37 @@ struct ReleaseCalendarView: View {
         
         let vibrantAccent = AppTheme.Colors.accent
         
-        RoundedRectangle(cornerRadius: 4)
-            .fill(cellColor)
-            .frame(width: 32, height: 32)
-            .overlay {
-                if isToday {
-                    Circle()
-                        .fill(colorScheme == .dark ? Color.white : Color.black)
-                        .frame(width: 4, height: 4)
-                        .offset(y: 10)
-                }
+        CalendarCellView(
+            day: day, isSelected: isSelected, isToday: isToday,
+            cellColor: cellColor, accent: vibrantAccent
+        ) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(vibrantAccent, lineWidth: 2)
-                        .padding(-2)
+                    selectedDate = nil
+                } else {
+                    selectedDate = day.date
                 }
             }
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    if isSelected {
-                        selectedDate = nil
-                    } else {
-                        selectedDate = day.date
-                    }
-                }
-            }
-            .help("\(day.date.formatted(date: .abbreviated, time: .omitted)): \(day.items.count) releases")
+        }
     }
     
     // MARK: - Detail Components
     
     @ViewBuilder
     private func headerSection(date: Date, count: Int = 0, isAllMonth: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
             let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
             Text(isAllMonth ? "FULL MONTH OVERVIEW" : date.formatted(date: .complete, time: .omitted).uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppTheme.Font.caption)
                 .foregroundStyle(accent)
-                .kerning(1.2)
+                .kerning(AppTheme.Kerning.wide)
             
             Text(isAllMonth ? date.formatted(.dateTime.month(.wide).year()) : "\(count) Releases")
                 .font(AppTheme.Font.largeTitle)
             
             if isAllMonth {
                 Text("\(count) total releases this month")
-                    .font(.headline)
+                    .font(AppTheme.Font.heading)
                     .foregroundStyle(.secondary)
             }
         }
@@ -473,9 +483,9 @@ struct ReleaseCalendarView: View {
     
     @ViewBuilder
     private func releasesList(items: [CalendarReleaseItem]) -> some View {
-        let columns = [GridItem(.adaptive(minimum: 160), spacing: 25)]
+        let columns = [GridItem(.adaptive(minimum: 160), spacing: AppTheme.Spacing.large)]
         
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             ForEach(items) { item in
                 releaseThumbnail(item: item)
             }
@@ -489,9 +499,9 @@ struct ReleaseCalendarView: View {
         }
         let sortedDays = groupedByDay.keys.sorted()
         
-        VStack(alignment: .leading, spacing: 40) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             ForEach(sortedDays, id: \.self) { day in
-                VStack(alignment: .leading, spacing: 15) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                     HStack {
                         Text(day.formatted(.dateTime.day().month()))
                             .font(AppTheme.Font.subtitle)
@@ -526,6 +536,19 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
         let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
+        ReleaseThumbnailCard(item: item, accent: accent)
+    }
+}
+
+// MARK: - Release Thumbnail with Hover
+
+private struct ReleaseThumbnailCard: View {
+    let item: CalendarReleaseItem
+    let accent: Color
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             MediaThumbnailView(metadata: item.metadata, mode: .grid)
             
@@ -537,6 +560,51 @@ struct ReleaseCalendarView: View {
                 .foregroundStyle(accent)
                 .clipShape(Capsule())
         }
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .shadow(color: isHovered ? accent.opacity(0.2) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .onHover { isHovered = $0 }
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+// MARK: - Calendar Cell with Hover
+
+private struct CalendarCellView: View {
+    let day: CalendarDayInfo
+    let isSelected: Bool
+    let isToday: Bool
+    let cellColor: Color
+    let accent: Color
+    let onTap: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        Button(action: onTap) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(cellColor)
+                .frame(width: 38, height: 38)
+                .scaleEffect(isHovered ? 1.12 : 1.0)
+                .shadow(color: isHovered ? accent.opacity(0.3) : .clear, radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
+                .overlay {
+                    if isToday {
+                        Circle()
+                            .fill(colorScheme == .dark ? Color.white : Color.black)
+                            .frame(width: 4, height: 4)
+                            .offset(y: 13)
+                    }
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(accent, lineWidth: 2)
+                            .padding(-2)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .onHover { isHovered = $0 }
+        .help("\(day.date.formatted(date: .abbreviated, time: .omitted)): \(day.items.count) releases")
     }
 }

@@ -12,9 +12,6 @@ struct DetailView: View {
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
-    @State private var isCollHovered = false
-    @State private var isCopyHovered = false
-    @State private var isTrailerHovered = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -40,9 +37,18 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
-            AppTheme.Colors.background(for: colorScheme)
-                .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
-                .ignoresSafeArea()
+            let hasPoster = viewModel.item.posterURL != nil
+
+            // Use neutral bg when poster exists, palette bg when no poster
+            Group {
+                if hasPoster {
+                    Color(white: colorScheme == .dark ? 0.11 : 0.96)
+                } else {
+                    AppTheme.Colors.background(for: colorScheme)
+                }
+            }
+            .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
+            .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
@@ -64,16 +70,13 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
-                .padding(.bottom, 24)
+                .padding(.bottom, 8)
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .scrollBounceBehavior(.always)
             .coordinateSpace(name: "detailScroll")
             .saturation(showDeleteConfirmation ? 0.3 : 1)
-            .blur(radius: showDeleteConfirmation ? 2 : 0)
+            .blur(radius: showDeleteConfirmation ? 5 : 0)
 
-        }
-        .bottomActionBarOverlay {
-            bottomActionBar
         }
         .overlay {
             if showDeleteConfirmation {
@@ -308,75 +311,38 @@ struct DetailView: View {
                 .frame(width: 32, height: 32)
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .help("Delete from library")
+
+                Menu {
+                    if viewModel.trailerKey != nil {
+                        Button("Play Trailer") { openTrailer() }
+                    }
+                    Button("Add to Collection") { showingCollectionPicker = true }
+                        .keyboardShortcut("l", modifiers: [.command])
+                    Button("Copy Title") { copyTitle() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: 28, height: 28)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 32, height: 32)
             }
         }
     }
 
-    // MARK: - Bottom Action Bar
+    // MARK: - Actions
 
-    @ViewBuilder
-    private var bottomActionBar: some View {
-        HStack(spacing: 0) {
-            if let trailerKey = viewModel.trailerKey {
-                Button {
-                    if let url = URL(string: "https://www.youtube.com/watch?v=\(trailerKey)") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Label("Play Trailer", systemImage: "play.fill")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(isTrailerHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(AppTheme.Animation.easeInOut) { isTrailerHovered = hovering }
-                }
+    private func openTrailer() {
+        guard let key = viewModel.trailerKey,
+              let url = URL(string: "https://www.youtube.com/watch?v=\(key)") else { return }
+        NSWorkspace.shared.open(url)
+    }
 
-                Divider()
-                    .frame(height: 20)
-            }
-
-            Button {
-                showingCollectionPicker = true
-            } label: {
-                Label("Add to Collection", systemImage: "folder.badge.plus")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(isCollHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("l", modifiers: [.command])
-            .onHover { hovering in
-                withAnimation(AppTheme.Animation.easeInOut) { isCollHovered = hovering }
-            }
-
-            Divider()
-                .frame(height: 20)
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(viewModel.item.title, forType: .string)
-                AppErrorState.shared.showToast("Title copied", style: .success)
-            } label: {
-                Label("Copy Title", systemImage: "doc.on.doc")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(isCopyHovered ? effectiveThemeColor.highContrastAccent(colorScheme: colorScheme) : Color.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(AppTheme.Animation.easeInOut) { isCopyHovered = hovering }
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.15 : 0.08), radius: 6, y: 3)
+    private func copyTitle() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(viewModel.item.title, forType: .string)
+        AppErrorState.shared.showToast("Title copied", style: .success)
     }
 
     @ViewBuilder

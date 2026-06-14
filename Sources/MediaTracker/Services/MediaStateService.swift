@@ -18,6 +18,9 @@ final class MediaStateService {
     // Any view — update single item in-place
     private(set) var lastChangedItemID: PersistentIdentifier?
 
+    // Debounce taste cache invalidation — avoid full library re-scan on rapid state changes
+    private var tasteCacheDebounceTask: Task<Void, Never>?
+
     func postMediaStateChanged(itemID: PersistentIdentifier? = nil) {
         if let itemID {
             needsSingleItemUpdateCount += 1
@@ -26,7 +29,7 @@ final class MediaStateService {
             needsFullRefreshCount += 1
             lastChangedItemID = nil
         }
-        TasteActor.clearCache()
+        debouncedTasteClear()
     }
 
     func postItemRefreshed(id: String, persistentID: PersistentIdentifier? = nil) {
@@ -39,12 +42,22 @@ final class MediaStateService {
             refreshedItemID = id
             lastChangedItemID = nil
         }
-        TasteActor.clearCache()
+        debouncedTasteClear()
     }
 
     func postBulkRefreshed() {
         needsFullRefreshCount += 1
         lastChangedItemID = nil
-        TasteActor.clearCache()
+        debouncedTasteClear()
+    }
+
+    /// Debounce taste cache clear — coalesce rapid state changes into a single invalidation
+    private func debouncedTasteClear() {
+        tasteCacheDebounceTask?.cancel()
+        tasteCacheDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+            guard !Task.isCancelled else { return }
+            TasteActor.clearCache()
+        }
     }
 }

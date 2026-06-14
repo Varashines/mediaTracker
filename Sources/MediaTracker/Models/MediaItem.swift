@@ -43,6 +43,7 @@ final class MediaItem: Identifiable {
     var searchableText: String = ""
     var storedCast: [SimpleCastMember] = []
     var cachedTrailerKey: String?
+    var cachedTMDBStatus: String?
     
     var collections: [MediaCollection] = []
 
@@ -67,7 +68,11 @@ final class MediaItem: Identifiable {
     func commitChange() {
         syncCachedProperties(force: true)
         guard let context = modelContext else { return }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            AppLogger.error("Failed to save \(title): \(error.localizedDescription)", logger: AppLogger.data)
+        }
         let pid = persistentModelID
         Task { @MainActor in
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
@@ -127,6 +132,8 @@ final class MediaItem: Identifiable {
             }
         }
         details.recalculateCachedProperties(triggerSync: true)
+        // Ensure episodes and cached properties are persisted
+        try? modelContext?.save()
     }
 
     func applyStateChange(_ newState: MediaState) {
@@ -134,6 +141,7 @@ final class MediaItem: Identifiable {
         state = newState
         if didChange {
             lastUpdated = Date()
+            if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
             commitChange()
         }
     }

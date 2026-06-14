@@ -6,6 +6,7 @@ class CollectionState {
         didSet {
             if selectedCollectionID == nil {
                 selectedCollectionName = nil
+                showingNoteOverlay = false
             }
         }
     }

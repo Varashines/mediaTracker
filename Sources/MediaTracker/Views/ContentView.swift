@@ -33,6 +33,8 @@ struct ContentView: View {
                             viewModel.filter.selectedCategory = .smartHub
                             viewModel.collection.selectedCollectionID = id
                             viewModel.collection.selectedCollectionName = name
+                            viewModel.filter.selectedNetworks = nil
+                            viewModel.filter.selectedLanguage = nil
                             viewModel.filter.selectedGenre = nil
                             viewModel.filter.selectedYear = nil
                             viewModel.filter.selectedState = nil
@@ -155,13 +157,37 @@ struct LibraryDetailView: View {
                 prompt: searchPlaceholder
             )
             .toolbarTitleMenuIfAvailable {
-                Button("Home") { viewModel.filter.selectedCategory = .home }
-                Button("Discovery Hub") { viewModel.filter.selectedCategory = .discover }
-                Button("Release Calendar") { viewModel.filter.selectedCategory = .upcoming }
+                Button("Home") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .home
+                }
+                Button("Discovery Hub") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .discover
+                }
+                Button("Release Calendar") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .upcoming
+                }
                 Divider()
-                Button("Library") { viewModel.filter.selectedCategory = .all }
-                Button("Movies") { viewModel.filter.selectedCategory = .movie }
-                Button("TV Shows") { viewModel.filter.selectedCategory = .tvShow }
+                Button("Library") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .all
+                }
+                Button("Movies") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .movie
+                }
+                Button("TV Shows") {
+                    viewModel.collection.selectedCollectionID = nil
+                    viewModel.collection.selectedCollectionName = nil
+                    viewModel.filter.selectedCategory = .tvShow
+                }
             }
             .navigationTitle(
                 sleepManager.isAsleep ? ""
@@ -228,7 +254,7 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                    Button("") { viewModel.navigationPath.removeLast() }.keyboardShortcut(.leftArrow, modifiers: .command)
+                    Button("") { if !viewModel.navigationPath.isEmpty { viewModel.navigationPath.removeLast() } }.keyboardShortcut(.leftArrow, modifiers: .command)
                     Button("") {
                         if !viewModel.filter.searchText.isEmpty {
                             viewModel.filter.searchText = ""
@@ -244,6 +270,17 @@ struct LibraryDetailView: View {
             if let collectionID = viewModel.collection.selectedCollectionID,
                let collection = collections.first(where: { $0.id == collectionID }) {
                 BulkCollectionManagerView(collection: collection)
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Collection not found")
+                        .font(.headline)
+                    Button("Close") { showingBulkManager = false }
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(width: 300, height: 200)
             }
         }
         .sheet(isPresented: $showWelcome) {

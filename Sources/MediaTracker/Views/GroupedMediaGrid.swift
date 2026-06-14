@@ -64,6 +64,7 @@ struct GroupedMediaGrid: View {
             isCompletedInCollection: completedIDs.contains(metadata.itemID),
             selectedCollectionID: viewModel.collection.selectedCollectionID
         )
+        .equatable()
         .id(metadata.versionHash)
     }
 

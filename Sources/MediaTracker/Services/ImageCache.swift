@@ -1,8 +1,12 @@
 import SwiftUI
-import Combine
 import UniformTypeIdentifiers
 import os
 import CryptoKit
+
+extension Notification.Name {
+    static let imageCacheUpdated = Notification.Name("MediaTracker.imageCacheUpdated")
+    static let imageCacheCleared = Notification.Name("MediaTracker.imageCacheCleared")
+}
 
 struct ImageContainer: @unchecked Sendable {
     let image: CGImage
@@ -67,8 +71,14 @@ class ImageCache: NSObject {
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private let maxDiskCacheSize: Int64 = 500 * 1024 * 1024 // 500MB
     
-    // Notification for broadcast updates
-    let updates = PassthroughSubject<String, Never>()
+    // Keyed notifications — O(1) delivery instead of O(n) Combine fan-out
+    private func postUpdate(forKey key: String) {
+        NotificationCenter.default.post(name: .imageCacheUpdated, object: nil, userInfo: ["key": key])
+    }
+    
+    private func postCacheCleared() {
+        NotificationCenter.default.post(name: .imageCacheCleared, object: nil)
+    }
     
     // Task de-duplication registry - NOW TRACKING URL + SIZE
     private var activeTasks: [String: Task<Void, Never>] = [:]
@@ -221,7 +231,7 @@ class ImageCache: NSObject {
             }
             await MainActor.run {
                 self.diskCacheIndex.removeAll()
-                self.updates.send("CLEARED_ALL")
+                self.postCacheCleared()
             }
         }
     }
@@ -255,7 +265,7 @@ class ImageCache: NSObject {
             }
             await MainActor.run {
                 for url in urls {
-                    self.updates.send(url)
+                    self.postUpdate(forKey: url)
                 }
             }
         }
@@ -344,7 +354,7 @@ class ImageCache: NSObject {
                     let wrapper = CachedImageWrapper(image: container.image, urlString: key, cacheKey: specificKey)
                     self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: container.image))
                     self.registerKeyForURL(key, specificKey: specificKey)
-                    self.updates.send(key) 
+                    self.postUpdate(forKey: key) 
                     return
                 }
             }
@@ -382,7 +392,7 @@ class ImageCache: NSObject {
                     let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: specificKey)
                     self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: cgImage))
                     self.registerKeyForURL(key, specificKey: specificKey)
-                    self.updates.send(key)
+                    self.postUpdate(forKey: key)
                 }
             } catch {
                 if !(error is CancellationError) {
@@ -410,7 +420,7 @@ class ImageCache: NSObject {
     }
 
     func ping(url: String) {
-        updates.send(url)
+        postUpdate(forKey: url)
     }
 
     func isExactMatch(image: CGImage, forURL url: String, size: CGSize?) -> Bool {
@@ -569,8 +579,23 @@ class ImageCache: NSObject {
 extension ImageCache: NSCacheDelegate {
     nonisolated func cache(_ cache: NSCache<AnyObject, AnyObject>, willEvictObject obj: Any) {
         guard let wrapper = obj as? CachedImageWrapper else { return }
-        // Synchronous cleanup via thread-safe store — avoids async dispatch lag where stale keys persist
         urlToKeys.removeKey(wrapper.urlString, wrapper.cacheKey)
+    }
+
+    func formattedDiskCacheSize() async -> String {
+        let dir = cacheDirectory
+        return await Task.detached(priority: .background) {
+            guard let files = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.fileSizeKey]
+            ) else { return "Unknown" }
+            let totalSize = files.reduce(0) { sum, url in
+                sum + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            }
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB]
+            formatter.countStyle = .file
+            return formatter.string(fromByteCount: Int64(totalSize))
+        }.value
     }
 }
 

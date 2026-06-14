@@ -38,6 +38,7 @@ struct MovieDetailsResult {
     let posterPath: String?
     let overview: String?
     let originalLanguage: String?
+    let status: String?
     let cast: [CastMemberResult]
     let directors: [CastMemberResult]
     let productionCompanies: [ProductionCompanyResult]

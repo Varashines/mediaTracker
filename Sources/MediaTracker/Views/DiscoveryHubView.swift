@@ -12,7 +12,7 @@ struct DiscoveryHubView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 60) {
+            LazyVStack(alignment: .leading, spacing: 60) {
                 if hasDataLoaded {
                     if !viewModel.discovery.cachedBadges.isEmpty {
                         DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text) { node in
@@ -44,7 +44,7 @@ struct DiscoveryHubView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Discovery Hub")
-        .scrollBounceBehavior(.basedOnSize)
+        .scrollBounceBehavior(.always)
         .onAppear { refreshData(force: false) }
         .refreshable { 
             refreshData(force: true) 

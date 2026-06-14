@@ -48,7 +48,6 @@ struct StatPill: View {
     let detail: String
     let color: Color
     @Environment(\.colorScheme) var colorScheme
-    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -77,16 +76,7 @@ struct StatPill: View {
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                 .fill(color.opacity(colorScheme == .dark ? 0.08 : 0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .stroke(color.opacity(colorScheme == .dark ? 0.2 : 0.1), lineWidth: 0.5)
-                )
         )
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .shadow(color: color.opacity(isHovered ? 0.12 : 0), radius: 8, x: 0, y: 4)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
-        }
     }
 }
 

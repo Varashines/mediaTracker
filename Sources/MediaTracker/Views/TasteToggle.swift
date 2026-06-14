@@ -93,12 +93,11 @@ struct TastePill: View {
                     activeColor
                 } else {
                     Color.primary.opacity(isHovered ? 0.08 : 0.05)
-                        .background(.ultraThinMaterial)
                 }
             }
             .clipShape(Capsule())
             .scaleEffect(isHovered ? 1.04 : 1.0)
-            .shadow(color: isSelected ? activeColor.opacity(isHovered ? 0.35 : 0.3) : .clear, radius: isHovered ? 10 : 8, x: 0, y: isHovered ? 6 : 4)
+            .shadow(color: isSelected ? activeColor.opacity(0.15) : .clear, radius: 6, y: 2)
         }
         .buttonStyle(.interactive(feedback: nil))
         .onHover { isHovered = $0 }

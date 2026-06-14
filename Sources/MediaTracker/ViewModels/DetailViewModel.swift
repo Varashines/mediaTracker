@@ -262,6 +262,7 @@ class DetailViewModel {
             item.stateValue = MediaState.completed.rawValue
             item.lastInteractionDate = Date()
             item.lastStateChangeDate = Date()
+            item.syncCachedProperties()
         }
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)
@@ -331,11 +332,6 @@ class DetailViewModel {
                             episode.season = currentSeason
                         }
                         
-                        // Ensure it's in the season's episodes array if not already (for relationship integrity)
-                        if !currentSeason.episodes.contains(where: { $0.uniqueID == epUniqueID }) {
-                            currentSeason.episodes.append(episode)
-                        }
-                        
                         episode.markWatched(markAsWatched)
                     }
                     
@@ -402,7 +398,7 @@ class DetailViewModel {
         let nextIndex = (currentIndex + 1) % allStates.count
         let nextState = allStates[nextIndex]
         
-        withAnimation {
+        withAnimation(AppTheme.Animation.springSnappy) {
             item.state = nextState
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()

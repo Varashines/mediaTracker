@@ -38,31 +38,47 @@ struct MainLibraryView: View {
     }
 
     var body: some View {
-        GeometryReader { (mainGeo: GeometryProxy) in
-            let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
-            let columns: [GridItem] = usePortraitCards
-                ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
-                : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
+        let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
+        let columns: [GridItem] = usePortraitCards
+            ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
+            : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
-                    if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                        HomeViewSections(
-                            homeContinueWatching: homeContinueWatching,
-                            featuredCarouselItems: featuredCarouselItems,
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
+                if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
+                    HomeViewSections(
+                        homeContinueWatching: homeContinueWatching,
+                        featuredCarouselItems: featuredCarouselItems,
+                        groupedItems: groupedItems,
+                        recommendations: recommendations,
+                        pickOfTheDay: pickOfTheDay,
+                        namespace: namespace,
+                        isFastScrolling: isFastScrolling,
+                        onSelectHero: onSelectHero,
+                        onCategorySelected: onCategorySelected,
+                        onTrendingAdd: onTrendingAdd
+                    )
+                }
+
+                if selectedCategory != .home {
+                    if viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory {
+                        LibraryGridSection(
+                            items: items,
                             groupedItems: groupedItems,
-                            recommendations: recommendations,
-                            pickOfTheDay: pickOfTheDay,
+                            recentlyAdded: recentlyAdded,
+                            featuredCarouselItems: featuredCarouselItems,
+                            selectedCategory: selectedCategory,
+                            searchText: searchText,
+                            selectedNetworks: selectedNetworks,
                             namespace: namespace,
                             isFastScrolling: isFastScrolling,
-                            onSelectHero: onSelectHero,
-                            onCategorySelected: onCategorySelected,
-                            onTrendingAdd: onTrendingAdd
+                            disableHover: false,
+                            columns: columns,
+                            viewModel: viewModel,
+                            onLoadMore: onLoadMore
                         )
-                    }
-
-                    if selectedCategory != .home {
-                        if viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory {
+                    } else {
+                        Section {
                             LibraryGridSection(
                                 items: items,
                                 groupedItems: groupedItems,
@@ -73,61 +89,43 @@ struct MainLibraryView: View {
                                 selectedNetworks: selectedNetworks,
                                 namespace: namespace,
                                 isFastScrolling: isFastScrolling,
-                                disableHover: false,
+                                disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
                                 columns: columns,
                                 viewModel: viewModel,
                                 onLoadMore: onLoadMore
                             )
-                        } else {
-                            Section {
-                                LibraryGridSection(
-                                    items: items,
-                                    groupedItems: groupedItems,
-                                    recentlyAdded: recentlyAdded,
-                                    featuredCarouselItems: featuredCarouselItems,
+                        } header: {
+                            VStack(alignment: .leading, spacing: 0) {
+                                LibraryHeaderView(
                                     selectedCategory: selectedCategory,
-                                    searchText: searchText,
-                                    selectedNetworks: selectedNetworks,
-                                    namespace: namespace,
-                                    isFastScrolling: isFastScrolling,
-                                    disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
-                                    columns: columns,
-                                    viewModel: viewModel,
-                                    onLoadMore: onLoadMore
-                                )
-                            } header: {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    LibraryHeaderView(
-                                        selectedCategory: selectedCategory,
-                                        selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                        onNetworkSelected: onNetworkSelected, onBack: onBack,
-                                        viewModel: viewModel)
+                                    selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
+                                    onNetworkSelected: onNetworkSelected, onBack: onBack,
+                                    viewModel: viewModel)
 
-                                    if showsFilterBar {
-                                        LibraryFilterBar(viewModel: viewModel)
-                                            .padding(.top, AppTheme.Spacing.micro)
-                                            .padding(.bottom, AppTheme.Spacing.tiny)
-                                    }
+                                if showsFilterBar {
+                                    LibraryFilterBar(viewModel: viewModel)
+                                        .padding(.top, AppTheme.Spacing.micro)
+                                        .padding(.bottom, AppTheme.Spacing.tiny)
                                 }
                             }
                         }
                     }
                 }
-                .background {
-                    ScrollVelocityTracker(
-                        isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollClipDisabled()
-            .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
-                if isAsleep {
-                    scrollTask?.cancel()
-                    isFastScrolling = false
-                }
+            .background {
+                ScrollVelocityTracker(
+                    isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
             }
-            .onAppear { visibleCount = 40 }
-            .onChange(of: items.count) { visibleCount = 40 }
         }
+        .scrollBounceBehavior(.always)
+        .scrollClipDisabled()
+        .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
+            if isAsleep {
+                scrollTask?.cancel()
+                isFastScrolling = false
+            }
+        }
+        .onAppear { visibleCount = 40 }
+        .onChange(of: items.count) { visibleCount = 40 }
     }
 }

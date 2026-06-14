@@ -81,14 +81,14 @@ struct CollectionToggleRow: View {
     
     private func toggle() {
         if isInCollection {
+            // Clean up completedItemIDs BEFORE removing from collection
+            collection.completedItemIDs.removeAll { $0 == item.id }
+            // Only mutate one side of the inverse relationship — SwiftData syncs the other
             item.collections.removeAll(where: { $0.id == collection.id })
-            collection.items.removeAll(where: { $0.id == item.id })
         } else {
             item.collections.append(collection)
-            collection.items.append(item)
         }
         
-        // SwiftData might need explicit save or context refresh for relationships sometimes
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)
         }

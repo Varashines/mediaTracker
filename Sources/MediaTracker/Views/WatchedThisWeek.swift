@@ -53,6 +53,7 @@ struct WatchedThisWeek: View {
                                 showTypeBadge: true,
                                 isFastScrolling: false
                             )
+                            .equatable()
                             .frame(width: 160)
                         }
                         .buttonStyle(.interactive)
@@ -65,7 +66,7 @@ struct WatchedThisWeek: View {
     }
 
     private func fetchRecentItems() {
-        let cutoff = Date(timeIntervalSinceNow: -7 * 86400)
+        let cutoff = Date(timeIntervalSinceNow: -TimeInterval.days7)
         let predicate = #Predicate<MediaItem> {
             ($0.lastInteractionDate ?? cutoff) >= cutoff && $0.stateValue != "Wishlist"
         }

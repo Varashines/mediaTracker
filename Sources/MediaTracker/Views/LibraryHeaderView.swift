@@ -46,7 +46,7 @@ struct LibraryHeaderView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AppTheme.Colors.accent)
                     
-                    Button { withAnimation { onNetworkSelected([]) } } label: {
+                    Button { withAnimation(AppTheme.Animation.springSnappy) { onNetworkSelected([]) } } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(AppTheme.Icon.medium)
                             .foregroundStyle(.secondary)

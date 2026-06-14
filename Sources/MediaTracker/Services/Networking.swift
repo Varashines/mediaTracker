@@ -347,6 +347,7 @@ actor APIClient {
             posterPath: details.poster_path, 
             overview: details.overview,
             originalLanguage: details.original_language, 
+            status: details.status,
             cast: Array(cast), 
             directors: directors,
             productionCompanies: productionCompanies,

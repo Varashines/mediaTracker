@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 @MainActor
-struct MediaThumbnailView: View {
+struct MediaThumbnailView: View, Equatable {
     enum DisplayMode {
         case grid
         case hero
@@ -21,6 +21,32 @@ struct MediaThumbnailView: View {
     var isFastScrolling: Bool = false
     var disableHover: Bool = false
     var action: (() -> Void)? = nil
+
+    nonisolated static func == (lhs: MediaThumbnailView, rhs: MediaThumbnailView) -> Bool {
+        lhs.capturedID == rhs.capturedID &&
+        lhs.capturedItemID == rhs.capturedItemID &&
+        lhs.capturedTitle == rhs.capturedTitle &&
+        lhs.capturedPosterURL == rhs.capturedPosterURL &&
+        lhs.capturedType == rhs.capturedType &&
+        lhs.capturedState == rhs.capturedState &&
+        lhs.capturedProgress == rhs.capturedProgress &&
+        lhs.capturedReleaseDate == rhs.capturedReleaseDate &&
+        lhs.capturedThemeColorHex == rhs.capturedThemeColorHex &&
+        lhs.capturedNextEpisodeLabel == rhs.capturedNextEpisodeLabel &&
+        lhs.capturedWatchProgress == rhs.capturedWatchProgress &&
+        lhs.capturedIsUpcoming == rhs.capturedIsUpcoming &&
+        lhs.capturedGridBadgeText == rhs.capturedGridBadgeText &&
+        lhs.capturedNextAiringDate == rhs.capturedNextAiringDate &&
+        lhs.capturedDisplayYear == rhs.capturedDisplayYear &&
+        lhs.mode == rhs.mode &&
+        lhs.showTypeBadge == rhs.showTypeBadge &&
+        lhs.isUpcomingSection == rhs.isUpcomingSection &&
+        lhs.isLocalInSearch == rhs.isLocalInSearch &&
+        lhs.isCompletedInCollection == rhs.isCompletedInCollection &&
+        lhs.selectedCollectionID == rhs.selectedCollectionID &&
+        lhs.isFastScrolling == rhs.isFastScrolling &&
+        lhs.disableHover == rhs.disableHover
+    }
 
     // Captured values for stability during background updates or deletion
     private let capturedID: PersistentIdentifier?
@@ -329,9 +355,21 @@ struct MediaThumbnailView: View {
         }
         .frame(width: width, height: height)
         .compositingGroup()
-        .cornerRadius(AppTheme.Radius.medium)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+        .shadow(
+            color: isHovered ? .clear : AppTheme.Colors.shadowAmbient(for: colorScheme),
+            radius: isHovered ? 0 : AppTheme.Shadow.subtle.radius,
+            y: isHovered ? 0 : AppTheme.Shadow.subtle.y
+        )
+        .shadow(
+            color: isHovered
+                ? AppTheme.Colors.shadowElevated(for: colorScheme)
+                : .clear,
+            radius: isHovered ? 12 : 0,
+            y: isHovered ? 6 : 0
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                 .stroke(disableHover && isHovered ? AppTheme.Colors.accent.opacity(0.5) : .clear, lineWidth: 2)
                 .animation(.easeOut(duration: 0.15), value: isHovered)
         )
@@ -343,7 +381,7 @@ struct MediaThumbnailView: View {
                 isAppeared = true
                 return
             }
-            let delay = Double((staggerIndex ?? 0) % 15) * 0.05
+            let delay = Double((staggerIndex ?? 0) % 8) * 0.04
             withAnimation(AppTheme.Animation.springGentle.delay(delay)) {
                 isAppeared = true
             }
@@ -455,7 +493,7 @@ struct MediaThumbnailView: View {
             if state != .completed {
                 Button {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
-                        withAnimation {
+                        withAnimation(AppTheme.Animation.springSnappy) {
                             if item.type == .tvShow {
                                 item.markLoadedEpisodesAsWatched()
                                 let container = modelContext.container
@@ -492,7 +530,7 @@ struct MediaThumbnailView: View {
                 targetState in
                 Button(targetState.displayName) {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
-                        withAnimation {
+                        withAnimation(AppTheme.Animation.springSnappy) {
                             item.state = targetState
                             item.lastUpdated = Date()
                             SaveCoordinator.shared.requestSave(modelContext)
@@ -503,7 +541,7 @@ struct MediaThumbnailView: View {
         }
 
         Button(role: .destructive) {
-            withAnimation {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 isRemoved = true
                 FeedbackManager.shared.trigger(.removeFromLibrary)
             }

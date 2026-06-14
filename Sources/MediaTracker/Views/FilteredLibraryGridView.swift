@@ -69,6 +69,7 @@ struct FilteredLibraryGridView: View {
                                     MediaThumbnailView(
                                         metadata: metadata, mode: .grid, namespace: namespace,
                                         isFastScrolling: isFastScrolling)
+                                    .equatable()
                                 }
                                 .buttonStyle(.interactive)
                                 .onAppear {
@@ -86,7 +87,7 @@ struct FilteredLibraryGridView: View {
                     }
                     .padding(AppTheme.Spacing.pageMargin)
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .scrollBounceBehavior(.always)
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)
@@ -340,11 +341,9 @@ struct FilteredLibraryGridView: View {
                 )
                 if Task.isCancelled { return }
                 await MainActor.run {
-                    withAnimation {
-                        self.items = result.displayed
-                        self.totalCount = result.totalCount
-                        self.isLoading = false
-                    }
+                    self.items = result.displayed
+                    self.totalCount = result.totalCount
+                    self.isLoading = false
                 }
             } catch {
                 if !(error is CancellationError) {

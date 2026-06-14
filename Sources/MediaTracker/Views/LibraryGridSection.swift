@@ -24,7 +24,7 @@ struct LibraryGridSection: View {
         VStack(alignment: .leading, spacing: 8) {
             if items.isEmpty && groupedItems.isEmpty {
                 LibraryEmptyStateView(category: selectedCategory) {
-                    withAnimation {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         viewModel.filter.selectedCategory = .discover
                     }
                 }

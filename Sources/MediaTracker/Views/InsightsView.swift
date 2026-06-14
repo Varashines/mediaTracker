@@ -56,7 +56,7 @@ struct InsightsView: View {
                     .padding(.vertical, 24)
                     .frame(maxWidth: .infinity)
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .scrollBounceBehavior(.always)
             }
         }
         .onAppear(perform: refreshData)

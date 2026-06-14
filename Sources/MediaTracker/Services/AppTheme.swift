@@ -6,6 +6,7 @@ struct AppTheme {
         static let micro: CGFloat = 4
         static let tiny: CGFloat = 8
         static let small: CGFloat = 12
+        static let smallMedium: CGFloat = 14
         static let medium: CGFloat = 16
         static let large: CGFloat = 24
         static let xLarge: CGFloat = 32
@@ -17,7 +18,14 @@ struct AppTheme {
         static let small: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 20
+        static let xl: CGFloat = 28
         static let card: CGFloat = 24
+    }
+
+    struct Kerning {
+        static let tight: CGFloat = 0.8
+        static let normal: CGFloat = 1.0
+        static let wide: CGFloat = 1.2
     }
 
     struct Font {
@@ -68,7 +76,9 @@ struct AppTheme {
     }
 
     struct Shadow {
+        static let subtle = ShadowConfig(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
         static let card = ShadowConfig(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
+        static let cardHover = ShadowConfig(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
         static let elevated = ShadowConfig(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
     }
 
@@ -76,6 +86,7 @@ struct AppTheme {
         static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
         static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
+        static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
     }
 
     struct Thumbnail {
@@ -92,5 +103,17 @@ struct AppTheme {
     struct Icon {
         static let small = SwiftUI.Font.system(size: 11, weight: .medium)
         static let medium = SwiftUI.Font.system(size: 14, weight: .medium)
+    }
+
+    struct Gradient {
+        static func accentPrimary(_ color: Color) -> SwiftUI.Gradient {
+            SwiftUI.Gradient(colors: [color, color.opacity(0.8)])
+        }
+        static func surfaceTint(_ color: Color, for scheme: ColorScheme) -> SwiftUI.Gradient {
+            SwiftUI.Gradient(colors: [
+                color.opacity(scheme == .dark ? 0.15 : 0.1),
+                color.opacity(scheme == .dark ? 0.05 : 0.02)
+            ])
+        }
     }
 }

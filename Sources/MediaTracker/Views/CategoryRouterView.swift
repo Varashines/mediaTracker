@@ -64,13 +64,15 @@ struct CategoryRouterView: View {
                     }
                 },
                 onNetworkSelected: { networks in
-                    withAnimation {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         viewModel.filter.selectedNetworks = networks.isEmpty ? nil : networks
                         viewModel.filterSubject.send()
                     }
                 },
                 onCategorySelected: { category in
-                    withAnimation {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        viewModel.collection.selectedCollectionID = nil
+                        viewModel.collection.selectedCollectionName = nil
                         sidebarSelection = .category(category)
                     }
                 },

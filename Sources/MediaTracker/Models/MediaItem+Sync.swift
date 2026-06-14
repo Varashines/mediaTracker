@@ -7,11 +7,6 @@ extension MediaItem {
         // If details aren't loaded, don't force a sync unless explicitly requested.
         let currentState = state ?? .wishlist
 
-        // Invalidate badge scan cache since state/episodes may have changed
-        if type == .tvShow {
-            BadgeEngine.invalidateScan(for: persistentModelID)
-        }
-
         syncCastCache()
 
         if type == .movie {
@@ -113,6 +108,7 @@ extension MediaItem {
         self.cachedRuntime = movie.runtime
         self.cachedNetwork = Self.normalizeCommaSeparated(movie.network)
         self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(movie.networkLogoPath)
+        self.cachedTMDBStatus = movie.status
     }
 
     func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
@@ -123,6 +119,7 @@ extension MediaItem {
         self.cachedLanguage = tv.originalLanguage
         self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
         self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)
+        self.cachedTMDBStatus = tv.status
         
         // Use Unified Logic - Only force recalculate if explicitly requested to heal drift
         let progressResult = tv.calculateProgress(now: now, forceRecalculate: forceRecalculate)

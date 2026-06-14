@@ -76,12 +76,6 @@ struct ForYouCompactCard: View {
                 // 3. Poster with padding, rounded corners, hover lift + glow
                 if let poster = metadata.posterURL, let url = URL(string: poster) {
                     ZStack {
-                        // Glow behind poster (visible on hover)
-                        RoundedRectangle(cornerRadius: posterCornerRadius + 2, style: .continuous)
-                            .fill(themeColor.opacity(isHovered ? 0.15 : 0))
-                            .shadow(color: themeColor.opacity(isHovered ? 0.15 : 0), radius: isHovered ? 10 : 0, y: 0)
-                            .frame(width: posterWidth + 4, height: posterHeight + 4)
-
                         // Poster image
                         CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                             RoundedRectangle(cornerRadius: posterCornerRadius, style: .continuous)
@@ -94,7 +88,6 @@ struct ForYouCompactCard: View {
                     }
                     .padding(.leading, posterPadding)
                     .padding(.vertical, posterPadding)
-                    .offset(y: isHovered ? -4 : 0)
 
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
@@ -102,7 +95,6 @@ struct ForYouCompactCard: View {
                             .font(AppTheme.Font.title3)
                             .foregroundStyle(.white)
                             .lineLimit(2)
-                            .shadow(radius: 2)
                         
                         Text(metadata.formattedMetadata)
                             .font(AppTheme.Font.caption)
