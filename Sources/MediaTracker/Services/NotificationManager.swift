@@ -286,6 +286,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                 completionHandler()
             }
         } else {
+            // Navigate to the item when notification body is tapped
+            if let itemID = userInfo["ITEM_ID"] as? String {
+                NavigationRouter.shared.pendingSpotlightItemID = itemID
+            }
             completionHandler()
         }
     }

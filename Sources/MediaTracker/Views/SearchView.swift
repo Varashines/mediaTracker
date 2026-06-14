@@ -160,8 +160,21 @@ struct SearchView: View {
     private var resultsScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                localResultsSection
-                webResultsSection
+                if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Searching...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 40)
+                } else {
+                    localResultsSection
+                    webResultsSection
+                }
             }
             .padding(.vertical, 30)
         }

@@ -117,12 +117,12 @@ struct DonutArc: View {
             )
             .rotationEffect(.degrees(-90))
             .onAppear {
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     animatedEnd = end
                 }
             }
             .onChange(of: end) { _, newValue in
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     animatedEnd = newValue
                 }
             }

@@ -125,7 +125,8 @@ struct SidebarNavigation: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .onHover { isHovered in
             withAnimation(AppTheme.Animation.easeInOut) {
                 hoveredItem = isHovered ? item : nil

@@ -7,7 +7,10 @@ struct InsightsView: View {
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
+    @State private var showSpectrum = false
+    @Namespace private var flipNamespace
     var refreshID: Int = 0
 
     var body: some View {
@@ -18,18 +21,28 @@ struct InsightsView: View {
                 InsightsSkeletonView()
             } else if let stats = stats {
                 ScrollView {
-                    VStack(spacing: AppTheme.Spacing.section) {
-                        // Section 0: Passport Header
-                        PassportHeaderView(stats: stats)
+                    LazyVStack(spacing: AppTheme.Spacing.section) {
+                        // Flip card: Passport ↔ Spectrum
+                        FlipCard(
+                            front: AnyView(PassportHeaderView(stats: stats)),
+                            back: AnyView(
+                                SpectrumView(items: stats.barcodeData)
+                                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                            ),
+                            isFlipped: showSpectrum
+                        )
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                                showSpectrum.toggle()
+                            }
+                        }
 
-                        // Section 1: Hero Stats + Taste DNA
                         HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                                 SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: .pink)
                                 HeroStatPills(stats: stats)
                             }
                             .frame(maxWidth: .infinity)
-
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                                 SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: .pink)
                                 TasteDNAView(stats: stats)
@@ -37,26 +50,31 @@ struct InsightsView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-                        // Section 3: Genre Constellation
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                             SectionHeader(title: "Genre Constellation", icon: "sparkles", iconColor: .indigo)
                             GenreConstellationView(items: Array(stats.genreDNA.prefix(6)))
                         }
-
-                        // Section 4: Spectrum
-                        SpectrumView(items: stats.barcodeData)
-
-                        // Section 7: Studios, Networks & Languages
                         StudiosNetworksView(stats: stats, modelContext: modelContext)
-
-                        // Section 8: Hall of Fame
                         HallOfFameView(stats: stats)
                     }
                     .padding(.vertical, 24)
                     .frame(maxWidth: .infinity)
                 }
                 .scrollBounceBehavior(.always)
+            } else if let error = errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Could not load insights")
+                        .font(.headline)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Retry") { refreshData() }
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onAppear(perform: refreshData)
@@ -83,8 +101,61 @@ struct InsightsView: View {
             } catch {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error fetching stats: \(error)")
+                    await MainActor.run {
+                        self.errorMessage = error.localizedDescription
+                        self.isLoading = false
+                    }
                 }
             }
         }
+    }
+}
+
+// MARK: - Flip Card with Solari Strip Lines
+
+private struct FlipCard<Front: View, Back: View>: View {
+    let front: Front
+    let back: Back
+    let isFlipped: Bool
+    var stripCount: Int = 8
+
+    var body: some View {
+        ZStack {
+            // Front side
+            if !isFlipped {
+                front
+            }
+
+            // Back side (counter-rotated so text stays readable)
+            if isFlipped {
+                back
+                    .rotation3DEffect(.degrees(180), axis: (x: 1, y: 0, z: 0))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .rotation3DEffect(
+            .degrees(isFlipped ? 180 : 0),
+            axis: (x: 1, y: 0, z: 0),
+            perspective: 0.5
+        )
+        .overlay(alignment: .center) {
+            // Decorative strip lines — animate in during flip
+            if abs(angle) > 10 && abs(angle) < 170 {
+                VStack(spacing: 0) {
+                    ForEach(0..<stripCount - 1, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.1))
+                            .frame(height: 1)
+                        Spacer()
+                    }
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var angle: Double {
+        isFlipped ? 180 : 0
     }
 }

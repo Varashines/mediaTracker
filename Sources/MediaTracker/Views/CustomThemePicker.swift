@@ -20,7 +20,7 @@ struct ThemePicker: View {
                 let isHovered = hoveredTag == tag
 
                 Button {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         themePreference = tag
                     }
                 } label: {
@@ -153,7 +153,7 @@ struct PalettePicker: View {
                 let isHovered = hoveredTag == tag
 
                 Button {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         customThemePalette = tag
                     }
                 } label: {

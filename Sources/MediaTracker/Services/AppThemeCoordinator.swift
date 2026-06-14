@@ -69,16 +69,16 @@ class AppThemeCoordinator {
     func background(for colorScheme: ColorScheme) -> Color {
         let isDark = isDarkActive
         switch customThemePalette {
-        case 1: // Earth — barely warm tint
-            return Color(hex: isDark ? "#1E1C1A" : "#F9F6F3") ?? Color(white: isDark ? 0.11 : 0.96)
-        case 2: // Cool — barely cool tint
-            return Color(hex: isDark ? "#1A1B20" : "#F6F7FA") ?? Color(white: isDark ? 0.11 : 0.96)
-        case 3: // Forest — barely green tint
-            return Color(hex: isDark ? "#181C1A" : "#F7FAF8") ?? Color(white: isDark ? 0.11 : 0.96)
-        case 4: // Ocean — barely blue tint
-            return Color(hex: isDark ? "#181A20" : "#F5F7FC") ?? Color(white: isDark ? 0.11 : 0.96)
-        default: // Standard — neutral
-            return Color(white: isDark ? 0.11 : 0.96)
+        case 1: // Earth — barely warm tint on grey base
+            return Color(hex: isDark ? "#2D2B28" : "#F9F6F3") ?? Color(white: isDark ? 0.17 : 0.96)
+        case 2: // Cool — barely cool tint on grey base
+            return Color(hex: isDark ? "#2A2B30" : "#F6F7FA") ?? Color(white: isDark ? 0.17 : 0.96)
+        case 3: // Forest — barely green tint on grey base
+            return Color(hex: isDark ? "#2A2D2B" : "#F7FAF8") ?? Color(white: isDark ? 0.17 : 0.96)
+        case 4: // Ocean — barely blue tint on grey base
+            return Color(hex: isDark ? "#292C33" : "#F5F7FC") ?? Color(white: isDark ? 0.17 : 0.96)
+        default: // Standard — macOS grey
+            return Color(white: isDark ? 0.17 : 0.96)
         }
     }
 

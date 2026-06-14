@@ -48,7 +48,7 @@ struct ServicesSection: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Channels")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                             HStack(spacing: 8) {
                                 channelButton("Movies", isOn: $movieNotificationsEnabled)
@@ -67,10 +67,10 @@ struct ServicesSection: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Delivery Time")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.primary)
                             Text("Daily notification schedule")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -91,10 +91,10 @@ struct ServicesSection: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Reschedule")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.primary)
                             Text("Refresh notification queue")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -102,7 +102,7 @@ struct ServicesSection: View {
                             Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
                         }
                         .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(AppTheme.Colors.accent)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -121,10 +121,10 @@ struct ServicesSection: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .font(AppTheme.Font.body)
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -150,12 +150,12 @@ struct ServicesSection: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(name)
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .font(AppTheme.Font.body)
                             .foregroundStyle(.primary)
                         StatusBadge(text: apiKey.wrappedValue.isEmpty ? "Missing" : "Connected", isActive: !apiKey.wrappedValue.isEmpty)
                     }
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -220,7 +220,7 @@ struct ServicesSection: View {
                     .font(.system(size: 12))
                     .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : .secondary)
                 Text(title)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
             }
             .padding(.horizontal, 8)

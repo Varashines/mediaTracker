@@ -42,7 +42,7 @@ struct DetailView: View {
             // Use neutral bg when poster exists, palette bg when no poster
             Group {
                 if hasPoster {
-                    Color(white: colorScheme == .dark ? 0.11 : 0.96)
+                    Color(white: colorScheme == .dark ? 0.17 : 0.96)
                 } else {
                     AppTheme.Colors.background(for: colorScheme)
                 }
@@ -76,6 +76,7 @@ struct DetailView: View {
             .coordinateSpace(name: "detailScroll")
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
+            .animation(.easeInOut(duration: 0.3), value: showDeleteConfirmation)
 
         }
         .overlay {
@@ -296,6 +297,7 @@ struct DetailView: View {
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
                 .help("Refresh metadata")
+                .accessibilityLabel("Refresh metadata")
 
                 Button(role: .destructive) {
                     withAnimation(AppTheme.Animation.springSnappy) {
@@ -311,6 +313,8 @@ struct DetailView: View {
                 .frame(width: 32, height: 32)
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .help("Delete from library")
+                .accessibilityLabel("Delete from library")
+                .accessibilityAddTraits(.isButton)
 
                 Menu {
                     if viewModel.trailerKey != nil {
@@ -352,7 +356,7 @@ struct DetailView: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
                         showDeleteConfirmation = false
                     }
                 }
@@ -385,7 +389,7 @@ struct DetailView: View {
 
                 HStack(spacing: 24) {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(AppTheme.Animation.springSnappy) {
                             showDeleteConfirmation = false
                         }
                     } label: {

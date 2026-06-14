@@ -4,6 +4,10 @@ struct WelcomeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
+    @State private var showIcon = false
+    @State private var showTitle = false
+    @State private var showDescription = false
+    @State private var showButtons = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,16 +18,22 @@ struct WelcomeSheet: View {
                     .resizable()
                     .frame(width: 64, height: 64)
                     .padding(.bottom, 16)
+                    .scaleEffect(showIcon ? 1 : 0.5)
+                    .opacity(showIcon ? 1 : 0)
             }
 
             Text("Welcome to")
                 .font(AppTheme.Font.title3)
                 .foregroundStyle(.secondary)
+                .opacity(showTitle ? 1 : 0)
+                .offset(y: showTitle ? 0 : 8)
 
             Text("MediaTracker")
                 .font(AppTheme.Font.titleLarge)
                 .foregroundStyle(.primary)
                 .padding(.bottom, 24)
+                .opacity(showTitle ? 1 : 0)
+                .offset(y: showTitle ? 0 : 8)
 
             Text("Track every movie and TV show you watch.\nGet personalized recommendations and never miss an episode.")
                 .font(AppTheme.Font.body)
@@ -32,6 +42,8 @@ struct WelcomeSheet: View {
                 .lineSpacing(4)
                 .padding(.horizontal, 40)
                 .padding(.bottom, 32)
+                .opacity(showDescription ? 1 : 0)
+                .offset(y: showDescription ? 0 : 8)
 
             VStack(spacing: 12) {
                 Button {
@@ -75,6 +87,8 @@ struct WelcomeSheet: View {
                 }
                 .buttonStyle(.plain)
             }
+            .opacity(showButtons ? 1 : 0)
+            .offset(y: showButtons ? 0 : 12)
 
             Spacer()
 
@@ -89,6 +103,12 @@ struct WelcomeSheet: View {
             Button("") { NSApp.terminate(nil) }
                 .keyboardShortcut("q", modifiers: [.command])
                 .opacity(0)
+        }
+        .onAppear {
+            withAnimation(AppTheme.Animation.springGentle.delay(0.1)) { showIcon = true }
+            withAnimation(AppTheme.Animation.springGentle.delay(0.25)) { showTitle = true }
+            withAnimation(AppTheme.Animation.springGentle.delay(0.4)) { showDescription = true }
+            withAnimation(AppTheme.Animation.springGentle.delay(0.55)) { showButtons = true }
         }
     }
 }

@@ -23,26 +23,32 @@ struct CuteEmptyState: View {
 
 struct ArchetypeBadge: View {
     let archetype: String
+    var onTap: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: archetypeIcon)
-                .font(.system(size: 12, weight: .semibold))
-            Text(archetype)
-                .font(AppTheme.Font.caption)
+        Button {
+            onTap?()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: archetypeIcon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(archetype)
+                    .font(AppTheme.Font.caption)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .foregroundStyle(.primary)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.1))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
+            )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .foregroundStyle(.primary)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.1))
-        )
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
-        )
+        .buttonStyle(.plain)
     }
 
     private var archetypeIcon: String {
@@ -52,6 +58,13 @@ struct ArchetypeBadge: View {
         case "The Binger": return "play.rectangle.on.rectangle.fill"
         case "The Curator": return "sparkles.rectangle.stack.fill"
         case "The Newcomer": return "star.fill"
+        case "The Collector": return "books.vertical.fill"
+        case "The Critic": return "hand.thumbsdown.fill"
+        case "The Marathoner": return "figure.run"
+        case "The Connoisseur": return "sparkles"
+        case "The Dipper": return "water.waves"
+        case "The Rewatcher": return "arrow.triangle.2.circlepath"
+        case "The Archivist": return "archivebox.fill"
         default: return "heart.fill"
         }
     }

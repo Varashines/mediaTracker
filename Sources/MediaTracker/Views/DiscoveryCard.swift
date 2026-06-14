@@ -59,6 +59,8 @@ struct DiscoveryCard: View {
         .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
         .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: isHovered)
         .onHover { isHovered = $0 }
+        .accessibilityLabel("\(node.name), \(node.count) items")
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder

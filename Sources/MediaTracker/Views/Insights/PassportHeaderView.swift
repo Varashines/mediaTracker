@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PassportHeaderView: View {
     let stats: LibraryStats
+    var onArchetypeTap: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -13,7 +14,7 @@ struct PassportHeaderView: View {
 
                 Spacer()
 
-                ArchetypeBadge(archetype: stats.archetype)
+                ArchetypeBadge(archetype: stats.archetype, onTap: onArchetypeTap)
             }
 
             HStack(spacing: 6) {

@@ -22,10 +22,10 @@ struct GeneralSection: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Follow System")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.body)
                                 .foregroundStyle(.primary)
                             Text("Automatically match macOS appearance")
-                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -54,7 +54,7 @@ struct GeneralSection: View {
 
                     HStack {
                         Text("Appearance")
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .font(AppTheme.Font.body)
                             .foregroundStyle(.primary)
                         Spacer()
                         LightDarkPicker(themePreference: $themePreference)
@@ -110,10 +110,10 @@ struct GeneralSection: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .font(AppTheme.Font.body)
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

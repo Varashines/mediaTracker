@@ -37,7 +37,7 @@ struct TrendingPosterCard: View {
         .frame(width: 160, height: 240)
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0), radius: 8, y: 4)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
     }
 

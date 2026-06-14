@@ -147,7 +147,6 @@ class BackgroundTaskManager {
         let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
         guard currentVersion < 4 else { return }
         guard let container = container else { return }
-        guard !SleepManager.shared.isAsleep else { return }
 
         let extractionVersionKey = "colorExtractionVersion"
         let batchSize = 50
@@ -157,7 +156,6 @@ class BackgroundTaskManager {
             try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV4", container: container) {
                 let context = ModelContext(container)
 
-                // Process the most-recently-interacted items first so the user sees early wins.
                 var descriptor = FetchDescriptor<MediaItem>(
                     sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
                 )
@@ -173,24 +171,28 @@ class BackgroundTaskManager {
                     guard !item.isDeleted else { continue }
                     guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
 
-                    if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url) {
-                        let pair: DominantPair? = await Task.detached {
-                            if let image = NSImage(data: data),
-                               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                                return await ColorExtractor.topTwoColors(from: cgImage)
-                            }
-                            return nil
-                        }.value
+                    // Use image cache first — avoid re-downloading from network
+                    var cgImage: CGImage?
+                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
+                        cgImage = cached.image
+                    } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
+                              let image = NSImage(data: data) {
+                        cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                    }
 
-                        if let pair {
-                            item.themeColorHex = "\(pair.primary.toHex())|\(pair.secondary.toHex())"
-                            item.themeColorSourceURL = poster
-                        }
+                    if let cgImage {
+                        let pair = await ColorExtractor.topTwoColors(from: cgImage)
+                        let primaryHex = pair.primary.toHex()
+                        let secondaryHex = pair.secondary.toHex()
+                        item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+                        item.themeColorSourceURL = poster
                     }
 
                     processed += 1
                     if processed % batchSize == 0 {
                         try? context.save()
+                        // Save progress incrementally so interrupted migrations don't restart
+                        UserDefaults.standard.set(4, forKey: extractionVersionKey)
                         try? await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }

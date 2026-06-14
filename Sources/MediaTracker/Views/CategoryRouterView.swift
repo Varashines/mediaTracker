@@ -38,12 +38,16 @@ struct CategoryRouterView: View {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
+            .transition(.opacity)
         } else if viewModel.filter.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID)
+                .transition(.opacity)
         } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
+                .transition(.opacity)
         } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection, refreshID: refreshID)
+                .transition(.opacity)
         } else {
             MainLibraryView(
                 items: viewModel.display.displayedItems,
@@ -114,6 +118,7 @@ struct CategoryRouterView: View {
                 },
                 viewModel: viewModel
             )
+            .transition(.opacity)
         }
     }
 

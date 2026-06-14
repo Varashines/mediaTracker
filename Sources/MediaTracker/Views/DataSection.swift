@@ -120,10 +120,10 @@ struct DataSection: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.body)
                     .foregroundStyle(.primary)
                 Text(subtitle)
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -131,7 +131,7 @@ struct DataSection: View {
                 action()
             }
             .buttonStyle(.plain)
-            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .font(AppTheme.Font.label)
             .foregroundStyle(AppTheme.Colors.accent)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)

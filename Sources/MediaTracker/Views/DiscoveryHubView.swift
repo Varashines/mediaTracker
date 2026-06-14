@@ -14,22 +14,43 @@ struct DiscoveryHubView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 60) {
                 if hasDataLoaded {
-                    if !viewModel.discovery.cachedBadges.isEmpty {
-                        DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text) { node in
-                            onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
+                    let hasAnyContent = !viewModel.discovery.cachedBadges.isEmpty ||
+                        !viewModel.discovery.cachedNetworks.isEmpty ||
+                        !viewModel.discovery.cachedGenres.isEmpty ||
+                        !viewModel.discovery.cachedLanguages.isEmpty
+
+                    if hasAnyContent {
+                        if !viewModel.discovery.cachedBadges.isEmpty {
+                            DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text) { node in
+                                onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
+                            }
                         }
-                    }
 
-                    DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.discovery.cachedNetworks, style: .logo) { node in
-                        onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
-                    }
+                        DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.discovery.cachedNetworks, style: .logo) { node in
+                            onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
+                        }
 
-                    DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text) { node in
-                        onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
-                    }
+                        DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text) { node in
+                            onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
+                        }
 
-                    DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text) { node in
-                        onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
+                        DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text) { node in
+                            onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
+                        }
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "sparkles")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary.opacity(0.3))
+                            Text("No discovery data yet")
+                                .font(.headline)
+                            Text("Add some titles to your library to see discovery insights here.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 80)
                     }
                 } else {
                     ProgressView()
@@ -39,7 +60,7 @@ struct DiscoveryHubView: View {
             }
             .padding(.top, 30)
             .padding(.bottom, 20)
-            .padding(.bottom, 100)
+            .padding(.bottom, 20)
             .scrollTargetLayout()
         }
         .accessibilityElement(children: .contain)
