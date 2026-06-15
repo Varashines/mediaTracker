@@ -198,6 +198,10 @@ private struct SeasonSection: View {
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
+    @State private var selectedRangeStart: Int = 1
+
+    private let episodesPerRange = 10
+    private let rangeThreshold = 15
 
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
@@ -207,26 +211,115 @@ private struct SeasonSection: View {
         season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
     }
 
+    private var sortedEpisodes: [TVEpisode] {
+        season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber })
+    }
+
+    private var showRangePills: Bool {
+        sortedEpisodes.count > rangeThreshold
+    }
+
+    private var episodeRanges: [ClosedRange<Int>] {
+        let episodes = sortedEpisodes
+        guard !episodes.isEmpty else { return [] }
+
+        let firstEp = episodes.first!.episodeNumber
+        let lastEp = episodes.last!.episodeNumber
+        var ranges: [ClosedRange<Int>] = []
+        var start = firstEp
+        while start <= lastEp {
+            let end = min(start + episodesPerRange - 1, lastEp)
+            ranges.append(start...end)
+            start = end + 1
+        }
+
+        // Merge last range into previous if ≤ 1 episode
+        if ranges.count >= 2 {
+            let last = ranges[ranges.count - 1]
+            let prev = ranges[ranges.count - 2]
+            if last.count <= 1 {
+                ranges[ranges.count - 2] = prev.lowerBound...last.upperBound
+                ranges.removeLast()
+            }
+        }
+
+        return ranges
+    }
+
+    private var filteredEpisodes: [TVEpisode] {
+        if !showRangePills {
+            return sortedEpisodes
+        }
+        guard let range = episodeRanges.first(where: { $0.lowerBound == selectedRangeStart }) else {
+            return sortedEpisodes
+        }
+        return sortedEpisodes.filter { range.contains($0.episodeNumber) }
+    }
+
+    private func defaultRangeStart() -> Int {
+        // Find the range containing the first unwatched episode
+        if let firstUnwatched = sortedEpisodes.first(where: { !$0.isWatched }) {
+            let epNum = firstUnwatched.episodeNumber
+            for range in episodeRanges {
+                if range.contains(epNum) {
+                    return range.lowerBound
+                }
+            }
+        }
+        return 1
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
-                            .font(AppTheme.Font.title3)
+            // Compact single-line header
+            HStack(alignment: .center, spacing: 8) {
+                Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
+                    .font(AppTheme.Font.title3)
 
-                        if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
-                            Text(parsed.formatted(.dateTime.year()))
-                                .font(AppTheme.Font.subtitle)
-                                .foregroundStyle(.tertiary)
+                if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
+                    Text(parsed.formatted(.dateTime.year()))
+                        .font(AppTheme.Font.subtitle)
+                        .foregroundStyle(.tertiary)
+                }
+
+                if season.episodeCount > 0 {
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+                    Text("\(season.episodeCount) EPISODES")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.secondary)
+                        .kerning(1.2)
+                }
+
+                if showRangePills {
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+                    ForEach(episodeRanges.indices, id: \.self) { index in
+                        let range = episodeRanges[index]
+                        let rangeStart = range.lowerBound
+                        let rangeEnd = range.upperBound
+                        let isSelected = selectedRangeStart == rangeStart
+
+                        Button {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                selectedRangeStart = rangeStart
+                            }
+                        } label: {
+                            Text("\(rangeStart)-\(rangeEnd)")
+                                .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(isSelected ? AppTheme.Colors.accent.opacity(0.25) : .clear, lineWidth: 0.5)
+                                )
                         }
-                    }
-
-                    if season.episodeCount > 0 {
-                        Text("\(season.episodeCount) EPISODES")
-                            .font(AppTheme.Font.caption2)
-                            .foregroundStyle(.secondary)
-                            .kerning(1.2)
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -296,9 +389,7 @@ private struct SeasonSection: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(
-                        season.episodes
-                            .liveModels
-                            .sorted(by: { $0.episodeNumber < $1.episodeNumber }),
+                        filteredEpisodes,
                         id: \.persistentModelID
                     ) { ep in
                         EpisodeCube(episode: ep, themeColor: themeColor) {
@@ -306,6 +397,11 @@ private struct SeasonSection: View {
                         }
                     }
                 }
+            }
+        }
+        .onAppear {
+            if showRangePills && selectedRangeStart == 1 {
+                selectedRangeStart = defaultRangeStart()
             }
         }
     }
