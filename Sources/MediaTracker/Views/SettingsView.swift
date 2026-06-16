@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 enum SettingsTab: Int, CaseIterable {
-    case general, services, discovery, data, about
+    case general, services, discovery, data, shortcuts, about
 
     var label: String {
         switch self {
@@ -10,6 +10,7 @@ enum SettingsTab: Int, CaseIterable {
         case .services: "Services"
         case .discovery: "Discovery"
         case .data: "Data"
+        case .shortcuts: "Shortcuts"
         case .about: "About"
         }
     }
@@ -20,6 +21,7 @@ enum SettingsTab: Int, CaseIterable {
         case .services: "antenna.radiowaves.left.and.right"
         case .discovery: "safari"
         case .data: "externaldrive"
+        case .shortcuts: "command"
         case .about: "info.circle"
         }
     }
@@ -47,6 +49,7 @@ struct SettingsView: View {
                     case .services: ServicesSection()
                     case .discovery: DiscoverySettingsSection()
                     case .data: DataSection()
+                    case .shortcuts: KeyboardShortcutsSection()
                     case .about: AboutSection()
                     }
                 }
