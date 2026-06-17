@@ -67,10 +67,10 @@ enum MediaFilterPredicates {
             return #Predicate { $0.isSoftDeleted == false && $0.tasteValue == "Dislike" }
 
         case .binge:
-            if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
-            if hasSearch { return #Predicate { $0.isSoftDeleted == false && ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { $0.isSoftDeleted == false && ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") && $0.stateValue == state } }
-            return #Predicate { $0.isSoftDeleted == false && ($0.storedSmartBadgeLabel == "BINGE DROP" || $0.storedSmartBadgeLabel == "BINGE") }
+            if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == "BINGE" && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == "BINGE" && $0.searchableText.localizedStandardContains(search) } }
+            if hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == "BINGE" && $0.stateValue == state } }
+            return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == "BINGE" }
 
         case .movie, .tvShow:
             if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.typeValue == typeValueForPredicate && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) && (badgeVal == nil || $0.storedSmartBadgeLabel == badgeVal) && (langVal == nil || $0.cachedLanguage == langVal) } }

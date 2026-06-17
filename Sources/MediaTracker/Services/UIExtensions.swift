@@ -290,11 +290,7 @@ extension View {
 
     @ViewBuilder
     func glassButtonStyle() -> some View {
-        if #available(macOS 26, *) {
-            self.buttonStyle(.glass)
-        } else {
-            self.buttonStyle(.plain)
-        }
+        self.buttonStyle(.plain)
     }
 
 
