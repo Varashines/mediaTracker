@@ -31,6 +31,7 @@ struct StatusPicker: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: currentState.iconName)
+                        .symbolEffect(.bounce, value: currentState)
                         .font(AppTheme.Font.label)
                     Text(currentState.displayName)
                         .font(AppTheme.Font.label)

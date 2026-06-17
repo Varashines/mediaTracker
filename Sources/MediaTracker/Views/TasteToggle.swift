@@ -82,6 +82,8 @@ struct TastePill: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: isSelected ? "\(icon).fill" : icon)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, value: isSelected)
                 Text(label)
             }
             .font(AppTheme.Font.bodyBold)
