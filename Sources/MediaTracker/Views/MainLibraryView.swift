@@ -40,7 +40,7 @@ struct MainLibraryView: View {
     var body: some View {
         let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
         let columns: [GridItem] = usePortraitCards
-            ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 10)]
+            ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 12)]
             : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
 
         ScrollView {
@@ -89,7 +89,7 @@ struct MainLibraryView: View {
                                 selectedNetworks: selectedNetworks,
                                 namespace: namespace,
                                 isFastScrolling: isFastScrolling,
-                                disableHover: selectedCategory == .all || selectedCategory == .movie || selectedCategory == .tvShow,
+                                disableHover: false,
                                 columns: columns,
                                 viewModel: viewModel,
                                 onLoadMore: onLoadMore

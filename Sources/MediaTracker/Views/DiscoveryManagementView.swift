@@ -7,26 +7,11 @@ struct DiscoveryManagementView: View {
     @State private var networkSearchText = ""
     @Environment(\.colorScheme) var colorScheme
 
+    @State private var availableNetworks: [String] = []
+    @State private var hiddenList: [String] = []
+    @State private var addableNetworks: [String] = []
+
     var body: some View {
-        let availableNetworks = networkEntities
-            .filter { $0.count >= 4 }
-            .map { $0.name }
-            .sorted()
-        
-        let allHidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
-        let hiddenList = allHidden.filter { name in
-            networkEntities.first(where: { $0.name == name })?.count ?? 0 >= 4
-        }.sorted()
-        
-        let addableNetworks: [String] = {
-            let filtered = availableNetworks.filter { !hiddenList.contains($0) }
-            if networkSearchText.isEmpty {
-                return filtered
-            } else {
-                return filtered.filter { $0.localizedCaseInsensitiveContains(networkSearchText) }
-            }
-        }()
-        
         VStack(alignment: .leading, spacing: 20) {
             // 1. Search and Add Section
             VStack(alignment: .leading, spacing: 12) {
@@ -126,6 +111,33 @@ struct DiscoveryManagementView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .onChange(of: networkEntities.count) { _, _ in recomputeLists() }
+        .onChange(of: hiddenStudios) { _, _ in recomputeLists() }
+        .onChange(of: networkSearchText) { _, _ in recomputeAddable() }
+        .onAppear { recomputeLists() }
+    }
+    
+    private func recomputeLists() {
+        availableNetworks = networkEntities
+            .filter { $0.count >= 4 }
+            .map { $0.name }
+            .sorted()
+        
+        let allHidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
+        hiddenList = allHidden.filter { name in
+            networkEntities.first(where: { $0.name == name })?.count ?? 0 >= 4
+        }.sorted()
+        
+        recomputeAddable()
+    }
+    
+    private func recomputeAddable() {
+        let filtered = availableNetworks.filter { !hiddenList.contains($0) }
+        if networkSearchText.isEmpty {
+            addableNetworks = filtered
+        } else {
+            addableNetworks = filtered.filter { $0.localizedCaseInsensitiveContains(networkSearchText) }
+        }
     }
     
     private func toggleHidden(_ name: String) {

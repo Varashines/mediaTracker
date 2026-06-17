@@ -51,6 +51,8 @@ struct StatusPicker: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Status: \(currentState.displayName)")
+            .accessibilityHint("Double tap to change status")
             .onHover { isHovered = $0 }
         }
     }

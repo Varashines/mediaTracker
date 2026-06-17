@@ -53,20 +53,20 @@ struct StatPill: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppTheme.Font.heading)
                     .foregroundStyle(color)
                 Text(label.uppercased())
-                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .font(AppTheme.Font.smallBold)
                     .kerning(0.8)
                     .foregroundStyle(color.opacity(0.7))
             }
 
             CountUpText(value: value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.title)
                 .foregroundStyle(.primary)
 
             Text(detail)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .font(AppTheme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }

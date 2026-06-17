@@ -253,12 +253,22 @@ extension BackgroundDataService {
                     return results.sorted { $0.seasonNumber < $1.seasonNumber }
                 }
 
+                // Batch pre-fetch all existing seasons and episodes for this show to avoid N+1 queries
+                let existingSeasonsDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
+                let existingSeasons = (try? modelContext.fetch(existingSeasonsDesc)) ?? []
+                var seasonByID: [String: TVSeason] = [:]
+                for s in existingSeasons { if let uid = s.uniqueID { seasonByID[uid] = s } }
+
+                let existingEpisodesDesc = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
+                let existingEpisodes = (try? modelContext.fetch(existingEpisodesDesc)) ?? []
+                var episodeByID: [String: TVEpisode] = [:]
+                for e in existingEpisodes { if let uid = e.uniqueID { episodeByID[uid] = e } }
+
                 for seasonData in fetchedSeasons {
                     let sNum = seasonData.seasonNumber
                     let seasonUniqueID = "\(tmdbID)_\(sNum)"
 
-                    let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                    let season = (try? modelContext.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episodeCount, airDate: seasonData.airDate, showID: tmdbID)
+                    let season = seasonByID[seasonUniqueID] ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episodeCount, airDate: seasonData.airDate, showID: tmdbID)
                     season.showID = tmdbID
 
                     if season.modelContext == nil {
@@ -270,13 +280,12 @@ extension BackgroundDataService {
 
                     for ep in seasonData.episodes {
                         let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
-                        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
                         let epName = ep.name ?? "Episode \(ep.episodeNumber)"
                         let epOverview = ep.overview ?? ""
 
                         let matchingMaze = mazeDict["\(sNum)_\(ep.episodeNumber)"]
 
-                        let episode = (try? modelContext.fetch(eDescriptor).first) ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
+                        let episode = episodeByID[epUniqueID] ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
                         episode.showID = tmdbID
 
                         if episode.modelContext == nil {

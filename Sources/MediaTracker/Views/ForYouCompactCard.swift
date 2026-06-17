@@ -116,6 +116,8 @@ struct ForYouCompactCard: View {
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(AppTheme.Animation.springGentle, value: isHovered)
         .onHover { isHovered = $0 }
+        .accessibilityLabel(metadata.title)
+        .accessibilityAddTraits(.isButton)
         .task {
             if let fetched = modelContext.model(for: metadata.id) as? MediaItem {
                 self.item = fetched

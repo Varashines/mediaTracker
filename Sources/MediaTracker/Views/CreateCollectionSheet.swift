@@ -75,7 +75,7 @@ struct CreateCollectionSheet: View {
                 }
                 
                 // Smart Playlist Toggle
-                Toggle(isOn: $isSmart.animation(.spring)) {
+                Toggle(isOn: $isSmart.animation(AppTheme.Animation.springSnappy)) {
                     HStack(spacing: 12) {
                         ZStack {
                             Circle().fill(.purple.opacity(0.1))
@@ -261,15 +261,18 @@ struct IconPickerGridView: View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                 ForEach(filteredIcons, id: \.self) { iconName in
-                    Image(systemName: iconName)
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
-                        .background(selectedIcon == iconName ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
-                        .foregroundStyle(selectedIcon == iconName ? .white : .primary)
-                        .cornerRadius(10)
-                        .onTapGesture {
-                            withAnimation(.spring) { selectedIcon = iconName }
-                        }
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) { selectedIcon = iconName }
+                    } label: {
+                        Image(systemName: iconName)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .background(selectedIcon == iconName ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                            .foregroundStyle(selectedIcon == iconName ? .white : .primary)
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(iconName)
                 }
             }
             .padding(.vertical, 4)

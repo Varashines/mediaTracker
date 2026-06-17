@@ -32,7 +32,7 @@ struct InsightsView: View {
                             isFlipped: showSpectrum
                         )
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                            withAnimation(AppTheme.Animation.springGentle) {
                                 showSpectrum.toggle()
                             }
                         }
@@ -57,7 +57,7 @@ struct InsightsView: View {
                         StudiosNetworksView(stats: stats, modelContext: modelContext)
                         HallOfFameView(stats: stats)
                     }
-                    .padding(.vertical, 24)
+                    .padding(.vertical, AppTheme.Spacing.xLarge)
                     .frame(maxWidth: .infinity)
                 }
                 .scrollBounceBehavior(.always)
@@ -93,7 +93,7 @@ struct InsightsView: View {
                 let result = try await actor.fetchStats(includeCinephileData: true)
                 if Task.isCancelled { return }
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(AppTheme.Animation.easeInOut) {
                         self.stats = result
                         self.isLoading = false
                     }

@@ -49,7 +49,7 @@ struct StudiosNetworksView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "building.2.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.orange)
                         Text("Studios")
                             .font(AppTheme.Font.caption)
@@ -88,7 +88,7 @@ struct StudiosNetworksView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.teal)
                         Text("Networks")
                             .font(AppTheme.Font.caption)
@@ -126,7 +126,7 @@ struct StudiosNetworksView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "globe")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.purple)
                         Text("Languages")
                             .font(AppTheme.Font.caption)

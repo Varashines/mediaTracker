@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct RatingDonutChart: View {
     let loved: Int
@@ -9,39 +10,21 @@ struct RatingDonutChart: View {
     private var total: Int { loved + liked + disliked + unrated }
     private var hasData: Bool { total > 0 }
 
-    private struct ComputedSegment: Identifiable {
-        let id: Int
-        let start: Double
-        let end: Double
-        let color: Color
+    private struct Segment: Identifiable {
+        let id = UUID()
         let label: String
         let value: Int
+        let color: Color
     }
 
-    private var computedSegments: [ComputedSegment] {
-        let raw = [
-            (loved, Color.red, "Love"),
-            (liked, Color.blue, "Like"),
-            (unrated, Color.gray.opacity(0.35), "Unrated"),
-            (disliked, Color.orange, "Dislike")
+    private var segments: [Segment] {
+        [
+            Segment(label: "Love", value: loved, color: .red),
+            Segment(label: "Like", value: liked, color: .blue),
+            Segment(label: "Unrated", value: unrated, color: .gray.opacity(0.35)),
+            Segment(label: "Dislike", value: disliked, color: .orange),
         ]
-
-        var currentSum = 0.0
-        var list: [ComputedSegment] = []
-        for (index, item) in raw.enumerated() {
-            guard item.0 > 0 else { continue }
-            let fraction = Double(item.0) / Double(max(1, total))
-            list.append(ComputedSegment(
-                id: index,
-                start: currentSum,
-                end: currentSum + fraction,
-                color: item.1,
-                label: item.2,
-                value: item.0
-            ))
-            currentSum += fraction
-        }
-        return list
+        .filter { $0.value > 0 }
     }
 
     var body: some View {
@@ -49,10 +32,17 @@ struct RatingDonutChart: View {
             HStack(spacing: AppTheme.Spacing.xLarge) {
                 ZStack {
                     if hasData {
-                        let arcWidth: CGFloat = 22
-                        ForEach(computedSegments) { seg in
-                            DonutArc(start: seg.start, end: seg.end, color: seg.color, lineWidth: arcWidth)
+                        Chart(segments) { seg in
+                            SectorMark(
+                                angle: .value("Count", seg.value),
+                                innerRadius: .ratio(0.55),
+                                angularInset: 1.5
+                            )
+                            .foregroundStyle(seg.color)
+                            .cornerRadius(4)
                         }
+                        .chartLegend(.hidden)
+                        .animation(AppTheme.Animation.springGentle, value: total)
                     } else {
                         Circle()
                             .stroke(Color.primary.opacity(0.06), lineWidth: 22)
@@ -60,10 +50,10 @@ struct RatingDonutChart: View {
 
                     VStack(spacing: 2) {
                         Text("\(total)")
-                            .font(.system(size: 30, weight: .heavy, design: .rounded))
+                            .font(AppTheme.Font.monoLarge)
                             .foregroundStyle(.primary)
                         Text("TOTAL\nRATED")
-                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                            .font(AppTheme.Font.mono)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
                     }
@@ -71,25 +61,25 @@ struct RatingDonutChart: View {
                 .frame(width: 150, height: 150)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(computedSegments) { seg in
+                    ForEach(segments) { seg in
                         HStack(spacing: AppTheme.Spacing.small) {
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(seg.color)
                                 .frame(width: 12, height: 12)
 
                             Text(seg.label)
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.bodyBold)
                                 .foregroundStyle(.primary)
                                 .frame(width: 60, alignment: .leading)
 
                             Text("\(seg.value)")
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .font(AppTheme.Font.monoBody)
                                 .foregroundStyle(.secondary)
 
                             Spacer()
 
-                            Text(String(format: "%.0f%%", (seg.end - seg.start) * 100))
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            Text(String(format: "%.0f%%", total > 0 ? Double(seg.value) / Double(total) * 100 : 0))
+                                .font(AppTheme.Font.monoCaption)
                                 .foregroundStyle(.tertiary)
                         }
                     }
@@ -97,34 +87,7 @@ struct RatingDonutChart: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-}
-
-struct DonutArc: View {
-    let start: Double
-    let end: Double
-    let color: Color
-    let lineWidth: CGFloat
-
-    @State private var animatedEnd: Double = 0.0
-
-    var body: some View {
-        Circle()
-            .trim(from: start, to: animatedEnd)
-            .stroke(
-                color,
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-            .rotationEffect(.degrees(-90))
-            .onAppear {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    animatedEnd = end
-                }
-            }
-            .onChange(of: end) { _, newValue in
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    animatedEnd = newValue
-                }
-            }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rating breakdown: \(loved) loved, \(liked) liked, \(disliked) disliked, \(unrated) unrated, \(total) total")
     }
 }

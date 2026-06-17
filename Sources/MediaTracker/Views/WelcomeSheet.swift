@@ -64,6 +64,7 @@ struct WelcomeSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Get Free TMDB API Key")
 
                 Button {
                     hasSeenWelcome = true
@@ -75,6 +76,7 @@ struct WelcomeSheet: View {
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("I already have a key")
 
                 Button {
                     hasSeenWelcome = true
@@ -86,6 +88,7 @@ struct WelcomeSheet: View {
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Explore in Demo Mode")
             }
             .opacity(showButtons ? 1 : 0)
             .offset(y: showButtons ? 0 : 12)

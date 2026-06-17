@@ -174,6 +174,45 @@ actor BackgroundDataService {
         return importedCount
     }
 
+    static func importCollections(backup: LibraryBackup, modelContainer: ModelContainer) async {
+        guard let collectionData = backup.collections, !collectionData.isEmpty else { return }
+
+        let context = ModelContext(modelContainer)
+        let existingDescriptor = FetchDescriptor<MediaCollection>()
+        let existingCollections = (try? context.fetch(existingDescriptor)) ?? []
+        let existingIDs = Set(existingCollections.map { $0.id })
+
+        var importedCount = 0
+
+        for colData in collectionData where !existingIDs.contains(colData.id) {
+            let collection = MediaCollection(name: colData.name, systemImage: colData.systemImage, isSmart: colData.smartRulesData != nil)
+            collection.id = colData.id
+            collection.notes = colData.notes
+            collection.isPinned = colData.isPinned
+            collection.completedItemIDs = colData.completedItemIDs
+            collection.smartRulesData = colData.smartRulesData
+            context.insert(collection)
+
+            if colData.smartRulesData == nil, let itemIDs = colData.itemIDs {
+                for itemID in itemIDs {
+                    let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
+                    if let item = try? context.fetch(descriptor).first, item.modelContext != nil {
+                        collection.items.append(item)
+                    }
+                }
+            }
+
+            importedCount += 1
+        }
+
+        if importedCount > 0 {
+            try? context.save()
+            await MainActor.run {
+                AppLogger.info("📦 Restored \(importedCount) collections from backup.", logger: AppLogger.data)
+            }
+        }
+    }
+
     func deleteMediaItem(id: String) async {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return }
@@ -416,7 +455,8 @@ actor BackgroundDataService {
             }
         }
 
-        let eDesc = FetchDescriptor<TVEpisode>()
+        var eDesc = FetchDescriptor<TVEpisode>()
+        eDesc.propertiesToFetch = [\.uniqueID, \.showID, \.seasonNumber]
         let allEpisodes = try modelContext.fetch(eDesc)
 
         var seasonMap: [Int: [Int: TVSeason]] = [:]

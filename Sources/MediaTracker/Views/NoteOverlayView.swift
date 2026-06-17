@@ -31,6 +31,7 @@ struct NoteOverlayView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Close notes")
                     }
                     
                     TextEditor(text: $localNote)

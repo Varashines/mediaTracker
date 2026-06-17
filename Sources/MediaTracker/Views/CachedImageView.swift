@@ -64,7 +64,10 @@ struct CachedImage<Placeholder: View>: View {
         }
         .onChange(of: isFastScrolling) { oldValue, newValue in
             if !newValue && image == nil {
-                Task { await attemptLoad() }
+                Task { @MainActor in
+                    guard !Task.isCancelled else { return }
+                    await self.attemptLoad()
+                }
             }
         }
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
@@ -72,7 +75,10 @@ struct CachedImage<Placeholder: View>: View {
                 self.image = nil
             } else {
                 setupBroadcastListener()
-                Task { await attemptLoad() }
+                Task { @MainActor in
+                    guard !Task.isCancelled else { return }
+                    await self.attemptLoad()
+                }
             }
         }
     }
@@ -85,7 +91,7 @@ struct CachedImage<Placeholder: View>: View {
                 .overlay {
                     Image(systemName: "film")
                         .foregroundStyle(color.opacity(0.3))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.title2)
                 }
         } else {
             ZStack {
@@ -144,6 +150,7 @@ struct CachedImage<Placeholder: View>: View {
     }
 
     private func attemptLoad() async {
+        guard !Task.isCancelled else { return }
         guard let url = url else { return }
         let key = url.absoluteString
         
@@ -151,7 +158,7 @@ struct CachedImage<Placeholder: View>: View {
             let isExact = ImageCache.shared.isExactMatch(image: container.image, forURL: key, size: targetSize)
             
             if isExact {
-                withAnimation(.easeIn(duration: 0.2)) {
+                withAnimation(AppTheme.Animation.easeInOut) {
                     self.image = container.image
                 }
                 return
@@ -168,7 +175,7 @@ struct CachedImage<Placeholder: View>: View {
         
         if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority, alwaysPreserveAlpha: alwaysPreserveAlpha) {
             if Task.isCancelled { return }
-            withAnimation(.easeIn(duration: 0.25)) {
+            withAnimation(AppTheme.Animation.easeInOut) {
                 self.image = container.image
             }
             onImageLoaded?(container.image)

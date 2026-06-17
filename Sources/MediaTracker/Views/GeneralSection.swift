@@ -71,10 +71,12 @@ struct GeneralSection: View {
             SettingsCard(color: .purple) {
                 HStack(spacing: 14) {
                     paletteDot(index: 0, accent: .accentColor, label: "Standard")
-                    paletteDot(index: 1, accent: Color(hex: "#9B7B6B") ?? .accentColor, label: "Earth")
-                    paletteDot(index: 2, accent: Color(hex: "#6E7BB8") ?? .accentColor, label: "Cool")
-                    paletteDot(index: 3, accent: Color(hex: "#059669") ?? .accentColor, label: "Forest")
-                    paletteDot(index: 4, accent: Color(hex: "#2563EB") ?? .accentColor, label: "Ocean")
+                    paletteDot(index: 1, accent: Color(hex: "#C47A5A") ?? .accentColor, label: "Earth")
+                    paletteDot(index: 2, accent: Color(hex: "#7B8CDE") ?? .accentColor, label: "Cool")
+                    paletteDot(index: 3, accent: Color(hex: "#10B981") ?? .accentColor, label: "Forest")
+                    paletteDot(index: 4, accent: Color(hex: "#3B82F6") ?? .accentColor, label: "Ocean")
+                    paletteDot(index: 5, accent: Color(hex: "#D97706") ?? .accentColor, label: "Dusk")
+                    paletteDot(index: 6, accent: Color(hex: "#8B5CF6") ?? .accentColor, label: "Midnight")
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -154,5 +156,6 @@ struct GeneralSection: View {
         }
         .buttonStyle(.plain)
         .help(label)
+        .accessibilityLabel(label)
     }
 }

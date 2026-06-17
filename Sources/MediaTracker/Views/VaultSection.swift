@@ -21,7 +21,7 @@ struct VaultSection: View {
                             let context = ModelContext(container)
                             let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
                             if let items = try? context.fetch(descriptor) {
-                                let exportItems = LibraryImportExportService.shared.prepareExportData(items: items)
+                                let exportItems = LibraryImportExportService.shared.prepareExportData(items: items, context: context)
                                 exportData = exportItems
                                 showExportDialog = true
                             }

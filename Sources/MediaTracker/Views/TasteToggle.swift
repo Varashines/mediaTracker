@@ -37,7 +37,7 @@ struct TasteToggle: View {
     
     private func setTaste(_ val: TasteValue) {
         guard item.modelContext != nil else { return }
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(AppTheme.Animation.easeInOut) {
             let isRemoving = item.taste == val
             if isRemoving {
                 item.applyTasteChange(.none)

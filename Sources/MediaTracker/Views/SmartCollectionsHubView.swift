@@ -378,7 +378,7 @@ struct SmartCollectionsHubView: View {
         
         await HubCountsCache.shared.save(counts: smartCounts, customCounts: customCounts)
         await MainActor.run {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(AppTheme.Animation.easeInOut) {
                 self.counts = smartCounts
                 self.customSmartCounts = customCounts
                 self.countsLoaded = true
@@ -432,7 +432,7 @@ private struct SmartCollectionCard: View {
                     if let count {
                         if count > 0 {
                             Text("\(count)")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(AppTheme.Font.caption2)
                                 .foregroundStyle(accentColor)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
@@ -481,6 +481,8 @@ private struct SmartCollectionCard: View {
             .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(collection?.name ?? title), \(count.map { "\($0) items" } ?? "no items")")
+        .accessibilityAddTraits(.isButton)
         .onHover { isHovered = $0 }
         .contextMenu {
             if let collection = collection {

@@ -161,7 +161,7 @@ struct ServicesSection: View {
                 Spacer()
                 Link(destination: link) {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 12))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -197,6 +197,7 @@ struct ServicesSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(showKey.wrappedValue ? "Hide API key" : "Show API key")
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 12)
@@ -217,7 +218,7 @@ struct ServicesSection: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 12))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : .secondary)
                 Text(title)
                     .font(AppTheme.Font.label)

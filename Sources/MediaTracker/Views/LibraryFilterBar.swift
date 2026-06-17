@@ -84,9 +84,9 @@ struct LibraryFilterBar: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
                 Text(title)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppTheme.Font.caption)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -109,6 +109,7 @@ struct LibraryFilterBar: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(active ? "\(title) (active)" : title)
     }
     
     private var sortMenu: some View {

@@ -162,7 +162,10 @@ struct BulkItemCard: View {
     let onToggle: () -> Void
     
     var body: some View {
-        VStack(spacing: 8) {
+        Button {
+            onToggle()
+        } label: {
+            VStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 // Poster
                 if let posterURL = item.posterURL, let url = URL(string: "https://image.tmdb.org/t/p/w300\(posterURL)") {
@@ -200,10 +203,11 @@ struct BulkItemCard: View {
                 .font(.caption)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+            }
         }
-        .onTapGesture {
-            onToggle()
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Toggle \(item.title)")
+        .accessibilityAddTraits(.isButton)
         .padding(4)
         .background(isSelected ? AppTheme.Colors.accent.opacity(0.1) : Color.clear)
         .cornerRadius(16)

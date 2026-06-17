@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct LibraryBackup: Codable, Sendable {
     let items: [MediaItemData]
+    var collections: [CollectionBackupData]?
     var version: Int = 1
 }
 
@@ -16,6 +17,17 @@ struct MediaItemData: Codable, Sendable {
     let dateAdded: Date
     let taste: String?
     let watchedEpisodeIDs: [String]?
+}
+
+struct CollectionBackupData: Codable, Sendable {
+    let id: UUID
+    let name: String
+    let systemImage: String
+    let notes: String?
+    let isPinned: Bool
+    let completedItemIDs: [String]
+    let smartRulesData: Data?
+    let itemIDs: [String]?
 }
 
 struct JSONFileDocument: FileDocument {
@@ -43,7 +55,7 @@ class LibraryImportExportService {
     static let shared = LibraryImportExportService()
     private init() {}
 
-    func prepareExportData(items: [MediaItem]) -> Data? {
+    func prepareExportData(items: [MediaItem], context: ModelContext) -> Data? {
         let exportItems = items.map { item -> MediaItemData in
             var watchedIDs: [String]? = nil
             if item.type == .tvShow, let tv = item.tvShowDetails {
@@ -64,7 +76,25 @@ class LibraryImportExportService {
             )
         }
 
-        let backup = LibraryBackup(items: exportItems)
+        var collectionBackup: [CollectionBackupData]? = nil
+        let collectionsDescriptor = FetchDescriptor<MediaCollection>()
+        if let collections = try? context.fetch(collectionsDescriptor) {
+            collectionBackup = collections.map { col in
+                let itemIDs: [String]? = col.isSmart ? nil : col.items.compactMap { $0.modelContext != nil ? $0.id : nil }
+                return CollectionBackupData(
+                    id: col.id,
+                    name: col.name,
+                    systemImage: col.systemImage,
+                    notes: col.notes,
+                    isPinned: col.isPinned,
+                    completedItemIDs: col.completedItemIDs,
+                    smartRulesData: col.smartRulesData,
+                    itemIDs: itemIDs
+                )
+            }
+        }
+
+        let backup = LibraryBackup(items: exportItems, collections: collectionBackup)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         return try? encoder.encode(backup)

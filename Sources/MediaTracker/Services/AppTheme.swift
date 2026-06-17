@@ -4,7 +4,9 @@ import SwiftUI
 struct AppTheme {
     struct Spacing {
         static let micro: CGFloat = 4
+        static let mini: CGFloat = 6
         static let tiny: CGFloat = 8
+        static let compact: CGFloat = 10
         static let small: CGFloat = 12
         static let smallMedium: CGFloat = 14
         static let medium: CGFloat = 16
@@ -15,6 +17,7 @@ struct AppTheme {
     }
 
     struct Radius {
+        static let micro: CGFloat = 4
         static let small: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 20
@@ -66,6 +69,14 @@ struct AppTheme {
 
         // Monospaced
         static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
+        static let monoBody = SwiftUI.Font.system(size: 13, weight: .bold, design: .monospaced)
+        static let monoCaption = SwiftUI.Font.system(size: 11, weight: .semibold, design: .monospaced)
+        static let monoLarge = SwiftUI.Font.system(size: 30, weight: .heavy, design: .rounded)
+        static let monoLabel = SwiftUI.Font.system(size: 10, weight: .medium, design: .monospaced)
+
+        // Settings
+        static let settingsIcon = SwiftUI.Font.system(size: 18, weight: .medium)
+        static let titleMedium = SwiftUI.Font.system(size: 18, weight: .semibold, design: .rounded)
     }
 
     struct ShadowConfig {

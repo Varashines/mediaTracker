@@ -96,11 +96,11 @@ struct SettingsView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(AppTheme.Font.settingsIcon)
                     .frame(width: 24, height: 24)
 
                 Text(tab.label)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(AppTheme.Font.label)
                     .lineLimit(1)
             }
             .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
@@ -111,6 +111,8 @@ struct SettingsView: View {
                     .fill(isSelected ? AppTheme.Colors.accent.opacity(0.08) : .clear)
             }
             .contentShape(Rectangle())
+            .accessibilityLabel(tab.label)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .buttonStyle(.plain)
     }

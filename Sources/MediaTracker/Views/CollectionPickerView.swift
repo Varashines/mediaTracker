@@ -39,7 +39,7 @@ struct CollectionPickerView: View {
             Button("Done") {
                 dismiss()
             }
-            .buttonStyle(.plain)
+        .buttonStyle(.plain)
             .padding(.horizontal, 40)
             .padding(.vertical, 12)
             .background(AppTheme.Colors.accent)
@@ -77,6 +77,8 @@ struct CollectionToggleRow: View {
             .cornerRadius(AppTheme.Radius.medium)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(collection.name), \(isInCollection ? "in collection" : "not in collection")")
+        .accessibilityHint("Double tap to toggle")
     }
     
     private func toggle() {

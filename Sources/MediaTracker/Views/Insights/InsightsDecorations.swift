@@ -10,7 +10,7 @@ struct CuteEmptyState: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .medium))
+                .font(AppTheme.Font.title3)
                 .foregroundStyle(color)
             Text(message)
                 .font(AppTheme.Font.body)
@@ -32,7 +32,7 @@ struct ArchetypeBadge: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: archetypeIcon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Font.label)
                 Text(archetype)
                     .font(AppTheme.Font.caption)
             }
@@ -86,7 +86,7 @@ struct PersonalityBadge: View {
 
         HStack(spacing: 4) {
             Image(systemName: "face.smiling")
-                .font(.system(size: 10, weight: .medium))
+                .font(AppTheme.Font.label)
             Text(personality)
                 .font(AppTheme.Font.caption)
         }

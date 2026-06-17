@@ -39,7 +39,7 @@ struct RecommendationSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Based on your \(filterName) picks")
-                .font(.system(size: 15, weight: .semibold))
+                .font(AppTheme.Font.bodyMedium)
                 .foregroundStyle(.primary)
 
             HStack(spacing: 6) {

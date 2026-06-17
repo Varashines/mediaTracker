@@ -15,13 +15,22 @@ struct TVTrackingView: View {
     var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
+    var onSeasonCompleted: (() -> Void)? = nil
 
     @State private var selectedSeasonNumber: Int?
+    @State private var previousSeasonComplete = false
 
     private var sortedSeasons: [TVSeason] {
         tvDetails.seasons
             .liveModels
             .sorted(by: { $0.seasonNumber < $1.seasonNumber })
+    }
+
+    private var selectedSeasonIsComplete: Bool {
+        guard let selectedNumber = selectedSeasonNumber,
+              let season = tvDetails.seasons.first(where: { $0.seasonNumber == selectedNumber }),
+              season.totalEpisodesCount > 0 else { return false }
+        return season.watchedEpisodesCount == season.totalEpisodesCount
     }
 
     var body: some View {
@@ -44,7 +53,7 @@ struct TVTrackingView: View {
                                 isSelected: selectedSeasonNumber == season.seasonNumber,
                                 themeColor: themeColor
                             ) {
-                                withAnimation(.easeInOut(duration: 0.3)) {
+                                withAnimation(AppTheme.Animation.easeInOut) {
                                     selectedSeasonNumber = season.seasonNumber
                                 }
                                 onSeasonSelected?(season)
@@ -74,6 +83,7 @@ struct TVTrackingView: View {
                     }
                     .onChange(of: selectedNumber) { _, _ in
                         autoFetchIfNeeded(season: selectedSeason)
+                        previousSeasonComplete = selectedSeasonIsComplete
                     }
                 }
             }
@@ -81,6 +91,12 @@ struct TVTrackingView: View {
         .onAppear { refreshSeasonSelection() }
         .onChange(of: tvDetails.seasons.count) { _, _ in refreshSeasonSelection() }
         .onChange(of: tvDetails.item?.lastUpdated) { _, _ in refreshSeasonSelection() }
+        .onChange(of: selectedSeasonIsComplete) { _, isNowComplete in
+            if isNowComplete && !previousSeasonComplete {
+                onSeasonCompleted?()
+            }
+            previousSeasonComplete = isNowComplete
+        }
     }
 
     private func autoFetchIfNeeded(season: TVSeason) {
@@ -172,7 +188,7 @@ private struct SeasonTab: View {
                         .frame(width: 8, height: 8)
                 }
             }
-            .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
+            .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background {
@@ -186,6 +202,8 @@ private struct SeasonTab: View {
                         lineWidth: isSelected ? 1.5 : 1)
             }
             .foregroundStyle(isSelected ? Color.primary : .secondary)
+            .accessibilityLabel("\(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name), \(Int(progress * 100))% watched")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .buttonStyle(.plain)
     }
@@ -309,14 +327,14 @@ private struct SeasonSection: View {
                                 .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
+                                .foregroundStyle(isSelected ? themeColor : .secondary)
                                 .background(
                                     Capsule()
-                                        .fill(isSelected ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                                        .fill(isSelected ? themeColor.opacity(0.12) : Color.primary.opacity(0.04))
                                 )
                                 .overlay(
                                     Capsule()
-                                        .stroke(isSelected ? AppTheme.Colors.accent.opacity(0.25) : .clear, lineWidth: 0.5)
+                                        .stroke(isSelected ? themeColor.opacity(0.25) : .clear, lineWidth: 0.5)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -340,9 +358,9 @@ private struct SeasonSection: View {
                     .background(
                         isAllWatched
                             ? themeColor.opacity(colorScheme == .dark ? 0.1 : 0.05)
-                            : AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.12)
+                            : themeColor.opacity(colorScheme == .dark ? 0.15 : 0.12)
                     )
-                    .foregroundStyle(isAllWatched ? .secondary : AppTheme.Colors.accent)
+                    .foregroundStyle(isAllWatched ? .secondary : themeColor)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -558,12 +576,14 @@ private struct EpisodeCube: View {
                 )
             }
             .buttonStyle(.interactive(feedback: nil))
+            .accessibilityLabel("Episode \(episode.episodeNumber), \(episode.name.isEmpty ? "Episode \(episode.episodeNumber)" : episode.name), \(episode.isWatched ? "watched" : "not watched")")
+            .accessibilityHint("Double tap to toggle watched")
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) { isHovering = hovering }
+                withAnimation(AppTheme.Animation.easeInOut) { isHovering = hovering }
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: episode.isWatched)
-        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: isHovering)
+        .animation(AppTheme.Animation.springSnappy, value: episode.isWatched)
+        .animation(AppTheme.Animation.springSnappy, value: isHovering)
     }
 
     // MARK: - Popover
@@ -610,14 +630,14 @@ private struct EpisodeCube: View {
                     }
                     if let runStr = runtimeString { Text(runStr) }
                 }
-                .font(.system(size: 10.5))
+                .font(AppTheme.Font.label)
                 .foregroundStyle(.secondary)
             }
 
             if !episode.overview.isEmpty {
                 ScrollView(showsIndicators: false) {
                     Text(episode.overview)
-                        .font(.system(size: 11.5))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(.secondary)
                         .lineSpacing(3)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -374,7 +374,7 @@ struct ReleaseCalendarView: View {
                                 // Count badge instead of dot
                                 if itemCount > 0 {
                                     Text("\(itemCount)")
-                                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                                        .font(AppTheme.Font.tiny)
                                         .foregroundStyle(isSelected ? .white : accent)
                                         .frame(width: 16, height: 16)
                                         .background(isSelected ? accent : accent.opacity(0.15))
@@ -536,7 +536,11 @@ struct ReleaseCalendarView: View {
     @ViewBuilder
     private func releaseThumbnail(item: CalendarReleaseItem) -> some View {
         let accent = AppTheme.Colors.accent.highContrastAccent(colorScheme: colorScheme)
-        ReleaseThumbnailCard(item: item, accent: accent)
+        ReleaseThumbnailCard(item: item, accent: accent) {
+            if let mediaItem = modelContext.model(for: item.metadata.id) as? MediaItem {
+                viewModel.navigationPath.append(mediaItem)
+            }
+        }
     }
 }
 
@@ -545,12 +549,13 @@ struct ReleaseCalendarView: View {
 private struct ReleaseThumbnailCard: View {
     let item: CalendarReleaseItem
     let accent: Color
+    let action: (() -> Void)?
     @State private var isHovered = false
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            MediaThumbnailView(metadata: item.metadata, mode: .grid)
+            MediaThumbnailView(metadata: item.metadata, mode: .grid, action: action)
             
             Text(item.releaseContext)
                 .font(AppTheme.Font.small)
@@ -589,6 +594,10 @@ private struct CalendarCellView: View {
                 .scaleEffect(isHovered ? 1.12 : 1.0)
                 .shadow(color: isHovered ? accent.opacity(0.3) : .clear, radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
                 .overlay {
+                    Text(day.date.formatted(.dateTime.day()))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(day.intensity > 0.4 ? .white.opacity(0.9) : .primary.opacity(0.7))
+                        .offset(y: isToday ? -4 : 0)
                     if isToday {
                         Circle()
                             .fill(colorScheme == .dark ? Color.white : Color.black)

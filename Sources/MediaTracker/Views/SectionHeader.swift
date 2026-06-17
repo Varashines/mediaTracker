@@ -14,7 +14,7 @@ struct SectionHeader: View {
                 if let icon = icon {
                     Image(systemName: icon)
                         .foregroundStyle(iconColor)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(AppTheme.Font.title2)
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {

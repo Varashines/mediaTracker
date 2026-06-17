@@ -20,7 +20,7 @@ struct DataSection: View {
                         let context = ModelContext(container)
                         let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
                         if let items = try? context.fetch(descriptor) {
-                            let exportItems = LibraryImportExportService.shared.prepareExportData(items: items)
+                            let exportItems = LibraryImportExportService.shared.prepareExportData(items: items, context: context)
                             exportData = exportItems
                             showExportDialog = true
                         }
@@ -95,6 +95,7 @@ struct DataSection: View {
                         let data = try Data(contentsOf: url)
                         let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
                         let count = await BackgroundDataService.importLibraryData(backup: backup, modelContainer: container)
+                        await BackgroundDataService.importCollections(backup: backup, modelContainer: container)
                         await MainActor.run {
                             AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
                             let context = ModelContext(container)
@@ -137,6 +138,8 @@ struct DataSection: View {
             .padding(.vertical, 5)
             .background(AppTheme.Colors.accent.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .accessibilityLabel(button)
+            .accessibilityHint(title)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

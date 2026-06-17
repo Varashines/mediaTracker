@@ -12,6 +12,7 @@ struct DetailView: View {
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
+    @State private var showConfetti = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -29,6 +30,18 @@ struct DetailView: View {
                 AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
             } else {
                 contentOverlay
+            }
+
+            if showConfetti {
+                ConfettiOverlay()
+                    .transition(.opacity)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            withAnimation(.easeOut(duration: 0.4)) {
+                                showConfetti = false
+                            }
+                        }
+                    }
             }
         }
     }
@@ -76,7 +89,7 @@ struct DetailView: View {
             .coordinateSpace(name: "detailScroll")
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
-            .animation(.easeInOut(duration: 0.3), value: showDeleteConfirmation)
+            .animation(AppTheme.Animation.easeInOut, value: showDeleteConfirmation)
 
         }
         .overlay {
@@ -125,6 +138,7 @@ struct DetailView: View {
                         FeedbackManager.shared.trigger(.markWatched)
                         AppErrorState.shared.showToast("Next episode marked", style: .success)
                     } else {
+                        let wasCompleted = viewModel.item.state == .completed
                         viewModel.toggleWatched()
                         let isCompleted = viewModel.item.state == .completed
                         FeedbackManager.shared.trigger(isCompleted ? .markWatched : .stateChange)
@@ -132,6 +146,9 @@ struct DetailView: View {
                             isCompleted ? "Marked as watched" : "Moved to wishlist",
                             style: .success
                         )
+                        if isCompleted && !wasCompleted {
+                            showConfetti = true
+                        }
                     }
                 }
                 .keyboardShortcut(.space, modifiers: [])
@@ -202,7 +219,10 @@ struct DetailView: View {
                                 viewModel.item.lastInteractionDate = Date()
                                 viewModel.item.syncCachedProperties()
                             },
-                            onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) }
+                            onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
+                            onSeasonCompleted: {
+                                showConfetti = true
+                            }
                         )
                         .padding(.top, 4)
                     }
@@ -460,7 +480,7 @@ struct DetailView: View {
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
             
             let container = modelContext.container
-            Task.detached {
+            Task.detached(priority: .background) {
                 let backgroundService = BackgroundDataService(modelContainer: container)
                 await backgroundService.deleteMediaItem(id: itemID)
                 

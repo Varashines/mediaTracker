@@ -76,6 +76,6 @@ struct WatchedThisWeek: View {
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
 
         items = (try? modelContext.fetch(descriptor)) ?? []
-        withAnimation(.easeInOut(duration: 0.25)) { isLoading = false }
+        withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
     }
 }

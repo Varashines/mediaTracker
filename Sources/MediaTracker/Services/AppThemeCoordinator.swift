@@ -43,13 +43,17 @@ class AppThemeCoordinator {
         // Compute Accent
         switch customThemePalette {
         case 1:
-            self.accent = Color(hex: "#9B7B6B") ?? .accentColor  // Earth
+            self.accent = Color(hex: "#C47A5A") ?? .accentColor  // Earth — warm terracotta
         case 2:
-            self.accent = Color(hex: "#6E7BB8") ?? .accentColor  // Cool
+            self.accent = Color(hex: "#7B8CDE") ?? .accentColor  // Cool — slate indigo
         case 3:
-            self.accent = Color(hex: "#059669") ?? .accentColor  // Forest
+            self.accent = Color(hex: "#10B981") ?? .accentColor  // Forest — deep emerald
         case 4:
-            self.accent = Color(hex: "#2563EB") ?? .accentColor  // Ocean
+            self.accent = Color(hex: "#3B82F6") ?? .accentColor  // Ocean — deep ocean
+        case 5:
+            self.accent = Color(hex: "#D97706") ?? .accentColor  // Dusk — warm amber
+        case 6:
+            self.accent = Color(hex: "#8B5CF6") ?? .accentColor  // Midnight — deep violet
         default:
             self.accent = .accentColor  // Standard
         }
@@ -77,6 +81,10 @@ class AppThemeCoordinator {
             return Color(hex: isDark ? "#2A2D2B" : "#F7FAF8") ?? Color(white: isDark ? 0.17 : 0.96)
         case 4: // Ocean — barely blue tint on grey base
             return Color(hex: isDark ? "#292C33" : "#F5F7FC") ?? Color(white: isDark ? 0.17 : 0.96)
+        case 5: // Dusk — barely amber tint on grey base
+            return Color(hex: isDark ? "#2D2A26" : "#FAF7F2") ?? Color(white: isDark ? 0.17 : 0.96)
+        case 6: // Midnight — barely violet tint on grey base
+            return Color(hex: isDark ? "#2A2830" : "#F7F5FA") ?? Color(white: isDark ? 0.17 : 0.96)
         default: // Standard — macOS grey
             return Color(white: isDark ? 0.17 : 0.96)
         }
@@ -85,7 +93,7 @@ class AppThemeCoordinator {
     func cardFill(for colorScheme: ColorScheme) -> Color {
         let isDark = isDarkActive
         switch customThemePalette {
-        case 1, 2, 3, 4: // All tinted palettes — subtle card fill
+        case 1, 2, 3, 4, 5, 6: // All tinted palettes — subtle card fill
             return Color.primary.opacity(isDark ? 0.05 : 0.03)
         default: // Standard — neutral card fill
             return Color.primary.opacity(isDark ? 0.04 : 0.02)

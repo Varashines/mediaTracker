@@ -24,7 +24,7 @@ struct OverviewSection: View {
 
                 if overview.count > 200 {
                     Button(isExpanded ? "Show Less" : "Show More") {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(AppTheme.Animation.easeInOut) {
                             isExpanded.toggle()
                         }
                     }

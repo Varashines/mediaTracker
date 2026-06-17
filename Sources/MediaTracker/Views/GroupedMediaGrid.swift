@@ -22,7 +22,7 @@ struct GroupedMediaGrid: View {
                         iconColor: .secondary
                     )
                     
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
                         let groupArray = Array(groupMetadatas.enumerated())
                         ForEach(groupArray, id: \.element.id) { idx, metadata in
                             NavigationLink(value: metadata.id) {
@@ -36,7 +36,7 @@ struct GroupedMediaGrid: View {
                 }
             }
         }
-        .padding(.bottom, 24)
+        .padding(.bottom, 32)
         .task(id: viewModel.collection.selectedCollectionID) {
             guard let cid = viewModel.collection.selectedCollectionID else {
                 completedIDs = []

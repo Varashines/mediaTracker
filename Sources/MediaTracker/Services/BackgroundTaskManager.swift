@@ -253,7 +253,26 @@ class BackgroundTaskManager {
                         watchedEpisodeIDs: watchedIDs
                     )
                 }
-                let backup = LibraryBackup(items: exportItems)
+
+                var collectionBackup: [CollectionBackupData]? = nil
+                let collectionsDescriptor = FetchDescriptor<MediaCollection>()
+                if let allCollections = try? context.fetch(collectionsDescriptor) {
+                    collectionBackup = allCollections.map { col in
+                        let itemIDs: [String]? = col.isSmart ? nil : col.items.compactMap { $0.modelContext != nil ? $0.id : nil }
+                        return CollectionBackupData(
+                            id: col.id,
+                            name: col.name,
+                            systemImage: col.systemImage,
+                            notes: col.notes,
+                            isPinned: col.isPinned,
+                            completedItemIDs: col.completedItemIDs,
+                            smartRulesData: col.smartRulesData,
+                            itemIDs: itemIDs
+                        )
+                    }
+                }
+
+                let backup = LibraryBackup(items: exportItems, collections: collectionBackup)
                 await LibraryImportExportService.shared.automatedBackup(backup: backup)
             }
 

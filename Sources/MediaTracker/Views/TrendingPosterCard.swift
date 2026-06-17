@@ -15,7 +15,7 @@ struct TrendingPosterCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
 
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 30))
+                    .font(AppTheme.Font.title)
                     .foregroundStyle(.white)
                     .shadow(radius: 4)
                     .padding(12)
@@ -39,6 +39,8 @@ struct TrendingPosterCard: View {
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0), radius: 8, y: 4)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder

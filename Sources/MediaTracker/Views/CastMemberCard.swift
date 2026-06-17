@@ -15,6 +15,7 @@ struct CastMemberCard: View {
             cardContent
         }
         .buttonStyle(.interactive)
+        .accessibilityLabel("\(member.name)\(member.characterName.isEmpty ? "" : ", \(member.characterName)")")
     }
 
     @ViewBuilder

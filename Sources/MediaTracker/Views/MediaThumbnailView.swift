@@ -297,6 +297,9 @@ struct MediaThumbnailView: View, Equatable {
                     }
                     Spacer()
                 }
+                .transition(.scale.combined(with: .opacity))
+                .animation(AppTheme.Animation.springSnappy, value: capturedState)
+                .animation(AppTheme.Animation.springSnappy, value: capturedGridBadgeText)
                 Spacer()
             }
             .padding(8)

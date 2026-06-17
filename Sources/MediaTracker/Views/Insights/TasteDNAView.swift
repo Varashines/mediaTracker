@@ -1,36 +1,55 @@
 import SwiftUI
+import Charts
 
 struct TasteDNAView: View {
     let stats: LibraryStats
     @Environment(\.colorScheme) var colorScheme
 
-    var body: some View {
+    private struct Segment: Identifiable {
+        let id = UUID()
+        let label: String
+        let value: Double
+        let color: Color
+    }
+
+    private var segments: [Segment] {
         let totalRated = stats.lovedCount + stats.likedCount + stats.dislikedCount
         let total = totalRated + stats.unratedCount
-        let lovedPct = total > 0 ? Double(stats.lovedCount) / Double(total) : 0
-        let likedPct = total > 0 ? Double(stats.likedCount) / Double(total) : 0
-        let dislikedPct = total > 0 ? Double(stats.dislikedCount) / Double(total) : 0
-        let unratedPct = total > 0 ? Double(stats.unratedCount) / Double(total) : 0
+        guard total > 0 else { return [] }
+        return [
+            Segment(label: "Loved", value: Double(stats.lovedCount), color: .pink),
+            Segment(label: "Liked", value: Double(stats.likedCount), color: .green),
+            Segment(label: "Disliked", value: Double(stats.dislikedCount), color: .red.opacity(0.6)),
+            Segment(label: "Unrated", value: Double(stats.unratedCount), color: .gray.opacity(0.4)),
+        ]
+    }
 
+    private var totalRated: Int {
+        stats.lovedCount + stats.likedCount + stats.dislikedCount
+    }
+
+    var body: some View {
         HStack(spacing: AppTheme.Spacing.large) {
-            // Donut
+            // Donut Chart
             ZStack {
-                DonutSegment(startAngle: -90, endAngle: -90 + lovedPct * 360)
-                    .fill(.pink)
-                DonutSegment(startAngle: -90 + lovedPct * 360, endAngle: -90 + (lovedPct + likedPct) * 360)
-                    .fill(.green)
-                DonutSegment(startAngle: -90 + (lovedPct + likedPct) * 360, endAngle: -90 + (lovedPct + likedPct + dislikedPct) * 360)
-                    .fill(.red.opacity(0.6))
-                DonutSegment(startAngle: -90 + (lovedPct + likedPct + dislikedPct) * 360, endAngle: -90 + 360)
-                    .fill(.gray.opacity(0.3))
-            }
-            .frame(width: 130, height: 130)
-            .overlay {
+                Chart(segments) { seg in
+                    SectorMark(
+                        angle: .value("Count", seg.value),
+                        innerRadius: .ratio(0.55),
+                        angularInset: 1.5
+                    )
+                    .foregroundStyle(seg.color)
+                    .cornerRadius(4)
+                }
+                .chartLegend(.hidden)
+                .frame(width: 130, height: 130)
+
+                // Center label
                 VStack(spacing: 2) {
                     Text("\(totalRated)")
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.titleLarge)
                     Text("Rated")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -40,10 +59,10 @@ struct TasteDNAView: View {
                     PersonalityBadge(personality: stats.ratingPersonality)
                 }
 
-                tasteLegend(color: .pink, label: "Loved", count: stats.lovedCount, pct: lovedPct)
-                tasteLegend(color: .green, label: "Liked", count: stats.likedCount, pct: likedPct)
-                tasteLegend(color: .red.opacity(0.6), label: "Disliked", count: stats.dislikedCount, pct: dislikedPct)
-                tasteLegend(color: .gray.opacity(0.4), label: "Unrated", count: stats.unratedCount, pct: unratedPct)
+                ForEach(segments) { seg in
+                    let pct = totalRated > 0 ? seg.value / Double(totalRated + stats.unratedCount) : 0
+                    tasteLegend(color: seg.color, label: seg.label, count: Int(seg.value), pct: pct)
+                }
             }
         }
         .padding(.vertical, 8)
@@ -54,31 +73,15 @@ struct TasteDNAView: View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
-                .font(.system(size: 13, weight: .medium))
+                .font(AppTheme.Font.bodyMedium)
                 .foregroundStyle(.primary)
                 .frame(width: 60, alignment: .leading)
             Text("\(count)")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppTheme.Font.heading)
                 .foregroundStyle(color)
             Text(String(format: "(%.0f%%)", pct * 100))
-                .font(.system(size: 11, weight: .medium))
+                .font(AppTheme.Font.label)
                 .foregroundStyle(.secondary)
         }
-    }
-}
-
-struct DonutSegment: Shape {
-    let startAngle: Double
-    let endAngle: Double
-
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        let innerRadius = radius * 0.55
-        var path = Path()
-        path.addArc(center: center, radius: radius, startAngle: .degrees(startAngle), endAngle: .degrees(endAngle), clockwise: false)
-        path.addArc(center: center, radius: innerRadius, startAngle: .degrees(endAngle), endAngle: .degrees(startAngle), clockwise: true)
-        path.closeSubpath()
-        return path
     }
 }

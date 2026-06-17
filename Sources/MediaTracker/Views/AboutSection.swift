@@ -22,16 +22,16 @@ struct AboutSection: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("MediaTracker")
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .font(AppTheme.Font.titleMedium)
                         Text("Version \(appVersion) (\(buildNumber))")
-                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .font(AppTheme.Font.label)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text("Track movies and TV shows you've watched, discover what to watch next, and keep your viewing history organized.")
-                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(.secondary)
                     .lineSpacing(4)
             }

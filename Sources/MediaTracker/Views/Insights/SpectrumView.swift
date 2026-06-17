@@ -88,6 +88,8 @@ struct SpectrumView: View {
                 Spacer(minLength: 0)
             }
             .frame(height: 50)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Cinema DNA spectrum, \(validItems.count) titles visualized")
         }
     }
 

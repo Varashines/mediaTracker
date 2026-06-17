@@ -9,7 +9,7 @@ struct HallOfFameView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.orange)
                         Text("Hall of Fame — Cast")
                             .font(AppTheme.Font.caption)
@@ -24,7 +24,7 @@ struct HallOfFameView: View {
                                 let member = SimpleCastMember(
                                     id: person.name,
                                     name: person.name,
-                                    characterName: "",
+                                    characterName: "\(person.count) titles",
                                     profileURL: person.profileURL,
                                     order: index
                                 )
@@ -42,7 +42,7 @@ struct HallOfFameView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "pencil.and.outline")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppTheme.Font.heading)
                             .foregroundStyle(.green)
                         Text("Hall of Fame — Creators")
                             .font(AppTheme.Font.caption)
@@ -57,7 +57,7 @@ struct HallOfFameView: View {
                                 let member = SimpleCastMember(
                                     id: person.name,
                                     name: person.name,
-                                    characterName: "",
+                                    characterName: "\(person.count) titles",
                                     profileURL: person.profileURL,
                                     order: index
                                 )
