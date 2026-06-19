@@ -31,6 +31,16 @@ jobs:
         with:
           xcode-version: '16.3.0'
 
+      # ✅ 1. Swift PM Build Cache Integration
+      - name: Cache Swift PM Build Directory
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ matrix.arch }}-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.arch }}-
+
+      # ✅ 2. Application Bundle Compilation
       - name: Build App Bundle
         run: |
           chmod +x install.sh
@@ -84,19 +94,30 @@ jobs:
           </plist>
           EOF
           
-          # Ad-hoc sign (mandatory)
+          # Ad-hoc sign (mandatory for local execution)
           codesign --force --deep --sign - "$APP_BUNDLE"
 
-      - name: Create DMG
+      # ✅ 3. Install create-dmg CLI via native Homebrew
+      - name: Install create-dmg utility
+        run: brew install create-dmg
+
+      # ✅ 4. Package Styled Installation Window Disk Image
+      # Layout parameters place the App Icon on the left and Applications link on the right
+      - name: Create Styled DMG
         run: |
           ARCH="${{ matrix.arch }}"
-          LABEL="${{ matrix.output_label }}"
           DMG_NAME="MediaTracker-${ARCH}"
           
-          mkdir -p dmg_folder
-          cp -R "MediaTracker.app" dmg_folder/
-          ln -s /Applications dmg_folder/Applications
-          hdiutil create -volname "MediaTracker" -srcfolder dmg_folder -ov -format UDZO "${DMG_NAME}.dmg"
+          create-dmg \
+            --volname "MediaTracker Installation" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "MediaTracker.app" 175 190 \
+            --hide-extension "MediaTracker.app" \
+            --app-drop-link 425 190 \
+            "${DMG_NAME}.dmg" \
+            "MediaTracker.app"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
@@ -108,7 +129,6 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    
     steps:
       - name: Download all DMGs
         uses: actions/download-artifact@v4
