@@ -1,0 +1,17 @@
+name: Generate App Icon
+on: workflow_dispatch # Allows manually clicking "Run workflow" in GitHub
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Script
+        run: swift generate_icon.swift
+      - name: Commit Icon Assets
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add AppIcon.iconset/
+          git commit -m "chore: auto-generate app icon assets" || exit 0
+          git push
