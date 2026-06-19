@@ -1,17 +1,47 @@
-name: Generate App Icon
-on: workflow_dispatch # Allows manually clicking "Run workflow" in GitHub
+name: Generate Master App Icon
+on: 
+  workflow_dispatch: # Allows you to manually trigger this via the GitHub Actions tab
 
 jobs:
-  build:
-    runs-on: macos-latest
+  generate-and-commit:
+    runs-on: macos-latest # Required because AppKit/CoreGraphics are Apple-only frameworks
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Script
-        run: swift generate_icon.swift
-      - name: Commit Icon Assets
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Flat AppIcon.png
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add AppIcon.iconset/
-          git commit -m "chore: auto-generate app icon assets" || exit 0
+          swift << 'EOF'
+          import AppKit
+          import CoreGraphics
+          import Foundation
+
+          let iconSize: CGFloat = 512
+          let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
+          image.lockFocus()
+          let context = NSGraphicsContext.current!.cgContext
+          let colors = [NSColor(red: 0.36, green: 0.21, blue: 0.89, alpha: 1.0).cgColor, NSColor(red: 0.19, green: 0.55, blue: 0.91, alpha: 1.0).cgColor] as CFArray
+          let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.0, 1.0])!
+          let path = NSBezierPath(roundedRect: NSRect(x: 50, y: 50, width: 412, height: 412), xRadius: 90, yRadius: 90)
+          context.saveGState(); path.addClip(); context.drawLinearGradient(gradient, start: CGPoint(x: 256, y: 50), end: CGPoint(x: 256, y: 462), options: []); context.restoreGState()
+          context.setStrokeColor(NSColor.white.withAlphaComponent(0.9).cgColor); context.setLineWidth(15); context.setLineCap(.round)
+          let screenPath = NSBezierPath(); screenPath.appendRoundedRect(NSRect(x: 156, y: 225, width: 200, height: 140), xRadius: 20, yRadius: 20); NSColor.white.withAlphaComponent(0.9).setStroke(); screenPath.stroke()
+          let playPath = NSBezierPath(); playPath.move(to: NSPoint(x: 240, y: 270)); playPath.line(to: NSPoint(x: 240, y: 320)); playPath.line(to: NSPoint(x: 280, y: 295)); playPath.close(); NSColor.white.withAlphaComponent(0.9).setFill(); playPath.fill()
+          let bookPath = NSBezierPath(); bookPath.appendRoundedRect(NSRect(x: 156, y: 140, width: 150, height: 60), xRadius: 10, yRadius: 10); NSColor.white.withAlphaComponent(0.7).setStroke(); bookPath.stroke()
+          image.unlockFocus()
+          if let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) {
+              try? png.write(to: URL(fileURLWithPath: "AppIcon.png"))
+              print("✅ AppIcon.png successfully drawn.")
+          }
+          EOF
+
+      - name: Commit and Push Icon
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Force add in case there is a global block matching AppIcon patterns
+          git add AppIcon.png
+          
+          git commit -m "chore: generate and commit root AppIcon.png" || echo "No changes to commit"
           git push
