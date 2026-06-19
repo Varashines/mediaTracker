@@ -1,174 +1,147 @@
 # MediaTracker
 
-Your entire movie and TV show collection, beautifully organized on your Mac. Track what you've watched, what you're watching, and what's coming next — all in one place.
+Your entire movie and TV show collection, beautifully organized on your Mac. Track what you've watched, what you're watching, and what's coming next — all in one gorgeous, private dashboard.
 
-## What is MediaTracker?
-
-MediaTracker is a native Mac app that helps you keep your viewing life in order. Add movies and TV shows, rate them, mark episodes as watched, and let the app do the rest. It knows your tastes, reminds you about upcoming releases, and tells you what to watch next.
-
-## Home
-
-Your personal dashboard when you open the app:
-
-- **Continue Watching** — Your active shows with unwatched episodes, ready to pick up right where you left off
-- **Coming Soon** — Upcoming releases you've added, so you never miss a premiere
-- **For You** — Personalized recommendations based on what you've loved and liked
-- **Recently Watched** — Quick access to what you've been enjoying
-
-## Track Everything
-
-**Movies & TV Shows** — Add any title from a global database of thousands of movies and shows. Each one comes with a poster, cast info, ratings, and more.
-
-**TV Episode Tracking** — See every season and episode at a glance. Toggle individual episodes as watched, or mark an entire season in one click.
-
-**Media States** — Organize your library the way you want:
-- Want to Watch
-- Active (currently watching)
-- On Hold
-- Dropped
-- Rewatching
-- Completed
-
-**Taste Ratings** — Rate titles as Loved, Liked, or Disliked. These ratings power the recommendation engine and your personal insights.
-
-## Recommendations
-
-MediaTracker uses a multi-layered recommendation engine to help you discover new content:
-
-- **MooreMetrics Integration** — Two-phase recommendation system that analyzes characteristics and preferences to surface relevant titles
-- **TasteActor** — Local taste-based matching using genre, creator, cast, and network affinities from your own library
-- **Smart Badges** — Intelligent badges that update automatically based on release schedules and viewing progress
-- **Continued Watching** — Items you've interacted with recently surface at the top
-
-## Smart Badges
-
-Every item in your library gets an intelligent badge that updates automatically:
-
-- **Premiere** — A new season is about to start
-- **Finale** — A season finale is coming up
-- **Binge Drop** — A full season just landed at once
-- **Binge** — Multiple episodes ready for a marathon
-- **Behind** — You're falling behind on episodes
-- **New** — Recently added to your library
-- **Soon** — Releasing within 48 hours
-
-## Collections
-
-**Manual Collections** — Create your own themed lists. "90s Classics," "Rainy Day Movies," "Comfort Shows" — whatever you like. Pin them to the sidebar for quick access.
-
-**Smart Collections** — Rule-based lists that populate themselves. Set rules like "all completed movies I loved" or "all active shows on Netflix" and watch the collection fill up automatically.
-
-**Quick Add** — Press **Cmd+L** from any detail page to add it to a collection.
-
-## Search
-
-Find anything instantly:
-
-- **Library Search** — Search your own collection by title, cast, creator, network, or language
-- **Global Search** — Search the entire database to discover and add new titles
-- **Recent Searches** — Your last 10 searches are saved for quick access
-- **Year Filter** — Type `y:2023` to narrow results to a specific year
-
-## Release Calendar
-
-A visual calendar that shows you what's releasing and when:
-
-- Heatmap-style overview of release density across the month
-- Quick navigation between weeks
-- Detailed view for any day showing all your releases
-- Color-coded badges for premiere types
-
-## Cinema DNA (Insights)
-
-Discover patterns in your viewing habits:
-
-- **Hero Stats** — Total titles tracked, total watch time, completion rate
-- **Taste Profile** — Your love/like/dislike breakdown, top genres, top networks, top studios
-- **Cast & Crew** — Actors and creators you watch most
-- **Cinephile Lab** — Deep-dive analytics including weekly activity, genre breakdown, release era distribution, and more
-
-## Discovery Hub
-
-Browse and explore by category:
-
-- **Networks & Studios** — See what each streaming service or studio has in your library
-- **Genres** — Browse by genre with color-coded cards
-- **Languages** — Browse by language
-- **Recent Activity** — Filter by smart badges (premieres, finales, binge drops)
-
-## Notifications
-
-Stay on top of new releases:
-
-- Movie premiere alerts
-- TV episode air date notifications
-- Customizable delivery time (daily digest)
-- "Mark as Watched" action directly from the notification
-
-## Settings
-
-Personalize the app:
-
-- **Themes** — Light, Dark, or System mode with Standard, Earth Tones, or Cool Tones palettes
-- **Haptic & Audio Feedback** — Tactile and sound responses on interactions
-- **Launch at Login** — Open automatically when you start your Mac
-- **Prevent Sleep** — Keep your Mac awake during background syncs
-
-## Backup & Restore
-
-Your data stays safe:
-
-- **Export** — Save your entire library as a backup file
-- **Import** — Restore from a backup whenever you need to
-- **Auto-Backups** — The app keeps rolling backups automatically
-- **Database Repair** — Fix duplicates and keep your data healthy
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| **Cmd+1–7** | Jump to sidebar sections |
-| **Cmd+F** | Open search |
-| **Escape** | Dismiss search + clear query |
-| **Space** | Mark watched / next episode (in detail view) |
-| **W** | Cycle status (in detail view) |
-| **Cmd+L** | Add to collection |
-| **Cmd+R** | Refresh metadata |
-| **Cmd+Delete** | Delete item |
-
-## Toast Feedback
-
-Every action gives you immediate feedback via toasts:
-
-- State changes via keyboard shortcuts
-- Taste rating toggles
-- Copy title to clipboard
-- Add to library
-- Mark watched / next episode
-
-## Getting Started
-
-**Requirements:** macOS 14.0 (Sonoma) or later — works on both Apple Silicon and Intel Macs
-
-**Install from source:**
-```bash
-git clone <repo-url>
-bash install.sh
-```
-
-**Set up metadata:**
-1. Go to **Settings > Connect**
-2. Enter your **TMDB API Key** (free at [themoviedb.org](https://www.themoviedb.org/documentation/api))
-3. Optional: Add an **OMDb API Key** for Rotten Tomatoes and IMDb ratings
-
-## What Makes It Different
-
-- Native Mac app — fast, responsive, and feels right at home on macOS
-- No subscriptions, no accounts, no cloud dependency
-- Your data stays on your Mac
-- Smart features that learn your taste over time
-- Beautiful design that adapts to the media you're browsing
+MediaTracker is a native Mac app built with SwiftUI and SwiftData that puts your viewing life in order. It automatically aggregates global metadata, rich cast indices, and precision air dates, learning your tastes and mapping your habits completely offline with zero tracking, zero accounts, and no subscriptions.
 
 ---
 
-*Built for people who love watching as much as tracking what they watch.*
+## 🖼 The Three Core Layout Pillars
+
+### 🧭 1. The Personal Dashboard (Home)
+
+The Home screen acts as your dynamic launchpad when you open the application. Rather than presenting a static catalog, it filters your collection to highlight exactly what demands your focus:
+
+* **Continue Watching:** Active TV shows featuring un-watched, already-aired episodes, ready to pick up right where you left off.
+* **Coming Soon:** A chronological timeline preview of upcoming premieres and highly anticipated releases you've flagged.
+* **For You:** Localized recommendations instantly generated by an intelligent engine based on what you've Loved and Liked.
+* **Recently Watched:** Quick-access shortcuts to recently enjoyed or completed movies and episodes.
+
+---
+
+### 🎬 2. The Detailed View & Media Tracking
+
+Every item in your library gets an immersive, beautifully crafted detail profile page that dynamically adapts its color palette using glassmorphism effects to complement the title artwork:
+
+* **Rich Metadata & Production Hub:** Instantly pulls in clear high-resolution posters, synopses, age ratings, crew lists, and cast cards showing actor profile images.
+* **TV Episode Progress Tracking:** Drill into deep season grids. Toggle individual episodes as watched, check off entire seasons at once, and view upcoming air dates.
+* **Six Media States:** Structure your library fluidly across *Want to Watch*, *Active (Currently Watching)*, *On Hold*, *Dropped*, *Rewatching*, and *Completed*.
+* **Taste Ratings:** Log your affinity via instant sentiment inputs—*Loved (❤️)*, *Liked (👍)*, or *Disliked (👎)*—to power recommendations and personalized analytics dashboards.
+
+---
+
+### 🗓 3. The Interactive Release Calendar
+
+Never lose track of air dates again. The Release Calendar overlays your personal watchlist and active tracking library onto a fluid schedule grid:
+
+* **Release Density Heatmap:** A visual matrix overview that color-codes dates based on your upcoming release volume so you can spot heavy streaming weeks instantly.
+* **Weekly Navigation:** Fluid navigation wrappers to swap between weeks or dive into individual days.
+* **Timezone Precision:** Adjusts upcoming show details to match local broadcast windows and streaming platform premiere rules.
+
+---
+
+## ⚡ Complete Feature Tour
+
+### 🏷 Smart Context Badges
+
+MediaTracker dynamically evaluates your library items to apply automated status badges directly onto poster cards:
+
+* `PREMIERE` — A brand-new season of an active show is starting within the week.
+* `FINALE` — A high-stakes season or series finale is approaching or just aired.
+* `BINGE DROP` — An entire season just landed all at once and is ready for a marathon.
+* `BINGE` — High engagement detected! Multiple un-watched episodes are ready to stream back-to-back.
+* `BEHIND` — You have fallen behind on recent airings of a show you highly rate.
+* `SOON` / `NEW` — Titles dropping within 48 hours, or recently dropped.
+
+### 📂 Manual & Rule-Based Smart Collections
+
+* **Themed Manual Lists:** Gather custom selections like *"Comfort Shows"* or *"90s Sci-Fi Classics"* and pin them to your primary sidebar router for instant access.
+* **Dynamic Smart Collections:** Set custom rule engines that populate lists automatically (e.g., *“All completed movies matching Genre: Thriller that I Loved”* or *“All Active series on Netflix”*).
+* **Quick Add:** Press **Cmd + L** anywhere on a title's page to pop up the collection assignment manager.
+
+### 📊 Cinema DNA (Insights & Analytics Hub)
+
+Explore your media trends inside the **Cinephile Lab** analytics dashboard:
+
+* **Hero Statistics:** Track your absolute lifetime watched metrics, completion rates, and total logged watch hours.
+* **Taste Profile:** Interactive graphs detailing your Love/Like/Dislike distributions across production networks and streaming studios.
+* **Talent & Era Timelines:** Rankings mapping the actors, creators, and directors you watch most, paired with distribution charts showing which release decades dominate your catalog.
+
+### 🧭 The Discovery Hub
+
+Browse your library filtered by metadata category groupings using visual, color-coded item cards:
+
+* **Networks & Studios:** Instantly see how many items you track per streaming service.
+* **Genres & Languages:** Filter your entire collection by genre types or language tags.
+* **Recent Activity:** Filter your views immediately by active smart badge updates.
+
+### 🔍 Split-Engine Search
+
+* **Local Library Search:** Query your own collection instantly by title, cast members, creator names, language, or network.
+* **Global Search:** Query the global database to discover and import new entries seamlessly.
+* **Precision Year Filter:** Narrow your search bar lookups instantly by appending structural tags like `title,year`.
+
+### 🔔 Custom Notifications & Settings
+
+* **Alert Digests:** Receive tailored alerts for movie premieres and episode air dates, bundled into a customizable daily digest.
+* **Actionable Prompts:** Check off an episode as "Watched" directly from the native system notification banner.
+* **Interface Tuning:** Toggle between Light, Dark, or System visual themes mapped across Earth Tones, Cool Tones, or Standard palettes.
+* **App Behaviors:** Opt to toggle haptic/audio interaction feedback, enable launch-at-login parameters, or turn on *Prevent Sleep* to keep your Mac awake during intensive background sync passes.
+
+### 💾 Backup, Restore, & Safety
+
+* **JSON Backups:** Natively export or import your entire tracking footprint inside portable backup files.
+* **Automated Maintenance:** The app creates rolling auto-backups and runs database health checks to repair duplicate entries and maintain database integrity.
+* **Immediate Feedback:** Every shortcut trigger, rating change, or status shift delivers instant visual confirmation via elegant toast alerts.
+
+---
+
+## ⌨️ Keyboard Shortcut Matrix
+
+Navigate your entire tracking station like a power user without leaving the keyboard:
+
+| Shortcut | Action |
+| --- | --- |
+| **`Cmd + 1–7`** | Jump directly between primary sidebar tabs |
+| **`Cmd + F`** | Open library search with automatic focus |
+| **`Escape`** | Dismiss search overlay and clear query parameters |
+| **`Spacebar`** | TV: Mark next episode watched. Movie: Toggle completed status |
+| **`W`** | Cycle media status through library states |
+| **`Cmd + L`** | Quick-add title to a custom list collection |
+| **`Cmd + R`** | Force refresh backend API metadata |
+| **`Cmd + Delete`** | Purge item completely from local database library |
+
+---
+
+## 🚀 Getting Started
+
+### Requirements
+
+* macOS 14.0 (Sonoma) or newer.
+* Fully optimized for Apple Silicon Macs (M-Series processors) and Intel architectures.
+
+### Installation from Source
+
+MediaTracker is maintained strictly as an independent Swift Package Manager project layout. Clone the repository and execute the automated compilation script:
+
+```bash
+git clone https://github.com/Varashines/mediaTracker
+cd mediaTracker
+bash install.sh
+
+```
+
+### Setup API Ingestion
+
+1. Launch the application and open **Settings > Connect**.
+2. Input a free developer token from **The Movie Database** (generate one at [themoviedb.org](https://www.themoviedb.org)).
+3. *(Optional)* Input an **OMDb API Key** to augment your listings with Rotten Tomatoes scores.
+4. *(Optional)* Input a **MooreMetrics API Key** to see reccomendations in detailed view and across the filtered views in Discover Hub
+
+---
+
+## 🔒 Privacy First
+
+* **100% Data Ownership:** MediaTracker operates entirely offline. There are no tracking analytics, third-party user accounts, cloud aggregators, or telemetry reporting. Your viewing logs, habits, and metadata stay on your machine.
+
+---
