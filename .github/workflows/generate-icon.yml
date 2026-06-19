@@ -41,7 +41,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           
           # Force add in case there is a global block matching AppIcon patterns
-          git add AppIcon.png
+          git add -f AppIcon.png
           
           git commit -m "chore: generate and commit root AppIcon.png" || echo "No changes to commit"
           git push
