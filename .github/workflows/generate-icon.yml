@@ -5,6 +5,10 @@ on:
 jobs:
   generate-and-commit:
     runs-on: macos-latest
+    # Add these permissions to allow pushing code back to the repo
+    permissions:
+      contents: write
+      
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
