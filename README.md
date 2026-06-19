@@ -1,6 +1,16 @@
-# MediaTracker
 
-Your entire movie and TV show collection, beautifully organized on your Mac. Track what you've watched, what you're watching, and what's coming next — all in one gorgeous, private dashboard.
+<div align="center">
+  <img src="AppIcon.png" alt="MediaTracker App Icon" width="140" height="140" />
+  
+  # MediaTracker
+
+  Your entire movie and TV show collection, beautifully organized on your Mac. Track what you've watched, what you're watching, and what's coming next — all in one gorgeous, private dashboard.
+
+  [![macOS 14.0+](https://img.shields.io/badge/macOS-14.0%2B-blue?logo=apple&logoColor=white)](https://developer.apple.com/macos/)
+  [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?logo=swift&logoColor=white)](https://developer.apple.com/swift/)
+  [![SwiftData](https://img.shields.io/badge/Persistence-SwiftData-red)](https://developer.apple.com/documentation/swiftdata)
+  [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-green)](https://github.com/varashines/mediatracker)
+</div>
 
 MediaTracker is a native Mac app built with SwiftUI and SwiftData that puts your viewing life in order. It automatically aggregates global metadata, rich cast indices, and precision air dates, learning your tastes and mapping your habits completely offline with zero tracking, zero accounts, and no subscriptions.
 
