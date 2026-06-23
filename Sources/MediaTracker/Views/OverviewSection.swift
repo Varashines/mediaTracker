@@ -12,8 +12,8 @@ struct OverviewSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+            HStack(spacing: AppTheme.Spacing.tiny) {
                 Image(systemName: "quote.opening")
                     .font(AppTheme.Font.title)
                     .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
@@ -21,7 +21,7 @@ struct OverviewSection: View {
                 Text("SYNOPSIS")
                     .font(AppTheme.Font.bodyBold)
                     .foregroundStyle(.secondary)
-                    .kerning(1.2)
+                    .kerning(AppTheme.Kerning.wide)
 
                 Spacer()
             }
@@ -29,7 +29,7 @@ struct OverviewSection: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(overview)
                     .font(AppTheme.Font.bodyMedium)
-                    .lineSpacing(8)
+                    .lineSpacing(AppTheme.Spacing.tiny)
                     .foregroundStyle(.primary)
                     .lineLimit(isExpanded ? nil : 4)
                     .overlay(alignment: .bottom) {
@@ -56,11 +56,11 @@ struct OverviewSection: View {
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
                     .buttonStyle(.plain)
-                    .padding(.top, 6)
+                    .padding(.top, AppTheme.Spacing.mini)
                 }
             }
         }
-        .padding(16)
+        .padding(AppTheme.Spacing.medium)
         .background(surfaceColor)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
     }

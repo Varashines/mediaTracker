@@ -23,7 +23,7 @@ struct PosterView: View {
                 
                 let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
                     } placeholder: {
-                        Rectangle().fill(Color.secondary.opacity(0.1))
+                        Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: posterFrame.width, height: posterFrame.height)

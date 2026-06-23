@@ -467,7 +467,7 @@ actor APIClient {
         let coalescingKey = cacheKey
 
         // Check disk cache first (24h TTL for season data, or 7-day if not force)
-        let ttl: TimeInterval = force ? .secondsInDay : 7 * .secondsInDay
+        let ttl: TimeInterval = force ? -1 : 7 * .secondsInDay
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBSeasonResponse.self, from: cachedData) {
             return decoded.episodes.map {

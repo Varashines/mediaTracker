@@ -54,14 +54,14 @@ private struct HoverPill: View {
 
     var body: some View {
         Text(text)
-            .font(style == .title ? AppTheme.Font.caption2 : .system(size: 8.5, weight: .semibold, design: .rounded))
+            .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.tiny)
             .foregroundStyle(.primary)
-            .padding(.horizontal, style == .title ? 8 : 6)
-            .padding(.vertical, style == .title ? 4 : 3)
+            .padding(.horizontal, style == .title ? AppTheme.Spacing.tiny : AppTheme.Spacing.mini)
+            .padding(.vertical, style == .title ? AppTheme.Spacing.micro : 3)
             .background(Capsule().fill(.thinMaterial))
             .overlay(
                 Capsule()
-                    .stroke(.white.opacity(strokeOpacity), lineWidth: 0.5)
+                    .stroke(Color.primary.opacity(strokeOpacity), lineWidth: 0.5)
             )
     }
 

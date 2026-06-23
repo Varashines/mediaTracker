@@ -52,6 +52,8 @@ struct StatusPicker: View {
                 }
             }
             .buttonStyle(.plain)
+            .scaleEffect(isHovered ? 1.04 : 1.0)
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
             .accessibilityLabel("Status: \(currentState.displayName)")
             .accessibilityHint("Double tap to change status")
             .onHover { isHovered = $0 }

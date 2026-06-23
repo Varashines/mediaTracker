@@ -9,7 +9,7 @@ struct ModularSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             HStack(spacing: 0) {
-                HStack(spacing: 7) {
+                HStack(spacing: AppTheme.Spacing.mini) {
                     Image(systemName: icon)
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
@@ -18,13 +18,13 @@ struct ModularSection<Content: View>: View {
                         .foregroundStyle(.secondary)
                         .kerning(0.8)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.micro)
                 .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 Spacer()
             }
 
-            GlassCard(material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: false) {
+            GlassCard(material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: true) {
                 content
                     .padding(AppTheme.Spacing.medium)
             }

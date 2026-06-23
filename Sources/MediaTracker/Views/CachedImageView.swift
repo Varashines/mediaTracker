@@ -47,7 +47,7 @@ struct CachedImage<Placeholder: View>: View {
                 staticPlaceholder
             }
         }
-        .animation(.default, value: image)
+        .animation(AppTheme.Animation.easeInOut, value: image)
         .onAppear {
             setupBroadcastListener()
         }

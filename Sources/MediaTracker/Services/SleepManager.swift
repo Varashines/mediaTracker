@@ -139,7 +139,7 @@ struct SleepOverlayModifier: ViewModifier {
                 .disabled(sleepManager.isAsleep)
                 .opacity(sleepManager.isAsleep ? 0 : 1)
                 .scaleEffect(sleepManager.isAsleep ? 0.98 : 1.0)
-                .animation(.easeInOut(duration: 0.6), value: sleepManager.isAsleep)
+                .animation(AppTheme.Animation.sleepTransition, value: sleepManager.isAsleep)
 
             if sleepManager.isAsleep {
                 ZStack {

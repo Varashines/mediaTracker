@@ -36,7 +36,8 @@ struct DetailView: View {
                 ConfettiOverlay()
                     .transition(.opacity)
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        Task {
+                            try? await Task.sleep(for: .seconds(2.5))
                             withAnimation(.easeOut(duration: 0.4)) {
                                 showConfetti = false
                             }
@@ -50,18 +51,10 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
-            let hasPoster = viewModel.item.posterURL != nil
 
-            // Use neutral bg when poster exists, palette bg when no poster
-            Group {
-                if hasPoster {
-                    Color(white: colorScheme == .dark ? 0.17 : 0.96)
-                } else {
-                    AppTheme.Colors.background(for: colorScheme)
-                }
-            }
-            .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
-            .ignoresSafeArea()
+            AppTheme.Colors.background(for: colorScheme)
+                .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
+                .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
@@ -83,7 +76,7 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
-                .padding(.bottom, 8)
+                .padding(.bottom, AppTheme.Spacing.tiny)
             }
             .scrollBounceBehavior(.always)
             .coordinateSpace(name: "detailScroll")
@@ -116,8 +109,9 @@ struct DetailView: View {
             activity.persistentIdentifier = viewModel.item.id
             activity.requiredUserInfoKeys = ["id"]
         }
-        .sheet(isPresented: $showingCollectionPicker) {
+        .inspector(isPresented: $showingCollectionPicker) {
             CollectionPickerView(item: viewModel.item)
+                .inspectorColumnWidth(min: 300, ideal: 350)
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, newID in
             if let id = newID, id == viewModel.item.id {
@@ -291,8 +285,10 @@ struct DetailView: View {
                     needsTV: viewModel.item.type == .tvShow,
                     hasCast: !viewModel.item.displayCast.isEmpty
                 )
+                .shimmering()
             }
         }
+        .animation(.easeInOut(duration: 0.4), value: showHeavyContent)
     }
 
     @ToolbarContentBuilder
@@ -332,6 +328,7 @@ struct DetailView: View {
                 .clipShape(.capsule)
                 .frame(width: 32, height: 32)
                 .keyboardShortcut(.delete, modifiers: [.command])
+                .sensoryFeedback(.error, trigger: showDeleteConfirmation)
                 .help("Delete from library")
                 .accessibilityLabel("Delete from library")
                 .accessibilityAddTraits(.isButton)
@@ -345,11 +342,11 @@ struct DetailView: View {
                     Button("Copy Title") { copyTitle() }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.primary)
                         .frame(width: 28, height: 28)
                 }
                 .menuStyle(.borderlessButton)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .clipShape(.capsule)
                 .frame(width: 32, height: 32)
             }
         }
@@ -382,7 +379,7 @@ struct DetailView: View {
                 }
                 .transition(.opacity)
 
-            VStack(spacing: 10) {
+            VStack(spacing: AppTheme.Spacing.compact) {
                 if let posterURL = viewModel.item.posterURL, let url = URL(string: posterURL) {
                     CachedImage(url: url, targetSize: AppTheme.Thumbnail.tiny) { _ in } placeholder: {
                         RoundedRectangle(cornerRadius: 10)
@@ -430,7 +427,7 @@ struct DetailView: View {
                 }
                 .padding(.top, 6)
             }
-            .padding(20)
+            .padding(AppTheme.Spacing.large)
             .frame(maxWidth: 280)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
@@ -471,7 +468,8 @@ struct DetailView: View {
         showDeleteConfirmation = false
         FeedbackManager.shared.trigger(.removeFromLibrary)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(250))
             dismiss()
         }
 

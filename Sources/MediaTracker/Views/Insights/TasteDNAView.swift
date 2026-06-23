@@ -43,6 +43,7 @@ struct TasteDNAView: View {
                 }
                 .chartLegend(.hidden)
                 .frame(width: 130, height: 130)
+                .animation(AppTheme.Animation.chartReveal, value: segments.map(\.value))
 
                 // Center label
                 VStack(spacing: 2) {

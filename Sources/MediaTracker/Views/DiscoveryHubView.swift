@@ -1,6 +1,26 @@
 import SwiftUI
 import SwiftData
 
+private struct ConditionalScrollTransition: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.scrollTransition { innerContent, phase in
+                innerContent
+                    .opacity(phase.isIdentity ? 1 : 0.6)
+                    .scaleEffect(phase.isIdentity ? 1 : 0.95)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func conditionalScrollTransition() -> some View {
+        modifier(ConditionalScrollTransition())
+    }
+}
+
 struct DiscoveryHubView: View {
     @Environment(\.modelContext) private var modelContext
     let namespace: Namespace.ID
@@ -24,19 +44,23 @@ struct DiscoveryHubView: View {
                             DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text) { node in
                                 onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
                             }
+                            .conditionalScrollTransition()
                         }
 
                         DiscoverySection(title: "Networks & Studios", icon: "tv", nodes: viewModel.discovery.cachedNetworks, style: .logo) { node in
                             onFilterSelected(DiscoveryFilter(type: .studio, name: node.name, sourceNames: node.sourceNames))
                         }
+                        .conditionalScrollTransition()
 
                         DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text) { node in
                             onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                         }
+                        .conditionalScrollTransition()
 
                         DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text) { node in
                             onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                         }
+                        .conditionalScrollTransition()
                     } else {
                         VStack(spacing: 16) {
                             Image(systemName: "sparkles")

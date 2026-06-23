@@ -51,6 +51,7 @@ struct ContentView: View {
                 viewModel: viewModel
             )
         }
+        .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             handleAppIntentLaunch()

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Point to Xcode-beta for SwiftData macro support
+export DEVELOPER_DIR="/Applications/Xcode-beta.app/Contents/Developer"
+
 # Configuration
 APP_NAME="MediaTracker"
 BUNDLE_ID="com.vara.mediatracker"

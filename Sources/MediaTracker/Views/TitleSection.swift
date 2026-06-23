@@ -13,7 +13,7 @@ struct TitleSection: View {
         if item.modelContext != nil {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
                     let titleView = Text(item.title)
                         .font(AppTheme.Font.largeTitle)
                         .lineLimit(3)
@@ -35,15 +35,15 @@ struct TitleSection: View {
                 }
 
                 // 2. Metadata Badges
-                HStack(spacing: 12) {
+                HStack(spacing: AppTheme.Spacing.small) {
                     let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
                     let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
                     
                     Text(item.type?.rawValue.uppercased() ?? "")
                         .font(AppTheme.Font.caption2)
-                        .kerning(1.2)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .kerning(AppTheme.Kerning.wide)
+                        .padding(.horizontal, AppTheme.Spacing.compact)
+                        .padding(.vertical, AppTheme.Spacing.micro)
                         .foregroundStyle(accent)
                         .background {
                             Capsule()
@@ -58,9 +58,9 @@ struct TitleSection: View {
                     if let status = item.cachedTMDBStatus, !status.isEmpty {
                         Text(status.uppercased())
                             .font(AppTheme.Font.caption2)
-                            .kerning(1.2)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .kerning(AppTheme.Kerning.wide)
+                            .padding(.horizontal, AppTheme.Spacing.compact)
+                            .padding(.vertical, AppTheme.Spacing.micro)
                             .foregroundStyle(accent)
                             .background {
                                 Capsule()
@@ -75,15 +75,15 @@ struct TitleSection: View {
                     if item.isUpcoming, let dateText = item.detailBadgeText {
                         let isStreaming = (item.cachedNextAiringDate ?? Date()) < Date()
                         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-                        HStack(spacing: 4) {
+                        HStack(spacing: AppTheme.Spacing.micro) {
                             Image(systemName: isStreaming ? "play.fill" : "calendar")
                                 .font(AppTheme.Font.tiny)
                             Text(dateText.uppercased())
                                 .font(AppTheme.Font.caption2)
-                                .kerning(1.2)
+                                .kerning(AppTheme.Kerning.wide)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, AppTheme.Spacing.compact)
+                        .padding(.vertical, AppTheme.Spacing.micro)
                         .foregroundStyle(accent)
                         .background {
                             Capsule()
@@ -97,15 +97,15 @@ struct TitleSection: View {
                 }
                 
                 // 3. Unified Glass Action Bar
-                HStack(spacing: 20) {
+                HStack(spacing: AppTheme.Spacing.large) {
                     StatusPicker(item: item, onChange: onStatusChange)
                     
                     Divider().frame(height: 24).opacity(0.3)
                     
                     TasteToggle(item: item, themeColor: themeColor)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .padding(.horizontal, AppTheme.Spacing.large)
+                .padding(.vertical, AppTheme.Spacing.compact)
                 .background {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous).fill(.ultraThinMaterial)
                 }

@@ -1,8 +1,5 @@
 import SwiftData
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 
 @MainActor
 struct SidebarNavigation: View {
@@ -10,83 +7,89 @@ struct SidebarNavigation: View {
     @Query(filter: #Predicate<MediaCollection> { $0.isPinned }) private var pinnedCollections:
         [MediaCollection]
     @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
-    @Environment(\.colorScheme) var colorScheme
     @State private var hoveredItem: SidebarItem? = nil
+    @Namespace private var sidebarNamespace
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                // Main Section
-                VStack(alignment: .leading, spacing: 4) {
+        List {
+            Section {
+                sidebarRow(
+                    title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
+                    item: .category(.home))
+                sidebarRow(
+                    title: NavigationCategory.discover.title,
+                    icon: NavigationCategory.discover.icon, item: .category(.discover))
+                sidebarRow(
+                    title: NavigationCategory.upcoming.title,
+                    icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
+            } header: {
+                Spacer().frame(height: 1)
+            }
+
+            Section {
+                sidebarRow(
+                    title: NavigationCategory.all.title, icon: NavigationCategory.all.icon,
+                    item: .category(.all))
+                sidebarRow(
+                    title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon,
+                    item: .category(.movie))
+                sidebarRow(
+                    title: NavigationCategory.tvShow.title,
+                    icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
+            } header: {
+                Text("LIBRARY")
+                    .font(AppTheme.Font.smallBold)
+                    .kerning(1.2)
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
+
+            Section {
+                sidebarRow(
+                    title: NavigationCategory.smartHub.title,
+                    icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
+
+                let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
+                    .map(String.init)
+                    .compactMap { NavigationCategory(rawValue: $0) }
+
+                ForEach(pinnedSystemList) { category in
                     sidebarRow(
-                        title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
-                        item: .category(.home))
-                    sidebarRow(
-                        title: NavigationCategory.discover.title,
-                        icon: NavigationCategory.discover.icon, item: .category(.discover))
-                    sidebarRow(
-                        title: NavigationCategory.upcoming.title,
-                        icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
+                        title: category.title,
+                        icon: category.icon,
+                        item: .category(category))
                 }
-                .padding(.bottom, 16)
 
-                sidebarSectionHeader("LIBRARY")
-                VStack(alignment: .leading, spacing: 4) {
+                ForEach(pinnedCollections) { collection in
                     sidebarRow(
-                        title: NavigationCategory.all.title, icon: NavigationCategory.all.icon,
-                        item: .category(.all))
-                    sidebarRow(
-                        title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon,
-                        item: .category(.movie))
-                    sidebarRow(
-                        title: NavigationCategory.tvShow.title,
-                        icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
+                        title: collection.name, icon: collection.systemImage,
+                        item: .collection(
+                            collection.id, name: collection.name, icon: collection.systemImage))
                 }
-                .padding(.bottom, 16)
+            } header: {
+                Text("COLLECTIONS")
+                    .font(AppTheme.Font.smallBold)
+                    .kerning(1.2)
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
 
-                sidebarSectionHeader("COLLECTIONS")
-                VStack(alignment: .leading, spacing: 4) {
-                    sidebarRow(
-                        title: NavigationCategory.smartHub.title,
-                        icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
-
-                    let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
-                        .map(String.init)
-                        .compactMap { NavigationCategory(rawValue: $0) }
-
-                    ForEach(pinnedSystemList) { category in
-                        sidebarRow(
-                            title: category.title,
-                            icon: category.icon,
-                            item: .category(category))
-                    }
-
-                    ForEach(pinnedCollections) { collection in
-                        sidebarRow(
-                            title: collection.name, icon: collection.systemImage,
-                            item: .collection(
-                                collection.id, name: collection.name, icon: collection.systemImage))
-                    }
-                }
-                .padding(.bottom, 16)
-
-                sidebarSectionHeader("ANALYTICS")
+            Section {
                 sidebarRow(
                     title: NavigationCategory.insights.title,
                     icon: NavigationCategory.insights.icon, item: .category(.insights))
+            } header: {
+                Text("ANALYTICS")
+                    .font(AppTheme.Font.smallBold)
+                    .kerning(1.2)
+                    .foregroundStyle(.secondary.opacity(0.7))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 16)
         }
-        .background(SidebarVisualEffectView())
+        .listStyle(.sidebar)
     }
 
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
         let isSelected = selection == item
-        
-        let activeColor = AppTheme.Colors.accent
+        let isHovered = hoveredItem == item
 
-        // Only append .fill if the icon name doesn't already contain it and it's a standard symbol
         let iconName: String
         if isSelected {
             if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" || icon == "calendar.badge.clock" || icon == "calendar.badge.sparkles" || icon == "sparkles.tv" || icon == "sparkles.rectangle.stack" {
@@ -109,6 +112,7 @@ struct SidebarNavigation: View {
                     .font(AppTheme.Icon.medium)
                     .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: AppTheme.Spacing.large)
+                    .scaleEffect(isSelected ? 1.1 : 1.0)
 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .medium))
@@ -119,43 +123,27 @@ struct SidebarNavigation: View {
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.tiny)
             .background {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(isSelected ? activeColor : (hoveredItem == item ? Color.primary.opacity(0.04) : .clear))
+                if isSelected {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .fill(AppTheme.Colors.accent)
+                        .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
+                } else {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .fill(isHovered ? Color.primary.opacity(0.04) : .clear)
+                }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .onHover { isHovered in
-            withAnimation(AppTheme.Animation.easeInOut) {
-                hoveredItem = isHovered ? item : nil
+        .animation(AppTheme.Animation.springSnappy, value: isSelected)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.microInteraction) {
+                hoveredItem = hovering ? item : nil
             }
         }
-    }
-
-    private func sidebarSectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(AppTheme.Font.smallBold)
-            .kerning(1.2)
-            .foregroundStyle(.secondary.opacity(0.7))
-            .padding(.leading, AppTheme.Spacing.small)
-            .padding(.bottom, AppTheme.Spacing.micro)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
-
-#if os(macOS)
-struct SidebarVisualEffectView: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-#endif
 
 

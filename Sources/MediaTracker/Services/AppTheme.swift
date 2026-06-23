@@ -98,6 +98,8 @@ struct AppTheme {
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
         static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+        static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
+        static let chartReveal: SwiftUI.Animation = .easeInOut(duration: 0.8)
     }
 
     struct Thumbnail {

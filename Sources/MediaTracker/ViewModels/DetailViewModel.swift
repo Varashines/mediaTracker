@@ -347,7 +347,6 @@ class DetailViewModel {
     }
     
     private var recsTask: Task<Void, Never>?
-    private var saveTask: Task<Void, Never>?
 
     func markNextEpisodeWatched() {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }

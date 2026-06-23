@@ -1,14 +1,6 @@
 import SwiftData
 import SwiftUI
 
-private enum TVTrackingConstants {
-    static let cornerRadius: CGFloat = AppTheme.Radius.small
-    static let cardCornerRadius: CGFloat = AppTheme.Radius.medium
-    static let strokeWidth: CGFloat = 2.0
-    static let secondaryStrokeWidth: CGFloat = 1.5
-    static let animationDuration: Double = 1.2
-}
-
 struct TVTrackingView: View {
     @Bindable var tvDetails: TVShowDetails
     var themeColor: Color
@@ -34,7 +26,7 @@ struct TVTrackingView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
 
             if tvDetails.seasons.isEmpty {
                 ContentUnavailableView(
@@ -46,7 +38,7 @@ struct TVTrackingView: View {
             } else {
                 // Horizontal Season Selector
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
+                    LazyHStack(spacing: AppTheme.Spacing.small) {
                         ForEach(sortedSeasons, id: \.seasonNumber) { season in
                             SeasonTab(
                                 season: season,
@@ -222,7 +214,7 @@ private struct SeasonSection: View {
     private let rangeThreshold = 15
 
     private let columns = [
-        GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
+                GridItem(.adaptive(minimum: 150, maximum: 190), spacing: AppTheme.Spacing.small)
     ]
 
     private var isAllWatched: Bool {
@@ -288,9 +280,10 @@ private struct SeasonSection: View {
     }
 
     var body: some View {
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         VStack(alignment: .leading, spacing: 16) {
             // Compact single-line header
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: AppTheme.Spacing.tiny) {
                 Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
                     .font(AppTheme.Font.title3)
 
@@ -327,14 +320,14 @@ private struct SeasonSection: View {
                                 .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .foregroundStyle(isSelected ? themeColor : .secondary)
+                                .foregroundStyle(isSelected ? accent : .secondary)
                                 .background(
                                     Capsule()
-                                        .fill(isSelected ? themeColor.opacity(0.12) : Color.primary.opacity(0.04))
+                                        .fill(isSelected ? accent.opacity(0.12) : Color.primary.opacity(0.04))
                                 )
                                 .overlay(
                                     Capsule()
-                                        .stroke(isSelected ? themeColor.opacity(0.25) : .clear, lineWidth: 0.5)
+                                        .stroke(isSelected ? accent.opacity(0.25) : .clear, lineWidth: 0.5)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -357,10 +350,10 @@ private struct SeasonSection: View {
                     .padding(.vertical, 6)
                     .background(
                         isAllWatched
-                            ? themeColor.opacity(colorScheme == .dark ? 0.1 : 0.05)
-                            : themeColor.opacity(colorScheme == .dark ? 0.15 : 0.12)
+                            ? accent.opacity(colorScheme == .dark ? 0.1 : 0.05)
+                            : accent.opacity(colorScheme == .dark ? 0.15 : 0.12)
                     )
-                    .foregroundStyle(isAllWatched ? .secondary : themeColor)
+                    .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -405,7 +398,7 @@ private struct SeasonSection: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             } else {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: columns, spacing: AppTheme.Spacing.small) {
                     ForEach(
                         filteredEpisodes,
                         id: \.persistentModelID
@@ -532,9 +525,6 @@ private struct EpisodeCube: View {
                                         .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
-                                .highPriorityGesture(
-                                    TapGesture().onEnded { showingOverview.toggle() }
-                                )
                                 .popover(isPresented: $showingOverview) {
                                     popoverContent
                                 }
@@ -548,16 +538,16 @@ private struct EpisodeCube: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 110)
                 .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                         .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                                 .fill(episode.isWatched ? green.opacity(0.12) : Color.blue.opacity(0.05))
                         }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                         .stroke(
                             episode.isWatched
                                 ? green.opacity(0.3)

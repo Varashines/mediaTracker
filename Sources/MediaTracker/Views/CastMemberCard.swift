@@ -6,6 +6,7 @@ struct CastMemberCard: View {
     let themeColor: Color
     var action: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
 
 
     var body: some View {
@@ -15,6 +16,10 @@ struct CastMemberCard: View {
             cardContent
         }
         .buttonStyle(.interactive)
+        .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: isHovered ? 8 : 2, y: isHovered ? 4 : 1)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .onHover { isHovered = $0 }
         .accessibilityLabel("\(member.name)\(member.characterName.isEmpty ? "" : ", \(member.characterName)")")
     }
 
@@ -42,7 +47,7 @@ struct CastMemberCard: View {
                 .scaledToFill()
             } else {
                 ZStack {
-                    Color.secondary.opacity(0.1)
+                    AppTheme.Colors.surfaceGhost(for: colorScheme)
                     Image(systemName: "person.fill")
                         .foregroundStyle(.secondary)
                         .font(AppTheme.Font.title2)
@@ -50,7 +55,7 @@ struct CastMemberCard: View {
             }
         }
         .frame(width: 60, height: 90)
-        .background(Color.secondary.opacity(0.1))
+        .background(AppTheme.Colors.surfaceGhost(for: colorScheme))
         .clipped()
     }
 
@@ -58,7 +63,7 @@ struct CastMemberCard: View {
     private var textSection: some View {
         let hasCharacterName = !member.characterName.isEmpty
 
-        VStack(alignment: .leading, spacing: hasCharacterName ? 4 : 0) {
+        VStack(alignment: .leading, spacing: hasCharacterName ? AppTheme.Spacing.micro : 0) {
             Text(member.name)
                 .font(AppTheme.Font.bodyBold)
                 .lineLimit(2)
@@ -74,8 +79,8 @@ struct CastMemberCard: View {
                     .multilineTextAlignment(.leading)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, AppTheme.Spacing.small)
+        .padding(.vertical, AppTheme.Spacing.tiny)
         .frame(width: 140, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .center)
     }

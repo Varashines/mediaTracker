@@ -46,20 +46,11 @@ struct StudiosNetworksView: View {
             // Studios (with alias grouping)
             let studioItems = cachedStudioItems
             if !studioItems.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "building.2.fill")
-                            .font(AppTheme.Font.heading)
-                            .foregroundStyle(.orange)
-                        Text("Studios")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.orange)
-                            .kerning(1.2)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Studios", icon: "building.2.fill", iconColor: .orange)
 
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 12) {
+                        LazyHStack(spacing: AppTheme.Spacing.large) {
                             ForEach(Array(studioItems.enumerated()), id: \.0) { idx, item in
                                 let node = DiscoveryNode(
                                     name: item.0,
@@ -85,20 +76,11 @@ struct StudiosNetworksView: View {
             // Networks (with alias grouping)
             let networkItems = cachedNetworkItems
             if !networkItems.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(AppTheme.Font.heading)
-                            .foregroundStyle(.teal)
-                        Text("Networks")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.teal)
-                            .kerning(1.2)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Networks", icon: "antenna.radiowaves.left.and.right", iconColor: .teal)
 
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 12) {
+                        LazyHStack(spacing: AppTheme.Spacing.large) {
                             ForEach(Array(networkItems.enumerated()), id: \.0) { idx, item in
                                 let node = DiscoveryNode(
                                     name: item.0,
@@ -123,19 +105,10 @@ struct StudiosNetworksView: View {
 
             // Languages
             if !stats.topRatedLanguages.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "globe")
-                            .font(AppTheme.Font.heading)
-                            .foregroundStyle(.purple)
-                        Text("Languages")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.purple)
-                            .kerning(1.2)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    SectionHeader(title: "Languages", icon: "globe", iconColor: .purple)
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)], spacing: 16) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                         ForEach(Array(stats.topRatedLanguages.prefix(6).enumerated()), id: \.element.name) { idx, item in
                             let node = DiscoveryNode(
                                 name: item.name,

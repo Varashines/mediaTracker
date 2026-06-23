@@ -23,7 +23,6 @@ struct MainLibraryView: View {
     var viewModel: MediaViewModel
 
     @Environment(\.modelContext) private var modelContext
-    @State private var visibleCount = 40
     @State private var scrollTask: Task<Void, Never>?
 
     var isCategoryPage: Bool {
@@ -125,7 +124,5 @@ struct MainLibraryView: View {
                 isFastScrolling = false
             }
         }
-        .onAppear { visibleCount = 40 }
-        .onChange(of: items.count) { visibleCount = 40 }
     }
 }

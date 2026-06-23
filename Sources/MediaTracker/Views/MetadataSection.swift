@@ -71,23 +71,23 @@ struct MetadataSection: View {
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
             // Row 1: Primary info (what is this?)
-            HStack(spacing: 10) {
+            HStack(spacing: AppTheme.Spacing.compact) {
                 ForEach(firstRowItems) { meta in
                     pillView(meta, accent: accent)
                 }
             }
             // Row 2: Secondary info (details)
             if !secondRowItems.isEmpty {
-                HStack(spacing: 10) {
+                HStack(spacing: AppTheme.Spacing.compact) {
                     ForEach(secondRowItems) { meta in
                         pillView(meta, accent: accent)
                     }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, AppTheme.Spacing.mini)
     }
 
     private var firstRowItems: [MetadataItem] {

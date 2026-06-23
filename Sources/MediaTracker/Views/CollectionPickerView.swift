@@ -39,7 +39,7 @@ struct CollectionPickerView: View {
             Button("Done") {
                 dismiss()
             }
-        .buttonStyle(.plain)
+            .buttonStyle(.plain)
             .padding(.horizontal, 40)
             .padding(.vertical, 12)
             .background(AppTheme.Colors.accent)
@@ -47,7 +47,7 @@ struct CollectionPickerView: View {
             .cornerRadius(AppTheme.Radius.medium)
         }
         .padding(32)
-        .frame(width: 350, height: 450)
+        .adaptiveBackground()
     }
 }
 

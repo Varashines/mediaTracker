@@ -4,10 +4,11 @@ import SwiftData
 struct TasteToggle: View {
     @Bindable var item: MediaItem
     let themeColor: Color
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         if item.modelContext != nil {
-            HStack(spacing: 12) {
+            HStack(spacing: AppTheme.Spacing.small) {
                 TastePill(
                     label: "Love",
                     icon: "heart",
@@ -28,7 +29,7 @@ struct TasteToggle: View {
                     label: "Dislike",
                     icon: "hand.thumbsdown",
                     isSelected: item.taste == .dislike,
-                    activeColor: Color(white: 0.35),
+                    activeColor: Color.semanticRed(for: colorScheme),
                     action: { setTaste(.dislike) }
                 )
             }
@@ -80,15 +81,15 @@ struct TastePill: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: AppTheme.Spacing.mini) {
                 Image(systemName: isSelected ? "\(icon).fill" : icon)
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: isSelected)
                 Text(label)
             }
             .font(AppTheme.Font.bodyBold)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppTheme.Spacing.smallMedium)
+            .padding(.vertical, AppTheme.Spacing.tiny)
             .foregroundStyle(isSelected ? .white : .primary.opacity(0.8))
             .background {
                 if isSelected {
@@ -99,7 +100,7 @@ struct TastePill: View {
             }
             .clipShape(Capsule())
             .scaleEffect(isHovered ? 1.04 : 1.0)
-            .shadow(color: isSelected ? activeColor.opacity(0.15) : .clear, radius: 6, y: 2)
+            .shadow(color: isSelected ? activeColor.opacity(0.15) : .clear, radius: AppTheme.Shadow.card.radius, y: AppTheme.Shadow.card.y)
         }
         .buttonStyle(.interactive(feedback: nil))
         .onHover { isHovered = $0 }

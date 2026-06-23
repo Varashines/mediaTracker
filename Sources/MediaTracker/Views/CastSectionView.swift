@@ -13,7 +13,7 @@ struct CastSectionView: View {
     var body: some View {
         let visible = showAll || cast.count <= initialLimit
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
+            LazyHStack(spacing: AppTheme.Spacing.medium) {
                 ForEach(visible ? cast : Array(cast.prefix(initialLimit))) { member in
                     CastMemberCard(member: member, themeColor: themeColor) {
                         onCastSelected?(member.name)
@@ -26,10 +26,10 @@ struct CastSectionView: View {
                         }
                     } label: {
                         Text("+\(remainingCount)")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(AppTheme.Font.bodyBold)
                             .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, AppTheme.Spacing.small)
+                            .padding(.vertical, AppTheme.Spacing.mini)
                             .background(
                                 Capsule()
                                     .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.10))
@@ -43,8 +43,8 @@ struct CastSectionView: View {
                     .buttonStyle(.interactive)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppTheme.Spacing.compact)
+            .padding(.vertical, AppTheme.Spacing.small)
         }
         .scrollBounceBehavior(.basedOnSize)
     }
