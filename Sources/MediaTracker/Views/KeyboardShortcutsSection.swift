@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct KeyboardShortcutsSection: View {
-    @Environment(\.colorScheme) var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
@@ -54,8 +53,6 @@ struct KeyboardShortcutsSection: View {
         }
     }
 
-    // MARK: - Row Builder
-
     @ViewBuilder
     private func shortcutRow(
         key: KeyEquivalent,
@@ -63,20 +60,8 @@ struct KeyboardShortcutsSection: View {
         label: String,
         showDivider: Bool
     ) -> some View {
-        HStack {
-            Text(label)
-                .font(AppTheme.Font.body)
-                .foregroundStyle(.primary)
-            Spacer()
+        SettingsRow(title: label, showDivider: showDivider) {
             ShortcutKeyBadge(key: key, modifiers: modifiers)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-
-        if showDivider {
-            Divider()
-                .overlay(AppTheme.Colors.strokeDefault(for: scheme))
-                .padding(.leading, 14)
         }
     }
 }
@@ -89,7 +74,7 @@ private struct ShortcutKeyBadge: View {
     @Environment(\.colorScheme) var scheme
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: AppTheme.Spacing.micro) {
             if modifiers.contains(.command) {
                 keyPill("⌘")
             }
@@ -126,14 +111,14 @@ private struct ShortcutKeyBadge: View {
             .font(AppTheme.Font.caption)
             .foregroundStyle(.primary)
             .frame(minWidth: 20)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
+            .padding(.horizontal, AppTheme.Spacing.micro)
+            .padding(.vertical, 2)
             .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.micro, style: .continuous)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.micro, style: .continuous)
                     .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
             )
     }

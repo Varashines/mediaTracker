@@ -19,48 +19,19 @@ struct GeneralSection: View {
 
             SettingsCard(color: .blue) {
                 VStack(spacing: 0) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Follow System")
-                                .font(AppTheme.Font.body)
-                                .foregroundStyle(.primary)
-                            Text("Automatically match macOS appearance")
-                                .font(AppTheme.Font.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { themePreference == 0 },
-                            set: { isSystem in
-                                withAnimation(AppTheme.Animation.springSnappy) {
-                                    if isSystem {
-                                        themePreference = 0
-                                    } else {
-                                        themePreference = scheme == .dark ? 1 : 2
-                                    }
-                                }
+                    SettingsToggleRow(title: "Follow System", subtitle: "Automatically match macOS appearance", showDivider: true, isOn: Binding(
+                        get: { themePreference == 0 },
+                        set: { isSystem in
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                if isSystem { themePreference = 0 }
+                                else { themePreference = scheme == .dark ? 1 : 2 }
                             }
-                        ))
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                        }
+                    ))
 
-                    Divider()
-                        .overlay(AppTheme.Colors.strokeDefault(for: scheme))
-                        .padding(.leading, 14)
-
-                    HStack {
-                        Text("Appearance")
-                            .font(AppTheme.Font.body)
-                            .foregroundStyle(.primary)
-                        Spacer()
+                    SettingsLabeledRow(title: "Appearance", showDivider: false) {
                         LightDarkPicker(themePreference: $themePreference)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
                     .opacity(isSystem ? 0.4 : 1.0)
                     .allowsHitTesting(!isSystem)
                 }
@@ -69,68 +40,44 @@ struct GeneralSection: View {
             SettingsSectionHeader(text: "Color Palette", icon: "paintbrush", color: .purple)
 
             SettingsCard(color: .purple) {
-                HStack(spacing: 14) {
-                    paletteDot(index: 0, accent: .accentColor, label: "Standard")
-                    paletteDot(index: 1, accent: Color(hex: "#C47A5A") ?? .accentColor, label: "Earth")
-                    paletteDot(index: 2, accent: Color(hex: "#7B8CDE") ?? .accentColor, label: "Cool")
-                    paletteDot(index: 3, accent: Color(hex: "#10B981") ?? .accentColor, label: "Forest")
-                    paletteDot(index: 4, accent: Color(hex: "#3B82F6") ?? .accentColor, label: "Ocean")
-                    paletteDot(index: 5, accent: Color(hex: "#D97706") ?? .accentColor, label: "Dusk")
-                    paletteDot(index: 6, accent: Color(hex: "#8B5CF6") ?? .accentColor, label: "Midnight")
+                VStack(spacing: 0) {
+                    HStack(spacing: AppTheme.Spacing.smallMedium) {
+                        paletteDot(index: 0, accent: AppTheme.Colors.accent, label: "Standard")
+                        paletteDot(index: 1, accent: Color(hex: "#C47A5A") ?? .accentColor, label: "Earth")
+                        paletteDot(index: 2, accent: Color(hex: "#7B8CDE") ?? .accentColor, label: "Cool")
+                        paletteDot(index: 3, accent: Color(hex: "#10B981") ?? .accentColor, label: "Forest")
+                        paletteDot(index: 4, accent: Color(hex: "#3B82F6") ?? .accentColor, label: "Ocean")
+                        paletteDot(index: 5, accent: Color(hex: "#D97706") ?? .accentColor, label: "Dusk")
+                        paletteDot(index: 6, accent: Color(hex: "#8B5CF6") ?? .accentColor, label: "Midnight")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.smallMedium)
+                    .padding(.horizontal, AppTheme.Spacing.smallMedium)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 14)
             }
 
             SettingsSectionHeader(text: "System", icon: "gearshape", color: .purple)
 
             SettingsCard(color: .purple) {
-                toggleRow("Haptic Feedback", subtitle: "Vibrate on interactions", isOn: $hapticsEnabled, showDivider: true)
-                toggleRow("Audio Feedback", subtitle: "Play sounds on actions", isOn: $audioEnabled, showDivider: true)
-                toggleRow("Launch at Login", subtitle: "Open automatically when you log in", isOn: $launchAtLogin, showDivider: true)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        do {
-                            if newValue {
-                                if SMAppService.mainApp.status != .enabled { try SMAppService.mainApp.register() }
-                            } else {
-                                if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+                VStack(spacing: 0) {
+                    SettingsToggleRow(title: "Haptic Feedback", subtitle: "Vibrate on interactions", showDivider: true, isOn: $hapticsEnabled)
+                    SettingsToggleRow(title: "Audio Feedback", subtitle: "Play sounds on actions", showDivider: true, isOn: $audioEnabled)
+                    SettingsToggleRow(title: "Launch at Login", subtitle: "Open automatically when you log in", showDivider: true, isOn: $launchAtLogin)
+                        .onChange(of: launchAtLogin) { _, newValue in
+                            do {
+                                if newValue {
+                                    if SMAppService.mainApp.status != .enabled { try SMAppService.mainApp.register() }
+                                } else {
+                                    if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+                                }
+                            } catch {
+                                AppLogger.error("Failed to update launch at login: \(error)")
                             }
-                        } catch {
-                            AppLogger.error("Failed to update launch at login: \(error)")
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
-                    }
-                toggleRow("Prevent Sleep", subtitle: "Keep Mac awake for background sync", isOn: $preventSleepMode, showDivider: true)
-                toggleRow("Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", isOn: $skipStartupTasks, showDivider: false)
-            }
-        }
-    }
-
-    private func toggleRow(_ title: String, subtitle: String, isOn: Binding<Bool>, showDivider: Bool) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(AppTheme.Font.body)
-                        .foregroundStyle(.primary)
-                    Text(subtitle)
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
+                    SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: true, isOn: $preventSleepMode)
+                    SettingsToggleRow(title: "Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", showDivider: false, isOn: $skipStartupTasks)
                 }
-                Spacer()
-                Toggle("", isOn: isOn)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            if showDivider {
-                Divider()
-                    .overlay(AppTheme.Colors.strokeDefault(for: scheme))
-                    .padding(.leading, 14)
             }
         }
     }
@@ -144,12 +91,12 @@ struct GeneralSection: View {
         } label: {
             Circle()
                 .fill(accent)
-                .frame(width: 24, height: 24)
+                .frame(width: AppTheme.Spacing.large, height: AppTheme.Spacing.large)
                 .overlay {
                     if isSelected {
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 8, height: 8)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(accent.isLightColor ? .black : .white)
                     }
                 }
                 .contentShape(Circle())

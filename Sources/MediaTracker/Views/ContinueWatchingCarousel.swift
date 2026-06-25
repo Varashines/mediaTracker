@@ -9,6 +9,7 @@ struct ContinueWatchingCarousel: View {
     var onDiscoverySpotlight: (() -> Void)?
 
     @State private var scrollProgress: Double = 0
+    @State private var horizontalFastScrolling = false
     private let scrollSpace = "CW_Scroll"
 
     var body: some View {
@@ -21,12 +22,12 @@ struct ContinueWatchingCarousel: View {
             )
 
             if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(
                                 metadata: metadata, mode: .hero, namespace: namespace,
-                                isFastScrolling: isFastScrolling)
+                                isFastScrolling: isFastScrolling || horizontalFastScrolling)
                             .equatable()
                         }
                         .buttonStyle(.interactive)

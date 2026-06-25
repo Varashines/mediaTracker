@@ -6,6 +6,7 @@ struct TrendingCarousel: View {
     let onSelect: (MediaSearchResult) -> Void
 
     @State private var scrollProgress: Double = 0
+    @State private var horizontalFastScrolling = false
     private let scrollSpace: String
 
     init(items: [MediaSearchResult], title: String, onSelect: @escaping (MediaSearchResult) -> Void) {
@@ -31,9 +32,9 @@ struct TrendingCarousel: View {
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
             } else {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { item in
-                        TrendingPosterCard(item: item)
+                        TrendingPosterCard(item: item, isFastScrolling: horizontalFastScrolling)
                             .onTapGesture { onSelect(item) }
                     }
                 }

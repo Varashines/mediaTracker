@@ -337,7 +337,7 @@ struct MediaThumbnailView: View, Equatable {
         }()
 
         ZStack {
-            if let ns = namespace, mode == .hero, !isFastScrolling && !itemIDString.isEmpty {
+            if let ns = namespace, mode == .hero, staggerIndex != nil, !isFastScrolling && !itemIDString.isEmpty {
                 posterContent
                     .matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
                     .background {
@@ -380,7 +380,7 @@ struct MediaThumbnailView: View, Equatable {
         .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         .onAppear {
-            if isFastScrolling {
+            if isFastScrolling || staggerIndex == nil {
                 isAppeared = true
                 return
             }

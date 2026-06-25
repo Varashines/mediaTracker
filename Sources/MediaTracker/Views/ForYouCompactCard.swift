@@ -113,8 +113,8 @@ struct ForYouCompactCard: View {
                 .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
         }
         .shadow(color: isHovered ? AppTheme.Colors.shadowElevated(for: colorScheme) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 8, y: 4)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(AppTheme.Animation.springGentle, value: isHovered)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)

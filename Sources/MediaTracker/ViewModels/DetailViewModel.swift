@@ -43,19 +43,11 @@ class DetailViewModel {
         guard let context = item.modelContext, !SleepManager.shared.isAsleep else { return }
 
         // Priority 1: Pre-calculated Poster Color from SwiftData
-        if let hex = item.themeColorHex {
-            if hex.contains("|") {
-                let parts = hex.split(separator: "|", maxSplits: 1).map(String.init)
-                if parts.count == 2, let primary = Color(hex: parts[0]) {
-                    self.themeColor = primary
-                    self.recalculateVibrantPalette()
-                    return
-                }
-            } else if let cachedColor = Color(hex: hex) {
-                self.themeColor = cachedColor
-                self.recalculateVibrantPalette()
-                return
-            }
+        if let hex = item.themeColorHex,
+           let cachedColor = Color(hex: hex.contains("|") ? String(hex.split(separator: "|")[0]) : hex) {
+            self.themeColor = cachedColor
+            self.recalculateVibrantPalette()
+            return
         }
 
         // Priority 2: Network/Studio Theme Color (backup)

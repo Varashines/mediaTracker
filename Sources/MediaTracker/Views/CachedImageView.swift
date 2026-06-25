@@ -56,6 +56,7 @@ struct CachedImage<Placeholder: View>: View {
             if let url = url {
                 ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
             }
+            self.image = nil
         }
         .task(id: url) {
             if !isFastScrolling {

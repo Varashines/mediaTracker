@@ -31,17 +31,16 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var scheme
     @State private var selectedTab: SettingsTab = .general
+    @Namespace private var tabNamespace
 
     var body: some View {
         VStack(spacing: 0) {
-            // Full-width tab bar
             tabBar
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+                .padding(.top, AppTheme.Spacing.large)
+                .padding(.bottom, AppTheme.Spacing.medium)
 
             Divider()
 
-            // Content
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     switch selectedTab {
@@ -53,15 +52,15 @@ struct SettingsView: View {
                     case .about: AboutSection()
                     }
                 }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 24)
+                .transition(.opacity.combined(with: .scale(0.98)))
+                .padding(.horizontal, AppTheme.Spacing.xLarge)
+                .padding(.vertical, AppTheme.Spacing.large)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(AppTheme.Colors.background(for: scheme))
+        .background(.ultraThinMaterial)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(maxWidth: 520, minHeight: 620)
-        .fontDesign(.rounded)
         .animation(AppTheme.Animation.springSnappy, value: selectedTab)
         .onAppear {
             Task {
@@ -83,7 +82,7 @@ struct SettingsView: View {
                 tabButton(tab: tab)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, AppTheme.Spacing.small)
     }
 
     private func tabButton(tab: SettingsTab) -> some View {
@@ -94,10 +93,10 @@ struct SettingsView: View {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: AppTheme.Spacing.mini) {
                 Image(systemName: tab.icon)
                     .font(AppTheme.Font.settingsIcon)
-                    .frame(width: 24, height: 24)
+                    .frame(width: AppTheme.Spacing.large, height: AppTheme.Spacing.large)
 
                 Text(tab.label)
                     .font(AppTheme.Font.label)
@@ -105,15 +104,24 @@ struct SettingsView: View {
             }
             .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, AppTheme.Spacing.compact)
             .background {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(isSelected ? AppTheme.Colors.accent.opacity(0.08) : .clear)
+                if isSelected {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .fill(AppTheme.Colors.accent.opacity(0.08))
+                        .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
+                }
             }
             .contentShape(Rectangle())
             .accessibilityLabel(tab.label)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering && !isSelected {
+                // subtle hover fill is handled via animated state would require @State per tab
+                // instead we let the native button style handle press feedback
+            }
+        }
     }
 }

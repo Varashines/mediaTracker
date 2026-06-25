@@ -7,6 +7,7 @@ struct PickOfDayCarousel: View {
     let onSelect: (MediaThumbnailMetadata) -> Void
 
     @State private var scrollProgress: Double = 0
+    @State private var horizontalFastScrolling = false
     private let scrollSpace = "POD_Scroll"
 
     var body: some View {
@@ -19,10 +20,10 @@ struct PickOfDayCarousel: View {
             )
 
             if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
-                            ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling)
+                            ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                         }
                         .buttonStyle(.interactive)
                     }

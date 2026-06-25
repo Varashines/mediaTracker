@@ -5,6 +5,7 @@ struct DiscoverySection: View {
     let icon: String
     let nodes: [DiscoveryNode]
     let style: DiscoveryCardStyle
+    let isFastScrolling: Bool
     let onSelected: (DiscoveryNode) -> Void
     
     var sectionColor: Color {
@@ -23,7 +24,7 @@ struct DiscoverySection: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                 ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
-                        .modifier(StaggerModifier(index: index))
+                        .modifier(StaggerModifier(index: index, isFastScrolling: isFastScrolling))
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -35,17 +36,22 @@ struct DiscoverySection: View {
 
 private struct StaggerModifier: ViewModifier {
     let index: Int
+    let isFastScrolling: Bool
     @State private var hasAppeared = false
 
     func body(content: Content) -> some View {
         content
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 8)
+            .opacity(hasAppeared || isFastScrolling ? 1 : 0)
+            .offset(y: hasAppeared || isFastScrolling ? 0 : 8)
             .onAppear {
-                if !hasAppeared {
-                    withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 8) * 0.05)) {
-                        hasAppeared = true
-                    }
+                if isFastScrolling {
+                    // Skip animation during fast scroll — show immediately
+                    hasAppeared = true
+                    return
+                }
+                guard !hasAppeared else { return }
+                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 8) * 0.05)) {
+                    hasAppeared = true
                 }
             }
     }

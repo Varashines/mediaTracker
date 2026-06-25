@@ -4,7 +4,7 @@ import SwiftData
 struct CollectionPickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
+    @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name) private var collections: [MediaCollection]
     let item: MediaItem
     
     var body: some View {

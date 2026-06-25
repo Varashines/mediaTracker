@@ -53,6 +53,11 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 900, minHeight: 600)
+        .onChange(of: isSearchActive) { _, active in
+            if !active {
+                sidebarSelection = .category(viewModel.filter.selectedCategory)
+            }
+        }
         .onAppear {
             handleAppIntentLaunch()
         }
@@ -85,6 +90,7 @@ struct LibraryDetailView: View {
     
     @State private var isSyncHovered = false
     @State private var showingBulkManager = false
+    @State private var hasInitiallyLoaded = false
     @State private var refreshID = 0
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
@@ -222,13 +228,16 @@ struct LibraryDetailView: View {
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
                 viewModel.display.isLibraryMetadataDirty = true
                 LibraryStatsActor.clearCache()
+                guard hasInitiallyLoaded else { return }
                 viewModel.filterSubject.send()
             }
             .task(id: viewModel.filter.searchText) {
+                guard hasInitiallyLoaded else { return }
                 viewModel.filterSubject.send()
             }
             .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
-                performUpdate()
+            performUpdate()
+            hasInitiallyLoaded = true
             }
             .toolbar {
 

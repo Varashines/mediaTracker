@@ -166,9 +166,9 @@ struct StudioAliasManagerView: View {
             HStack {
                 TextField("Group Name (e.g. Disney)", text: $newGroupName)
                     .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(Color.primary.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(AppTheme.Spacing.compact)
+                    .background(AppTheme.Colors.surfaceGhost(for: scheme))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
                 
                 Button("Create") {
                     if !newGroupName.isEmpty {

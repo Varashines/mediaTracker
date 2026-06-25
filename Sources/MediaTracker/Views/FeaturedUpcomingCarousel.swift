@@ -8,6 +8,7 @@ struct FeaturedUpcomingCarousel: View {
     let onSelect: (MediaThumbnailMetadata) -> Void
     
     @State private var scrollProgress: Double = 0
+    @State private var horizontalFastScrolling = false
     private let scrollSpace = "Featured_Scroll"
 
     var body: some View {
@@ -20,10 +21,10 @@ struct FeaturedUpcomingCarousel: View {
             )
             
             if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
-                            MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling)
+                            MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .id(metadata.versionHash)
                         }
                         .buttonStyle(.interactive)

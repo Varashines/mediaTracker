@@ -334,9 +334,7 @@ extension BackgroundDataService {
 
         if let cgImage {
             let pair = await ColorExtractor.topTwoColors(from: cgImage)
-            let primaryHex = pair.primary.toHex()
-            let secondaryHex = pair.secondary.toHex()
-            item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+            item.themeColorHex = pair.primary.toHex()
             item.themeColorSourceURL = poster
         }
     }

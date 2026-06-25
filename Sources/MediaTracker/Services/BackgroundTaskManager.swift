@@ -72,7 +72,7 @@ class BackgroundTaskManager {
         if !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) {
             Task.detached(priority: .background) {
                 await self.refreshStaleBadges()
-                await self.runPosterColorMigrationV4IfNeeded()
+                await self.runPosterColorMigrationV6IfNeeded()
             }
         }
         
@@ -140,12 +140,12 @@ class BackgroundTaskManager {
         }
     }
 
-    /// One-shot migration: re-extract dominant poster colors using the CoreImage algorithm (v4).
+    /// One-shot migration: re-extract dominant poster colors using the median-cut + Vision saliency algorithm (v6).
     /// Runs in the background, chunked, gated by `BackgroundOperationGate` to avoid overlap with
     /// other heavy work. Safe to call repeatedly — it bails immediately if the version flag is already set.
-    func runPosterColorMigrationV4IfNeeded() async {
+    func runPosterColorMigrationV6IfNeeded() async {
         let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        guard currentVersion < 4 else { return }
+        guard currentVersion < 6 else { return }
         guard let container = container else { return }
 
         let extractionVersionKey = "colorExtractionVersion"
@@ -153,7 +153,7 @@ class BackgroundTaskManager {
         let interBatchSleepNs: UInt64 = 250_000_000
 
         do {
-            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV4", container: container) {
+            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV6", container: container) {
                 let context = ModelContext(container)
 
                 var descriptor = FetchDescriptor<MediaItem>(
@@ -164,7 +164,7 @@ class BackgroundTaskManager {
 
                 var processed = 0
                 let total = allItems.count
-                AppLogger.info("🎨 Poster color migration v4 starting: \(total) items", logger: AppLogger.background)
+                AppLogger.info("🎨 Poster color migration v6 starting: \(total) items", logger: AppLogger.background)
 
                 for item in allItems {
                     try Task.checkCancellation()
@@ -182,9 +182,7 @@ class BackgroundTaskManager {
 
                     if let cgImage {
                         let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                        let primaryHex = pair.primary.toHex()
-                        let secondaryHex = pair.secondary.toHex()
-                        item.themeColorHex = "\(primaryHex)|\(secondaryHex)"
+                        item.themeColorHex = pair.primary.toHex()
                         item.themeColorSourceURL = poster
                     }
 
@@ -192,17 +190,17 @@ class BackgroundTaskManager {
                     if processed % batchSize == 0 {
                         try? context.save()
                         // Save progress incrementally so interrupted migrations don't restart
-                        UserDefaults.standard.set(4, forKey: extractionVersionKey)
+                        UserDefaults.standard.set(6, forKey: extractionVersionKey)
                         try? await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }
 
                 try? context.save()
-                UserDefaults.standard.set(4, forKey: extractionVersionKey)
-                AppLogger.info("🎨 Poster color migration v4 complete: \(processed) items", logger: AppLogger.background)
+                UserDefaults.standard.set(6, forKey: extractionVersionKey)
+                AppLogger.info("🎨 Poster color migration v6 complete: \(processed) items", logger: AppLogger.background)
             }
         } catch {
-            AppLogger.error("🎨 Poster color migration v4 failed: \(error.localizedDescription)", logger: AppLogger.background)
+            AppLogger.error("🎨 Poster color migration v6 failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
     
@@ -219,7 +217,7 @@ class BackgroundTaskManager {
 
         // Opportunistic: if v4 poster color migration hasn't run yet, kick it off.
         if UserDefaults.standard.integer(forKey: "colorExtractionVersion") < 4 {
-            await runPosterColorMigrationV4IfNeeded()
+            await runPosterColorMigrationV6IfNeeded()
         }
 
         // Secondary Background Tasks

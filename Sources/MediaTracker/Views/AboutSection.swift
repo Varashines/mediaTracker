@@ -13,37 +13,33 @@ struct AboutSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            VStack(spacing: 14) {
-                HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            SettingsCard {
+                VStack(spacing: AppTheme.Spacing.smallMedium) {
+                    HStack(spacing: AppTheme.Spacing.smallMedium) {
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable()
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("MediaTracker")
-                            .font(AppTheme.Font.titleMedium)
-                        Text("Version \(appVersion) (\(buildNumber))")
-                            .font(AppTheme.Font.label)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+                            Text("MediaTracker")
+                                .font(AppTheme.Font.titleMedium)
+                            Text("Version \(appVersion) (\(buildNumber))")
+                                .font(AppTheme.Font.label)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("Track movies and TV shows you've watched, discover what to watch next, and keep your viewing history organized.")
-                    .font(AppTheme.Font.label)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(4)
+                    Text("Track movies and TV shows you've watched, discover what to watch next, and keep your viewing history organized.")
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(AppTheme.Spacing.micro)
+                }
+                .padding(.horizontal, AppTheme.Spacing.medium)
+                .padding(.vertical, AppTheme.Spacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.Colors.cardFill(for: scheme))
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                    .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
-            )
         }
     }
 }

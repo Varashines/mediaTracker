@@ -108,14 +108,14 @@ class ImageCache: NSObject {
         // Adaptive memory cache sizing based on system RAM
         let physicalMemory = ProcessInfo.processInfo.physicalMemory
         if physicalMemory >= 16_000_000_000 {
+            memoryCache.totalCostLimit = 512 * 1024 * 1024
+            memoryCache.countLimit = 3000
+        } else if physicalMemory >= 8_000_000_000 {
             memoryCache.totalCostLimit = 256 * 1024 * 1024
             memoryCache.countLimit = 1500
-        } else if physicalMemory >= 8_000_000_000 {
+        } else {
             memoryCache.totalCostLimit = 128 * 1024 * 1024
             memoryCache.countLimit = 800
-        } else {
-            memoryCache.totalCostLimit = 64 * 1024 * 1024
-            memoryCache.countLimit = 400
         }
         
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)

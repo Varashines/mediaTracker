@@ -83,7 +83,7 @@ struct SettingsSectionHeader: View {
                 .font(AppTheme.Font.settingsSectionHeader)
                 .foregroundStyle(.primary)
         }
-        .padding(.bottom, 6)
+        .padding(.bottom, AppTheme.Spacing.mini)
     }
 }
 
@@ -157,6 +157,7 @@ struct SettingsLabeledRow<Trailing: View>: View {
 
 struct SettingsButton: View {
     let title: String
+    var color: Color = AppTheme.Colors.accent
     let action: () -> Void
     @State private var isHovered = false
 
@@ -164,7 +165,7 @@ struct SettingsButton: View {
         Button(action: action) {
             Text(title)
                 .font(AppTheme.Font.caption)
-                .foregroundStyle(AppTheme.Colors.accent)
+                .foregroundStyle(color)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(
@@ -173,7 +174,7 @@ struct SettingsButton: View {
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(AppTheme.Colors.accent.opacity(isHovered ? 0.3 : 0.15), lineWidth: 0.5)
+                        .stroke(color.opacity(isHovered ? 0.3 : 0.15), lineWidth: 0.5)
                 }
                 .scaleEffect(isHovered ? 1.02 : 1.0)
                 .animation(AppTheme.Animation.springSnappy, value: isHovered)

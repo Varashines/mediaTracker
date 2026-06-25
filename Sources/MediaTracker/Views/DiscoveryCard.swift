@@ -72,8 +72,8 @@ struct DiscoveryCard: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(themeColor.opacity(isHovered ? 0.16 : 0.08))
                     .strokeBorder(
-                        isHovered ? themeColor.opacity(0.35) : AppTheme.Colors.strokeDefault(for: colorScheme),
-                        lineWidth: isHovered ? 1.0 : 0.8
+                        AppTheme.Colors.strokeDefault(for: colorScheme),
+                        lineWidth: 0.8
                     )
             }
     }
@@ -86,8 +86,8 @@ struct DiscoveryCard: View {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.28 : 0.15) : (isHovered ? 0.22 : 0.12)),
-                        lineWidth: isHovered ? 1.0 : 0.8
+                        AppTheme.Colors.strokeDefault(for: colorScheme),
+                        lineWidth: 0.8
                     )
             }
     }

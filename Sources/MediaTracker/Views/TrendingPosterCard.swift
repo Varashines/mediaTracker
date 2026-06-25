@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrendingPosterCard: View {
     let item: MediaSearchResult
+    var isFastScrolling: Bool = false
     @State private var isHovered = false
 
     var body: some View {
@@ -46,7 +47,7 @@ struct TrendingPosterCard: View {
     @ViewBuilder
     private var posterImage: some View {
         if let posterURL = item.posterURL, let url = URL(string: posterURL) {
-            CachedImage(url: url, targetSize: CGSize(width: 160, height: 240)) { _ in
+            CachedImage(url: url, targetSize: CGSize(width: 160, height: 240), isFastScrolling: isFastScrolling) { _ in
             } placeholder: {
                 Color.secondary.opacity(0.1)
             }

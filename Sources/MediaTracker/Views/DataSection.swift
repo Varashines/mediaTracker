@@ -14,41 +14,52 @@ struct DataSection: View {
             SettingsSectionHeader(text: "Backup", icon: "tray.and.arrow.down.fill", color: .blue)
 
             SettingsCard(color: .blue) {
-                actionRow("Export Library", subtitle: "Save a backup of your collection", button: "Export") {
-                    let container = modelContext.container
-                    Task {
-                        let context = ModelContext(container)
-                        let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
-                        if let items = try? context.fetch(descriptor) {
-                            let exportItems = LibraryImportExportService.shared.prepareExportData(items: items, context: context)
-                            exportData = exportItems
-                            showExportDialog = true
+                VStack(spacing: 0) {
+                    SettingsRow(title: "Export Library", subtitle: "Save a backup of your collection", showDivider: true) {
+                        SettingsButton(title: "Export") {
+                            let container = modelContext.container
+                            Task {
+                                let context = ModelContext(container)
+                                let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
+                                if let items = try? context.fetch(descriptor) {
+                                    let exportItems = LibraryImportExportService.shared.prepareExportData(items: items, context: context)
+                                    exportData = exportItems
+                                    showExportDialog = true
+                                }
+                            }
                         }
                     }
-                }
-                Divider().overlay(AppTheme.Colors.strokeDefault(for: scheme)).padding(.leading, 14)
-                actionRow("Import Library", subtitle: "Restore from a backup file", button: "Import") {
-                    showImportDialog = true
-                }
-                Divider().overlay(AppTheme.Colors.strokeDefault(for: scheme)).padding(.leading, 14)
-                actionRow("Auto Backups", subtitle: "View automatic backup folder", button: "Show in Finder") {
-                    let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
-                    if !FileManager.default.fileExists(atPath: url.path) {
-                        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    SettingsRow(title: "Import Library", subtitle: "Restore from a backup file", showDivider: true) {
+                        SettingsButton(title: "Import") {
+                            showImportDialog = true
+                        }
                     }
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                    SettingsRow(title: "Auto Backups", subtitle: "View automatic backup folder", showDivider: false) {
+                        SettingsButton(title: "Show in Finder") {
+                            let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+                            if !FileManager.default.fileExists(atPath: url.path) {
+                                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                            }
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                        }
+                    }
                 }
             }
 
             SettingsSectionHeader(text: "Maintenance", icon: "wrench.and.screwdriver.fill", color: .orange)
 
             SettingsCard(color: .orange) {
-                actionRow("Database Repair", subtitle: "Fix relationships and remove duplicates", button: "Repair") {
-                    DataService.shared.runMaintenance(modelContext: modelContext)
-                }
-                Divider().overlay(AppTheme.Colors.strokeDefault(for: scheme)).padding(.leading, 14)
-                actionRow("Image Cache", subtitle: "Clear downloaded poster images", button: "Purge") {
-                    ImageCache.shared.clearFullCache()
+                VStack(spacing: 0) {
+                    SettingsRow(title: "Database Repair", subtitle: "Fix relationships and remove duplicates", showDivider: true) {
+                        SettingsButton(title: "Repair") {
+                            DataService.shared.runMaintenance(modelContext: modelContext)
+                        }
+                    }
+                    SettingsRow(title: "Image Cache", subtitle: "Clear downloaded poster images", showDivider: false) {
+                        SettingsButton(title: "Purge") {
+                            ImageCache.shared.clearFullCache()
+                        }
+                    }
                 }
             }
 
@@ -56,22 +67,9 @@ struct DataSection: View {
 
             GroupContainer(isDangerZone: true) {
                 SettingsRow(title: "Delete All Data", subtitle: "Permanently wipe your entire library", showDivider: false) {
-                    Button {
+                    SettingsButton(title: "Delete", color: .red) {
                         showClearConfirmation = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash")
-                                .font(AppTheme.Font.caption)
-                            Text("Delete")
-                                .font(AppTheme.Font.caption)
-                        }
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.red.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -115,33 +113,5 @@ struct DataSection: View {
                 AppErrorState.shared.surfaceError("Import cancelled: \(error.localizedDescription)")
             }
         }
-    }
-
-    private func actionRow(_ title: String, subtitle: String, button: String, action: @escaping () -> Void) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppTheme.Font.body)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button(button) {
-                action()
-            }
-            .buttonStyle(.plain)
-            .font(AppTheme.Font.label)
-            .foregroundStyle(AppTheme.Colors.accent)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(AppTheme.Colors.accent.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .accessibilityLabel(button)
-            .accessibilityHint(title)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
     }
 }

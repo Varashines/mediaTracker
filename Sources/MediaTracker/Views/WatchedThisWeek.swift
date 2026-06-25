@@ -6,6 +6,7 @@ struct WatchedThisWeek: View {
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var scrollProgress: Double = 0
+    @State private var horizontalFastScrolling = false
     private let scrollSpace = "WTW_Scroll"
 
     var body: some View {
@@ -44,14 +45,14 @@ struct WatchedThisWeek: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, AppTheme.Spacing.small)
             } else {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress) {
+                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items, id: \.persistentModelID) { item in
                         NavigationLink(value: item) {
                             MediaThumbnailView(
                                 item: item,
                                 mode: .grid,
                                 showTypeBadge: true,
-                                isFastScrolling: false
+                                isFastScrolling: horizontalFastScrolling
                             )
                             .equatable()
                             .frame(width: 160)

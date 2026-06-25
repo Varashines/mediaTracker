@@ -109,9 +109,9 @@ struct DetailView: View {
             activity.persistentIdentifier = viewModel.item.id
             activity.requiredUserInfoKeys = ["id"]
         }
-        .inspector(isPresented: $showingCollectionPicker) {
+        .sheet(isPresented: $showingCollectionPicker) {
             CollectionPickerView(item: viewModel.item)
-                .inspectorColumnWidth(min: 300, ideal: 350)
+                .frame(minWidth: 350, maxWidth: 450)
         }
         .onChange(of: MediaStateService.shared.refreshedItemID) { _, newID in
             if let id = newID, id == viewModel.item.id {
@@ -333,21 +333,41 @@ struct DetailView: View {
                 .accessibilityLabel("Delete from library")
                 .accessibilityAddTraits(.isButton)
 
-                Menu {
-                    if viewModel.trailerKey != nil {
-                        Button("Play Trailer") { openTrailer() }
+                if viewModel.trailerKey != nil {
+                    Button { openTrailer() } label: {
+                        Image(systemName: "play.rectangle.fill")
+                            .frame(width: 28, height: 28)
                     }
-                    Button("Add to Collection") { showingCollectionPicker = true }
-                        .keyboardShortcut("l", modifiers: [.command])
-                    Button("Copy Title") { copyTitle() }
-                } label: {
-                    Image(systemName: "ellipsis")
+                    .buttonStyle(.plain)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .clipShape(.capsule)
+                    .frame(width: 32, height: 32)
+                    .help("Play Trailer")
+                    .accessibilityLabel("Play Trailer")
+                }
+
+                Button { showingCollectionPicker = true } label: {
+                    Image(systemName: "folder.badge.plus")
                         .frame(width: 28, height: 28)
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
                 .background(Capsule().fill(.ultraThinMaterial))
                 .clipShape(.capsule)
                 .frame(width: 32, height: 32)
+                .keyboardShortcut("l", modifiers: [.command])
+                .help("Add to Collection")
+                .accessibilityLabel("Add to Collection")
+
+                Button { copyTitle() } label: {
+                    Image(systemName: "doc.on.doc")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .clipShape(.capsule)
+                .frame(width: 32, height: 32)
+                .help("Copy Title")
+                .accessibilityLabel("Copy Title")
             }
         }
     }
