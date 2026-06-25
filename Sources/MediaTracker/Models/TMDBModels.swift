@@ -131,3 +131,15 @@ struct TMDBVideo: Codable {
     let type: String
     let official: Bool?
 }
+
+// MARK: - Title Logos
+struct TMDBImagesResponse: Codable {
+    let logos: [TMDBLogo]?
+}
+
+struct TMDBLogo: Codable {
+    let file_path: String
+    let iso_639_1: String?
+    let width: Int
+    let height: Int
+}

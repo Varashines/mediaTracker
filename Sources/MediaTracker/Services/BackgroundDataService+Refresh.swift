@@ -70,6 +70,19 @@ extension BackgroundDataService {
             
             if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
             item.cachedTrailerKey = details.trailerKey
+            if item.titleLogoURL == nil {
+                do {
+                    let logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, force: force)
+                    if !logos.isEmpty {
+                        item.titleLogoURL = logos.first
+                        AppLogger.info("Movie logo set for tmdbID=\(tmdbID)", logger: AppLogger.background)
+                    } else {
+                        AppLogger.info("No movie logos found for tmdbID=\(tmdbID)", logger: AppLogger.background)
+                    }
+                } catch {
+                    AppLogger.warning("Movie logo fetch failed for tmdbID=\(tmdbID): \(error)", logger: AppLogger.background)
+                }
+            }
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.updateSearchableText()
@@ -209,7 +222,20 @@ extension BackgroundDataService {
             tvDetails.creators = details.creators.map { $0.name }
             tvDetails.tvMazeID = tvMazeID
             item.cachedTrailerKey = details.trailerKey
-            
+            if item.titleLogoURL == nil {
+                do {
+                    let logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, force: force)
+                    if !logos.isEmpty {
+                        item.titleLogoURL = logos.first
+                        AppLogger.info("TV logo set for tmdbID=\(tmdbID)", logger: AppLogger.background)
+                    } else {
+                        AppLogger.info("No TV logos found for tmdbID=\(tmdbID)", logger: AppLogger.background)
+                    }
+                } catch {
+                    AppLogger.warning("TV logo fetch failed for tmdbID=\(tmdbID): \(error)", logger: AppLogger.background)
+                }
+            }
+
             if !metadataOnly {
                 let seasonsToSync = details.seasons
 

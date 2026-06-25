@@ -44,6 +44,7 @@ final class MediaItem: Identifiable {
     var storedCast: [SimpleCastMember] = []
     var cachedTrailerKey: String?
     var cachedTMDBStatus: String?
+    var titleLogoURL: String?
     
     var collections: [MediaCollection] = []
 
@@ -232,7 +233,8 @@ extension MediaItem {
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
-        \.searchableText
+        \.searchableText,
+        \.cachedTrailerKey, \.cachedTMDBStatus, \.titleLogoURL,
     ]
 
     nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]

@@ -95,6 +95,7 @@ class DetailViewModel {
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         updateThemeColor()
+        fetchTitleLogoIfNeeded()
 
         let hasData = item.lastUpdated != nil
 
@@ -141,12 +142,47 @@ class DetailViewModel {
                 self.item.backdropURL = fresh.backdropURL ?? self.item.backdropURL
                 self.item.themeColorHex = fresh.themeColorHex ?? self.item.themeColorHex
                 self.item.themeColorSourceURL = fresh.themeColorSourceURL ?? self.item.themeColorSourceURL
+                self.item.titleLogoURL = fresh.titleLogoURL ?? self.item.titleLogoURL
+                // Pre-warm the logo image so the CachedImage renders instantly
+                if let logoURL = self.item.titleLogoURL, let url = URL(string: logoURL) {
+                    ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 500, height: 90))
+                }
             }
         }
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
+    }
+
+    /// Fetch title logo from TMDB independently of the main refresh cycle.
+    /// This ensures logos are loaded even when `refreshData` returns early due to
+    /// session debouncing or freshness guards.
+    func fetchTitleLogoIfNeeded() {
+        guard item.titleLogoURL == nil else { return }
+        guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
+
+        let type = item.type
+        Task {
+            do {
+                let logos: [String]
+                if type == .tvShow {
+                    logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID)
+                } else {
+                    logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID)
+                }
+                if !logos.isEmpty {
+                    await MainActor.run {
+                        self.item.titleLogoURL = logos.first
+                        if let context = self.item.modelContext {
+                            SaveCoordinator.shared.requestSave(context)
+                        }
+                    }
+                }
+            } catch {
+                AppLogger.warning("Logo fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
+            }
+        }
     }
 
     func fetchRecommendations() {

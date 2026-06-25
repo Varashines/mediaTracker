@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import os
 import CryptoKit
+import AppKit
 
 extension Notification.Name {
     static let imageCacheUpdated = Notification.Name("MediaTracker.imageCacheUpdated")
@@ -393,6 +394,11 @@ class ImageCache: NSObject {
                     self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: cgImage))
                     self.registerKeyForURL(key, specificKey: specificKey)
                     self.postUpdate(forKey: key)
+                } else if let svgImage = Self.renderSVGToCGImage(data: data, targetSize: targetSize) {
+                    let wrapper = CachedImageWrapper(image: svgImage, urlString: key, cacheKey: specificKey)
+                    self.memoryCache.setObject(wrapper, forKey: specificKey as NSString, cost: self.cost(for: svgImage))
+                    self.registerKeyForURL(key, specificKey: specificKey)
+                    self.postUpdate(forKey: key)
                 }
             } catch {
                 if !(error is CancellationError) {
@@ -549,13 +555,49 @@ class ImageCache: NSObject {
         }.value
     }
 
+    /// Render an SVG data blob to a CGImage at the requested size.
+    /// macOS 14+ includes native SVG support via NSImage (private _NSSVGImageRep).
+    nonisolated static func renderSVGToCGImage(data: Data, targetSize: CGSize?) -> CGImage? {
+        // Detect SVG by checking if raw data starts with "<svg" or "<?xml"
+        let prefix = data.prefix(20).compactMap { b in
+            (0x20...0x7E).contains(b) ? Character(UnicodeScalar(b)) : nil
+        }.map(String.init).joined().trimmingCharacters(in: .whitespaces)
+        guard prefix.hasPrefix("<?xml") || prefix.hasPrefix("<svg") else { return nil }
+
+        guard let nsImage = NSImage(data: data) else { return nil }
+        let size = targetSize ?? nsImage.size
+        let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: max(1, Int(size.width)),
+            pixelsHigh: max(1, Int(size.height)),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        nsImage.draw(in: NSRect(origin: .zero, size: size),
+                     from: .zero, operation: .copy, fraction: 1.0)
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.cgImage
+    }
+
     private func loadFromDisk(diskFileName: String, targetSize: CGSize?) async -> ImageContainer? {
         let screenScale = self.screenScale
         let fileURL = self.cacheDirectory.appendingPathComponent(diskFileName)
         return await Task.detached(priority: .userInitiated) {
             // Use CGImageSourceCreateWithURL to let CoreGraphics memory-map the file
             // instead of loading entire Data into RAM before decoding
-            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
+            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else {
+                // Try SVG decode
+                guard let rawData = try? Data(contentsOf: fileURL),
+                      let svgImage = ImageCache.renderSVGToCGImage(data: rawData, targetSize: targetSize) else { return nil }
+                return ImageContainer(image: svgImage)
+            }
             
             if let targetSize = targetSize {
                 let maxDimension = max(targetSize.width, targetSize.height) * screenScale
@@ -570,7 +612,12 @@ class ImageCache: NSObject {
                 }
             }
             
-            guard let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
+            guard let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+                // Fallback: try SVG decode from file data
+                guard let rawData = try? Data(contentsOf: fileURL),
+                      let svgImage = ImageCache.renderSVGToCGImage(data: rawData, targetSize: targetSize) else { return nil }
+                return ImageContainer(image: svgImage)
+            }
             return ImageContainer(image: cgImage)
         }.value
     }

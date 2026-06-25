@@ -515,6 +515,60 @@ actor APIClient {
         }
     }
 
+    // MARK: - Title Logos
+
+    func fetchMovieLogos(tmdbID: Int, force: Bool = false) async throws -> [String] {
+        let cacheKey = "movie_logos_\(tmdbID).json"
+        let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
+
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+            return Self.processLogoURLs(decoded.logos)
+        }
+
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/movie/\(tmdbID)/images", queryItems: [
+                URLQueryItem(name: "include_image_language", value: "en,null")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            self.saveToCache(data: data, forKey: cacheKey)
+            let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+            return Self.processLogoURLs(decoded.logos)
+        }
+    }
+
+    func fetchTVLogos(tmdbID: Int, force: Bool = false) async throws -> [String] {
+        let cacheKey = "tv_logos_\(tmdbID).json"
+        let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
+
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+            return Self.processLogoURLs(decoded.logos)
+        }
+
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/tv/\(tmdbID)/images", queryItems: [
+                URLQueryItem(name: "include_image_language", value: "en,null")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            self.saveToCache(data: data, forKey: cacheKey)
+            let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+            return Self.processLogoURLs(decoded.logos)
+        }
+    }
+
+    private nonisolated static func processLogoURLs(_ logos: [TMDBLogo]?) -> [String] {
+        guard let logos else { return [] }
+        return logos
+            .filter { $0.iso_639_1 == "en" || $0.iso_639_1 == nil }
+            .compactMap { Self.tmdbImageURL(path: $0.file_path, size: "w500") }
+            .sorted { $0.hasSuffix(".svg") && !$1.hasSuffix(".svg") }
+    }
+
     // MARK: - OMDb Integration
 
     func fetchOMDBData(imdbID: String) async -> OMDBFullData? {

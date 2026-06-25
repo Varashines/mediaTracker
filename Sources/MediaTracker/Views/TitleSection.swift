@@ -14,18 +14,31 @@ struct TitleSection: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-                    let titleView = Text(item.title)
-                        .font(AppTheme.Font.largeTitle)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.7)
-                        .foregroundStyle(.primary)
-                    
-                    if let ns = namespace {
-                        titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
+                    if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
+                        CachedImage(url: url, targetSize: CGSize(width: 500, height: 90), priority: .critical) { _ in
+                        } placeholder: {
+                            Text(item.title)
+                                .font(AppTheme.Font.largeTitle)
+                                .lineLimit(3)
+                                .minimumScaleFactor(0.7)
+                                .foregroundStyle(.primary)
+                        }
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 500, maxHeight: 100, alignment: .leading)
                     } else {
-                        titleView
+                        let titleView = Text(item.title)
+                            .font(AppTheme.Font.largeTitle)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(.primary)
+
+                        if let ns = namespace {
+                            titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
+                        } else {
+                            titleView
+                        }
                     }
-                    
+
                     let creators = item.cachedCreators
                     if !creators.isEmpty {
                         Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
