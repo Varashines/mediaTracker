@@ -35,7 +35,7 @@ struct LibraryEmptyStateView: View {
                 if let actionLabel, let action {
                     Button(action: action) {
                         Text(actionLabel)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.bodyBold)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
                             .background(AppTheme.Colors.accent)

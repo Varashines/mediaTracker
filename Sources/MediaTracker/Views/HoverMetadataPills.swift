@@ -36,7 +36,7 @@ struct HoverMetadataPills: View {
         }
         .padding(.bottom, 12)
         .padding(.horizontal, 8)
-        .animation(AppTheme.Animation.easeInOut, value: isHovered)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
     }
 }
 
@@ -63,6 +63,7 @@ private struct HoverPill: View {
                 Capsule()
                     .stroke(Color.primary.opacity(strokeOpacity), lineWidth: 0.5)
             )
+            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
     }
 
     private var strokeOpacity: Double {

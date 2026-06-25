@@ -1,6 +1,8 @@
 import SwiftData
 import SwiftUI
 
+private let insightsScrollName = "insightsScroll"
+
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -10,12 +12,33 @@ struct InsightsView: View {
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
     @State private var showSpectrum = false
+    @State private var scrollOffset: CGFloat = 0
     @Namespace private var flipNamespace
     var refreshID: Int = 0
 
+    private var backgroundTint: Color {
+        let progress = max(0, min(1, -scrollOffset / 800))
+        let colors: [Color] = [
+            AppTheme.Colors.accent,
+            .pink,
+            .indigo,
+            .orange,
+            .purple
+        ]
+        let segment = progress * CGFloat(colors.count - 1)
+        let idx = Int(segment)
+        let frac = segment - CGFloat(idx)
+        guard idx + 1 < colors.count else {
+            return (colors.last ?? AppTheme.Colors.accent).opacity(0.05)
+        }
+        return colors[idx].opacity(0.06 - Double(frac) * 0.01)
+    }
+
     var body: some View {
         ZStack {
-            AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
+            AppTheme.Colors.background(for: colorScheme)
+                .overlay(backgroundTint)
+                .ignoresSafeArea()
 
             if isLoading {
                 InsightsSkeletonView()
@@ -37,6 +60,8 @@ struct InsightsView: View {
                             }
                         }
 
+                        SectionDivider(color: AppTheme.Colors.accent)
+
                         HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                                 SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: .pink)
@@ -50,17 +75,37 @@ struct InsightsView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                        SectionDivider(color: .pink)
+
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                             SectionHeader(title: "Genre Constellation", icon: "sparkles", iconColor: .indigo)
-                            GenreConstellationView(items: Array(stats.genreDNA.prefix(6)))
+                            GenreConstellationView(items: Array(stats.genreDNA.prefix(8)))
                         }
+
+                        SectionDivider(color: .indigo)
+
                         StudiosNetworksView(stats: stats, modelContext: modelContext)
+
+                        SectionDivider(color: .orange)
+
                         HallOfFameView(stats: stats)
                     }
                     .padding(.vertical, AppTheme.Spacing.xLarge)
                     .frame(maxWidth: .infinity)
+                    .background(alignment: .top) {
+                        GeometryReader { geo in
+                            let offset = geo.frame(in: .named(insightsScrollName)).minY
+                            Color.clear
+                                .preference(key: ScrollOffsetKey.self, value: [insightsScrollName: offset])
+                        }
+                    }
                 }
+                .coordinateSpace(name: insightsScrollName)
                 .scrollBounceBehavior(.always)
+                .onPreferenceChange(ScrollOffsetKey.self) { offsets in
+                    scrollOffset = offsets[insightsScrollName] ?? 0
+                }
             } else if let error = errorMessage {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")

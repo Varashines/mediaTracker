@@ -42,7 +42,7 @@ struct GeneralSection: View {
             SettingsCard(color: .purple) {
                 VStack(spacing: 0) {
                     HStack(spacing: AppTheme.Spacing.smallMedium) {
-                        paletteDot(index: 0, accent: AppTheme.Colors.accent, label: "Standard")
+                        paletteDot(index: 0, accent: Color.accentColor, label: "Standard")
                         paletteDot(index: 1, accent: Color(hex: "#C47A5A") ?? .accentColor, label: "Earth")
                         paletteDot(index: 2, accent: Color(hex: "#7B8CDE") ?? .accentColor, label: "Cool")
                         paletteDot(index: 3, accent: Color(hex: "#10B981") ?? .accentColor, label: "Forest")

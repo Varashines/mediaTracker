@@ -70,6 +70,7 @@ struct ContinueWatchingCarousel: View {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                             .stroke(Color.primary.opacity(0.06), lineWidth: 0.8)
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)

@@ -2,6 +2,28 @@ import SwiftUI
 
 // MARK: - Reusable Decorations
 
+struct SectionDivider: View {
+    let color: Color
+    @State private var hasAppeared = false
+
+    var body: some View {
+        Rectangle()
+            .fill(LinearGradient(
+                colors: [color.opacity(0.35), color.opacity(0.0)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+            .frame(height: 1)
+            .frame(width: hasAppeared ? 200 : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .onAppear {
+                withAnimation(AppTheme.Animation.easeInOut.delay(0.1)) {
+                    hasAppeared = true
+                }
+            }
+    }
+}
+
 struct CuteEmptyState: View {
     let icon: String
     let message: String
@@ -47,6 +69,7 @@ struct ArchetypeBadge: View {
                 Capsule()
                     .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }

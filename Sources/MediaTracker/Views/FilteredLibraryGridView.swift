@@ -139,6 +139,7 @@ struct FilteredLibraryGridView: View {
                     .background(AppTheme.Colors.accent)
                     .clipShape(Capsule())
                     .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 8, y: 4)
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(isLoadingRecommendations)

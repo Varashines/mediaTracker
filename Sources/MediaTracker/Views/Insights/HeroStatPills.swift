@@ -8,7 +8,7 @@ struct HeroStatPills: View {
         let completed = stats.completedMovies + stats.completedTVShows
         let completionRate = total > 0 ? Double(completed) / Double(total) : 0
 
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: AppTheme.Spacing.large), GridItem(.flexible(), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
             StatPill(
                 icon: "film.stack.fill",
                 value: "\(total)",
@@ -48,21 +48,22 @@ struct StatPill: View {
     let detail: String
     let color: Color
     @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            HStack(spacing: AppTheme.Spacing.tiny) {
                 Image(systemName: icon)
-                    .font(AppTheme.Font.heading)
+                    .font(AppTheme.Font.title3)
                     .foregroundStyle(color)
                 Text(label.uppercased())
-                    .font(AppTheme.Font.smallBold)
-                    .kerning(0.8)
+                    .font(AppTheme.Font.caption)
+                    .kerning(AppTheme.Kerning.wide)
                     .foregroundStyle(color.opacity(0.7))
             }
 
             CountUpText(value: value)
-                .font(AppTheme.Font.title)
+                .font(AppTheme.Font.titleLarge)
                 .foregroundStyle(.primary)
 
             Text(detail)
@@ -70,13 +71,29 @@ struct StatPill: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(width: 180, alignment: .leading)
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .padding(.vertical, AppTheme.Spacing.medium)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .fill(color.opacity(colorScheme == .dark ? 0.08 : 0.04))
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .fill(AppTheme.Colors.cardFill(for: colorScheme))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .stroke(color.opacity(colorScheme == .dark ? 0.15 : 0.1), lineWidth: 0.5)
+        )
+        .overlay(alignment: .bottomTrailing) {
+            Image(systemName: icon)
+                .font(.system(size: 40, weight: .ultraLight))
+                .foregroundStyle(color.opacity(colorScheme == .dark ? 0.06 : 0.04))
+                .offset(x: 8, y: 4)
+                .allowsHitTesting(false)
+        }
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .shadow(color: .black.opacity(isHovered ? 0.06 : 0), radius: 8, y: isHovered ? 4 : 0)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
+        }
     }
 }
 

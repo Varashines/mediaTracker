@@ -162,8 +162,8 @@ struct SmartCollectionsHubView: View {
                         showingCreateSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.purple.gradient)
-                            .font(.title3)
+                            .foregroundStyle(AppTheme.Colors.accent.gradient)
+                            .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
                 }
@@ -177,7 +177,7 @@ struct SmartCollectionsHubView: View {
                             showingCreateSheet = true
                         }
                     } else {
-                        ForEach(customSmartCollections) { collection in
+                        ForEach(Array(customSmartCollections.enumerated()), id: \.element.id) { idx, collection in
                             SmartCollectionCard(
                                 collection: collection,
                                 title: collection.name,
@@ -188,6 +188,7 @@ struct SmartCollectionsHubView: View {
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }
+                            .modifier(CardStaggerModifier(index: idx))
                         }
                     }
                 }
@@ -202,8 +203,8 @@ struct SmartCollectionsHubView: View {
                         showingCreateSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.blue.gradient)
-                            .font(.title3)
+                            .foregroundStyle(AppTheme.Colors.accent.gradient)
+                            .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
                 }
@@ -217,7 +218,7 @@ struct SmartCollectionsHubView: View {
                             showingCreateSheet = true
                         }
                     } else {
-                        ForEach(manualCollections) { collection in
+                        ForEach(Array(manualCollections.enumerated()), id: \.element.id) { idx, collection in
                             SmartCollectionCard(
                                 collection: collection,
                                 title: collection.name,
@@ -228,6 +229,7 @@ struct SmartCollectionsHubView: View {
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }
+                            .modifier(CardStaggerModifier(index: idx + customSmartCollections.count))
                         }
                     }
                 }
@@ -276,7 +278,7 @@ struct SmartCollectionsHubView: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
-                    .font(.system(.headline, design: .rounded))
+                    .font(AppTheme.Font.subtitle)
                 Text(subtitle)
                     .font(AppTheme.Font.body)
                     .foregroundStyle(.secondary)
@@ -287,6 +289,7 @@ struct SmartCollectionsHubView: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(color.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [5]))
             }
+            .contentShape(RoundedRectangle(cornerRadius: 24))
         }
         .buttonStyle(.plain)
     }
@@ -423,7 +426,7 @@ private struct SmartCollectionCard: View {
                             .frame(width: 50, height: 50)
                         
                         Image(systemName: icon)
-                            .font(.title2)
+                            .font(AppTheme.Font.title2)
                             .foregroundStyle(accentColor.gradient)
                     }
                     
@@ -440,8 +443,7 @@ private struct SmartCollectionCard: View {
                                 .clipShape(Capsule())
                         } else {
                             Text("0")
-                                .font(.system(.subheadline, design: .rounded))
-                                .fontWeight(.bold)
+                                .font(AppTheme.Font.bodyMedium)
                                 .foregroundStyle(.secondary.opacity(0.4))
                         }
                     } else {
@@ -520,5 +522,22 @@ private struct SmartCollectionCard: View {
                 CreateCollectionSheet(editingCollection: collection)
             }
         }
+    }
+}
+
+private struct CardStaggerModifier: ViewModifier {
+    let index: Int
+    @State private var hasAppeared = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 8)
+            .onAppear {
+                guard !hasAppeared else { return }
+                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 8) * 0.05)) {
+                    hasAppeared = true
+                }
+            }
     }
 }

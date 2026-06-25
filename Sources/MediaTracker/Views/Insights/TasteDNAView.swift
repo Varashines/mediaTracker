@@ -35,54 +35,55 @@ struct TasteDNAView: View {
                 Chart(segments) { seg in
                     SectorMark(
                         angle: .value("Count", seg.value),
-                        innerRadius: .ratio(0.55),
+                        innerRadius: .ratio(0.58),
                         angularInset: 1.5
                     )
                     .foregroundStyle(seg.color)
                     .cornerRadius(4)
                 }
                 .chartLegend(.hidden)
-                .frame(width: 130, height: 130)
+                .frame(width: 150, height: 150)
                 .animation(AppTheme.Animation.chartReveal, value: segments.map(\.value))
 
                 // Center label
-                VStack(spacing: 2) {
+                VStack(spacing: 0) {
                     Text("\(totalRated)")
-                        .font(AppTheme.Font.titleLarge)
-                    Text("Rated")
-                        .font(AppTheme.Font.label)
+                        .font(AppTheme.Font.largeTitle)
+                        .foregroundStyle(.primary)
+                    Text("RATED")
+                        .font(AppTheme.Font.caption2)
+                        .kerning(AppTheme.Kerning.wide)
                         .foregroundStyle(.secondary)
+                }
+
+                if !stats.ratingPersonality.isEmpty {
+                    PersonalityBadge(personality: stats.ratingPersonality)
+                        .offset(y: 90)
                 }
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                if !stats.ratingPersonality.isEmpty {
-                    PersonalityBadge(personality: stats.ratingPersonality)
-                }
-
                 ForEach(segments) { seg in
-                    let pct = totalRated > 0 ? seg.value / Double(totalRated + stats.unratedCount) : 0
-                    tasteLegend(color: seg.color, label: seg.label, count: Int(seg.value), pct: pct)
+                    tasteLegend(color: seg.color, label: seg.label, count: Int(seg.value))
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, AppTheme.Spacing.small)
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
     }
 
-    func tasteLegend(color: Color, label: String, count: Int, pct: Double) -> some View {
+    func tasteLegend(color: Color, label: String, count: Int) -> some View {
         HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 8, height: 8)
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
             Text(label)
                 .font(AppTheme.Font.bodyMedium)
                 .foregroundStyle(.primary)
                 .frame(width: 60, alignment: .leading)
-            Text("\(count)")
-                .font(AppTheme.Font.heading)
+            CountUpText(value: "\(count)")
+                .font(AppTheme.Font.title3)
                 .foregroundStyle(color)
-            Text(String(format: "(%.0f%%)", pct * 100))
-                .font(AppTheme.Font.label)
-                .foregroundStyle(.secondary)
         }
     }
 }

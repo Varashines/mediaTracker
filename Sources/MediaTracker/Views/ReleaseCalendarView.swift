@@ -103,6 +103,7 @@ struct ReleaseCalendarView: View {
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.06))
                     .clipShape(Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             
@@ -130,6 +131,7 @@ struct ReleaseCalendarView: View {
                                 .fill(Color.primary.opacity(0.03))
                         }
                     }
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             
@@ -152,6 +154,7 @@ struct ReleaseCalendarView: View {
                         .padding(.vertical, 6)
                         .background(Color.primary.opacity(0.06))
                         .clipShape(Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .help("Jump to current month")
@@ -166,6 +169,7 @@ struct ReleaseCalendarView: View {
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.06))
                     .clipShape(Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
         }

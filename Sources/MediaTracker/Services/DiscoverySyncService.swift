@@ -3,6 +3,9 @@ import SwiftData
 
 @ModelActor
 actor DiscoverySyncService {
+    /// UserDefaults key for syncLibrary rate-limiting timestamp
+    nonisolated static let lastSyncLibraryTimestampKey = "lastSyncLibraryTimestamp"
+
     private struct AliasRule {
         let target: String
         let sources: Set<String>
@@ -76,6 +79,15 @@ actor DiscoverySyncService {
     func syncLibrary(force: Bool) async {
         let isAsleep = await SleepManager.shared.isAsleep
         guard !isAsleep else { return }
+
+        // Rate-limit: skip full scan if synced within last 30 seconds (unless forced).
+        // This avoids redundant full-table scans during rapid category navigation.
+        if !force {
+            let defaults = UserDefaults.standard
+            let lastSync = defaults.object(forKey: Self.lastSyncLibraryTimestampKey) as? Date ?? .distantPast
+            guard Date().timeIntervalSince(lastSync) > 30 else { return }
+        }
+
         let rules = await fetchAliasRules()
         let (sourceToTarget, targetToLogoSource) = buildAliasMaps(from: rules)
 
@@ -207,7 +219,12 @@ actor DiscoverySyncService {
         }
         
         try? modelContext.save()
-        
+
+        // Record sync timestamp for rate-limiting
+        if !force {
+            await MainActor.run { UserDefaults.standard.set(Date(), forKey: Self.lastSyncLibraryTimestampKey) }
+        }
+
         // 3. Extract missing colors
         await extractMissingColors()
     }
@@ -384,6 +401,21 @@ actor DiscoverySyncService {
                 existing.count += 1
             } else {
                 modelContext.insert(BadgeEntity(label: new, count: 1))
+            }
+        }
+        try? modelContext.save()
+    }
+
+    /// Apply accumulated badge deltas in a single transaction.
+    /// Replaces N individual `onBadgeChanged` calls during bulk operations.
+    func applyBadgeDeltas(_ deltas: [String: Int]) async {
+        for (label, delta) in deltas {
+            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == label })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += delta
+                if existing.count <= 0 { modelContext.delete(existing) }
+            } else if delta > 0 {
+                modelContext.insert(BadgeEntity(label: label, count: delta))
             }
         }
         try? modelContext.save()

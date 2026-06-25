@@ -57,6 +57,7 @@ struct MainLibraryView: View {
                         onCategorySelected: onCategorySelected,
                         onTrendingAdd: onTrendingAdd
                     )
+                    .transition(.opacity)
                 }
 
                 if selectedCategory != .home {
@@ -76,6 +77,7 @@ struct MainLibraryView: View {
                             viewModel: viewModel,
                             onLoadMore: onLoadMore
                         )
+                        .transition(.opacity)
                     } else {
                         Section {
                             LibraryGridSection(
@@ -93,6 +95,7 @@ struct MainLibraryView: View {
                                 viewModel: viewModel,
                                 onLoadMore: onLoadMore
                             )
+                            .transition(.opacity)
                         } header: {
                             VStack(alignment: .leading, spacing: 0) {
                                 LibraryHeaderView(
@@ -108,6 +111,7 @@ struct MainLibraryView: View {
                                 }
                             }
                         }
+                        .transition(.opacity)
                     }
                 }
             }
@@ -118,6 +122,7 @@ struct MainLibraryView: View {
         }
         .scrollBounceBehavior(.always)
         .scrollClipDisabled()
+        .animation(AppTheme.Animation.springSnappy, value: selectedCategory)
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {
                 scrollTask?.cancel()

@@ -34,20 +34,25 @@ struct CategoryRouterView: View {
 
     @ViewBuilder
     private var normalContent: some View {
+        let slideTransition: AnyTransition = .asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        )
+
         if viewModel.filter.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
-            .transition(.opacity)
+            .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .upcoming {
             ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID)
-                .transition(.opacity)
+                .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
-                .transition(.opacity)
+                .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
             SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection, refreshID: refreshID)
-                .transition(.opacity)
+                .transition(slideTransition)
         } else {
             MainLibraryView(
                 items: viewModel.display.displayedItems,
@@ -109,16 +114,22 @@ struct CategoryRouterView: View {
                             AppErrorState.shared.showToast("Added to Library", style: .success)
                             FeedbackManager.shared.trigger(.addToLibrary)
                         }
-                        if let id = id {
+                        if id != nil {
                             await MainActor.run {
-                                viewModelCopy.navigationPath.append(id)
+                                // Refetch from main context to avoid cross-context
+                                // PersistentIdentifier race (crash on property access).
+                                let mainContext = container.mainContext
+                                let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == uniqueID })
+                                if let item = try? mainContext.fetch(descriptor).first {
+                                    viewModelCopy.navigationPath.append(item)
+                                }
                             }
                         }
                     }
                 },
                 viewModel: viewModel
             )
-            .transition(.opacity)
+            .transition(slideTransition)
         }
     }
 

@@ -148,7 +148,7 @@ struct SearchView: View {
                 Image(systemName: "wifi.slash")
                 Text("Offline: showing library results only")
             }
-            .font(.caption.bold())
+            .font(AppTheme.Font.caption)
             .foregroundStyle(.secondary)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
@@ -166,7 +166,7 @@ struct SearchView: View {
                         ProgressView()
                             .controlSize(.small)
                         Text("Searching...")
-                            .font(.caption)
+                            .font(AppTheme.Font.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -189,13 +189,13 @@ struct SearchView: View {
                     Image(systemName: "tray.full.fill")
                         .foregroundStyle(.secondary)
                     Text("In Your Library")
-                        .font(.title3.bold())
+                        .font(AppTheme.Font.title3)
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(searchVM.filteredLocalResults) { metadata in
+                    ForEach(Array(searchVM.filteredLocalResults.enumerated()), id: \.element.id) { idx, metadata in
                         MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
                             isSearchActive = false
                             if let item = modelContext.model(for: metadata.id) as? MediaItem {
@@ -203,7 +203,7 @@ struct SearchView: View {
                             }
                         }
                         .accessibilityAddTraits(.isButton)
-                        .id("local_\(metadata.id)")
+                        .modifier(SearchStaggerModifier(index: idx))
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -222,13 +222,13 @@ struct SearchView: View {
                     Image(systemName: "globe")
                         .foregroundStyle(.secondary)
                     Text("Global Search")
-                        .font(.title3.bold())
+                        .font(AppTheme.Font.title3)
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                    ForEach(combined) { result in
+                    ForEach(Array(combined.enumerated()), id: \.element.id) { idx, result in
                         MediaThumbnailView(result: result, isLocal: false) {
                             searchVM.addMedia(result, modelContext: modelContext) { item in
                                 isSearchActive = false
@@ -236,7 +236,7 @@ struct SearchView: View {
                             }
                         }
                         .accessibilityAddTraits(.isButton)
-                        .id("web_\(result.id)")
+                        .modifier(SearchStaggerModifier(index: idx))
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -244,6 +244,23 @@ struct SearchView: View {
         } else if !searchVM.isSearching && !searchText.isEmpty {
             ContentUnavailableView.search(text: searchText)
         }
+    }
+}
+
+private struct SearchStaggerModifier: ViewModifier {
+    let index: Int
+    @State private var hasAppeared = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 6)
+            .onAppear {
+                guard !hasAppeared else { return }
+                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 6) * 0.04)) {
+                    hasAppeared = true
+                }
+            }
     }
 }
 

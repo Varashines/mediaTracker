@@ -20,6 +20,7 @@ struct HomeViewSections: View {
     @State private var visibleSection: HomeSection? = nil
     @State private var trendingMovies: [MediaSearchResult] = []
     @State private var trendingShows: [MediaSearchResult] = []
+    @State private var hoveredPill: HomeSection? = nil
     @Namespace private var pillNamespace
 
     var body: some View {
@@ -153,7 +154,7 @@ struct HomeViewSections: View {
             .padding(.vertical, 6)
             .background {
                 Capsule()
-                    .fill(isActive ? AppTheme.Colors.accent : Color.primary.opacity(0.06))
+                    .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06)))
                     .overlay {
                         if isActive {
                             Capsule()
@@ -164,8 +165,16 @@ struct HomeViewSections: View {
             }
             .foregroundStyle(isActive ? .white : .primary)
             .clipShape(Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .scaleEffect(!isActive && hoveredPill == section ? 1.03 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: hoveredPill)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) {
+                hoveredPill = hovering ? section : nil
+            }
+        }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }

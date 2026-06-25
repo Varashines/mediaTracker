@@ -102,7 +102,7 @@ struct SidebarNavigation: View {
         }
 
         return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.65)) {
                 selection = item
             }
             FeedbackManager.shared.trigger(.click)
@@ -115,7 +115,7 @@ struct SidebarNavigation: View {
                     .scaleEffect(isSelected ? 1.1 : 1.0)
 
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                    .font(AppTheme.Font.body.weight(isSelected ? .bold : .medium))
                     .foregroundStyle(isSelected ? .white : Color.secondary)
 
                 Spacer()
@@ -135,7 +135,7 @@ struct SidebarNavigation: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(AppTheme.Animation.springSnappy, value: isSelected)
+        .animation(.spring(response: 0.45, dampingFraction: 0.65), value: isSelected)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.microInteraction) {
                 hoveredItem = hovering ? item : nil

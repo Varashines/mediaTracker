@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 // MARK: - Smart Badge Identifier
 
@@ -261,5 +262,56 @@ struct BadgeEngine {
         }
 
         return nil
+    }
+}
+
+// MARK: - Badge Change Delta Buffer
+
+/// Thread-safe accumulator for badge count changes.
+/// Coalesces individual badge changes during bulk operations so they can be
+/// flushed as a single write transaction, eliminating N detached ModelActor tasks.
+private final class BadgeDeltaStore: @unchecked Sendable {
+    private var deltas: [String: Int] = [:]
+    private let lock = OSAllocatedUnfairLock(uncheckedState: ())
+
+    func enqueue(old: String?, new: String?) {
+        lock.withLockUnchecked {
+            if let old, !old.isEmpty {
+                deltas[old, default: 0] -= 1
+                if deltas[old] == 0 { deltas.removeValue(forKey: old) }
+            }
+            if let new, !new.isEmpty {
+                deltas[new, default: 0] += 1
+                if deltas[new] == 0 { deltas.removeValue(forKey: new) }
+            }
+        }
+    }
+
+    func takeSnapshot() -> [String: Int] {
+        lock.withLockUnchecked {
+            let snapshot = deltas
+            deltas = [:]
+            return snapshot
+        }
+    }
+}
+
+extension BadgeEngine {
+    private static let badgeDeltaStore = BadgeDeltaStore()
+
+    /// Enqueue a badge change for batched delivery.
+    /// Thread-safe — can be called from any context without awaiting.
+    nonisolated static func enqueueBadgeChange(old: String?, new: String?) {
+        badgeDeltaStore.enqueue(old: old, new: new)
+    }
+
+    /// Flush all accumulated badge deltas to the database in a single transaction.
+    /// Call this before `context.save()` after any bulk operation that may have
+    /// changed badges (heal, refresh, mark-all-watched, stale badge refresh).
+    static func flushBadgeChanges(container: ModelContainer) async {
+        let deltas = badgeDeltaStore.takeSnapshot()
+        guard !deltas.isEmpty else { return }
+        let sync = DiscoverySyncService(modelContainer: container)
+        await sync.applyBadgeDeltas(deltas)
     }
 }

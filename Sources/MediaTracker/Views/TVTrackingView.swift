@@ -194,10 +194,12 @@ private struct SeasonTab: View {
                         lineWidth: isSelected ? 1.5 : 1)
             }
             .foregroundStyle(isSelected ? Color.primary : .secondary)
+            .contentShape(Capsule())
             .accessibilityLabel("\(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name), \(Int(progress * 100))% watched")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .buttonStyle(.plain)
+        .hoverScaled(.subtle)
     }
 }
 
@@ -329,8 +331,10 @@ private struct SeasonSection: View {
                                     Capsule()
                                         .stroke(isSelected ? accent.opacity(0.25) : .clear, lineWidth: 0.5)
                                 )
+                                .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .hoverScaled(.subtle)
                     }
                 }
 
@@ -355,9 +359,11 @@ private struct SeasonSection: View {
                     )
                     .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(season.totalEpisodesCount == 0)
+                .hoverScaled(.subtle)
             }
             .padding(.horizontal, 4)
 

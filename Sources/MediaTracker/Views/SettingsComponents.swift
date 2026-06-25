@@ -39,14 +39,14 @@ struct SettingsRow<Trailing: View>: View {
                 Spacer()
                 trailing()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppTheme.Spacing.medium)
+            .padding(.vertical, AppTheme.Spacing.small)
             .background {
                 if isHovered {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(.ultraThinMaterial)
                         .allowsHitTesting(false)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, AppTheme.Spacing.tiny)
                 }
             }
             .onHover { hovered in
@@ -59,7 +59,7 @@ struct SettingsRow<Trailing: View>: View {
                 Rectangle()
                     .fill(AppTheme.Colors.strokeDefault(for: scheme))
                     .frame(height: 1)
-                    .padding(.leading, 16)
+                    .padding(.leading, AppTheme.Spacing.medium)
             }
         }
     }
@@ -118,9 +118,10 @@ struct SettingsLabeledRow<Trailing: View>: View {
     var showDivider: Bool = true
     @ViewBuilder var trailing: () -> Trailing
     @Environment(\.colorScheme) private var scheme
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
             if let subtitle {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -140,14 +141,27 @@ struct SettingsLabeledRow<Trailing: View>: View {
                 Spacer()
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .padding(.vertical, AppTheme.Spacing.small)
+        .background {
+            if isHovered {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .allowsHitTesting(false)
+                    .padding(.horizontal, AppTheme.Spacing.tiny)
+            }
+        }
+        .onHover { hovered in
+            withAnimation(AppTheme.Animation.easeInOut) {
+                isHovered = hovered
+            }
+        }
         .overlay(alignment: .bottom) {
             if showDivider {
                 Rectangle()
                     .fill(AppTheme.Colors.strokeDefault(for: scheme))
                     .frame(height: 1)
-                    .padding(.leading, 16)
+                    .padding(.leading, AppTheme.Spacing.medium)
             }
         }
     }
@@ -166,16 +180,17 @@ struct SettingsButton: View {
             Text(title)
                 .font(AppTheme.Font.caption)
                 .foregroundStyle(color)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.micro)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(.ultraThinMaterial)
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .stroke(color.opacity(isHovered ? 0.3 : 0.15), lineWidth: 0.5)
                 }
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
                 .scaleEffect(isHovered ? 1.02 : 1.0)
                 .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
@@ -208,8 +223,8 @@ struct StatusBadge: View {
                 .font(AppTheme.Font.caption2)
                 .foregroundStyle(isActive ? activeColor : inactiveColor)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, AppTheme.Spacing.tiny)
+        .padding(.vertical, AppTheme.Spacing.micro)
         .background((isActive ? activeColor : inactiveColor).opacity(0.08))
         .clipShape(Capsule())
     }

@@ -348,9 +348,11 @@ actor BackgroundDataService {
                 }
             }
             
-            item.syncCachedProperties(force: true)
+            item.syncCachedProperties(force: false)
         }
         
+        // Flush buffered badge changes before the heal save
+        await BadgeEngine.flushBadgeChanges(container: modelContext.container)
         try modelContext.save()
         
         // Phase 7: Global Notification Resync
@@ -537,6 +539,9 @@ actor BackgroundDataService {
                 }
             }
         }
+
+        // Flush buffered badge changes before the batch save
+        await BadgeEngine.flushBadgeChanges(container: modelContext.container)
 
         // Phase 2 Optimization: Batch Save with Robust Error Handling
         do {
@@ -734,6 +739,7 @@ actor BackgroundDataService {
         BadgeEngine.invalidateScan(for: refreshedItem.persistentModelID)
         
         do {
+            await BadgeEngine.flushBadgeChanges(container: modelContext.container)
             try modelContext.save()
             AppLogger.info("✅ Deep Completion: Marked all episodes as watched for \(itemID).", logger: AppLogger.background)
             

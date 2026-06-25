@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// Generic horizontal carousel with the standard fade-in reveal pattern used by
-/// `CastSectionView` and `RecommendationSectionView`. Centralizes the `isVisible`
-/// state, the `LazyHStack` layout, and the `scrollBounceBehavior` so both call
-/// sites stay in sync.
+/// Generic horizontal carousel with a staggered fade-in reveal pattern.
+/// Each item animates with a progressive delay so cards appear in sequence.
 struct AnimatedCarousel<Item: Identifiable, Content: View>: View {
     let items: [Item]
     let spacing: CGFloat
@@ -20,20 +18,19 @@ struct AnimatedCarousel<Item: Identifiable, Content: View>: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: spacing) {
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     content(item)
                         .offset(x: isVisible ? 0 : 20)
                         .opacity(isVisible ? 1 : 0)
+                        .animation(AppTheme.Animation.springGentle.delay(Double(index) * 0.05), value: isVisible)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppTheme.Spacing.compact)
+            .padding(.vertical, AppTheme.Spacing.small)
         }
         .scrollBounceBehavior(.basedOnSize)
         .onAppear {
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isVisible = true
-            }
+            isVisible = true
         }
     }
 }

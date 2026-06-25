@@ -30,17 +30,11 @@ extension MediaItem {
             }
         }
 
-        // Notify DiscoverySyncService about badge changes to keep hub counts accurate
-        let newLabel = storedSmartBadgeLabel
-        if oldLabel != newLabel {
-            if let container = modelContext?.container {
-                let capturedOld = oldLabel
-                let capturedNew = newLabel
-                Task.detached(priority: .background) {
-                    let sync = DiscoverySyncService(modelContainer: container)
-                    await sync.onBadgeChanged(oldBadge: capturedOld, newBadge: capturedNew)
-                }
-            }
+        // Notify DiscoverySyncService about badge changes to keep hub counts accurate.
+        // Changes are buffered and flushed as a single transaction at the next save boundary,
+        // eliminating N detached ModelActor tasks during bulk operations.
+        if oldLabel != storedSmartBadgeLabel {
+            BadgeEngine.enqueueBadgeChange(old: oldLabel, new: storedSmartBadgeLabel)
         }
 
         if let airDate = cachedNextAiringDate ?? releaseDate {
@@ -49,7 +43,7 @@ extension MediaItem {
             self.storedIsUpcoming = false
         }
         // Only rebuild searchable text if source fields may have changed
-        if force || oldLabel != newLabel {
+        if force || oldLabel != storedSmartBadgeLabel {
             updateSearchableText()
         }
     }

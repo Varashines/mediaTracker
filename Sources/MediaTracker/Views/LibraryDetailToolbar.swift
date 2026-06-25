@@ -89,10 +89,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             Image(systemName: "arrow.clockwise")
                 .font(AppTheme.Icon.medium)
                 .frame(width: 28, height: 28)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .clipShape(.capsule)
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .clipShape(.capsule)
         .frame(width: 32, height: 32)
         .help("Sync Library")
     }

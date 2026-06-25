@@ -33,26 +33,44 @@ struct LibraryHeaderView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+            // Page title
+            HStack(spacing: AppTheme.Spacing.small) {
+                Text(pageTitle)
+                    .font(AppTheme.Font.title)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+
+            // Page subtitle
+            if let subtitle = pageSubtitle {
+                Text(subtitle)
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Network filter badge
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
-                
+
                 HStack(spacing: AppTheme.Spacing.tiny) {
                     Text("Filtered by:")
-                        .font(.caption)
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     Text(title)
-                        .font(.caption.weight(.bold))
+                        .font(AppTheme.Font.caption.weight(.bold))
                         .foregroundStyle(AppTheme.Colors.accent)
-                    
+
                     Button { withAnimation(AppTheme.Animation.springSnappy) { onNetworkSelected([]) } } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(AppTheme.Icon.medium)
                             .foregroundStyle(.secondary)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    
+
                     Spacer()
                 }
             }

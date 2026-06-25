@@ -109,6 +109,7 @@ struct StudioAliasManagerView: View {
                                     Capsule().stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 1)
                                 }
                             }
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }

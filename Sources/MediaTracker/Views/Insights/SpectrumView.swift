@@ -3,6 +3,7 @@ import SwiftUI
 struct SpectrumView: View {
     let items: [BarcodeSlice]
     @State private var hoveredItem: BarcodeSlice?
+    @State private var scanPosition: CGFloat = -1
     @Environment(\.colorScheme) private var colorScheme
 
     private var validItems: [BarcodeSlice] {
@@ -88,8 +89,24 @@ struct SpectrumView: View {
                 Spacer(minLength: 0)
             }
             .frame(height: 50)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(LinearGradient(
+                        colors: [.clear, AppTheme.Colors.accent.opacity(0.3), .clear],
+                        startPoint: .top, endPoint: .bottom
+                    ))
+                    .frame(width: 40)
+                    .offset(x: scanPosition)
+                    .blur(radius: 8)
+                    .allowsHitTesting(false)
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Cinema DNA spectrum, \(validItems.count) titles visualized")
+            .onAppear {
+                withAnimation(AppTheme.Animation.easeInOut.delay(0.3).repeatForever(autoreverses: false)) {
+                    scanPosition = 600
+                }
+            }
         }
     }
 

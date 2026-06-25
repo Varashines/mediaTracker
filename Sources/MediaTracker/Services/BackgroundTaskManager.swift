@@ -335,9 +335,10 @@ class BackgroundTaskManager {
                     try Task.checkCancellation()
                     item.syncCachedProperties(now: now)
                 }
+                await BadgeEngine.flushBadgeChanges(container: container)
                 try context.save()
                 
-                // Full recount to fix any drift from concurrent onBadgeChanged tasks
+                // syncLibrary is no longer needed here — badge deltas were flushed above
                 Task.detached(priority: .background) {
                     try? await BackgroundOperationGate.shared.performSync(label: "refreshStaleBadges", container: container) {
                         let sync = DiscoverySyncService(modelContainer: container)

@@ -22,13 +22,13 @@ struct WatchedThisWeek: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: AppTheme.Spacing.large) {
                         ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                                 .fill(Color.secondary.opacity(0.2))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                                         .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
                                 }
-                                .frame(width: 160, height: 240)
+                                .frame(width: AppTheme.Thumbnail.small.width, height: AppTheme.Thumbnail.small.height)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -36,12 +36,15 @@ struct WatchedThisWeek: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
             } else if items.isEmpty {
-                HStack {
+                HStack(spacing: AppTheme.Spacing.small) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(AppTheme.Font.title3)
+                        .foregroundStyle(.green.opacity(0.5))
                     Text("Nothing watched this week")
-                        .font(AppTheme.Font.caption)
+                        .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, AppTheme.Spacing.small)
             } else {

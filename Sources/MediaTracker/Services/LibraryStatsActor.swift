@@ -452,7 +452,7 @@ actor LibraryStatsActor {
             let score = val.affinity(cutoff: 5)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(5)
+        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(7)
 
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
 
@@ -460,7 +460,7 @@ actor LibraryStatsActor {
             let score = val.affinity(cutoff: 3)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(5)
+        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(7)
 
         let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 

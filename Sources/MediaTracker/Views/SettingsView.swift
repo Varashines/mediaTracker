@@ -25,12 +25,24 @@ enum SettingsTab: Int, CaseIterable {
         case .about: "info.circle"
         }
     }
+
+    var fillIcon: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .services: "antenna.radiowaves.left.and.right"
+        case .discovery: "safari.fill"
+        case .data: "externaldrive.fill"
+        case .shortcuts: "command.circle.fill"
+        case .about: "info.circle.fill"
+        }
+    }
 }
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var scheme
     @State private var selectedTab: SettingsTab = .general
+    @State private var hoveredTab: SettingsTab? = nil
     @Namespace private var tabNamespace
 
     var body: some View {
@@ -77,51 +89,53 @@ struct SettingsView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: AppTheme.Spacing.small) {
             ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
                 tabButton(tab: tab)
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.small)
     }
 
     private func tabButton(tab: SettingsTab) -> some View {
         let isSelected = selectedTab == tab
+        let isHovered = hoveredTab == tab
 
         return Button {
             withAnimation(AppTheme.Animation.springSnappy) {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: AppTheme.Spacing.mini) {
-                Image(systemName: tab.icon)
-                    .font(AppTheme.Font.settingsIcon)
-                    .frame(width: AppTheme.Spacing.large, height: AppTheme.Spacing.large)
-
-                Text(tab.label)
-                    .font(AppTheme.Font.label)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppTheme.Spacing.compact)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(AppTheme.Colors.accent.opacity(0.08))
-                        .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
-                }
-            }
-            .contentShape(Rectangle())
-            .accessibilityLabel(tab.label)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            Image(systemName: isSelected ? tab.fillIcon : tab.icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary.opacity(0.5) : .secondary))
+                .frame(width: 38, height: 32)
+                .scaleEffect(isSelected ? 1.05 : 1.0)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Capsule()
+                                .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
+                        )
+                )
+                .clipShape(Capsule())
+                .overlay(
+                    Group {
+                        if isSelected {
+                            Capsule()
+                                .fill(AppTheme.Colors.accent.opacity(0.18))
+                                .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
+                        }
+                    }
+                )
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            if hovering && !isSelected {
-                // subtle hover fill is handled via animated state would require @State per tab
-                // instead we let the native button style handle press feedback
+            withAnimation(AppTheme.Animation.microInteraction) {
+                hoveredTab = hovering ? tab : nil
             }
         }
+        .accessibilityLabel(tab.label)
     }
 }

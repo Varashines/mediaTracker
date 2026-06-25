@@ -50,6 +50,7 @@ struct StatusPicker: View {
                     Capsule()
                         .stroke(accent.opacity(0.3), lineWidth: 0.8)
                 }
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .scaleEffect(isHovered ? 1.04 : 1.0)

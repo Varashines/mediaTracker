@@ -44,6 +44,7 @@ struct DetailView: View {
                         }
                     }
             }
+
         }
     }
 
@@ -82,8 +83,13 @@ struct DetailView: View {
             .coordinateSpace(name: "detailScroll")
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
-            .animation(AppTheme.Animation.easeInOut, value: showDeleteConfirmation)
+            .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
 
+            floatingActionBar
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 16)
+                .saturation(showDeleteConfirmation ? 0.3 : 1)
+                .allowsHitTesting(!showDeleteConfirmation)
         }
         .overlay {
             if showDeleteConfirmation {
@@ -288,7 +294,7 @@ struct DetailView: View {
                 .shimmering()
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: showHeavyContent)
+        .animation(AppTheme.Animation.springGentle, value: showHeavyContent)
     }
 
     @ToolbarContentBuilder
@@ -298,17 +304,19 @@ struct DetailView: View {
                 Button {
                     viewModel.refreshData(force: true)
                 } label: {
-                    if viewModel.isRefreshing {
-                        ProgressView().controlSize(.small)
-                            .frame(width: 28, height: 28)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .frame(width: 28, height: 28)
+                    Group {
+                        if viewModel.isRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
+                    .frame(width: 28, height: 28)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .clipShape(.capsule)
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .background(Capsule().fill(.ultraThinMaterial))
-                .clipShape(.capsule)
                 .frame(width: 32, height: 32)
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
@@ -322,52 +330,17 @@ struct DetailView: View {
                 } label: {
                     Image(systemName: "trash")
                         .frame(width: 28, height: 28)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                        .clipShape(.capsule)
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .background(Capsule().fill(.ultraThinMaterial))
-                .clipShape(.capsule)
                 .frame(width: 32, height: 32)
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .sensoryFeedback(.error, trigger: showDeleteConfirmation)
                 .help("Delete from library")
                 .accessibilityLabel("Delete from library")
                 .accessibilityAddTraits(.isButton)
-
-                if viewModel.trailerKey != nil {
-                    Button { openTrailer() } label: {
-                        Image(systemName: "play.rectangle.fill")
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .clipShape(.capsule)
-                    .frame(width: 32, height: 32)
-                    .help("Play Trailer")
-                    .accessibilityLabel("Play Trailer")
-                }
-
-                Button { showingCollectionPicker = true } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .background(Capsule().fill(.ultraThinMaterial))
-                .clipShape(.capsule)
-                .frame(width: 32, height: 32)
-                .keyboardShortcut("l", modifiers: [.command])
-                .help("Add to Collection")
-                .accessibilityLabel("Add to Collection")
-
-                Button { copyTitle() } label: {
-                    Image(systemName: "doc.on.doc")
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .background(Capsule().fill(.ultraThinMaterial))
-                .clipShape(.capsule)
-                .frame(width: 32, height: 32)
-                .help("Copy Title")
-                .accessibilityLabel("Copy Title")
             }
         }
     }
@@ -384,6 +357,52 @@ struct DetailView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(viewModel.item.title, forType: .string)
         AppErrorState.shared.showToast("Title copied", style: .success)
+    }
+
+    @ViewBuilder
+    private var floatingActionBar: some View {
+        HStack(spacing: 4) {
+            if viewModel.trailerKey != nil {
+                actionChip(
+                    icon: "play.rectangle.fill",
+                    label: "Trailer",
+                    action: openTrailer
+                )
+            }
+
+            actionChip(
+                icon: "folder.badge.plus",
+                label: "Add to Collection",
+                action: { showingCollectionPicker = true }
+            )
+            .keyboardShortcut("l", modifiers: [.command])
+
+            actionChip(
+                icon: "doc.on.doc",
+                label: "Copy Title",
+                action: copyTitle
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+    }
+
+    private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .imageScale(.small)
+                Text(label)
+                    .font(AppTheme.Font.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
     }
 
     @ViewBuilder

@@ -8,6 +8,9 @@ struct WelcomeSheet: View {
     @State private var showTitle = false
     @State private var showDescription = false
     @State private var showButtons = false
+    @State private var isPrimaryHovered = false
+    @State private var isSecondaryHovered = false
+    @State private var isDemoHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,8 +65,14 @@ struct WelcomeSheet: View {
                     .padding(.vertical, 12)
                     .background(AppTheme.Colors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
                 .buttonStyle(.plain)
+                .scaleEffect(isPrimaryHovered ? 1.03 : 1.0)
+                .shadow(color: .black.opacity(isPrimaryHovered ? 0.15 : 0), radius: 8, y: isPrimaryHovered ? 4 : 0)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.springSnappy) { isPrimaryHovered = hovering }
+                }
                 .accessibilityLabel("Get Free TMDB API Key")
 
                 Button {
@@ -73,9 +82,19 @@ struct WelcomeSheet: View {
                     Text("I already have a key")
                         .font(AppTheme.Font.bodyMedium)
                         .foregroundStyle(AppTheme.Colors.accent)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(isSecondaryHovered ? AppTheme.Colors.accent.opacity(0.08) : .clear)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
                 .buttonStyle(.plain)
+                .scaleEffect(isSecondaryHovered ? 1.02 : 1.0)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.springSnappy) { isSecondaryHovered = hovering }
+                }
                 .accessibilityLabel("I already have a key")
 
                 Button {
@@ -85,9 +104,19 @@ struct WelcomeSheet: View {
                     Text("Explore in Demo Mode")
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(isDemoHovered ? Color.primary.opacity(0.06) : .clear)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
                 .buttonStyle(.plain)
+                .scaleEffect(isDemoHovered ? 1.02 : 1.0)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.springSnappy) { isDemoHovered = hovering }
+                }
                 .accessibilityLabel("Explore in Demo Mode")
             }
             .opacity(showButtons ? 1 : 0)

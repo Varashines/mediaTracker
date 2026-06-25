@@ -103,12 +103,13 @@ struct LibraryFilterBar: View {
                     }
                 }
             }
-            .overlay {
-                Capsule()
-                    .stroke(active ? AppTheme.Colors.accent.opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
+                .overlay {
+                    Capsule()
+                        .stroke(active ? AppTheme.Colors.accent.opacity(0.2) : .primary.opacity(0.05), lineWidth: 1)
+                }
+                .contentShape(Capsule())
             }
-        }
-        .buttonStyle(.plain)
+            .buttonStyle(.plain)
         .accessibilityLabel(active ? "\(title) (active)" : title)
     }
     

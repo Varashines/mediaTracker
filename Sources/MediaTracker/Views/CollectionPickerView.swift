@@ -4,29 +4,31 @@ import SwiftData
 struct CollectionPickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name) private var collections: [MediaCollection]
     let item: MediaItem
+    @State private var isDoneHovered = false
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: AppTheme.Spacing.large) {
             Text("Add to Collection")
-                .font(.title2.bold())
+                .font(AppTheme.Font.title3)
             
             if collections.isEmpty {
-                VStack(spacing: 16) {
+                VStack(spacing: AppTheme.Spacing.medium) {
                     Image(systemName: "folder.badge.plus")
                         .font(.largeTitle)
                         .foregroundStyle(.secondary)
                     Text("No collections found.")
                         .foregroundStyle(.secondary)
                     Text("Create one from the My Collections hub.")
-                        .font(.caption)
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 40)
             } else {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: AppTheme.Spacing.small) {
                         ForEach(collections) { collection in
                             CollectionToggleRow(collection: collection, item: item)
                         }
@@ -36,17 +38,25 @@ struct CollectionPickerView: View {
                 .scrollBounceBehavior(.basedOnSize)
             }
             
-            Button("Done") {
+            Button {
                 dismiss()
+            } label: {
+                Text("Done")
+                    .padding(.horizontal, 40)
+                    .padding(.vertical, 12)
+                    .background(AppTheme.Colors.accent)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 40)
-            .padding(.vertical, 12)
-            .background(AppTheme.Colors.accent)
-            .foregroundStyle(.white)
-            .cornerRadius(AppTheme.Radius.medium)
+            .scaleEffect(isDoneHovered ? 1.03 : 1.0)
+            .shadow(color: .black.opacity(isDoneHovered ? 0.12 : 0), radius: 6, y: isDoneHovered ? 3 : 0)
+            .onHover { hovering in
+                withAnimation(AppTheme.Animation.springSnappy) { isDoneHovered = hovering }
+            }
         }
-        .padding(32)
+        .padding(AppTheme.Spacing.xLarge)
         .adaptiveBackground()
     }
 }
@@ -54,6 +64,7 @@ struct CollectionPickerView: View {
 struct CollectionToggleRow: View {
     let collection: MediaCollection
     let item: MediaItem
+    @State private var isHovered = false
     
     var isInCollection: Bool {
         item.collections.contains(where: { $0.id == collection.id })
@@ -68,24 +79,31 @@ struct CollectionToggleRow: View {
                     .foregroundStyle(.blue)
                     .frame(width: 24)
                 Text(collection.name)
+                    .font(AppTheme.Font.body)
                 Spacer()
                 Image(systemName: isInCollection ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isInCollection ? .blue : .secondary)
             }
-            .padding()
-            .background(Color.primary.opacity(0.05))
-            .cornerRadius(AppTheme.Radius.medium)
+            .padding(AppTheme.Spacing.small)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                    .fill(isHovered ? Color.primary.opacity(0.06) : Color.primary.opacity(0.03))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
+        }
         .accessibilityLabel("\(collection.name), \(isInCollection ? "in collection" : "not in collection")")
         .accessibilityHint("Double tap to toggle")
     }
     
     private func toggle() {
         if isInCollection {
-            // Clean up completedItemIDs BEFORE removing from collection
             collection.completedItemIDs.removeAll { $0 == item.id }
-            // Only mutate one side of the inverse relationship — SwiftData syncs the other
             item.collections.removeAll(where: { $0.id == collection.id })
         } else {
             item.collections.append(collection)
