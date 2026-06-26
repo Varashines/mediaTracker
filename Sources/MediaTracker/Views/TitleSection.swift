@@ -15,7 +15,7 @@ struct TitleSection: View {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
                     if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
-                        CachedImage(url: url, targetSize: CGSize(width: 500, height: 90), priority: .critical) { _ in
+                        CachedImage(url: url, targetSize: CGSize(width: 600, height: 150), priority: .critical) { _ in
                         } placeholder: {
                             Text(item.title)
                                 .font(AppTheme.Font.largeTitle)
@@ -24,7 +24,12 @@ struct TitleSection: View {
                                 .foregroundStyle(.primary)
                         }
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 500, maxHeight: 100, alignment: .leading)
+                        .frame(maxHeight: 110, alignment: .leading)
+                        .padding(.vertical, AppTheme.Spacing.mini)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                                .fill(colorScheme == .dark ? .clear : themeColor.opacity(0.08))
+                        )
                     } else {
                         let titleView = Text(item.title)
                             .font(AppTheme.Font.largeTitle)

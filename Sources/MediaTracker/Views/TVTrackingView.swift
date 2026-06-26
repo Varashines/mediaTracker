@@ -307,34 +307,39 @@ private struct SeasonSection: View {
                 if showRangePills {
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    ForEach(episodeRanges.indices, id: \.self) { index in
-                        let range = episodeRanges[index]
-                        let rangeStart = range.lowerBound
-                        let rangeEnd = range.upperBound
-                        let isSelected = selectedRangeStart == rangeStart
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(episodeRanges.indices, id: \.self) { index in
+                                let range = episodeRanges[index]
+                                let rangeStart = range.lowerBound
+                                let rangeEnd = range.upperBound
+                                let isSelected = selectedRangeStart == rangeStart
 
-                        Button {
-                            withAnimation(AppTheme.Animation.springSnappy) {
-                                selectedRangeStart = rangeStart
+                                Button {
+                                    withAnimation(AppTheme.Animation.springSnappy) {
+                                        selectedRangeStart = rangeStart
+                                    }
+                                } label: {
+                                    Text("\(rangeStart)-\(rangeEnd)")
+                                        .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .foregroundStyle(isSelected ? accent : .secondary)
+                                        .background(
+                                            Capsule()
+                                                .fill(isSelected ? accent.opacity(0.12) : Color.primary.opacity(0.04))
+                                        )
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(isSelected ? accent.opacity(0.25) : .clear, lineWidth: 0.5)
+                                        )
+                                        .contentShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .hoverScaled(.subtle)
                             }
-                        } label: {
-                            Text("\(rangeStart)-\(rangeEnd)")
-                                .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .foregroundStyle(isSelected ? accent : .secondary)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? accent.opacity(0.12) : Color.primary.opacity(0.04))
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(isSelected ? accent.opacity(0.25) : .clear, lineWidth: 0.5)
-                                )
-                                .contentShape(Capsule())
                         }
-                        .buttonStyle(.plain)
-                        .hoverScaled(.subtle)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
