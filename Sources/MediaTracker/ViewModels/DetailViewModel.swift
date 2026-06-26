@@ -75,6 +75,18 @@ class DetailViewModel {
         let scheme: ColorScheme = isDark ? .dark : .light
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
     }
+
+    var nextEpisodeToWatch: TVEpisode? {
+        guard let tv = item.tvShowDetails else { return nil }
+        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        for season in sortedSeasons where season.seasonNumber > 0 {
+            let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
+            if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
+                return next
+            }
+        }
+        return nil
+    }
     
     private var needsOMDBData: Bool {
         let apiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? ""

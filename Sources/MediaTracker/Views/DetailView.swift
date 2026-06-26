@@ -13,6 +13,8 @@ struct DetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
     @State private var showConfetti = false
+    @State private var isActionBarVisible = true
+    @State private var lastScrollOffset: CGFloat = 0
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -52,10 +54,28 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             let p = viewModel.vibrantThemeColor
+            let baseBackground = AppTheme.Colors.background(for: colorScheme)
 
-            AppTheme.Colors.background(for: colorScheme)
-                .overlay(p.opacity(colorScheme == .dark ? 0.15 : 0.12))
-                .ignoresSafeArea()
+            ZStack {
+                baseBackground
+                
+                GeometryReader { geo in
+                    ZStack {
+                        Circle()
+                            .fill(p.opacity(colorScheme == .dark ? 0.35 : 0.25))
+                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
+                            .offset(x: -geo.size.width * 0.2, y: -geo.size.width * 0.3)
+                        
+                        Circle()
+                            .fill(viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
+                            .frame(width: geo.size.width * 0.6, height: geo.size.width * 0.6)
+                            .offset(x: geo.size.width * 0.4, y: -geo.size.width * 0.1)
+                    }
+                    .blur(radius: 80)
+                }
+            }
+            .ignoresSafeArea()
+
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
@@ -65,9 +85,22 @@ struct DetailView: View {
                                 Color.clear
                                     .onChange(of: frame.minY) { _, newValue in
                                         showNavTitle = newValue < -50
+                                        
+                                        let delta = newValue - lastScrollOffset
+                                        if delta < -8 { // Scrolling down
+                                            withAnimation(AppTheme.Animation.springSnappy) {
+                                                isActionBarVisible = false
+                                            }
+                                        } else if delta > 8 || newValue > -50 { // Scrolling up or near top
+                                            withAnimation(AppTheme.Animation.springSnappy) {
+                                                isActionBarVisible = true
+                                            }
+                                        }
+                                        lastScrollOffset = newValue
                                     }
                                     .onAppear {
                                         showNavTitle = frame.minY < -50
+                                        lastScrollOffset = frame.minY
                                     }
                             }
                         }
@@ -86,10 +119,13 @@ struct DetailView: View {
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
 
             floatingActionBar
+                .offset(y: isActionBarVisible ? 0 : 60)
+                .opacity(isActionBarVisible ? 1.0 : 0.0)
+                .animation(AppTheme.Animation.springGentle, value: isActionBarVisible)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 16)
                 .saturation(showDeleteConfirmation ? 0.3 : 1)
-                .allowsHitTesting(!showDeleteConfirmation)
+                .allowsHitTesting(!showDeleteConfirmation && isActionBarVisible)
         }
         .overlay {
             if showDeleteConfirmation {
@@ -208,6 +244,47 @@ struct DetailView: View {
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
+                if viewModel.item.type == .tvShow, let nextEpisode = viewModel.nextEpisodeToWatch {
+                    ModularSection(title: "Next Up to Watch", icon: "play.circle.fill", color: effectiveThemeColor) {
+                        HStack(spacing: AppTheme.Spacing.medium) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("SEASON \(nextEpisode.seasonNumber), EPISODE \(nextEpisode.episodeNumber)".uppercased())
+                                    .font(AppTheme.Font.caption2)
+                                    .kerning(AppTheme.Kerning.wide)
+                                    .foregroundStyle(.secondary)
+                                
+                                Text(nextEpisode.name)
+                                    .font(AppTheme.Font.bodyBold)
+                                    .foregroundStyle(.primary)
+                                
+                                if !nextEpisode.overview.isEmpty {
+                                    Text(nextEpisode.overview)
+                                        .font(AppTheme.Font.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button {
+                                viewModel.markNextEpisodeWatched()
+                                FeedbackManager.shared.trigger(.markWatched)
+                                AppErrorState.shared.showToast("Marked S\(nextEpisode.seasonNumber)E\(nextEpisode.episodeNumber) as watched", style: .success)
+                            } label: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(AppTheme.Spacing.medium)
+                        .background(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+                    }
+                }
+
                 // 1. TV TRACKING (Modular Card)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
                     ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {

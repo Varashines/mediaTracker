@@ -49,6 +49,20 @@ extension Color {
         return luminance > 0.5
     }
 
+    var isNearlyWhite: Bool {
+        guard let rgbColor = NSColor(self).usingColorSpace(.sRGB) else { return false }
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        rgbColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        let maxVal = max(r, g, b)
+        let minVal = min(r, g, b)
+        let saturation = maxVal > 0 ? (maxVal - minVal) / maxVal : 0
+        return luminance > 0.75 && saturation < 0.2
+    }
+
     init?(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
@@ -301,6 +315,15 @@ extension View {
     func toolbarTitleMenuIfAvailable<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
         if #available(macOS 15, *) {
             self.toolbarTitleMenu(content: content)
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder
+    func colorInvert(_ active: Bool) -> some View {
+        if active {
+            self.colorInvert()
         } else {
             self
         }

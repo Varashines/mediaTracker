@@ -634,7 +634,7 @@ struct ThumbnailPosterLayer: View {
                 .frame(width: width, height: height)
                 .clipped()
 
-                if let ns = namespace, !itemID.isEmpty {
+                if namespace != nil, !itemID.isEmpty {
                     content
                 } else {
                     content

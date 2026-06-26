@@ -585,19 +585,6 @@ actor LibraryStatsActor {
             return url
         }
 
-        if let path = try? await APIClient.shared.searchPerson(query: name) {
-            let fullURL = APIClient.tmdbImageURL(path: path, size: "w185") ?? ""
-
-            if let items = try? modelContext.fetch(cacheDescriptor), let existing = items.first {
-                return existing.profileURL
-            }
-
-            let newEntity = PersonImageEntity(name: name, profileURL: fullURL)
-            modelContext.insert(newEntity)
-            try? modelContext.save()
-            return fullURL
-        }
-
         return nil
     }
 }

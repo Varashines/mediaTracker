@@ -8,13 +8,21 @@ struct TitleSection: View {
     @Environment(\.colorScheme) var colorScheme
 
 
+    @State private var isLogoLight = false
+
     var body: some View {
         if item.modelContext != nil {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-                    if colorScheme == .dark, let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
-                        CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { _ in
+                    if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
+                        CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
+                            Task {
+                                let dominant = await ColorExtractor.dominantColor(from: cgImage)
+                                await MainActor.run {
+                                    self.isLogoLight = dominant.isNearlyWhite
+                                }
+                            }
                         } placeholder: {
                             Text(item.title)
                                 .font(AppTheme.Font.largeTitle)
@@ -24,6 +32,7 @@ struct TitleSection: View {
                         }
                         .aspectRatio(contentMode: .fit)
                         .frame(maxHeight: 110, alignment: .leading)
+                        .colorInvert(colorScheme == .light && isLogoLight)
                     } else {
                         Text(item.title)
                             .font(AppTheme.Font.largeTitle)

@@ -82,13 +82,6 @@ actor TasteActor {
             return url
         }
 
-        if let path = try? await APIClient.shared.searchPerson(query: name) {
-            let fullURL = APIClient.tmdbImageURL(path: path, size: "w185") ?? ""
-            modelContext.insert(PersonImageEntity(name: name, profileURL: fullURL))
-            try? modelContext.save()
-            return fullURL
-        }
-
         return nil
     }
 
