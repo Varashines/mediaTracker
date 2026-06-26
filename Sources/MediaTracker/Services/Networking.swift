@@ -565,7 +565,7 @@ actor APIClient {
         guard let logos else { return [] }
         return logos
             .filter { $0.iso_639_1 == "en" || $0.iso_639_1 == nil }
-            .compactMap { Self.tmdbImageURL(path: $0.file_path, size: "w500") }
+            .compactMap { Self.tmdbImageURL(path: $0.file_path, size: "w780") }
             .sorted { $0.hasSuffix(".svg") && !$1.hasSuffix(".svg") }
     }
 

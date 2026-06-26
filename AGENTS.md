@@ -1,16 +1,18 @@
 # MediaTracker
 
-Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 15+, Swift 6.0 strict concurrency.
+Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 14+, Swift 6.0 strict concurrency.
 
 ## Build & Test
 
 ```bash
 swift build                          # debug build
 swift build -c release               # release build
-swift test                           # run all tests (172 tests, XCTest)
+swift test                           # run all tests (79 tests, XCTest)
 swift test --filter <TestCase>       # run single test class
+swift test --filter "BadgeEngineTests|DetailViewModelTests"  # run multiple test classes
 ```
 
+**Note**: `DiscoverySyncServiceTests/testNetworkCountDeduplication` is flaky in isolation — it passes alone but crashes during full suite runs due to a container deallocation race. Do not treat it as a real failure.
 
 ## Architecture
 
@@ -47,7 +49,7 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - Close overlays first, then dismiss after delay (`DispatchQueue.main.asyncAfter(deadline: .now() + 0.25)`)
 - Defer `MediaStateService.postMediaStateChanged()` until after dismiss animation completes
 - Use `AppTheme.Animation.springGentle` or `.springSnappy`
-- **Transition Delay for Progressive Content**: For detailed/heavy statistical screens (e.g., `CinephileLabView`), use a sleep of `try? await Task.sleep(nanoseconds: 350_000_000)` (350ms) to allow the macOS navigation slide-in animation to complete showing a shimmering skeleton (`.shimmering()`) before rendering the final layout.
+- **Transition Delay for Progressive Content**: For detailed/heavy statistical screens (e.g., `InsightsView`), use a sleep of `try? await Task.sleep(nanoseconds: 350_000_000)` (350ms) to allow the macOS navigation slide-in animation to complete showing a shimmering skeleton (`.shimmering()`) before rendering the final layout.
 
 ### Theming
 - Accent colors via `AppTheme.Colors.accent` (reads dynamically from `AppThemeCoordinator.shared.accent`)
@@ -55,12 +57,24 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - Card fills via `AppTheme.Colors.cardFill(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.cardFill`)
 - DetailView uses `AppTheme.Colors.background(for: colorScheme)` — integrates custom theme backgrounds with vibrant poster overlays
 - DiscoveryCard uses network's own theme color, not the global accent
-- **Custom Palettes**: Supports standard Accent (0), Earth Tones (1), and Cool Tones (2) resolved and propagated dynamically via the `@Observable AppThemeCoordinator`. Apply these to views using the `.adaptiveBackground()` modifier.
+- **Custom Palettes**: Supports standard Accent (0), Earth Tones (1), Cool Tones (2), Forest (3), Ocean (4), Dusk (5), and Midnight (6) resolved and propagated dynamically via the `@Observable AppThemeCoordinator`. Apply these to views using the `.adaptiveBackground()` modifier.
 - **Layout Squeezing Constraint**: In Settings panels, avoid horizontal layouts (side-by-side labels and wide pickers) that cause label text to wrap/clipping. Stack forms vertically (labels above pickers) to prevent truncation.
 - **Theme Transition Delay Bug**: SwiftUI on macOS has a known issue where dynamically transitioning `.preferredColorScheme` from a concrete value (`.light`/`.dark`) to `nil` (to follow the system) fails to immediately update the environment's `\.colorScheme`.
   - *Solution*: In `App.swift`, we subscribe to system appearance changes via `NSApp.publisher(for: \.effectiveAppearance)`. When the theme preference is set to System/Auto (`0`), we compute and return the concrete `systemColorScheme` (either `.dark` or `.light`) rather than `nil`. This forces SwiftUI to immediately redraw the view hierarchy without any lag.
 - **Reactive Theme & Palette Updates**: Static color queries normally do not register SwiftUI layout dependencies.
   - *Solution*: `AppTheme.Colors` properties read from the `@Observable @MainActor class AppThemeCoordinator`, which observes `UserDefaults.didChangeNotification`. When preference changes are detected, the coordinator updates its reactive properties, instantly forcing SwiftUI to redraw any view referencing these color tokens.
+
+### Button Hit-Testing
+- **`.buttonStyle(.plain)` strips hit targets** — buttons only respond to taps on their label content, not the padded area. Always add `.contentShape(Capsule())` or `.contentShape(Rectangle())` after padding/background on button labels. This affects ~40 buttons across the app.
+
+### SVG Logo Support
+- `ImageCache.swift` uses `NSImage(data:)` to render SVGs (macOS 14+ private API `_NSSVGImageRep`). When `CGImageSource` fails for SVG data, it falls back to `renderSVGToCGImage` via NSImage.
+- `Networking.swift` sorts SVGs first in `processLogoURLs()` and fetches at `w780` resolution for crisp display.
+- `TitleSection.swift` displays logos at `CGSize(width: 780, height: 185)` — matched to source resolution to avoid upscale blur.
+
+### Navigation Transitions
+- **`matchedGeometryEffect` does NOT work with NavigationStack push/pop on macOS** — the source view is not preserved during the push animation. The only official solution is `.navigationTransition(.zoom(...))` which is iOS-only.
+- The hero poster transition from grid to detail view currently uses the default NavigationStack slide. The `matchedGeometryEffect` on poster views is wired but inactive for push — it only animates during pop.
 
 ### Keyboard Shortcuts & Interactions
 - **Contextual Shortcuts**: The spacebar shortcut (`.keyboardShortcut(.space, modifiers: [])`) in the detail view is contextual:
@@ -76,11 +90,3 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - `GlassCard` — material fill + stroke container
 - `PillBadge` — capsule badge with icon + text
 - `safeSave(context)` — error-handled save in MainActor context
-
-## Skills (`.opencode/skills/`)
-
-Four skills loaded on-demand by the agent:
-- `swift-style` — AppTheme constants, naming, view patterns
-- `swiftdata-patterns` — model conventions, context safety, save/delete patterns
-- `animation-debug` — prevent jitter, proper dismiss sequences
-- `swift-testing` — XCTest patterns, in-memory container setup
