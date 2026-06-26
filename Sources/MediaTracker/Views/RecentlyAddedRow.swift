@@ -4,6 +4,7 @@ import SwiftData
 struct RecentlyAddedRow: View {
     let items: [MediaThumbnailMetadata]
     let isFastScrolling: Bool
+    let namespace: Namespace.ID
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -12,7 +13,7 @@ struct RecentlyAddedRow: View {
                 LazyHStack(spacing: 20) {
                     ForEach(items) { metadata in
                         NavigationLink(value: metadata.id) {
-                            MediaThumbnailView(metadata: metadata, mode: .grid, isFastScrolling: isFastScrolling)
+                            MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
                                 .equatable()
                                 .id(metadata.versionHash)
                         }

@@ -73,7 +73,7 @@ struct SettingsSectionHeader: View {
     var color: Color = .primary
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: AppTheme.Spacing.mini) {
             if let icon {
                 Image(systemName: icon)
                     .font(AppTheme.Font.caption)
@@ -215,10 +215,10 @@ struct StatusBadge: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: AppTheme.Spacing.mini) {
             Circle()
                 .fill(isActive ? activeColor : inactiveColor)
-                .frame(width: 5, height: 5)
+                .frame(width: AppTheme.Spacing.mini, height: AppTheme.Spacing.mini)
             Text(text)
                 .font(AppTheme.Font.caption2)
                 .foregroundStyle(isActive ? activeColor : inactiveColor)

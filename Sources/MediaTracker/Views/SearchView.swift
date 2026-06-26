@@ -61,7 +61,6 @@ struct SearchView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Search movies and shows")
-        .background(Color.clear)
         .searchSuggestions {
             if searchText.isEmpty {
                 ForEach(recentSearches.prefix(10), id: \.self) { query in
@@ -159,7 +158,7 @@ struct SearchView: View {
     @ViewBuilder
     private var resultsScrollView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 40) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.pageMargin) {
                 if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
                     HStack {
                         Spacer()
@@ -170,13 +169,13 @@ struct SearchView: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
-                    .padding(.vertical, 40)
+                    .padding(.vertical, AppTheme.Spacing.compact)
                 } else {
                     localResultsSection
                     webResultsSection
                 }
             }
-            .padding(.vertical, 30)
+            .padding(.vertical, AppTheme.Spacing.xLarge)
         }
         .scrollBounceBehavior(.basedOnSize)
     }

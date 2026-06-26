@@ -3,7 +3,6 @@ import SwiftUI
 struct PosterView: View {
     let item: MediaItem
     let themeColor: Color
-    var namespace: Namespace.ID? = nil
 
     private let posterFrame = CGSize(width: 260, height: 390)
     @State private var glowPulse = false
@@ -21,25 +20,11 @@ struct PosterView: View {
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: glowPulse)
                 
-                let content = CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
-                    } placeholder: {
-                        Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: posterFrame.width, height: posterFrame.height)
-                    .clipped()
-                
-                Group {
-                    if let ns = namespace {
-                        content
-                            .matchedGeometryEffect(id: "poster_\(item.id)", in: ns)
-                            .background {
-                                Color.clear.matchedGeometryEffect(id: "poster_bg_\(item.id)", in: ns)
-                            }
-                    } else {
-                        content
-                    }
+                CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
+                } placeholder: {
+                    Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
                 }
+                .aspectRatio(contentMode: .fill)
                 .frame(width: posterFrame.width, height: posterFrame.height)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
                 .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)

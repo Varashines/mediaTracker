@@ -49,7 +49,7 @@ struct SmartCollectionsHubView: View {
             VStack(alignment: .leading, spacing: 35) {
                 // 1. SYSTEM SMART COLLECTIONS
                 sectionHeaderMini("System Intelligence")
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, 40)
 
                 Grid(alignment: .leading, horizontalSpacing: 25, verticalSpacing: 25) {
@@ -151,7 +151,7 @@ struct SmartCollectionsHubView: View {
                             .gridCellUnsizedAxes([.horizontal, .vertical])
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 
                 // 2. CUSTOM SMART PLAYLISTS
                 HStack {
@@ -167,7 +167,7 @@ struct SmartCollectionsHubView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
@@ -192,7 +192,7 @@ struct SmartCollectionsHubView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                 // 3. MANUAL COLLECTIONS
                 HStack {
@@ -208,7 +208,7 @@ struct SmartCollectionsHubView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
@@ -233,7 +233,7 @@ struct SmartCollectionsHubView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 
                 Spacer(minLength: 50)
             }
@@ -286,10 +286,10 @@ struct SmartCollectionsHubView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                     .stroke(color.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [5]))
             }
-            .contentShape(RoundedRectangle(cornerRadius: 24))
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         }
         .buttonStyle(.plain)
     }
@@ -467,15 +467,15 @@ private struct SmartCollectionCard: View {
             }
             .padding(16)
             .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
                     .fill(.thinMaterial)
                     .background {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
                             .fill(Color.primary.opacity(isHovered ? 0.04 : 0.015))
                     }
                     .shadow(color: Color.black.opacity(isHovered ? 0.06 : 0), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
                             .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.05), lineWidth: 0.8)
                     }
             }

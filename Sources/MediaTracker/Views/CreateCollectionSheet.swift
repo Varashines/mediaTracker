@@ -57,7 +57,7 @@ struct CreateCollectionSheet: View {
     var body: some View {
         VStack(spacing: 24) {
             Text(editingCollection == nil ? "New Collection" : "Edit Collection")
-                .font(.system(.title2, design: .rounded)).bold()
+                .font(AppTheme.Font.title2)
             
             VStack(alignment: .leading, spacing: 20) {
                 // Name Input
@@ -87,7 +87,7 @@ struct CreateCollectionSheet: View {
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Smart Playlist")
-                                .font(.system(.headline, design: .rounded))
+                                .font(AppTheme.Font.heading)
                             Text("Dynamic rules to group media.")
                                 .font(AppTheme.Font.caption)
                                 .foregroundStyle(.secondary)
@@ -117,7 +117,7 @@ struct CreateCollectionSheet: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Color.primary.opacity(0.05))
-                            .cornerRadius(10)
+                            .cornerRadius(AppTheme.Radius.small)
                             .frame(width: 180)
                     }
                     
@@ -269,7 +269,7 @@ struct IconPickerGridView: View {
                             .frame(width: 44, height: 44)
                             .background(selectedIcon == iconName ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
                             .foregroundStyle(selectedIcon == iconName ? .white : .primary)
-                            .cornerRadius(10)
+                            .cornerRadius(AppTheme.Radius.small)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(iconName)

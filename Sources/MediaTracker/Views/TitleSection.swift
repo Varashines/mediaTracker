@@ -5,7 +5,6 @@ struct TitleSection: View {
     @Bindable var item: MediaItem
     let themeColor: Color
     var onStatusChange: ((MediaState?) -> Void)?
-    var namespace: Namespace.ID? = nil
     @Environment(\.colorScheme) var colorScheme
 
 
@@ -14,7 +13,7 @@ struct TitleSection: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-                    if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
+                    if colorScheme == .dark, let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
                         CachedImage(url: url, targetSize: CGSize(width: 600, height: 150), priority: .critical) { _ in
                         } placeholder: {
                             Text(item.title)
@@ -25,23 +24,12 @@ struct TitleSection: View {
                         }
                         .aspectRatio(contentMode: .fit)
                         .frame(maxHeight: 110, alignment: .leading)
-                        .padding(.vertical, AppTheme.Spacing.mini)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                                .fill(colorScheme == .dark ? .clear : themeColor.opacity(0.08))
-                        )
                     } else {
-                        let titleView = Text(item.title)
+                        Text(item.title)
                             .font(AppTheme.Font.largeTitle)
                             .lineLimit(3)
                             .minimumScaleFactor(0.7)
                             .foregroundStyle(.primary)
-
-                        if let ns = namespace {
-                            titleView.matchedGeometryEffect(id: "title_\(item.id)", in: ns)
-                        } else {
-                            titleView
-                        }
                     }
 
                     let creators = item.cachedCreators

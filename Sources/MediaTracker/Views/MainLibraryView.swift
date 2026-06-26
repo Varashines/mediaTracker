@@ -98,11 +98,13 @@ struct MainLibraryView: View {
                             .transition(.opacity)
                         } header: {
                             VStack(alignment: .leading, spacing: 0) {
-                                LibraryHeaderView(
-                                    selectedCategory: selectedCategory,
-                                    selectedNetworks: selectedNetworks, isCategoryPage: isCategoryPage,
-                                    onNetworkSelected: onNetworkSelected, onBack: onBack,
-                                    viewModel: viewModel)
+                                if let networks = selectedNetworks, !networks.isEmpty {
+                                    LibraryHeaderView(
+                                        selectedCategory: selectedCategory,
+                                        selectedNetworks: networks, isCategoryPage: isCategoryPage,
+                                        onNetworkSelected: onNetworkSelected, onBack: onBack,
+                                        viewModel: viewModel)
+                                }
 
                                 if showsFilterBar {
                                     LibraryFilterBar(viewModel: viewModel)

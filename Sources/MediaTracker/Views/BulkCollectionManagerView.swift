@@ -31,9 +31,9 @@ struct BulkCollectionManagerView: View {
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Manage Items")
-                        .font(.title3.bold())
+                        .font(AppTheme.Font.title3)
                     Text("Add or remove items from '\(collection.name)'")
-                        .font(.caption)
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -51,8 +51,8 @@ struct BulkCollectionManagerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(Color.primary.opacity(0.05))
-                .cornerRadius(10)
-                .padding(.horizontal, 24)
+                .cornerRadius(AppTheme.Radius.small)
+                .padding(.horizontal, AppTheme.Spacing.medium)
                 .padding(.bottom, 12)
                 
                 if isLoading {

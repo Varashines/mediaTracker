@@ -272,7 +272,9 @@ struct MediaThumbnailView: View, Equatable {
                 type: type,
                 isFastScrolling: isFastScrolling,
                 width: width,
-                height: height
+                height: height,
+                namespace: namespace,
+                itemID: capturedItemID
             )
 
             // 2. Hover Metadata Pills (Floating capsules)
@@ -331,21 +333,8 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
 
-        let itemIDString: String = {
-            if let id = capturedID { return "\(id)" }
-            return result?.id ?? ""
-        }()
-
         ZStack {
-            if let ns = namespace, mode == .hero, staggerIndex != nil, !isFastScrolling && !itemIDString.isEmpty {
-                posterContent
-                    .matchedGeometryEffect(id: "poster_\(itemIDString)", in: ns)
-                    .background {
-                        Color.clear.matchedGeometryEffect(id: "poster_bg_\(itemIDString)", in: ns)
-                    }
-            } else {
-                posterContent
-            }
+            posterContent
 
             // 3. Search Mode (Modal status remains visible)
             if mode == .search {
@@ -626,6 +615,8 @@ struct ThumbnailPosterLayer: View {
     let isFastScrolling: Bool
     let width: CGFloat
     let height: CGFloat
+    var namespace: Namespace.ID? = nil
+    var itemID: String = ""
 
     var body: some View {
         Group {
@@ -633,7 +624,7 @@ struct ThumbnailPosterLayer: View {
                 let baseColor = themeColorHex.flatMap { Color(hex: $0) }
                 let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
 
-                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
+                let content = CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
@@ -642,6 +633,12 @@ struct ThumbnailPosterLayer: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)
                 .clipped()
+
+                if let ns = namespace, !itemID.isEmpty {
+                    content
+                } else {
+                    content
+                }
             } else {
                 Rectangle()
                     .fill(Color.secondary.opacity(0.2))

@@ -20,7 +20,7 @@ struct WelcomeSheet: View {
                 Image(nsImage: appIcon)
                     .resizable()
                     .frame(width: 64, height: 64)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppTheme.Spacing.medium)
                     .scaleEffect(showIcon ? 1 : 0.5)
                     .opacity(showIcon ? 1 : 0)
             }
@@ -34,7 +34,7 @@ struct WelcomeSheet: View {
             Text("MediaTracker")
                 .font(AppTheme.Font.titleLarge)
                 .foregroundStyle(.primary)
-                .padding(.bottom, 24)
+                .padding(.bottom, AppTheme.Spacing.large)
                 .opacity(showTitle ? 1 : 0)
                 .offset(y: showTitle ? 0 : 8)
 
@@ -43,8 +43,8 @@ struct WelcomeSheet: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 32)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.bottom, AppTheme.Spacing.xLarge)
                 .opacity(showDescription ? 1 : 0)
                 .offset(y: showDescription ? 0 : 8)
 

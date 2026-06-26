@@ -33,7 +33,7 @@ struct LibraryGridSection: View {
                     && selectedNetworks == nil
                 {
                     RecentlyAddedRow(
-                        items: recentlyAdded, isFastScrolling: isFastScrolling)
+                        items: recentlyAdded, isFastScrolling: isFastScrolling, namespace: namespace)
                 }
 
                 if viewModel.filter.currentGroupBy == .none {

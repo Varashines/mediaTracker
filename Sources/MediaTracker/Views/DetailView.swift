@@ -390,19 +390,7 @@ struct DetailView: View {
     }
 
     private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .imageScale(.small)
-                Text(label)
-                    .font(AppTheme.Font.caption)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        ActionChipButton(icon: icon, label: label, action: action)
     }
 
     @ViewBuilder
@@ -532,4 +520,36 @@ struct DetailView: View {
         }
     }
 
+}
+
+private struct ActionChipButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .imageScale(.small)
+                Text(label)
+                    .font(AppTheme.Font.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isHovered ? Color.primary.opacity(0.06) : .clear)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isHovered ? .primary : .secondary)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) {
+                isHovered = hovering
+            }
+        }
+    }
 }

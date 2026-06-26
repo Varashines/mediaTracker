@@ -12,10 +12,10 @@ struct MediaHeaderView: View {
     var body: some View {
         if item.modelContext != nil {
             HStack(alignment: .top, spacing: AppTheme.Spacing.section) {
-                PosterView(item: item, themeColor: themeColor, namespace: namespace)
+                PosterView(item: item, themeColor: themeColor)
                 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-                    TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange, namespace: namespace)
+                    TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange)
                     
                     MetadataSection(item: item, themeColor: themeColor)
                     
