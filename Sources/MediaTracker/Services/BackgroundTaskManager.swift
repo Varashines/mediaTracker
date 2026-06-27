@@ -54,6 +54,10 @@ class BackgroundTaskManager {
                 let backgroundService = BackgroundDataService(modelContainer: container)
                 await backgroundService.refreshMetadata(for: itemIDs, metadataOnly: false, force: false)
                 
+                // Rebuild hub counts after drip sync populates cachedWatchProviders
+                let sync = DiscoverySyncService(modelContainer: container)
+                await sync.syncLibrary(force: true)
+                
                 // broadcast UI update
                 await MainActor.run {
                     MediaStateService.shared.postMediaStateChanged()
@@ -73,6 +77,8 @@ class BackgroundTaskManager {
             Task.detached(priority: .background) {
                 await self.refreshStaleBadges()
                 await self.runPosterColorMigrationV6IfNeeded()
+                await self.runWatchProviderMigrationIfNeeded()
+                await self.runNetworkKindMigrationIfNeeded()
             }
         }
         
@@ -114,8 +120,8 @@ class BackgroundTaskManager {
 
                 AppLogger.info("🗑️ Purging \(stale.count) soft-deleted items past undo window...", logger: AppLogger.background)
 
-                let syncItems: [(id: String, network: String?, genres: [String], language: String?, badge: String?)] = stale.map {
-                    ($0.id, $0.cachedNetwork, $0.cachedGenres, $0.cachedLanguage, $0.storedSmartBadgeLabel)
+                let syncItems: [(id: String, network: String?, genres: [String], language: String?, badge: String?, providers: [String])] = stale.map {
+                    ($0.id, $0.cachedNetwork, $0.cachedGenres, $0.cachedLanguage, $0.storedSmartBadgeLabel, $0.cachedWatchProviders)
                 }
 
                 for item in stale {
@@ -128,7 +134,7 @@ class BackgroundTaskManager {
 
                 for entry in syncItems {
                     let sync = DiscoverySyncService(modelContainer: container)
-                    await sync.updateItemDeleted(network: entry.network, genres: entry.genres, language: entry.language, badge: entry.badge)
+                    await sync.updateItemDeleted(network: entry.network, genres: entry.genres, language: entry.language, badge: entry.badge, providers: entry.providers)
                 }
 
                 await MainActor.run {
@@ -354,5 +360,169 @@ class BackgroundTaskManager {
         } catch {
             AppLogger.error("♻️ Badge update failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
+    }
+
+    /// One-shot migration: loads watch providers from local cache files on disk into the new SwiftData attributes
+    /// on MediaItem. This enables the Discovery Hub Streaming Providers section to work instantly without requiring
+    /// manual forced refreshes of the whole library.
+    func runWatchProviderMigrationIfNeeded() async {
+        let migrationVersionKey = "watchProviderMigrationVersion"
+        let currentVersion = UserDefaults.standard.integer(forKey: migrationVersionKey)
+        guard currentVersion < 3 else { return }
+        guard let container = container else { return }
+
+        // --- v2 migration (legacy) ---
+        if currentVersion < 2 {
+            let context = ModelContext(container)
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders, \.cachedWatchProviderLogos]
+            
+            let allItems = (try? context.fetch(descriptor)) ?? []
+            
+            if allItems.isEmpty {
+                UserDefaults.standard.set(2, forKey: migrationVersionKey)
+            } else {
+                AppLogger.info("📦 Watch Provider migration v2 starting for \(allItems.count) items...", logger: AppLogger.background)
+                
+                var migratedCount = 0
+                for item in allItems {
+                    try? Task.checkCancellation()
+                    
+                    if !item.cachedWatchProviders.isEmpty && !item.cachedWatchProviderLogos.isEmpty {
+                        continue
+                    }
+                    
+                    guard let tmdbIDString = item.id.split(separator: "_").last,
+                          let tmdbID = Int(tmdbIDString) else { continue }
+                    
+                    let type = item.type ?? .movie
+                    
+                    let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
+                    if !providers.isEmpty {
+                        item.cachedWatchProviders = providers.map { $0.name }
+                        item.cachedWatchProviderLogos = providers.map { $0.logoPath ?? "" }
+                        migratedCount += 1
+                    }
+                }
+                
+                if migratedCount > 0 {
+                    try? context.save()
+                    AppLogger.info("📦 Watch Provider migration v2 completed: migrated \(migratedCount) items", logger: AppLogger.background)
+                    let sync = DiscoverySyncService(modelContainer: container)
+                    await sync.syncLibrary(force: true)
+                    await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+                }
+                UserDefaults.standard.set(2, forKey: migrationVersionKey)
+            }
+        }
+
+        // --- v3 migration: backfill items still missing providers ---
+        do {
+            let context = ModelContext(container)
+            var descriptor = FetchDescriptor<MediaItem>()
+            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders]
+            
+            guard let allItems = try? context.fetch(descriptor) else {
+                UserDefaults.standard.set(3, forKey: migrationVersionKey)
+                return
+            }
+            
+            let needsBackfill = allItems.filter { $0.cachedWatchProviders.isEmpty }
+            guard !needsBackfill.isEmpty else {
+                AppLogger.info("📦 Watch Provider migration v3: all items already have providers", logger: AppLogger.background)
+                UserDefaults.standard.set(3, forKey: migrationVersionKey)
+                return
+            }
+            
+            AppLogger.info("📦 Watch Provider migration v3 starting: \(needsBackfill.count) items need backfill (\(allItems.count) total)...", logger: AppLogger.background)
+            
+            let batchSize = 50
+            var migratedCount = 0
+            var processed = 0
+            
+            for item in needsBackfill {
+                try? Task.checkCancellation()
+                
+                guard let tmdbIDString = item.id.split(separator: "_").last,
+                      let tmdbID = Int(tmdbIDString) else { continue }
+                
+                let type = item.type ?? .movie
+                
+                let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
+                if !providers.isEmpty {
+                    item.cachedWatchProviders = providers.map { $0.name }
+                    migratedCount += 1
+                }
+                
+                processed += 1
+                if processed % batchSize == 0 {
+                    try? context.save()
+                    AppLogger.info("📦 Watch Provider migration v3 progress: \(processed)/\(needsBackfill.count) (\(migratedCount) migrated)", logger: AppLogger.background)
+                }
+            }
+            
+            try? context.save()
+            AppLogger.info("📦 Watch Provider migration v3 completed: \(migratedCount)/\(needsBackfill.count) items migrated", logger: AppLogger.background)
+            
+            if migratedCount > 0 {
+                let sync = DiscoverySyncService(modelContainer: container)
+                await sync.syncLibrary(force: true)
+                await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+            }
+            
+            UserDefaults.standard.set(3, forKey: migrationVersionKey)
+        }
+    }
+
+    /// One-shot migration: backfill NetworkEntity.kind based on item types
+    func runNetworkKindMigrationIfNeeded() async {
+        let migrationVersionKey = "networkKindMigrationVersion"
+        let currentVersion = UserDefaults.standard.integer(forKey: migrationVersionKey)
+        guard currentVersion < 1 else { return }
+        guard let container = container else { return }
+
+        let context = ModelContext(container)
+
+        // 1. Count networks by kind from items
+        var networkKindCounts: [String: (network: Int, studio: Int)] = [:]
+        var itemDesc = FetchDescriptor<MediaItem>()
+        itemDesc.propertiesToFetch = [\.cachedNetwork, \.typeValue]
+        let allItems = (try? context.fetch(itemDesc)) ?? []
+
+        for item in allItems {
+            guard let rawName = item.cachedNetwork else { continue }
+            let names = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let isMovie = item.typeValue == "Movie"
+            for name in names where !name.isEmpty {
+                var counts = networkKindCounts[name] ?? (network: 0, studio: 0)
+                if isMovie { counts.studio += 1 } else { counts.network += 1 }
+                networkKindCounts[name] = counts
+            }
+        }
+
+        // 2. Update NetworkEntity.kind
+        var entityDesc = FetchDescriptor<NetworkEntity>()
+        entityDesc.propertiesToFetch = [\.name, \.kind]
+        let entities = (try? context.fetch(entityDesc)) ?? []
+        var updated = 0
+        for entity in entities {
+            if let counts = networkKindCounts[entity.name] {
+                let newKind = counts.studio > counts.network ? "studio" : "network"
+                if entity.kind != newKind {
+                    entity.kind = newKind
+                    updated += 1
+                }
+            }
+        }
+
+        if updated > 0 {
+            try? context.save()
+            AppLogger.info("🏷️ Network kind migration: updated \(updated) entities", logger: AppLogger.background)
+            let sync = DiscoverySyncService(modelContainer: container)
+            await sync.syncLibrary(force: true)
+            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        }
+
+        UserDefaults.standard.set(1, forKey: migrationVersionKey)
     }
 }

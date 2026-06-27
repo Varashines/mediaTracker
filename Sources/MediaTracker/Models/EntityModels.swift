@@ -8,13 +8,15 @@ final class NetworkEntity {
     var count: Int = 0
     var themeColorHex: String?
     var sourceNames: [String] = []
+    var kind: String = "network"
 
-    init(name: String, logoPath: String? = nil, count: Int = 0, themeColorHex: String? = nil, sourceNames: [String] = []) {
+    init(name: String, logoPath: String? = nil, count: Int = 0, themeColorHex: String? = nil, sourceNames: [String] = [], kind: String = "network") {
         self.name = name
         self.logoPath = logoPath
         self.count = count
         self.themeColorHex = themeColorHex
         self.sourceNames = sourceNames
+        self.kind = kind
     }
 }
 

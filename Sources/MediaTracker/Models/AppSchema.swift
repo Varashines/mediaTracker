@@ -9,7 +9,7 @@ enum AppSchemaV1: VersionedSchema {
         NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
         BadgeEntity.self, PersonImageEntity.self,
         StudioAliasEntity.self, SearchCacheEntity.self,
-        MediaCollection.self
+        MediaCollection.self, ProviderEntity.self
     ]}
 }
 

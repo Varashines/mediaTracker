@@ -26,6 +26,7 @@ struct DiscoveryNode: Identifiable, Equatable, Codable, Sendable {
 
 struct DiscoveryHubData: Sendable {
     let networks: [DiscoveryNode]
+    let studios: [DiscoveryNode]
     let genres: [DiscoveryNode]
     let languages: [DiscoveryNode]
     let badges: [DiscoveryNode]

@@ -88,6 +88,26 @@ final class WatchProvidersTests: XCTestCase {
         XCTAssertFalse(providers.contains(where: { $0.id == 3001 }))
     }
 
+    /// Verifies that Apple TV Channels are filtered out
+    func testFiltersAppleTVChannels() {
+        let region = TMDBWatchRegion(
+            flatrate: [
+                makeProvider(id: 8, name: "Netflix"),
+                makeProvider(id: 4000, name: "MLS Season Pass Apple TV Channel"),
+                makeProvider(id: 4001, name: "Paramount+ Apple TV Channel")
+            ],
+            free: nil,
+            ads: nil
+        )
+        let response = makeResponse(regions: ["IN": region])
+        let providers = extractWatchProviders(from: response, regionOverride: "IN")
+
+        XCTAssertEqual(providers.count, 1)
+        XCTAssertEqual(providers.first?.name, "Netflix")
+        XCTAssertFalse(providers.contains(where: { $0.id == 4000 }))
+        XCTAssertFalse(providers.contains(where: { $0.id == 4001 }))
+    }
+
     /// Verifies that duplicate provider entries are deduplicated
     func testDeduplicatesProviders() {
         let region = TMDBWatchRegion(

@@ -545,6 +545,7 @@ struct MediaThumbnailView: View, Equatable {
             let genres = item.cachedGenres
             let lang = item.cachedLanguage
             let badge = item.storedSmartBadgeLabel
+            let providers = item.cachedWatchProviders
 
             // Soft-delete so the user can undo within the 5s window.
             item.softDelete()
@@ -572,7 +573,7 @@ struct MediaThumbnailView: View, Equatable {
                 let context = ModelContext(container)
                 if let live = context.model(for: itemID) as? MediaItem, live.isSoftDeleted {
                     let sync = DiscoverySyncService(modelContainer: container)
-                    await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
+                    await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge, providers: providers)
                 }
             }
         } label: {

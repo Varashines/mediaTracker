@@ -91,7 +91,7 @@ actor DiscoverySyncService {
         let rules = await fetchAliasRules()
         let (sourceToTarget, targetToLogoSource) = buildAliasMaps(from: rules)
 
-        var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String])] = [:]
+        var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String], kind: String)] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
         var badgeCounts: [String: Int] = [:]
@@ -101,7 +101,7 @@ actor DiscoverySyncService {
         
         while true {
             var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.storedSmartBadgeLabel]
+            descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.storedSmartBadgeLabel, \.typeValue]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
@@ -110,6 +110,7 @@ actor DiscoverySyncService {
             for item in items {
                 // Count Networks
                 // Normalize name to lowercase+trimmed to match how the filter compares networks
+                let itemKind = item.typeValue == "Movie" ? "studio" : "network"
                 if let rawName = item.cachedNetwork {
                     let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                     let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
@@ -120,7 +121,7 @@ actor DiscoverySyncService {
                         let targetName: String = sourceToTarget[normalizedName].map { $0 } ?? originalName
                         let preferredSource: String? = targetToLogoSource[targetName]
                         
-                        let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [])
+                        let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [], kind: "network")
                         var newLogo: String? = currentData.logo
                         var newPriority: Int = currentData.priority
                         var newSources: [String] = currentData.sources
@@ -144,7 +145,17 @@ actor DiscoverySyncService {
                         }
                         
                         let addedCount = seenTargets.insert(targetName).inserted ? 1 : 0
-                        networkCounts[targetName] = (logo: newLogo, count: currentData.count + addedCount, priority: newPriority, sources: newSources)
+                        // If name appears in both contexts, use kind with higher count
+                        let newCount = currentData.count + addedCount
+                        let finalKind: String
+                        if itemKind == currentData.kind {
+                            finalKind = itemKind
+                        } else if newCount > currentData.count {
+                            finalKind = itemKind
+                        } else {
+                            finalKind = currentData.kind
+                        }
+                        networkCounts[targetName] = (logo: newLogo, count: newCount, priority: newPriority, sources: newSources, kind: finalKind)
                     }
                 }
                 
@@ -174,8 +185,10 @@ actor DiscoverySyncService {
                 existing.count = data.count
                 existing.logoPath = data.logo
                 existing.sourceNames = data.sources
+                existing.kind = data.kind
             } else {
-                modelContext.insert(NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources))
+                let entity = NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources, kind: data.kind)
+                modelContext.insert(entity)
             }
         }
         for entity in existingNetworks where networkCounts[entity.name] == nil {
@@ -235,6 +248,7 @@ actor DiscoverySyncService {
         let (sourceToTarget, _) = buildAliasMaps(from: rules)
 
         // Incremental Network update
+        let itemKind = item.typeValue == "Movie" ? "studio" : "network"
         if let rawName = item.cachedNetwork {
             let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
@@ -250,12 +264,12 @@ actor DiscoverySyncService {
                 let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
                 if let existing = try? modelContext.fetch(descriptor).first {
                     existing.count += 1
+                    existing.kind = itemKind
                     if !existing.sourceNames.contains(originalName) {
                         existing.sourceNames.append(originalName)
                     }
                 } else {
-                    let entity = NetworkEntity(name: name, logoPath: itemLogo, count: 1)
-                    entity.sourceNames = [originalName]
+                    let entity = NetworkEntity(name: name, logoPath: itemLogo, count: 1, sourceNames: [originalName], kind: itemKind)
                     modelContext.insert(entity)
                 }
             }
@@ -287,6 +301,17 @@ actor DiscoverySyncService {
                 existing.count += 1
             } else {
                 modelContext.insert(BadgeEntity(label: badge, count: 1))
+            }
+        }
+
+        // Incremental Watch Provider update
+        for name in item.cachedWatchProviders where !name.isEmpty {
+            let providerID = name.hashValue
+            let descriptor = FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count += 1
+            } else {
+                modelContext.insert(ProviderEntity(providerID: providerID, name: name, logoPath: nil, count: 1))
             }
         }
         
@@ -328,7 +353,12 @@ actor DiscoverySyncService {
         let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
         let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
 
-        let snNets = filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
+        let snNetworks = filteredNets
+            .filter { $0.kind == "network" || $0.kind.isEmpty }
+            .map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
+        let snStudios = filteredNets
+            .filter { $0.kind == "studio" }
+            .map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
         let snGenres = ((try? modelContext.fetch(genreDescriptor)) ?? []).map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) }
         let snLangs = ((try? modelContext.fetch(langDescriptor)) ?? []).map {
             let name = LanguageUtils.languageName(for: $0.code)
@@ -336,10 +366,10 @@ actor DiscoverySyncService {
         }
         let snBadges = ((try? modelContext.fetch(badgeDescriptor)) ?? []).filter { !$0.label.isEmpty }.map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
 
-        return DiscoveryHubData(networks: snNets, genres: snGenres, languages: snLangs, badges: snBadges)
+        return DiscoveryHubData(networks: snNetworks, studios: snStudios, genres: snGenres, languages: snLangs, badges: snBadges)
     }
 
-    func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?) async {
+    func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?, providers: [String] = []) async {
         let rules = await fetchAliasRules()
         let (sourceToTarget, _) = buildAliasMaps(from: rules)
 
@@ -378,6 +408,15 @@ actor DiscoverySyncService {
 
         if let b = badge, !b.isEmpty {
             let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == b })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.count -= 1
+                if existing.count <= 0 { modelContext.delete(existing) }
+            }
+        }
+
+        // Decrement Watch Providers
+        for name in providers where !name.isEmpty {
+            let descriptor = FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count -= 1
                 if existing.count <= 0 { modelContext.delete(existing) }

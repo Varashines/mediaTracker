@@ -172,20 +172,23 @@ struct FilteredLibraryGridView: View {
         var badge: String? = nil
         var sortOrder: SortOrder = .alphabetical
 
+        var provider: String? = nil
+        
         switch filter.type {
-        case .studio: network = filter.sourceNames ?? [filter.name]
+        case .studio, .network: network = filter.sourceNames ?? [filter.name]
         case .genre: genre = filter.name
         case .language: language = filter.name
         case .badge:
             badge = filter.name
             sortOrder = .recentInteraction
+        case .provider: provider = filter.name
         }
 
         Task {
             do {
                 let result = try await filterActor.filterAndSort(
                     category: .all, searchText: "", sortOrder: sortOrder,
-                    network: network, language: language, genre: genre, badge: badge,
+                    network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: offset
                 )
                 if Task.isCancelled { return }
@@ -323,21 +326,23 @@ struct FilteredLibraryGridView: View {
             var language: String? = nil
             var genre: String? = nil
             var badge: String? = nil
+            var provider: String? = nil
             var sortOrder: SortOrder = .alphabetical
             
             switch filter.type {
-            case .studio: network = filter.sourceNames ?? [filter.name]
+            case .studio, .network: network = filter.sourceNames ?? [filter.name]
             case .genre: genre = filter.name
             case .language: language = filter.name
             case .badge: 
                 badge = filter.name
                 sortOrder = .recentInteraction
+            case .provider: provider = filter.name
             }
             
             do {
                 let result = try await filterActor.filterAndSort(
                     category: .all, searchText: "", sortOrder: sortOrder,
-                    network: network, language: language, genre: genre, badge: badge,
+                    network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: 0
                 )
                 if Task.isCancelled { return }
@@ -359,12 +364,14 @@ struct FilteredLibraryGridView: View {
         var language: String? = nil
         var genre: String? = nil
         var badge: String? = nil
+        var provider: String? = nil
         
         switch filter.type {
-        case .studio: network = filter.sourceNames ?? [filter.name]
+        case .studio, .network: network = filter.sourceNames ?? [filter.name]
         case .genre: genre = filter.name
         case .language: language = filter.name
         case .badge: badge = filter.name
+        case .provider: provider = filter.name
         }
         
         updateTask?.cancel()
@@ -378,7 +385,8 @@ struct FilteredLibraryGridView: View {
                     network: network,
                     language: language,
                     genre: genre,
-                    badge: badge
+                    badge: badge,
+                    provider: provider
                 )
                 if Task.isCancelled { return }
                 

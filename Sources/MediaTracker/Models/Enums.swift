@@ -173,8 +173,10 @@ enum MediaType: String, Codable, CaseIterable, Sendable {
 enum FilterType: String, Codable, Hashable, Sendable {
     case genre = "Genre"
     case studio = "Studio"
+    case network = "Network"
     case language = "Language"
     case badge = "Badge"
+    case provider = "Provider"
 }
 
 enum TasteValue: String, Codable, CaseIterable, Sendable {

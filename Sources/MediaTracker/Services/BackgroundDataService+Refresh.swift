@@ -84,6 +84,8 @@ extension BackgroundDataService {
                     AppLogger.warning("Movie logo fetch failed for tmdbID=\(tmdbID): \(error)", logger: AppLogger.background)
                 }
             }
+            item.cachedWatchProviders = details.streamingProviders.map { $0.name }
+            item.cachedWatchProviderLogos = details.streamingProviders.map { $0.logoPath ?? "" }
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.updateSearchableText()
@@ -361,6 +363,8 @@ extension BackgroundDataService {
                 }
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
+            item.cachedWatchProviders = details.streamingProviders.map { $0.name }
+            item.cachedWatchProviderLogos = details.streamingProviders.map { $0.logoPath ?? "" }
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.lastUpdated = Date()

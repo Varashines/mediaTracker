@@ -55,7 +55,7 @@ func extractWatchProviders(from response: TMDBWatchProvidersResponse?, regionOve
         .filter { !blockedProviderIDs.contains($0.provider_id) }
         .filter {
             let name = $0.provider_name.lowercased()
-            return !name.contains("amazon channel") && !name.contains("prime video channel")
+            return !name.contains("amazon channel") && !name.contains("prime video channel") && !name.contains("apple tv channel")
         }
         .reduce(into: [WatchProviderResult]()) { acc, provider in
             if !acc.contains(where: { $0.id == provider.provider_id }) {

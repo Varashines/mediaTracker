@@ -14,6 +14,7 @@ actor MediaFilterActor {
         year: String? = nil,
         state: MediaState? = nil,
         badge: String? = nil,
+        provider: String? = nil,
         groupBy: GroupBy = .none,
         collectionID: UUID? = nil,
         limit: Int = 40,
@@ -68,6 +69,7 @@ actor MediaFilterActor {
                                    (genre?.isEmpty == false) ||
                                    year != nil ||
                                    badge != nil ||
+                                   provider != nil ||
                                    category == .releaseRadar ||
                                    category == .stalled ||
                                    category == .quickBites ||
@@ -92,7 +94,7 @@ actor MediaFilterActor {
         try Task.checkCancellation()
         // 2. Swift-Level Refinement — all filters handled in Swift (cachedGenres is transformable,
         // not safe in #Predicate). buildFilteredPredicate only applies category + search.
-        results = try refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, searchText: processedSearch, category: category, smartRules: smartRules)
+        results = try refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, provider: provider, searchText: processedSearch, category: category, smartRules: smartRules)
 
         let totalCount = (needsSwiftRefinement || groupBy != .none) ?
                          results.count :
@@ -133,7 +135,7 @@ actor MediaFilterActor {
         )
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) throws -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) throws -> [MediaItem] {
         try Task.checkCancellation()
         let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
         let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
@@ -195,6 +197,11 @@ actor MediaFilterActor {
             // Genre filter
             if let g = genre, !g.isEmpty {
                 guard item.cachedGenres.contains(g) else { return false }
+            }
+
+            // Provider filter
+            if let p = provider, !p.isEmpty {
+                guard item.cachedWatchProviders.contains(p) else { return false }
             }
 
             // Year filter
@@ -353,6 +360,7 @@ actor MediaFilterActor {
         year: String? = nil,
         state: MediaState? = nil,
         badge: String? = nil,
+        provider: String? = nil,
         collectionID: UUID? = nil
     ) throws -> MediaThumbnailMetadata? {
         guard let fetchedItem = modelContext.model(for: id) as? MediaItem else { return nil }
@@ -413,6 +421,7 @@ actor MediaFilterActor {
             year: year,
             state: state,
             badge: badge,
+            provider: provider,
             searchText: searchText,
             category: category
         )

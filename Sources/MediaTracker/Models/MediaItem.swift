@@ -28,6 +28,8 @@ final class MediaItem: Identifiable {
     var cachedLanguage: String?
     var cachedNetwork: String?
     var cachedNetworkLogoPath: String?
+    var cachedWatchProviders: [String] = []
+    var cachedWatchProviderLogos: [String] = []
     var cachedNextAiringDate: Date?
     var cachedRuntime: Int?
     var cachedEpisodeRuntime: Int?
@@ -229,7 +231,7 @@ extension MediaItem {
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
         \.isSoftDeleted, \.softDeletedAt,
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
-        \.cachedNetworkLogoPath, \.cachedNextAiringDate, \.cachedRuntime,
+        \.cachedNetworkLogoPath, \.cachedWatchProviders, \.cachedWatchProviderLogos, \.cachedNextAiringDate, \.cachedRuntime,
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,

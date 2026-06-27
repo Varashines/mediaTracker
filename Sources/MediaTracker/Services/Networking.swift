@@ -126,7 +126,16 @@ actor APIClient {
             URLQueryItem(name: "region", value: region)
         ]
         items.append(contentsOf: queryItems)
-        components?.queryItems = items
+        
+        let percentEncodedItems = items.map { item -> URLQueryItem in
+            let encodedName = item.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)?
+                .replacingOccurrences(of: "/", with: "%2F") ?? item.name
+            let encodedValue = item.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)?
+                .replacingOccurrences(of: "/", with: "%2F")
+            return URLQueryItem(name: encodedName, value: encodedValue)
+        }
+        components?.percentEncodedQueryItems = percentEncodedItems
+        
         guard let url = components?.url else { throw URLError(.badURL) }
         return url
     }

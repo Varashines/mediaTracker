@@ -515,6 +515,7 @@ struct DetailView: View {
         let genres = itemToDelete.cachedGenres
         let lang = itemToDelete.cachedLanguage
         let badge = itemToDelete.storedSmartBadgeLabel
+        let providers = itemToDelete.cachedWatchProviders
 
         showDeleteConfirmation = false
         FeedbackManager.shared.trigger(.removeFromLibrary)
@@ -534,7 +535,7 @@ struct DetailView: View {
                 await backgroundService.deleteMediaItem(id: itemID)
                 
                 let sync = DiscoverySyncService(modelContainer: container)
-                await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge)
+                await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge, providers: providers)
                 
                 try? await Task.sleep(for: .seconds(0.3))
                 await MainActor.run {
