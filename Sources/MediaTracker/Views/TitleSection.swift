@@ -4,12 +4,43 @@ import SwiftData
 struct TitleSection: View {
     @Bindable var item: MediaItem
     let themeColor: Color
+    let watchProviders: [WatchProviderResult]
     var onStatusChange: ((MediaState?) -> Void)?
     @Environment(\.colorScheme) var colorScheme
 
 
     @AppStorage("use_title_logos") private var useTitleLogos = true
     @State private var isLogoLight = false
+
+    private func cleanProviderName(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("netflix") { return "NETFLIX" }
+        if lower.contains("disney") { return "DISNEY+" }
+        if lower.contains("hotstar") { return "HOTSTAR" }
+        if lower.contains("prime video") || lower.contains("amazon prime") { return "PRIME VIDEO" }
+        if lower.contains("apple tv") { return "APPLE TV+" }
+        if lower.contains("hulu") { return "HULU" }
+        if lower.contains("max") || lower.contains("hbo") { return "MAX" }
+        if lower.contains("paramount") { return "PARAMOUNT+" }
+        if lower.contains("peacock") { return "PEACOCK" }
+        if lower.contains("crunchyroll") { return "CRUNCHYROLL" }
+        if lower.contains("zee5") { return "ZEE5" }
+        if lower.contains("sony") { return "SONYLIV" }
+        if lower.contains("jio") { return "JIOCINEMA" }
+        return name.uppercased()
+    }
+
+    private var providersText: String {
+        let names = watchProviders.map { cleanProviderName($0.name) }
+        guard !names.isEmpty else { return "" }
+        if names.count == 1 {
+            return names[0]
+        } else if names.count == 2 {
+            return "\(names[0]) & \(names[1])"
+        } else {
+            return "\(names[0]), \(names[1]) & MORE"
+        }
+    }
 
     var body: some View {
         if item.modelContext != nil {
@@ -84,6 +115,28 @@ struct TitleSection: View {
                             .overlay {
                                 Capsule().stroke(accent.opacity(0.1), lineWidth: 0.5)
                             }
+                    }
+
+                    // Popcorn watch providers pill
+                    if !watchProviders.isEmpty {
+                        HStack(spacing: AppTheme.Spacing.micro) {
+                            Image(systemName: "popcorn.fill")
+                                .font(AppTheme.Font.tiny)
+                            Text(providersText)
+                                .font(AppTheme.Font.caption2)
+                                .kerning(AppTheme.Kerning.wide)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.compact)
+                        .padding(.vertical, AppTheme.Spacing.micro)
+                        .foregroundStyle(accent)
+                        .background {
+                            Capsule()
+                                .fill(accent.opacity(0.12))
+                        }
+                        .clipShape(Capsule())
+                        .overlay {
+                            Capsule().stroke(accent.opacity(0.1), lineWidth: 0.5)
+                        }
                     }
 
                     if item.isUpcoming, let dateText = item.detailBadgeText {

@@ -12,6 +12,7 @@ class DetailViewModel {
     var recommendations: [MooreMetricsRecommendation] = []
     var isLoadingRecommendations = false
     var trailerKey: String?
+    var watchProviders: [WatchProviderResult] = []
     var debugSelectedTraits: [String] = []
     
     init(item: MediaItem) {
@@ -108,6 +109,7 @@ class DetailViewModel {
 
         updateThemeColor()
         fetchTitleLogoIfNeeded()
+        fetchWatchProvidersIfNeeded()
 
         let hasData = item.lastUpdated != nil
 
@@ -193,6 +195,18 @@ class DetailViewModel {
                 }
             } catch {
                 AppLogger.warning("Logo fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
+            }
+        }
+    }
+
+    private func fetchWatchProvidersIfNeeded() {
+        guard watchProviders.isEmpty else { return }
+        guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { return }
+        let type = item.type ?? .movie
+        Task {
+            let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
+            await MainActor.run { [weak self] in
+                self?.watchProviders = providers
             }
         }
     }

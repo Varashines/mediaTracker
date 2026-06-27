@@ -39,6 +39,7 @@ extension BackgroundDataService {
             movieDetails.networkLogoPath = prodLogos.isEmpty ? nil : prodLogos.joined(separator: ",")
             movieDetails.status = details.status
             
+            
             let newCastResults = details.cast
             let currentCast = item.displayCast
             // Short-circuit: quick check before expensive sort-and-zip
@@ -120,16 +121,19 @@ extension BackgroundDataService {
             }
             
             var tvMazeID = tvDetails.tvMazeID
-            if let tvdbID = details.tvdbID, tvMazeID == nil {
-                tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
-            }
             if tvMazeID == nil {
-                tvMazeID = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title)
+                if let tvdbID = details.tvdbID {
+                    tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
+                }
+                if tvMazeID == nil {
+                    tvMazeID = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title)
+                }
+                tvDetails.tvMazeID = tvMazeID ?? -1
             }
             
             var mazeEpisodes: [TVMazeEpisode] = []
             var mazeGenres: [String]?
-            if let mID = tvMazeID {
+            if let mID = tvMazeID, mID > 0 {
                 if let (episode, timezone, service, airtime, genres) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime

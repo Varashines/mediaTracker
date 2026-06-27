@@ -52,6 +52,9 @@ actor APIClient {
     private var trendingTVCache: (data: [MediaSearchResult], timestamp: Date)?
     private let trendingCacheTTL: TimeInterval = 3600
 
+    // In-memory watch provider cache (populated during processMovieDetails/processTVDetails)
+    private var providerCache: [Int: [WatchProviderResult]] = [:]
+
     #if DEBUG
     init(testing session: URLSession) {
         self.session = session
@@ -280,11 +283,13 @@ actor APIClient {
     // MARK: - Details
 
     func fetchMovieDetails(tmdbID: Int, force: Bool = false) async throws -> MovieDetailsResult {
-        let cacheKey = "movie_details_\(tmdbID).json"
+        let cacheKey = "movie_details_v2_\(tmdbID).json"
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
-            return processMovieDetails(details)
+            let result = processMovieDetails(details)
+            if !result.streamingProviders.isEmpty { providerCache[tmdbID] = result.streamingProviders }
+            return result
         }
 
         if let existing = inFlightMovieDetails[tmdbID] {
@@ -292,8 +297,8 @@ actor APIClient {
         }
         let task = Task<MovieDetailsResult, Error> {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
-            return try await self.executeWithRetry {
-                let appendParts = force ? "credits,release_dates,external_ids,videos" : "credits,external_ids,videos"
+            let result = try await self.executeWithRetry {
+                let appendParts = force ? "credits,release_dates,external_ids,videos,watch/providers" : "credits,external_ids,videos,watch/providers"
                 let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
@@ -301,6 +306,8 @@ actor APIClient {
                 let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
                 return self.processMovieDetails(details)
             }
+            if !result.streamingProviders.isEmpty { self.providerCache[tmdbID] = result.streamingProviders }
+            return result
         }
         inFlightMovieDetails[tmdbID] = task
         return try await task.value
@@ -351,7 +358,8 @@ actor APIClient {
             cast: Array(cast), 
             directors: directors,
             productionCompanies: productionCompanies,
-            trailerKey: trailerKey
+            trailerKey: trailerKey,
+            streamingProviders: extractWatchProviders(from: details.watch_providers)
         )
     }
 
@@ -371,11 +379,13 @@ actor APIClient {
     }
 
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
-        let cacheKey = "tv_details_\(tmdbID).json"
+        let cacheKey = "tv_details_v2_\(tmdbID).json"
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
-            return processTVDetails(d)
+            let result = processTVDetails(d)
+            if !result.streamingProviders.isEmpty { providerCache[tmdbID] = result.streamingProviders }
+            return result
         }
 
         // Coalesce concurrent in-flight requests for the same show to share one network call
@@ -384,14 +394,16 @@ actor APIClient {
         }
         let task = Task<TVDetailsResult, Error> {
             defer { self.inFlightTVDetails.removeValue(forKey: tmdbID) }
-            return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits,videos")])
+            let result = try await self.executeWithRetry {
+                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits,videos,watch/providers")])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
                 let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
                 return self.processTVDetails(d)
             }
+            if !result.streamingProviders.isEmpty { self.providerCache[tmdbID] = result.streamingProviders }
+            return result
         }
         inFlightTVDetails[tmdbID] = task
         return try await task.value
@@ -448,7 +460,8 @@ actor APIClient {
             tvdbID: d.external_ids?.tvdb_id,
             cast: Array(cast),
             creators: creators,
-            trailerKey: trailerKey
+            trailerKey: trailerKey,
+            streamingProviders: extractWatchProviders(from: d.watch_providers)
         )
     }
     
@@ -460,6 +473,49 @@ actor APIClient {
     static func tmdbImageURL(path: String?, size: String = "w780") -> String? {
         guard let path = path else { return nil }
         return "https://image.tmdb.org/t/p/\(size)\(path)"
+    }
+
+    func fetchWatchProviders(tmdbID: Int, type: MediaType) async -> [WatchProviderResult] {
+        // Primary: in-memory cache (populated during fetchMovieDetails/fetchTVDetails)
+        if let cached = providerCache[tmdbID], !cached.isEmpty {
+            return cached
+        }
+        // Fallback 1: disk cache (for items refreshed before this session)
+        let cacheKey = type == .movie ? "movie_details_v2_\(tmdbID).json" : "tv_details_v2_\(tmdbID).json"
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay) {
+            if type == .movie {
+                if let d = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
+                    let providers = extractWatchProviders(from: d.watch_providers)
+                    if !providers.isEmpty {
+                        providerCache[tmdbID] = providers
+                        return providers
+                    }
+                }
+            } else {
+                if let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
+                    let providers = extractWatchProviders(from: d.watch_providers)
+                    if !providers.isEmpty {
+                        providerCache[tmdbID] = providers
+                        return providers
+                    }
+                }
+            }
+        }
+        
+        // Fallback 2: dedicated watch providers endpoint
+        let path = type == .movie ? "/movie/\(tmdbID)/watch/providers" : "/tv/\(tmdbID)/watch/providers"
+        do {
+            let url = try tmdbURL(path: path)
+            let (data, response) = try await session.data(from: url)
+            try validateResponse(response)
+            let decoded = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
+            let providers = extractWatchProviders(from: decoded)
+            providerCache[tmdbID] = providers
+            return providers
+        } catch {
+            AppLogger.warning("Failed to fetch watch providers online for \(type) \(tmdbID): \(error)", logger: AppLogger.background)
+            return []
+        }
     }
 
     func fetchSeasonDetails(tmdbID: Int, seasonNumber: Int, force: Bool = false) async throws -> [TVEpisodeResult] {

@@ -9,8 +9,10 @@ struct StreamingServiceRule: Codable {
     static let defaults: [StreamingServiceRule] = [
         // Apple TV+: Drops at Midnight ET, usually listed as US date but available in India next morning.
         StreamingServiceRule(patterns: ["apple"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
-        // Disney+ (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
-        StreamingServiceRule(patterns: ["disney", "star wars", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Disney+ Flagships (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
+        StreamingServiceRule(patterns: ["star wars", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Disney+ Standard: Drops at Midnight PT / 3:00 AM ET.
+        StreamingServiceRule(patterns: ["disney"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Netflix: Midnight PT.
         StreamingServiceRule(patterns: ["netflix"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Amazon Prime / MGM+: New 2025/2026 standard is Midnight PT.

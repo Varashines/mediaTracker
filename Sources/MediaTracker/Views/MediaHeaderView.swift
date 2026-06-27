@@ -4,7 +4,7 @@ import SwiftData
 struct MediaHeaderView: View {
     @Bindable var item: MediaItem
     let themeColor: Color
-    var viewModel: DetailViewModel? = nil
+    let watchProviders: [WatchProviderResult]
     var namespace: Namespace.ID? = nil
     var onStatusChange: ((MediaState?) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
@@ -15,7 +15,7 @@ struct MediaHeaderView: View {
                 PosterView(item: item, themeColor: themeColor)
                 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-                    TitleSection(item: item, themeColor: themeColor, onStatusChange: onStatusChange)
+                    TitleSection(item: item, themeColor: themeColor, watchProviders: watchProviders, onStatusChange: onStatusChange)
                     
                     MetadataSection(item: item, themeColor: themeColor)
                     

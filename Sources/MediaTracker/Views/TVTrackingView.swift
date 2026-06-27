@@ -507,7 +507,13 @@ private struct EpisodeCube: View {
                         // Metadata + Info button
                         HStack(spacing: 5) {
                             if let date = episode.airDateAsDate {
-                                Text(date.formatted(.dateTime.month(.abbreviated).day()))
+                                let formattedDate: String = {
+                                    let d = date.formatted(.dateTime.day())
+                                    let m = date.formatted(.dateTime.month(.abbreviated))
+                                    let y = date.formatted(.dateTime.year(.twoDigits))
+                                    return "\(d) \(m) '\(y)"
+                                }()
+                                Text(formattedDate)
                                     .foregroundStyle(.secondary.opacity(0.6))
                             }
                             if episode.airDateAsDate != nil, let runtime = episode.runtime,

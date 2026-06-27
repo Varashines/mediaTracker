@@ -143,3 +143,20 @@ struct TMDBLogo: Codable {
     let width: Int
     let height: Int
 }
+
+// MARK: - Watch Providers
+struct TMDBWatchProvidersResponse: Codable {
+    let results: [String: TMDBWatchRegion]?
+}
+
+struct TMDBWatchRegion: Codable {
+    let flatrate: [TMDBWatchProvider]?
+    let free: [TMDBWatchProvider]?
+    let ads: [TMDBWatchProvider]?
+}
+
+struct TMDBWatchProvider: Codable {
+    let provider_id: Int
+    let provider_name: String
+    let logo_path: String?
+}

@@ -59,6 +59,13 @@ struct TMDBMovieDetailsResponse: Codable {
     let production_companies: [TMDBProductionCompany]?
     let external_ids: TMDBExternalIDs?
     let videos: TMDBVideoResponse?
+    let watch_providers: TMDBWatchProvidersResponse?
+
+    enum CodingKeys: String, CodingKey {
+        case runtime, genres, vote_average, release_date, backdrop_path, poster_path
+        case overview, original_language, status, credits, release_dates, production_companies, external_ids, videos
+        case watch_providers = "watch/providers"
+    }
 }
 
 struct OMDBFullData: Sendable {
@@ -141,6 +148,13 @@ struct TMDBTVDetailsResponse: Codable {
     let created_by: [TMDBPerson]?
     let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?, aggregate_credits: TMDBAggregateCreditsResponse?
     let videos: TMDBVideoResponse?
+    let watch_providers: TMDBWatchProvidersResponse?
+
+    enum CodingKeys: String, CodingKey {
+        case number_of_seasons, number_of_episodes, status, vote_average, genres, backdrop_path, poster_path
+        case overview, original_language, networks, created_by, seasons, first_air_date, next_episode_to_air, external_ids, credits, aggregate_credits, videos
+        case watch_providers = "watch/providers"
+    }
 }
 
 // MARK: - TV Season (Database Model)

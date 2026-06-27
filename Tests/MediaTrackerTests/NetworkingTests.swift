@@ -96,6 +96,54 @@ final class NetworkingTests: XCTestCase {
         XCTAssertEqual(details.overview, "A great movie")
     }
 
+    func testFetchMovieDetailsDecodesWatchProviders() async throws {
+        let json = """
+        {
+            "id": 1,
+            "runtime": 120,
+            "genres": [],
+            "vote_average": 7.5,
+            "release_date": "2026-01-01",
+            "backdrop_path": null,
+            "poster_path": null,
+            "overview": "A great movie",
+            "original_language": "en",
+            "credits": {"cast": [], "crew": []},
+            "release_dates": {"results": []},
+            "production_companies": [],
+            "external_ids": null,
+            "watch/providers": {
+                "results": {
+                    "US": {
+                        "link": "https://www.themoviedb.org/movie/1-test/watch?locale=US",
+                        "flatrate": [
+                            {"logo_path": "/netflix.png", "provider_id": 8, "provider_name": "Netflix", "display_priority": 1}
+                        ]
+                    },
+                    "IN": {
+                        "link": "https://www.themoviedb.org/movie/1-test/watch?locale=IN",
+                        "flatrate": [
+                            {"logo_path": "/netflix.png", "provider_id": 8, "provider_name": "Netflix", "display_priority": 1}
+                        ]
+                    }
+                }
+            }
+        }
+        """
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, json.data(using: .utf8))
+        }
+
+        let client = APIClient(testing: mockSession)
+        let details = try await client.fetchMovieDetails(tmdbID: 1)
+
+        XCTAssertFalse(details.streamingProviders.isEmpty, "Watch providers should be decoded successfully from the nested watch/providers key")
+        XCTAssertEqual(details.streamingProviders.first?.name, "Netflix")
+        XCTAssertEqual(details.streamingProviders.first?.id, 8)
+    }
+
     func testFetchTVDetails() async throws {
         let json = """
         {

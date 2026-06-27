@@ -192,12 +192,11 @@ struct DetailView: View {
         viewModel.themeColor
     }
 
-    @ViewBuilder
     private var headerSection: some View {
         MediaHeaderView(
             item: viewModel.item,
             themeColor: effectiveThemeColor,
-            viewModel: viewModel,
+            watchProviders: viewModel.watchProviders,
             namespace: namespace,
             onStatusChange: { newState in
                 if newState == .completed {
@@ -230,63 +229,7 @@ struct DetailView: View {
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
-                if viewModel.item.type == .tvShow, let nextEpisode = viewModel.nextEpisodeToWatch, !nextEpisode.overview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ModularSection(title: "Next Up to Watch", icon: "play.circle.fill", color: effectiveThemeColor) {
-                        HStack(spacing: AppTheme.Spacing.medium) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                let subtitleText: String = {
-                                    var comps = ["SEASON \(nextEpisode.seasonNumber), EPISODE \(nextEpisode.episodeNumber)"]
-                                    if let airDate = nextEpisode.airDateAsDate {
-                                        let dateStr = airDate.formatted(.dateTime.month(.abbreviated).day().year())
-                                        if nextEpisode.airstamp != nil {
-                                            let timeStr = airDate.formatted(.dateTime.hour().minute())
-                                            comps.append("\(dateStr) at \(timeStr)")
-                                        } else {
-                                            comps.append(dateStr)
-                                        }
-                                    }
-                                    if let runtime = nextEpisode.runtime, runtime > 0 {
-                                        comps.append("\(runtime)m")
-                                    }
-                                    return comps.joined(separator: "  ·  ").uppercased()
-                                }()
-                                
-                                Text(subtitleText)
-                                    .font(AppTheme.Font.caption2)
-                                    .kerning(AppTheme.Kerning.wide)
-                                    .foregroundStyle(.secondary)
-                                
-                                Text(nextEpisode.name)
-                                    .font(AppTheme.Font.bodyBold)
-                                    .foregroundStyle(.primary)
-                                
-                                if !nextEpisode.overview.isEmpty {
-                                    Text(nextEpisode.overview)
-                                        .font(AppTheme.Font.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            Button {
-                                viewModel.markNextEpisodeWatched()
-                                FeedbackManager.shared.trigger(.markWatched)
-                                AppErrorState.shared.showToast("Marked S\(nextEpisode.seasonNumber)E\(nextEpisode.episodeNumber) as watched", style: .success)
-                            } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
-                                    .contentShape(Circle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(AppTheme.Spacing.medium)
-                        .background(AppTheme.Colors.surfaceGhost(for: colorScheme))
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-                    }
-                }
+
 
                 // 1. TV TRACKING (Modular Card)
                 if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
@@ -307,6 +250,7 @@ struct DetailView: View {
                         .padding(.top, 4)
                     }
                 }
+
 
                 // 2. TOP CAST (Modular Card)
                 if !viewModel.item.displayCast.isEmpty {
