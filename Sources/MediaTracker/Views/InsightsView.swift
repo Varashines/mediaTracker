@@ -11,7 +11,6 @@ struct InsightsView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
-    @State private var showSpectrum = false
     @State private var scrollOffset: CGFloat = 0
     @Namespace private var flipNamespace
     var refreshID: Int = 0
@@ -45,20 +44,7 @@ struct InsightsView: View {
             } else if let stats = stats {
                 ScrollView {
                     LazyVStack(spacing: AppTheme.Spacing.section) {
-                        // Flip card: Passport ↔ Spectrum
-                        FlipCard(
-                            front: AnyView(PassportHeaderView(stats: stats)),
-                            back: AnyView(
-                                SpectrumView(items: stats.barcodeData)
-                                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                            ),
-                            isFlipped: showSpectrum
-                        )
-                        .onTapGesture {
-                            withAnimation(AppTheme.Animation.springGentle) {
-                                showSpectrum.toggle()
-                            }
-                        }
+                        PassportHeaderView(stats: stats)
 
                         SectionDivider(color: AppTheme.Colors.accent)
 

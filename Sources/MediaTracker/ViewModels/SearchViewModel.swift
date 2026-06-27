@@ -84,11 +84,27 @@ class SearchViewModel {
         isSearching = false
     }
 
+    func cancelSearchTaskOnly() {
+        searchTask?.cancel()
+        searchTask = nil
+        isSearching = false
+    }
+
     func performSearch(text: String, selectedType: SearchType) async {
         guard !SleepManager.shared.isAsleep else { return }
         
         isSearching = true
         isOfflineResultsOnly = false
+        
+        // Fetch latest library TMDB IDs directly from SQLite to guarantee accurate filtering
+        let filterActor = getFilterActor()
+        if let dbLibraryIDs = try? await filterActor.allLibraryTMDBIDs() {
+            await MainActor.run {
+                if let display = self.displayCache {
+                    display.libraryTMDBIDs = dbLibraryIDs
+                }
+            }
+        }
         
         // 1. Try Cache First
         if let cached = fetchCachedResults(query: text, type: selectedType) {

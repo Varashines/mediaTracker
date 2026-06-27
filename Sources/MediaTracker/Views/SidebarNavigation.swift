@@ -91,7 +91,7 @@ struct SidebarNavigation: View {
         let isHovered = hoveredItem == item
 
         let iconName: String
-        if isSelected {
+        if isSelected && !icon.isEmoji {
             if icon.contains(".fill") || icon == "calendar" || icon == "cpu" || icon == "sparkles" || icon == "calendar.badge.clock" || icon == "calendar.badge.sparkles" || icon == "sparkles.tv" || icon == "sparkles.rectangle.stack" {
                 iconName = icon
             } else {
@@ -108,9 +108,7 @@ struct SidebarNavigation: View {
             FeedbackManager.shared.trigger(.click)
         } label: {
             HStack(spacing: AppTheme.Spacing.small) {
-                Image(systemName: iconName)
-                    .font(AppTheme.Icon.medium)
-                    .foregroundStyle(isSelected ? .white : Color.primary.opacity(0.6))
+                CollectionIconView(systemImage: iconName, font: AppTheme.Icon.medium, color: isSelected ? .white : Color.primary.opacity(0.6))
                     .frame(width: AppTheme.Spacing.large)
                     .scaleEffect(isSelected ? 1.1 : 1.0)
 

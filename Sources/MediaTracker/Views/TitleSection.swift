@@ -8,6 +8,7 @@ struct TitleSection: View {
     @Environment(\.colorScheme) var colorScheme
 
 
+    @AppStorage("use_title_logos") private var useTitleLogos = true
     @State private var isLogoLight = false
 
     var body: some View {
@@ -15,7 +16,7 @@ struct TitleSection: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-                    if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
+                    if useTitleLogos, let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
                         CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
                             Task {
                                 let dominant = await ColorExtractor.dominantColor(from: cgImage)
@@ -27,7 +28,6 @@ struct TitleSection: View {
                             Text(item.title)
                                 .font(AppTheme.Font.largeTitle)
                                 .lineLimit(3)
-                                .minimumScaleFactor(0.7)
                                 .foregroundStyle(.primary)
                         }
                         .aspectRatio(contentMode: .fit)
@@ -37,7 +37,6 @@ struct TitleSection: View {
                         Text(item.title)
                             .font(AppTheme.Font.largeTitle)
                             .lineLimit(3)
-                            .minimumScaleFactor(0.7)
                             .foregroundStyle(.primary)
                     }
 

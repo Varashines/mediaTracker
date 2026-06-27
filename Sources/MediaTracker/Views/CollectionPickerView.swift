@@ -75,8 +75,7 @@ struct CollectionToggleRow: View {
             toggle()
         } label: {
             HStack {
-                Image(systemName: collection.systemImage)
-                    .foregroundStyle(.blue)
+                CollectionIconView(systemImage: collection.systemImage, font: AppTheme.Font.bodyMedium, color: .blue)
                     .frame(width: 24)
                 Text(collection.name)
                     .font(AppTheme.Font.body)

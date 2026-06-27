@@ -56,10 +56,6 @@ struct TasteDNAView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if !stats.ratingPersonality.isEmpty {
-                    PersonalityBadge(personality: stats.ratingPersonality)
-                        .offset(y: 90)
-                }
             }
 
             VStack(alignment: .leading, spacing: 10) {

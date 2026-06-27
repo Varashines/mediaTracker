@@ -13,6 +13,11 @@ struct CreateCollectionSheet: View {
     @State private var iconSearchText = ""
     @State private var isSmart = false
     @State private var smartRules: [SmartRule] = []
+    @State private var pickerMode = 0 // 0 for SF Symbols, 1 for Emojis
+    
+    let suggestedEmojis = [
+        "🍿", "🎬", "📺", "🎭", "⭐️", "🔥", "💖", "👾", "🎮", "📚", "📅", "⏰", "📁", "💿", "📼", "🎟️", "🎙️", "👀", "🚨", "🏆", "🌟", "✨", "🍕", "🍔", "☕️", "🍺", "🍷", "🎉", "✈️", "🚗", "🏖️", "💤"
+    ]
     
     let suggestedIcons = [
         // Media & Apps
@@ -54,6 +59,14 @@ struct CreateCollectionSheet: View {
         }
     }
     
+    var filteredEmojis: [String] {
+        if iconSearchText.isEmpty {
+            return suggestedEmojis
+        } else {
+            return suggestedEmojis.filter { $0.contains(iconSearchText) }
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 24) {
             Text(editingCollection == nil ? "New Collection" : "Edit Collection")
@@ -75,29 +88,32 @@ struct CreateCollectionSheet: View {
                 }
                 
                 // Smart Playlist Toggle
-                Toggle(isOn: $isSmart.animation(AppTheme.Animation.springSnappy)) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(.purple.opacity(0.1))
-                                .frame(width: 32, height: 32)
-                            Image(systemName: "sparkles")
-                                .foregroundStyle(.purple)
-                                .font(AppTheme.Font.heading)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Smart Playlist")
-                                .font(AppTheme.Font.heading)
-                            Text("Dynamic rules to group media.")
-                                .font(AppTheme.Font.caption)
-                                .foregroundStyle(.secondary)
+                if editingCollection == nil ? initialIsSmart : isSmart {
+                    Toggle(isOn: $isSmart.animation(AppTheme.Animation.springSnappy)) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(.purple.opacity(0.1))
+                                    .frame(width: 32, height: 32)
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(.purple)
+                                    .font(AppTheme.Font.heading)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Smart Playlist")
+                                    .font(AppTheme.Font.heading)
+                                Text("Dynamic rules to group media.")
+                                    .font(AppTheme.Font.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .toggleStyle(.switch)
+                    .padding()
+                    .background(Color.primary.opacity(0.03))
+                    .cornerRadius(AppTheme.Radius.medium)
+                    .disabled(editingCollection != nil)
                 }
-                .toggleStyle(.switch)
-                .padding()
-                .background(Color.primary.opacity(0.03))
-                .cornerRadius(AppTheme.Radius.medium)
                 
                 if isSmart {
                     smartRulesSection
@@ -106,12 +122,16 @@ struct CreateCollectionSheet: View {
                 // Icon Picker
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("ICON")
-                            .font(AppTheme.Font.caption2)
-                            .foregroundStyle(.secondary)
-                            .kerning(1.2)
+                        Picker("", selection: $pickerMode) {
+                            Text("Symbols").tag(0)
+                            Text("Emojis").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
+                        
                         Spacer()
-                        TextField("Search symbols...", text: $iconSearchText)
+                        
+                        TextField(pickerMode == 0 ? "Search symbols..." : "Search emojis...", text: $iconSearchText)
                             .textFieldStyle(.plain)
                             .font(AppTheme.Font.caption)
                             .padding(.horizontal, 10)
@@ -121,7 +141,11 @@ struct CreateCollectionSheet: View {
                             .frame(width: 180)
                     }
                     
-                    IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
+                    if pickerMode == 0 {
+                        IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
+                    } else {
+                        EmojiPickerGridView(selectedIcon: $icon, filteredEmojis: filteredEmojis)
+                    }
                 }
             }
             
@@ -151,9 +175,10 @@ struct CreateCollectionSheet: View {
                         if isSmart { newCollection.smartRules = smartRules }
                         modelContext.insert(newCollection)
                     }
-                    // Trigger refresh so the grid updates with new rules/items
-                    MediaStateService.shared.postMediaStateChanged()
                     dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        MediaStateService.shared.postMediaStateChanged()
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(name.isEmpty)
@@ -174,6 +199,9 @@ struct CreateCollectionSheet: View {
                 icon = editing.systemImage
                 isSmart = editing.isSmart
                 smartRules = editing.smartRules
+                if icon.isEmoji {
+                    pickerMode = 1
+                }
             } else {
                 isSmart = initialIsSmart
             }
@@ -370,5 +398,33 @@ struct RuleAddMenu: View {
             Label("Add Rule", systemImage: "plus.circle")
                 .font(AppTheme.Font.caption)
         }
+    }
+}
+
+struct EmojiPickerGridView: View {
+    @Binding var selectedIcon: String
+    let filteredEmojis: [String]
+    
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                ForEach(filteredEmojis, id: \.self) { emoji in
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) { selectedIcon = emoji }
+                    } label: {
+                        Text(emoji)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .background(selectedIcon == emoji ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                            .cornerRadius(AppTheme.Radius.small)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(emoji)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: 180)
     }
 }

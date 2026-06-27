@@ -129,11 +129,7 @@ extension BackgroundDataService {
             
             var mazeEpisodes: [TVMazeEpisode] = []
             var mazeGenres: [String]?
-            // Skip TVMaze calls for completed/dropped shows with no upcoming episodes
-            let hasUpcomingEpisode = details.nextEpisodeDate != nil
-            let isActiveShow = item.state == .active || item.state == .rewatching
-            
-            if let mID = tvMazeID, (isActiveShow || hasUpcomingEpisode) {
+            if let mID = tvMazeID {
                 if let (episode, timezone, service, airtime, genres) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
@@ -147,10 +143,8 @@ extension BackgroundDataService {
                     }
                 }
                 
-                // Only fetch full episode list for active shows (airstamp data needed for scheduling)
-                if isActiveShow {
-                    mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
-                }
+                // Fetch full episode list from TVMaze
+                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
             }
 
             let mazeDict: [String: TVMazeEpisode] = {
@@ -247,36 +241,66 @@ extension BackgroundDataService {
                     let episodes: [TVEpisodeResult]
                 }
 
-                let fetchedSeasons: [FetchedSeasonData] = await withTaskGroup(of: FetchedSeasonData?.self) { group in
-                    for seasonData in seasonsToSync {
-                        let sNum = seasonData.season_number
-                        if seasonData.episode_count == 0 { continue }
+                var fetchedSeasons: [FetchedSeasonData] = []
+                
+                if tvMazeID != nil && !mazeEpisodes.isEmpty {
+                    // Group TVMaze episodes by season
+                    let groupedBySeason = Dictionary(grouping: mazeEpisodes, by: { $0.season ?? 1 })
+                    for (sNum, eps) in groupedBySeason {
+                        let sortedEps = eps.sorted(by: { ($0.number ?? 0) < ($1.number ?? 0) })
+                        let episodeResults = sortedEps.map { ep -> TVEpisodeResult in
+                            let strippedSummary = ep.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                            return TVEpisodeResult(
+                                episodeNumber: ep.number ?? 0,
+                                name: ep.name ?? "Episode \(ep.number ?? 0)",
+                                overview: strippedSummary,
+                                airDate: ep.airdate,
+                                runtime: ep.runtime
+                            )
+                        }
+                        
+                        let matchingTMDBSeason = seasonsToSync.first(where: { $0.season_number == sNum })
+                        fetchedSeasons.append(FetchedSeasonData(
+                            seasonNumber: sNum,
+                            name: matchingTMDBSeason?.name ?? "Season \(sNum)",
+                            episodeCount: sortedEps.count,
+                            airDate: sortedEps.first?.airdate,
+                            episodes: episodeResults
+                        ))
+                    }
+                    fetchedSeasons.sort(by: { $0.seasonNumber < $1.seasonNumber })
+                } else {
+                    fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
+                        for seasonData in seasonsToSync {
+                            let sNum = seasonData.season_number
+                            if seasonData.episode_count == 0 { continue }
 
-                        // Skip seasons that already have episodes loaded unless force
-                        if !force {
-                            let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                            if let existing = try? modelContext.fetch(sDescriptor).first,
-                               existing.totalEpisodesCount > 0 {
-                                continue
+                            // Skip seasons that already have episodes loaded unless force
+                            if !force {
+                                let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                                let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                                if let existing = try? modelContext.fetch(sDescriptor).first,
+                                   existing.totalEpisodesCount > 0 {
+                                    continue
+                                }
+                            }
+
+                            group.addTask {
+                                do {
+                                    let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
+                                    return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
+                                } catch {
+                                    AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
+                                    return nil
+                                }
                             }
                         }
-
-                        group.addTask {
-                            do {
-                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
-                            } catch {
-                                AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
-                                return nil
-                            }
+                        var results: [FetchedSeasonData] = []
+                        for await result in group {
+                            if let result { results.append(result) }
                         }
+                        return results.sorted { $0.seasonNumber < $1.seasonNumber }
                     }
-                    var results: [FetchedSeasonData] = []
-                    for await result in group {
-                        if let result { results.append(result) }
-                    }
-                    return results.sorted { $0.seasonNumber < $1.seasonNumber }
                 }
 
                 // Batch pre-fetch all existing seasons and episodes for this show to avoid N+1 queries

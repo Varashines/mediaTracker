@@ -94,12 +94,12 @@ struct SearchView: View {
         }
         .onAppear {
             searchVM.displayCache = viewModel.display
-            if !searchText.isEmpty {
+            if !searchText.isEmpty && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
         }
         .onDisappear {
-            searchVM.cancelAllSearchOperations()
+            searchVM.cancelSearchTaskOnly()
         }
         .background {
             if isSearchActive {
@@ -132,10 +132,19 @@ struct SearchView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 240)
+                .padding(AppTheme.Spacing.micro)
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+                }
                 Spacer()
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
     }
@@ -159,7 +168,9 @@ struct SearchView: View {
     private var resultsScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.pageMargin) {
-                if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
+                if searchText.isEmpty {
+                    recentSearchesLandingSection
+                } else if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
                     HStack {
                         Spacer()
                         ProgressView()
@@ -181,14 +192,82 @@ struct SearchView: View {
     }
 
     @ViewBuilder
+    private var recentSearchesLandingSection: some View {
+        if !recentSearches.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Label("Recent Searches", systemImage: "clock.arrow.circlepath")
+                        .font(AppTheme.Font.heading)
+                        .foregroundStyle(.secondary)
+                    
+                    Spacer()
+                    
+                    Button {
+                        recentSearchesData = ""
+                    } label: {
+                        Text("Clear History")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                
+                FlowLayout(spacing: 8) {
+                    ForEach(recentSearches, id: \.self) { query in
+                        Button {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                searchText = query
+                            }
+                        } label: {
+                            Text(query)
+                                .font(AppTheme.Font.body)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.primary.opacity(0.06))
+                                .cornerRadius(AppTheme.Radius.medium)
+                        }
+                        .buttonStyle(.plain)
+                        .hoverScaled(.subtle)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            }
+        } else {
+            VStack(spacing: AppTheme.Spacing.medium) {
+                Spacer(minLength: 40)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.secondary.opacity(0.6))
+                Text("Search movies and TV shows")
+                    .font(AppTheme.Font.heading)
+                    .foregroundStyle(.secondary)
+                Text("Enter a title or creator name to discover media.")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary.opacity(0.8))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+        }
+    }
+
+    @ViewBuilder
     private var localResultsSection: some View {
         if !searchText.isEmpty && !searchVM.filteredLocalResults.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "tray.full.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.Colors.accent)
                     Text("In Your Library")
                         .font(AppTheme.Font.title3)
+                    
+                    Text("\(searchVM.filteredLocalResults.count)")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(AppTheme.Colors.accent.opacity(0.12))
+                        .clipShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
@@ -196,7 +275,6 @@ struct SearchView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(Array(searchVM.filteredLocalResults.enumerated()), id: \.element.id) { idx, metadata in
                         MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
-                            isSearchActive = false
                             if let item = modelContext.model(for: metadata.id) as? MediaItem {
                                 onSelectLocal?(item)
                             }
@@ -217,11 +295,19 @@ struct SearchView: View {
         let combined = searchVM.allWebResults
         if !combined.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "globe")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.Colors.accent)
                     Text("Global Search")
                         .font(AppTheme.Font.title3)
+                    
+                    Text("\(combined.count)")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(AppTheme.Colors.accent.opacity(0.12))
+                        .clipShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
@@ -230,7 +316,6 @@ struct SearchView: View {
                     ForEach(Array(combined.enumerated()), id: \.element.id) { idx, result in
                         MediaThumbnailView(result: result, isLocal: false) {
                             searchVM.addMedia(result, modelContext: modelContext) { item in
-                                isSearchActive = false
                                 onSelectLocal?(item)
                             }
                         }

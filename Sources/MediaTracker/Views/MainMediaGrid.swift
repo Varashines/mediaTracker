@@ -61,18 +61,6 @@ struct MainMediaGrid: View {
             if metadata.id == items.last?.id {
                 onLoadMore()
             }
-            if !isFastScrolling {
-                let prefetchCount = 12
-                if idx + 1 < items.count {
-                    let endIdx = min(idx + 1 + prefetchCount, items.count)
-                    let urlsToPrefetch = items[idx+1..<endIdx]
-                        .compactMap { $0.posterURL }
-                        .compactMap { URL(string: $0) }
-                    if !urlsToPrefetch.isEmpty {
-                        PrefetchManager.shared.prefetch(urls: urlsToPrefetch, targetSize: .thumbSmall)
-                    }
-                }
-            }
         }
     }
 

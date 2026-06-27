@@ -9,6 +9,7 @@ struct GeneralSection: View {
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
     @AppStorage("skip_startup_background_tasks") private var skipStartupTasks = false
+    @AppStorage("use_title_logos") private var useTitleLogos = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private var isSystem: Bool { themePreference == 0 }
@@ -29,11 +30,13 @@ struct GeneralSection: View {
                         }
                     ))
 
-                    SettingsLabeledRow(title: "Appearance", showDivider: false) {
+                    SettingsLabeledRow(title: "Appearance", showDivider: true) {
                         LightDarkPicker(themePreference: $themePreference)
                     }
                     .opacity(isSystem ? 0.4 : 1.0)
                     .allowsHitTesting(!isSystem)
+
+                    SettingsToggleRow(title: "Use Graphic Logos", subtitle: "Show graphical title logos in detailed view headers when available", showDivider: false, isOn: $useTitleLogos)
                 }
             }
 

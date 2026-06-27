@@ -342,15 +342,6 @@ actor LibraryStatsActor {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
 
-            if includeCinephileData && stats.barcodeData.count < 200 {
-                stats.barcodeData.append(BarcodeSlice(
-                    id: item.id,
-                    title: item.title,
-                    tasteValue: tasteValue,
-                    themeColorHex: item.themeColorHex
-                ))
-            }
-
             // Taste counts
             if let taste = TasteValue(rawValue: tasteValue) {
                 switch taste {
@@ -468,20 +459,6 @@ actor LibraryStatsActor {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
 
-        // 4. Compute personality & passport stats
-        let ratingPersonality = computeRatingPersonality(loved: stats.loved, liked: stats.liked, disliked: stats.disliked, unrated: stats.unrated)
-        let archetype = computeArchetype(
-            totalMovies: stats.movieCount,
-            completedMovies: stats.movieCompleted,
-            totalTV: stats.tvCount,
-            completedTV: stats.tvCompleted,
-            loved: stats.loved,
-            liked: stats.liked,
-            disliked: stats.disliked,
-            tvWatchTime: 0,
-            totalWatchTime: stats.watchTime
-        )
-
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
             totalMovies: stats.movieCount,
@@ -499,9 +476,9 @@ actor LibraryStatsActor {
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
             unratedCount: stats.unrated,
-            barcodeData: stats.barcodeData,
-            ratingPersonality: ratingPersonality,
-            archetype: archetype,
+            barcodeData: [],
+            ratingPersonality: "",
+            archetype: "",
             memberSince: stats.earliestDateAdded
         )
     }

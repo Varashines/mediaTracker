@@ -37,7 +37,9 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            refreshButton
+            if !isSearchActive {
+                refreshButton
+            }
         }
     }
 

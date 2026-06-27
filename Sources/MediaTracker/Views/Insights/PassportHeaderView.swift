@@ -30,8 +30,6 @@ struct PassportHeaderView: View {
                     .foregroundStyle(.primary)
 
                 Spacer()
-
-                ArchetypeBadge(archetype: stats.archetype, onTap: onArchetypeTap)
             }
 
             HStack(spacing: 6) {

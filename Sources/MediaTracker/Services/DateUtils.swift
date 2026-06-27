@@ -8,7 +8,7 @@ struct StreamingServiceRule: Codable {
     
     static let defaults: [StreamingServiceRule] = [
         // Apple TV+: Drops at Midnight ET, usually listed as US date but available in India next morning.
-        StreamingServiceRule(patterns: ["apple"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 1),
+        StreamingServiceRule(patterns: ["apple"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // Disney+ (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
         StreamingServiceRule(patterns: ["disney", "star wars", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // Netflix: Midnight PT.
@@ -75,41 +75,39 @@ struct DateUtils {
     }
 
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
-        guard let dateString = dateString else { return nil }
+        var resolvedDateString = dateString
+        if resolvedDateString == nil, let airstamp = airstamp, airstamp.count >= 10 {
+            resolvedDateString = String(airstamp.prefix(10))
+        }
         
-        // 1. Identify the service explicitly for smart defaults
         let service = (serviceName ?? show?.network ?? "").lowercased()
         
-        var finalDate: Date? = nil
-
-        // 2. Data-Driven Streaming Overrides (Preserve existing strict rules)
+        // 1. Data-Driven Streaming Overrides (Preserve existing strict rules and take highest precedence)
         if let rule = StreamingServiceRule.defaults.first(where: { rule in
             rule.patterns.contains(where: { service.contains($0) })
-        }) {
+        }), let dateStr = resolvedDateString {
             let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: rule.timeZoneIdentifier)
-            if let baseDate = formatter.date(from: "\(dateString) \(rule.releaseTime)") {
-                finalDate = Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
+            if let baseDate = formatter.date(from: "\(dateStr) \(rule.releaseTime)") {
+                return Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
             }
         }
-
-        if finalDate == nil {
-            // 3. Fallback: Trust high-precision ISO airstamp if available from the database
-            if let airstamp = airstamp, let date = getIsoFormatter().date(from: airstamp) {
-                finalDate = date
-            } 
-            // 4. Use provided timezone and show-level schedule
-            else if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
-                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
-                let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
-                finalDate = formatter.date(from: "\(dateString) \(timeToUse)")
-            } 
-            // 5. Smart Fallback for TMDB dates without time: Assume US Network (8 PM ET)
-            else {
-                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
-                finalDate = formatter.date(from: "\(dateString) 20:00")
-            }
+        
+        // 2. Fallback: Trust high-precision ISO airstamp if available from the database
+        if let airstamp = airstamp, let date = getIsoFormatter().date(from: airstamp) {
+            return date
         }
+        
+        guard let dateStr = resolvedDateString else { return nil }
 
-        return finalDate
+        // 3. Fallback: Use provided timezone and show-level schedule
+        if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
+            let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
+            let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
+            return formatter.date(from: "\(dateStr) \(timeToUse)")
+        } 
+        
+        // 4. Smart Fallback for TMDB dates without time: Assume US Network (8 PM ET)
+        let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
+        return formatter.date(from: "\(dateStr) 20:00")
     }
 }

@@ -51,6 +51,21 @@ struct MetadataSection: View {
             } else if let e = tv.numberOfEpisodes, e > 0 {
                 items.append(MetadataItem(icon: "play.fill", value: "\(e) EP"))
             }
+            
+            // Add next unwatched episode pill if the bottom card is hidden (empty overview)
+            let unwatched = tv.seasons.liveModels.flatMap { $0.episodes.liveModels }
+                .filter { !$0.isWatched && $0.seasonNumber > 0 }
+                .sorted {
+                    if $0.seasonNumber != $1.seasonNumber {
+                        return $0.seasonNumber < $1.seasonNumber
+                    }
+                    return $0.episodeNumber < $1.episodeNumber
+                }
+                .first
+            
+            if let next = unwatched, next.overview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                items.append(MetadataItem(icon: "play.circle.fill", value: "Next: S\(next.seasonNumber)E\(next.episodeNumber)"))
+            }
         }
         
         if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {

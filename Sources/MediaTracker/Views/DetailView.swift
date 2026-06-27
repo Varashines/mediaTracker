@@ -12,7 +12,6 @@ struct DetailView: View {
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
-    @State private var showConfetti = false
     @State private var isActionBarVisible = true
     @State private var lastScrollOffset: CGFloat = 0
 
@@ -32,19 +31,6 @@ struct DetailView: View {
                 AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
             } else {
                 contentOverlay
-            }
-
-            if showConfetti {
-                ConfettiOverlay()
-                    .transition(.opacity)
-                    .onAppear {
-                        Task {
-                            try? await Task.sleep(for: .seconds(2.5))
-                            withAnimation(.easeOut(duration: 0.4)) {
-                                showConfetti = false
-                            }
-                        }
-                    }
             }
 
         }
@@ -183,7 +169,7 @@ struct DetailView: View {
                             style: .success
                         )
                         if isCompleted && !wasCompleted {
-                            showConfetti = true
+                            // Completion effect handled via badge/haptic
                         }
                     }
                 }
@@ -244,11 +230,28 @@ struct DetailView: View {
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
-                if viewModel.item.type == .tvShow, let nextEpisode = viewModel.nextEpisodeToWatch {
+                if viewModel.item.type == .tvShow, let nextEpisode = viewModel.nextEpisodeToWatch, !nextEpisode.overview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     ModularSection(title: "Next Up to Watch", icon: "play.circle.fill", color: effectiveThemeColor) {
                         HStack(spacing: AppTheme.Spacing.medium) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("SEASON \(nextEpisode.seasonNumber), EPISODE \(nextEpisode.episodeNumber)".uppercased())
+                                let subtitleText: String = {
+                                    var comps = ["SEASON \(nextEpisode.seasonNumber), EPISODE \(nextEpisode.episodeNumber)"]
+                                    if let airDate = nextEpisode.airDateAsDate {
+                                        let dateStr = airDate.formatted(.dateTime.month(.abbreviated).day().year())
+                                        if nextEpisode.airstamp != nil {
+                                            let timeStr = airDate.formatted(.dateTime.hour().minute())
+                                            comps.append("\(dateStr) at \(timeStr)")
+                                        } else {
+                                            comps.append(dateStr)
+                                        }
+                                    }
+                                    if let runtime = nextEpisode.runtime, runtime > 0 {
+                                        comps.append("\(runtime)m")
+                                    }
+                                    return comps.joined(separator: "  ·  ").uppercased()
+                                }()
+                                
+                                Text(subtitleText)
                                     .font(AppTheme.Font.caption2)
                                     .kerning(AppTheme.Kerning.wide)
                                     .foregroundStyle(.secondary)
@@ -298,7 +301,7 @@ struct DetailView: View {
                             },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
                             onSeasonCompleted: {
-                                showConfetti = true
+                                // Handled via badge/haptic
                             }
                         )
                         .padding(.top, 4)

@@ -16,6 +16,7 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
                 .onChange(of: sidebarSelection) { _, newValue in
                     guard let selection = newValue else { return }
+                    isSearchActive = false
                     Task { @MainActor in
                         viewModel.navigationPath = NavigationPath()
 
@@ -318,7 +319,6 @@ struct LibraryDetailView: View {
                 TasteActor.clearCache()
                 BadgeEngine.clearScanCache()
                 LibraryStatsActor.clearCache()
-                PrefetchManager.shared.cancel()
                 URLCache.shared.removeAllCachedResponses()
             }
             performUpdate()
