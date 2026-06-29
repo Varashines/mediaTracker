@@ -4,7 +4,7 @@ import ServiceManagement
 struct GeneralSection: View {
     @Environment(\.colorScheme) var scheme
     @AppStorage("theme_preference") private var themePreference: Int = 0
-    @AppStorage("custom_theme_palette") private var customThemePalette = 0
+    @AppStorage("theme_preset") private var themePreset = 0
     @AppStorage("haptics_enabled") private var hapticsEnabled = true
     @AppStorage("audio_enabled") private var audioEnabled = true
     @AppStorage("prevent_sleep_mode") private var preventSleepMode = false
@@ -30,32 +30,47 @@ struct GeneralSection: View {
                         }
                     ))
 
-                    SettingsLabeledRow(title: "Appearance", showDivider: true) {
+                    SettingsRow(title: "Appearance", showDivider: true) {
                         LightDarkPicker(themePreference: $themePreference)
                     }
                     .opacity(isSystem ? 0.4 : 1.0)
                     .allowsHitTesting(!isSystem)
 
-                    SettingsToggleRow(title: "Use Graphic Logos", subtitle: "Show graphical title logos in detailed view headers when available", showDivider: false, isOn: $useTitleLogos)
-                }
-            }
+                    SettingsRow(title: "Palette", showDivider: true) {
+                        HStack(spacing: AppTheme.Spacing.medium) {
+                            ForEach(0..<AppThemeCoordinator.presets.count, id: \.self) { index in
+                                let preset = AppThemeCoordinator.presets[index]
+                                let isSelected = themePreset == index
+                                let color = Color(hex: preset.accent) ?? .gray
 
-            SettingsSectionHeader(text: "Color Palette", icon: "paintbrush", color: .purple)
+                                Button {
+                                    withAnimation(AppTheme.Animation.springSnappy) {
+                                        themePreset = index
+                                    }
+                                } label: {
+                                    ZStack {
+                                        Capsule()
+                                            .fill(color)
+                                            .frame(width: 44, height: 26)
 
-            SettingsCard(color: .purple) {
-                VStack(spacing: 0) {
-                    HStack(spacing: AppTheme.Spacing.smallMedium) {
-                        paletteDot(index: 0, accent: Color.accentColor, label: "Standard")
-                        paletteDot(index: 1, accent: Color(hex: "#C47A5A") ?? .accentColor, label: "Earth")
-                        paletteDot(index: 2, accent: Color(hex: "#7B8CDE") ?? .accentColor, label: "Cool")
-                        paletteDot(index: 3, accent: Color(hex: "#10B981") ?? .accentColor, label: "Forest")
-                        paletteDot(index: 4, accent: Color(hex: "#3B82F6") ?? .accentColor, label: "Ocean")
-                        paletteDot(index: 5, accent: Color(hex: "#D97706") ?? .accentColor, label: "Dusk")
-                        paletteDot(index: 6, accent: Color(hex: "#8B5CF6") ?? .accentColor, label: "Midnight")
+                                        if isSelected {
+                                            Circle()
+                                                .fill(.white)
+                                                .frame(width: 6, height: 6)
+                                                .shadow(color: .black.opacity(0.3), radius: 1)
+                                        }
+                                    }
+                                    .frame(width: 44, height: 26)
+                                    .contentShape(Capsule())
+                                    .help(preset.name)
+                                    .accessibilityLabel(preset.name)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppTheme.Spacing.smallMedium)
-                    .padding(.horizontal, AppTheme.Spacing.smallMedium)
+
+                    SettingsToggleRow(title: "Use Graphic Logos", subtitle: "Show graphical title logos in detailed view headers when available", showDivider: false, isOn: $useTitleLogos)
                 }
             }
 
@@ -83,29 +98,5 @@ struct GeneralSection: View {
                 }
             }
         }
-    }
-
-    private func paletteDot(index: Int, accent: Color, label: String) -> some View {
-        let isSelected = customThemePalette == index
-        return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                customThemePalette = index
-            }
-        } label: {
-            Circle()
-                .fill(accent)
-                .frame(width: AppTheme.Spacing.large, height: AppTheme.Spacing.large)
-                .overlay {
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(accent.isLightColor ? .black : .white)
-                    }
-                }
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help(label)
-        .accessibilityLabel(label)
     }
 }

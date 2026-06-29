@@ -65,7 +65,6 @@ struct GroupedMediaGrid: View {
             selectedCollectionID: viewModel.collection.selectedCollectionID
         )
         .equatable()
-        .id(metadata.versionHash)
     }
 
     @Environment(\.modelContext) private var modelContext

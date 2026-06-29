@@ -80,8 +80,8 @@ final class MediaItem: Identifiable {
         self.dateAdded = now
     }
 
-    func commitChange() {
-        syncCachedProperties(force: true)
+    nonisolated func commitChange(forceRecalc: Bool = false) {
+        syncCachedProperties(force: forceRecalc)
         guard let context = modelContext else { return }
         do {
             try context.save()
@@ -172,7 +172,7 @@ final class MediaItem: Identifiable {
             }
             
             if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
-            commitChange()
+            commitChange(forceRecalc: true)
         }
     }
 
@@ -221,29 +221,23 @@ final class MediaItem: Identifiable {
 
 extension MediaItem {
     var isUpcoming: Bool {
-        let date = cachedNextAiringDate ?? releaseDate
-        guard let finalDate = date else { return false }
-        return finalDate > Date()
+        storedIsUpcoming
     }
 
     var badgeText: String? {
-        if isUpcoming {
-            return cachedNextAiringDate?.formatted(date: .abbreviated, time: .omitted)
-        }
-        return nil
+        guard isUpcoming, let date = cachedNextAiringDate else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 
     var gridBadgeText: String? { badgeText }
 
     var detailBadgeText: String? {
-        if isUpcoming {
-            if type == .tvShow {
-                return cachedNextAiringDate?.formatted(date: .abbreviated, time: .shortened)
-            } else {
-                return cachedNextAiringDate?.formatted(date: .abbreviated, time: .omitted)
-            }
+        guard isUpcoming, let date = cachedNextAiringDate else { return nil }
+        if type == .tvShow {
+            return date.formatted(date: .abbreviated, time: .shortened)
+        } else {
+            return date.formatted(date: .abbreviated, time: .omitted)
         }
-        return nil
     }
 
     var requiresMaintenanceRefresh: Bool {

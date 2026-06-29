@@ -188,7 +188,8 @@ struct SearchView: View {
             }
             .padding(.vertical, AppTheme.Spacing.xLarge)
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .scrollBounceBehavior(.always)
+        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
@@ -257,16 +258,16 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 8) {
                     Image(systemName: "tray.full.fill")
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                     Text("In Your Library")
                         .font(AppTheme.Font.title3)
                     
                     Text("\(searchVM.filteredLocalResults.count)")
                         .font(AppTheme.Font.caption2)
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(AppTheme.Colors.accent.opacity(0.12))
+                        .background(.secondary.opacity(0.12))
                         .clipShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -297,16 +298,16 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 8) {
                     Image(systemName: "globe")
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                     Text("Global Search")
                         .font(AppTheme.Font.title3)
                     
                     Text("\(combined.count)")
                         .font(AppTheme.Font.caption2)
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(AppTheme.Colors.accent.opacity(0.12))
+                        .background(.secondary.opacity(0.12))
                         .clipShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)

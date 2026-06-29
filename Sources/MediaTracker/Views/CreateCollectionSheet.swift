@@ -185,7 +185,7 @@ struct CreateCollectionSheet: View {
                 .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(AppTheme.Colors.accent))
+                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(.secondary))
                 .foregroundStyle(.white)
                 .cornerRadius(AppTheme.Radius.medium)
             }
@@ -295,7 +295,7 @@ struct IconPickerGridView: View {
                         Image(systemName: iconName)
                             .font(.title3)
                             .frame(width: 44, height: 44)
-                            .background(selectedIcon == iconName ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                            .background(selectedIcon == iconName ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.primary.opacity(0.05)))
                             .foregroundStyle(selectedIcon == iconName ? .white : .primary)
                             .cornerRadius(AppTheme.Radius.small)
                     }
@@ -415,7 +415,7 @@ struct EmojiPickerGridView: View {
                         Text(emoji)
                             .font(.title3)
                             .frame(width: 44, height: 44)
-                            .background(selectedIcon == emoji ? AnyShapeStyle(AppTheme.Colors.accent) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                            .background(selectedIcon == emoji ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.primary.opacity(0.05)))
                             .cornerRadius(AppTheme.Radius.small)
                     }
                     .buttonStyle(.plain)

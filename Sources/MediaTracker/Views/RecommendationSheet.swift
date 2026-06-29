@@ -12,7 +12,7 @@ struct RecommendationSheet: View {
     @State private var addedIDs: Set<String> = []
 
     private var themeColor: Color {
-        AppTheme.Colors.accent
+        Color.secondary
     }
 
     var body: some View {
@@ -25,7 +25,7 @@ struct RecommendationSheet: View {
                 .padding(AppTheme.Spacing.pageMargin)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .background(AppTheme.Colors.background(for: colorScheme))
+            .background(AppTheme.Colors.surface(for: colorScheme))
             .navigationTitle("Recommended for You")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -53,7 +53,7 @@ struct RecommendationSheet: View {
                         .foregroundStyle(.tertiary)
                     Text("Top traits: \(debugTraits.joined(separator: ", "))")
                         .font(AppTheme.Font.caption)
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

@@ -46,7 +46,7 @@ struct ForYouCompactCard: View, Equatable {
             
             // 2. Matching Your Taste Tag (Top Right)
             if let context = recommendationContext {
-                let accent = AppTheme.Colors.accent
+                let accent: Color = .secondary
                 VStack {
                     HStack {
                         Spacer()
@@ -69,7 +69,6 @@ struct ForYouCompactCard: View, Equatable {
                         .overlay {
                             Capsule().stroke(accent.opacity(0.4), lineWidth: 0.8)
                         }
-                        .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 6, y: 3)
                         .padding(12)
                     }
                     Spacer()
@@ -81,14 +80,13 @@ struct ForYouCompactCard: View, Equatable {
                 if let poster = metadata.posterURL, let url = URL(string: poster) {
                     ZStack {
                         // Poster image
-                        CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) { _ in } placeholder: {
+                        CachedImage(url: url, targetSize: .thumbSmall, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                             RoundedRectangle(cornerRadius: posterCornerRadius, style: .continuous)
                                 .fill(Color.secondary.opacity(0.15))
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: posterWidth, height: posterHeight)
                         .clipShape(RoundedRectangle(cornerRadius: posterCornerRadius, style: .continuous))
-                        .shadow(color: .black.opacity(isHovered ? 0.25 : 0.2), radius: isHovered ? 7 : 5, y: isHovered ? 3 : 2)
                     }
                     .padding(.leading, posterPadding)
                     .padding(.vertical, posterPadding)

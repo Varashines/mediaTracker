@@ -20,7 +20,7 @@ struct PosterView: View {
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: glowPulse)
                 
-                CachedImage(url: url, targetSize: .thumbLarge, priority: .normal, themeColor: themeColor) { _ in
+                CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
                 }

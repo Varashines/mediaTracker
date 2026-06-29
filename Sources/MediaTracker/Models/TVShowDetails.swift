@@ -71,20 +71,21 @@ final class TVShowDetails {
         
         for season in sortedSeasons {
             let seasonEpisodes = season.episodes.liveModels
-            // Sync season counts
+            // Ensure episodes are sorted
+            let sortedEpisodes = seasonEpisodes.sorted { $0.episodeNumber < $1.episodeNumber }
+            
+            var seasonWatched = 0
+            // Sync season counts and compute progress in a single pass
             season.totalEpisodesCount = max(season.episodeCount, seasonEpisodes.count)
-            season.watchedEpisodesCount = seasonEpisodes.filter { $0.isWatched }.count
 
             // Standard progress calculations usually exclude Specials (Season 0)
             if season.seasonNumber > 0 {
                 total += season.totalEpisodesCount
-                watched += season.watchedEpisodesCount
-                
-                // Ensure episodes are sorted
-                let sortedEpisodes = seasonEpisodes.sorted { $0.episodeNumber < $1.episodeNumber }
                 
                 for ep in sortedEpisodes {
                     if ep.isWatched {
+                        watched += 1
+                        seasonWatched += 1
                         runtime += ep.runtime ?? 0
                     } else if firstUnwatchedEpisode == nil {
                         firstUnwatchedEpisode = ep
@@ -94,7 +95,13 @@ final class TVShowDetails {
                         aired += 1
                     }
                 }
+            } else {
+                // Still count watched for Specials season display
+                for ep in sortedEpisodes where ep.isWatched {
+                    seasonWatched += 1
+                }
             }
+            season.watchedEpisodesCount = seasonWatched
         }
         
         let remaining = max(0, aired - watched)

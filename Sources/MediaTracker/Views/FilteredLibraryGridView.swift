@@ -24,6 +24,7 @@ struct FilteredLibraryGridView: View {
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var updateTask: Task<Void, Never>? = nil
     @State private var recsTask: Task<Void, Never>? = nil
+    @State private var scrollTask: Task<Void, Never>? = nil
     @State private var cachedLikedTitles: [String] = []
     @State private var cachedRecommendedDomain: String = "showdive"
     private func getFilterActor() -> MediaFilterActor {
@@ -59,7 +60,7 @@ struct FilteredLibraryGridView: View {
                                 NavigationLink(value: metadata.id) {
                                     MediaThumbnailView(
                                         metadata: metadata, mode: .grid, namespace: namespace,
-                                        isFastScrolling: isFastScrolling)
+                                        staggerIndex: idx, isFastScrolling: isFastScrolling)
                                     .equatable()
                                 }
                                 .buttonStyle(.interactive)
@@ -79,6 +80,10 @@ struct FilteredLibraryGridView: View {
                     .padding(AppTheme.Spacing.pageMargin)
                 }
                 .scrollBounceBehavior(.always)
+                .scrollIndicators(.hidden)
+                .background {
+                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+                }
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)
@@ -110,7 +115,7 @@ struct FilteredLibraryGridView: View {
             recsTask?.cancel()
             recsTask = nil
         }
-        .task(id: items) {
+        .task {
             recomputeRecommendationData()
         }
         .overlay(alignment: .bottomTrailing) {
@@ -130,9 +135,9 @@ struct FilteredLibraryGridView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(AppTheme.Colors.accent)
+                    .background(.secondary)
                     .clipShape(Capsule())
-                    .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 8, y: 4)
+                    .shadow(color: .secondary.opacity(0.3), radius: 8, y: 4)
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -189,6 +194,13 @@ struct FilteredLibraryGridView: View {
                 await MainActor.run {
                     items.append(contentsOf: result.displayed)
                     isLoadingMore = false
+                    recomputeRecommendationData()
+                }
+
+                // Prefetch images for newly loaded items so they're ready when the user scrolls to them
+                let posterURLs = result.displayed.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
+                if !posterURLs.isEmpty {
+                    ImageCache.shared.prewarmImages(urls: posterURLs, targetSize: .thumbSmall)
                 }
             } catch {
                 if !(error is CancellationError) {

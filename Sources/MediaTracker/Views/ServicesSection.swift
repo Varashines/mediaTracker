@@ -146,7 +146,7 @@ struct ServicesSection: View {
             HStack(spacing: AppTheme.Spacing.micro) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
                     .font(AppTheme.Font.label)
-                    .foregroundStyle(isOn.wrappedValue ? AppTheme.Colors.accent : .secondary)
+                    .foregroundStyle(isOn.wrappedValue ? .secondary : .secondary)
                 Text(title)
                     .font(AppTheme.Font.label)
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
@@ -155,7 +155,7 @@ struct ServicesSection: View {
             .padding(.vertical, AppTheme.Spacing.micro)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(isOn.wrappedValue ? AppTheme.Colors.accent.opacity(0.06) : Color.primary.opacity(0.03))
+                    .fill(isOn.wrappedValue ? .secondary.opacity(0.06) : Color.primary.opacity(0.03))
             )
         }
         .buttonStyle(.plain)

@@ -41,7 +41,7 @@ struct TrendingPosterCard: View, Equatable {
         }
         .frame(width: 160, height: 240)
         .scaleEffect(isHovered ? 1.03 : 1.0)
-        .shadow(color: .black.opacity(isHovered ? 0.15 : 0), radius: 8, y: 4)
+        .shadow(color: AppTheme.Colors.shadowAmbient(for: .dark), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
         .accessibilityLabel(item.title)

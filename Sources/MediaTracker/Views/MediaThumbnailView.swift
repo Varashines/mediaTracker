@@ -350,9 +350,9 @@ struct MediaThumbnailView: View, Equatable {
         .shadow(
             color: isHovered
                 ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                : AppTheme.Colors.shadowAmbient(for: colorScheme),
-            radius: isHovered ? 12 : AppTheme.Shadow.subtle.radius,
-            y: isHovered ? 6 : AppTheme.Shadow.subtle.y
+                : Color.clear,
+            radius: 0,
+            y: 0
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)

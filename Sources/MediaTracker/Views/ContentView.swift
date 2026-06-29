@@ -14,6 +14,7 @@ struct ContentView: View {
             SidebarNavigation(selection: $sidebarSelection)
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
                 .onChange(of: sidebarSelection) { _, newValue in
                     guard let selection = newValue else { return }
                     isSearchActive = false
@@ -517,6 +518,12 @@ struct LibraryDetailView: View {
                     viewModel.display.displayedItems.append(contentsOf: result.displayed)
                     viewModel.pagination.isLoadingMore = false
                     viewModel.pagination.currentOffset = nextOffset
+                }
+
+                // Prefetch images for newly loaded items so they're ready when the user scrolls to them
+                let posterURLs = result.displayed.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
+                if !posterURLs.isEmpty {
+                    ImageCache.shared.prewarmImages(urls: posterURLs, targetSize: .thumbSmall)
                 }
             } catch {
                 AppLogger.debug("Error loading more: \(error)")

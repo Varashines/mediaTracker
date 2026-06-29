@@ -67,7 +67,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 let hasNote = !viewModel.collection.currentCollectionNote.isEmpty
                 Image(systemName: icon)
                     .font(AppTheme.Icon.medium)
-                    .foregroundStyle(hasNote ? AppTheme.Colors.accent : Color.secondary)
+                    .foregroundStyle(hasNote ? .secondary : Color.secondary)
             }
             .help("Collection Notes")
 

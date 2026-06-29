@@ -57,11 +57,12 @@ struct MainLibraryView: View {
                         onCategorySelected: onCategorySelected,
                         onTrendingAdd: onTrendingAdd
                     )
+                    .equatable()
                     .transition(.opacity)
                 }
 
                 if selectedCategory != .home {
-                    if viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory {
+                    Section {
                         LibraryGridSection(
                             items: items,
                             groupedItems: groupedItems,
@@ -78,25 +79,8 @@ struct MainLibraryView: View {
                             onLoadMore: onLoadMore
                         )
                         .transition(.opacity)
-                    } else {
-                        Section {
-                            LibraryGridSection(
-                                items: items,
-                                groupedItems: groupedItems,
-                                recentlyAdded: recentlyAdded,
-                                featuredCarouselItems: featuredCarouselItems,
-                                selectedCategory: selectedCategory,
-                                searchText: searchText,
-                                selectedNetworks: selectedNetworks,
-                                namespace: namespace,
-                                isFastScrolling: isFastScrolling,
-                                disableHover: false,
-                                columns: columns,
-                                viewModel: viewModel,
-                                onLoadMore: onLoadMore
-                            )
-                            .transition(.opacity)
-                        } header: {
+                    } header: {
+                        if !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
                             VStack(alignment: .leading, spacing: 0) {
                                 if let networks = selectedNetworks, !networks.isEmpty {
                                     LibraryHeaderView(
@@ -113,8 +97,8 @@ struct MainLibraryView: View {
                                 }
                             }
                         }
-                        .transition(.opacity)
                     }
+                    .transition(.opacity)
                 }
             }
             .background {
@@ -123,6 +107,7 @@ struct MainLibraryView: View {
             }
         }
         .scrollBounceBehavior(.always)
+        .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .animation(AppTheme.Animation.springSnappy, value: selectedCategory)
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in

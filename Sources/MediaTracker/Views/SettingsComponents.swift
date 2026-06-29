@@ -171,7 +171,7 @@ struct SettingsLabeledRow<Trailing: View>: View {
 
 struct SettingsButton: View {
     let title: String
-    var color: Color = AppTheme.Colors.accent
+    var color: Color = .secondary
     let action: () -> Void
     @State private var isHovered = false
 

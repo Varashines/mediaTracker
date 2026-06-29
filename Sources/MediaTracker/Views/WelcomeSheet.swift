@@ -63,7 +63,7 @@ struct WelcomeSheet: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(AppTheme.Colors.accent)
+                    .background(.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                     .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
@@ -81,7 +81,7 @@ struct WelcomeSheet: View {
                 } label: {
                     Text("I already have a key")
                         .font(AppTheme.Font.bodyMedium)
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
@@ -130,7 +130,7 @@ struct WelcomeSheet: View {
                 .padding(.bottom, 24)
         }
         .frame(width: 380, height: 520)
-        .background(AppTheme.Colors.background(for: colorScheme))
+        .background(AppTheme.Colors.surface(for: colorScheme))
         .background {
             Button("") { NSApp.terminate(nil) }
                 .keyboardShortcut("q", modifiers: [.command])

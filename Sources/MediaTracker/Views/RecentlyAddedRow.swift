@@ -15,7 +15,7 @@ struct RecentlyAddedRow: View {
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
                                 .equatable()
-                                .id(metadata.versionHash)
+                                .compositingGroup()
                         }
                         .buttonStyle(.interactive)
                     }
@@ -26,7 +26,6 @@ struct RecentlyAddedRow: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
         }
-        .compositingGroup()
         Divider().padding(.horizontal, AppTheme.Spacing.pageMargin).padding(.bottom, 20)
     }
 }

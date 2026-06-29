@@ -16,7 +16,7 @@ enum UserDefaultsKeys: String {
     
     // Appearance
     case themePreference = "theme_preference"
-    case customThemePalette = "custom_theme_palette"
+    case themePreset = "theme_preset"
     case backgroundIntensity = "background_intensity"
     case useTitleLogos = "use_title_logos"
     

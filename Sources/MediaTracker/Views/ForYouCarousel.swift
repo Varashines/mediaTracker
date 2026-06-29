@@ -26,12 +26,12 @@ struct ForYouCarousel: View {
                         Button { onSelect(metadata) } label: {
                             ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
+                                .compositingGroup()
                         }
                         .buttonStyle(.interactive)
                     }
                 }
             }
         }
-        .compositingGroup()
     }
 }

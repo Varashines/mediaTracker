@@ -38,7 +38,7 @@ struct LibraryEmptyStateView: View {
                             .font(AppTheme.Font.bodyBold)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
-                            .background(AppTheme.Colors.accent)
+                            .background(.secondary)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
                     }

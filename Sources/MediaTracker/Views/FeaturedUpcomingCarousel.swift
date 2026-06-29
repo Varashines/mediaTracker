@@ -26,7 +26,7 @@ struct FeaturedUpcomingCarousel: View {
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
-                                .id(metadata.versionHash)
+                                .compositingGroup()
                         }
                         .buttonStyle(.interactive)
                     }
@@ -36,7 +36,6 @@ struct FeaturedUpcomingCarousel: View {
             }
         }
         .scrollClipDisabled()
-        .compositingGroup()
     }
 
     private func prewarm(items: [MediaThumbnailMetadata]) {

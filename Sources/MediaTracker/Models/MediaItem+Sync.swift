@@ -154,32 +154,45 @@ extension MediaItem {
                             ep.markWatched(true)
                         }
                     }
+                    // Recalculate progress after auto-mark so cached properties reflect actual state
+                    let finalProgress = tv.calculateProgress(now: now, forceRecalculate: true)
+                    self.cachedRuntime = finalProgress.totalRuntime
+                    self.cachedWatchedEpisodeCount = finalProgress.watchedCount
+                    self.remainingEpisodesCount = finalProgress.remainingCount
+
+                    if finalProgress.totalCount > 0 {
+                        self.cachedEpisodeRuntime = finalProgress.totalRuntime / finalProgress.totalCount
+                        let finalProgressVal = Double(finalProgress.watchedCount) / Double(finalProgress.totalCount)
+                        self.storedProgress = finalProgressVal
+                        self.storedWatchProgressLabel = "\(finalProgress.watchedCount)/\(finalProgress.totalCount) EP"
+                    }
+
+                    if let next = finalProgress.firstUnwatched {
+                        self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                        self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                    } else {
+                        self.storedNextEpisodeLabel = nil
+                        self.cachedNextAiringDate = tv.nextEpisodeDate
+                    }
+                } else {
+                    // No auto-mark needed, use original progressResult
+                    if let next = progressResult.firstUnwatched {
+                        self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                        self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                    } else {
+                        self.storedNextEpisodeLabel = nil
+                        self.cachedNextAiringDate = tv.nextEpisodeDate
+                    }
                 }
-            }
-
-            // Recalculate progress after auto-mark so cached properties reflect actual state
-            let finalProgress = if stateValue == "Completed" && UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
-                tv.calculateProgress(now: now, forceRecalculate: true)
             } else {
-                progressResult
-            }
-            self.cachedRuntime = finalProgress.totalRuntime
-            self.cachedWatchedEpisodeCount = finalProgress.watchedCount
-            self.remainingEpisodesCount = finalProgress.remainingCount
-
-            if finalProgress.totalCount > 0 {
-                self.cachedEpisodeRuntime = finalProgress.totalRuntime / finalProgress.totalCount
-                let finalProgressVal = Double(finalProgress.watchedCount) / Double(finalProgress.totalCount)
-                self.storedProgress = finalProgressVal
-                self.storedWatchProgressLabel = "\(finalProgress.watchedCount)/\(finalProgress.totalCount) EP"
-            }
-
-            if let next = finalProgress.firstUnwatched ?? progressResult.firstUnwatched {
-                self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
-                self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
-            } else {
-                self.storedNextEpisodeLabel = nil
-                self.cachedNextAiringDate = tv.nextEpisodeDate
+                // State is not Completed, no auto-mark, use original progressResult
+                if let next = progressResult.firstUnwatched {
+                    self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                    self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
+                } else {
+                    self.storedNextEpisodeLabel = nil
+                    self.cachedNextAiringDate = tv.nextEpisodeDate
+                }
             }
         } else {
             self.storedProgress = 0

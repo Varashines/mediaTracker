@@ -120,8 +120,13 @@ actor MediaFilterActor {
         // 4. Grouping Logic
         let finalGroupedItems = groupResults(results, groupBy: groupBy, collectionID: collectionID)
 
-        // 5. Fetch Recently Added
-        let recentAddedItems = fetchRecentlyAdded(category: category)
+        // 5. Fetch Recently Added (skip for home — it uses its own queries)
+        let recentAddedItems: [MediaThumbnailMetadata]
+        if category == .home {
+            recentAddedItems = []
+        } else {
+            recentAddedItems = fetchRecentlyAdded(category: category)
+        }
 
         return PaginatedResult(
             displayed: results.map { toMetadata($0) },

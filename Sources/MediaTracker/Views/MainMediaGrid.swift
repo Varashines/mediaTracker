@@ -50,7 +50,6 @@ struct MainMediaGrid: View {
             selectedCollectionID: selectedCollectionID
         )
         .equatable()
-        .id(metadata.versionHash)
         .onAppear {
             if metadata.id == items.last?.id {
                 onLoadMore()

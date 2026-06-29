@@ -179,7 +179,11 @@ struct MediaTrackerApp: App {
     private func updateSystemColorScheme() {
         #if os(macOS)
         let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        systemColorScheme = isDark ? .dark : .light
+        let newScheme: ColorScheme = isDark ? .dark : .light
+        if systemColorScheme != newScheme {
+            systemColorScheme = newScheme
+            AppThemeCoordinator.shared.appearanceDidChange()
+        }
         #endif
     }
 

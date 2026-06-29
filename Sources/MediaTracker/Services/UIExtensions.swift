@@ -1,6 +1,13 @@
 import SwiftUI
 import AppKit
 
+// Cache for parsed hex colors to avoid repeated parsing in view bodies
+private nonisolated(unsafe) let hexColorCache: NSCache<NSString, NSColor> = {
+    let cache = NSCache<NSString, NSColor>()
+    cache.countLimit = 200
+    return cache
+}()
+
 extension CGSize {
     static let thumbTiny = AppTheme.Thumbnail.tiny
     static let thumbSmall = AppTheme.Thumbnail.small
@@ -78,6 +85,13 @@ extension Color {
             return nil
         }
 
+        // Check cache first
+        let cacheKey = hexSanitized as NSString
+        if let cached = hexColorCache.object(forKey: cacheKey) {
+            self.init(cached)
+            return
+        }
+
         var rgb: UInt64 = 0
         guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
 
@@ -86,6 +100,11 @@ extension Color {
         let b = Double(rgb & 0x0000FF) / 255.0
 
         self.init(red: r, green: g, blue: b)
+
+        // Cache the parsed NSColor
+        if let nsColor = NSColor(self).usingColorSpace(.sRGB) {
+            hexColorCache.setObject(nsColor, forKey: cacheKey)
+        }
     }
 
     func toHex() -> String {
@@ -331,9 +350,6 @@ extension View {
 }
 struct AdaptiveBackgroundModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("theme_preference") private var themePreference = 0
-    @AppStorage("dark_theme_style") private var darkThemeStyle = 0
-    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     func body(content: Content) -> some View {
         content

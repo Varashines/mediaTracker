@@ -12,13 +12,15 @@ struct InsightsView: View {
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
     @State private var scrollOffset: CGFloat = 0
+    @State private var isFastScrolling = false
+    @State private var scrollTask: Task<Void, Never>?
     @Namespace private var flipNamespace
     var refreshID: Int = 0
 
     private var backgroundTint: Color {
         let progress = max(0, min(1, -scrollOffset / 800))
         let colors: [Color] = [
-            AppTheme.Colors.accent,
+            Color.secondary,
             .pink,
             .indigo,
             .orange,
@@ -28,7 +30,7 @@ struct InsightsView: View {
         let idx = Int(segment)
         let frac = segment - CGFloat(idx)
         guard idx + 1 < colors.count else {
-            return (colors.last ?? AppTheme.Colors.accent).opacity(0.05)
+            return (colors.last ?? .secondary).opacity(0.05)
         }
         return colors[idx].opacity(0.06 - Double(frac) * 0.01)
     }
@@ -46,7 +48,7 @@ struct InsightsView: View {
                     LazyVStack(spacing: AppTheme.Spacing.section) {
                         PassportHeaderView(stats: stats)
 
-                        SectionDivider(color: AppTheme.Colors.accent)
+                        SectionDivider(color: .secondary)
 
                         HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -89,6 +91,10 @@ struct InsightsView: View {
                 }
                 .coordinateSpace(name: insightsScrollName)
                 .scrollBounceBehavior(.always)
+                .scrollIndicators(.hidden)
+                .background {
+                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+                }
                 .onPreferenceChange(ScrollOffsetKey.self) { offsets in
                     scrollOffset = offsets[insightsScrollName] ?? 0
                 }

@@ -77,6 +77,24 @@ class DetailViewModel {
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
     }
 
+    /// Darker variant of themeColor for mesh gradient corners.
+    var darkerThemeColor: Color {
+        let o = themeColor.oklch
+        guard o.c > 0.02 else {
+            return Color(white: max(o.l - 0.12, 0.1))
+        }
+        return Color.fromOKLCH(l: max(o.l - 0.12, 0.1), c: o.c, h: o.h)
+    }
+
+    /// Lighter variant of themeColor for mesh gradient edges.
+    var lighterThemeColor: Color {
+        let o = themeColor.oklch
+        guard o.c > 0.02 else {
+            return Color(white: min(o.l + 0.08, 0.95))
+        }
+        return Color.fromOKLCH(l: min(o.l + 0.08, 0.95), c: o.c, h: o.h)
+    }
+
     var nextEpisodeToWatch: TVEpisode? {
         if let cached = _nextEpisodeToWatch { return cached }
         let result = computeNextEpisodeToWatch()
@@ -166,7 +184,7 @@ class DetailViewModel {
                 self.item.titleLogoURL = fresh.titleLogoURL ?? self.item.titleLogoURL
                 // Pre-warm the logo image so the CachedImage renders instantly
                 if let logoURL = self.item.titleLogoURL, let url = URL(string: logoURL) {
-                    ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 500, height: 90))
+                    ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 780, height: 185))
                 }
             }
         }

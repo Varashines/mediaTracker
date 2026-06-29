@@ -8,8 +8,18 @@ extension AppTheme {
         }
 
         @MainActor
+        static var sidebarAccent: Color {
+            AppThemeCoordinator.shared.sidebarAccent
+        }
+
+        @MainActor
         static func background(for colorScheme: ColorScheme) -> Color {
             AppThemeCoordinator.shared.background(for: colorScheme)
+        }
+
+        @MainActor
+        static func surface(for colorScheme: ColorScheme) -> Color {
+            AppThemeCoordinator.shared.surface(for: colorScheme)
         }
 
         @MainActor

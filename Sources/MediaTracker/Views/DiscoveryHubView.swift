@@ -83,6 +83,7 @@ struct DiscoveryHubView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Discovery Hub")
         .scrollBounceBehavior(.always)
+        .scrollIndicators(.hidden)
         .background {
             ScrollVelocityTracker(
                 isFastScrolling: $isFastScrolling,

@@ -27,14 +27,14 @@ private struct SegmentPicker: View {
                         Text(option.label)
                             .font(AppTheme.Font.caption)
                     }
-                    .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
+                    .foregroundStyle(.secondary)
                     .frame(height: 28)
                     .padding(.horizontal, AppTheme.Spacing.smallMedium)
                     .background {
                         ZStack {
                             if isSelected {
                                 Capsule()
-                                    .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                                    .fill(.secondary.opacity(colorScheme == .dark ? 0.15 : 0.08))
                                     .matchedGeometryEffect(id: "selected", in: namespace)
                             } else if isHovered {
                                 Capsule()

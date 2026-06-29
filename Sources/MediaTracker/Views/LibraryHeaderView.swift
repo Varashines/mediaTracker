@@ -22,7 +22,7 @@ struct LibraryHeaderView: View {
 
                     Text(title)
                         .font(AppTheme.Font.caption.weight(.bold))
-                        .foregroundStyle(AppTheme.Colors.accent)
+                        .foregroundStyle(.secondary)
 
                     Button { withAnimation(AppTheme.Animation.springSnappy) { onNetworkSelected([]) } } label: {
                         Image(systemName: "xmark.circle.fill")

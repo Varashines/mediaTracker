@@ -29,6 +29,7 @@ struct ContinueWatchingCarousel: View {
                                 metadata: metadata, mode: .hero, namespace: namespace,
                                 isFastScrolling: isFastScrolling || horizontalFastScrolling)
                             .equatable()
+                            .compositingGroup()
                         }
                         .buttonStyle(.interactive)
                     }
@@ -42,9 +43,9 @@ struct ContinueWatchingCarousel: View {
                     HStack(spacing: AppTheme.Spacing.medium) {
                         Image(systemName: "sparkles.tv.fill")
                             .font(AppTheme.Font.title3)
-                            .foregroundStyle(AppTheme.Colors.accent)
+                            .foregroundStyle(.secondary)
                             .frame(width: 54, height: 54)
-                            .background(AppTheme.Colors.accent.opacity(0.12))
+                            .background(.secondary.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
@@ -77,7 +78,6 @@ struct ContinueWatchingCarousel: View {
                 .padding(.vertical, AppTheme.Spacing.medium - 1)
             }
         }
-        .compositingGroup()
     }
 
     private func prewarm(items: [MediaThumbnailMetadata]) {

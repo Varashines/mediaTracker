@@ -36,12 +36,24 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
+    private let maxConcurrentLoads = 6
+    private var currentLoads = 0
     
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+
     private override init() {
         super.init()
         memoryCache.delegate = self
         memoryCache.countLimit = 500
         memoryCache.totalCostLimit = 250 * 1024 * 1024 // 250MB
+
+        // Clear memory cache on memory pressure to free up system resources
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in
+            self?.clearMemoryCache()
+        }
+        source.resume()
+        memoryPressureSource = source
     }
     
     func clearMemoryCache() {
@@ -80,10 +92,6 @@ class ImageCache: NSObject, NSCacheDelegate {
             return "\(key)_\(Int(size.width))x\(Int(size.height))"
         }
         return key
-    }
-    
-    func isExactMatch(image: CGImage, forURL url: String, size: CGSize?) -> Bool {
-        return true
     }
     
     func cancel(forKey key: String, targetSize: CGSize? = nil) {
@@ -130,7 +138,18 @@ class ImageCache: NSObject, NSCacheDelegate {
             return await active.value
         }
         
+        // Throttle concurrent loads to prevent bursts on cold start
+        while currentLoads >= maxConcurrentLoads {
+            await Task.yield()
+        }
+        currentLoads += 1
+        
         let task = Task<ImageContainer?, Never> { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.currentLoads -= 1
+                }
+            }
             guard let self = self else { return nil }
             guard let url = URL(string: key) else { return nil }
             

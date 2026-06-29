@@ -79,23 +79,23 @@ struct PassportHeaderView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.06 : 0.04))
+                .fill(.secondary.opacity(colorScheme == .dark ? 0.06 : 0.04))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(AppTheme.Colors.accent.opacity(0.15), lineWidth: 0.5)
+                .stroke(.secondary.opacity(0.15), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomTrailing) {
             Image(systemName: "popcorn.fill")
                 .font(.system(size: 80, weight: .ultraLight))
-                .foregroundStyle(AppTheme.Colors.accent.opacity(0.05))
+                .foregroundStyle(.secondary.opacity(0.05))
                 .offset(x: 20, y: 10)
                 .allowsHitTesting(false)
         }
         .overlay(alignment: .topLeading) {
             Image(systemName: "ticket.fill")
                 .font(.system(size: 40, weight: .ultraLight))
-                .foregroundStyle(AppTheme.Colors.accent.opacity(0.04))
+                .foregroundStyle(.secondary.opacity(0.04))
                 .offset(x: -8, y: -8)
                 .allowsHitTesting(false)
         }

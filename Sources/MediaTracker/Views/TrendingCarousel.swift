@@ -36,11 +36,11 @@ struct TrendingCarousel: View {
                     ForEach(items) { item in
                         TrendingPosterCard(item: item, isFastScrolling: horizontalFastScrolling)
                             .equatable()
+                            .compositingGroup()
                             .onTapGesture { onSelect(item) }
                     }
                 }
             }
         }
-        .compositingGroup()
     }
 }

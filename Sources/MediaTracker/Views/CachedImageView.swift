@@ -27,18 +27,13 @@ struct CachedImage<Placeholder: View>: View {
         self.placeholder = placeholder()
         
         if let url = url, let container = ImageCache.shared.checkMemoryCache(forKey: url.absoluteString, targetSize: targetSize) {
-            let isExact = ImageCache.shared.isExactMatch(image: container.image, forURL: url.absoluteString, size: targetSize)
-            if isExact {
-                _image = State(initialValue: container.image)
-            }
+            _image = State(initialValue: container.image)
         }
     }
     
     var body: some View {
         Group {
-            if isFastScrolling && image == nil {
-                staticPlaceholder
-            } else if let finalImage = image {
+            if let finalImage = image {
                 Image(finalImage, scale: 1.0, label: Text(accessibilityLabel ?? "Poster"))
                     .resizable()
                     .transition(.opacity)
@@ -57,16 +52,14 @@ struct CachedImage<Placeholder: View>: View {
             }
         }
         .task(id: url) {
-            if !isFastScrolling {
-                await attemptLoad()
-            }
+            await attemptLoad()
         }
-        .onChange(of: isFastScrolling) { oldValue, newValue in
+        .onChange(of: isFastScrolling) { _, newValue in
             if !newValue && image == nil {
                 Task { @MainActor in
                     guard !Task.isCancelled else { return }
                     // Stagger load to avoid thundering herd after scroll-stop
-                    let delay = UInt64.random(in: 10_000_000...80_000_000) // 10-80ms
+                    let delay = UInt64.random(in: 0...20_000_000) // 0-20ms
                     try? await Task.sleep(nanoseconds: delay)
                     guard !Task.isCancelled else { return }
                     await self.attemptLoad()
@@ -143,15 +136,11 @@ struct CachedImage<Placeholder: View>: View {
         let key = url.absoluteString
         
         if let container = ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) {
-            let isExact = ImageCache.shared.isExactMatch(image: container.image, forURL: key, size: targetSize)
-            
-            if isExact {
-                withAnimation(AppTheme.Animation.easeInOut) {
-                    self.image = container.image
-                }
-                onImageLoaded?(container.image)
-                return
+            withAnimation(AppTheme.Animation.easeInOut) {
+                self.image = container.image
             }
+            onImageLoaded?(container.image)
+            return
         }
         
         await loadImage()

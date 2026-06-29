@@ -58,6 +58,7 @@ struct WatchedThisWeek: View {
                                 isFastScrolling: horizontalFastScrolling
                             )
                             .equatable()
+                            .compositingGroup()
                             .frame(width: 160)
                         }
                         .buttonStyle(.interactive)
@@ -65,7 +66,6 @@ struct WatchedThisWeek: View {
                 }
             }
         }
-        .compositingGroup()
         .task { fetchRecentItems() }
     }
 

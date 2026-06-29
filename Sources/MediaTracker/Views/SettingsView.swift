@@ -94,6 +94,8 @@ struct SettingsView: View {
                 tabButton(tab: tab)
             }
         }
+        .padding(.horizontal, AppTheme.Spacing.xLarge)
+        .frame(maxWidth: .infinity)
     }
 
     private func tabButton(tab: SettingsTab) -> some View {
@@ -106,29 +108,29 @@ struct SettingsView: View {
             }
         } label: {
             Image(systemName: isSelected ? tab.fillIcon : tab.icon)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary.opacity(0.5) : .secondary))
-                .frame(width: 38, height: 32)
-                .scaleEffect(isSelected ? 1.05 : 1.0)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule()
-                                .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
-                        )
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Group {
-                        if isSelected {
-                            Capsule()
-                                .fill(AppTheme.Colors.accent.opacity(0.18))
-                                .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
-                        }
+                .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary.opacity(0.5) : .secondary))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule()
+                            .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
+                    )
+            )
+            .clipShape(Capsule())
+            .overlay(
+                Group {
+                    if isSelected {
+                        Capsule()
+                            .fill(AppTheme.Colors.accent.opacity(0.18))
+                            .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
                     }
-                )
-                .contentShape(Capsule())
+                }
+            )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in

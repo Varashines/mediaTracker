@@ -34,9 +34,7 @@ struct ScrollVelocityTracker: View {
         scrollTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isFastScrolling = false
-            }
+            isFastScrolling = false
         }
     }
 }

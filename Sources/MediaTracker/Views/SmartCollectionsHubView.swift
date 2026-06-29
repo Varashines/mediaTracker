@@ -60,7 +60,7 @@ struct SmartCollectionsHubView: View {
                             icon: category.icon,
                             description: description(for: category),
                             count: countsLoaded ? counts[category] : nil,
-                            accentColor: AppTheme.Colors.accent,
+                            accentColor: .secondary,
                             isPinned: pinnedList.contains(category.rawValue),
                             onPinToggle: { togglePinned(category) }
                         ) {
@@ -79,7 +79,7 @@ struct SmartCollectionsHubView: View {
                         showingCreateSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(AppTheme.Colors.accent.gradient)
+                            .foregroundStyle(Color.secondary.gradient)
                             .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct SmartCollectionsHubView: View {
                         showingCreateSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(AppTheme.Colors.accent.gradient)
+                            .foregroundStyle(Color.secondary.gradient)
                             .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
@@ -155,7 +155,8 @@ struct SmartCollectionsHubView: View {
                 Spacer(minLength: 50)
             }
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .scrollBounceBehavior(.always)
+        .scrollIndicators(.hidden)
         .sheet(isPresented: $showingCreateSheet) {
             CreateCollectionSheet(initialIsSmart: initialIsSmart)
         }

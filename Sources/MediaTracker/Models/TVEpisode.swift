@@ -21,6 +21,8 @@ final class TVEpisode {
     }
     var airDateValue: Date?
     private var isUpdatingAirDateValue = false
+    @Transient private var _cachedAirDateAsDate: Date?
+    @Transient private var _airDateAsDateComputed = false
     var runtime: Int?
     var isWatched: Bool = false
     var lastWatchedDate: Date?
@@ -67,9 +69,11 @@ final class TVEpisode {
         }
     }
     
-    // UI property: Uses the persistent airDateValue if accurate, or recalculates
+    // UI property: Uses the persistent airDateValue if accurate, or recalculates (cached after first access)
     var airDateAsDate: Date? {
-        airDateValue ?? DateUtils.parseEpisodeDate(
+        if let airDateValue { return airDateValue }
+        if _airDateAsDateComputed { return _cachedAirDateAsDate }
+        let result = DateUtils.parseEpisodeDate(
             airDate, 
             time: nil, 
             airstamp: airstamp, 
@@ -77,6 +81,9 @@ final class TVEpisode {
             serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork, 
             for: season?.tvShowDetails
         )
+        _cachedAirDateAsDate = result
+        _airDateAsDateComputed = true
+        return result
     }
 
     func updateAirDateValue() {
@@ -93,6 +100,8 @@ final class TVEpisode {
         ) {
             self.airDateValue = parsed
         }
+        _airDateAsDateComputed = false
+        _cachedAirDateAsDate = nil
     }
     
     init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, airstamp: String? = nil, runtime: Int? = nil, isWatched: Bool = false, showID: Int? = nil) {

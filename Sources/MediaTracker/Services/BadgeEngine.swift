@@ -116,7 +116,8 @@ struct BadgeEngine {
     private static func batchScan(tv: TVShowDetails, now: Date, cutoff: Date) -> EpisodeScan? {
         guard let context = tv.modelContext else { return nil }
         let tmdbID = tv.tmdbID
-        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
+        var eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
+        eDescriptor.propertiesToFetch = [\.isWatched, \.seasonNumber, \.episodeNumber, \.airDateValue, \.lastWatchedDate, \.uniqueID]
         guard let allEpisodes = try? context.fetch(eDescriptor), !allEpisodes.isEmpty else { return nil }
 
         var nextEpisodeNumber = 0

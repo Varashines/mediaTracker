@@ -81,6 +81,7 @@ final class MediaItemComputedPropertiesTests: XCTestCase {
 
         let item = MediaItem(id: "1", title: "Test", overview: "", type: .movie)
         item.cachedNextAiringDate = Date().addingTimeInterval(86400)
+        item.storedIsUpcoming = true
         context.insert(item)
         try context.save()
 

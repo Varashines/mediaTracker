@@ -12,78 +12,74 @@ struct SidebarNavigation: View {
 
     var body: some View {
         List {
-            Section {
+            // Primary — always visible, no header collapse
+            Spacer().frame(height: AppTheme.Spacing.tiny)
+            sidebarRow(
+                title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
+                item: .category(.home))
+            sidebarRow(
+                title: NavigationCategory.discover.title,
+                icon: NavigationCategory.discover.icon, item: .category(.discover))
+            sidebarRow(
+                title: NavigationCategory.upcoming.title,
+                icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
+
+            sectionHeader("LIBRARY")
+            sidebarRow(
+                title: NavigationCategory.all.title, icon: NavigationCategory.all.icon,
+                item: .category(.all))
+            sidebarRow(
+                title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon,
+                item: .category(.movie))
+            sidebarRow(
+                title: NavigationCategory.tvShow.title,
+                icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
+
+            sectionHeader("COLLECTIONS")
+            sidebarRow(
+                title: NavigationCategory.smartHub.title,
+                icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
+
+            let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
+                .map(String.init)
+                .compactMap { NavigationCategory(rawValue: $0) }
+
+            ForEach(pinnedSystemList) { category in
                 sidebarRow(
-                    title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
-                    item: .category(.home))
-                sidebarRow(
-                    title: NavigationCategory.discover.title,
-                    icon: NavigationCategory.discover.icon, item: .category(.discover))
-                sidebarRow(
-                    title: NavigationCategory.upcoming.title,
-                    icon: NavigationCategory.upcoming.icon, item: .category(.upcoming))
-            } header: {
-                Spacer().frame(height: 1)
+                    title: category.title,
+                    icon: category.icon,
+                    item: .category(category))
             }
 
-            Section {
+            ForEach(pinnedCollections) { collection in
                 sidebarRow(
-                    title: NavigationCategory.all.title, icon: NavigationCategory.all.icon,
-                    item: .category(.all))
-                sidebarRow(
-                    title: NavigationCategory.movie.title, icon: NavigationCategory.movie.icon,
-                    item: .category(.movie))
-                sidebarRow(
-                    title: NavigationCategory.tvShow.title,
-                    icon: NavigationCategory.tvShow.icon, item: .category(.tvShow))
-            } header: {
-                Text("LIBRARY")
-                    .font(AppTheme.Font.smallBold)
-                    .kerning(1.2)
-                    .foregroundStyle(.secondary.opacity(0.7))
+                    title: collection.name, icon: collection.systemImage,
+                    item: .collection(
+                        collection.id, name: collection.name, icon: collection.systemImage))
             }
 
-            Section {
-                sidebarRow(
-                    title: NavigationCategory.smartHub.title,
-                    icon: NavigationCategory.smartHub.icon, item: .category(.smartHub))
+            sectionHeader("ANALYTICS")
+            sidebarRow(
+                title: NavigationCategory.insights.title,
+                icon: NavigationCategory.insights.icon, item: .category(.insights))
 
-                let pinnedSystemList = pinnedSystemCategories.split(separator: ",")
-                    .map(String.init)
-                    .compactMap { NavigationCategory(rawValue: $0) }
-
-                ForEach(pinnedSystemList) { category in
-                    sidebarRow(
-                        title: category.title,
-                        icon: category.icon,
-                        item: .category(category))
-                }
-
-                ForEach(pinnedCollections) { collection in
-                    sidebarRow(
-                        title: collection.name, icon: collection.systemImage,
-                        item: .collection(
-                            collection.id, name: collection.name, icon: collection.systemImage))
-                }
-            } header: {
-                Text("COLLECTIONS")
-                    .font(AppTheme.Font.smallBold)
-                    .kerning(1.2)
-                    .foregroundStyle(.secondary.opacity(0.7))
-            }
-
-            Section {
-                sidebarRow(
-                    title: NavigationCategory.insights.title,
-                    icon: NavigationCategory.insights.icon, item: .category(.insights))
-            } header: {
-                Text("ANALYTICS")
-                    .font(AppTheme.Font.smallBold)
-                    .kerning(1.2)
-                    .foregroundStyle(.secondary.opacity(0.7))
-            }
+            Spacer().frame(height: AppTheme.Spacing.tiny)
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(AppTheme.Font.smallBold)
+            .kerning(1.2)
+            .foregroundStyle(.secondary.opacity(0.7))
+            .padding(.horizontal, AppTheme.Spacing.small + 2)
+            .padding(.top, AppTheme.Spacing.small)
+            .padding(.bottom, AppTheme.Spacing.micro)
+            .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
+            .listRowSeparator(.hidden)
+            .listSectionSeparator(.hidden)
     }
 
     private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
@@ -123,7 +119,7 @@ struct SidebarNavigation: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(AppTheme.Colors.accent)
+                        .fill(AppTheme.Colors.sidebarAccent)
                         .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)

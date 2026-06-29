@@ -102,11 +102,11 @@ struct StudioAliasManagerView: View {
                             .font(isSelected ? AppTheme.Font.caption : AppTheme.Font.label)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(isSelected ? AppTheme.Colors.accent.opacity(0.15) : AppTheme.Colors.surfaceGhost(for: scheme))
+                            .background(isSelected ? .secondary.opacity(0.15) : AppTheme.Colors.surfaceGhost(for: scheme))
                             .clipShape(Capsule())
                             .overlay {
                                 if isSelected {
-                                    Capsule().stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 1)
+                                    Capsule().stroke(.secondary.opacity(0.3), lineWidth: 1)
                                 }
                             }
                             .contentShape(Capsule())
@@ -120,7 +120,7 @@ struct StudioAliasManagerView: View {
                     } label: {
                         Text(showAllNetworks ? "Show Less" : "+\(availableNetworks.count - 20) More")
                             .font(AppTheme.Font.caption)
-                            .foregroundStyle(AppTheme.Colors.accent)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
@@ -152,7 +152,7 @@ struct StudioAliasManagerView: View {
                             Text(src)
                                 .font(AppTheme.Font.caption)
                         }
-                        .foregroundStyle(isLogo ? AppTheme.Colors.accent : .secondary)
+                        .foregroundStyle(isLogo ? .secondary : .secondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -195,7 +195,7 @@ struct StudioAliasManagerView: View {
             } label: {
                 Label("Add New Group", systemImage: "plus.circle.fill")
                     .font(AppTheme.Font.body)
-                    .foregroundStyle(AppTheme.Colors.accent)
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
         }
