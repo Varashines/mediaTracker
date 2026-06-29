@@ -1,9 +1,13 @@
 import SwiftUI
 
-struct TrendingPosterCard: View {
+struct TrendingPosterCard: View, Equatable {
     let item: MediaSearchResult
     var isFastScrolling: Bool = false
     @State private var isHovered = false
+    
+    nonisolated static func == (lhs: TrendingPosterCard, rhs: TrendingPosterCard) -> Bool {
+        lhs.item.id == rhs.item.id && lhs.isFastScrolling == rhs.isFastScrolling
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {

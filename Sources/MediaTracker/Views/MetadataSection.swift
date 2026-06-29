@@ -4,14 +4,10 @@ import SwiftData
 struct MetadataSection: View {
     let item: MediaItem
     let themeColor: Color
+    let watchProviders: [WatchProviderResult]
     
     @Environment(\.colorScheme) var colorScheme
-
-    struct MetadataItem: Identifiable {
-        let id = UUID()
-        let icon: String
-        let value: String
-    }
+    @State private var showAllGenres = false
 
     var voteAverage: Double? {
         if item.type == .movie {
@@ -21,106 +17,125 @@ struct MetadataSection: View {
         }
     }
 
-    private var metadataItems: [MetadataItem] {
-        var items: [MetadataItem] = []
-        
-        if let rating = voteAverage, rating > 0 {
-            items.append(MetadataItem(icon: "star.fill", value: String(format: "%.1f", rating)))
-        }
-        if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
-            let icon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
-            items.append(MetadataItem(icon: icon, value: "\(rt)%"))
-        }
-        if let rated = item.movieDetails?.contentRating ?? item.tvShowDetails?.contentRating, !rated.isEmpty, rated != "N/A" {
-            items.append(MetadataItem(icon: rated.contains("TV") ? "tv.fill" : "film.fill", value: rated))
-        }
-        
-        if let date = item.releaseDate {
-            items.append(MetadataItem(icon: "calendar", value: date.formatted(date: .abbreviated, time: .omitted)))
-        }
-        
-        if item.type == .movie {
-            if let runtime = item.cachedRuntime, runtime > 0 {
-                items.append(MetadataItem(icon: "clock.fill", value: DateUtils.formatRuntime(runtime)))
-            }
-        } else if item.type == .tvShow, let tv = item.tvShowDetails {
-            if let s = tv.numberOfSeasons, s > 0, let e = tv.numberOfEpisodes, e > 0 {
-                items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons") · \(e) EP"))
-            } else if let s = tv.numberOfSeasons, s > 0 {
-                items.append(MetadataItem(icon: "rectangle.stack.fill", value: "\(s) \(s == 1 ? "Season" : "Seasons")"))
-            } else if let e = tv.numberOfEpisodes, e > 0 {
-                items.append(MetadataItem(icon: "play.fill", value: "\(e) EP"))
-            }
-            
-
-        }
-        
-        if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
-            items.append(MetadataItem(icon: "tv.fill", value: net))
-        }
-        
-        if let lang = item.cachedLanguage, !lang.isEmpty {
-            items.append(MetadataItem(icon: "globe", value: LanguageUtils.languageName(for: lang)))
-        }
-        
-        for genre in item.cachedGenres {
-            items.append(MetadataItem(icon: "tag.fill", value: genre))
-        }
-        
-        return items
-    }
-
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
 
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-            // Row 1: Primary info (what is this?)
-            HStack(spacing: AppTheme.Spacing.compact) {
-                ForEach(firstRowItems) { meta in
-                    pillView(meta, accent: accent)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            // Row 1: All metadata in one line
+            HStack(spacing: AppTheme.Spacing.small) {
+                if let rating = voteAverage, rating > 0 {
+                    ratingPill(icon: "star.fill", value: String(format: "%.1f", rating), color: ratingColor(for: rating), accent: accent)
+                }
+                if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
+                    let rtIcon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+                    let rtColor: Color = rt >= 60 ? .green : .red
+                    ratingPill(icon: rtIcon, value: "\(rt)%", color: rtColor, accent: accent)
+                }
+                if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
+                    infoPill(text: net, accent: accent)
+                }
+                if let date = item.releaseDate {
+                    infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
+                }
+                if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
+                    infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
+                }
+                if let lang = item.cachedLanguage, !lang.isEmpty {
+                    infoPill(text: LanguageUtils.languageName(for: lang), icon: "globe", accent: accent)
                 }
             }
-            // Row 2: Secondary info (details)
-            if !secondRowItems.isEmpty {
-                HStack(spacing: AppTheme.Spacing.compact) {
-                    ForEach(secondRowItems) { meta in
-                        pillView(meta, accent: accent)
+
+            // Row 2: Genres (pills)
+            if !item.cachedGenres.isEmpty {
+                let genres = item.cachedGenres
+                let displayGenres = showAllGenres ? genres : Array(genres.prefix(5))
+                let extraCount = genres.count - 5
+
+                HStack(spacing: AppTheme.Spacing.small) {
+                    ForEach(displayGenres, id: \.self) { genre in
+                        Text(genre)
+                            .font(AppTheme.Font.caption2)
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, AppTheme.Spacing.small)
+                            .padding(.vertical, AppTheme.Spacing.micro)
+                            .background(
+                                Capsule()
+                                    .fill(accent.opacity(colorScheme == .dark ? 0.10 : 0.12))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(accent.opacity(0.15), lineWidth: 0.5)
+                            )
+                    }
+
+                    if extraCount > 0 && !showAllGenres {
+                        Button {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                showAllGenres = true
+                            }
+                        } label: {
+                            Text("+\(extraCount)")
+                                .font(AppTheme.Font.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
-        .padding(.vertical, AppTheme.Spacing.mini)
     }
 
-    private var firstRowItems: [MetadataItem] {
-        // Primary: status, rating, RT, content rating, date
-        Array(metadataItems.prefix(5))
-    }
+    // MARK: - Components
 
-    private var secondRowItems: [MetadataItem] {
-        // Secondary: seasons/runtime, network, language, genres
-        Array(metadataItems.dropFirst(5))
+    private func ratingColor(for rating: Double) -> Color {
+        if rating >= 7 { return .green }
+        if rating >= 5 { return .yellow }
+        return .red
     }
 
     @ViewBuilder
-    private func pillView(_ meta: MetadataItem, accent: Color) -> some View {
+    private func ratingPill(icon: String, value: String, color: Color, accent: Color) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: meta.icon)
-                .font(AppTheme.Font.small)
-                .foregroundStyle(accent)
-            Text(meta.value)
-                .font(AppTheme.Font.caption)
+            Image(systemName: icon)
+                .font(AppTheme.Font.caption2)
+                .foregroundStyle(color)
+            Text(value)
+                .font(AppTheme.Font.bodyBold.monospacedDigit())
                 .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background {
             Capsule()
-                .fill(themeColor.opacity(colorScheme == .dark ? 0.10 : 0.14))
+                .fill(color.opacity(colorScheme == .dark ? 0.15 : 0.12))
         }
         .overlay {
             Capsule()
-                .stroke(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.20), lineWidth: 0.5)
+                .stroke(color.opacity(0.25), lineWidth: 0.5)
         }
+    }
+
+    @ViewBuilder
+    private func infoPill(text: String, icon: String? = nil, accent: Color) -> some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Text(text)
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, AppTheme.Spacing.small)
+        .padding(.vertical, AppTheme.Spacing.micro)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(.quaternary, lineWidth: 0.5)
+                )
+        )
     }
 }

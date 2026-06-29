@@ -25,6 +25,7 @@ struct FeaturedUpcomingCarousel: View {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
+                                .equatable()
                                 .id(metadata.versionHash)
                         }
                         .buttonStyle(.interactive)

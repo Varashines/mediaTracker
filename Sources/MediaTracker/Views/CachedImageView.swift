@@ -14,7 +14,6 @@ struct CachedImage<Placeholder: View>: View {
     @State private var image: CGImage?
     @State private var isLoading = false
     @State private var observer: NSObjectProtocol?
-    @State private var clearObserver: NSObjectProtocol?
  
     init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
@@ -56,7 +55,6 @@ struct CachedImage<Placeholder: View>: View {
             if let url = url {
                 ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
             }
-            self.image = nil
         }
         .task(id: url) {
             if !isFastScrolling {
@@ -66,6 +64,10 @@ struct CachedImage<Placeholder: View>: View {
         .onChange(of: isFastScrolling) { oldValue, newValue in
             if !newValue && image == nil {
                 Task { @MainActor in
+                    guard !Task.isCancelled else { return }
+                    // Stagger load to avoid thundering herd after scroll-stop
+                    let delay = UInt64.random(in: 10_000_000...80_000_000) // 10-80ms
+                    try? await Task.sleep(nanoseconds: delay)
                     guard !Task.isCancelled else { return }
                     await self.attemptLoad()
                 }
@@ -126,27 +128,12 @@ struct CachedImage<Placeholder: View>: View {
             }
         }
         
-        // Global cache clear — fires when any cache is wiped
-        clearObserver = NotificationCenter.default.addObserver(
-            forName: .imageCacheCleared,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                self.image = nil
-                await self.attemptLoad()
-            }
-        }
     }
     
     private func removeObservers() {
         if let obs = observer {
             NotificationCenter.default.removeObserver(obs)
             observer = nil
-        }
-        if let obs = clearObserver {
-            NotificationCenter.default.removeObserver(obs)
-            clearObserver = nil
         }
     }
 
@@ -162,6 +149,7 @@ struct CachedImage<Placeholder: View>: View {
                 withAnimation(AppTheme.Animation.easeInOut) {
                     self.image = container.image
                 }
+                onImageLoaded?(container.image)
                 return
             }
         }

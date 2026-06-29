@@ -505,7 +505,7 @@ private struct EpisodeCube: View {
                         Spacer(minLength: 6)
 
                         // Metadata + Info button
-                        HStack(spacing: 5) {
+                        HStack {
                             if let date = episode.airDateAsDate {
                                 let formattedDate: String = {
                                     let d = date.formatted(.dateTime.day())
@@ -516,34 +516,31 @@ private struct EpisodeCube: View {
                                 Text(formattedDate)
                                     .foregroundStyle(.secondary.opacity(0.6))
                             }
-                            if episode.airDateAsDate != nil, let runtime = episode.runtime,
-                                runtime > 0
-                            {
-                                Text("\u{00B7}")
-                                    .foregroundStyle(.secondary.opacity(0.25))
-                            }
-                            if let runtime = episode.runtime, runtime > 0 {
-                                Text("\(runtime)m")
-                                    .foregroundStyle(.secondary.opacity(0.4))
-                            }
 
                             Spacer()
 
-                            if !episode.overview.isEmpty {
-                                Button {
-                                    showingOverview.toggle()
-                                } label: {
-                                    Image(systemName: "info.circle.fill")
-                                        .font(AppTheme.Font.caption2)
-                                        .foregroundStyle(
-                                            accent.opacity(showingOverview ? 1.0 : 0.3)
-                                        )
-                                        .padding(.trailing, 4)
-                                        .contentShape(Rectangle())
+                            HStack(spacing: 5) {
+                                if let runtime = episode.runtime, runtime > 0 {
+                                    Text("\(runtime)m")
+                                        .foregroundStyle(.secondary.opacity(0.4))
                                 }
-                                .buttonStyle(.plain)
-                                .popover(isPresented: $showingOverview) {
-                                    popoverContent
+
+                                if !episode.overview.isEmpty {
+                                    Button {
+                                        showingOverview.toggle()
+                                    } label: {
+                                        Image(systemName: "info.circle.fill")
+                                            .font(AppTheme.Font.caption2)
+                                            .foregroundStyle(
+                                                accent.opacity(showingOverview ? 1.0 : 0.3)
+                                            )
+                                            .padding(.trailing, 4)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .popover(isPresented: $showingOverview) {
+                                        popoverContent
+                                    }
                                 }
                             }
                         }
@@ -654,7 +651,7 @@ private struct EpisodeCube: View {
         }
         .padding(14)
         .frame(width: 270)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxHeight: 170)
     }
 }
 

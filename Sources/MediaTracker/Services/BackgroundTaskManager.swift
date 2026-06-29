@@ -56,7 +56,9 @@ class BackgroundTaskManager {
                 
                 // Rebuild hub counts after drip sync populates cachedWatchProviders
                 let sync = DiscoverySyncService(modelContainer: container)
-                await sync.syncLibrary(force: true)
+                try? await BackgroundOperationGate.shared.performSync(container: container) {
+                    await sync.syncLibrary(force: true)
+                }
                 
                 // broadcast UI update
                 await MainActor.run {
@@ -375,7 +377,7 @@ class BackgroundTaskManager {
         if currentVersion < 2 {
             let context = ModelContext(container)
             var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders, \.cachedWatchProviderLogos]
+            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders]
             
             let allItems = (try? context.fetch(descriptor)) ?? []
             
@@ -388,7 +390,7 @@ class BackgroundTaskManager {
                 for item in allItems {
                     try? Task.checkCancellation()
                     
-                    if !item.cachedWatchProviders.isEmpty && !item.cachedWatchProviderLogos.isEmpty {
+                    if !item.cachedWatchProviders.isEmpty {
                         continue
                     }
                     
@@ -400,7 +402,6 @@ class BackgroundTaskManager {
                     let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
                     if !providers.isEmpty {
                         item.cachedWatchProviders = providers.map { $0.name }
-                        item.cachedWatchProviderLogos = providers.map { $0.logoPath ?? "" }
                         migratedCount += 1
                     }
                 }
@@ -416,31 +417,38 @@ class BackgroundTaskManager {
             }
         }
 
-        // --- v3 migration: backfill items still missing providers ---
+        // --- v3 migration: backfill items still missing providers (batched) ---
         do {
             let context = ModelContext(container)
             var descriptor = FetchDescriptor<MediaItem>()
             descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders]
+            descriptor.fetchLimit = 500
             
-            guard let allItems = try? context.fetch(descriptor) else {
-                UserDefaults.standard.set(3, forKey: migrationVersionKey)
-                return
+            var allNeedsBackfill: [MediaItem] = []
+            var offset = 0
+            var hasMore = true
+            
+            while hasMore {
+                descriptor.fetchOffset = offset
+                let batch = (try? context.fetch(descriptor)) ?? []
+                hasMore = batch.count == 500
+                allNeedsBackfill.append(contentsOf: batch.filter { $0.cachedWatchProviders.isEmpty })
+                offset += 500
             }
             
-            let needsBackfill = allItems.filter { $0.cachedWatchProviders.isEmpty }
-            guard !needsBackfill.isEmpty else {
+            guard !allNeedsBackfill.isEmpty else {
                 AppLogger.info("📦 Watch Provider migration v3: all items already have providers", logger: AppLogger.background)
                 UserDefaults.standard.set(3, forKey: migrationVersionKey)
                 return
             }
             
-            AppLogger.info("📦 Watch Provider migration v3 starting: \(needsBackfill.count) items need backfill (\(allItems.count) total)...", logger: AppLogger.background)
+            AppLogger.info("📦 Watch Provider migration v3 starting: \(allNeedsBackfill.count) items need backfill...", logger: AppLogger.background)
             
             let batchSize = 50
             var migratedCount = 0
             var processed = 0
             
-            for item in needsBackfill {
+            for item in allNeedsBackfill {
                 try? Task.checkCancellation()
                 
                 guard let tmdbIDString = item.id.split(separator: "_").last,
@@ -457,12 +465,12 @@ class BackgroundTaskManager {
                 processed += 1
                 if processed % batchSize == 0 {
                     try? context.save()
-                    AppLogger.info("📦 Watch Provider migration v3 progress: \(processed)/\(needsBackfill.count) (\(migratedCount) migrated)", logger: AppLogger.background)
+                    AppLogger.info("📦 Watch Provider migration v3 progress: \(processed)/\(allNeedsBackfill.count) (\(migratedCount) migrated)", logger: AppLogger.background)
                 }
             }
             
             try? context.save()
-            AppLogger.info("📦 Watch Provider migration v3 completed: \(migratedCount)/\(needsBackfill.count) items migrated", logger: AppLogger.background)
+            AppLogger.info("📦 Watch Provider migration v3 completed: \(migratedCount)/\(allNeedsBackfill.count) items migrated", logger: AppLogger.background)
             
             if migratedCount > 0 {
                 let sync = DiscoverySyncService(modelContainer: container)
@@ -483,21 +491,30 @@ class BackgroundTaskManager {
 
         let context = ModelContext(container)
 
-        // 1. Count networks by kind from items
+        // 1. Count networks by kind from items (batched)
         var networkKindCounts: [String: (network: Int, studio: Int)] = [:]
         var itemDesc = FetchDescriptor<MediaItem>()
         itemDesc.propertiesToFetch = [\.cachedNetwork, \.typeValue]
-        let allItems = (try? context.fetch(itemDesc)) ?? []
-
-        for item in allItems {
-            guard let rawName = item.cachedNetwork else { continue }
-            let names = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            let isMovie = item.typeValue == "Movie"
-            for name in names where !name.isEmpty {
-                var counts = networkKindCounts[name] ?? (network: 0, studio: 0)
-                if isMovie { counts.studio += 1 } else { counts.network += 1 }
-                networkKindCounts[name] = counts
+        itemDesc.fetchLimit = 500
+        var itemOffset = 0
+        var hasMoreItems = true
+        
+        while hasMoreItems {
+            itemDesc.fetchOffset = itemOffset
+            let batch = (try? context.fetch(itemDesc)) ?? []
+            hasMoreItems = batch.count == 500
+            
+            for item in batch {
+                guard let rawName = item.cachedNetwork else { continue }
+                let names = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let isMovie = item.typeValue == "Movie"
+                for name in names where !name.isEmpty {
+                    var counts = networkKindCounts[name] ?? (network: 0, studio: 0)
+                    if isMovie { counts.studio += 1 } else { counts.network += 1 }
+                    networkKindCounts[name] = counts
+                }
             }
+            itemOffset += 500
         }
 
         // 2. Update NetworkEntity.kind

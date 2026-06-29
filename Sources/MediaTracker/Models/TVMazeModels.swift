@@ -5,6 +5,7 @@ struct TVMazeShowLookupResponse: Codable { let id: Int }
 struct TVMazeResponse: Codable {
     let _embedded: TVMazeEmbedded?, network: TVMazeNetwork?, webChannel: TVMazeWebChannel?, schedule: TVMazeSchedule?
     let genres: [String]?
+    let type: String?
     var timezone: String? { network?.country?.timezone ?? webChannel?.country?.timezone }
 }
 

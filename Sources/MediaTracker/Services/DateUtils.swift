@@ -77,38 +77,59 @@ struct DateUtils {
     }
 
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
-        var resolvedDateString = dateString
-        if resolvedDateString == nil, let airstamp = airstamp, airstamp.count >= 10 {
+        var resolvedDateString: String?
+        if let airstamp = airstamp, airstamp.count >= 10 {
             resolvedDateString = String(airstamp.prefix(10))
+        }
+        if resolvedDateString == nil {
+            resolvedDateString = dateString
         }
         
         let service = (serviceName ?? show?.network ?? "").lowercased()
+        let hasRealAirtime = time?.isEmpty == false || show?.nextEpisodeTime?.isEmpty == false
         
-        // 1. Data-Driven Streaming Overrides (Preserve existing strict rules and take highest precedence)
-        if let rule = StreamingServiceRule.defaults.first(where: { rule in
-            rule.patterns.contains(where: { service.contains($0) })
-        }), let dateStr = resolvedDateString {
+        // 1. Streaming service rules: Use when rule matches AND TVMaze has no real airtime.
+        //    Streaming originals (Apple TV+, Netflix, etc.) have empty airtime and a placeholder
+        //    noon-UTC airstamp. The hardcoded rules provide the actual release time.
+        if !hasRealAirtime,
+           let rule = StreamingServiceRule.defaults.first(where: { rule in
+               rule.patterns.contains(where: { service.contains($0) })
+           }), let dateStr = resolvedDateString {
             let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: rule.timeZoneIdentifier)
             if let baseDate = formatter.date(from: "\(dateStr) \(rule.releaseTime)") {
                 return Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
             }
         }
         
-        // 2. Fallback: Trust high-precision ISO airstamp if available from the database
-        if let airstamp = airstamp, let date = getIsoFormatter().date(from: airstamp) {
+        // 2. Real TVMaze airtime: Network shows have actual airtime (e.g. "21:00" for HBO).
+        //    Use TVMaze date + real airtime + show timezone.
+        if hasRealAirtime, let dateStr = resolvedDateString {
+            let tzName = timezone ?? show?.timezone
+            let timeToUse = time ?? show?.nextEpisodeTime
+            if let tName = tzName, let t = timeToUse, TimeZone(identifier: tName) != nil {
+                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tName)
+                if let date = formatter.date(from: "\(dateStr) \(t)") {
+                    return date
+                }
+            }
+        }
+        
+        // 3. Real ISO airstamp: Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
+        if let airstamp = airstamp, !airstamp.contains("T12:00:00+00:00"),
+           let date = getIsoFormatter().date(from: airstamp) {
             return date
         }
         
         guard let dateStr = resolvedDateString else { return nil }
 
-        // 3. Fallback: Use provided timezone and show-level schedule
+        // 4. Timezone + time fallback
         if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
             let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
             let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
             return formatter.date(from: "\(dateStr) \(timeToUse)")
         } 
         
-        // 4. Smart Fallback for TMDB dates without time: Assume US Network (8 PM ET)
+        // 5. US 8 PM ET fallback
         let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
         return formatter.date(from: "\(dateStr) 20:00")
     }

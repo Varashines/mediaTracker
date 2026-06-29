@@ -439,17 +439,10 @@ actor APIClient {
         } ?? []
         let network = d.networks?.first
         
-        var networkLogos: [String: String] = [:]
-        for net in d.networks ?? [] {
-            networkLogos[net.name] = net.logo_path
-        }
-        
         let imdbID = d.external_ids?.imdb_id
         let trailerKey = Self.extractTrailerKey(from: d.videos)
 
         return TVDetailsResult(
-            seasonsCount: d.number_of_seasons,
-            episodesCount: d.number_of_episodes,
             status: d.status,
             voteAverage: d.vote_average,
             imdbID: imdbID,
@@ -459,7 +452,6 @@ actor APIClient {
             overview: d.overview,
             network: network?.name,
             networkLogoPath: network?.logo_path,
-            networkLogos: networkLogos,
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
             firstAirDate: d.first_air_date,
@@ -582,14 +574,14 @@ actor APIClient {
 
     // MARK: - Title Logos
 
-    func fetchMovieLogos(tmdbID: Int, force: Bool = false) async throws -> [String] {
+    func fetchMovieLogos(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let cacheKey = "movie_logos_\(tmdbID).json"
         let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
 
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
-            return Self.processLogoURLs(decoded.logos)
+            return Self.processLogoURLs(decoded.logos, originalLanguage: originalLanguage)
         }
 
         return try await executeWithRetry {
@@ -600,18 +592,18 @@ actor APIClient {
             try self.validateResponse(response)
             self.saveToCache(data: data, forKey: cacheKey)
             let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
-            return Self.processLogoURLs(decoded.logos)
+            return Self.processLogoURLs(decoded.logos, originalLanguage: originalLanguage)
         }
     }
 
-    func fetchTVLogos(tmdbID: Int, force: Bool = false) async throws -> [String] {
+    func fetchTVLogos(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let cacheKey = "tv_logos_\(tmdbID).json"
         let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
 
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
-            return Self.processLogoURLs(decoded.logos)
+            return Self.processLogoURLs(decoded.logos, originalLanguage: originalLanguage)
         }
 
         return try await executeWithRetry {
@@ -622,16 +614,30 @@ actor APIClient {
             try self.validateResponse(response)
             self.saveToCache(data: data, forKey: cacheKey)
             let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
-            return Self.processLogoURLs(decoded.logos)
+            return Self.processLogoURLs(decoded.logos, originalLanguage: originalLanguage)
         }
     }
 
-    private nonisolated static func processLogoURLs(_ logos: [TMDBLogo]?) -> [String] {
+    private nonisolated static func processLogoURLs(_ logos: [TMDBLogo]?, originalLanguage: String? = nil) -> [String] {
         guard let logos else { return [] }
+        
+        // Prioritize: original language > English > null > others
         return logos
-            .filter { $0.iso_639_1 == "en" || $0.iso_639_1 == nil }
+            .sorted { a, b in
+                let aScore = logoPriority(a, originalLanguage: originalLanguage)
+                let bScore = logoPriority(b, originalLanguage: originalLanguage)
+                if aScore != bScore { return aScore < bScore }
+                return a.width > b.width // Prefer larger logos as tiebreaker
+            }
             .compactMap { Self.tmdbImageURL(path: $0.file_path, size: "w780") }
-            .sorted { $0.hasSuffix(".svg") && !$1.hasSuffix(".svg") }
+    }
+    
+    private nonisolated static func logoPriority(_ logo: TMDBLogo, originalLanguage: String?) -> Int {
+        let lang = logo.iso_639_1
+        if let originalLanguage, lang == originalLanguage { return 0 } // Original language = highest priority
+        if lang == "en" { return 1 } // English = second priority
+        if lang == nil { return 2 } // No language = third priority
+        return 3 // Other languages = lowest priority
     }
 
     // MARK: - OMDb Integration
@@ -703,12 +709,12 @@ actor APIClient {
         }
     }
 
-    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?, genres: [String]?) {
+    func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?, genres: [String]?, showType: String?) {
         // Check 24h disk cache
         let cacheKey = "tvmaze_schedule_\(tvMazeID)"
         if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
            let r = try? decoder.decode(TVMazeResponse.self, from: cachedData) {
-            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres, r.type)
         }
 
         return try await executeWithRetry {
@@ -717,7 +723,7 @@ actor APIClient {
             try self.validateResponse(response)
             let r = try self.decoder.decode(TVMazeResponse.self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres)
+            return (r._embedded?.nextepisode, r.timezone, r.webChannel?.name ?? r.network?.name, r.schedule?.time, r.genres, r.type)
         }
     }
 

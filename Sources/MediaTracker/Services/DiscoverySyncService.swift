@@ -13,6 +13,7 @@ actor DiscoverySyncService {
     }
     
     @MainActor private static var cachedRules: [AliasRule]?
+    @MainActor private static var cachedAliasMaps: (sourceToTarget: [String: String], targetToLogoSource: [String: String])?
 
     private func fetchAliasRules() async -> [AliasRule] {
         // Simple cache check to avoid redundant fetches in the same sync loop
@@ -37,8 +38,34 @@ actor DiscoverySyncService {
         }
 
         let rules = entities.map { AliasRule(target: $0.target, sources: Set($0.sources), preferredLogoSource: $0.preferredLogoSource) }
-        await MainActor.run { Self.cachedRules = rules }
+        await MainActor.run { 
+            Self.cachedRules = rules
+            Self.cachedAliasMaps = Self.buildAliasMapsStatic(from: rules)
+        }
         return rules
+    }
+    
+    private static func buildAliasMapsStatic(from rules: [AliasRule]) -> (sourceToTarget: [String: String], targetToLogoSource: [String: String]) {
+        var sourceToTarget: [String: String] = [:]
+        var targetToLogoSource: [String: String] = [:]
+        for rule in rules {
+            let target = rule.target
+            for source in rule.sources {
+                sourceToTarget[source.lowercased()] = target
+            }
+            if let logo = rule.preferredLogoSource {
+                targetToLogoSource[target] = logo
+            }
+        }
+        return (sourceToTarget, targetToLogoSource)
+    }
+    
+    private func getAliasMaps() async -> (sourceToTarget: [String: String], targetToLogoSource: [String: String]) {
+        if let cached = await MainActor.run(body: { Self.cachedAliasMaps }) {
+            return cached
+        }
+        _ = await fetchAliasRules()
+        return await MainActor.run(body: { Self.cachedAliasMaps ?? ([:], [:]) })
     }
 
     private func migrateLegacyAliases(_ legacy: String) -> [AliasRule] {
@@ -88,8 +115,7 @@ actor DiscoverySyncService {
             guard Date().timeIntervalSince(lastSync) > 30 else { return }
         }
 
-        let rules = await fetchAliasRules()
-        let (sourceToTarget, targetToLogoSource) = buildAliasMaps(from: rules)
+        let (sourceToTarget, targetToLogoSource) = await getAliasMaps()
 
         var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String], kind: String)] = [:]
         var genreCounts: [String: Int] = [:]
@@ -244,8 +270,7 @@ actor DiscoverySyncService {
 
     func updateItemAdded(_ itemID: PersistentIdentifier) async {
         guard let item = modelContext.model(for: itemID) as? MediaItem else { return }
-        let rules = await fetchAliasRules()
-        let (sourceToTarget, _) = buildAliasMaps(from: rules)
+        let (sourceToTarget, _) = await getAliasMaps()
 
         // Incremental Network update
         let itemKind = item.typeValue == "Movie" ? "studio" : "network"
@@ -370,8 +395,7 @@ actor DiscoverySyncService {
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?, providers: [String] = []) async {
-        let rules = await fetchAliasRules()
-        let (sourceToTarget, _) = buildAliasMaps(from: rules)
+        let (sourceToTarget, _) = await getAliasMaps()
 
         if let networkString = network {
             let networks = networkString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }

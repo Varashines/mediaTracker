@@ -14,6 +14,7 @@ class DetailViewModel {
     var trailerKey: String?
     var watchProviders: [WatchProviderResult] = []
     var debugSelectedTraits: [String] = []
+    private var _nextEpisodeToWatch: TVEpisode?? = nil
     
     init(item: MediaItem) {
         self.item = item
@@ -41,7 +42,7 @@ class DetailViewModel {
     }
     
     func updateThemeColor() {
-        guard let context = item.modelContext, !SleepManager.shared.isAsleep else { return }
+        guard !SleepManager.shared.isAsleep else { return }
 
         // Priority 1: Pre-calculated Poster Color from SwiftData
         if let hex = item.themeColorHex,
@@ -51,11 +52,10 @@ class DetailViewModel {
             return
         }
 
-        // Priority 2: Network/Studio Theme Color (backup)
+        // Priority 2: Network/Studio Theme Color (in-memory cache — no SQLite)
         if let networkName = item.cachedNetwork {
             let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate<NetworkEntity> { $0.name == first })
-            if let network = try? context.fetch(descriptor).first, let hex = network.themeColorHex, let netColor = Color(hex: hex) {
+            if let netColor = NetworkThemeManager.shared.color(for: first) {
                 self.themeColor = netColor
                 self.recalculateVibrantPalette()
                 return
@@ -78,6 +78,13 @@ class DetailViewModel {
     }
 
     var nextEpisodeToWatch: TVEpisode? {
+        if let cached = _nextEpisodeToWatch { return cached }
+        let result = computeNextEpisodeToWatch()
+        _nextEpisodeToWatch = result
+        return result
+    }
+
+    private func computeNextEpisodeToWatch() -> TVEpisode? {
         guard let tv = item.tvShowDetails else { return nil }
         let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
         for season in sortedSeasons where season.seasonNumber > 0 {
@@ -163,6 +170,7 @@ class DetailViewModel {
                 }
             }
         }
+        _nextEpisodeToWatch = nil
         item.syncCachedProperties()
         item.tvShowDetails?.recalculateCachedProperties()
         trailerKey = item.cachedTrailerKey
@@ -180,10 +188,11 @@ class DetailViewModel {
         Task {
             do {
                 let logos: [String]
+                let originalLanguage = item.cachedLanguage
                 if type == .tvShow {
-                    logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID)
+                    logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: originalLanguage)
                 } else {
-                    logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID)
+                    logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, originalLanguage: originalLanguage)
                 }
                 if !logos.isEmpty {
                     await MainActor.run {

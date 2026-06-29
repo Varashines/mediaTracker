@@ -23,7 +23,8 @@ final class WatchProvidersTests: XCTestCase {
                 makeProvider(id: 337, name: "Disney+"),
             ],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: "https://www.themoviedb.org/tv/1/watch?locale=IN"
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -38,7 +39,8 @@ final class WatchProvidersTests: XCTestCase {
         let region = TMDBWatchRegion(
             flatrate: [makeProvider(id: 8, name: "Netflix")],
             free: [makeProvider(id: 283, name: "Crunchyroll")],
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -57,7 +59,8 @@ final class WatchProvidersTests: XCTestCase {
                 makeProvider(id: 614, name: "VI movies and tv"), // blocklisted
             ],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -77,7 +80,8 @@ final class WatchProvidersTests: XCTestCase {
                 makeProvider(id: 3001, name: "HBO Max Prime Video Channel")
             ],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -97,7 +101,8 @@ final class WatchProvidersTests: XCTestCase {
                 makeProvider(id: 4001, name: "Paramount+ Apple TV Channel")
             ],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -113,7 +118,8 @@ final class WatchProvidersTests: XCTestCase {
         let region = TMDBWatchRegion(
             flatrate: [makeProvider(id: 8, name: "Netflix")],
             free: [makeProvider(id: 8, name: "Netflix")], // duplicate
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")
@@ -132,7 +138,8 @@ final class WatchProvidersTests: XCTestCase {
         let region = TMDBWatchRegion(
             flatrate: [makeProvider(id: 8, name: "Netflix")],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["US": region])
         // Force IN override — should return [] since IN data is absent
@@ -145,7 +152,8 @@ final class WatchProvidersTests: XCTestCase {
         let region = TMDBWatchRegion(
             flatrate: [makeProvider(id: 8, name: "Netflix")],
             free: nil,
-            ads: nil
+            ads: nil,
+            link: nil
         )
         let response = makeResponse(regions: ["IN": region])
         let providers = extractWatchProviders(from: response, regionOverride: "IN")

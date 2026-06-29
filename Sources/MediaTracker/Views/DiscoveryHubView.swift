@@ -26,7 +26,7 @@ struct DiscoveryHubView: View {
                         !viewModel.discovery.cachedLanguages.isEmpty
 
                     if hasAnyContent {
-                        LibrarySummaryBanner()
+                        LibrarySummaryBanner(modelContainer: modelContext.container)
 
                         if !viewModel.discovery.cachedBadges.isEmpty {
                             DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text, isFastScrolling: isFastScrolling, limit: 6) { node in

@@ -46,37 +46,39 @@ class DisplayCache {
         // Track which lists actually changed to avoid animating 7+ lists for a single-item update
         var changedLists: [String] = []
 
-        let track = { (name: String, list: inout [MediaThumbnailMetadata]) in
-            let before = list.count
-            self.replaceInList(&list, id: id, updated: updated)
-            if list.count != before { changedLists.append(name) }
+        let mutate = {
+            let track = { (name: String, list: inout [MediaThumbnailMetadata]) in
+                let before = list.count
+                self.replaceInList(&list, id: id, updated: updated)
+                if list.count != before { changedLists.append(name) }
+            }
+
+            track("displayed", &self.displayedItems)
+            track("recentlyAdded", &self.recentlyAddedItems)
+            track("continueWatching", &self.homeContinueWatchingItems)
+            track("featuredUpcoming", &self.featuredUpcomingItems)
+            track("recommendations", &self.recommendations)
+            track("pickOfTheDay", &self.pickOfTheDay)
+
+            if let updated, self.spotlightHero?.id == id {
+                self.spotlightHero = updated
+                changedLists.append("spotlight")
+            } else if self.spotlightHero?.id == id && updated == nil {
+                self.spotlightHero = nil
+                changedLists.append("spotlight")
+            }
+
+            for i in 0..<self.groupedItems.count {
+                let before = self.groupedItems[i].1.count
+                self.replaceInList(&self.groupedItems[i].1, id: id, updated: updated)
+                if self.groupedItems[i].1.count != before { changedLists.append("grouped_\(i)") }
+            }
         }
 
-        track("displayed", &displayedItems)
-        track("recentlyAdded", &recentlyAddedItems)
-        track("continueWatching", &homeContinueWatchingItems)
-        track("featuredUpcoming", &featuredUpcomingItems)
-        track("recommendations", &recommendations)
-        track("pickOfTheDay", &pickOfTheDay)
-
-        if let updated, self.spotlightHero?.id == id {
-            self.spotlightHero = updated
-            changedLists.append("spotlight")
-        } else if self.spotlightHero?.id == id && updated == nil {
-            self.spotlightHero = nil
-            changedLists.append("spotlight")
-        }
-
-        for i in 0..<self.groupedItems.count {
-            let before = self.groupedItems[i].1.count
-            self.replaceInList(&self.groupedItems[i].1, id: id, updated: updated)
-            if self.groupedItems[i].1.count != before { changedLists.append("grouped_\(i)") }
-        }
-
-        // Only animate if lists actually changed — avoids 7+ simultaneous animations
-        guard !changedLists.isEmpty else { return }
         if animated {
-            withAnimation(AppTheme.Animation.easeInOut) { }
+            withAnimation(AppTheme.Animation.easeInOut) { mutate() }
+        } else {
+            mutate()
         }
     }
 

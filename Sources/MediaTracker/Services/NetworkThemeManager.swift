@@ -19,7 +19,10 @@ class NetworkThemeManager {
 
     func setup(with container: ModelContainer) {
         self.modelContainer = container
-        syncWithDatabase()
+        // Defer database sync off the main thread — themeMap is already populated from UserDefaults
+        Task.detached(priority: .utility) { [weak self] in
+            await self?.syncWithDatabase()
+        }
     }
     
     func color(for network: String) -> Color? {

@@ -193,10 +193,13 @@ actor BackgroundDataService {
             collection.smartRulesData = colData.smartRulesData
             context.insert(collection)
 
-            if colData.smartRulesData == nil, let itemIDs = colData.itemIDs {
+            if colData.smartRulesData == nil, let itemIDs = colData.itemIDs, !itemIDs.isEmpty {
+                let idSet = Set(itemIDs)
+                let batchDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { idSet.contains($0.id) })
+                let fetchedItems = (try? context.fetch(batchDescriptor)) ?? []
+                let itemsByID = Dictionary<String, MediaItem>(uniqueKeysWithValues: fetchedItems.map { ($0.id, $0) })
                 for itemID in itemIDs {
-                    let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
-                    if let item = try? context.fetch(descriptor).first, item.modelContext != nil {
+                    if let item = itemsByID[itemID], item.modelContext != nil {
                         collection.items.append(item)
                     }
                 }
@@ -286,13 +289,23 @@ actor BackgroundDataService {
 
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
-        let items = try modelContext.fetch(descriptor)
+        descriptor.fetchLimit = 100
         
-        // 2. Deduplicate and Standardize
-        for item in items {
+        var offset = 0
+        var processedCount = 0
+        var hasMore = true
+        
+        while hasMore {
+            descriptor.fetchOffset = offset
+            let items = try modelContext.fetch(descriptor)
+            hasMore = items.count == 100
+            
+            // 2. Deduplicate and Standardize
+            for item in items {
             if Task.isCancelled { break }
             if isThermalThrottled {
                 AppLogger.warning("🌡️ Thermal throttle during library heal. Stopping early.", logger: AppLogger.background)
+                hasMore = false
                 break
             }
             // Migrate legacy IDs
@@ -340,18 +353,31 @@ actor BackgroundDataService {
                     }
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
 
-                    // Refresh network info from TMDB (fixes logo mismatches)
-                    if let netDetails = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
-                        tv.network = netDetails.network
-                        tv.networkLogoPath = netDetails.networkLogoPath
+                    // Refresh network info from TMDB only if missing (fixes logo mismatches)
+                    if tv.network == nil || tv.networkLogoPath == nil {
+                        if let netDetails = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
+                            tv.network = netDetails.network
+                            tv.networkLogoPath = netDetails.networkLogoPath
+                        }
                     }
                 }
             }
             
             item.syncCachedProperties(force: false)
+            processedCount += 1
+            }
+            
+            // Save after each batch
+            if processedCount % 100 == 0 {
+                await BadgeEngine.flushBadgeChanges(container: modelContext.container)
+                try modelContext.save()
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms between batches
+            }
+            
+            offset += 100
         }
         
-        // Flush buffered badge changes before the heal save
+        // Final save
         await BadgeEngine.flushBadgeChanges(container: modelContext.container)
         try modelContext.save()
         
@@ -571,7 +597,6 @@ actor BackgroundDataService {
 
         do {
             let itemType = item.type
-            // Phase 1: Wrap the entire refresh logic in the SyncCoordinator to prevent race conditions.
             let success = try await SyncCoordinator.shared.perform(key: "sync_\(tmdbID)") {
                 let success: Bool
                 if itemType == .movie {

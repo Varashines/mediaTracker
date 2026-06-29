@@ -17,7 +17,7 @@ struct MediaHeaderView: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
                     TitleSection(item: item, themeColor: themeColor, watchProviders: watchProviders, onStatusChange: onStatusChange)
                     
-                    MetadataSection(item: item, themeColor: themeColor)
+                    MetadataSection(item: item, themeColor: themeColor, watchProviders: watchProviders)
                     
                     OverviewSection(overview: item.overview, themeColor: themeColor)
                 }

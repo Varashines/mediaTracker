@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct HoverMetadataPills: View {
+struct HoverMetadataPills: View, Equatable {
     let title: String
     let year: String?
     let nextEpisodeLabel: String?
@@ -9,6 +9,12 @@ struct HoverMetadataPills: View {
     let isHovered: Bool
 
     @Environment(\.colorScheme) var colorScheme
+    
+    nonisolated static func == (lhs: HoverMetadataPills, rhs: HoverMetadataPills) -> Bool {
+        lhs.title == rhs.title && lhs.year == rhs.year &&
+        lhs.nextEpisodeLabel == rhs.nextEpisodeLabel && lhs.nextAiringDate == rhs.nextAiringDate &&
+        lhs.isUpcoming == rhs.isUpcoming && lhs.isHovered == rhs.isHovered
+    }
 
     var body: some View {
         VStack(spacing: 8) {

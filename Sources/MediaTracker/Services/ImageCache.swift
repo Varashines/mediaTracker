@@ -40,8 +40,8 @@ class ImageCache: NSObject, NSCacheDelegate {
     private override init() {
         super.init()
         memoryCache.delegate = self
-        memoryCache.countLimit = 150
-        memoryCache.totalCostLimit = 80 * 1024 * 1024 // 80MB
+        memoryCache.countLimit = 500
+        memoryCache.totalCostLimit = 250 * 1024 * 1024 // 250MB
     }
     
     func clearMemoryCache() {
@@ -93,7 +93,30 @@ class ImageCache: NSObject, NSCacheDelegate {
     }
     
     func prewarmImages(urls: [URL], targetSize: CGSize? = nil, priority: ImagePriority = .normal) {
-        // Stub: Prefetching has been disabled to save memory and network resource usage.
+        guard !urls.isEmpty else { return }
+        let maxConcurrent = priority == .critical ? 8 : 4
+        var index = 0
+        var inFlight = 0
+
+        func loadNext() {
+            while index < urls.count, inFlight < maxConcurrent {
+                let url = urls[index]
+                index += 1
+                inFlight += 1
+                let key = url.absoluteString
+                let task = Task.detached(priority: priority == .low ? .utility : .userInitiated) { [weak self] in
+                    _ = await self?.get(forKey: key, targetSize: targetSize, priority: priority)
+                }
+                Task {
+                    _ = await task.value
+                    await MainActor.run {
+                        inFlight -= 1
+                        loadNext()
+                    }
+                }
+            }
+        }
+        loadNext()
     }
     
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
@@ -117,25 +140,30 @@ class ImageCache: NSObject, NSCacheDelegate {
                 
                 if Task.isCancelled { return nil }
                 
-                var finalCGImage: CGImage? = nil
-                
-                if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
-                    finalCGImage = Self.renderSVGToCGImage(data: data, targetSize: targetSize)
-                } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
-                    if let target = targetSize {
-                        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-                        let maxDimension = max(target.width, target.height) * scale
-                        let options: [CFString: Any] = [
-                            kCGImageSourceShouldCache: false,
-                            kCGImageSourceCreateThumbnailFromImageAlways: true,
-                            kCGImageSourceCreateThumbnailWithTransform: true,
-                            kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
-                        ]
-                        finalCGImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-                    } else {
-                        finalCGImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+                // Decode off the main actor to avoid blocking UI
+                let finalCGImage: CGImage? = await Task.detached(priority: .utility) {
+                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
+                        // Render SVG off-main using CGContext (avoids MainActor hop for NSGraphicsContext)
+                        return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
+                    } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
+                        if let target = targetSize {
+                            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                            let maxDimension = max(target.width, target.height) * scale
+                            let options: [CFString: Any] = [
+                                kCGImageSourceShouldCache: false,
+                                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                kCGImageSourceCreateThumbnailWithTransform: true,
+                                kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
+                            ]
+                            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                        } else {
+                            return CGImageSourceCreateImageAtIndex(source, 0, nil)
+                        }
                     }
-                }
+                    return nil
+                }.value
+                
+                if Task.isCancelled { return nil }
                 
                 if let cgImage = finalCGImage {
                     let container = ImageContainer(image: cgImage)
@@ -156,35 +184,12 @@ class ImageCache: NSObject, NSCacheDelegate {
         return result
     }
     
-    static func renderSVGToCGImage(data: Data, targetSize: CGSize?) -> CGImage? {
+    nonisolated static func renderSVGToCGImage(data: Data, targetSize: CGSize?) -> CGImage? {
         guard let nsImage = NSImage(data: data) else { return nil }
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         let size = targetSize ?? nsImage.size
-        let pixelSize = CGSize(width: size.width * scale, height: size.height * scale)
-        
-        let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: max(1, Int(pixelSize.width)),
-            pixelsHigh: max(1, Int(pixelSize.height)),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        )!
-        
         nsImage.size = size
-        
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        nsImage.draw(in: NSRect(origin: .zero, size: pixelSize),
-                     from: NSRect(origin: .zero, size: size),
-                     operation: .copy,
-                     fraction: 1.0)
-        NSGraphicsContext.restoreGraphicsState()
-        return bitmap.cgImage
+        // cgImage(forProposedRect:) is thread-safe and avoids NSGraphicsContext main-thread requirement
+        return nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
     
     func formattedDiskCacheSize() async -> String {

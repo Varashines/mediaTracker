@@ -10,22 +10,32 @@ class SleepManager {
     var isIdle: Bool = false
     var purgeDataCache: (() -> Void)?
     private var lastInteractionDate: Date = Date()
-    private var timer: AnyCancellable?
+    private var idleWorkItem: DispatchWorkItem?
+    private var sleepWorkItem: DispatchWorkItem?
     private let sleepThreshold: TimeInterval = 120 // 2 minutes
     private let idleThreshold: TimeInterval = 60 // 1 minute for silent syncs
     
     private init() {
         setupInteractionMonitor()
-        startIdleTimer()
+        scheduleIdleCheck()
     }
     
-    private func startIdleTimer() {
-        timer?.cancel()
-        timer = Timer.publish(every: 5, on: .main, in: .common) // Increased frequency for more precise idle detection
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.checkIdleState()
-            }
+    private func scheduleIdleCheck() {
+        idleWorkItem?.cancel()
+        sleepWorkItem?.cancel()
+        
+        let idleItem = DispatchWorkItem { [weak self] in
+            self?.checkIdleState()
+        }
+        let sleepItem = DispatchWorkItem { [weak self] in
+            self?.checkIdleState()
+        }
+        
+        idleWorkItem = idleItem
+        sleepWorkItem = sleepItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + idleThreshold, execute: idleItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + sleepThreshold, execute: sleepItem)
     }
 
     private func checkIdleState() {
@@ -58,10 +68,13 @@ class SleepManager {
             withAnimation(.easeInOut(duration: 0.4)) {
                 isAsleep = false
             }
-            // Restart timer after waking from sleep
-            startIdleTimer()
+            // Reschedule idle/sleep checks
+            scheduleIdleCheck()
             updateWindowChrome()
             AppLogger.info("🌅 App woke up from sleep mode.", logger: AppLogger.background)
+        } else {
+            // Reschedule the timers since interaction occurred
+            scheduleIdleCheck()
         }
     }
     
@@ -74,9 +87,9 @@ class SleepManager {
         withAnimation(.easeIn(duration: 0.6)) {
             isAsleep = true
         }
-        // Stop polling timer — no need to check idle state while asleep
-        timer?.cancel()
-        timer = nil
+        // Cancel pending checks — no need while asleep
+        idleWorkItem?.cancel()
+        sleepWorkItem?.cancel()
         purgeDataCache?()
         updateWindowChrome()
         AppLogger.info("💤 App entered sleep mode due to inactivity. UI interactions throttled.", logger: AppLogger.background)

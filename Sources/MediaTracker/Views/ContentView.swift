@@ -236,10 +236,6 @@ struct LibraryDetailView: View {
                 guard hasInitiallyLoaded else { return }
                 viewModel.filterSubject.send()
             }
-            .onReceive(viewModel.filterSubject.debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
-            performUpdate()
-            hasInitiallyLoaded = true
-            }
             .toolbar {
 
                 LibraryDetailToolbarContent(
@@ -320,6 +316,10 @@ struct LibraryDetailView: View {
                 BadgeEngine.clearScanCache()
                 LibraryStatsActor.clearCache()
                 URLCache.shared.removeAllCachedResponses()
+            }
+            viewModel.onFilterUpdate = {
+                self.performUpdate()
+                self.hasInitiallyLoaded = true
             }
             performUpdate()
         }
@@ -610,6 +610,14 @@ struct LibraryDetailView: View {
 
     private func updateSingleItemInContentView(id: PersistentIdentifier) {
         let category = viewModel.filter.selectedCategory
+
+        // Home category has special processing (eligibility, sorting, limiting)
+        // that single-item replacement cannot handle. Trigger a full refresh.
+        if category == .home {
+            viewModel.filterSubject.send()
+            return
+        }
+
         let searchText = viewModel.filter.searchText
         let networks = viewModel.filter.selectedNetworks
         let language = viewModel.filter.selectedLanguage

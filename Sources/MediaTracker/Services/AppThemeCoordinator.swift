@@ -14,6 +14,9 @@ class AppThemeCoordinator {
     var themePreference: Int = 0
     var customThemePalette: Int = 0
 
+    private var lastReload: Date = .distantPast
+    private let reloadDebounce: TimeInterval = 0.1
+
     private init() {
         reloadSettings()
         
@@ -23,7 +26,11 @@ class AppThemeCoordinator {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.reloadSettings()
+                guard let self else { return }
+                let now = Date()
+                guard now.timeIntervalSince(self.lastReload) >= self.reloadDebounce else { return }
+                self.lastReload = now
+                self.reloadSettings()
             }
         }
     }

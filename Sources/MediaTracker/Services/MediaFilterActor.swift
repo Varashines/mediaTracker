@@ -27,6 +27,11 @@ actor MediaFilterActor {
         // Pre-compute filter values for Swift-level refinement
         let stateRaw = state?.rawValue
 
+        // Home category uses its own queries — skip the general fetch entirely
+        if category == .home {
+            return try processHomeCategory(now: now, totalCount: 0)
+        }
+
         // 1. Handle collection override first
         var smartRules: [SmartRule] = []
         var basePredicate: Predicate<MediaItem>
@@ -65,10 +70,8 @@ actor MediaFilterActor {
         // Optimization: Only use SQLite pagination when no Swift-level refinement is needed.
         // Swift-level refinement is now only needed for network (array of strings), genre (transformable array), stalled/quickBites/releaseRadar category date limits, or custom smart rules.
         let needsSwiftRefinement = (network?.isEmpty == false) ||
-                                   !(language ?? "").isEmpty ||
                                    (genre?.isEmpty == false) ||
                                    year != nil ||
-                                   badge != nil ||
                                    provider != nil ||
                                    category == .releaseRadar ||
                                    category == .stalled ||
@@ -109,10 +112,7 @@ actor MediaFilterActor {
         var featuredUpcoming: [MediaThumbnailMetadata] = []
         
         // 3. Specialized Logic
-        if category == .home {
-            let homeResult = try processHomeCategory(now: now, totalCount: totalCount)
-            return homeResult
-        } else if category == .upcoming && collectionID == nil {
+        if category == .upcoming && collectionID == nil {
             featuredUpcoming = results.prefix(15).map { toMetadata($0) }
             results = Array(results.dropFirst(results.count > 15 ? 15 : 0))
         }

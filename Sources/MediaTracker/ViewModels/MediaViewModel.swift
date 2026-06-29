@@ -40,6 +40,18 @@ class MediaViewModel {
     var display = DisplayCache()
     var discovery = DiscoveryCache()
 
+    var onFilterUpdate: (() -> Void)?
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        filterSubject
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.onFilterUpdate?()
+            }
+            .store(in: &cancellables)
+    }
+
     func navigationTitle(for category: NavigationCategory) -> String {
         if let colName = collection.selectedCollectionName {
             return colName

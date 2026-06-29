@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct ForYouCompactCard: View {
+struct ForYouCompactCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
     let namespace: Namespace.ID
     var isFastScrolling: Bool = false
@@ -9,6 +9,10 @@ struct ForYouCompactCard: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     @State private var item: MediaItem?
+    
+    nonisolated static func == (lhs: ForYouCompactCard, rhs: ForYouCompactCard) -> Bool {
+        lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
+    }
     
     private let cardWidth: CGFloat = 420
     private let cardHeight: CGFloat = 200

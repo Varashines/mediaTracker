@@ -235,14 +235,61 @@ enum ColorExtractor {
 
     // MARK: - Vision Saliency
 
-    private struct SaliencyData {
+    private final class SaliencyData {
         let values: [Float]
         let width: Int
         let height: Int
+
+        init(values: [Float], width: Int, height: Int) {
+            self.values = values
+            self.width = width
+            self.height = height
+        }
+    }
+
+    /// Cache saliency results to avoid repeated Vision neural network inference.
+    /// Key is a lightweight hash of image dimensions + corner/center pixel samples.
+    nonisolated(unsafe) private static let saliencyCache: NSCache<NSString, SaliencyData> = {
+        let cache = NSCache<NSString, SaliencyData>()
+        cache.countLimit = 50
+        return cache
+    }()
+
+    private static func saliencyCacheKey(for cgImage: CGImage) -> NSString {
+        let w = cgImage.width
+        let h = cgImage.height
+        // Sample 9 pixels: 4 corners + 4 edge midpoints + center
+        var hasher = Hasher()
+        hasher.combine(w)
+        hasher.combine(h)
+        if let data = cgImage.dataProvider?.data,
+           let ptr = CFDataGetBytePtr(data) {
+            let bytesPerRow = cgImage.bytesPerRow
+            let bpp = cgImage.bitsPerPixel / 8
+            let samples: [(Int, Int)] = [
+                (0, 0), (w-1, 0), (0, h-1), (w-1, h-1),
+                (w/2, 0), (w/2, h-1), (0, h/2), (w-1, h/2),
+                (w/2, h/2)
+            ]
+            for (x, y) in samples {
+                let offset = y * bytesPerRow + x * bpp
+                if offset + 3 < CFDataGetLength(data) {
+                    hasher.combine(ptr[offset])
+                    hasher.combine(ptr[offset + 1])
+                    hasher.combine(ptr[offset + 2])
+                }
+            }
+        }
+        return "saliency_\(hasher.finalize())" as NSString
     }
 
     private static func generateSaliencyData(from cgImage: CGImage) async -> SaliencyData? {
-        return await withCheckedContinuation { continuation in
+        let key = saliencyCacheKey(for: cgImage)
+        if let cached = saliencyCache.object(forKey: key) {
+            return cached
+        }
+
+        let result: SaliencyData? = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let request = VNGenerateAttentionBasedSaliencyImageRequest()
                 let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -280,6 +327,11 @@ enum ColorExtractor {
                 }
             }
         }
+
+        if let result {
+            saliencyCache.setObject(result, forKey: key)
+        }
+        return result
     }
 
     private static func rgbToHue(r: Double, g: Double, b: Double) -> Double {

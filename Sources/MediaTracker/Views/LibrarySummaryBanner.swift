@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct LibrarySummaryBanner: View {
+    let modelContainer: ModelContainer
     @State private var stats: Stats?
     
     struct Stats {
@@ -49,14 +50,7 @@ struct LibrarySummaryBanner: View {
     }
     
     private func loadStats() async {
-        let container = try? ModelContainer(for: MediaItem.self, MovieDetails.self, TVShowDetails.self,
-                                            TVSeason.self, TVEpisode.self, CastMember.self,
-                                            NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
-                                            BadgeEntity.self, PersonImageEntity.self,
-                                            StudioAliasEntity.self, SearchCacheEntity.self,
-                                            MediaCollection.self, ProviderEntity.self)
-        guard let container else { return }
-        let context = ModelContext(container)
+        let context = ModelContext(modelContainer)
         
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.typeValue, \.stateValue]

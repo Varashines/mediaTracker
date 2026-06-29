@@ -32,6 +32,7 @@ struct WatchProviderResult: Codable, Identifiable, Sendable {
     let id: Int
     let name: String
     let logoPath: String?
+    let watchPageURL: String?
     var logoURL: String? { logoPath.flatMap { APIClient.tmdbImageURL(path: $0, size: "w45") } }
 }
 
@@ -59,7 +60,7 @@ func extractWatchProviders(from response: TMDBWatchProvidersResponse?, regionOve
         }
         .reduce(into: [WatchProviderResult]()) { acc, provider in
             if !acc.contains(where: { $0.id == provider.provider_id }) {
-                acc.append(WatchProviderResult(id: provider.provider_id, name: provider.provider_name, logoPath: provider.logo_path))
+                acc.append(WatchProviderResult(id: provider.provider_id, name: provider.provider_name, logoPath: provider.logo_path, watchPageURL: regionData.link))
             }
         }
 }
@@ -84,8 +85,6 @@ struct MovieDetailsResult {
 }
 
 struct TVDetailsResult {
-    let seasonsCount: Int
-    let episodesCount: Int
     let status: String
     let voteAverage: Double?
     let imdbID: String?
@@ -95,7 +94,6 @@ struct TVDetailsResult {
     let overview: String?
     let network: String?
     let networkLogoPath: String?
-    let networkLogos: [String: String]
     let originalLanguage: String?
     let seasons: [TMDBSeasonBrief]
     let firstAirDate: String?

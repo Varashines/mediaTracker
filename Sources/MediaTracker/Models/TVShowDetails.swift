@@ -21,6 +21,7 @@ final class TVShowDetails {
     var rottenTomatoesScore: Int?
     var contentRating: String?
     var genres: [String] = []
+    var showType: String?
     var network: String?
     var networkLogoPath: String?
     var originalLanguage: String?

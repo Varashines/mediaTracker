@@ -153,6 +153,7 @@ struct TMDBWatchRegion: Codable {
     let flatrate: [TMDBWatchProvider]?
     let free: [TMDBWatchProvider]?
     let ads: [TMDBWatchProvider]?
+    let link: String?
 }
 
 struct TMDBWatchProvider: Codable {

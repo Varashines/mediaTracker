@@ -179,8 +179,6 @@ final class NetworkingTests: XCTestCase {
 
         XCTAssertEqual(details.status, "Returning Series")
         XCTAssertEqual(details.genres, ["Drama"])
-        XCTAssertEqual(details.seasonsCount, 2)
-        XCTAssertEqual(details.episodesCount, 20)
     }
 
     func testRateLimitRetry() async throws {

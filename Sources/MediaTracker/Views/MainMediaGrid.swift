@@ -34,12 +34,6 @@ struct MainMediaGrid: View {
         .task(id: selectedCollectionID) {
             await loadCompletedIDs()
         }
-        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
-            Task { await loadCompletedIDs() }
-        }
-        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-            Task { await loadCompletedIDs() }
-        }
     }
 
     @ViewBuilder

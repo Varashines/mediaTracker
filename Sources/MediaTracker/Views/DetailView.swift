@@ -45,20 +45,20 @@ struct DetailView: View {
             ZStack {
                 baseBackground
                 
-                GeometryReader { geo in
-                    ZStack {
-                        Circle()
-                            .fill(p.opacity(colorScheme == .dark ? 0.35 : 0.25))
-                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
-                            .offset(x: -geo.size.width * 0.2, y: -geo.size.width * 0.3)
-                        
-                        Circle()
-                            .fill(viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
-                            .frame(width: geo.size.width * 0.6, height: geo.size.width * 0.6)
-                            .offset(x: geo.size.width * 0.4, y: -geo.size.width * 0.1)
-                    }
-                    .blur(radius: 80)
-                }
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        .init(0, 0), .init(0.5, 0), .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                        .init(0, 1), .init(0.5, 1), .init(1, 1)
+                    ],
+                    colors: [
+                        p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
+                        .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
+                        .clear, .clear, .clear
+                    ]
+                )
+                .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
             }
             .ignoresSafeArea()
 
@@ -73,11 +73,11 @@ struct DetailView: View {
                                         showNavTitle = newValue < -50
                                         
                                         let delta = newValue - lastScrollOffset
-                                        if delta < -8 { // Scrolling down
+                                        if delta < -8 {
                                             withAnimation(AppTheme.Animation.springSnappy) {
                                                 isActionBarVisible = false
                                             }
-                                        } else if delta > 8 || newValue > -50 { // Scrolling up or near top
+                                        } else if delta > 8 || newValue > -50 {
                                             withAnimation(AppTheme.Animation.springSnappy) {
                                                 isActionBarVisible = true
                                             }

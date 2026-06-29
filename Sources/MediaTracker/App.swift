@@ -106,6 +106,18 @@ struct MediaTrackerApp: App {
             appMainContent
         }
         .modelContainer(sharedModelContainer)
+        .windowResizability(.contentSize)
+        .defaultWindowPlacement { content, context in
+            let displayBounds = context.defaultDisplay.visibleRect
+            let size = content.sizeThatFits(.unspecified)
+            return WindowPlacement(
+                CGPoint(
+                    x: displayBounds.midX - (size.width / 2),
+                    y: displayBounds.midY - (size.height / 2)
+                ),
+                size: size
+            )
+        }
 
         Settings {
             settingsContent

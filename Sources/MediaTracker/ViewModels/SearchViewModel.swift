@@ -107,7 +107,7 @@ class SearchViewModel {
         }
         
         // 1. Try Cache First
-        if let cached = fetchCachedResults(query: text, type: selectedType) {
+        if let cached = await fetchCachedResults(query: text, type: selectedType) {
             self.movieResults = cached.filter { $0.type == .movie }
             self.tvResults = cached.filter { $0.type == .tvShow }
             
@@ -201,7 +201,7 @@ class SearchViewModel {
 
     private var aliasSearchTimestamp: [String: Date] = [:]
 
-    private func fetchCachedResults(query: String, type: SearchType) -> [MediaSearchResult]? {
+    private func fetchCachedResults(query: String, type: SearchType) async -> [MediaSearchResult]? {
         let key = "\(type.rawValue)_\(query)"
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<SearchCacheEntity>(predicate: #Predicate { $0.key == key })

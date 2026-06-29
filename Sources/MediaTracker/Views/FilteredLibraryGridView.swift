@@ -8,7 +8,6 @@ struct FilteredLibraryGridView: View {
     @Binding var isSearchActive: Bool
     @Binding var searchText: String
     var onNavigateToSearch: ((String) -> Void)? = nil
-    @Environment(\.colorScheme) var scheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
@@ -25,6 +24,8 @@ struct FilteredLibraryGridView: View {
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var updateTask: Task<Void, Never>? = nil
     @State private var recsTask: Task<Void, Never>? = nil
+    @State private var cachedLikedTitles: [String] = []
+    @State private var cachedRecommendedDomain: String = "showdive"
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
     }
@@ -35,17 +36,7 @@ struct FilteredLibraryGridView: View {
     private var canShowRecommendations: Bool {
         MooreMetricsService.shared.isConfigured &&
         (filter.type == .studio || filter.type == .genre) &&
-        !likedTitles.isEmpty
-    }
-
-    private var likedTitles: [String] {
-        var titles: [String] = []
-        for item in items {
-            if item.tasteValue == "Love" || item.tasteValue == "Like" {
-                titles.append(item.title)
-            }
-        }
-        return titles
+        !cachedLikedTitles.isEmpty
     }
 
     var body: some View {
@@ -118,6 +109,9 @@ struct FilteredLibraryGridView: View {
             updateTask = nil
             recsTask?.cancel()
             recsTask = nil
+        }
+        .task(id: items) {
+            recomputeRecommendationData()
         }
         .overlay(alignment: .bottomTrailing) {
             if canShowRecommendations && !isLoading {
@@ -215,8 +209,8 @@ struct FilteredLibraryGridView: View {
 
     private func fetchRecommendations() {
         recsTask?.cancel()
-        let titles = likedTitles
-        let domain = recommendedDomain
+        let titles = cachedLikedTitles
+        let domain = cachedRecommendedDomain
         let cacheKey = "\(filter.type.rawValue)_\(filter.name)_\(titles.sorted().joined(separator: "|"))"
 
         // Check 30-day persisted cache
@@ -307,15 +301,11 @@ struct FilteredLibraryGridView: View {
         return cached
     }
 
-    private var recommendedDomain: String {
-        // Check if all items are movies or TV shows
+    private func recomputeRecommendationData() {
+        cachedLikedTitles = items.filter { $0.tasteValue == "Love" || $0.tasteValue == "Like" }.map(\.title)
         let hasMovies = items.contains { $0.type == .movie }
         let hasTV = items.contains { $0.type == .tvShow }
-
-        if hasMovies && !hasTV { return "moviedive" }
-        if hasTV && !hasMovies { return "showdive" }
-        // Mixed or unknown — default to showdive
-        return "showdive"
+        cachedRecommendedDomain = hasMovies && !hasTV ? "moviedive" : "showdive"
     }
 
     private func fetchItems() {

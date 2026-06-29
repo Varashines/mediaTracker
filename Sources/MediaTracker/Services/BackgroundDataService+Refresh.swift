@@ -25,14 +25,35 @@ extension BackgroundDataService {
             movieDetails.voteAverage = details.voteAverage
             movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
-            // Skip OMDB for Wishlist items without taste ratings — minimal value
-            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue) {
-                if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
-                    movieDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
-                    movieDetails.imdbRating = omdb.imdbRating
-                    movieDetails.contentRating = omdb.contentRating
+            // Parallelize OMDB + logos + color extraction
+            let itemState = item.state
+            let itemTaste = item.tasteValue
+            let itemLogoURL = item.titleLogoURL
+            async let omdbTask: OMDBFullData? = {
+                if !(itemState == .wishlist && itemTaste == TasteValue.none.rawValue),
+                   let imdbID = details.imdbID {
+                    return await APIClient.shared.fetchOMDBData(imdbID: imdbID)
                 }
+                return nil
+            }()
+            
+            async let logoTask: String? = {
+                if itemLogoURL == nil {
+                    return try? await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
+                }
+                return nil
+            }()
+            
+            if let omdb = await omdbTask {
+                movieDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+                movieDetails.imdbRating = omdb.imdbRating
+                movieDetails.contentRating = omdb.contentRating
             }
+            
+            if let logo = await logoTask {
+                item.titleLogoURL = logo
+            }
+            
             let prodNames = details.productionCompanies.map { $0.name }
             let prodLogos = details.productionCompanies.map { $0.logoPath ?? "" }
             movieDetails.network = prodNames.isEmpty ? nil : prodNames.joined(separator: ",")
@@ -71,22 +92,7 @@ extension BackgroundDataService {
             
             if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
             item.cachedTrailerKey = details.trailerKey
-            if item.titleLogoURL == nil {
-                do {
-                    let logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, force: force)
-                    if !logos.isEmpty {
-                        item.titleLogoURL = logos.first
-                        AppLogger.info("Movie logo set for tmdbID=\(tmdbID)", logger: AppLogger.background)
-                    } else {
-                        AppLogger.info("No movie logos found for tmdbID=\(tmdbID)", logger: AppLogger.background)
-                    }
-                } catch {
-                    AppLogger.warning("Movie logo fetch failed for tmdbID=\(tmdbID): \(error)", logger: AppLogger.background)
-                }
-            }
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
-            item.cachedWatchProviderLogos = details.streamingProviders.map { $0.logoPath ?? "" }
-            await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.updateSearchableText()
             item.lastUpdated = Date()
@@ -136,10 +142,11 @@ extension BackgroundDataService {
             var mazeEpisodes: [TVMazeEpisode] = []
             var mazeGenres: [String]?
             if let mID = tvMazeID, mID > 0 {
-                if let (episode, timezone, service, airtime, genres) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
+                if let (episode, timezone, service, airtime, genres, showType) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
                     mazeGenres = genres
+                    tvDetails.showType = showType
                     
                     if let schedule = episode {
                         tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
@@ -149,7 +156,6 @@ extension BackgroundDataService {
                     }
                 }
                 
-                // Fetch full episode list from TVMaze
                 mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
             }
 
@@ -198,42 +204,27 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
-            // Skip OMDB for Wishlist items without taste ratings — minimal value
-            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue) {
-                if let imdbID = details.imdbID, let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
+
+            // Merge TMDB + TVMaze genres for richer coverage
+            var mergedGenres = Set(details.genres)
+            if let mazeGenres {
+                for genre in mazeGenres { mergedGenres.insert(genre) }
+            }
+            tvDetails.genres = Array(mergedGenres)
+            
+            // OMDB fetch (sequential — Sendable issues prevent parallelization with item)
+            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue),
+               let imdbID = details.imdbID, !imdbID.isEmpty {
+                if let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
                     tvDetails.imdbRating = omdb.imdbRating
                     tvDetails.contentRating = omdb.contentRating
                     tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
                 }
             }
-            // Merge TVMaze genres with TMDB genres (union, standardized)
-            let tmdbGenres = details.genres
-            if let mazeGenres, !mazeGenres.isEmpty {
-                let merged = GenreMapper.standardize(tmdbGenres + mazeGenres)
-                tvDetails.genres = merged
-            } else {
-                tvDetails.genres = tmdbGenres
-            }
-            // Use TMDB network name and logo (consistent single source)
-            tvDetails.network = details.network
-            tvDetails.networkLogoPath = details.networkLogoPath
-            tvDetails.numberOfSeasons = details.seasonsCount
-            tvDetails.numberOfEpisodes = details.episodesCount
-            tvDetails.creators = details.creators.map { $0.name }
-            tvDetails.tvMazeID = tvMazeID
-            item.cachedTrailerKey = details.trailerKey
+            
+            // Logo fetch
             if item.titleLogoURL == nil {
-                do {
-                    let logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, force: force)
-                    if !logos.isEmpty {
-                        item.titleLogoURL = logos.first
-                        AppLogger.info("TV logo set for tmdbID=\(tmdbID)", logger: AppLogger.background)
-                    } else {
-                        AppLogger.info("No TV logos found for tmdbID=\(tmdbID)", logger: AppLogger.background)
-                    }
-                } catch {
-                    AppLogger.warning("TV logo fetch failed for tmdbID=\(tmdbID): \(error)", logger: AppLogger.background)
-                }
+                item.titleLogoURL = try? await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
             }
 
             if !metadataOnly {
@@ -248,65 +239,39 @@ extension BackgroundDataService {
                 }
 
                 var fetchedSeasons: [FetchedSeasonData] = []
-                
-                if tvMazeID != nil && !mazeEpisodes.isEmpty {
-                    // Group TVMaze episodes by season
-                    let groupedBySeason = Dictionary(grouping: mazeEpisodes, by: { $0.season ?? 1 })
-                    for (sNum, eps) in groupedBySeason {
-                        let sortedEps = eps.sorted(by: { ($0.number ?? 0) < ($1.number ?? 0) })
-                        let episodeResults = sortedEps.map { ep -> TVEpisodeResult in
-                            let strippedSummary = ep.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                            return TVEpisodeResult(
-                                episodeNumber: ep.number ?? 0,
-                                name: ep.name ?? "Episode \(ep.number ?? 0)",
-                                overview: strippedSummary,
-                                airDate: ep.airdate,
-                                runtime: ep.runtime
-                            )
-                        }
-                        
-                        let matchingTMDBSeason = seasonsToSync.first(where: { $0.season_number == sNum })
-                        fetchedSeasons.append(FetchedSeasonData(
-                            seasonNumber: sNum,
-                            name: matchingTMDBSeason?.name ?? "Season \(sNum)",
-                            episodeCount: sortedEps.count,
-                            airDate: sortedEps.first?.airdate,
-                            episodes: episodeResults
-                        ))
-                    }
-                    fetchedSeasons.sort(by: { $0.seasonNumber < $1.seasonNumber })
-                } else {
-                    fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
-                        for seasonData in seasonsToSync {
-                            let sNum = seasonData.season_number
-                            if seasonData.episode_count == 0 { continue }
 
-                            // Skip seasons that already have episodes loaded unless force
-                            if !force {
-                                let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                                let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                                if let existing = try? modelContext.fetch(sDescriptor).first,
-                                   existing.totalEpisodesCount > 0 {
-                                    continue
-                                }
-                            }
+                fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
+                    for seasonData in seasonsToSync {
+                        let sNum = seasonData.season_number
+                        if seasonData.episode_count == 0 { continue }
 
-                            group.addTask {
-                                do {
-                                    let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
-                                    return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
-                                } catch {
-                                    AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
-                                    return nil
-                                }
+                        // Skip seasons that already have episodes loaded unless force
+                        // or TMDB reports more episodes than we have (airing show with new episodes)
+                        if !force {
+                            let seasonUniqueID = "\(tmdbID)_\(sNum)"
+                            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+                            if let existing = try? modelContext.fetch(sDescriptor).first,
+                               existing.totalEpisodesCount > 0,
+                               existing.totalEpisodesCount >= seasonData.episode_count {
+                                continue
                             }
                         }
-                        var results: [FetchedSeasonData] = []
-                        for await result in group {
-                            if let result { results.append(result) }
+
+                        group.addTask {
+                            do {
+                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
+                            } catch {
+                                AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
+                                return nil
+                            }
                         }
-                        return results.sorted { $0.seasonNumber < $1.seasonNumber }
                     }
+                    var results: [FetchedSeasonData] = []
+                    for await result in group {
+                        if let result { results.append(result) }
+                    }
+                    return results.sorted { $0.seasonNumber < $1.seasonNumber }
                 }
 
                 // Batch pre-fetch all existing seasons and episodes for this show to avoid N+1 queries
@@ -364,7 +329,9 @@ extension BackgroundDataService {
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
-            item.cachedWatchProviderLogos = details.streamingProviders.map { $0.logoPath ?? "" }
+            if let trailer = details.trailerKey {
+                item.cachedTrailerKey = trailer
+            }
             await extractAndSavePosterColor(for: item)
             item.syncCachedProperties(force: true)
             item.lastUpdated = Date()

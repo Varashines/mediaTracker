@@ -3,6 +3,20 @@ import SwiftData
 
 @Model
 final class MediaItem: Identifiable {
+    #Index<MediaItem>([
+        \.stateValue,
+        \.isSoftDeleted,
+        \.typeValue,
+        \.storedIsUpcoming,
+        \.tasteValue,
+        \.storedSmartBadgeLabel,
+        \.lastInteractionDate,
+        \.dateAdded,
+        \.lastUpdated,
+        \.cachedLanguage,
+        \.cachedNextAiringDate
+    ])
+
     @Attribute(.unique)
     var id: String
     var title: String
@@ -29,7 +43,6 @@ final class MediaItem: Identifiable {
     var cachedNetwork: String?
     var cachedNetworkLogoPath: String?
     var cachedWatchProviders: [String] = []
-    var cachedWatchProviderLogos: [String] = []
     var cachedNextAiringDate: Date?
     var cachedRuntime: Int?
     var cachedEpisodeRuntime: Int?
@@ -45,7 +58,6 @@ final class MediaItem: Identifiable {
     var searchableText: String = ""
     var storedCast: [SimpleCastMember] = []
     var cachedTrailerKey: String?
-    var cachedTMDBStatus: String?
     var titleLogoURL: String?
     
     var collections: [MediaCollection] = []
@@ -141,9 +153,24 @@ final class MediaItem: Identifiable {
 
     func applyStateChange(_ newState: MediaState) {
         let didChange = stateValue != newState.rawValue
-        state = newState
         if didChange {
-            lastUpdated = Date()
+            stateValue = newState.rawValue
+            lastInteractionDate = Date()
+            lastStateChangeDate = Date()
+            
+            if typeValue == "TV Show" && stateValue == "Completed" {
+                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
+                    markLoadedEpisodesAsWatched()
+                    if let container = modelContext?.container {
+                        let rawID = id
+                        Task.detached(priority: .userInitiated) {
+                            let backgroundService = BackgroundDataService(modelContainer: container)
+                            await backgroundService.markAllEpisodesAsWatched(itemID: rawID)
+                        }
+                    }
+                }
+            }
+            
             if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
             commitChange()
         }
@@ -151,8 +178,9 @@ final class MediaItem: Identifiable {
 
     func applyTasteChange(_ newTaste: TasteValue) {
         let didChange = tasteValue != newTaste.rawValue
-        taste = newTaste
         if didChange {
+            tasteValue = newTaste.rawValue
+            lastInteractionDate = Date()
             commitChange()
         }
     }
@@ -231,12 +259,12 @@ extension MediaItem {
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
         \.isSoftDeleted, \.softDeletedAt,
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
-        \.cachedNetworkLogoPath, \.cachedWatchProviders, \.cachedWatchProviderLogos, \.cachedNextAiringDate, \.cachedRuntime,
+        \.cachedNetworkLogoPath, \.cachedWatchProviders, \.cachedNextAiringDate, \.cachedRuntime,
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
         \.searchableText,
-        \.cachedTrailerKey, \.cachedTMDBStatus, \.titleLogoURL,
+        \.cachedTrailerKey, \.titleLogoURL,
     ]
 
     nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]

@@ -35,6 +35,7 @@ struct TrendingCarousel: View {
                 ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { item in
                         TrendingPosterCard(item: item, isFastScrolling: horizontalFastScrolling)
+                            .equatable()
                             .onTapGesture { onSelect(item) }
                     }
                 }

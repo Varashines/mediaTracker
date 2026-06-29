@@ -102,7 +102,6 @@ extension MediaItem {
         self.cachedRuntime = movie.runtime
         self.cachedNetwork = Self.normalizeCommaSeparated(movie.network)
         self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(movie.networkLogoPath)
-        self.cachedTMDBStatus = movie.status
     }
 
     func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
@@ -113,7 +112,6 @@ extension MediaItem {
         self.cachedLanguage = tv.originalLanguage
         self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
         self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)
-        self.cachedTMDBStatus = tv.status
         
         // Use Unified Logic - Only force recalculate if explicitly requested to heal drift
         let progressResult = tv.calculateProgress(now: now, forceRecalculate: forceRecalculate)

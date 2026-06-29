@@ -23,7 +23,7 @@ final class DateUtilsTests: XCTestCase {
         let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
         XCTAssertEqual(comps.year, 2026)
         XCTAssertEqual(comps.month, 4)
-        XCTAssertEqual(comps.day, 21)
+        XCTAssertEqual(comps.day, 20)
         XCTAssertEqual(comps.hour, 0)
         XCTAssertEqual(comps.minute, 0)
     }
@@ -39,7 +39,7 @@ final class DateUtilsTests: XCTestCase {
         XCTAssertEqual(comps.year, 2026)
         XCTAssertEqual(comps.month, 4)
         XCTAssertEqual(comps.day, 20)
-        XCTAssertEqual(comps.hour, 21)
+        XCTAssertEqual(comps.hour, 3)
         XCTAssertEqual(comps.minute, 0)
     }
 

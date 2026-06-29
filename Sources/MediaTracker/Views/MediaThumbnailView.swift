@@ -70,7 +70,6 @@ struct MediaThumbnailView: View, Equatable {
     @Environment(\.colorScheme) var colorScheme
 
     @State private var isHovered = false
-    @State private var isButtonHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
 
@@ -286,6 +285,7 @@ struct MediaThumbnailView: View, Equatable {
                 isUpcoming: isUpcoming,
                 isHovered: effectiveHover
             )
+            .equatable()
 
             // Smart Badge (Top Leading)
             VStack {
@@ -346,19 +346,13 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .shadow(
-            color: isHovered ? .clear : AppTheme.Colors.shadowAmbient(for: colorScheme),
-            radius: isHovered ? 0 : AppTheme.Shadow.subtle.radius,
-            y: isHovered ? 0 : AppTheme.Shadow.subtle.y
-        )
         .shadow(
             color: isHovered
                 ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                : .clear,
-            radius: isHovered ? 12 : 0,
-            y: isHovered ? 6 : 0
+                : AppTheme.Colors.shadowAmbient(for: colorScheme),
+            radius: isHovered ? 12 : AppTheme.Shadow.subtle.radius,
+            y: isHovered ? 6 : AppTheme.Shadow.subtle.y
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
