@@ -3,7 +3,6 @@ import SwiftUI
 struct PosterView: View {
     let item: MediaItem
     let themeColor: Color
-    let scrollOffset: CGFloat
 
     private let posterFrame = CGSize(width: 260, height: 390)
     @State private var glowPulse = false
@@ -11,7 +10,6 @@ struct PosterView: View {
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
-                // Aurora Glow Background — animated radius for breathing effect
                 RadialGradient(
                     colors: [themeColor.opacity(0.5), .clear],
                     center: .center,
@@ -41,7 +39,6 @@ struct PosterView: View {
             }
             .compositingGroup()
             .onAppear { glowPulse = true }
-            .offset(y: scrollOffset * 0.12)
         }
     }
 }

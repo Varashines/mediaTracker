@@ -145,17 +145,10 @@ class DetailViewModel {
 
         isRefreshing = true
         let rawID = item.id
-        let startTime = ContinuousClock.now
 
         Task { [weak self] in
             let backgroundService = BackgroundDataService(modelContainer: context.container)
             let success = await backgroundService.refreshSingleItem(id: rawID, force: force)
-
-            let elapsed = startTime.duration(to: .now)
-            let minDuration: Duration = .milliseconds(400)
-            if elapsed < minDuration {
-                try? await Task.sleep(for: minDuration - elapsed)
-            }
 
             await MainActor.run { [weak self] in
                 guard let self = self, self.item.modelContext != nil else { return }

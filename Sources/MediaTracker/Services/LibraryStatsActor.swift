@@ -299,10 +299,6 @@ actor LibraryStatsActor {
         return result
     }
 
-    func fetchCinephileData() async throws -> LibraryStats? {
-        return try await fetchStats(includeCinephileData: true)
-    }
-
     // Taste Affinity Helpers
 
     private struct PersonInput: Sendable {
@@ -481,37 +477,6 @@ actor LibraryStatsActor {
             archetype: "",
             memberSince: stats.earliestDateAdded
         )
-    }
-
-    private func computeRatingPersonality(loved: Int, liked: Int, disliked: Int, unrated: Int) -> String {
-        let rated = loved + liked + disliked
-        guard rated > 0 else { return "Mystery Critic" }
-        let lovedPct = Double(loved) / Double(rated)
-        let dislikedPct = Double(disliked) / Double(rated)
-        if lovedPct > 0.55 { return "Hopeless Romantic" }
-        if dislikedPct > 0.25 { return "Harsh Critic" }
-        if loved > 0 && liked > 0 && disliked == 0 { return "Enthusiast" }
-        return "Balanced"
-    }
-
-    private func computeArchetype(totalMovies: Int, completedMovies: Int, totalTV: Int, completedTV: Int, loved: Int, liked: Int, disliked: Int, tvWatchTime: Int, totalWatchTime: Int) -> String {
-        let total = totalMovies + totalTV
-        let completed = completedMovies + completedTV
-        let completionRate = total > 0 ? Double(completed) / Double(total) : 0
-        let rated = loved + liked + disliked
-        let lovedPct = rated > 0 ? Double(loved) / Double(rated) : 0
-        let tvPct = totalWatchTime > 0 ? Double(tvWatchTime) / Double(totalWatchTime) : 0
-
-        if total < 20 { return "The Newcomer" }
-        if completionRate > 0.8 && lovedPct > 0.5 { return "The Completionist" }
-        if lovedPct > 0.6 && completionRate > 0.6 { return "The Curator" }
-        if total > 50 && completionRate < 0.3 { return "The Collector" }
-        if rated > 0 && Double(disliked) / Double(rated) > 0.3 { return "The Critic" }
-        if tvPct > 0.9 && totalTV > 30 { return "The Marathoner" }
-        if total > 19 && total < 51 && lovedPct > 0.7 { return "The Connoisseur" }
-        if total > 50 && completionRate < 0.5 { return "The Explorer" }
-        if tvPct > 0.7 && totalTV > 20 { return "The Binger" }
-        return "The Enthusiast"
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

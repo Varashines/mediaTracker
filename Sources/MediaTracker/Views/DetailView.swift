@@ -1,46 +1,6 @@
 import SwiftData
 import SwiftUI
 
-private struct DetailScrollKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct DetailGlowBackground: View {
-    let themeColor: Color
-    let vibrantThemeColor: Color
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        let fallback = Color.secondary.opacity(0.15)
-        let hasPosterColor = themeColor != fallback
-
-        ZStack {
-            AppTheme.Colors.background(for: colorScheme)
-
-            if hasPosterColor {
-                GeometryReader { geo in
-                    ZStack {
-                        Circle()
-                            .fill(vibrantThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25))
-                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
-                            .offset(x: -geo.size.width * 0.2, y: -geo.size.width * 0.3)
-
-                        Circle()
-                            .fill(themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
-                            .frame(width: geo.size.width * 0.6, height: geo.size.width * 0.6)
-                            .offset(x: geo.size.width * 0.4, y: -geo.size.width * 0.1)
-                    }
-                    .blur(radius: 80)
-                }
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
 struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -51,14 +11,6 @@ struct DetailView: View {
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
-    @State private var showNavTitle = false
-    @State private var isActionBarVisible = true
-    @State private var lastScrollOffset: CGFloat = 0
-    @State private var lastActionBarCheck = Date()
-    @State private var isFastScrolling = false
-    @State private var scrollTask: Task<Void, Never>?
-    @State private var posterParallaxOffset: CGFloat = 0
-    @State private var scrollOffsetCache: CGFloat = 0
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -84,22 +36,32 @@ struct DetailView: View {
     @ViewBuilder
     private var contentOverlay: some View {
         ZStack {
-            DetailGlowBackground(
-                themeColor: viewModel.themeColor,
-                vibrantThemeColor: viewModel.vibrantThemeColor,
-                colorScheme: colorScheme
-            )
-            .id(viewModel.themeColor)
+            let p = viewModel.vibrantThemeColor
+            let baseBackground = AppTheme.Colors.background(for: colorScheme)
+
+            ZStack {
+                baseBackground
+
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        .init(0, 0), .init(0.5, 0), .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                        .init(0, 1), .init(0.5, 1), .init(1, 1)
+                    ],
+                    colors: [
+                        p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
+                        .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
+                        .clear, .clear, .clear
+                    ]
+                )
+                .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
+            }
+            .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
-                        .background(alignment: .top) {
-                            GeometryReader { geo in
-                                Color.clear
-                                    .preference(key: DetailScrollKey.self, value: geo.frame(in: .named("detailScroll")).minY)
-                            }
-                        }
                     tmdbWarningSection
                     castAndTrackingSection
                 }
@@ -108,34 +70,20 @@ struct DetailView: View {
                 .padding(.vertical, AppTheme.Spacing.section)
                 .padding(.bottom, AppTheme.Spacing.tiny)
             }
-            .scrollBounceBehavior(.always)
+            .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            .coordinateSpace(name: "detailScroll")
-            .background {
-                ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-            }
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
-            .onPreferenceChange(DetailScrollKey.self) { newValue in
-                scrollOffsetCache = newValue
-                handleScrollOffset(newValue)
-            }
-            .onAppear {
-                posterParallaxOffset = scrollOffsetCache
-                showNavTitle = scrollOffsetCache < -50
-                lastScrollOffset = scrollOffsetCache
-            }
 
             floatingActionBar
-                .offset(y: isActionBarVisible ? 0 : 60)
-                .opacity(isActionBarVisible ? 1.0 : 0.0)
-                .animation(AppTheme.Animation.springGentle, value: isActionBarVisible)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 16)
-                .saturation(showDeleteConfirmation ? 0.3 : 1)
-                .allowsHitTesting(!showDeleteConfirmation && isActionBarVisible)
+                .allowsHitTesting(!showDeleteConfirmation)
+
+            Button("") { dismiss() }
+                .keyboardShortcut(.leftArrow, modifiers: .command)
+                .hidden()
         }
         .overlay {
             if showDeleteConfirmation {
@@ -146,7 +94,7 @@ struct DetailView: View {
         .toolbar { detailToolbar }
         .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-        .navigationTitle(sleepManager.isAsleep ? "" : showNavTitle ? viewModel.item.title : "Details")
+        .navigationTitle(sleepManager.isAsleep ? "" : viewModel.item.title)
         .onAppear {
             viewModel.refreshData()
             Task {
@@ -222,7 +170,6 @@ struct DetailView: View {
             themeColor: effectiveThemeColor,
             watchProviders: viewModel.watchProviders,
             namespace: namespace,
-            scrollOffset: posterParallaxOffset,
             onStatusChange: { newState in
                 if newState == .completed {
                     viewModel.markAllAsWatched()
@@ -250,30 +197,9 @@ struct DetailView: View {
         }
     }
 
-    private func handleScrollOffset(_ offset: CGFloat) {
-        posterParallaxOffset = offset
-        showNavTitle = offset < -50
-
-        let now = Date()
-        guard now.timeIntervalSince(lastActionBarCheck) > 0.08 else { return }
-        lastActionBarCheck = now
-
-        let delta = offset - lastScrollOffset
-        if delta < -8 {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                isActionBarVisible = false
-            }
-        } else if delta > 8 || offset > -50 {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                isActionBarVisible = true
-            }
-        }
-        lastScrollOffset = offset
-    }
-
     @ViewBuilder
     private var castAndTrackingSection: some View {
-        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
 
 
@@ -457,7 +383,6 @@ struct DetailView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(Capsule().fill(.ultraThinMaterial))
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
     }
 
     private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {

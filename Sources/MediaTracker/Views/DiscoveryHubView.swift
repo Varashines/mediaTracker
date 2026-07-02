@@ -108,10 +108,7 @@ struct DiscoveryHubView: View {
         .scrollBounceBehavior(.always)
         .scrollIndicators(.hidden)
         .background {
-            ScrollVelocityTracker(
-                isFastScrolling: $isFastScrolling,
-                scrollTask: $scrollTask
-            )
+            ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
         }
         .onAppear { refreshData(force: false) }
         .refreshable { 
@@ -124,6 +121,7 @@ struct DiscoveryHubView: View {
         .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
             if !isAsleep {
                 hasDataLoaded = false
+                refreshData(force: false)
             }
         }
     }

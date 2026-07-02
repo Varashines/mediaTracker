@@ -37,10 +37,7 @@ struct MainLibraryView: View {
     }
 
     var body: some View {
-        let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
-        let columns: [GridItem] = usePortraitCards
-            ? [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
-            : [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
+        let columns: [GridItem] = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
         VStack(spacing: 0) {
             if selectedCategory != .home && !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
@@ -78,7 +75,6 @@ struct MainLibraryView: View {
                             onCategorySelected: onCategorySelected,
                             onTrendingAdd: onTrendingAdd
                         )
-                        .equatable()
                         .transition(.opacity)
                     }
 
@@ -101,13 +97,12 @@ struct MainLibraryView: View {
                         .transition(.opacity)
                     }
                 }
-                .background {
-                    ScrollVelocityTracker(
-                        isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
+            .background {
+                ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+            }
         }
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {

@@ -20,21 +20,11 @@ struct InsightsView: View {
     var refreshID: Int = 0
 
     private var backgroundTint: Color {
-        let progress = max(0, min(1, -scrollOffsetDebounced / 800))
-        let colors: [Color] = [
-            Color.secondary,
-            .pink,
-            .indigo,
-            .orange,
-            .purple
-        ]
-        let segment = progress * CGFloat(colors.count - 1)
-        let idx = Int(segment)
-        let frac = segment - CGFloat(idx)
-        guard idx + 1 < colors.count else {
-            return (colors.last ?? .secondary).opacity(0.05)
-        }
-        return colors[idx].opacity(0.06 - Double(frac) * 0.01)
+        let progress = max(0, min(1, -scrollOffsetDebounced / 600))
+        let intensity = UserDefaults.standard.double(forKey: "background_intensity")
+        let scaled = progress * max(0.02, intensity * 0.04)
+        let isDark = colorScheme == .dark
+        return AppTheme.Colors.accent.opacity(isDark ? scaled : scaled * 0.5)
     }
 
     var body: some View {
@@ -50,34 +40,34 @@ struct InsightsView: View {
                     LazyVStack(spacing: AppTheme.Spacing.section) {
                         PassportHeaderView(stats: stats)
 
-                        SectionDivider(color: .secondary)
+                        SectionDivider(color: AppTheme.Colors.accent)
 
                         HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                                SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: .pink)
+                                SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: AppTheme.Colors.accent)
                                 HeroStatPills(stats: stats)
                             }
                             .frame(maxWidth: .infinity)
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                                SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: .pink)
+                                SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: AppTheme.Colors.accent)
                                 TasteDNAView(stats: stats)
                             }
                             .frame(maxWidth: .infinity)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                        SectionDivider(color: .pink)
+                        SectionDivider(color: AppTheme.Colors.accent)
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Genre Constellation", icon: "sparkles", iconColor: .indigo)
+                            SectionHeader(title: "Genre Constellation", icon: "sparkles", iconColor: AppTheme.Colors.accent)
                             GenreConstellationView(items: Array(stats.genreDNA.prefix(8)))
                         }
 
-                        SectionDivider(color: .indigo)
+                        SectionDivider(color: AppTheme.Colors.accent)
 
                         StudiosNetworksView(stats: stats, modelContext: modelContext)
 
-                        SectionDivider(color: .orange)
+                        SectionDivider(color: AppTheme.Colors.accent)
 
                         HallOfFameView(stats: stats)
                     }

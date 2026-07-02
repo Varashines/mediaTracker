@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct TitleSection: View {
-    @Bindable var item: MediaItem
+    let item: MediaItem
     let themeColor: Color
     let watchProviders: [WatchProviderResult]
     var onStatusChange: ((MediaState?) -> Void)?

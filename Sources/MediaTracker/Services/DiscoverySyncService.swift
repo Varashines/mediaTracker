@@ -88,21 +88,6 @@ actor DiscoverySyncService {
         return rules
     }
 
-    private func buildAliasMaps(from rules: [AliasRule]) -> (sourceToTarget: [String: String], targetToLogoSource: [String: String]) {
-        var sourceToTarget: [String: String] = [:]
-        var targetToLogoSource: [String: String] = [:]
-        for rule in rules {
-            for source in rule.sources {
-                let normalizedSource = source.lowercased().trimmingCharacters(in: .whitespaces)
-                sourceToTarget[normalizedSource] = rule.target
-            }
-            if let pref = rule.preferredLogoSource {
-                targetToLogoSource[rule.target] = pref
-            }
-        }
-        return (sourceToTarget, targetToLogoSource)
-    }
-
     func syncLibrary(force: Bool) async {
         let isAsleep = await SleepManager.shared.isAsleep
         guard !isAsleep else { return }

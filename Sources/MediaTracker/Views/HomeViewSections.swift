@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct HomeViewSections: View, Equatable {
+struct HomeViewSections: View {
     let homeContinueWatching: [MediaThumbnailMetadata]
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
@@ -14,17 +14,6 @@ struct HomeViewSections: View, Equatable {
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
-
-    nonisolated static func == (lhs: HomeViewSections, rhs: HomeViewSections) -> Bool {
-        lhs.homeContinueWatching == rhs.homeContinueWatching &&
-        lhs.featuredCarouselItems == rhs.featuredCarouselItems &&
-        lhs.groupedItems.map(\.0) == rhs.groupedItems.map(\.0) &&
-        lhs.recommendations == rhs.recommendations &&
-        lhs.pickOfTheDay == rhs.pickOfTheDay &&
-        lhs.trendingMovies.count == rhs.trendingMovies.count &&
-        lhs.trendingShows.count == rhs.trendingShows.count &&
-        lhs.isFastScrolling == rhs.isFastScrolling
-    }
 
     private enum HomeSection {
         case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows

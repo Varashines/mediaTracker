@@ -47,7 +47,7 @@ struct StudiosNetworksView: View {
             let studioItems = cachedStudioItems
             if !studioItems.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Studios", icon: "building.2.fill", iconColor: .orange)
+                    SectionHeader(title: "Studios", icon: "building.2.fill", iconColor: AppTheme.Colors.accent)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: AppTheme.Spacing.large) {
@@ -72,7 +72,7 @@ struct StudiosNetworksView: View {
             let networkItems = cachedNetworkItems
             if !networkItems.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Networks", icon: "antenna.radiowaves.left.and.right", iconColor: .teal)
+                    SectionHeader(title: "Networks", icon: "antenna.radiowaves.left.and.right", iconColor: AppTheme.Colors.accent)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: AppTheme.Spacing.large) {
@@ -96,7 +96,7 @@ struct StudiosNetworksView: View {
             // Languages
             if !stats.topRatedLanguages.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    SectionHeader(title: "Languages", icon: "globe", iconColor: .purple)
+                    SectionHeader(title: "Languages", icon: "globe", iconColor: AppTheme.Colors.accent)
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                         ForEach(Array(stats.topRatedLanguages.prefix(6).enumerated()), id: \.element.name) { idx, item in
