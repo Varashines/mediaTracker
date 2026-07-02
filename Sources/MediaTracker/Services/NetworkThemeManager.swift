@@ -33,16 +33,6 @@ class NetworkThemeManager {
     func save(color: Color, for network: String) {
         let hex = color.toHex()
         themeMap[network] = hex
-        
-        // Persist to NetworkEntity if possible
-        if let container = modelContainer {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == network })
-            if let entity = try? context.fetch(descriptor).first {
-                entity.themeColorHex = hex
-                try? context.save()
-            }
-        }
     }
     
     func resetAll() {

@@ -56,9 +56,9 @@ enum MediaFilterPredicates {
 
         case .archive:
             if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
-            if hasSearch { return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") && $0.searchableText.localizedStandardContains(search) } }
+            if hasSearch { return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.searchableText.localizedStandardContains(search) } }
             if hasState { return #Predicate { $0.isSoftDeleted == false && $0.stateValue == state } }
-            return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching") }
+            return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "On Hold" || $0.stateValue == "Dropped") }
 
         case .disliked:
             if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.tasteValue == "Dislike" && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
@@ -89,12 +89,6 @@ enum MediaFilterPredicates {
             if hasSearch { return #Predicate { $0.isSoftDeleted == false && (($0.cachedRuntime ?? 0) > 0 || ($0.cachedEpisodeRuntime ?? 0) > 0) && $0.searchableText.localizedStandardContains(search) } }
             if hasState { return #Predicate { $0.isSoftDeleted == false && (($0.cachedRuntime ?? 0) > 0 || ($0.cachedEpisodeRuntime ?? 0) > 0) && $0.stateValue == state } }
             return #Predicate { $0.isSoftDeleted == false && (($0.cachedRuntime ?? 0) > 0 || ($0.cachedEpisodeRuntime ?? 0) > 0) }
-
-        case .stalled:
-            if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedIsUpcoming == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }
-            if hasSearch { return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false && $0.searchableText.localizedStandardContains(search) } }
-            if hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedIsUpcoming == false && $0.stateValue == state } }
-            return #Predicate { $0.isSoftDeleted == false && ($0.stateValue == "Active" || $0.stateValue == "On Hold" || $0.stateValue == "Dropped") && $0.storedIsUpcoming == false }
 
         case .smartUpcoming:
             if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == "PREMIERE" && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) } }

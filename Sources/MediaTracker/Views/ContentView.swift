@@ -24,25 +24,40 @@ struct ContentView: View {
                         switch selection {
                         case .category(let category):
                             viewModel.filter.selectedCategory = category
-                            viewModel.filter.selectedNetworks = nil
-                            viewModel.filter.selectedLanguage = nil
-                            viewModel.filter.selectedGenre = nil
-                            viewModel.filter.selectedYear = nil
-                            viewModel.filter.selectedState = nil
-
+                            viewModel.filter.resetFilters()
                             viewModel.collection.selectedCollectionID = nil
                         case .collection(let id, let name, _):
                             viewModel.filter.selectedCategory = .smartHub
                             viewModel.collection.selectedCollectionID = id
                             viewModel.collection.selectedCollectionName = name
-                            viewModel.filter.selectedNetworks = nil
-                            viewModel.filter.selectedLanguage = nil
-                            viewModel.filter.selectedGenre = nil
-                            viewModel.filter.selectedYear = nil
-                            viewModel.filter.selectedState = nil
+                            viewModel.filter.resetFilters()
                         }
 
                         viewModel.filterSubject.send()
+
+                        if selection == .category(.discover) {
+                            let container = modelContext.container
+                            Task.detached(priority: .utility) {
+                                let actor = MediaFilterActor.shared(modelContainer: container)
+                                let allIDs = (try? await actor.allLibraryTMDBIDs()) ?? []
+                                let metadata = try? await actor.fetchLibraryMetadata()
+
+                                await MainActor.run {
+                                    viewModel.display.libraryTMDBIDs = allIDs
+                                    if let meta = metadata {
+                                        viewModel.discovery.cachedNetworks = meta.networks
+                                        viewModel.discovery.cachedStudios = meta.studios
+                                        viewModel.discovery.cachedGenres = meta.genres
+                                        viewModel.discovery.cachedLanguages = meta.languages
+                                    }
+                                }
+
+                                try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
+                                    let sync = DiscoverySyncService(modelContainer: container)
+                                    await sync.syncLibrary(force: false)
+                                }
+                            }
+                        }
                     }
                 }
         } detail: {
@@ -228,7 +243,6 @@ struct LibraryDetailView: View {
                 }
             }
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-                viewModel.display.isLibraryMetadataDirty = true
                 LibraryStatsActor.clearCache()
                 guard hasInitiallyLoaded else { return }
                 viewModel.filterSubject.send()
@@ -328,7 +342,6 @@ struct LibraryDetailView: View {
             if isAsleep {
                 viewModel.purgeSleepCache()
             } else {
-                viewModel.display.isLibraryMetadataDirty = true
                 viewModel.filterSubject.send()
                 checkAndRepairStaleMetadata()
             }
@@ -361,21 +374,17 @@ struct LibraryDetailView: View {
     }
 
     private func performUpdate() {
-        // Skip updating if app is in sleep mode
         guard !SleepManager.shared.isAsleep else { return }
 
         let snapshot = FilterSnapshot(from: viewModel)
 
         updateTask?.cancel()
         updateTask = Task {
-            // Optimization: Skip heavy data load if view handles its own data
             if snapshot.category == .discover || snapshot.category == .insights || snapshot.category == .upcoming || (snapshot.category == .smartHub && snapshot.collectionID == nil) { return }
 
-            // Soft update preserves existing items to avoid flickering during background syncs
             let isSoftUpdate = !viewModel.display.displayedItems.isEmpty
 
             if !isSoftUpdate {
-                // Reset pagination only for "Hard" updates to avoid flickering during background syncs
                 await MainActor.run {
                     viewModel.display.displayedItems = []
                     viewModel.pagination.currentOffset = 0
@@ -385,9 +394,6 @@ struct LibraryDetailView: View {
 
             do {
                 let filterActor = getFilterActor()
-
-                // Phase 4 Optimization: Pagination limit
-                let limit = viewModel.pagination.pageSize
                 let result = try await filterActor.filterAndSort(
                     category: snapshot.category,
                     searchText: snapshot.searchText,
@@ -400,87 +406,17 @@ struct LibraryDetailView: View {
                     badge: nil,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
-                    limit: limit,
+                    limit: viewModel.pagination.pageSize,
                     offset: 0
                 )
 
-                // Phase 2.2: Only refetch library metadata + run discovery sync on hard updates.
-                // A "soft" update just refreshes the displayed grid; everything else is unchanged.
-                let shouldFetchMetadata = !isSoftUpdate
-                let shouldRunDiscoverySync = !isSoftUpdate && (snapshot.category == .discover || snapshot.category == .all)
-
-                let allIDs: Set<String>
-                let metadata: MediaFilterActor.LibraryMetadata?
-                if shouldFetchMetadata {
-                    allIDs = (try? await filterActor.allLibraryTMDBIDs()) ?? []
-                    metadata = try? await filterActor.fetchLibraryMetadata()
-                } else {
-                    allIDs = viewModel.display.libraryTMDBIDs
-                    metadata = nil
-                }
-
                 if Task.isCancelled { return }
-
-                // Phase 2.1: Single MainActor hop to commit all the new state at once.
-                let displayedItems = result.displayed
-                let newMoodColors = displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
 
                 await MainActor.run {
                     viewModel.pagination.totalItemCount = result.totalCount
-                    viewModel.display.displayedItems = displayedItems
-                    viewModel.display.featuredUpcomingItems = result.featuredUpcoming
-                    viewModel.display.recentlyAddedItems = result.recentlyAdded
-                    viewModel.display.homeContinueWatchingItems = result.homeContinueWatching
-                    viewModel.display.spotlightHero = result.spotlightHero
-                    viewModel.display.groupedItems = result.grouped
-                    viewModel.display.pickOfTheDay = result.pickOfTheDay
-
-                    if shouldFetchMetadata {
-                        viewModel.display.libraryTMDBIDs = allIDs
-                        viewModel.display.isLibraryMetadataDirty = false
-                        if let meta = metadata {
-                            viewModel.discovery.cachedNetworks = meta.networks
-                            viewModel.discovery.cachedGenres = meta.genres
-                            viewModel.discovery.cachedLanguages = meta.languages
-                        }
-                    }
-
-                    themeCoordinator.updateMood(for: Array(newMoodColors), colorScheme: colorScheme)
-                }
-
-                // Sync network/studio data on hard updates only
-                if shouldRunDiscoverySync {
-                    let container = modelContext.container
-                    Task.detached(priority: .background) {
-                        try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
-                            let sync = DiscoverySyncService(modelContainer: container)
-                            await sync.syncLibrary(force: false)
-                        }
-                    }
-                }
-
-                // Async Recommendation Calculation (Only for Home view)
-                if snapshot.category == .home {
-                    // Spread the load: Wait 2 seconds before heavy taste analytics
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if Task.isCancelled { return }
-
-                    let tasteActor = TasteActor(modelContainer: modelContext.container)
-                    let recs = await tasteActor.calculateRecommendations()
-
-                    // Resolve metadata on the main actor (we need modelContext for `model(for:)`).
-                    await MainActor.run {
-                        // Find metadata for these IDs
-                        self.viewModel.display.recommendations = recs.compactMap {
-                            (id, reason) -> MediaThumbnailMetadata? in
-                            guard let item = modelContext.model(for: id) as? MediaItem
-                            else { return nil }
-                            return MediaThumbnailMetadata(item: item, recommendationReason: reason)
-                        }
-                    }
+                    viewModel.display.applyFilterResult(result)
                 }
             } catch is CancellationError {
-                // Task was cancelled, ignore.
             } catch {
                 AppLogger.debug("Error filtering items: \(error)")
             }
@@ -576,11 +512,17 @@ struct LibraryDetailView: View {
             var missingIDs = Set<String>()
             
             let p1 = #Predicate<MediaItem> { $0.overview == "" || $0.posterURL == nil }
-            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p1)) {
+            var desc1 = FetchDescriptor<MediaItem>(predicate: p1)
+            desc1.fetchLimit = 100
+            desc1.propertiesToFetch = [\.id]
+            if let items = try? context.fetch(desc1) {
                 missingIDs.formUnion(items.map { $0.id })
             }
             let p2 = #Predicate<MediaItem> { $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
-            if let items = try? context.fetch(FetchDescriptor<MediaItem>(predicate: p2)) {
+            var desc2 = FetchDescriptor<MediaItem>(predicate: p2)
+            desc2.fetchLimit = 100
+            desc2.propertiesToFetch = [\.id]
+            if let items = try? context.fetch(desc2) {
                 missingIDs.formUnion(items.map { $0.id })
             }
             

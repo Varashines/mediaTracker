@@ -79,6 +79,7 @@ struct MetadataSection: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Capsule())
                     }
                 }
             }

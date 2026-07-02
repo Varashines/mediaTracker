@@ -6,6 +6,7 @@ struct CastSectionView: View {
     let themeColor: Color
     var onCastSelected: ((String) -> Void)? = nil
     @State private var showAll = false
+    @State private var isShowAllHovered = false
     @Environment(\.colorScheme) var colorScheme
 
     private let initialLimit = 6
@@ -39,8 +40,11 @@ struct CastSectionView: View {
                                     .stroke(themeColor.opacity(0.2), lineWidth: 0.5)
                             )
                             .frame(height: 90)
+                            .scaleEffect(isShowAllHovered ? 1.04 : 1.0)
+                            .animation(AppTheme.Animation.springSnappy, value: isShowAllHovered)
                     }
                     .buttonStyle(.interactive)
+                    .onHover { isShowAllHovered = $0 }
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.compact)

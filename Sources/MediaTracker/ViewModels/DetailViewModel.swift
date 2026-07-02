@@ -15,11 +15,11 @@ class DetailViewModel {
     var watchProviders: [WatchProviderResult] = []
     var debugSelectedTraits: [String] = []
     private var _nextEpisodeToWatch: TVEpisode?? = nil
+    private var _darkerThemeColor: Color = .clear
+    private var _lighterThemeColor: Color = .clear
     
     init(item: MediaItem) {
         self.item = item
-        // Initial pre-warm for cached data removed to speed up transitions.
-        // Will be triggered lazily if needed.
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
     }
@@ -75,25 +75,22 @@ class DetailViewModel {
         #endif
         let scheme: ColorScheme = isDark ? .dark : .light
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
+        
+        let o = themeColor.oklch
+        if o.c > 0.02 {
+            _darkerThemeColor = Color.fromOKLCH(l: max(o.l - 0.12, 0.1), c: o.c, h: o.h)
+            _lighterThemeColor = Color.fromOKLCH(l: min(o.l + 0.08, 0.95), c: o.c, h: o.h)
+        } else {
+            _darkerThemeColor = Color(white: max(o.l - 0.12, 0.1))
+            _lighterThemeColor = Color(white: min(o.l + 0.08, 0.95))
+        }
     }
 
     /// Darker variant of themeColor for mesh gradient corners.
-    var darkerThemeColor: Color {
-        let o = themeColor.oklch
-        guard o.c > 0.02 else {
-            return Color(white: max(o.l - 0.12, 0.1))
-        }
-        return Color.fromOKLCH(l: max(o.l - 0.12, 0.1), c: o.c, h: o.h)
-    }
+    var darkerThemeColor: Color { _darkerThemeColor }
 
     /// Lighter variant of themeColor for mesh gradient edges.
-    var lighterThemeColor: Color {
-        let o = themeColor.oklch
-        guard o.c > 0.02 else {
-            return Color(white: min(o.l + 0.08, 0.95))
-        }
-        return Color.fromOKLCH(l: min(o.l + 0.08, 0.95), c: o.c, h: o.h)
-    }
+    var lighterThemeColor: Color { _lighterThemeColor }
 
     var nextEpisodeToWatch: TVEpisode? {
         if let cached = _nextEpisodeToWatch { return cached }
@@ -388,14 +385,18 @@ class DetailViewModel {
                     guard let currentSeason = self.item.tvShowDetails?.seasons
                         .first(where: { !$0.isDeleted && $0.modelContext != nil && $0.persistentModelID == seasonID }) else { return }
                     
+                    // Batch fetch all existing episodes for this season (1 query instead of N)
+                    let showIDInt = tmdbID
+                    let seasonNum = seasonNumber
+                    let batchDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == showIDInt && $0.seasonNumber == seasonNum })
+                    let existingEpisodes = (try? self.item.modelContext?.fetch(batchDescriptor)) ?? []
+                    var existingMap: [Int: TVEpisode] = [:]
+                    for ep in existingEpisodes {
+                        existingMap[ep.episodeNumber] = ep
+                    }
+                    
                     for ep in episodes {
-                        let epUniqueID = "\(tmdbID)_\(seasonNumber)_\(ep.episodeNumber)"
-                        
-                        // Robust deduplication check: Check both the persistent store and the current season's relationship
-                        let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                        let existingEpisode = try? self.item.modelContext?.fetch(eDescriptor).first
-                        
-                        let episode = existingEpisode ?? TVEpisode(
+                        let episode = existingMap[ep.episodeNumber] ?? TVEpisode(
                             episodeNumber: ep.episodeNumber,
                             seasonNumber: seasonNumber,
                             name: ep.name ?? "Episode \(ep.episodeNumber)",

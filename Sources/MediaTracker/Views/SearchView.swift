@@ -171,14 +171,25 @@ struct SearchView: View {
                 if searchText.isEmpty {
                     recentSearchesLandingSection
                 } else if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Searching...")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                    VStack(spacing: AppTheme.Spacing.medium) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            HStack(spacing: AppTheme.Spacing.medium) {
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.08))
+                                    .frame(width: 50, height: 75)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.secondary.opacity(0.08))
+                                        .frame(height: 14)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.secondary.opacity(0.06))
+                                        .frame(width: 120, height: 10)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                            .shimmering()
+                        }
                     }
                     .padding(.vertical, AppTheme.Spacing.compact)
                 } else {
@@ -211,6 +222,7 @@ struct SearchView: View {
                             .foregroundStyle(.red.opacity(0.8))
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 

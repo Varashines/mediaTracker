@@ -11,7 +11,7 @@ struct MediaTrackerApp: App {
     @AppStorage("theme_preference") private var themePreference: Int = 0
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema(AppSchemaV1.models)
+        let schema = Schema(AppSchemaV2.models)
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,

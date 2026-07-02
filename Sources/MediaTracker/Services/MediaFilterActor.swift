@@ -19,7 +19,7 @@ actor MediaFilterActor {
         collectionID: UUID? = nil,
         limit: Int = 40,
         offset: Int = 0
-    ) throws -> PaginatedResult {
+    ) async throws -> PaginatedResult {
 
         let now = Date()
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
@@ -29,7 +29,7 @@ actor MediaFilterActor {
 
         // Home category uses its own queries — skip the general fetch entirely
         if category == .home {
-            return try processHomeCategory(now: now, totalCount: 0)
+            return try await processHomeCategory(now: now, totalCount: 0)
         }
 
         // 1. Handle collection override first
@@ -74,7 +74,6 @@ actor MediaFilterActor {
                                    year != nil ||
                                    provider != nil ||
                                    category == .releaseRadar ||
-                                   category == .stalled ||
                                    category == .quickBites ||
                                    !smartRules.isEmpty
 
@@ -136,6 +135,7 @@ actor MediaFilterActor {
             spotlightHero: nil,
             grouped: finalGroupedItems,
             pickOfTheDay: [],
+            recommendations: [],
             totalCount: totalCount
         )
     }
@@ -145,8 +145,8 @@ actor MediaFilterActor {
         let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
         let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
         let now = Date()
-        let ninetyDaysAgo = now.addingTimeInterval(-.days90)
         let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
+        let calendar = Calendar.current
 
         return results.filter { item in
             // Smart rules
@@ -165,14 +165,6 @@ actor MediaFilterActor {
                 } else {
                     return false
                 }
-            }
-
-            // Category filter: stalled
-            if category == .stalled {
-                if item.stateValue == "On Hold" || item.stateValue == "Dropped" { return true }
-                let lastChange = item.lastStateChangeDate ?? .distantPast
-                let lastInter = item.lastInteractionDate ?? .distantPast
-                guard lastChange < ninetyDaysAgo && lastInter < ninetyDaysAgo else { return false }
             }
 
             // Category filter: releaseRadar
@@ -212,7 +204,7 @@ actor MediaFilterActor {
             // Year filter
             if let y = year, !y.isEmpty {
                 guard let date = item.releaseDate else { return false }
-                let itemYear = Calendar.current.component(.year, from: date)
+                let itemYear = calendar.component(.year, from: date)
                 guard String(itemYear) == y else { return false }
             }
 
@@ -307,7 +299,7 @@ actor MediaFilterActor {
         case .disliked:
             return #Predicate { $0.tasteValue == "Dislike" }
         case .archive:
-            return #Predicate { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" || $0.stateValue == "Re-watching" }
+            return #Predicate { $0.stateValue == "On Hold" || $0.stateValue == "Dropped" }
         default:
             return nil
         }
@@ -322,6 +314,7 @@ actor MediaFilterActor {
 
     struct LibraryMetadata: Sendable {
         let networks: [DiscoveryNode]
+        let studios: [DiscoveryNode]
         let genres: [DiscoveryNode]
         let languages: [DiscoveryNode]
     }
@@ -345,11 +338,19 @@ actor MediaFilterActor {
         let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
         let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
 
+        let snNetworks = filteredNets
+            .filter { $0.kind == "network" || $0.kind.isEmpty }
+            .map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
+        let snStudios = filteredNets
+            .filter { $0.kind == "studio" }
+            .map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
+
         let genres = (try? modelContext.fetch(genreDescriptor)) ?? []
         let langs = (try? modelContext.fetch(langDescriptor)) ?? []
 
         return LibraryMetadata(
-            networks: filteredNets.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) },
+            networks: snNetworks,
+            studios: snStudios,
             genres: genres.map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) },
             languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) }
         )
@@ -395,7 +396,7 @@ actor MediaFilterActor {
         case .completed:
             if fetchedItem.stateValue != "Completed" { return nil }
         case .archive:
-            if fetchedItem.stateValue != "On Hold" && fetchedItem.stateValue != "Dropped" && fetchedItem.stateValue != "Re-watching" { return nil }
+            if fetchedItem.stateValue != "On Hold" && fetchedItem.stateValue != "Dropped" { return nil }
         case .disliked:
             if fetchedItem.tasteValue != TasteValue.dislike.rawValue { return nil }
         case .binge:
@@ -409,9 +410,6 @@ actor MediaFilterActor {
             if !hasRuntime { return nil }
         case .catchUp:
             if fetchedItem.storedSmartBadgeLabel != "BEHIND" { return nil }
-        case .stalled:
-            let isStalled = fetchedItem.stateValue == "Active" || fetchedItem.stateValue == "On Hold" || fetchedItem.stateValue == "Dropped"
-            if !isStalled { return nil }
         case .smartUpcoming:
             if fetchedItem.storedSmartBadgeLabel != "PREMIERE" { return nil }
         default:

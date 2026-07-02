@@ -72,9 +72,32 @@ struct DiscoveryHubView: View {
                         .padding(.vertical, 80)
                     }
                 } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 80)
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+                        // Skeleton for sections
+                        ForEach(0..<3, id: \.self) { _ in
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.secondary.opacity(0.08))
+                                        .frame(width: 16, height: 16)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.secondary.opacity(0.08))
+                                        .frame(width: 80, height: 14)
+                                }
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: AppTheme.Spacing.medium) {
+                                        ForEach(0..<6, id: \.self) { _ in
+                                            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                                                .fill(Color.secondary.opacity(0.08))
+                                                .frame(width: 100, height: 60)
+                                                .shimmering()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 30)
                 }
             }
             .padding(.top, 30)
@@ -176,6 +199,7 @@ private struct NetworkTabPill: View {
     let isSelected: Bool
     let action: () -> Void
     @Environment(\.colorScheme) var colorScheme
+    @State private var isHovered = false
     
     init(_ title: String, isSelected: Bool, action: @escaping () -> Void) {
         self.title = title
@@ -192,15 +216,19 @@ private struct NetworkTabPill: View {
                 .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10) : Color.clear)
+                        .fill(isHovered && !isSelected ? Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.06) : (isSelected ? Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10) : Color.clear))
                 )
                 .overlay(
                     Capsule()
                         .stroke(.quaternary, lineWidth: isSelected ? 0 : 0.5)
                 )
                 .foregroundStyle(isSelected ? .primary : .secondary)
+                .scaleEffect(isHovered ? 1.04 : 1.0)
+                .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
+        .onHover { isHovered = $0 }
     }
 }
 

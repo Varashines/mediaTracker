@@ -35,6 +35,10 @@ class SaveCoordinator {
         let id = ObjectIdentifier(context)
         saveTasks[id]?.cancel()
         saveTasks[id] = nil
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            AppErrorState.shared.surfaceError("Failed to save changes: \(error.localizedDescription)")
+        }
     }
 }

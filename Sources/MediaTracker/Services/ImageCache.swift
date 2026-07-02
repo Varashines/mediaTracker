@@ -1,9 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
+import os
 
 extension Notification.Name {
-    static let imageCacheUpdated = Notification.Name("MediaTracker.imageCacheUpdated")
     static let imageCacheCleared = Notification.Name("MediaTracker.imageCacheCleared")
 }
 
@@ -37,15 +37,15 @@ class ImageCache: NSObject, NSCacheDelegate {
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
     private let maxConcurrentLoads = 6
-    private var currentLoads = 0
+    private let currentLoads = OSAllocatedUnfairLock<Int>(uncheckedState: 0)
     
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     private override init() {
         super.init()
         memoryCache.delegate = self
-        memoryCache.countLimit = 500
-        memoryCache.totalCostLimit = 250 * 1024 * 1024 // 250MB
+        memoryCache.countLimit = 250
+        memoryCache.totalCostLimit = 128 * 1024 * 1024 // 128MB
 
         // Clear memory cache on memory pressure to free up system resources
         let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
@@ -110,8 +110,13 @@ class ImageCache: NSObject, NSCacheDelegate {
             while index < urls.count, inFlight < maxConcurrent {
                 let url = urls[index]
                 index += 1
-                inFlight += 1
                 let key = url.absoluteString
+                let cacheKey = generateCacheKey(key: key, size: targetSize)
+                // Skip if already cached or actively loading
+                if checkMemoryCache(forKey: key, targetSize: targetSize) != nil || activeTasks[cacheKey] != nil {
+                    continue
+                }
+                inFlight += 1
                 let task = Task.detached(priority: priority == .low ? .utility : .userInitiated) { [weak self] in
                     _ = await self?.get(forKey: key, targetSize: targetSize, priority: priority)
                 }
@@ -139,16 +144,14 @@ class ImageCache: NSObject, NSCacheDelegate {
         }
         
         // Throttle concurrent loads to prevent bursts on cold start
-        while currentLoads >= maxConcurrentLoads {
-            await Task.yield()
+        if currentLoads.withLock({ $0 }) >= maxConcurrentLoads {
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms backoff
         }
-        currentLoads += 1
+        currentLoads.withLock { $0 += 1 }
         
         let task = Task<ImageContainer?, Never> { [weak self] in
             defer {
-                Task { @MainActor [weak self] in
-                    self?.currentLoads -= 1
-                }
+                self?.currentLoads.withLock { $0 -= 1 }
             }
             guard let self = self else { return nil }
             guard let url = URL(string: key) else { return nil }
@@ -188,7 +191,6 @@ class ImageCache: NSObject, NSCacheDelegate {
                     let container = ImageContainer(image: cgImage)
                     let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: cacheKey)
                     self.memoryCache.setObject(wrapper, forKey: cacheKey as NSString, cost: cgImage.bytesPerRow * cgImage.height)
-                    NotificationCenter.default.post(name: .imageCacheUpdated, object: nil, userInfo: ["key": key])
                     return container
                 }
             } catch {

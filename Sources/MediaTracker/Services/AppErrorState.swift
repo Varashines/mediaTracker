@@ -136,6 +136,7 @@ struct ToastView: View {
                         .foregroundStyle(toast.style.color)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
         }
         .padding(.horizontal, 20)

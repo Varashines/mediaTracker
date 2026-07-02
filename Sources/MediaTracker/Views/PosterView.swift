@@ -3,6 +3,7 @@ import SwiftUI
 struct PosterView: View {
     let item: MediaItem
     let themeColor: Color
+    let scrollOffset: CGFloat
 
     private let posterFrame = CGSize(width: 260, height: 390)
     @State private var glowPulse = false
@@ -10,7 +11,7 @@ struct PosterView: View {
     var body: some View {
         if let urlString = item.posterURL, let url = URL(string: urlString) {
             ZStack {
-                // 1. Aurora Glow Background — animated radius for breathing effect
+                // Aurora Glow Background — animated radius for breathing effect
                 RadialGradient(
                     colors: [themeColor.opacity(0.5), .clear],
                     center: .center,
@@ -19,10 +20,15 @@ struct PosterView: View {
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: glowPulse)
-                
+
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
-                    Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
+                        Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
+                            .overlay {
+                                Image(systemName: item.type == .movie ? "film" : "tv")
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                                    .font(.system(size: 24, weight: .medium))
+                            }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: posterFrame.width, height: posterFrame.height)
@@ -35,6 +41,7 @@ struct PosterView: View {
             }
             .compositingGroup()
             .onAppear { glowPulse = true }
+            .offset(y: scrollOffset * 0.12)
         }
     }
 }

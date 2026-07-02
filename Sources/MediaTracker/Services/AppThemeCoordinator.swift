@@ -14,16 +14,6 @@ class AppThemeCoordinator {
     var themePreference: Int = 0
     var themePreset: Int = 0
 
-    // MARK: - Sidebar Theme Bridge
-
-    /// Set by DetailView when viewing an item — propagates item's theme color to sidebar.
-    var detailThemeColor: Color? = nil
-
-    /// Returns the detail item's theme color if available, otherwise the global accent.
-    var sidebarAccent: Color {
-        detailThemeColor ?? accent
-    }
-
     private var lastReload: Date = .distantPast
     private let reloadDebounce: TimeInterval = 0.1
 

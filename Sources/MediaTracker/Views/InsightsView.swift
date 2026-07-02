@@ -12,13 +12,15 @@ struct InsightsView: View {
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
     @State private var scrollOffset: CGFloat = 0
+    @State private var scrollOffsetDebounced: CGFloat = 0
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
+    @State private var backgroundTintTask: Task<Void, Never>?
     @Namespace private var flipNamespace
     var refreshID: Int = 0
 
     private var backgroundTint: Color {
-        let progress = max(0, min(1, -scrollOffset / 800))
+        let progress = max(0, min(1, -scrollOffsetDebounced / 800))
         let colors: [Color] = [
             Color.secondary,
             .pink,
@@ -96,7 +98,14 @@ struct InsightsView: View {
                     ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 }
                 .onPreferenceChange(ScrollOffsetKey.self) { offsets in
-                    scrollOffset = offsets[insightsScrollName] ?? 0
+                    let newOffset = offsets[insightsScrollName] ?? 0
+                    scrollOffset = newOffset
+                    backgroundTintTask?.cancel()
+                    backgroundTintTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        guard !Task.isCancelled else { return }
+                        scrollOffsetDebounced = newOffset
+                    }
                 }
             } else if let error = errorMessage {
                 VStack(spacing: 16) {
@@ -119,6 +128,8 @@ struct InsightsView: View {
         .onDisappear {
             statsTask?.cancel()
             statsTask = nil
+            backgroundTintTask?.cancel()
+            backgroundTintTask = nil
         }
     }
 

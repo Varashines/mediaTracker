@@ -92,6 +92,7 @@ struct ServicesSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Circle())
             }
             .padding(.horizontal, AppTheme.Spacing.medium)
             .padding(.vertical, AppTheme.Spacing.small)
@@ -123,6 +124,7 @@ struct ServicesSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Circle())
                 .accessibilityLabel(showKey.wrappedValue ? "Hide API key" : "Show API key")
             }
             .padding(.horizontal, AppTheme.Spacing.medium)
@@ -159,5 +161,6 @@ struct ServicesSection: View {
             )
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
     }
 }

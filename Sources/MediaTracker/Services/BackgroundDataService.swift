@@ -258,6 +258,11 @@ actor BackgroundDataService {
             try modelContext.delete(model: GenreEntity.self)
             try modelContext.delete(model: LanguageEntity.self)
             try modelContext.delete(model: MediaCollection.self)
+            try modelContext.delete(model: BadgeEntity.self)
+            try modelContext.delete(model: PersonImageEntity.self)
+            try modelContext.delete(model: StudioAliasEntity.self)
+            try modelContext.delete(model: SearchCacheEntity.self)
+            try modelContext.delete(model: ProviderEntity.self)
             try modelContext.save()
             
             // Clear caches as well
@@ -316,23 +321,7 @@ actor BackgroundDataService {
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
-                    // Recalculate progress to get current state
-                    tv.recalculateCachedProperties()
-                    // Auto-mark only if still actually completed (progress is 100%)
-                    // This prevents re-marking when user unmarked an episode
-                    let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
-                    if autoMark && item.stateValue == "Completed" && tv.watchedEpisodesCount < tv.totalEpisodesCount {
-                        // Defensive: skip deleted/detached during concurrent merges
-                        let liveEps = tv.seasons
-                            .liveModels
-                            .flatMap { $0.episodes.liveModels }
-                        for ep in liveEps where !ep.isWatched {
-                            ep.markWatched(true)
-                        }
-                    }
-
-                    // Standardize Seasons and Episodes
-                    // Defensive: skip deleted/detached seasons and episodes
+                    // 1. Standardize Seasons and Episodes first
                     let liveSeasons = tv.seasons.liveModels
                     for season in liveSeasons {
                         season.showID = tmdbID
@@ -351,15 +340,35 @@ actor BackgroundDataService {
                             }
                         }
                     }
-                    tv.recalculateCachedProperties(triggerSync: true, force: true)
 
-                    // Refresh network info from TMDB only if missing (fixes logo mismatches)
+                    // 2. Auto-mark unwatched episodes if Completed
+                    let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
+                    if autoMark && item.stateValue == "Completed" {
+                        let liveEps = liveSeasons.flatMap { $0.episodes.liveModels }
+                        for ep in liveEps where !ep.isWatched {
+                            ep.markWatched(true)
+                        }
+                    }
+
+                    // 3. Refresh network info from TMDB only if missing
+                    let networkWasNil = tv.network == nil
                     if tv.network == nil || tv.networkLogoPath == nil {
                         if let netDetails = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
                             tv.network = netDetails.network
                             tv.networkLogoPath = netDetails.networkLogoPath
                         }
                     }
+                    // If network was just populated, re-heal episode air dates
+                    if networkWasNil && tv.network != nil {
+                        for season in liveSeasons {
+                            for episode in season.episodes.liveModels {
+                                episode.updateAirDateValue()
+                            }
+                        }
+                    }
+
+                    // 4. Single recalculate at the end (was 3 separate calls)
+                    tv.recalculateCachedProperties(triggerSync: true, force: true)
                 }
             }
             
@@ -398,7 +407,8 @@ actor BackgroundDataService {
     }
 
     private func repairOrphanedEntities() async throws {
-        let sDesc = FetchDescriptor<TVSeason>()
+        var sDesc = FetchDescriptor<TVSeason>()
+        sDesc.fetchLimit = 500
         let allSeasons = try modelContext.fetch(sDesc)
         let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
@@ -485,6 +495,7 @@ actor BackgroundDataService {
 
         var eDesc = FetchDescriptor<TVEpisode>()
         eDesc.propertiesToFetch = [\.uniqueID, \.showID, \.seasonNumber]
+        eDesc.fetchLimit = 500
         let allEpisodes = try modelContext.fetch(eDesc)
 
         var seasonMap: [Int: [Int: TVSeason]] = [:]

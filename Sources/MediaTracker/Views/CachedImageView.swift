@@ -13,7 +13,6 @@ struct CachedImage<Placeholder: View>: View {
     
     @State private var image: CGImage?
     @State private var isLoading = false
-    @State private var observer: NSObjectProtocol?
  
     init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
@@ -42,11 +41,7 @@ struct CachedImage<Placeholder: View>: View {
             }
         }
         .animation(AppTheme.Animation.easeInOut, value: image)
-        .onAppear {
-            setupBroadcastListener()
-        }
         .onDisappear {
-            removeObservers()
             if let url = url {
                 ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
             }
@@ -58,8 +53,7 @@ struct CachedImage<Placeholder: View>: View {
             if !newValue && image == nil {
                 Task { @MainActor in
                     guard !Task.isCancelled else { return }
-                    // Stagger load to avoid thundering herd after scroll-stop
-                    let delay = UInt64.random(in: 0...20_000_000) // 0-20ms
+                    let delay = UInt64.random(in: 0...20_000_000)
                     try? await Task.sleep(nanoseconds: delay)
                     guard !Task.isCancelled else { return }
                     await self.attemptLoad()
@@ -70,7 +64,6 @@ struct CachedImage<Placeholder: View>: View {
             if isAsleep {
                 self.image = nil
             } else {
-                setupBroadcastListener()
                 Task { @MainActor in
                     guard !Task.isCancelled else { return }
                     await self.attemptLoad()
@@ -94,39 +87,6 @@ struct CachedImage<Placeholder: View>: View {
                 Color.secondary.opacity(0.1)
                 placeholder
             }
-        }
-    }
-
-    private func setupBroadcastListener() {
-        guard let url = url else { return }
-        let key = url.absoluteString
-        let cachedTargetSize = self.targetSize
-        
-        removeObservers()
-        
-        // Per-key notification — only fires when THIS specific image is updated.
-        // The closure is @Sendable so we capture only Sendable values and dispatch
-        // all MainActor work through Task.
-        observer = NotificationCenter.default.addObserver(
-            forName: .imageCacheUpdated,
-            object: nil,
-            queue: .main
-        ) { notification in
-            guard let updatedKey = notification.userInfo?["key"] as? String, updatedKey == key else { return }
-            Task { @MainActor in
-                if ImageCache.shared.checkMemoryCache(forKey: key, targetSize: cachedTargetSize) == nil {
-                    self.image = nil
-                }
-                await self.attemptLoad()
-            }
-        }
-        
-    }
-    
-    private func removeObservers() {
-        if let obs = observer {
-            NotificationCenter.default.removeObserver(obs)
-            observer = nil
         }
     }
 

@@ -27,4 +27,12 @@ class FilterState {
     var currentGroupBy: GroupBy {
         categoryGroupBys[selectedCategory] ?? .none
     }
+
+    func resetFilters() {
+        selectedNetworks = nil
+        selectedLanguage = nil
+        selectedGenre = nil
+        selectedYear = nil
+        selectedState = nil
+    }
 }

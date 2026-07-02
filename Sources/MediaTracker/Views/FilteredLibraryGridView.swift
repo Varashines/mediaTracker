@@ -43,9 +43,19 @@ struct FilteredLibraryGridView: View {
     var body: some View {
         Group {
             if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
+                ScrollView {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                        ForEach(0..<12, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                                .frame(width: 160, height: 240)
+                                .shimmering()
+                        }
+                    }
+                    .padding(AppTheme.Spacing.pageMargin)
+                }
+                .scrollBounceBehavior(.always)
+                .scrollIndicators(.hidden)
             } else if items.isEmpty && !isLoading {
                 ContentUnavailableView(
                     "No items found",

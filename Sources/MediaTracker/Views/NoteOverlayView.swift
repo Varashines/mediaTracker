@@ -31,6 +31,7 @@ struct NoteOverlayView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Circle())
                         .accessibilityLabel("Close notes")
                     }
                     

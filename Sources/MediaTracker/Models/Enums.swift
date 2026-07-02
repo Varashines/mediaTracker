@@ -23,7 +23,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case smartHub = "Smart Hub"
     case quickBites = "Quick Bites"
     case catchUp = "Catch Up"
-    case stalled = "Stalled"
     case releaseRadar = "Release Radar"
     case smartUpcoming = "Smart Upcoming"
 
@@ -38,7 +37,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .all: return "Library"
         case .loved: return "Loved"
         case .completed: return "Completed"
-        case .archive: return "Re-watching"
+        case .archive: return "Shelved"
         case .disliked: return "Disliked"
         case .binge: return "Binge"
         case .discover: return "Discovery Hub"
@@ -48,7 +47,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .smartHub: return "Smart Hub"
         case .quickBites: return "Quick Bites"
         case .catchUp: return "Catch Up"
-        case .stalled: return "On Hold"
         case .releaseRadar: return "Release Radar"
         case .smartUpcoming: return "Premiere Radar"
         }
@@ -63,7 +61,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .all: return "tray.full"
         case .loved: return "heart"
         case .completed: return "checkmark.circle"
-        case .archive: return "arrow.clockwise"
+        case .archive: return "archivebox"
         case .disliked: return "hand.thumbsdown"
         case .binge: return "rectangle.stack"
         case .discover: return "sparkles.tv"
@@ -73,7 +71,6 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .smartHub: return "sparkles.rectangle.stack"
         case .quickBites: return "timer"
         case .catchUp: return "arrow.uturn.right.circle"
-        case .stalled: return "pause.circle"
         case .releaseRadar: return "sparkles"
         case .smartUpcoming: return "calendar.badge.clock"
         }
@@ -81,7 +78,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
 
     var isSmartCategory: Bool {
         switch self {
-        case .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites, .stalled, .archive:
+        case .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites, .archive:
             return true
         default:
             return false

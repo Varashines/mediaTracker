@@ -119,7 +119,7 @@ struct SidebarNavigation: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(AppTheme.Colors.sidebarAccent)
+                        .fill(AppTheme.Colors.accent)
                         .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)

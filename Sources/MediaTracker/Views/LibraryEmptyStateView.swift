@@ -57,7 +57,7 @@ struct LibraryEmptyStateView: View {
         case .watchlist: "Watchlist is Empty"
         case .loved: "No Loved Items"
         case .completed: "Nothing Completed"
-        case .archive: "Archive is Empty"
+        case .archive: "Shelved is Empty"
         case .disliked: "No Disliked Items"
         default: "Library is Empty"
         }
@@ -83,7 +83,7 @@ struct LibraryEmptyStateView: View {
         case .watchlist: "Your watchlist is empty. Search for something to add!"
         case .loved: "Items you've loved will appear here."
         case .completed: "All your finished movies and series will be collected here."
-        case .archive: "Items you've paused or dropped will appear here."
+        case .archive: "Items you've shelved will appear here."
         case .disliked: "Items you've actively disliked."
         default: "Start building your collection by searching for movies or shows."
         }

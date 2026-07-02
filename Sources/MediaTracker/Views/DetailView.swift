@@ -1,6 +1,46 @@
 import SwiftData
 import SwiftUI
 
+private struct DetailScrollKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct DetailGlowBackground: View {
+    let themeColor: Color
+    let vibrantThemeColor: Color
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        let fallback = Color.secondary.opacity(0.15)
+        let hasPosterColor = themeColor != fallback
+
+        ZStack {
+            AppTheme.Colors.background(for: colorScheme)
+
+            if hasPosterColor {
+                GeometryReader { geo in
+                    ZStack {
+                        Circle()
+                            .fill(vibrantThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25))
+                            .frame(width: geo.size.width * 0.8, height: geo.size.width * 0.8)
+                            .offset(x: -geo.size.width * 0.2, y: -geo.size.width * 0.3)
+
+                        Circle()
+                            .fill(themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
+                            .frame(width: geo.size.width * 0.6, height: geo.size.width * 0.6)
+                            .offset(x: geo.size.width * 0.4, y: -geo.size.width * 0.1)
+                    }
+                    .blur(radius: 80)
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
 struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -17,6 +57,8 @@ struct DetailView: View {
     @State private var lastActionBarCheck = Date()
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
+    @State private var posterParallaxOffset: CGFloat = 0
+    @State private var scrollOffsetCache: CGFloat = 0
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -42,54 +84,20 @@ struct DetailView: View {
     @ViewBuilder
     private var contentOverlay: some View {
         ZStack {
-            let baseBackground = AppTheme.Colors.background(for: colorScheme)
-            let fallback = Color.secondary.opacity(0.15)
-            let hasPosterColor = viewModel.themeColor != fallback
-
-            ZStack {
-                baseBackground.opacity(0.5)
-
-                DetailMeshOverlay(
-                    themeColor: viewModel.themeColor,
-                    darkerThemeColor: viewModel.darkerThemeColor,
-                    lighterThemeColor: viewModel.lighterThemeColor,
-                    colorScheme: colorScheme,
-                    hasPosterColor: hasPosterColor
-                )
-            }
-            .ignoresSafeArea()
+            DetailGlowBackground(
+                themeColor: viewModel.themeColor,
+                vibrantThemeColor: viewModel.vibrantThemeColor,
+                colorScheme: colorScheme
+            )
+            .id(viewModel.themeColor)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
                         .background(alignment: .top) {
                             GeometryReader { geo in
-                                let frame = geo.frame(in: .named("detailScroll"))
                                 Color.clear
-                                    .onChange(of: frame.minY) { _, newValue in
-                                        showNavTitle = newValue < -50
-                                        
-                                        // Throttle animation calls to avoid 120fps fire rate
-                                        let now = Date()
-                                        guard now.timeIntervalSince(lastActionBarCheck) > 0.08 else { return }
-                                        lastActionBarCheck = now
-
-                                        let delta = newValue - lastScrollOffset
-                                        if delta < -8 {
-                                            withAnimation(AppTheme.Animation.springSnappy) {
-                                                isActionBarVisible = false
-                                            }
-                                        } else if delta > 8 || newValue > -50 {
-                                            withAnimation(AppTheme.Animation.springSnappy) {
-                                                isActionBarVisible = true
-                                            }
-                                        }
-                                        lastScrollOffset = newValue
-                                    }
-                                    .onAppear {
-                                        showNavTitle = frame.minY < -50
-                                        lastScrollOffset = frame.minY
-                                    }
+                                    .preference(key: DetailScrollKey.self, value: geo.frame(in: .named("detailScroll")).minY)
                             }
                         }
                     tmdbWarningSection
@@ -110,6 +118,15 @@ struct DetailView: View {
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
+            .onPreferenceChange(DetailScrollKey.self) { newValue in
+                scrollOffsetCache = newValue
+                handleScrollOffset(newValue)
+            }
+            .onAppear {
+                posterParallaxOffset = scrollOffsetCache
+                showNavTitle = scrollOffsetCache < -50
+                lastScrollOffset = scrollOffsetCache
+            }
 
             floatingActionBar
                 .offset(y: isActionBarVisible ? 0 : 60)
@@ -158,13 +175,6 @@ struct DetailView: View {
                 viewModel.updateThemeColor()
             }
         }
-        .onChange(of: viewModel.themeColor) { _, newColor in
-            let fallback = Color.secondary.opacity(0.15)
-            AppThemeCoordinator.shared.detailThemeColor = newColor == fallback ? nil : newColor
-        }
-        .onDisappear {
-            AppThemeCoordinator.shared.detailThemeColor = nil
-        }
         .tint(effectiveThemeColor)
         .background {
             Group {
@@ -212,6 +222,7 @@ struct DetailView: View {
             themeColor: effectiveThemeColor,
             watchProviders: viewModel.watchProviders,
             namespace: namespace,
+            scrollOffset: posterParallaxOffset,
             onStatusChange: { newState in
                 if newState == .completed {
                     viewModel.markAllAsWatched()
@@ -239,9 +250,30 @@ struct DetailView: View {
         }
     }
 
+    private func handleScrollOffset(_ offset: CGFloat) {
+        posterParallaxOffset = offset
+        showNavTitle = offset < -50
+
+        let now = Date()
+        guard now.timeIntervalSince(lastActionBarCheck) > 0.08 else { return }
+        lastActionBarCheck = now
+
+        let delta = offset - lastScrollOffset
+        if delta < -8 {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                isActionBarVisible = false
+            }
+        } else if delta > 8 || offset > -50 {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                isActionBarVisible = true
+            }
+        }
+        lastScrollOffset = offset
+    }
+
     @ViewBuilder
     private var castAndTrackingSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
+        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if showHeavyContent {
 
 
@@ -314,6 +346,7 @@ struct DetailView: View {
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Capsule())
                     } else {
                         RecommendationSectionView(
                             recommendations: viewModel.recommendations,
@@ -480,6 +513,7 @@ struct DetailView: View {
                             .foregroundStyle(Color.semanticGreen(for: colorScheme))
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
 
                     Button {
                         deleteItem()
@@ -489,6 +523,7 @@ struct DetailView: View {
                             .foregroundStyle(Color.semanticRed(for: colorScheme))
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                 }
                 .padding(.top, 6)
             }
@@ -590,38 +625,5 @@ private struct ActionChipButton: View {
                 isHovered = hovering
             }
         }
-    }
-}
-
-private struct DetailMeshOverlay: View, Equatable {
-    let themeColor: Color
-    let darkerThemeColor: Color
-    let lighterThemeColor: Color
-    let colorScheme: ColorScheme
-    let hasPosterColor: Bool
-
-    nonisolated static func == (lhs: DetailMeshOverlay, rhs: DetailMeshOverlay) -> Bool {
-        lhs.themeColor == rhs.themeColor &&
-        lhs.darkerThemeColor == rhs.darkerThemeColor &&
-        lhs.lighterThemeColor == rhs.lighterThemeColor &&
-        lhs.colorScheme == rhs.colorScheme &&
-        lhs.hasPosterColor == rhs.hasPosterColor
-    }
-
-    var body: some View {
-        MeshGradient(
-            width: 3, height: 3,
-            points: [
-                .init(0, 0), .init(0.5, 0), .init(1, 0),
-                .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                .init(0, 1), .init(0.5, 1), .init(1, 1)
-            ],
-            colors: [
-                darkerThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, darkerThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25),
-                .clear, themeColor.opacity(colorScheme == .dark ? 0.55 : 0.40), .clear,
-                lighterThemeColor.opacity(colorScheme == .dark ? 0.25 : 0.18), .clear, lighterThemeColor.opacity(colorScheme == .dark ? 0.25 : 0.18)
-            ]
-        )
-        .opacity(hasPosterColor ? 1 : 0)
     }
 }

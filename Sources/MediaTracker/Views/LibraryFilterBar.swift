@@ -70,6 +70,7 @@ struct LibraryFilterBar: View {
             .padding(.horizontal, AppTheme.Spacing.section)
             .padding(.vertical, AppTheme.Spacing.tiny)
         }
+        .scrollContentBackground(.hidden)
     }
     
     @ViewBuilder

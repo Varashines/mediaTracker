@@ -148,5 +148,6 @@ struct PaginatedResult: Sendable {
     let spotlightHero: MediaThumbnailMetadata?
     let grouped: [(String, [MediaThumbnailMetadata])]
     let pickOfTheDay: [MediaThumbnailMetadata]
+    let recommendations: [MediaThumbnailMetadata]
     let totalCount: Int
 }

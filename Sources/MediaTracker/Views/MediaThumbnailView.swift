@@ -72,6 +72,7 @@ struct MediaThumbnailView: View, Equatable {
     @State private var isHovered = false
     @State private var isAppeared = false
     @State private var isRemoved = false
+    @State private var hasStaggerPlayed = false
 
     // Performance optimization: Status passed from parent to avoid @Query in every thumbnail
     var isCompletedInCollection: Bool = false
@@ -363,10 +364,11 @@ struct MediaThumbnailView: View, Equatable {
         .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
         .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         .onAppear {
-            if isFastScrolling || staggerIndex == nil {
+            if isFastScrolling || staggerIndex == nil || hasStaggerPlayed {
                 isAppeared = true
                 return
             }
+            hasStaggerPlayed = true
             let delay = Double((staggerIndex ?? 0) % 8) * 0.04
             withAnimation(AppTheme.Animation.springGentle.delay(delay)) {
                 isAppeared = true
@@ -376,6 +378,9 @@ struct MediaThumbnailView: View, Equatable {
         .onHover { hovering in
             guard !disableHover else { return }
             isHovered = hovering
+        }
+        .onChange(of: isFastScrolling) { _, fast in
+            if fast { isHovered = false }
         }
         .animation(!disableHover ? AppTheme.Animation.springSnappy : nil, value: isHovered)
     }
@@ -410,7 +415,7 @@ struct MediaThumbnailView: View, Equatable {
         let themeColor = capturedThemeColor
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
-        
+
         return Group {
             switch type {
             case .movie:
@@ -519,6 +524,7 @@ struct MediaThumbnailView: View, Equatable {
                         withAnimation(AppTheme.Animation.springSnappy) {
                             item.state = targetState
                             item.lastUpdated = Date()
+                            item.syncCachedProperties()
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
                     }
@@ -578,7 +584,7 @@ struct MediaThumbnailView: View, Equatable {
 
 #Preview("Media Thumbnail - Movie") {
     @Previewable var namespace = Namespace().wrappedValue
-    
+
     let container = try! ModelContainer(
         for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, MediaCollection.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
@@ -587,7 +593,7 @@ struct MediaThumbnailView: View, Equatable {
     let item = MediaItem(id: "mt1", title: "The Matrix", overview: "A computer hacker learns about reality", type: .movie)
     item.state = .completed
     context.insert(item)
-    
+
     return MediaThumbnailView(
         item: item,
         mode: .grid,
@@ -635,14 +641,14 @@ struct ThumbnailPosterLayer: View {
                     content
                 }
             } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .overlay {
-                        Image(systemName: type == .movie ? "film" : "tv")
-                            .font(.system(size: mode == .hero ? 40 : 30))
-                            .foregroundStyle(.secondary.opacity(0.2))
-                    }
-                    .frame(width: width, height: height)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .overlay {
+                            Image(systemName: type == .movie ? "film" : "tv")
+                                .font(.system(size: mode == .hero ? 40 : 30))
+                                .foregroundStyle(AppTheme.Colors.accent)
+                        }
+                        .frame(width: width, height: height)
             }
         }
     }

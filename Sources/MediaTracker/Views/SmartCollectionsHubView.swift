@@ -83,6 +83,7 @@ struct SmartCollectionsHubView: View {
                             .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Circle())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
@@ -124,6 +125,7 @@ struct SmartCollectionsHubView: View {
                             .font(AppTheme.Font.titleMedium)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Circle())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
@@ -220,8 +222,7 @@ struct SmartCollectionsHubView: View {
         case .loved: return "Your absolute favorites, marked with a heart."
         case .binge: return "Shows with multiple unwatched episodes available."
         case .quickBites: return "Short media under 90 minutes for quick viewing."
-        case .stalled: return "Active titles with no progress in the last 3 months."
-        case .archive: return "Completed or dropped items you've archived."
+        case .archive: return "On hold or dropped items you've shelved."
         default: return ""
         }
     }

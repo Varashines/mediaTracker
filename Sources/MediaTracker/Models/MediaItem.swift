@@ -9,12 +9,7 @@ final class MediaItem: Identifiable {
         \.typeValue,
         \.storedIsUpcoming,
         \.tasteValue,
-        \.storedSmartBadgeLabel,
-        \.lastInteractionDate,
-        \.dateAdded,
-        \.lastUpdated,
-        \.cachedLanguage,
-        \.cachedNextAiringDate
+        \.storedSmartBadgeLabel
     ])
 
     @Attribute(.unique)
@@ -82,14 +77,12 @@ final class MediaItem: Identifiable {
 
     nonisolated func commitChange(forceRecalc: Bool = false) {
         syncCachedProperties(force: forceRecalc)
-        guard let context = modelContext else { return }
-        do {
-            try context.save()
-        } catch {
-            AppLogger.error("Failed to save \(title): \(error.localizedDescription)", logger: AppLogger.data)
-        }
+        nonisolated(unsafe) let context = modelContext
         let pid = persistentModelID
         Task { @MainActor in
+            if let ctx = context {
+                SaveCoordinator.shared.requestSave(ctx)
+            }
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
         }
     }
@@ -119,7 +112,6 @@ final class MediaItem: Identifiable {
             if old != stateValue {
                 lastInteractionDate = Date()
                 lastStateChangeDate = Date()
-                syncCachedProperties()
                 
                 if typeValue == "TV Show" && stateValue == "Completed" {
                     if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
@@ -147,8 +139,10 @@ final class MediaItem: Identifiable {
             }
         }
         details.recalculateCachedProperties(triggerSync: true)
-        // Ensure episodes and cached properties are persisted
-        try? modelContext?.save()
+        nonisolated(unsafe) let ctx = modelContext
+        Task { @MainActor in
+            if let ctx { SaveCoordinator.shared.forceSave(ctx) }
+        }
     }
 
     func applyStateChange(_ newState: MediaState) {

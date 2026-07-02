@@ -120,4 +120,57 @@ final class DateUtilsTests: XCTestCase {
         let date = DateUtils.parseEpisodeDate("2026-04-20", time: "20:00")
         XCTAssertNotNil(date)
     }
+
+    func testParseEpisodeDateShowNetworkFallback() {
+        // When serviceName is nil, parseEpisodeDate should fall back to show.network
+        // This is the fix for Apple TV+ / Disney+ showing wrong times
+        let show = TVShowDetails(tmdbID: 1)
+        show.network = "Apple TV"
+
+        let date = DateUtils.parseEpisodeDate("2026-04-20", for: show)
+        XCTAssertNotNil(date)
+
+        let tzET = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzET
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.hour, 0, "Apple TV+ should resolve to midnight ET via show.network fallback")
+        XCTAssertEqual(comps.minute, 0)
+    }
+
+    func testParseEpisodeDateDisneyPlusShowNetworkFallback() {
+        let show = TVShowDetails(tmdbID: 2)
+        show.network = "Disney+"
+
+        let date = DateUtils.parseEpisodeDate("2026-04-20", for: show)
+        XCTAssertNotNil(date)
+
+        let tzET = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzET
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.hour, 3, "Disney+ should resolve to 3 AM ET via show.network fallback")
+        XCTAssertEqual(comps.minute, 0)
+    }
+
+    func testParseEpisodeDateYouTube() {
+        // YouTube shows (e.g. Thai dramas): TVMaze airstamp at noon UTC IS the actual release time.
+        // The airstamp should be used directly instead of a streaming rule.
+        let date = DateUtils.parseEpisodeDate(
+            "2026-07-03",
+            airstamp: "2026-07-03T12:00:00+00:00",
+            serviceName: "YouTube"
+        )
+        XCTAssertNotNil(date)
+
+        let tzUTC = TimeZone(identifier: "UTC")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzUTC
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.year, 2026)
+        XCTAssertEqual(comps.month, 7)
+        XCTAssertEqual(comps.day, 3, "YouTube airstamp should preserve the TVMaze airdate (Friday)")
+        XCTAssertEqual(comps.hour, 12, "YouTube airstamp noon UTC = 7 PM ICT (Thailand)")
+        XCTAssertEqual(comps.minute, 0)
+    }
 }

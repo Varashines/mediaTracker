@@ -45,6 +45,7 @@ struct DiscoverySection<HeaderAccessory: View>: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .padding(.trailing, AppTheme.Spacing.pageMargin)
                 }
             }

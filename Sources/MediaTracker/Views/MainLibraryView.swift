@@ -39,30 +39,50 @@ struct MainLibraryView: View {
     var body: some View {
         let usePortraitCards = viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory
         let columns: [GridItem] = usePortraitCards
-            ? [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 12)]
-            : [GridItem(.adaptive(minimum: 160, maximum: 175), spacing: 16)]
+            ? [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
+            : [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section, pinnedViews: [.sectionHeaders]) {
-                if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                    HomeViewSections(
-                        homeContinueWatching: homeContinueWatching,
-                        featuredCarouselItems: featuredCarouselItems,
-                        groupedItems: groupedItems,
-                        recommendations: recommendations,
-                        pickOfTheDay: pickOfTheDay,
-                        namespace: namespace,
-                        isFastScrolling: isFastScrolling,
-                        onSelectHero: onSelectHero,
-                        onCategorySelected: onCategorySelected,
-                        onTrendingAdd: onTrendingAdd
-                    )
-                    .equatable()
-                    .transition(.opacity)
+        VStack(spacing: 0) {
+            if selectedCategory != .home && !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
+                if let networks = selectedNetworks, !networks.isEmpty {
+                    LibraryHeaderView(
+                        selectedCategory: selectedCategory,
+                        selectedNetworks: networks, isCategoryPage: isCategoryPage,
+                        onNetworkSelected: onNetworkSelected, onBack: onBack,
+                        viewModel: viewModel)
                 }
 
-                if selectedCategory != .home {
-                    Section {
+                if showsFilterBar {
+                    LibraryFilterBar(viewModel: viewModel)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.top, AppTheme.Spacing.micro)
+                        .padding(.bottom, AppTheme.Spacing.tiny)
+                        .background(.ultraThinMaterial)
+                }
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                    if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
+                        HomeViewSections(
+                            homeContinueWatching: homeContinueWatching,
+                            featuredCarouselItems: featuredCarouselItems,
+                            groupedItems: groupedItems,
+                            recommendations: recommendations,
+                            pickOfTheDay: pickOfTheDay,
+                            trendingMovies: viewModel.trendingMovies,
+                            trendingShows: viewModel.trendingShows,
+                            namespace: namespace,
+                            isFastScrolling: isFastScrolling,
+                            onSelectHero: onSelectHero,
+                            onCategorySelected: onCategorySelected,
+                            onTrendingAdd: onTrendingAdd
+                        )
+                        .equatable()
+                        .transition(.opacity)
+                    }
+
+                    if selectedCategory != .home {
                         LibraryGridSection(
                             items: items,
                             groupedItems: groupedItems,
@@ -79,42 +99,24 @@ struct MainLibraryView: View {
                             onLoadMore: onLoadMore
                         )
                         .transition(.opacity)
-                    } header: {
-                        if !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                if let networks = selectedNetworks, !networks.isEmpty {
-                                    LibraryHeaderView(
-                                        selectedCategory: selectedCategory,
-                                        selectedNetworks: networks, isCategoryPage: isCategoryPage,
-                                        onNetworkSelected: onNetworkSelected, onBack: onBack,
-                                        viewModel: viewModel)
-                                }
-
-                                if showsFilterBar {
-                                    LibraryFilterBar(viewModel: viewModel)
-                                        .padding(.top, AppTheme.Spacing.micro)
-                                        .padding(.bottom, AppTheme.Spacing.tiny)
-                                }
-                            }
-                        }
                     }
-                    .transition(.opacity)
+                }
+                .background {
+                    ScrollVelocityTracker(
+                        isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 }
             }
-            .background {
-                ScrollVelocityTracker(
-                    isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
         }
-        .scrollBounceBehavior(.always)
-        .scrollIndicators(.hidden)
-        .scrollClipDisabled()
-        .animation(AppTheme.Animation.springSnappy, value: selectedCategory)
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {
                 scrollTask?.cancel()
                 isFastScrolling = false
             }
+        }
+        .onAppear {
+            viewModel.fetchTrendingIfNeeded()
         }
     }
 }

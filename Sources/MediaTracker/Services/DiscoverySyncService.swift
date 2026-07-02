@@ -51,7 +51,7 @@ actor DiscoverySyncService {
         for rule in rules {
             let target = rule.target
             for source in rule.sources {
-                sourceToTarget[source.lowercased()] = target
+                sourceToTarget[source.lowercased().trimmingCharacters(in: .whitespaces)] = target
             }
             if let logo = rule.preferredLogoSource {
                 targetToLogoSource[target] = logo
@@ -117,7 +117,7 @@ actor DiscoverySyncService {
 
         let (sourceToTarget, targetToLogoSource) = await getAliasMaps()
 
-        var networkCounts: [String: (logo: String?, count: Int, priority: Int, sources: [String], kind: String)] = [:]
+        var networkCounts: [String: (logo: String?, networkCount: Int, studioCount: Int, priority: Int, sources: [String])] = [:]
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
         var badgeCounts: [String: Int] = [:]
@@ -147,7 +147,7 @@ actor DiscoverySyncService {
                         let targetName: String = sourceToTarget[normalizedName].map { $0 } ?? originalName
                         let preferredSource: String? = targetToLogoSource[targetName]
                         
-                        let currentData = networkCounts[targetName] ?? (logo: nil, count: 0, priority: 0, sources: [], kind: "network")
+                        let currentData = networkCounts[targetName] ?? (logo: nil, networkCount: 0, studioCount: 0, priority: 0, sources: [])
                         var newLogo: String? = currentData.logo
                         var newPriority: Int = currentData.priority
                         var newSources: [String] = currentData.sources
@@ -170,18 +170,16 @@ actor DiscoverySyncService {
                             }
                         }
                         
-                        let addedCount = seenTargets.insert(targetName).inserted ? 1 : 0
-                        // If name appears in both contexts, use kind with higher count
-                        let newCount = currentData.count + addedCount
-                        let finalKind: String
-                        if itemKind == currentData.kind {
-                            finalKind = itemKind
-                        } else if newCount > currentData.count {
-                            finalKind = itemKind
-                        } else {
-                            finalKind = currentData.kind
+                        var newNetworkCount = currentData.networkCount
+                        var newStudioCount = currentData.studioCount
+                        if seenTargets.insert(targetName).inserted {
+                            if itemKind == "network" {
+                                newNetworkCount += 1
+                            } else {
+                                newStudioCount += 1
+                            }
                         }
-                        networkCounts[targetName] = (logo: newLogo, count: newCount, priority: newPriority, sources: newSources, kind: finalKind)
+                        networkCounts[targetName] = (logo: newLogo, networkCount: newNetworkCount, studioCount: newStudioCount, priority: newPriority, sources: newSources)
                     }
                 }
                 
@@ -205,15 +203,20 @@ actor DiscoverySyncService {
         }
         
         // 2. Incremental Sync: Update existing, insert new, delete orphaned
+        // Build dictionaries for O(1) lookup instead of O(N×M) first(where:)
         let existingNetworks = (try? modelContext.fetch(FetchDescriptor<NetworkEntity>())) ?? []
+        var networkMap: [String: NetworkEntity] = [:]
+        for entity in existingNetworks { networkMap[entity.name] = entity }
         for (name, data) in networkCounts {
-            if let existing = existingNetworks.first(where: { $0.name == name }) {
-                existing.count = data.count
+            let totalCount = data.networkCount + data.studioCount
+            let finalKind = data.studioCount > data.networkCount ? "studio" : "network"
+            if let existing = networkMap[name] {
+                existing.count = totalCount
                 existing.logoPath = data.logo
                 existing.sourceNames = data.sources
-                existing.kind = data.kind
+                existing.kind = finalKind
             } else {
-                let entity = NetworkEntity(name: name, logoPath: data.logo, count: data.count, sourceNames: data.sources, kind: data.kind)
+                let entity = NetworkEntity(name: name, logoPath: data.logo, count: totalCount, sourceNames: data.sources, kind: finalKind)
                 modelContext.insert(entity)
             }
         }
@@ -222,8 +225,10 @@ actor DiscoverySyncService {
         }
 
         let existingGenres = (try? modelContext.fetch(FetchDescriptor<GenreEntity>())) ?? []
+        var genreMap: [String: GenreEntity] = [:]
+        for entity in existingGenres { genreMap[entity.name] = entity }
         for (name, count) in genreCounts {
-            if let existing = existingGenres.first(where: { $0.name == name }) {
+            if let existing = genreMap[name] {
                 existing.count = count
             } else {
                 modelContext.insert(GenreEntity(name: name, count: count))
@@ -234,8 +239,10 @@ actor DiscoverySyncService {
         }
 
         let existingLanguages = (try? modelContext.fetch(FetchDescriptor<LanguageEntity>())) ?? []
+        var langMap: [String: LanguageEntity] = [:]
+        for entity in existingLanguages { langMap[entity.code] = entity }
         for (code, count) in languageCounts {
-            if let existing = existingLanguages.first(where: { $0.code == code }) {
+            if let existing = langMap[code] {
                 existing.count = count
             } else {
                 modelContext.insert(LanguageEntity(code: code, count: count))
@@ -246,8 +253,10 @@ actor DiscoverySyncService {
         }
 
         let existingBadges = (try? modelContext.fetch(FetchDescriptor<BadgeEntity>())) ?? []
+        var badgeMap: [String: BadgeEntity] = [:]
+        for entity in existingBadges { badgeMap[entity.label] = entity }
         for (label, count) in badgeCounts {
-            if let existing = existingBadges.first(where: { $0.label == label }) {
+            if let existing = badgeMap[label] {
                 existing.count = count
             } else {
                 modelContext.insert(BadgeEntity(label: label, count: count))

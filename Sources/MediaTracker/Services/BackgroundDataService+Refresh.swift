@@ -204,6 +204,8 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
+            tvDetails.network = details.network
+            tvDetails.networkLogoPath = details.networkLogoPath
 
             // Merge TMDB + TVMaze genres for richer coverage
             var mergedGenres = Set(details.genres)

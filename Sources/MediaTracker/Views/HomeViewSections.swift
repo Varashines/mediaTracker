@@ -7,6 +7,8 @@ struct HomeViewSections: View, Equatable {
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recommendations: [MediaThumbnailMetadata]
     let pickOfTheDay: [MediaThumbnailMetadata]
+    let trendingMovies: [MediaSearchResult]
+    let trendingShows: [MediaSearchResult]
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
@@ -19,6 +21,8 @@ struct HomeViewSections: View, Equatable {
         lhs.groupedItems.map(\.0) == rhs.groupedItems.map(\.0) &&
         lhs.recommendations == rhs.recommendations &&
         lhs.pickOfTheDay == rhs.pickOfTheDay &&
+        lhs.trendingMovies.count == rhs.trendingMovies.count &&
+        lhs.trendingShows.count == rhs.trendingShows.count &&
         lhs.isFastScrolling == rhs.isFastScrolling
     }
 
@@ -27,8 +31,6 @@ struct HomeViewSections: View, Equatable {
     }
 
     @State private var visibleSection: HomeSection? = nil
-    @State private var trendingMovies: [MediaSearchResult] = []
-    @State private var trendingShows: [MediaSearchResult] = []
     @State private var hoveredPill: HomeSection? = nil
     @Namespace private var pillNamespace
 
@@ -135,12 +137,6 @@ struct HomeViewSections: View, Equatable {
             }
         }
         .padding(.top, AppTheme.Spacing.medium)
-        .task {
-            async let movies = APIClient.shared.fetchTrendingMovies()
-            async let shows = APIClient.shared.fetchTrendingTVShows()
-            trendingMovies = (try? await movies) ?? []
-            trendingShows = (try? await shows) ?? []
-        }
     }
 
     private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {

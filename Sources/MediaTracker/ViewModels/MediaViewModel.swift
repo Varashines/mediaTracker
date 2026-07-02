@@ -39,9 +39,12 @@ class MediaViewModel {
     var collection = CollectionState()
     var display = DisplayCache()
     var discovery = DiscoveryCache()
+    var trendingMovies: [MediaSearchResult] = []
+    var trendingShows: [MediaSearchResult] = []
 
     var onFilterUpdate: (() -> Void)?
     private var cancellables = Set<AnyCancellable>()
+    private var trendingTask: Task<Void, Never>?
 
     init() {
         filterSubject
@@ -63,6 +66,22 @@ class MediaViewModel {
             return Locale.current.localizedString(forLanguageCode: lang) ?? lang.uppercased()
         }
         return category.title
+    }
+
+    func fetchTrendingIfNeeded() {
+        guard trendingMovies.isEmpty || trendingShows.isEmpty else { return }
+        trendingTask?.cancel()
+        trendingTask = Task { [weak self] in
+            async let movies = APIClient.shared.fetchTrendingMovies()
+            async let shows = APIClient.shared.fetchTrendingTVShows()
+            let m = (try? await movies) ?? []
+            let s = (try? await shows) ?? []
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.trendingMovies = m
+                self?.trendingShows = s
+            }
+        }
     }
 
     func purgeSleepCache() {

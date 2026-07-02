@@ -3,6 +3,17 @@ import SwiftData
 
 extension MediaFilterActor {
     func sortResults(_ results: inout [MediaItem], category: NavigationCategory, sortOrder: SortOrder) {
+        // Loved always sorts by most recently interacted
+        if category == .loved {
+            results.sort {
+                if $0.lastInteractionDate != $1.lastInteractionDate {
+                    return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
+                }
+                return $0.title < $1.title
+            }
+            return
+        }
+
         switch sortOrder {
         case .alphabetical:
             results.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
@@ -31,6 +42,15 @@ extension MediaFilterActor {
     }
 
     func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
+        // Loved always sorts by most recently interacted
+        if category == .loved {
+            descriptor.sortBy = [
+                SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse),
+                SortDescriptor<MediaItem>(\.title, order: .forward)
+            ]
+            return
+        }
+
         if category == .upcoming || category == .smartUpcoming || badge == SmartBadge.premiere.rawValue {
             descriptor.sortBy = [
                 SortDescriptor<MediaItem>(\.cachedNextAiringDate, order: .forward),

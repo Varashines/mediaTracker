@@ -42,8 +42,8 @@ extension MediaItem {
         } else {
             self.storedIsUpcoming = false
         }
-        // Only rebuild searchable text if source fields may have changed
-        if force || oldLabel != storedSmartBadgeLabel {
+        // Only rebuild searchable text on forced sync (badge/progress changes alter searchable fields)
+        if force {
             updateSearchableText()
         }
     }

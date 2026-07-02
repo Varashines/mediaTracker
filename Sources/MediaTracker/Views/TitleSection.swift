@@ -80,7 +80,7 @@ struct TitleSection: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
                     if useTitleLogos, let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
                         CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
-                            Task {
+                            Task.detached(priority: .utility) {
                                 let dominant = await ColorExtractor.dominantColor(from: cgImage)
                                 await MainActor.run {
                                     self.isLogoLight = dominant.isNearlyWhite
@@ -192,6 +192,7 @@ struct TitleSection: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Capsule())
                     }
                 }
                 

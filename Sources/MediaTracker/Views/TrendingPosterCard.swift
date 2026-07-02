@@ -44,6 +44,9 @@ struct TrendingPosterCard: View, Equatable {
         .shadow(color: AppTheme.Colors.shadowAmbient(for: .dark), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
+        .onChange(of: isFastScrolling) { _, fast in
+            if fast { isHovered = false }
+        }
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(.isButton)
     }
@@ -59,9 +62,9 @@ struct TrendingPosterCard: View, Equatable {
         } else {
             ZStack {
                 Color.secondary.opacity(0.1)
-                Image(systemName: item.type == .movie ? "film" : "tv")
-                    .foregroundStyle(.secondary)
-                    .font(.title2)
+                    Image(systemName: item.type == .movie ? "film" : "tv")
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .font(.title2)
             }
         }
     }

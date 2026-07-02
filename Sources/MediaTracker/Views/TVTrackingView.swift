@@ -212,6 +212,10 @@ private struct SeasonSection: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedRangeStart: Int = 1
 
+    @State private var cachedSortedEpisodes: [TVEpisode] = []
+    @State private var cachedEpisodeRanges: [ClosedRange<Int>] = []
+    @State private var cachedShowRangePills: Bool = false
+
     private let episodesPerRange = 10
     private let rangeThreshold = 15
 
@@ -223,62 +227,63 @@ private struct SeasonSection: View {
         season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
     }
 
-    private var sortedEpisodes: [TVEpisode] {
-        season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber })
-    }
-
-    private var showRangePills: Bool {
-        sortedEpisodes.count > rangeThreshold
-    }
-
-    private var episodeRanges: [ClosedRange<Int>] {
-        let episodes = sortedEpisodes
-        guard !episodes.isEmpty else { return [] }
-
-        let firstEp = episodes.first!.episodeNumber
-        let lastEp = episodes.last!.episodeNumber
-        var ranges: [ClosedRange<Int>] = []
-        var start = firstEp
-        while start <= lastEp {
-            let end = min(start + episodesPerRange - 1, lastEp)
-            ranges.append(start...end)
-            start = end + 1
-        }
-
-        // Merge last range into previous if ≤ 1 episode
-        if ranges.count >= 2 {
-            let last = ranges[ranges.count - 1]
-            let prev = ranges[ranges.count - 2]
-            if last.count <= 1 {
-                ranges[ranges.count - 2] = prev.lowerBound...last.upperBound
-                ranges.removeLast()
-            }
-        }
-
-        return ranges
-    }
-
     private var filteredEpisodes: [TVEpisode] {
-        if !showRangePills {
-            return sortedEpisodes
+        if !cachedShowRangePills {
+            return cachedSortedEpisodes
         }
-        guard let range = episodeRanges.first(where: { $0.lowerBound == selectedRangeStart }) else {
-            return sortedEpisodes
+        guard let range = cachedEpisodeRanges.first(where: { $0.lowerBound == selectedRangeStart }) else {
+            return cachedSortedEpisodes
         }
-        return sortedEpisodes.filter { range.contains($0.episodeNumber) }
+        return cachedSortedEpisodes.filter { range.contains($0.episodeNumber) }
     }
 
     private func defaultRangeStart() -> Int {
-        // Find the range containing the first unwatched episode
-        if let firstUnwatched = sortedEpisodes.first(where: { !$0.isWatched }) {
+        if let firstUnwatched = cachedSortedEpisodes.first(where: { !$0.isWatched }) {
             let epNum = firstUnwatched.episodeNumber
-            for range in episodeRanges {
+            for range in cachedEpisodeRanges {
                 if range.contains(epNum) {
                     return range.lowerBound
                 }
             }
         }
         return 1
+    }
+
+    private func updateCachedData() {
+        let sorted = season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber })
+        cachedSortedEpisodes = sorted
+
+        guard !sorted.isEmpty else {
+            cachedEpisodeRanges = []
+            cachedShowRangePills = false
+            return
+        }
+
+        let showPills = sorted.count > rangeThreshold
+        cachedShowRangePills = showPills
+
+        if showPills {
+            let firstEp = sorted.first!.episodeNumber
+            let lastEp = sorted.last!.episodeNumber
+            var ranges: [ClosedRange<Int>] = []
+            var start = firstEp
+            while start <= lastEp {
+                let end = min(start + episodesPerRange - 1, lastEp)
+                ranges.append(start...end)
+                start = end + 1
+            }
+            if ranges.count >= 2 {
+                let last = ranges[ranges.count - 1]
+                let prev = ranges[ranges.count - 2]
+                if last.count <= 1 {
+                    ranges[ranges.count - 2] = prev.lowerBound...last.upperBound
+                    ranges.removeLast()
+                }
+            }
+            cachedEpisodeRanges = ranges
+        } else {
+            cachedEpisodeRanges = []
+        }
     }
 
     var body: some View {
@@ -304,13 +309,13 @@ private struct SeasonSection: View {
                         .kerning(1.2)
                 }
 
-                if showRangePills {
+                if cachedShowRangePills {
                     Text("·")
                         .foregroundStyle(.tertiary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 4) {
-                            ForEach(episodeRanges.indices, id: \.self) { index in
-                                let range = episodeRanges[index]
+                            ForEach(cachedEpisodeRanges.indices, id: \.self) { index in
+                                let range = cachedEpisodeRanges[index]
                                 let rangeStart = range.lowerBound
                                 let rangeEnd = range.upperBound
                                 let isSelected = selectedRangeStart == rangeStart
@@ -422,9 +427,16 @@ private struct SeasonSection: View {
             }
         }
         .onAppear {
-            if showRangePills && selectedRangeStart == 1 {
+            updateCachedData()
+            if cachedShowRangePills && selectedRangeStart == 1 {
                 selectedRangeStart = defaultRangeStart()
             }
+        }
+        .onChange(of: season.episodes.count) { _, _ in
+            updateCachedData()
+        }
+        .onChange(of: season.watchedEpisodesCount) { _, _ in
+            updateCachedData()
         }
     }
 
@@ -460,6 +472,21 @@ private struct EpisodeCube: View {
 
     @State private var showingOverview = false
     @State private var isHovering = false
+    private let cachedDateString: String
+
+    init(episode: TVEpisode, themeColor: Color, onToggle: @escaping () -> Void) {
+        _episode = Bindable(wrappedValue: episode)
+        self.themeColor = themeColor
+        self.onToggle = onToggle
+        if let date = episode.airDateAsDate {
+            let d = date.formatted(.dateTime.day())
+            let m = date.formatted(.dateTime.month(.abbreviated))
+            let y = date.formatted(.dateTime.year(.twoDigits))
+            self.cachedDateString = "\(d) \(m) '\(y)"
+        } else {
+            self.cachedDateString = ""
+        }
+    }
 
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
@@ -506,14 +533,8 @@ private struct EpisodeCube: View {
 
                         // Metadata + Info button
                         HStack {
-                            if let date = episode.airDateAsDate {
-                                let formattedDate: String = {
-                                    let d = date.formatted(.dateTime.day())
-                                    let m = date.formatted(.dateTime.month(.abbreviated))
-                                    let y = date.formatted(.dateTime.year(.twoDigits))
-                                    return "\(d) \(m) '\(y)"
-                                }()
-                                Text(formattedDate)
+                            if !cachedDateString.isEmpty {
+                                Text(cachedDateString)
                                     .foregroundStyle(.secondary.opacity(0.6))
                             }
 

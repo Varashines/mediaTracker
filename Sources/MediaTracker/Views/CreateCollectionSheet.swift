@@ -153,6 +153,7 @@ struct CreateCollectionSheet: View {
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .font(AppTheme.Font.bodyBold)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
@@ -181,6 +182,7 @@ struct CreateCollectionSheet: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .disabled(name.isEmpty)
                 .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
@@ -242,6 +244,7 @@ struct CreateCollectionSheet: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Circle())
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

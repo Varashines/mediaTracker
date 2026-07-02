@@ -118,6 +118,9 @@ struct ForYouCompactCard: View, Equatable {
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
+        .onChange(of: isFastScrolling) { _, fast in
+            if fast { isHovered = false }
+        }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)
         .task {

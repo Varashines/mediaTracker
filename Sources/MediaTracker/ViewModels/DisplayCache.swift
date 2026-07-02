@@ -14,7 +14,6 @@ class DisplayCache {
     var pickOfTheDayDate: Date? = nil
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
     var libraryTMDBIDs: Set<String> = []
-    var isLibraryMetadataDirty: Bool = true
     var calendarCache: [Date: CalendarResult] = [:]
 
     func purgeAll() {
@@ -28,8 +27,20 @@ class DisplayCache {
         pickOfTheDayDate = nil
         featuredUpcomingItems = []
         libraryTMDBIDs = []
-        isLibraryMetadataDirty = true
         calendarCache = [:]
+    }
+
+    /// Applies a full filter result atomically — all property mutations within this
+    /// single call are coalesced into one SwiftUI observation notification.
+    func applyFilterResult(_ result: PaginatedResult) {
+        displayedItems = result.displayed
+        featuredUpcomingItems = result.featuredUpcoming
+        recentlyAddedItems = result.recentlyAdded
+        homeContinueWatchingItems = result.homeContinueWatching
+        spotlightHero = result.spotlightHero
+        groupedItems = result.grouped
+        pickOfTheDay = result.pickOfTheDay
+        recommendations = result.recommendations
     }
 
     func trimCalendarCache(keepMonths: Int = 6) {

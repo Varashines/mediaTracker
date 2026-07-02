@@ -3,29 +3,46 @@ import SwiftUI
 struct ScrollVelocityTracker: View {
     @Binding var isFastScrolling: Bool
     @Binding var scrollTask: Task<Void, Never>?
-    @State private var lastVelocityCheck = Date()
-    // Coalesce velocity checks. SwiftUI re-fires `onChange(of: currentY)` on every pixel of
-    // scroll, so we throttle to a sensible cadence and only spawn the debounce Task once
-    // per actual sample.
-    private let minSampleInterval: TimeInterval = 0.05
-    private let velocityThreshold: CGFloat = 30
+    @State private var scrollOffset: CGFloat = 0
+    @State private var lastOffset: CGFloat = 0
+    @State private var sampleTask: Task<Void, Never>?
+
+    private let sampleInterval: TimeInterval = 0.05
+    private let velocityThreshold: CGFloat = 40
 
     var body: some View {
         GeometryReader { geo in
-            let currentY = geo.frame(in: .global).minY
             Color.clear
-                .onChange(of: currentY) { oldValue, newValue in
-                    let now = Date()
-                    guard now.timeIntervalSince(lastVelocityCheck) > minSampleInterval else { return }
-                    lastVelocityCheck = now
+                .onAppear {
+                    scrollOffset = geo.frame(in: .global).minY
+                    lastOffset = scrollOffset
+                    startSampling(geo: geo)
+                }
+                .onDisappear {
+                    sampleTask?.cancel()
+                }
+        }
+        .frame(height: 0)
+    }
 
-                    let velocity = abs(newValue - oldValue)
-                    if velocity > velocityThreshold && !isFastScrolling {
-                        isFastScrolling = true
-                    }
+    private func startSampling(geo: GeometryProxy) {
+        sampleTask?.cancel()
+        sampleTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(sampleInterval * 1_000_000_000))
+                guard !Task.isCancelled else { break }
+                let current = geo.frame(in: .global).minY
+                let velocity = abs(current - lastOffset)
+                lastOffset = current
 
+                if velocity > velocityThreshold && !isFastScrolling {
+                    isFastScrolling = true
+                }
+
+                if isFastScrolling {
                     scheduleDebounce()
                 }
+            }
         }
     }
 

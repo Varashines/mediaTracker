@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 extension MediaFilterActor {
-    func processHomeCategory(now: Date, totalCount: Int) throws -> PaginatedResult {
+    func processHomeCategory(now: Date, totalCount: Int) async throws -> PaginatedResult {
         let newLabel = SmartBadge.new.rawValue
         let bingeLabel = SmartBadge.bingeDrop.rawValue
         let finaleLabel = SmartBadge.finale.rawValue
@@ -86,6 +86,13 @@ extension MediaFilterActor {
 
         let pickOfDay = fetchPickOfTheDay(now: now)
 
+        let tasteActor = TasteActor(modelContainer: modelContext.container)
+        let recs = await tasteActor.calculateRecommendations()
+        let recommendations: [MediaThumbnailMetadata] = recs.compactMap { rec in
+            guard let item = modelContext.model(for: rec.id) as? MediaItem else { return nil }
+            return MediaThumbnailMetadata(item: item, recommendationReason: rec.reason)
+        }
+
         return PaginatedResult(
             displayed: [],
             featuredUpcoming: [],
@@ -94,6 +101,7 @@ extension MediaFilterActor {
             spotlightHero: spotlight.map { toMetadata($0) },
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,
+            recommendations: recommendations,
             totalCount: totalCount
         )
     }
