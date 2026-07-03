@@ -7,7 +7,6 @@ struct CollectionPickerView: View {
     @Environment(\.colorScheme) var colorScheme
     @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name) private var collections: [MediaCollection]
     let item: MediaItem
-    @State private var isDoneHovered = false
     
     var body: some View {
         VStack(spacing: AppTheme.Spacing.large) {
@@ -50,11 +49,7 @@ struct CollectionPickerView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .scaleEffect(isDoneHovered ? 1.03 : 1.0)
-            .shadow(color: .black.opacity(isDoneHovered ? 0.12 : 0), radius: 6, y: isDoneHovered ? 3 : 0)
-            .onHover { hovering in
-                withAnimation(AppTheme.Animation.springSnappy) { isDoneHovered = hovering }
-            }
+            .hoverScaled(.subtle)
         }
         .padding(AppTheme.Spacing.xLarge)
         .background(AppTheme.Colors.surface(for: colorScheme))

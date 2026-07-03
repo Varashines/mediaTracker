@@ -6,7 +6,6 @@ struct CastMemberCard: View {
     let themeColor: Color
     var action: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
-    @State private var isHovered = false
 
 
     var body: some View {
@@ -16,10 +15,7 @@ struct CastMemberCard: View {
             cardContent
         }
         .buttonStyle(.interactive)
-        .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: isHovered ? 8 : 2, y: isHovered ? 4 : 1)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
-        .onHover { isHovered = $0 }
+        .hoverScaled(.subtle, themeColor: themeColor)
         .accessibilityLabel("\(member.name)\(member.characterName.isEmpty ? "" : ", \(member.characterName)")")
     }
 

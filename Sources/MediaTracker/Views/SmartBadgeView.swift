@@ -175,7 +175,19 @@ struct StatusBadgePrimitive: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
-        .background(isSolid ? accentColor : accentColor.opacity(colorScheme == .dark ? 0.15 : 0.2))
+        .background {
+            if isSolid {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule()
+                            .fill(accentColor.opacity(colorScheme == .dark ? 0.7 : 0.85))
+                    )
+            } else {
+                Capsule()
+                    .fill(accentColor.opacity(colorScheme == .dark ? 0.15 : 0.2))
+            }
+        }
         .clipShape(Capsule())
         .overlay {
             if let progress = progress, progress > 0 && progress < 1.0 {

@@ -11,6 +11,9 @@ struct DetailView: View {
     @State private var showHeavyContent = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
+    @State private var showNavTitle = false
+    @State private var isActionBarVisible = true
+    @State private var lastScrollOffset: CGFloat = 0
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -62,6 +65,30 @@ struct DetailView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     headerSection
+                        .background(alignment: .top) {
+                            GeometryReader { geo in
+                                let frame = geo.frame(in: .named("detailScroll"))
+                                Color.clear
+                                    .onChange(of: frame.minY) { _, newValue in
+                                        showNavTitle = newValue < -50
+                                        let delta = newValue - lastScrollOffset
+                                        if delta < -8 {
+                                            withAnimation(AppTheme.Animation.springSnappy) {
+                                                isActionBarVisible = false
+                                            }
+                                        } else if delta > 8 || newValue > -50 {
+                                            withAnimation(AppTheme.Animation.springSnappy) {
+                                                isActionBarVisible = true
+                                            }
+                                        }
+                                        lastScrollOffset = newValue
+                                    }
+                                    .onAppear {
+                                        showNavTitle = frame.minY < -50
+                                        lastScrollOffset = frame.minY
+                                    }
+                            }
+                        }
                     tmdbWarningSection
                     castAndTrackingSection
                 }
@@ -72,14 +99,18 @@ struct DetailView: View {
             }
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
+            .coordinateSpace(name: "detailScroll")
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
 
             floatingActionBar
+                .offset(y: isActionBarVisible ? 0 : 60)
+                .opacity(isActionBarVisible ? 1.0 : 0.0)
+                .animation(AppTheme.Animation.springGentle, value: isActionBarVisible)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 16)
-                .allowsHitTesting(!showDeleteConfirmation)
+                .allowsHitTesting(!showDeleteConfirmation && isActionBarVisible)
 
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -94,7 +125,7 @@ struct DetailView: View {
         .toolbar { detailToolbar }
         .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-        .navigationTitle(sleepManager.isAsleep ? "" : viewModel.item.title)
+        .navigationTitle(sleepManager.isAsleep ? "" : showNavTitle ? viewModel.item.title : "Details")
         .onAppear {
             viewModel.refreshData()
             Task {
@@ -419,7 +450,7 @@ struct DetailView: View {
 
                 Text(viewModel.item.title)
                     .font(AppTheme.Font.title3)
-                    .foregroundStyle(effectiveThemeColor)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
 
@@ -455,19 +486,9 @@ struct DetailView: View {
             .padding(AppTheme.Spacing.large)
             .frame(maxWidth: 280)
             .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                            .fill(effectiveThemeColor.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                            .strokeBorder(LinearGradient(
-                                colors: [effectiveThemeColor.opacity(0.35), effectiveThemeColor.opacity(0.08)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ), lineWidth: 1)
-                    )
+                GlassCard(color: effectiveThemeColor, material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: true) {
+                    Color.clear
+                }
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
             .shadow(

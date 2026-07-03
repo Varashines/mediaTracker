@@ -61,7 +61,7 @@ struct OverviewSection: View {
             isHovering = hovering
         }
         .onTapGesture {
-            if hasTruncation {
+            if overview.count > 200 {
                 withAnimation(AppTheme.Animation.springGentle) {
                     isExpanded.toggle()
                 }

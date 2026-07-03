@@ -12,6 +12,7 @@ struct SidebarNavigation: View {
 
     var body: some View {
         List {
+            Spacer().frame(height: AppTheme.Spacing.micro)
             // Primary — always visible, no header collapse
             sidebarRow(
                 title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,

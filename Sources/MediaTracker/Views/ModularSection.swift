@@ -20,7 +20,7 @@ struct ModularSection<Content: View>: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.small)
                 .padding(.vertical, AppTheme.Spacing.micro)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 Spacer()
             }
 

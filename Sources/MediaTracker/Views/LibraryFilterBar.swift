@@ -108,7 +108,7 @@ struct LibraryFilterBar: View {
             .background {
                 ZStack {
                     Capsule()
-                        .fill(.regularMaterial)
+                        .fill(.ultraThinMaterial)
                     
                     if active {
                         Capsule()

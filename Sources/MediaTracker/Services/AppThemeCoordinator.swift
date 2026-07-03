@@ -32,6 +32,8 @@ class AppThemeCoordinator {
     static let presets: [ThemePreset] = [
         .init(name: "Blue",  accent: "#007AFF", darkBG: "#1E1E1E", lightBG: "#F2F2F7", darkSurface: "#222222", lightSurface: "#E5E5EA", cardFillOpacity: 0.05),
         .init(name: "Beige", accent: "#D4A574", darkBG: "#2A2420", lightBG: "#FCF6EE", darkSurface: "#2C2824", lightSurface: "#F0E8DC", cardFillOpacity: 0.05),
+        .init(name: "Slate", accent: "#8E8E93", darkBG: "#1C1C1E", lightBG: "#F2F2F7", darkSurface: "#222224", lightSurface: "#E5E5EA", cardFillOpacity: 0.06),
+        .init(name: "Sage",  accent: "#7B9B6D", darkBG: "#1C1E1A", lightBG: "#F5F7F2", darkSurface: "#22241E", lightSurface: "#E8EAE2", cardFillOpacity: 0.05),
     ]
 
     private var activePreset: ThemePreset {
