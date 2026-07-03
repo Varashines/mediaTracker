@@ -24,6 +24,82 @@ struct SectionDivider: View {
     }
 }
 
+// MARK: - Archetype & Personality Badges
+
+struct ArchetypeBadge: View {
+    let archetype: String
+    var onTap: (() -> Void)? = nil
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        Button {
+            onTap?()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: archetypeIcon)
+                    .font(AppTheme.Font.label)
+                Text(archetype)
+                    .font(AppTheme.Font.caption)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .foregroundStyle(.primary)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.1))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var archetypeIcon: String {
+        switch archetype {
+        case let s where s.contains("Connoisseur"): return "sparkles"
+        case let s where s.contains("Completionist"): return "checkmark.seal.fill"
+        case let s where s.contains("Explorer"): return "binoculars.fill"
+        case let s where s.contains("Binger"): return "play.rectangle.on.rectangle.fill"
+        case let s where s.contains("Collector"): return "books.vertical.fill"
+        case let s where s.contains("Critic"): return "hand.thumbsdown.fill"
+        case let s where s.contains("Streamer"): return "antenna.radiowaves.left.and.right"
+        case let s where s.contains("Newcomer"): return "star.fill"
+        case let s where s.contains("Enthusiast"): return "heart.fill"
+        default: return "heart.fill"
+        }
+    }
+}
+
+struct PersonalityBadge: View {
+    let personality: String
+
+    var body: some View {
+        let color: Color = {
+            switch personality {
+            case "Hopeless Romantic": return .pink
+            case "Harsh Critic": return .orange
+            case "Enthusiast": return .green
+            case "Mystery Critic": return .gray
+            default: return .blue
+            }
+        }()
+
+        HStack(spacing: 4) {
+            Image(systemName: "face.smiling")
+                .font(AppTheme.Font.label)
+            Text(personality)
+                .font(AppTheme.Font.caption)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .foregroundStyle(color)
+        .background(Capsule().fill(color.opacity(0.12)))
+        .overlay(Capsule().stroke(color.opacity(0.3), lineWidth: 0.5))
+    }
+}
+
 struct CuteEmptyState: View {
     let icon: String
     let message: String
@@ -107,5 +183,51 @@ struct DashboardCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                     .stroke(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.05), lineWidth: 0.5)
             )
+    }
+}
+
+// MARK: - Flip Card with Solari Strip Lines
+
+struct FlipCard<Front: View, Back: View>: View {
+    let front: Front
+    let back: Back
+    let isFlipped: Bool
+    var stripCount: Int = 8
+
+    var body: some View {
+        ZStack {
+            if !isFlipped {
+                front
+            }
+
+            if isFlipped {
+                back
+                    .rotation3DEffect(.degrees(180), axis: (x: 1, y: 0, z: 0))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .rotation3DEffect(
+            .degrees(isFlipped ? 180 : 0),
+            axis: (x: 1, y: 0, z: 0),
+            perspective: 0.5
+        )
+        .overlay(alignment: .center) {
+            if abs(angle) > 10 && abs(angle) < 170 {
+                VStack(spacing: 0) {
+                    ForEach(0..<stripCount - 1, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.1))
+                            .frame(height: 1)
+                        Spacer()
+                    }
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var angle: Double {
+        isFlipped ? 180 : 0
     }
 }

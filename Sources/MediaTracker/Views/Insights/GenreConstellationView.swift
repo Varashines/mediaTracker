@@ -11,7 +11,7 @@ struct GenreConstellationView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180, maximum: 220), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                 ForEach(Array(items.prefix(5).enumerated()), id: \.element.name) { idx, item in
                     GenreCard(rank: idx + 1, name: item.name, percentage: item.percentage)
-                        .modifier(StaggerModifier(index: idx))
+                        .modifier(StaggerModifier(index: idx, modulo: 6, delayPerStep: 0.05))
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -77,23 +77,5 @@ private struct GenreCard: View {
                 isHovered = hovering
             }
         }
-    }
-}
-
-private struct StaggerModifier: ViewModifier {
-    let index: Int
-    @State private var hasAppeared = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 8)
-            .onAppear {
-                if !hasAppeared {
-                    withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 6) * 0.05)) {
-                        hasAppeared = true
-                    }
-                }
-            }
     }
 }

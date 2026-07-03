@@ -43,7 +43,20 @@ struct LibraryFilterBar: View {
                     }
                 }
                 
-                // 3. YEAR FILTER
+                // 3. PROVIDER FILTER (where to watch)
+                filterMenu(
+                    title: viewModel.filter.selectedProvider ?? "All Providers",
+                    icon: "popcorn.fill",
+                    active: viewModel.filter.selectedProvider != nil
+                ) {
+                    Button("All Providers") { updateProvider(nil) }
+                    Divider()
+                    ForEach(viewModel.discovery.cachedProviders.map { $0.name }.sorted(), id: \.self) { provider in
+                        Button(provider) { updateProvider(provider) }
+                    }
+                }
+
+                // 4. YEAR FILTER
                 filterMenu(
                     title: viewModel.filter.selectedYear ?? "All Years",
                     icon: "calendar",
@@ -177,6 +190,14 @@ struct LibraryFilterBar: View {
     private func updateYear(_ year: String?) {
         withAnimation(AppTheme.Animation.springSnappy) {
             viewModel.filter.selectedYear = year
+            viewModel.filterSubject.send()
+        }
+        FeedbackManager.shared.trigger(.click)
+    }
+
+    private func updateProvider(_ provider: String?) {
+        withAnimation(AppTheme.Animation.springSnappy) {
+            viewModel.filter.selectedProvider = provider
             viewModel.filterSubject.send()
         }
         FeedbackManager.shared.trigger(.click)

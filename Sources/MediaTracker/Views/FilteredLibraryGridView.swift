@@ -235,52 +235,16 @@ struct FilteredLibraryGridView: View {
         let domain = cachedRecommendedDomain
         let cacheKey = "\(filter.type.rawValue)_\(filter.name)_\(titles.sorted().joined(separator: "|"))"
 
-        // Check 30-day persisted cache
-        if let cached = loadCachedRecommendations(key: cacheKey) {
-            recommendations = cached
-            showRecommendations = true
-            return
-        }
-
         isLoadingRecommendations = true
 
         recsTask = Task {
-            async let asyncLabels = MooreMetricsService.shared.fetchCharacteristics(for: domain)
-            var mutableResults = await MooreMetricsService.shared.recommend(domain: domain, items: titles, limit: 10, labels: await asyncLabels)
-            guard !mutableResults.isEmpty else {
-                await MainActor.run {
-                    AppErrorState.shared.showToast("No recommendations found", style: .info)
-                    isLoadingRecommendations = false
-                }
-                return
-            }
-            guard !Task.isCancelled else { return }
-
-            if mutableResults.count >= 3 {
-                let topProfile = MooreMetricsService.shared.buildPreferenceProfile(
-                    from: mutableResults.map { ($0.characteristics, $0.score) }
-                )
-                if !topProfile.isEmpty {
-                    let debugMode = UserDefaults.standard.bool(forKey: UserDefaultsKeys.mmDebugMode.rawValue)
-                    if debugMode {
-                        await MainActor.run { debugSelectedTraits = Array(topProfile.keys) }
-                    }
-
-                    guard !Task.isCancelled else { return }
-
-                    let prefResults = await MooreMetricsService.shared.recommendByPreferences(
-                        domain: domain, preferences: topProfile, limit: 5, labels: await asyncLabels
-                    )
-                    var seen = Set(mutableResults.map(\.name))
-                    for rec in prefResults where !seen.contains(rec.name) {
-                        mutableResults.append(rec)
-                        seen.insert(rec.name)
-                    }
-                }
-            }
-
             let inputCount = max(titles.count, 1)
-            let finalResults = Array(mutableResults.prefix(10)).map { rec in
+            let results = await RecommendationService.fetchRecommendations(
+                titles: titles,
+                domain: domain,
+                cachePrefix: "mm_rec_cache_",
+                cacheKey: cacheKey
+            ) { rec in
                 MooreMetricsRecommendation(
                     id: rec.id,
                     name: rec.name,
@@ -290,37 +254,16 @@ struct FilteredLibraryGridView: View {
                 )
             }
 
-            // Persist to 30-day cache
-            saveCachedRecommendations(key: cacheKey, recommendations: finalResults)
+            if results.isEmpty {
+                AppErrorState.shared.showToast("No recommendations found", style: .info)
+            }
 
             await MainActor.run {
-                recommendations = finalResults
+                recommendations = results
                 isLoadingRecommendations = false
                 showRecommendations = true
             }
         }
-    }
-
-    private func saveCachedRecommendations(key: String, recommendations: [MooreMetricsRecommendation]) {
-        let prefix = "mm_rec_cache_"
-        if let data = try? JSONEncoder().encode(recommendations) {
-            UserDefaults.standard.set(data, forKey: prefix + key)
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: prefix + key + "_ts")
-        }
-    }
-
-    private func loadCachedRecommendations(key: String) -> [MooreMetricsRecommendation]? {
-        let prefix = "mm_rec_cache_"
-        let thirtyDays: TimeInterval = 30 * 24 * 3600
-
-        guard let data = UserDefaults.standard.data(forKey: prefix + key),
-              let cached = try? JSONDecoder().decode([MooreMetricsRecommendation].self, from: data),
-              !cached.isEmpty,
-              let timestamp = UserDefaults.standard.object(forKey: prefix + key + "_ts") as? TimeInterval,
-              Date().timeIntervalSince1970 - timestamp < thirtyDays else {
-            return nil
-        }
-        return cached
     }
 
     private func recomputeRecommendationData() {

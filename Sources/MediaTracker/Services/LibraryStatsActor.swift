@@ -411,6 +411,16 @@ actor LibraryStatsActor {
                 }
             }
 
+            // Barcode data for SpectrumView
+            if stats.barcodeData.count < 200 {
+                stats.barcodeData.append(BarcodeSlice(
+                    id: item.id,
+                    title: item.title,
+                    tasteValue: tasteValue,
+                    themeColorHex: item.themeColorHex
+                ))
+            }
+
         }
     }
 
@@ -455,6 +465,16 @@ actor LibraryStatsActor {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
 
+        let topGenre = genreDNA.first?.0
+        let personality = computeRatingPersonality(loved: stats.loved, liked: stats.liked, disliked: stats.disliked, unrated: stats.unrated)
+        let archetype = computeArchetype(
+            totalMovies: stats.movieCount, completedMovies: stats.movieCompleted,
+            totalTV: stats.tvCount, completedTV: stats.tvCompleted,
+            loved: stats.loved, liked: stats.liked, disliked: stats.disliked,
+            tvWatchTime: stats.watchTime, totalWatchTime: stats.watchTime,
+            topGenre: topGenre
+        )
+
         return LibraryStats(
             totalWatchTimeMinutes: stats.watchTime,
             totalMovies: stats.movieCount,
@@ -472,11 +492,52 @@ actor LibraryStatsActor {
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
             unratedCount: stats.unrated,
-            barcodeData: [],
-            ratingPersonality: "",
-            archetype: "",
+            barcodeData: stats.barcodeData,
+            ratingPersonality: personality,
+            archetype: archetype,
             memberSince: stats.earliestDateAdded
         )
+    }
+
+    private func computeRatingPersonality(loved: Int, liked: Int, disliked: Int, unrated: Int) -> String {
+        let rated = loved + liked + disliked
+        guard rated > 0 else { return "Mystery Critic" }
+        let lovedPct = Double(loved) / Double(rated)
+        let dislikedPct = Double(disliked) / Double(rated)
+        if lovedPct > 0.55 { return "Hopeless Romantic" }
+        if dislikedPct > 0.25 { return "Harsh Critic" }
+        if loved > 0 && liked > 0 && disliked == 0 { return "Enthusiast" }
+        return "Balanced"
+    }
+
+    private func computeArchetype(totalMovies: Int, completedMovies: Int, totalTV: Int, completedTV: Int, loved: Int, liked: Int, disliked: Int, tvWatchTime: Int, totalWatchTime: Int, topGenre: String? = nil) -> String {
+        let total = totalMovies + totalTV
+        let completed = completedMovies + completedTV
+        let completionRate = total > 0 ? Double(completed) / Double(total) : 0
+        let rated = loved + liked + disliked
+        let lovedPct = rated > 0 ? Double(loved) / Double(rated) : 0
+        let dislikedPct = rated > 0 ? Double(disliked) / Double(rated) : 0
+        let tvPct = totalWatchTime > 0 ? Double(tvWatchTime) / Double(totalWatchTime) : 0
+        let genre = topGenre ?? ""
+
+        // Whimsical suffix based on watching personality
+        let suffix: String = {
+            if total < 5 { return "Newcomer" }
+            if completionRate > 0.9 && lovedPct > 0.5 { return "Connoisseur" }
+            if dislikedPct > 0.25 { return "Critic" }
+            if tvPct > 0.8 && totalTV > 20 { return "Binger" }
+            if completionRate > 0.7 { return "Completionist" }
+            if lovedPct > 0.6 { return "Enthusiast" }
+            if total > 50 && completionRate < 0.3 { return "Collector" }
+            if tvPct > 0.6 && totalTV > 10 { return "Streamer" }
+            if total > 19 && completionRate < 0.5 { return "Explorer" }
+            return "Enthusiast"
+        }()
+
+        if !genre.isEmpty {
+            return "\(genre) \(suffix)"
+        }
+        return suffix
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

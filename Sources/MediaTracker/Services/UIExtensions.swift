@@ -192,19 +192,16 @@ struct ShimmeringModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay {
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    LinearGradient(
-                        colors: [.clear, .white.opacity(0.22), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: width * 2)
-                    .offset(x: -width + (width * 2.5 * phase))
-                    .rotationEffect(.degrees(15))
-                }
-                .mask(content)
+                LinearGradient(
+                    colors: [.clear, .white.opacity(0.22), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 600)
+                .offset(x: -600 + (600 * 2.5 * phase))
+                .rotationEffect(.degrees(15))
             }
+            .mask(content)
             .onAppear {
                 withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                     phase = 1

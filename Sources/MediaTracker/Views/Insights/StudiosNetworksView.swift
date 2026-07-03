@@ -22,7 +22,7 @@ struct StudiosNetworksView: View {
             let target = aliasMap[name] ?? name
             if let existing = grouped[target] {
                 grouped[target] = (
-                    score: existing.score + score,
+                    score: max(existing.score, score),
                     logoPath: existing.logoPath ?? logoMap[target] ?? logoMap[name],
                     themeColorHex: existing.themeColorHex ?? colorMap[target] ?? colorMap[name]
                 )

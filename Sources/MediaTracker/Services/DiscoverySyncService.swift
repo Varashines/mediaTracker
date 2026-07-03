@@ -367,6 +367,10 @@ actor DiscoverySyncService {
             SortDescriptor(\.count, order: .reverse),
             SortDescriptor(\.label, order: .forward)
         ])
+        let providerDescriptor = FetchDescriptor<ProviderEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
 
         let nets = (try? modelContext.fetch(netDescriptor)) ?? []
         let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
@@ -384,8 +388,9 @@ actor DiscoverySyncService {
             return DiscoveryNode(name: name, code: $0.code, logoPath: nil, count: $0.count)
         }
         let snBadges = ((try? modelContext.fetch(badgeDescriptor)) ?? []).filter { !$0.label.isEmpty }.map { DiscoveryNode(name: $0.label, logoPath: nil, count: $0.count) }
+        let snProviders = ((try? modelContext.fetch(providerDescriptor)) ?? []).filter { $0.count >= 1 }.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count) }
 
-        return DiscoveryHubData(networks: snNetworks, studios: snStudios, genres: snGenres, languages: snLangs, badges: snBadges)
+        return DiscoveryHubData(networks: snNetworks, studios: snStudios, genres: snGenres, languages: snLangs, badges: snBadges, providers: snProviders)
     }
 
     func updateItemDeleted(network: String?, genres: [String], language: String?, badge: String?, providers: [String] = []) async {

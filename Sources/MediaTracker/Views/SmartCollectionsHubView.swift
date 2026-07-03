@@ -106,7 +106,7 @@ struct SmartCollectionsHubView: View {
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }
-                            .modifier(CardStaggerModifier(index: idx))
+                            .modifier(StaggerModifier(index: idx))
                         }
                     }
                 }
@@ -148,7 +148,7 @@ struct SmartCollectionsHubView: View {
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }
-                            .modifier(CardStaggerModifier(index: idx + customSmartCollections.count))
+                            .modifier(StaggerModifier(index: idx + customSmartCollections.count))
                         }
                     }
                 }
@@ -500,22 +500,5 @@ private struct SmartCollectionCard: View {
                 CreateCollectionSheet(editingCollection: collection)
             }
         }
-    }
-}
-
-private struct CardStaggerModifier: ViewModifier {
-    let index: Int
-    @State private var hasAppeared = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 8)
-            .onAppear {
-                guard !hasAppeared else { return }
-                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 8) * 0.05)) {
-                    hasAppeared = true
-                }
-            }
     }
 }

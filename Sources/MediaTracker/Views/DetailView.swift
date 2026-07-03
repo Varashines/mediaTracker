@@ -70,7 +70,7 @@ struct DetailView: View {
                 .padding(.vertical, AppTheme.Spacing.section)
                 .padding(.bottom, AppTheme.Spacing.tiny)
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
             .saturation(showDeleteConfirmation ? 0.3 : 1)
             .blur(radius: showDeleteConfirmation ? 5 : 0)

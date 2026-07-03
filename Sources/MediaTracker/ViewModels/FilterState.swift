@@ -15,6 +15,7 @@ class FilterState {
     var selectedGenre: String? = nil
     var selectedYear: String? = nil
     var selectedState: MediaState? = nil
+    var selectedProvider: String? = nil
     var searchTypeFilter: SearchType = .all
     var discoveryRefreshTrigger: Int = 0
     var categorySortOrders: [NavigationCategory: SortOrder] = [:]
@@ -34,5 +35,6 @@ class FilterState {
         selectedGenre = nil
         selectedYear = nil
         selectedState = nil
+        selectedProvider = nil
     }
 }

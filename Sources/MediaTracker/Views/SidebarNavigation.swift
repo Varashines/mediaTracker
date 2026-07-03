@@ -13,7 +13,6 @@ struct SidebarNavigation: View {
     var body: some View {
         List {
             // Primary — always visible, no header collapse
-            Spacer().frame(height: AppTheme.Spacing.tiny)
             sidebarRow(
                 title: NavigationCategory.home.title, icon: NavigationCategory.home.icon,
                 item: .category(.home))
@@ -74,8 +73,8 @@ struct SidebarNavigation: View {
             .font(AppTheme.Font.smallBold)
             .kerning(1.2)
             .foregroundStyle(.secondary.opacity(0.7))
-            .padding(.horizontal, AppTheme.Spacing.small + 2)
-            .padding(.top, AppTheme.Spacing.small)
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.top, AppTheme.Spacing.tiny)
             .padding(.bottom, AppTheme.Spacing.micro)
             .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
             .listRowSeparator(.hidden)

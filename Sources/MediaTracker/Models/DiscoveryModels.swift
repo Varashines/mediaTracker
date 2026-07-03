@@ -30,4 +30,5 @@ struct DiscoveryHubData: Sendable {
     let genres: [DiscoveryNode]
     let languages: [DiscoveryNode]
     let badges: [DiscoveryNode]
+    let providers: [DiscoveryNode]
 }

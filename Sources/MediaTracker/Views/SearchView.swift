@@ -276,6 +276,7 @@ struct SearchView: View {
                     
                     Text("\(searchVM.filteredLocalResults.count)")
                         .font(AppTheme.Font.caption2)
+                        .contentTransition(.numericText())
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -293,7 +294,7 @@ struct SearchView: View {
                             }
                         }
                         .accessibilityAddTraits(.isButton)
-                        .modifier(SearchStaggerModifier(index: idx))
+                        .modifier(StaggerModifier(index: idx, modulo: 6, delayPerStep: 0.04, verticalOffset: 6))
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -316,6 +317,7 @@ struct SearchView: View {
                     
                     Text("\(combined.count)")
                         .font(AppTheme.Font.caption2)
+                        .contentTransition(.numericText())
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -333,7 +335,7 @@ struct SearchView: View {
                             }
                         }
                         .accessibilityAddTraits(.isButton)
-                        .modifier(SearchStaggerModifier(index: idx))
+                        .modifier(StaggerModifier(index: idx, modulo: 6, delayPerStep: 0.04, verticalOffset: 6))
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -341,23 +343,6 @@ struct SearchView: View {
         } else if !searchVM.isSearching && !searchText.isEmpty {
             ContentUnavailableView.search(text: searchText)
         }
-    }
-}
-
-private struct SearchStaggerModifier: ViewModifier {
-    let index: Int
-    @State private var hasAppeared = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 6)
-            .onAppear {
-                guard !hasAppeared else { return }
-                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 6) * 0.04)) {
-                    hasAppeared = true
-                }
-            }
     }
 }
 

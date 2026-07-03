@@ -44,7 +44,7 @@ struct CollectionPickerView: View {
                 Text("Done")
                     .padding(.horizontal, 40)
                     .padding(.vertical, 12)
-                    .background(.secondary)
+                    .background(AppTheme.Colors.accent)
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
                     .contentShape(Capsule())

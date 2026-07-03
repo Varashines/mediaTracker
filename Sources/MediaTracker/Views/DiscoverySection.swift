@@ -75,27 +75,3 @@ extension DiscoverySection where HeaderAccessory == EmptyView {
         self.onSelected = onSelected
     }
 }
-
-// MARK: - Stagger Modifier
-
-private struct StaggerModifier: ViewModifier {
-    let index: Int
-    let isFastScrolling: Bool
-    @State private var hasAppeared = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(hasAppeared || isFastScrolling ? 1 : 0)
-            .offset(y: hasAppeared || isFastScrolling ? 0 : 8)
-            .onAppear {
-                if isFastScrolling {
-                    hasAppeared = true
-                    return
-                }
-                guard !hasAppeared else { return }
-                withAnimation(AppTheme.Animation.springGentle.delay(Double(index % 8) * 0.05)) {
-                    hasAppeared = true
-                }
-            }
-    }
-}

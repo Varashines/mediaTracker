@@ -135,6 +135,7 @@ struct DiscoveryCard: View {
             if isHovered {
                 Text("\(node.count)")
                     .font(AppTheme.Font.small.monospacedDigit())
+                    .contentTransition(.numericText())
                     .foregroundStyle(accent.opacity(0.8))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2.5)
@@ -159,6 +160,7 @@ struct DiscoveryCard: View {
                 Spacer(minLength: 4)
                 Text("\(node.count)")
                     .font(AppTheme.Font.label.monospacedDigit())
+                    .contentTransition(.numericText())
                     .foregroundStyle(accent)
             }
         }

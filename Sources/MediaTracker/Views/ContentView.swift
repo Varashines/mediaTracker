@@ -14,7 +14,6 @@ struct ContentView: View {
             SidebarNavigation(selection: $sidebarSelection)
                 .navigationTitle("Library")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
                 .onChange(of: sidebarSelection) { _, newValue in
                     guard let selection = newValue else { return }
                     isSearchActive = false
@@ -404,6 +403,7 @@ struct LibraryDetailView: View {
                     year: snapshot.year,
                     state: snapshot.state,
                     badge: nil,
+                    provider: snapshot.provider,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
                     limit: viewModel.pagination.pageSize,
@@ -444,6 +444,7 @@ struct LibraryDetailView: View {
                     year: snapshot.year,
                     state: snapshot.state,
                     badge: nil,
+                    provider: snapshot.provider,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
                     limit: viewModel.pagination.pageSize,
@@ -573,6 +574,7 @@ struct LibraryDetailView: View {
         let genre = viewModel.filter.selectedGenre
         let year = viewModel.filter.selectedYear
         let state = viewModel.filter.selectedState
+        let provider = viewModel.filter.selectedProvider
         let collectionID = viewModel.collection.selectedCollectionID
 
         Task {
@@ -587,6 +589,7 @@ struct LibraryDetailView: View {
                     genre: genre,
                     year: year,
                     state: state,
+                    provider: provider,
                     collectionID: collectionID
                 )
 

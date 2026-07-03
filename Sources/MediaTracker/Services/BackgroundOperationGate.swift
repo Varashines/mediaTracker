@@ -4,52 +4,32 @@ import SwiftData
 actor BackgroundOperationGate {
     static let shared = BackgroundOperationGate()
 
-    private var isHealing = false
-    private var isSyncing = false
-    private var isExtracting = false
+    private var isRunning: [String: Bool] = [:]
 
-    func performHeal(label: String = "heal", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
-        guard !isHealing else {
-            AppLogger.debug("⏭️ Skipping heal (\(label)) — another heal is already running", logger: AppLogger.background)
+    func perform(label: String, container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
+        guard !(isRunning[label] ?? false) else {
+            AppLogger.debug("⏭️ Skipping \(label) — already running", logger: AppLogger.background)
             return
         }
-        isHealing = true
-        defer { isHealing = false }
+        isRunning[label] = true
+        defer { isRunning[label] = false }
         try await operation()
+    }
+
+    func performHeal(label: String = "heal", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
+        try await perform(label: label, container: container, operation: operation)
     }
 
     func performSync(label: String = "sync", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
-        guard !isSyncing else {
-            AppLogger.debug("⏭️ Skipping sync (\(label)) — another sync is already running", logger: AppLogger.background)
-            return
-        }
-        isSyncing = true
-        defer { isSyncing = false }
-        try await operation()
+        try await perform(label: label, container: container, operation: operation)
     }
 
     func performExtract(label: String = "extract", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
-        guard !isExtracting else {
-            AppLogger.debug("⏭️ Skipping extract (\(label)) — another extract is already running", logger: AppLogger.background)
-            return
-        }
-        isExtracting = true
-        defer { isExtracting = false }
-        try await operation()
+        try await perform(label: label, container: container, operation: operation)
     }
 
     func performBoth(label: String = "maintenance", container: ModelContainer, heal: @Sendable () async throws -> Void, sync: @Sendable () async throws -> Void) async throws {
-        guard !isHealing, !isSyncing else {
-            AppLogger.debug("⏭️ Skipping maintenance (\(label)) — heal or sync already running", logger: AppLogger.background)
-            return
-        }
-        isHealing = true
-        isSyncing = true
-        defer {
-            isHealing = false
-            isSyncing = false
-        }
-        try await heal()
-        try await sync()
+        try await perform(label: "\(label)_heal", container: container, operation: heal)
+        try await perform(label: "\(label)_sync", container: container, operation: sync)
     }
 }

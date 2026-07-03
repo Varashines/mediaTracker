@@ -10,6 +10,7 @@ struct FilterSnapshot: Sendable {
     let genre: String?
     let year: String?
     let state: MediaState?
+    let provider: String?
     let groupBy: GroupBy
     let collectionID: UUID?
 
@@ -23,6 +24,7 @@ struct FilterSnapshot: Sendable {
         self.genre = viewModel.filter.selectedGenre
         self.year = viewModel.filter.selectedYear
         self.state = viewModel.filter.selectedState
+        self.provider = viewModel.filter.selectedProvider
         self.groupBy = viewModel.filter.currentGroupBy
         self.collectionID = viewModel.collection.selectedCollectionID
     }

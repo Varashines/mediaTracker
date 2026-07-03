@@ -193,6 +193,7 @@ class SearchViewModel {
             year: nil,
             state: nil,
             badge: nil,
+            provider: nil,
             limit: 200,
             offset: 0
         )

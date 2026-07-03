@@ -170,6 +170,7 @@ struct DiscoveryHubView: View {
                     self.viewModel.discovery.cachedGenres = hubData.genres
                     self.viewModel.discovery.cachedLanguages = hubData.languages
                     self.viewModel.discovery.cachedBadges = hubData.badges
+                    self.viewModel.discovery.cachedProviders = hubData.providers
                     self.hasDataLoaded = true
                 }
             }

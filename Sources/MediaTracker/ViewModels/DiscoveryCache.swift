@@ -7,6 +7,7 @@ class DiscoveryCache {
     var cachedGenres: [DiscoveryNode] = []
     var cachedLanguages: [DiscoveryNode] = []
     var cachedBadges: [DiscoveryNode] = []
+    var cachedProviders: [DiscoveryNode] = []
     var lastDiscoveryRefresh: Date?
 
     func purgeAll() {
@@ -15,6 +16,7 @@ class DiscoveryCache {
         cachedGenres = []
         cachedLanguages = []
         cachedBadges = []
+        cachedProviders = []
         lastDiscoveryRefresh = nil
     }
 }
