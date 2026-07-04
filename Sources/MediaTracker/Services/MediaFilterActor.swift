@@ -317,6 +317,7 @@ actor MediaFilterActor {
         let studios: [DiscoveryNode]
         let genres: [DiscoveryNode]
         let languages: [DiscoveryNode]
+        let providers: [DiscoveryNode]
     }
 
     func fetchLibraryMetadata() throws -> LibraryMetadata {
@@ -345,6 +346,12 @@ actor MediaFilterActor {
             .filter { $0.kind == "studio" }
             .map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count, themeColorHex: $0.themeColorHex, sourceNames: $0.sourceNames) }
 
+        let providerDescriptor = FetchDescriptor<ProviderEntity>(sortBy: [
+            SortDescriptor(\.count, order: .reverse),
+            SortDescriptor(\.name, order: .forward)
+        ])
+        let providerEntities = (try? modelContext.fetch(providerDescriptor)) ?? []
+
         let genres = (try? modelContext.fetch(genreDescriptor)) ?? []
         let langs = (try? modelContext.fetch(langDescriptor)) ?? []
 
@@ -352,8 +359,21 @@ actor MediaFilterActor {
             networks: snNetworks,
             studios: snStudios,
             genres: genres.map { DiscoveryNode(name: $0.name, logoPath: nil, count: $0.count) },
-            languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) }
+            languages: langs.map { DiscoveryNode(name: LanguageUtils.languageName(for: $0.code), code: $0.code, logoPath: nil, count: $0.count) },
+            providers: providerEntities.filter { $0.count >= 1 }.map { DiscoveryNode(name: $0.name, logoPath: $0.logoPath, count: $0.count) }
         )
+    }
+
+    func fetchDistinctYears() async -> [String] {
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { $0.releaseDate != nil },
+            sortBy: [SortDescriptor(\.releaseDate, order: .reverse)]
+        )
+        descriptor.propertiesToFetch = [\.releaseDate]
+        descriptor.fetchLimit = 2000
+        let items = (try? modelContext.fetch(descriptor)) ?? []
+        let years = Set(items.compactMap { $0.releaseDate.flatMap { Calendar.current.component(.year, from: $0) } })
+        return years.sorted(by: >).map(String.init)
     }
 
     func fetchMetadataIfMatches(

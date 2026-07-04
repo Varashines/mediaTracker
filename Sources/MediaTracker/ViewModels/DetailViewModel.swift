@@ -223,7 +223,13 @@ class DetailViewModel {
         Task {
             let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
             await MainActor.run { [weak self] in
-                self?.watchProviders = providers
+                guard let self else { return }
+                self.watchProviders = providers
+                let names = providers.map(\.name)
+                if self.item.cachedWatchProviders != names {
+                    self.item.cachedWatchProviders = names
+                    self.item.commitChange()
+                }
             }
         }
     }

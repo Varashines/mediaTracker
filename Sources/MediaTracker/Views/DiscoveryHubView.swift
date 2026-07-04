@@ -23,7 +23,8 @@ struct DiscoveryHubView: View {
                         !viewModel.discovery.cachedNetworks.isEmpty ||
                         !viewModel.discovery.cachedStudios.isEmpty ||
                         !viewModel.discovery.cachedGenres.isEmpty ||
-                        !viewModel.discovery.cachedLanguages.isEmpty
+                        !viewModel.discovery.cachedLanguages.isEmpty ||
+                        !viewModel.discovery.cachedProviders.isEmpty
 
                     if hasAnyContent {
                         LibrarySummaryBanner(modelContainer: modelContext.container)
@@ -54,6 +55,12 @@ struct DiscoveryHubView: View {
                         if !viewModel.discovery.cachedLanguages.isEmpty {
                             DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text, isFastScrolling: isFastScrolling, limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
+                            }
+                        }
+
+                        if !viewModel.discovery.cachedProviders.isEmpty {
+                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, limit: 12) { node in
+                                onFilterSelected(DiscoveryFilter(type: .provider, name: node.name))
                             }
                         }
                     } else {

@@ -34,21 +34,29 @@ struct ContentView: View {
 
                         viewModel.filterSubject.send()
 
-                        if selection == .category(.discover) {
-                            let container = modelContext.container
-                            Task.detached(priority: .utility) {
-                                let actor = MediaFilterActor.shared(modelContainer: container)
-                                let allIDs = (try? await actor.allLibraryTMDBIDs()) ?? []
-                                let metadata = try? await actor.fetchLibraryMetadata()
+                        let container = modelContext.container
+                        Task.detached(priority: .utility) { [viewModel] in
+                            let actor = MediaFilterActor.shared(modelContainer: container)
 
+                            let needsMetadata = await MainActor.run { viewModel.discovery.cachedGenres.isEmpty }
+
+                            if needsMetadata {
+                                let metadata = try? await actor.fetchLibraryMetadata()
                                 await MainActor.run {
-                                    viewModel.display.libraryTMDBIDs = allIDs
                                     if let meta = metadata {
                                         viewModel.discovery.cachedNetworks = meta.networks
                                         viewModel.discovery.cachedStudios = meta.studios
                                         viewModel.discovery.cachedGenres = meta.genres
                                         viewModel.discovery.cachedLanguages = meta.languages
+                                        viewModel.discovery.cachedProviders = meta.providers
                                     }
+                                }
+                            }
+
+                            if selection == .category(.discover) {
+                                let allIDs = (try? await actor.allLibraryTMDBIDs()) ?? []
+                                await MainActor.run {
+                                    viewModel.display.libraryTMDBIDs = allIDs
                                 }
 
                                 try? await BackgroundOperationGate.shared.performSync(label: "navSync", container: container) {
@@ -114,6 +122,7 @@ struct LibraryDetailView: View {
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     @State private var showWelcome = false
     @State private var showDataRecoveryAlert = false
+    @State private var recoveryLog: String?
     @AppStorage("theme_preference") private var themePreference = 0
     @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
@@ -308,15 +317,36 @@ struct LibraryDetailView: View {
             WelcomeSheet()
         }
         .alert("Data Lost", isPresented: $showDataRecoveryAlert) {
-            Button("OK") {}
+            Button("Copy Error & OK") {
+                let logDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                if let logFiles = try? FileManager.default.contentsOfDirectory(at: logDir!, includingPropertiesForKeys: nil),
+                   let latestLog = logFiles.filter({ $0.pathExtension == "recovery.log" }).sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first,
+                   let logContent = try? String(contentsOf: latestLog, encoding: .utf8) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(logContent, forType: .string)
+                }
+            }
+            Button("OK", role: .cancel) {}
         } message: {
-            Text("The database was corrupted and had to be rebuilt. Your library appears empty.\n\nTo restore, go to Settings → Vault → Import Library and select your latest backup.\n\nA backup of the old corrupted database was saved to your Application Support folder.")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("The database was corrupted and had to be rebuilt. Your library appears empty.\n\nTo restore, go to Settings → Vault → Import Library and select your latest backup.\n\nA backup of the old corrupted database was saved to your Application Support folder.")
+                if let logContent = recoveryLog {
+                    Divider()
+                    Text("Error details:").font(.caption.weight(.semibold))
+                    Text(logContent).font(.caption.monospaced()).foregroundStyle(.secondary)
+                }
+            }
         }
         .onAppear {
             if !hasSeenWelcome && !APIClient.shared.isTMDBConfigured {
                 showWelcome = true
             }
             if AppErrorState.shared.storeRecoveredFromMigrationFailure {
+                if let logDir = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false),
+                   let logFiles = try? FileManager.default.contentsOfDirectory(at: logDir, includingPropertiesForKeys: nil),
+                   let latestLog = logFiles.filter({ $0.pathExtension == "recovery.log" }).sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first {
+                    recoveryLog = try? String(contentsOf: latestLog, encoding: .utf8)
+                }
                 showDataRecoveryAlert = true
                 AppErrorState.shared.storeRecoveredFromMigrationFailure = false
             }
@@ -550,7 +580,10 @@ struct LibraryDetailView: View {
         case .smartHub where viewModel.collection.selectedCollectionID == nil:
             return { refreshID += 1 }
         default:
-            return { viewModel.filterSubject.send() }
+            return {
+                ImageCache.shared.clearMemoryCache()
+                viewModel.filterSubject.send()
+            }
         }
     }
 

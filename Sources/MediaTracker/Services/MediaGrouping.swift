@@ -16,6 +16,7 @@ extension MediaFilterActor {
                 return "Unknown"
             case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"
             case .category: return item.stateValue
+            case .watchProvider: return item.cachedWatchProviders.first ?? "None"
             case .none: return ""
             }
         }

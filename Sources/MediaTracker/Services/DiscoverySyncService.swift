@@ -106,13 +106,14 @@ actor DiscoverySyncService {
         var genreCounts: [String: Int] = [:]
         var languageCounts: [String: Int] = [:]
         var badgeCounts: [String: Int] = [:]
+        var providerData: [String: (count: Int, logoPath: String?)] = [:]
         
         let batchSize = 500
         var offset = 0
         
         while true {
             var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.storedSmartBadgeLabel, \.typeValue]
+            descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.cachedWatchProviders, \.cachedWatchProviderLogoPaths, \.storedSmartBadgeLabel, \.typeValue]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
@@ -182,6 +183,16 @@ actor DiscoverySyncService {
                 if let badge = item.storedSmartBadgeLabel, !badge.isEmpty {
                     badgeCounts[badge, default: 0] += 1
                 }
+
+                // Count Providers
+                for (pIdx, provider) in item.cachedWatchProviders.enumerated() where !provider.isEmpty {
+                    let providerPaths = item.cachedWatchProviderLogoPaths ?? []
+                    let logoPath = pIdx < providerPaths.count && !providerPaths[pIdx].isEmpty ? providerPaths[pIdx] : nil
+                    var entry = providerData[provider] ?? (count: 0, logoPath: nil)
+                    entry.count += 1
+                    if entry.logoPath == nil, let path = logoPath { entry.logoPath = path }
+                    providerData[provider] = entry
+                }
             }
             
             offset += batchSize
@@ -250,7 +261,22 @@ actor DiscoverySyncService {
         for entity in existingBadges where badgeCounts[entity.label] == nil || entity.label.isEmpty {
             modelContext.delete(entity)
         }
-        
+
+        let existingProviders = (try? modelContext.fetch(FetchDescriptor<ProviderEntity>())) ?? []
+        var providerMap: [String: ProviderEntity] = [:]
+        for entity in existingProviders { providerMap[entity.name] = entity }
+        for (name, data) in providerData {
+            if let existing = providerMap[name] {
+                existing.count = data.count
+                if existing.logoPath == nil, let path = data.logoPath { existing.logoPath = path }
+            } else {
+                modelContext.insert(ProviderEntity(providerID: name.hashValue, name: name, logoPath: data.logoPath, count: data.count))
+            }
+        }
+        for entity in existingProviders where providerData[entity.name] == nil {
+            modelContext.delete(entity)
+        }
+
         try? modelContext.save()
 
         // Record sync timestamp for rate-limiting
@@ -324,13 +350,16 @@ actor DiscoverySyncService {
         }
 
         // Incremental Watch Provider update
-        for name in item.cachedWatchProviders where !name.isEmpty {
+        for (pIdx, name) in item.cachedWatchProviders.enumerated() where !name.isEmpty {
             let providerID = name.hashValue
+            let providerPaths = item.cachedWatchProviderLogoPaths ?? []
+            let logoPath = pIdx < providerPaths.count && !providerPaths[pIdx].isEmpty ? providerPaths[pIdx] : nil
             let descriptor = FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name })
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.count += 1
+                if existing.logoPath == nil, let path = logoPath { existing.logoPath = path }
             } else {
-                modelContext.insert(ProviderEntity(providerID: providerID, name: name, logoPath: nil, count: 1))
+                modelContext.insert(ProviderEntity(providerID: providerID, name: name, logoPath: logoPath, count: 1))
             }
         }
         

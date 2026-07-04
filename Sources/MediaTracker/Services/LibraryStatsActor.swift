@@ -35,6 +35,8 @@ struct LibraryStats: Sendable {
     let topRatedNetworks: [(name: String, score: Double)]
     let topRatedStudios: [(name: String, score: Double)]
     let topRatedLanguages: [(name: String, score: Double)]
+    let topProviders: [(name: String, count: Int, percentage: Double, runtime: Int)]
+    let providerCoverage: Double
 
     let lovedCount: Int
     let likedCount: Int
@@ -61,6 +63,8 @@ struct LibraryStats: Sendable {
         topRatedNetworks: [],
         topRatedStudios: [],
         topRatedLanguages: [],
+        topProviders: [],
+        providerCoverage: 0,
         lovedCount: 0,
         likedCount: 0,
         dislikedCount: 0,
@@ -81,6 +85,12 @@ struct CodableLibraryStats: Codable {
         let name: String
         let score: Double
     }
+    struct ProviderStats: Codable {
+        let name: String
+        let count: Int
+        let percentage: Double
+        let runtime: Int
+    }
 
     let totalWatchTimeMinutes: Int
     let totalMovies: Int
@@ -95,6 +105,8 @@ struct CodableLibraryStats: Codable {
     let topRatedNetworks: [NameScore]
     let topRatedStudios: [NameScore]
     let topRatedLanguages: [NameScore]
+    let topProviders: [ProviderStats]
+    let providerCoverage: Double
 
     let lovedCount: Int
     let likedCount: Int
@@ -120,6 +132,8 @@ struct CodableLibraryStats: Codable {
         self.topRatedNetworks = stats.topRatedNetworks.map { NameScore(name: $0.name, score: $0.score) }
         self.topRatedStudios = stats.topRatedStudios.map { NameScore(name: $0.name, score: $0.score) }
         self.topRatedLanguages = stats.topRatedLanguages.map { NameScore(name: $0.name, score: $0.score) }
+        self.topProviders = stats.topProviders.map { ProviderStats(name: $0.name, count: $0.count, percentage: $0.percentage, runtime: $0.runtime) }
+        self.providerCoverage = stats.providerCoverage
         self.lovedCount = stats.lovedCount
         self.likedCount = stats.likedCount
         self.dislikedCount = stats.dislikedCount
@@ -144,6 +158,8 @@ struct CodableLibraryStats: Codable {
             topRatedNetworks: topRatedNetworks.map { ($0.name, $0.score) },
             topRatedStudios: topRatedStudios.map { ($0.name, $0.score) },
             topRatedLanguages: topRatedLanguages.map { ($0.name, $0.score) },
+            topProviders: topProviders.map { ($0.name, $0.count, $0.percentage, $0.runtime) },
+            providerCoverage: providerCoverage,
             lovedCount: lovedCount,
             likedCount: likedCount,
             dislikedCount: dislikedCount,
@@ -266,7 +282,7 @@ actor LibraryStatsActor {
                 \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
                 \.lastInteractionDate, \.lastStateChangeDate,
                 \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
-                \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
+                \.cachedWatchProviders, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
                 \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast
             ]
             descriptor.fetchLimit = batchSize
@@ -322,6 +338,7 @@ actor LibraryStatsActor {
         var unrated = 0
         var barcodeData: [BarcodeSlice] = []
         var earliestDateAdded: Date?
+        var itemsWithProviders = 0
     }
 
     private struct TasteMapsContainer {
@@ -331,6 +348,7 @@ actor LibraryStatsActor {
         var actorTaste: [String: CategoryStats] = [:]
         var creatorTaste: [String: CategoryStats] = [:]
         var languageTaste: [String: CategoryStats] = [:]
+        var providerStats: [String: (count: Int, runtime: Int)] = [:]
     }
 
     private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>, tvWatchedEpisodesMap: [Int: [TVEpisode]], includeCinephileData: Bool = true) {
@@ -369,7 +387,8 @@ actor LibraryStatsActor {
                 }
 
                 for c in item.cachedCreators {
-                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue)
+                    let profileURL = item.displayCast.first { $0.name == c }?.profileURL
+                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue, profileURL: profileURL)
                 }
             } else if item.type == .tvShow {
                 stats.tvCount += 1
@@ -380,7 +399,8 @@ actor LibraryStatsActor {
                 stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
 
                 for c in item.cachedCreators {
-                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue)
+                    let profileURL = item.displayCast.first { $0.name == c }?.profileURL
+                    TasteMath.updateTaste(&taste.creatorTaste, c, tasteValue, profileURL: profileURL)
                 }
             }
 
@@ -408,6 +428,18 @@ actor LibraryStatsActor {
                 let limit = item.type == .movie ? 5 : 10
                 for actor in item.displayCast.prefix(limit) {
                     TasteMath.updateTaste(&taste.actorTaste, actor.name, tasteValue, profileURL: actor.profileURL)
+                }
+            }
+
+            // Provider distribution counts and runtime
+            let itemRuntime = item.cachedRuntime ?? 0
+            if !item.cachedWatchProviders.isEmpty {
+                stats.itemsWithProviders += 1
+                for provider in item.cachedWatchProviders where !provider.isEmpty {
+                    var entry = taste.providerStats[provider] ?? (count: 0, runtime: 0)
+                    entry.count += 1
+                    entry.runtime += itemRuntime
+                    taste.providerStats[provider] = entry
                 }
             }
 
@@ -465,6 +497,15 @@ actor LibraryStatsActor {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
 
+        // Provider distribution (top 8 by count)
+        let totalItems = stats.movieCount + stats.tvCount
+        let providerCoverage = totalItems > 0 ? Double(stats.itemsWithProviders) / Double(totalItems) : 0
+        let topProviders: [(name: String, count: Int, percentage: Double, runtime: Int)] = taste.providerStats
+            .map { ($0.key, $0.value.count, totalItems > 0 ? Double($0.value.count) / Double(totalItems) * 100 : 0, $0.value.runtime) }
+            .sorted { $0.1 > $1.1 }
+            .prefix(8)
+            .map { $0 }
+
         let topGenre = genreDNA.first?.0
         let personality = computeRatingPersonality(loved: stats.loved, liked: stats.liked, disliked: stats.disliked, unrated: stats.unrated)
         let archetype = computeArchetype(
@@ -488,6 +529,8 @@ actor LibraryStatsActor {
             topRatedNetworks: mapTaste(taste.networkTaste),
             topRatedStudios: mapTaste(taste.studioTaste),
             topRatedLanguages: languageRankings,
+            topProviders: topProviders,
+            providerCoverage: providerCoverage,
             lovedCount: stats.loved,
             likedCount: stats.liked,
             dislikedCount: stats.disliked,

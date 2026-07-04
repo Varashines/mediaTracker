@@ -38,8 +38,83 @@ struct LibraryDetailToolbarContent: ToolbarContent {
 
         ToolbarItem(placement: .primaryAction) {
             if !isSearchActive {
-                refreshButton
+                HStack(spacing: AppTheme.Spacing.micro) {
+                    sortMenu
+                    groupMenu
+                    refreshButton
+                }
             }
+        }
+    }
+
+    private var isLibraryCategory: Bool {
+        switch viewModel.filter.selectedCategory {
+        case .all, .movie, .tvShow, .completed: return true
+        default: return false
+        }
+    }
+
+    @ViewBuilder
+    private var sortMenu: some View {
+        if isLibraryCategory {
+            Menu {
+                Picker("Sort By", selection: Binding(
+                    get: { viewModel.filter.currentSortOrder },
+                    set: {
+                        viewModel.filter.categorySortOrders[viewModel.filter.selectedCategory] = $0
+                        viewModel.filterSubject.send()
+                    }
+                )) {
+                    ForEach(SortOrder.allCases, id: \.self) { order in
+                        Label(order.rawValue, systemImage: order.icon).tag(order)
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(AppTheme.Icon.medium)
+                    .frame(width: 28, height: 28)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .clipShape(.capsule)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(width: 32, height: 32)
+            .help(viewModel.filter.currentSortOrder.rawValue)
+        }
+    }
+
+    @ViewBuilder
+    private var groupMenu: some View {
+        if isLibraryCategory {
+            Menu {
+                Picker("Group By", selection: Binding(
+                    get: { viewModel.filter.currentGroupBy },
+                    set: {
+                        viewModel.filter.categoryGroupBys[viewModel.filter.selectedCategory] = $0
+                        viewModel.filterSubject.send()
+                    }
+                )) {
+                    ForEach(GroupBy.allCases, id: \.self) { group in
+                        Label(group.rawValue, systemImage: group.icon).tag(group)
+                    }
+                }
+            } label: {
+                Image(systemName: viewModel.filter.currentGroupBy.icon)
+                    .font(AppTheme.Icon.medium)
+                    .frame(width: 28, height: 28)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background {
+                        if viewModel.filter.currentGroupBy != .none {
+                            Capsule()
+                                .fill(AppTheme.Colors.accent.opacity(0.15))
+                        }
+                    }
+                    .clipShape(.capsule)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(width: 32, height: 32)
+            .help(viewModel.filter.currentGroupBy != .none ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
         }
     }
 

@@ -83,6 +83,11 @@ class BackgroundTaskManager {
                 await self.runNetworkKindMigrationIfNeeded()
             }
         }
+
+        // Schedule automated JSON backup (daily)
+        Task.detached(priority: .background) {
+            await self.runAutomatedBackup()
+        }
         
         #if os(macOS)
         let activity = NSBackgroundActivityScheduler(identifier: "com.mediatracker.backgroundSync")
@@ -541,5 +546,50 @@ class BackgroundTaskManager {
         }
 
         UserDefaults.standard.set(1, forKey: migrationVersionKey)
+    }
+
+    // MARK: - Automated JSON Backup
+
+    private var lastBackupKey: String { "com.vara.mediatracker.lastAutoBackup" }
+
+    private func runAutomatedBackup() async {
+        let lastBackup = UserDefaults.standard.object(forKey: lastBackupKey) as? Date ?? .distantPast
+        guard Date().timeIntervalSince(lastBackup) >= .days7 else { return }
+
+        guard let container else { return }
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue]
+        let items = (try? context.fetch(descriptor)) ?? []
+        guard !items.isEmpty else { return }
+
+        let exportItems = items.map { item -> MediaItemData in
+            var watchedIDs: [String]? = nil
+            if item.type == .tvShow, let tv = item.tvShowDetails {
+                watchedIDs = tv.seasons.liveModels.flatMap { $0.episodes.liveModels }.filter { $0.isWatched }.map { $0.uniqueID ?? "" }
+            }
+            return MediaItemData(
+                id: item.id, title: item.title, type: item.type?.rawValue ?? "Movie",
+                state: item.state?.rawValue ?? "Wishlist", dateAdded: item.dateAdded ?? Date(),
+                taste: item.tasteValue, watchedEpisodeIDs: watchedIDs
+            )
+        }
+
+        var collectionBackup: [CollectionBackupData]? = nil
+        let collectionsDescriptor = FetchDescriptor<MediaCollection>()
+        if let collections = try? context.fetch(collectionsDescriptor) {
+            collectionBackup = collections.map { col in
+                CollectionBackupData(
+                    id: col.id, name: col.name, systemImage: col.systemImage,
+                    notes: col.notes, isPinned: col.isPinned,
+                    completedItemIDs: col.completedItemIDs, smartRulesData: col.smartRulesData,
+                    itemIDs: col.isSmart ? nil : col.items.compactMap { $0.modelContext != nil ? $0.id : nil }
+                )
+            }
+        }
+
+        let backup = LibraryBackup(items: exportItems, collections: collectionBackup)
+        await LibraryImportExportService.shared.automatedBackup(backup: backup)
+        UserDefaults.standard.set(Date(), forKey: lastBackupKey)
     }
 }

@@ -93,6 +93,7 @@ extension BackgroundDataService {
             if movieDetails.modelContext == nil { modelContext.insert(movieDetails) }
             item.cachedTrailerKey = details.trailerKey
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
+            item.cachedWatchProviderLogoPaths = details.streamingProviders.map { $0.logoPath ?? "" }
             item.syncCachedProperties(force: true)
             item.updateSearchableText()
             item.lastUpdated = Date()
@@ -331,6 +332,7 @@ extension BackgroundDataService {
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
             }
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
+            item.cachedWatchProviderLogoPaths = details.streamingProviders.map { $0.logoPath ?? "" }
             if let trailer = details.trailerKey {
                 item.cachedTrailerKey = trailer
             }

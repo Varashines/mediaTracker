@@ -43,8 +43,8 @@ actor BackgroundDataService {
         return (item.persistentModelID, false)
     }
 
-    static func importLibraryData(backup: LibraryBackup, modelContainer: ModelContainer) async -> Int {
-        let context = ModelContext(modelContainer)
+    func importLibraryData(backup: LibraryBackup) async -> Int {
+        let context = modelContext
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id, \.typeValue]
         let existing = (try? context.fetch(descriptor)) ?? []
@@ -174,10 +174,10 @@ actor BackgroundDataService {
         return importedCount
     }
 
-    static func importCollections(backup: LibraryBackup, modelContainer: ModelContainer) async {
+    func importCollections(backup: LibraryBackup) async {
         guard let collectionData = backup.collections, !collectionData.isEmpty else { return }
 
-        let context = ModelContext(modelContainer)
+        let context = modelContext
         let existingDescriptor = FetchDescriptor<MediaCollection>()
         let existingCollections = (try? context.fetch(existingDescriptor)) ?? []
         let existingIDs = Set(existingCollections.map { $0.id })
@@ -407,9 +407,18 @@ actor BackgroundDataService {
     }
 
     private func repairOrphanedEntities() async throws {
-        var sDesc = FetchDescriptor<TVSeason>()
-        sDesc.fetchLimit = 500
-        let allSeasons = try modelContext.fetch(sDesc)
+        var allSeasons: [TVSeason] = []
+        var offset = 0
+        let batchSize = 500
+        while true {
+            var sDesc = FetchDescriptor<TVSeason>()
+            sDesc.fetchLimit = batchSize
+            sDesc.fetchOffset = offset
+            let batch = try modelContext.fetch(sDesc)
+            allSeasons.append(contentsOf: batch)
+            if batch.count < batchSize { break }
+            offset += batchSize
+        }
         let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
 
@@ -493,10 +502,18 @@ actor BackgroundDataService {
             }
         }
 
-        var eDesc = FetchDescriptor<TVEpisode>()
-        eDesc.propertiesToFetch = [\.uniqueID, \.showID, \.seasonNumber]
-        eDesc.fetchLimit = 500
-        let allEpisodes = try modelContext.fetch(eDesc)
+        var allEpisodes: [TVEpisode] = []
+        var epOffset = 0
+        while true {
+            var eDesc = FetchDescriptor<TVEpisode>()
+            eDesc.propertiesToFetch = [\.uniqueID, \.showID, \.seasonNumber]
+            eDesc.fetchLimit = batchSize
+            eDesc.fetchOffset = epOffset
+            let batch = try modelContext.fetch(eDesc)
+            allEpisodes.append(contentsOf: batch)
+            if batch.count < batchSize { break }
+            epOffset += batchSize
+        }
 
         var seasonMap: [Int: [Int: TVSeason]] = [:]
         for season in allSeasons {

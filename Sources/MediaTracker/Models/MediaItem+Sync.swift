@@ -7,7 +7,7 @@ extension MediaItem {
         // If details aren't loaded, don't force a sync unless explicitly requested.
         let currentState = state ?? .wishlist
 
-        syncCastCache()
+        syncCastCache(force: force)
 
         if type == .movie {
             syncMovieProperties()
@@ -48,11 +48,10 @@ extension MediaItem {
         }
     }
 
-    func syncCastCache() {
+    func syncCastCache(force: Bool = false) {
         guard let context = modelContext else { return }
         
-        // Skip if cast is already populated and not a force refresh
-        if !storedCast.isEmpty { return }
+        if !force, !storedCast.isEmpty { return }
         
         // Defensive: Use direct fetch instead of relationship to avoid "ghost objects" during background merges
         let currentID = self.id

@@ -92,8 +92,9 @@ struct DataSection: View {
                     do {
                         let data = try Data(contentsOf: url)
                         let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
-                        let count = await BackgroundDataService.importLibraryData(backup: backup, modelContainer: container)
-                        await BackgroundDataService.importCollections(backup: backup, modelContainer: container)
+                        let importService = BackgroundDataService(modelContainer: container)
+                        let count = await importService.importLibraryData(backup: backup)
+                        await importService.importCollections(backup: backup)
                         await MainActor.run {
                             AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
                             let context = ModelContext(container)

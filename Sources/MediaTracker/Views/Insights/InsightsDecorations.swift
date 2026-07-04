@@ -188,6 +188,98 @@ struct DashboardCard<Content: View>: View {
 
 // MARK: - Flip Card with Solari Strip Lines
 
+@MainActor
+struct FlipCardModifier: AnimatableModifier {
+    var angle: Double
+    var stripCount: Int
+    
+    nonisolated var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scale)
+            .rotation3DEffect(
+                .degrees(angle),
+                axis: (x: 1, y: 0, z: 0),
+                perspective: 0.4
+            )
+            .shadow(
+                color: Color.black.opacity(shadowOpacity),
+                radius: shadowRadius,
+                x: 0,
+                y: shadowYOffset
+            )
+            .overlay {
+                if showStrips {
+                    VStack(spacing: 0) {
+                        ForEach(0..<stripCount - 1, id: \.self) { _ in
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.12 * stripOpacity))
+                                .frame(height: 1)
+                            Spacer()
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.0),
+                        .white.opacity(glossOpacity * 0.12),
+                        .white.opacity(0.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .blendMode(.overlay)
+                .allowsHitTesting(false)
+            }
+    }
+    
+    private var scale: CGFloat {
+        let progress = abs(sin(angle * .pi / 180.0))
+        return 1.0 - (progress * 0.06)
+    }
+    
+    private var shadowOpacity: Double {
+        let progress = abs(sin(angle * .pi / 180.0))
+        return 0.1 + (progress * 0.12)
+    }
+    
+    private var shadowRadius: CGFloat {
+        let progress = abs(sin(angle * .pi / 180.0))
+        return 6 + (progress * 10)
+    }
+    
+    private var shadowYOffset: CGFloat {
+        let progress = abs(sin(angle * .pi / 180.0))
+        return 3 + (progress * 8)
+    }
+    
+    private var showStrips: Bool {
+        let normalizedAngle = abs(angle.truncatingRemainder(dividingBy: 360))
+        return normalizedAngle > 10 && normalizedAngle < 170
+    }
+    
+    private var stripOpacity: Double {
+        let progress = abs(sin(angle * .pi / 180.0))
+        return progress
+    }
+    
+    private var glossOpacity: Double {
+        let normalizedAngle = abs(angle.truncatingRemainder(dividingBy: 180))
+        if normalizedAngle < 90 {
+            return sin(normalizedAngle * 2.0 * .pi / 180.0)
+        } else {
+            return sin((normalizedAngle - 90) * 2.0 * .pi / 180.0)
+        }
+    }
+}
+
 struct FlipCard<Front: View, Back: View>: View {
     let front: Front
     let back: Back
@@ -195,39 +287,33 @@ struct FlipCard<Front: View, Back: View>: View {
     var stripCount: Int = 8
 
     var body: some View {
-        ZStack {
-            if !isFlipped {
-                front
-            }
+        FlipCardContent(front: front, back: back, angle: isFlipped ? 180 : 0, stripCount: stripCount)
+    }
+}
 
-            if isFlipped {
+@MainActor
+struct FlipCardContent<Front: View, Back: View>: View, Animatable {
+    let front: Front
+    let back: Back
+    var angle: Double
+    var stripCount: Int
+    
+    nonisolated var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+    
+    var body: some View {
+        let isFaceUp = abs(angle.truncatingRemainder(dividingBy: 360)) < 90
+        
+        ZStack {
+            if isFaceUp {
+                front
+            } else {
                 back
                     .rotation3DEffect(.degrees(180), axis: (x: 1, y: 0, z: 0))
             }
         }
-        .frame(maxWidth: .infinity)
-        .rotation3DEffect(
-            .degrees(isFlipped ? 180 : 0),
-            axis: (x: 1, y: 0, z: 0),
-            perspective: 0.5
-        )
-        .overlay(alignment: .center) {
-            if abs(angle) > 10 && abs(angle) < 170 {
-                VStack(spacing: 0) {
-                    ForEach(0..<stripCount - 1, id: \.self) { _ in
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.1))
-                            .frame(height: 1)
-                        Spacer()
-                    }
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-        }
-    }
-
-    private var angle: Double {
-        isFlipped ? 180 : 0
+        .modifier(FlipCardModifier(angle: angle, stripCount: stripCount))
     }
 }

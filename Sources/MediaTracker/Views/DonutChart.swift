@@ -91,3 +91,4 @@ struct RatingDonutChart: View {
         .accessibilityLabel("Rating breakdown: \(loved) loved, \(liked) liked, \(disliked) disliked, \(unrated) unrated, \(total) total")
     }
 }
+

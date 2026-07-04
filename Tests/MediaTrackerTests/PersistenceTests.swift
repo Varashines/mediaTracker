@@ -4,6 +4,21 @@ import SwiftData
 
 final class PersistenceTests: XCTestCase {
     @MainActor
+    func testFullSchemaInitializesWithoutError() throws {
+        let schema = Schema([
+            MediaItem.self, MovieDetails.self, TVShowDetails.self,
+            TVSeason.self, TVEpisode.self, CastMember.self,
+            NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
+            BadgeEntity.self, PersonImageEntity.self,
+            StudioAliasEntity.self, SearchCacheEntity.self,
+            MediaCollection.self, ProviderEntity.self
+        ])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        XCTAssertNoThrow(try ModelContainer(for: schema, configurations: [config]),
+                         "Full schema should initialize without error — if this fails, a @Model property change broke auto-migration compatibility")
+    }
+    
+    @MainActor
     func testTVEpisodePersistence() async throws {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self

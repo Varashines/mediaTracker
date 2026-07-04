@@ -144,10 +144,15 @@ class ImageCache: NSObject, NSCacheDelegate {
         }
         
         // Throttle concurrent loads to prevent bursts on cold start
-        if currentLoads.withLock({ $0 }) >= maxConcurrentLoads {
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms backoff
+        while true {
+            let acquired = currentLoads.withLock { current -> Bool in
+                guard current < maxConcurrentLoads else { return false }
+                current += 1
+                return true
+            }
+            if acquired { break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
-        currentLoads.withLock { $0 += 1 }
         
         let task = Task<ImageContainer?, Never> { [weak self] in
             defer {
@@ -163,13 +168,12 @@ class ImageCache: NSObject, NSCacheDelegate {
                 if Task.isCancelled { return nil }
                 
                 // Decode off the main actor to avoid blocking UI
-                let finalCGImage: CGImage? = await Task.detached(priority: .utility) {
+                let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                let finalCGImage: CGImage? = await Task.detached(priority: .utility) { [scale] in
                     if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
-                        // Render SVG off-main using CGContext (avoids MainActor hop for NSGraphicsContext)
                         return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
                     } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
                         if let target = targetSize {
-                            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
                             let maxDimension = max(target.width, target.height) * scale
                             let options: [CFString: Any] = [
                                 kCGImageSourceShouldCache: false,

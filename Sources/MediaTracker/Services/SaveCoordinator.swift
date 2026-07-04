@@ -16,7 +16,9 @@ class SaveCoordinator {
         saveTasks[id]?.cancel()
         
         saveTasks[id] = Task { @MainActor in
-            defer { saveTasks[id] = nil }
+            defer {
+                if !Task.isCancelled { saveTasks[id] = nil }
+            }
             do {
                 try await Task.sleep(nanoseconds: delayMs * 1_000_000)
                 if Task.isCancelled { return }

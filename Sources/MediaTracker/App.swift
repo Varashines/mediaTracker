@@ -11,7 +11,14 @@ struct MediaTrackerApp: App {
     @AppStorage("theme_preference") private var themePreference: Int = 0
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema(AppSchemaV2.models)
+        let schema = Schema([
+            MediaItem.self, MovieDetails.self, TVShowDetails.self,
+            TVSeason.self, TVEpisode.self, CastMember.self,
+            NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
+            BadgeEntity.self, PersonImageEntity.self,
+            StudioAliasEntity.self, SearchCacheEntity.self,
+            MediaCollection.self, ProviderEntity.self
+        ])
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -20,25 +27,75 @@ struct MediaTrackerApp: App {
             groupContainer: .none
         )
 
+        // Check for backup files from a previous corruption recovery.
+        // On the first launch after adding a backup, try to restore the oldest backup.
+        // Skip validation — just restore and let the main container creation handle migration.
+        // If it fails, the catch block below backs it up again and creates a fresh store.
+        let storeURL = modelConfiguration.url
+        let storeDir = storeURL.deletingLastPathComponent()
+        let didRestoreKey = "com.vara.mediatracker.didRestoreBackup"
+        if !UserDefaults.standard.bool(forKey: didRestoreKey),
+           let backupFiles = try? FileManager.default.contentsOfDirectory(at: storeDir, includingPropertiesForKeys: nil) {
+            // Filter: match "default_corrupted_vMAJOR_MINOR_<timestamp>.store"
+            let candidates = backupFiles.filter { url in
+                let name = url.lastPathComponent
+                return name.hasPrefix("default_corrupted_v") && name.hasSuffix(".store")
+                    && name.dropFirst(20).contains("_")
+            }.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
+            // Check version compatibility: read the .version file written alongside the backup
+            let currentVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
+            var compatibleBackup: URL?
+            for backup in candidates {
+                let versionURL = backup.deletingPathExtension().appendingPathExtension("version")
+                let backupVersion = (try? String(contentsOf: versionURL, encoding: .utf8)).flatMap {
+                    // Backups from same major version are compatible
+                    let backupMajor = $0.split(separator: ".").first ?? ""
+                    let currentMajor = currentVersion.split(separator: ".").first ?? ""
+                    return backupMajor == currentMajor ? $0 : nil
+                }
+                if backupVersion != nil {
+                    compatibleBackup = backup
+                    break
+                }
+            }
+            if let backupURL = compatibleBackup {
+                AppLogger.info("Found compatible backup: \(backupURL.lastPathComponent). Restoring...")
+                let savedCurrent = storeDir.appendingPathComponent("default_current_saved.store")
+                try? FileManager.default.removeItem(at: savedCurrent)
+                try? FileManager.default.copyItem(at: storeURL, to: savedCurrent)
+                try? FileManager.default.removeItem(at: storeURL)
+                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
+                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+                try? FileManager.default.copyItem(at: backupURL, to: storeURL)
+                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
+                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+            }
+            UserDefaults.standard.set(true, forKey: didRestoreKey)
+        }
+
         do {
             return try ModelContainer(
                 for: schema,
-                migrationPlan: AppMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
-            AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(error)")
+            let firstError = error
+            AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(firstError)")
 
             let storeURL = modelConfiguration.url
+            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)?.replacingOccurrences(of: ".", with: "_") ?? "unknown"
             let timestamp = Int(Date().timeIntervalSince1970)
-            let backupName = "default_corrupted_\(timestamp).store"
+            let backupName = "default_corrupted_v\(appVersion)_\(timestamp).store"
             let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
             let logURL = backupURL.deletingPathExtension().appendingPathExtension("recovery.log")
+            let versionURL = backupURL.deletingPathExtension().appendingPathExtension("version")
 
             // 1. Backup the corrupted store before deletion. Surface failures to a recovery log
             //    so we never silently destroy user data on a permission/disk error.
             var backupSucceeded = true
             do {
+                try "Migration error: \(firstError)".write(to: logURL, atomically: true, encoding: .utf8)
+                try appVersion.write(to: versionURL, atomically: true, encoding: .utf8)
                 try FileManager.default.copyItem(at: storeURL, to: backupURL)
             } catch {
                 backupSucceeded = false
@@ -65,15 +122,43 @@ struct MediaTrackerApp: App {
                 fatalError("CRITICAL: Corrupted store could not be backed up; refusing to delete it. See \(logURL.path). Error: \(error)")
             }
 
+            // Try to restore from backup with the new migration plan.
+            // If the failure was just a schema mismatch (now fixed), this will work.
+            var restoredFromBackup = false
+            if backupSucceeded {
+                do {
+                    let backupConfig = ModelConfiguration(url: backupURL)
+                    AppLogger.info("Attempting to validate backup store...")
+                    let _ = try ModelContainer(
+                        for: schema,
+                        configurations: [backupConfig]
+                    )
+                    AppLogger.info("Backup validated. Restoring from backup...")
+                    try FileManager.default.copyItem(at: backupURL, to: storeURL)
+                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
+                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+                    let container = try ModelContainer(
+                        for: schema,
+                        configurations: [modelConfiguration]
+                    )
+                    AppLogger.info("Database restored from backup.")
+                    restoredFromBackup = true
+                    return container
+                } catch {
+                    AppLogger.error("Backup restoration failed, starting fresh: \(error)")
+                }
+            }
+
             do {
-                AppLogger.info("Store deleted, recreating ModelContainer...")
+                AppLogger.info("Creating fresh ModelContainer...")
                 let container = try ModelContainer(
                     for: schema,
-                    migrationPlan: AppMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
-                Task { @MainActor in
-                    AppErrorState.shared.storeRecoveredFromMigrationFailure = true
+                if !restoredFromBackup {
+                    Task { @MainActor in
+                        AppErrorState.shared.storeRecoveredFromMigrationFailure = true
+                    }
                 }
                 return container
             } catch {

@@ -173,6 +173,14 @@ struct InsightsView: View {
 
         SectionDivider(color: AppTheme.Colors.accent)
 
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            SectionHeader(title: "Streaming Providers", icon: "tv.and.mediabox.fill", iconColor: AppTheme.Colors.accent)
+            ProviderRingView(providers: stats.topProviders, providerCoverage: stats.providerCoverage)
+        }
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+        SectionDivider(color: AppTheme.Colors.accent)
+
         StudiosNetworksView(stats: stats, modelContext: modelContext)
     }
 

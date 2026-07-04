@@ -40,7 +40,7 @@ done
 if [ "$FORCE" = false ]; then
     HASH_FILE=".build/.source_hash_$BUILD_CONFIG"
     mkdir -p .build
-    SOURCE_HASH=$(git ls-files '*.swift' 'Package.swift' 'Package.resolved' 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    SOURCE_HASH=$(find . \( -name '*.swift' -o -name 'Package.swift' -o -name 'Package.resolved' \) -not -path './.build/*' 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
 
     if [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" == "$SOURCE_HASH" ]; then
         echo "✨ No source changes detected. Skipping build."

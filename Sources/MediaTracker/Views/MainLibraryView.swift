@@ -29,13 +29,6 @@ struct MainLibraryView: View {
         return selectedCategory == .movie || selectedCategory == .tvShow
     }
 
-    var showsFilterBar: Bool {
-        switch selectedCategory {
-        case .all, .movie, .tvShow, .completed: return true
-        default: return false
-        }
-    }
-
     var body: some View {
         let columns: [GridItem] = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
@@ -47,14 +40,6 @@ struct MainLibraryView: View {
                         selectedNetworks: networks, isCategoryPage: isCategoryPage,
                         onNetworkSelected: onNetworkSelected, onBack: onBack,
                         viewModel: viewModel)
-                }
-
-                if showsFilterBar {
-                    LibraryFilterBar(viewModel: viewModel)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        .padding(.top, AppTheme.Spacing.micro)
-                        .padding(.bottom, AppTheme.Spacing.tiny)
-                        .background(.ultraThinMaterial)
                 }
             }
 
