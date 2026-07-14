@@ -12,8 +12,6 @@ struct DetailView: View {
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
-    @State private var isActionBarVisible = true
-    @State private var lastScrollOffset: CGFloat = 0
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -71,21 +69,9 @@ struct DetailView: View {
                                 Color.clear
                                     .onChange(of: frame.minY) { _, newValue in
                                         showNavTitle = newValue < -50
-                                        let delta = newValue - lastScrollOffset
-                                        if delta < -8 {
-                                            withAnimation(AppTheme.Animation.springSnappy) {
-                                                isActionBarVisible = false
-                                            }
-                                        } else if delta > 8 || newValue > -50 {
-                                            withAnimation(AppTheme.Animation.springSnappy) {
-                                                isActionBarVisible = true
-                                            }
-                                        }
-                                        lastScrollOffset = newValue
                                     }
                                     .onAppear {
                                         showNavTitle = frame.minY < -50
-                                        lastScrollOffset = frame.minY
                                     }
                             }
                         }
@@ -105,12 +91,9 @@ struct DetailView: View {
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
 
             floatingActionBar
-                .offset(y: isActionBarVisible ? 0 : 60)
-                .opacity(isActionBarVisible ? 1.0 : 0.0)
-                .animation(AppTheme.Animation.springGentle, value: isActionBarVisible)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 16)
-                .allowsHitTesting(!showDeleteConfirmation && isActionBarVisible)
+                .allowsHitTesting(!showDeleteConfirmation)
 
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)

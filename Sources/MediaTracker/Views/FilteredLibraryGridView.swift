@@ -16,6 +16,7 @@ struct FilteredLibraryGridView: View {
     @State private var isLoading = true
     @State private var isLoadingMore = false
     @State private var totalCount = 0
+    @State private var scopedStats: ScopedLibraryStats?
     @State private var showRecommendations = false
     @State private var recommendations: [MooreMetricsRecommendation] = []
     @State private var isLoadingRecommendations = false
@@ -65,6 +66,9 @@ struct FilteredLibraryGridView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        if let stats = scopedStats, !items.isEmpty {
+                            ScopedInsightsHeader(stats: stats, filterName: filter.name, filterType: filter.type)
+                        }
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
                                 NavigationLink(value: metadata.id) {
@@ -104,10 +108,12 @@ struct FilteredLibraryGridView: View {
         }
         .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
         .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+            ScopedStatsActor.invalidateCache()
             let itemID = MediaStateService.shared.lastChangedItemID
             if let itemID = itemID {
                 updateSingleItem(id: itemID)
             } else {
+                scopedStats = nil
                 fetchItems()
             }
         }
@@ -115,6 +121,13 @@ struct FilteredLibraryGridView: View {
             fetchItems()
             if filter.type == .studio {
                 fetchNetworkColor()
+            }
+        }
+        .task {
+            let actor = ScopedStatsActor(modelContainer: modelContext.container)
+            let stats = await actor.fetchScopedStats(filter: filter)
+            if stats.totalItems > 0 {
+                await MainActor.run { scopedStats = stats }
             }
         }
         .onDisappear {

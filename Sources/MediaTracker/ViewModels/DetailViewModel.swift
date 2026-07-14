@@ -329,18 +329,20 @@ class DetailViewModel {
                     guard let currentSeason = self.item.tvShowDetails?.seasons
                         .first(where: { !$0.isDeleted && $0.modelContext != nil && $0.persistentModelID == seasonID }) else { return }
                     
-                    // Batch fetch all existing episodes for this season (1 query instead of N)
                     let showIDInt = tmdbID
                     let seasonNum = seasonNumber
-                    let batchDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == showIDInt && $0.seasonNumber == seasonNum })
+                    let batchDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == showIDInt })
                     let existingEpisodes = (try? self.item.modelContext?.fetch(batchDescriptor)) ?? []
-                    var existingMap: [Int: TVEpisode] = [:]
+                    var existingMap: [String: TVEpisode] = [:]
                     for ep in existingEpisodes {
-                        existingMap[ep.episodeNumber] = ep
+                        if let uid = ep.uniqueID {
+                            existingMap[uid] = ep
+                        }
                     }
                     
                     for ep in episodes {
-                        let episode = existingMap[ep.episodeNumber] ?? TVEpisode(
+                        let epUniqueID = "\(tmdbID)_\(seasonNum)_\(ep.episodeNumber)"
+                        let episode = existingMap[epUniqueID] ?? TVEpisode(
                             episodeNumber: ep.episodeNumber,
                             seasonNumber: seasonNumber,
                             name: ep.name ?? "Episode \(ep.episodeNumber)",

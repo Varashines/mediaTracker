@@ -59,7 +59,7 @@ struct DiscoveryHubView: View {
                         }
 
                         if !viewModel.discovery.cachedProviders.isEmpty {
-                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, limit: 12) { node in
+                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .provider, name: node.name))
                             }
                         }
