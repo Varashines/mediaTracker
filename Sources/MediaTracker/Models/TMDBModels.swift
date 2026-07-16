@@ -135,6 +135,7 @@ struct TMDBVideo: Codable {
 // MARK: - Title Logos
 struct TMDBImagesResponse: Codable {
     let logos: [TMDBLogo]?
+    let posters: [TMDBPoster]?
 }
 
 struct TMDBLogo: Codable {
@@ -142,6 +143,15 @@ struct TMDBLogo: Codable {
     let iso_639_1: String?
     let width: Int
     let height: Int
+}
+
+struct TMDBPoster: Codable {
+    let file_path: String
+    let iso_639_1: String?
+    let width: Int
+    let height: Int
+    let vote_average: Double?
+    let vote_count: Int?
 }
 
 // MARK: - Watch Providers

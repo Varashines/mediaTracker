@@ -347,9 +347,10 @@ extension BackgroundDataService {
 
 
     func extractAndSavePosterColor(for item: MediaItem) async {
-        let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != item.posterURL
+        let effectivePoster = item.effectivePosterURL
+        let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
-              let poster = item.posterURL else { return }
+              let poster = effectivePoster else { return }
 
         // Try to get the image from cache first, avoiding a redundant network download
         var cgImage: CGImage?

@@ -193,7 +193,15 @@ struct DetailView: View {
                     }
                     MediaStateService.shared.postMediaStateChanged(itemID: viewModel.item.persistentModelID)
                 }
-            }
+            },
+            posterOptions: viewModel.posterOptions,
+            isCustomPoster: viewModel.isCustomPoster,
+            onSelectPoster: { url in viewModel.selectPoster(url: url) },
+            onResetPoster: { viewModel.resetToDefaultPoster() },
+            logoOptions: viewModel.logoOptions,
+            isCustomLogo: viewModel.isCustomLogo,
+            onSelectLogo: { url in viewModel.selectLogo(url: url) },
+            onResetLogo: { viewModel.resetToDefaultLogo() }
         )
     }
 
@@ -417,7 +425,7 @@ struct DetailView: View {
                 .transition(.opacity)
 
             VStack(spacing: AppTheme.Spacing.compact) {
-                if let posterURL = viewModel.item.posterURL, let url = URL(string: posterURL) {
+                if let posterURL = viewModel.item.effectivePosterURL, let url = URL(string: posterURL) {
                     CachedImage(url: url, targetSize: AppTheme.Thumbnail.tiny) { _ in } placeholder: {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color.secondary.opacity(0.1))

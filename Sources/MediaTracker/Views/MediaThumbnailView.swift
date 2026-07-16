@@ -104,7 +104,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedID = item.persistentModelID
         self.capturedItemID = item.id
         self.capturedTitle = item.title
-        self.capturedPosterURL = item.posterURL
+        self.capturedPosterURL = item.effectivePosterURL
         self.capturedType = item.type ?? .movie
         self.capturedState = item.state ?? .wishlist
         self.capturedProgress = item.storedProgress

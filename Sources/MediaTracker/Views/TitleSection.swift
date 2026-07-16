@@ -6,11 +6,17 @@ struct TitleSection: View {
     let themeColor: Color
     let watchProviders: [WatchProviderResult]
     var onStatusChange: ((MediaState?) -> Void)?
+    var logoOptions: [String] = []
+    var isCustomLogo: Bool = false
+    var onSelectLogo: ((String) -> Void)? = nil
+    var onResetLogo: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
 
     @AppStorage("use_title_logos") private var useTitleLogos = true
     @State private var isLogoLight = false
+    @State private var isLogosHovering = false
+    @State private var showLogoPicker = false
 
     private func cleanProviderName(_ name: String) -> String {
         let lower = name.lowercased()
@@ -47,7 +53,6 @@ struct TitleSection: View {
         let calendar = Calendar.current
 
         if isMovie {
-            // Movies: no time, just date
             if calendar.isDateInToday(date) {
                 return "Releasing today"
             } else if calendar.isDateInTomorrow(date) {
@@ -59,7 +64,6 @@ struct TitleSection: View {
                 return "Releasing on \(date.formatted(date: .abbreviated, time: .omitted))"
             }
         } else {
-            // TV shows: with time
             if calendar.isDateInToday(date) {
                 return "Today \(date.formatted(date: .omitted, time: .shortened))"
             } else if calendar.isDateInTomorrow(date) {
@@ -78,23 +82,69 @@ struct TitleSection: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                 // 1. Editorial Title & Creators
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-                    if useTitleLogos, let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
-                        CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
-                            Task.detached(priority: .utility) {
-                                let dominant = await ColorExtractor.dominantColor(from: cgImage)
-                                await MainActor.run {
-                                    self.isLogoLight = dominant.isNearlyWhite
+                    if useTitleLogos, let logoURL = item.effectiveLogoURL, let url = URL(string: logoURL) {
+                        ZStack(alignment: .topTrailing) {
+                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
+                                Task.detached(priority: .utility) {
+                                    let dominant = await ColorExtractor.dominantColor(from: cgImage)
+                                    await MainActor.run {
+                                        self.isLogoLight = dominant.isNearlyWhite
+                                    }
+                                }
+                            } placeholder: {
+                                Text(item.title)
+                                    .font(AppTheme.Font.largeTitle)
+                                    .lineLimit(3)
+                                    .foregroundStyle(.primary)
+                            }
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 110, alignment: .leading)
+                            .colorInvert(colorScheme == .light && isLogoLight)
+                            .onHover { hovering in
+                                isLogosHovering = hovering
+                            }
+
+                            if logoOptions.count > 1 {
+                                Button {
+                                    showLogoPicker.toggle()
+                                } label: {
+                                    Image(systemName: showLogoPicker ? "square.grid.3x3.fill" : "square.grid.3x3")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                        .padding(7)
+                                        .background {
+                                            if showLogoPicker {
+                                                Circle().fill(Color.primary.opacity(0.12))
+                                            } else {
+                                                Circle().fill(.ultraThinMaterial)
+                                            }
+                                        }
+                                        .shadow(color: .black.opacity(showLogoPicker ? 0.25 : 0.15), radius: showLogoPicker ? 4 : 3, x: 0, y: showLogoPicker ? 3 : 2)
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
+                                .help("Change logo")
+                                .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)
+                                .scaleEffect((isLogosHovering || showLogoPicker) ? 1 : 0.9)
+                                .animation(.easeInOut(duration: 0.2), value: isLogosHovering || showLogoPicker)
+                                .padding(8)
+                                .popover(isPresented: $showLogoPicker) {
+                                    LogoPickerGrid(
+                                        options: logoOptions,
+                                        currentURL: item.effectiveLogoURL,
+                                        isCustom: isCustomLogo,
+                                        onSelect: { url in
+                                            onSelectLogo?(url)
+                                            showLogoPicker = false
+                                        },
+                                        onReset: {
+                                            onResetLogo?()
+                                            showLogoPicker = false
+                                        }
+                                    )
                                 }
                             }
-                        } placeholder: {
-                            Text(item.title)
-                                .font(AppTheme.Font.largeTitle)
-                                .lineLimit(3)
-                                .foregroundStyle(.primary)
                         }
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 110, alignment: .leading)
-                        .colorInvert(colorScheme == .light && isLogoLight)
                     } else {
                         Text(item.title)
                             .font(AppTheme.Font.largeTitle)
@@ -215,6 +265,139 @@ struct TitleSection: View {
                         .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
                 }
                 .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 10, y: 5)
+            }
+        }
+    }
+}
+
+private struct LogoPickerGrid: View {
+    let options: [String]
+    let currentURL: String?
+    let isCustom: Bool
+    let onSelect: (String) -> Void
+    let onReset: () -> Void
+
+    private let columns = [GridItem(.flexible(), spacing: 8)]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.3x3")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("Select Logo")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("·")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                Text("\(options.count)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(options, id: \.self) { urlString in
+                        LogoThumbnail(
+                            urlString: urlString,
+                            isSelected: urlString == currentURL,
+                            onSelect: { onSelect(urlString) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 14)
+            }
+            .frame(maxHeight: min(CGFloat(options.count) * (60 + 8) + 4, 320))
+
+            if isCustom {
+                Divider()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 4)
+
+                Button {
+                    onReset()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 10))
+                        Text("Reset to default")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.04))
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+            }
+        }
+        .frame(width: 340)
+    }
+}
+
+private struct LogoThumbnail: View {
+    let urlString: String
+    let isSelected: Bool
+    let onSelect: () -> Void
+    @State private var isHovered = false
+    @State private var selectionPulse = false
+
+    var body: some View {
+        if let url = URL(string: urlString) {
+            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.06))
+                    .shimmering()
+            }
+            .aspectRatio(contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(isHovered ? 0.12 : 0), radius: isHovered ? 6 : 0, y: isHovered ? 3 : 0)
+            .overlay(alignment: .trailing) {
+                if isSelected {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 20, height: 20)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.trailing, 8)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.primary.opacity(0.25) : (isHovered ? Color.secondary.opacity(0.2) : .clear), lineWidth: isSelected ? 1.5 : 1)
+            )
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .scaleEffect(selectionPulse ? 0.95 : 1.0)
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .onTapGesture {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                    selectionPulse = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                        selectionPulse = false
+                    }
+                }
+                onSelect()
             }
         }
     }

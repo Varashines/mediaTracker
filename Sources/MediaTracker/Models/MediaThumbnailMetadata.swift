@@ -52,7 +52,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.id = item.persistentModelID
         self.itemID = item.id
         self.title = item.title
-        self.posterURL = item.posterURL
+        self.posterURL = item.effectivePosterURL
         self.backdropURL = item.backdropURL
         self.releaseDate = item.releaseDate
         self.type = item.type

@@ -13,6 +13,8 @@ class DetailViewModel {
     var isLoadingRecommendations = false
     var trailerKey: String?
     var watchProviders: [WatchProviderResult] = []
+    var posterOptions: [String] = []
+    var logoOptions: [String] = []
     var debugSelectedTraits: [String] = []
     private var _nextEpisodeToWatch: TVEpisode?? = nil
     private var _darkerThemeColor: Color = .clear
@@ -131,6 +133,7 @@ class DetailViewModel {
 
         updateThemeColor()
         fetchTitleLogoIfNeeded()
+        fetchPosterOptions()
         fetchWatchProvidersIfNeeded()
 
         let hasData = item.lastUpdated != nil
@@ -189,22 +192,30 @@ class DetailViewModel {
     /// This ensures logos are loaded even when `refreshData` returns early due to
     /// session debouncing or freshness guards.
     func fetchTitleLogoIfNeeded() {
-        guard item.titleLogoURL == nil else { return }
+        guard item.titleLogoURL == nil || logoOptions.isEmpty else { return }
         guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
 
         let type = item.type
+        let originalLanguage = item.cachedLanguage
+        let defaultLogo = item.effectiveLogoURL
+
         Task {
             do {
-                let logos: [String]
-                let originalLanguage = item.cachedLanguage
+                var logos: [String]
                 if type == .tvShow {
                     logos = try await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: originalLanguage)
                 } else {
                     logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, originalLanguage: originalLanguage)
                 }
                 if !logos.isEmpty {
+                    // Ensure the current effective logo is always first
+                    if let current = defaultLogo {
+                        logos.removeAll { $0 == current }
+                        logos.insert(current, at: 0)
+                    }
                     await MainActor.run {
                         self.item.titleLogoURL = logos.first
+                        self.logoOptions = logos
                         if let context = self.item.modelContext {
                             SaveCoordinator.shared.requestSave(context)
                         }
@@ -214,6 +225,92 @@ class DetailViewModel {
                 AppLogger.warning("Logo fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
             }
         }
+    }
+
+    /// Fetch alternative poster options from TMDB lazily.
+    func fetchPosterOptions() {
+        guard posterOptions.isEmpty else { return }
+        guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
+
+        let type = item.type
+        let originalLanguage = item.cachedLanguage
+        let defaultPoster = item.effectivePosterURL
+
+        Task {
+            do {
+                var options: [String] = []
+                if type == .tvShow {
+                    options = try await APIClient.shared.fetchTVPosters(tmdbID: tmdbID, originalLanguage: originalLanguage)
+                } else {
+                    options = try await APIClient.shared.fetchMoviePosters(tmdbID: tmdbID, originalLanguage: originalLanguage)
+                }
+                // Ensure the current effective poster is always first in the list
+                if let current = defaultPoster {
+                    options.removeAll { $0 == current }
+                    options.insert(current, at: 0)
+                }
+                await MainActor.run { [weak self] in
+                    self?.posterOptions = options
+                }
+            } catch {
+                AppLogger.warning("Poster options fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
+            }
+        }
+    }
+
+    var isCustomPoster: Bool {
+        item.customPosterURL != nil
+    }
+
+    func selectPoster(url: String) {
+        guard item.modelContext != nil else { return }
+        guard url != item.effectivePosterURL else { return }
+
+        item.customPosterURL = url
+
+        // Invalidate theme color so it re-extracts from the new poster
+        if item.themeColorSourceURL == item.posterURL {
+            item.themeColorSourceURL = url
+            item.themeColorHex = nil
+        }
+
+        item.commitChange()
+        updateThemeColor()
+        AppErrorState.shared.showToast("Poster updated", style: .success)
+    }
+
+    func resetToDefaultPoster() {
+        guard item.modelContext != nil, item.customPosterURL != nil else { return }
+
+        item.customPosterURL = nil
+
+        // Restore theme color tracking to the default poster
+        item.themeColorSourceURL = item.posterURL
+
+        item.commitChange()
+        updateThemeColor()
+        AppErrorState.shared.showToast("Poster reset to default", style: .success)
+    }
+
+    var isCustomLogo: Bool {
+        item.customLogoURL != nil
+    }
+
+    func selectLogo(url: String) {
+        guard item.modelContext != nil else { return }
+        guard url != item.effectiveLogoURL else { return }
+
+        item.customLogoURL = url
+        item.commitChange()
+        AppErrorState.shared.showToast("Logo updated", style: .success)
+    }
+
+    func resetToDefaultLogo() {
+        guard item.modelContext != nil, item.customLogoURL != nil else { return }
+
+        item.customLogoURL = nil
+        item.commitChange()
+        AppErrorState.shared.showToast("Logo reset to default", style: .success)
     }
 
     private func fetchWatchProvidersIfNeeded() {

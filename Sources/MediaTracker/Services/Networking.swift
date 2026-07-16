@@ -640,6 +640,76 @@ actor APIClient {
         return 3 // Other languages = lowest priority
     }
 
+    // MARK: - Poster Options
+
+    func fetchMoviePosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
+        let cacheKey = "movie_posters_\(tmdbID).json"
+        let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
+
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+            return Self.processPosterURLs(decoded.posters, originalLanguage: originalLanguage)
+        }
+
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/movie/\(tmdbID)/images", queryItems: [
+                URLQueryItem(name: "include_image_language", value: "en,null")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            self.saveToCache(data: data, forKey: cacheKey)
+            let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+            return Self.processPosterURLs(decoded.posters, originalLanguage: originalLanguage)
+        }
+    }
+
+    func fetchTVPosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
+        let cacheKey = "tv_posters_\(tmdbID).json"
+        let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
+
+        if !force,
+           let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+            return Self.processPosterURLs(decoded.posters, originalLanguage: originalLanguage)
+        }
+
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/tv/\(tmdbID)/images", queryItems: [
+                URLQueryItem(name: "include_image_language", value: "en,null")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            self.saveToCache(data: data, forKey: cacheKey)
+            let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+            return Self.processPosterURLs(decoded.posters, originalLanguage: originalLanguage)
+        }
+    }
+
+    private nonisolated static func processPosterURLs(_ posters: [TMDBPoster]?, originalLanguage: String? = nil) -> [String] {
+        guard let posters else { return [] }
+
+        // Prioritize: null language (clean) > original language > English > others, then by vote_average
+        return posters
+            .sorted { a, b in
+                let aScore = posterPriority(a, originalLanguage: originalLanguage)
+                let bScore = posterPriority(b, originalLanguage: originalLanguage)
+                if aScore != bScore { return aScore < bScore }
+                let aVotes = a.vote_average ?? 0
+                let bVotes = b.vote_average ?? 0
+                return aVotes > bVotes
+            }
+            .compactMap { Self.tmdbImageURL(path: $0.file_path, size: "w780") }
+    }
+
+    private nonisolated static func posterPriority(_ poster: TMDBPoster, originalLanguage: String?) -> Int {
+        let lang = poster.iso_639_1
+        if lang == nil { return 0 } // No language (clean poster) = highest priority
+        if let originalLanguage, lang == originalLanguage { return 1 } // Original language = second priority
+        if lang == "en" { return 2 } // English = third priority
+        return 3 // Other languages = lowest priority
+    }
+
     // MARK: - OMDb Integration
 
     func fetchOMDBData(imdbID: String) async -> OMDBFullData? {

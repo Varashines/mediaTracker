@@ -17,6 +17,8 @@ final class MediaItem: Identifiable {
     var title: String
     var overview: String
     var posterURL: String?
+    var customPosterURL: String?
+    var customLogoURL: String?
     var backdropURL: String?
     var releaseDate: Date?
     var typeValue: String = "Movie"
@@ -242,8 +244,16 @@ extension MediaItem {
 }
 
 extension MediaItem {
+    var effectivePosterURL: String? {
+        customPosterURL ?? posterURL
+    }
+
+    var effectiveLogoURL: String? {
+        customLogoURL ?? titleLogoURL
+    }
+
     nonisolated(unsafe) static let thumbnailProperties: [PartialKeyPath<MediaItem>] = [
-        \.id, \.title, \.posterURL, \.backdropURL, \.releaseDate,
+        \.id, \.title, \.posterURL, \.customPosterURL, \.backdropURL, \.releaseDate,
         \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex, \.themeColorSourceURL,
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
         \.isSoftDeleted, \.softDeletedAt,
