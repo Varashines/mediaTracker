@@ -9,64 +9,43 @@ struct HallOfFameView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if !stats.topRatedActors.isEmpty {
-                hallSection(
-                    title: "Hall of Fame — Cast",
-                    icon: "person.2.fill",
-                    color: .orange,
-                    persons: Array(stats.topRatedActors.prefix(7))
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 60, weight: .ultraLight))
-                        .foregroundStyle(.orange.opacity(colorScheme == .dark ? 0.05 : 0.03))
-                        .offset(x: 12, y: 6)
-                        .allowsHitTesting(false)
-                }
+                SectionHeader(title: "Hall of Fame — Cast", icon: "person.2.fill", iconColor: .orange)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                personGrid(persons: Array(stats.topRatedActors.prefix(7)), color: .orange)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 60, weight: .ultraLight))
+                            .foregroundStyle(.orange.opacity(colorScheme == .dark ? 0.05 : 0.03))
+                            .offset(x: 12, y: 6)
+                            .allowsHitTesting(false)
+                    }
             }
 
             if !stats.topRatedCreators.isEmpty {
-                hallSection(
-                    title: "Hall of Fame — Creators",
-                    icon: "pencil.and.outline",
-                    color: .green,
-                    persons: Array(stats.topRatedCreators.prefix(7))
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "pencil.and.outline")
-                        .font(.system(size: 60, weight: .ultraLight))
-                        .foregroundStyle(.green.opacity(colorScheme == .dark ? 0.05 : 0.03))
-                        .offset(x: 12, y: 6)
-                        .allowsHitTesting(false)
-                }
+                SectionHeader(title: "Hall of Fame — Creators", icon: "pencil.and.outline", iconColor: .green)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                personGrid(persons: Array(stats.topRatedCreators.prefix(7)), color: .green)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "pencil.and.outline")
+                            .font(.system(size: 60, weight: .ultraLight))
+                            .foregroundStyle(.green.opacity(colorScheme == .dark ? 0.05 : 0.03))
+                            .offset(x: 12, y: 6)
+                            .allowsHitTesting(false)
+                    }
             }
         }
     }
 
     @ViewBuilder
-    private func hallSection(title: String, icon: String, color: Color, persons: [VisualPersonStat]) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(AppTheme.Font.heading)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(color)
-                    .kerning(1.2)
-                Spacer()
-                Text("Top \(persons.count)")
-                    .font(AppTheme.Font.monoLabel)
-                    .foregroundStyle(.secondary.opacity(0.6))
+    private func personGrid(persons: [VisualPersonStat], color: Color) -> some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(Array(persons.enumerated()), id: \.element.name) { index, person in
+                PersonCard(person: person, themeColor: color, rank: index + 1)
             }
-            .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(Array(persons.enumerated()), id: \.element.name) { index, person in
-                    PersonCard(person: person, themeColor: color, rank: index + 1)
-                }
-            }
-            .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
     }
 }
 

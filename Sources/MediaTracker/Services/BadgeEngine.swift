@@ -12,9 +12,10 @@ enum SmartBadge: String, CaseIterable, Sendable {
     case behind = "BEHIND"
     case new = "NEW"
     case soon = "SOON"
+    case streak = "STREAK"
 
-    static let radarBadges: Set<SmartBadge> = [.new, .bingeDrop, .premiere, .finale]
-    static let recentBadges: Set<SmartBadge> = [.new, .bingeDrop, .finale, .premiere]
+    static let radarBadges: Set<SmartBadge> = [.new, .bingeDrop, .premiere, .finale, .streak]
+    static let recentBadges: Set<SmartBadge> = [.new, .bingeDrop, .finale, .premiere, .streak]
 }
 
 // MARK: - Badge Logic Engine

@@ -19,6 +19,7 @@ final class MediaItem: Identifiable {
     var posterURL: String?
     var customPosterURL: String?
     var customLogoURL: String?
+    var mood: String?
     var backdropURL: String?
     var releaseDate: Date?
     var typeValue: String = "Movie"
@@ -256,7 +257,7 @@ extension MediaItem {
         \.id, \.title, \.posterURL, \.customPosterURL, \.backdropURL, \.releaseDate,
         \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex, \.themeColorSourceURL,
         \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded, \.lastUpdated,
-        \.isSoftDeleted, \.softDeletedAt,
+        \.mood, \.isSoftDeleted, \.softDeletedAt,
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
         \.cachedNetworkLogoPath, \.cachedWatchProviders, \.cachedWatchProviderLogoPaths, \.cachedNextAiringDate, \.cachedRuntime,
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,

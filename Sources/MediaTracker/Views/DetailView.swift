@@ -12,6 +12,7 @@ struct DetailView: View {
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
+    @State private var showMoodBanner = false
 
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
@@ -75,6 +76,21 @@ struct DetailView: View {
                                     }
                             }
                         }
+                    if showMoodBanner {
+                        MoodCaptureBanner(
+                            onSelectMood: { mood in
+                                viewModel.item.mood = mood.rawValue
+                                viewModel.item.commitChange()
+                                AppErrorState.shared.showToast("Mood: \(mood.rawValue)", style: .info)
+                                showMoodBanner = false
+                            },
+                            onDismiss: {
+                                showMoodBanner = false
+                            }
+                        )
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     tmdbWarningSection
                     castAndTrackingSection
                 }
@@ -155,7 +171,6 @@ struct DetailView: View {
                             style: .success
                         )
                         if isCompleted && !wasCompleted {
-                            // Completion effect handled via badge/haptic
                         }
                     }
                 }
@@ -201,7 +216,11 @@ struct DetailView: View {
             logoOptions: viewModel.logoOptions,
             isCustomLogo: viewModel.isCustomLogo,
             onSelectLogo: { url in viewModel.selectLogo(url: url) },
-            onResetLogo: { viewModel.resetToDefaultLogo() }
+            onResetLogo: { viewModel.resetToDefaultLogo() },
+            onMoodChanged: { mood in
+                viewModel.item.mood = mood?.rawValue
+                viewModel.item.commitChange()
+            }
         )
     }
 

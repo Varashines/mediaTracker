@@ -30,6 +30,8 @@ struct InsightsView: View {
     @State private var backgroundTintTask: Task<Void, Never>?
     @State private var selectedTab: InsightTab = .overview
     @State private var showSpectrum = false
+    @State private var showingShareSheet = false
+    @State private var shareImage: NSImage? = nil
     @State private var hoveredTab: InsightTab? = nil
     @Namespace private var insightsNamespace
     @Namespace private var flipNamespace
@@ -75,6 +77,25 @@ struct InsightsView: View {
                                 ),
                                 isFlipped: showSpectrum
                             )
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    let card = PassportCardView(stats: stats)
+                                    if let image = card.renderToImage() {
+                                        shareImage = image
+                                        showingShareSheet = true
+                                    }
+                                } label: {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .padding(6)
+                                        .background(Circle().fill(.ultraThinMaterial))
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
+                                .help("Share Passport")
+                                .padding(12)
+                            }
                             .onTapGesture {
                                 withAnimation(AppTheme.Animation.springGentle) {
                                     showSpectrum.toggle()
@@ -141,6 +162,15 @@ struct InsightsView: View {
             backgroundTintTask?.cancel()
             backgroundTintTask = nil
         }
+        .onChange(of: showingShareSheet) { _, show in
+            if show, let image = shareImage {
+                let picker = NSSharingServicePicker(items: [image])
+                if let window = NSApp.keyWindow, let content = window.contentView {
+                    picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+                }
+                showingShareSheet = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -154,6 +184,20 @@ struct InsightsView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: AppTheme.Colors.accent)
                 TasteDNAView(stats: stats)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+        HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                SectionHeader(title: "Watch Streak", icon: "flame.fill", iconColor: .orange)
+                StreakSummaryView(stats: stats)
+            }
+            .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                SectionHeader(title: "Mood Journey", icon: "heart.text.clipboard.fill", iconColor: AppTheme.Colors.accent)
+                MoodTimelineView(stats: stats)
             }
             .frame(maxWidth: .infinity)
         }
@@ -176,8 +220,8 @@ struct InsightsView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(title: "Streaming Providers", icon: "tv.and.mediabox.fill", iconColor: AppTheme.Colors.accent)
             ProviderRingView(providers: stats.topProviders, providerCoverage: stats.providerCoverage)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
-        .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
         SectionDivider(color: AppTheme.Colors.accent)
 

@@ -251,3 +251,42 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+// MARK: - Mood Sentiment
+
+enum Mood: String, Codable, CaseIterable, Sendable {
+    case awe = "Awe"
+    case joy = "Joy"
+    case calm = "Calm"
+    case tense = "Tense"
+    case heavy = "Heavy"
+    case flat = "Flat"
+
+    var emoji: String {
+        switch self {
+        case .awe: return "sparkles"
+        case .joy: return "face.smiling.fill"
+        case .calm: return "leaf.fill"
+        case .tense: return "bolt.fill"
+        case .heavy: return "cloud.rain.fill"
+        case .flat: return "circle.dashed"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .awe: return Color(red: 0.6, green: 0.35, blue: 0.9)
+        case .joy: return Color(red: 0.9, green: 0.55, blue: 0.15)
+        case .calm: return Color(red: 0.25, green: 0.65, blue: 0.6)
+        case .tense: return Color(red: 0.85, green: 0.25, blue: 0.2)
+        case .heavy: return Color(red: 0.3, green: 0.35, blue: 0.55)
+        case .flat: return Color(red: 0.5, green: 0.5, blue: 0.5)
+        }
+    }
+}
+
+struct GenreMoodEntry: Codable, Sendable {
+    let genre: String
+    let totalCount: Int
+    let moodDistribution: [String: Int]
+}

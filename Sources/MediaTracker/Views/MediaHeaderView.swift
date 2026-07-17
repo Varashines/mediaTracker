@@ -14,6 +14,7 @@ struct MediaHeaderView: View {
     var isCustomLogo: Bool = false
     var onSelectLogo: ((String) -> Void)? = nil
     var onResetLogo: (() -> Void)? = nil
+    var onMoodChanged: ((Mood?) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -37,7 +38,8 @@ struct MediaHeaderView: View {
                         logoOptions: logoOptions,
                         isCustomLogo: isCustomLogo,
                         onSelectLogo: onSelectLogo,
-                        onResetLogo: onResetLogo
+                        onResetLogo: onResetLogo,
+                        onMoodChanged: onMoodChanged
                     )
                     
                     MetadataSection(item: item, themeColor: themeColor, watchProviders: watchProviders)

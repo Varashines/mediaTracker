@@ -50,6 +50,13 @@ struct LibraryStats: Sendable {
     let archetype: String
     let memberSince: Date?
 
+    let currentStreak: Int
+    let longestStreak: Int
+    let topMood: (name: String, percentage: Double)?
+    let moodBreakdown: [(name: String, count: Int, percentage: Double)]
+    let genreMoodMap: [String: [String: Int]]
+    let watchDaysLast16Weeks: [Date]
+
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
         totalMovies: 0,
@@ -72,7 +79,13 @@ struct LibraryStats: Sendable {
         barcodeData: [],
         ratingPersonality: "",
         archetype: "",
-        memberSince: nil
+        memberSince: nil,
+        currentStreak: 0,
+        longestStreak: 0,
+        topMood: nil,
+        moodBreakdown: [],
+        genreMoodMap: [:],
+        watchDaysLast16Weeks: []
     )
 }
 
@@ -118,6 +131,8 @@ struct CodableLibraryStats: Codable {
     let ratingPersonality: String
     let archetype: String
     let memberSince: Date?
+    let currentStreak: Int
+    let longestStreak: Int
 
     init(_ stats: LibraryStats) {
         self.totalWatchTimeMinutes = stats.totalWatchTimeMinutes
@@ -142,6 +157,8 @@ struct CodableLibraryStats: Codable {
         self.ratingPersonality = stats.ratingPersonality
         self.archetype = stats.archetype
         self.memberSince = stats.memberSince
+        self.currentStreak = stats.currentStreak
+        self.longestStreak = stats.longestStreak
     }
 
     func toLibraryStats() -> LibraryStats {
@@ -167,9 +184,20 @@ struct CodableLibraryStats: Codable {
             barcodeData: barcodeData,
             ratingPersonality: ratingPersonality,
             archetype: archetype,
-            memberSince: memberSince
+            memberSince: memberSince,
+            currentStreak: currentStreak,
+            longestStreak: longestStreak,
+            topMood: nil,
+            moodBreakdown: [],
+            genreMoodMap: [:],
+            watchDaysLast16Weeks: []
         )
     }
+}
+
+extension LibraryStats {
+    var topMoodName: String? { topMood?.name }
+    var topMoodPercentage: Double? { topMood?.percentage }
 }
 
 struct CachedStatsWrapper: Codable {
@@ -283,7 +311,7 @@ actor LibraryStatsActor {
                 \.lastInteractionDate, \.lastStateChangeDate,
                 \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
                 \.cachedWatchProviders, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
-                \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast
+                \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast, \.mood
             ]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
@@ -296,7 +324,11 @@ actor LibraryStatsActor {
         }
 
         try Task.checkCancellation()
-        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: includeCinephileData)
+
+        // Compute streaks from episode + movie watch dates
+        let streaks = await computeStreaks()
+
+        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: includeCinephileData, streaks: streaks)
 
         let calculationDate = Date()
         await MainActor.run {
@@ -339,6 +371,8 @@ actor LibraryStatsActor {
         var barcodeData: [BarcodeSlice] = []
         var earliestDateAdded: Date?
         var itemsWithProviders = 0
+        var moodCounts: [String: Int] = [:]
+        var genreMoodMap: [String: [String: Int]] = [:]
     }
 
     private struct TasteMapsContainer {
@@ -453,10 +487,18 @@ actor LibraryStatsActor {
                 ))
             }
 
+            // Mood tracking
+            if let mood = item.mood {
+                stats.moodCounts[mood, default: 0] += 1
+                for genre in item.cachedGenres {
+                    stats.genreMoodMap[genre, default: [:]][mood, default: 0] += 1
+                }
+            }
+
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true) async throws -> LibraryStats {
+    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date]) = (0, 0, [])) async throws -> LibraryStats {
         // 1. Process Genre DNA
         let genreDNAMap = taste.genreTaste.map { name, stats in
             (name, stats.affinity(cutoff: 5))
@@ -507,6 +549,19 @@ actor LibraryStatsActor {
             .map { $0 }
 
         let topGenre = genreDNA.first?.0
+
+        let totalMoods = stats.moodCounts.values.reduce(0, +)
+        let topMood: (name: String, percentage: Double)? = {
+            guard totalMoods > 0, let top = stats.moodCounts.max(by: { $0.value < $1.value }) else { return nil }
+            return (top.key, Double(top.value) / Double(totalMoods) * 100)
+        }()
+
+        let moodBreakdown: [(name: String, count: Int, percentage: Double)] = Mood.allCases.compactMap { mood in
+            let count = stats.moodCounts[mood.rawValue] ?? 0
+            let percentage = totalMoods > 0 ? Double(count) / Double(totalMoods) * 100 : 0
+            return count > 0 ? (mood.rawValue, count, percentage) : nil
+        }
+
         let personality = computeRatingPersonality(loved: stats.loved, liked: stats.liked, disliked: stats.disliked, unrated: stats.unrated)
         let archetype = computeArchetype(
             totalMovies: stats.movieCount, completedMovies: stats.movieCompleted,
@@ -538,7 +593,13 @@ actor LibraryStatsActor {
             barcodeData: stats.barcodeData,
             ratingPersonality: personality,
             archetype: archetype,
-            memberSince: stats.earliestDateAdded
+            memberSince: stats.earliestDateAdded,
+            currentStreak: streaks.current,
+            longestStreak: streaks.longest,
+            topMood: topMood,
+            moodBreakdown: moodBreakdown,
+            genreMoodMap: stats.genreMoodMap,
+            watchDaysLast16Weeks: streaks.watchDays16Weeks
         )
     }
 
@@ -581,6 +642,72 @@ actor LibraryStatsActor {
             return "\(genre) \(suffix)"
         }
         return suffix
+    }
+
+    private func computeStreaks() async -> (current: Int, longest: Int, watchDays16Weeks: [Date]) {
+        var activeDays = Set<Date>()
+        let calendar = Calendar.current
+
+        // Collect all episode watch dates
+        let epDescriptor = FetchDescriptor<TVEpisode>(
+            predicate: #Predicate<TVEpisode> { $0.isWatched && $0.lastWatchedDate != nil }
+        )
+        if let episodes = try? modelContext.fetch(epDescriptor) {
+            for ep in episodes {
+                if let date = ep.lastWatchedDate {
+                    activeDays.insert(calendar.startOfDay(for: date))
+                }
+            }
+        }
+
+        // Collect completed movie dates
+        let movieDescriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { $0.stateValue == "Completed" && $0.typeValue == "Movie" && $0.lastStateChangeDate != nil }
+        )
+        if let movies = try? modelContext.fetch(movieDescriptor) {
+            for movie in movies {
+                if let date = movie.lastStateChangeDate {
+                    activeDays.insert(calendar.startOfDay(for: date))
+                }
+            }
+        }
+
+        guard !activeDays.isEmpty else { return (0, 0, []) }
+
+        let sortedDays = activeDays.sorted()
+        var currentStreak = 0
+        var longestStreak = 0
+        var tempStreak = 1
+        let today = calendar.startOfDay(for: Date())
+
+        for i in 1..<sortedDays.count {
+            let diff = calendar.dateComponents([.day], from: sortedDays[i - 1], to: sortedDays[i]).day ?? 0
+            if diff == 1 {
+                tempStreak += 1
+            } else {
+                longestStreak = max(longestStreak, tempStreak)
+                tempStreak = 1
+            }
+        }
+        longestStreak = max(longestStreak, tempStreak)
+
+        // Compute current streak: count backwards from today
+        if activeDays.contains(today) || activeDays.contains(calendar.date(byAdding: .day, value: -1, to: today)!) {
+            currentStreak = 1
+            var checkDate = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -1, to: today)!)
+            while activeDays.contains(checkDate) {
+                currentStreak += 1
+                checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+            }
+        }
+
+        // Collect watch days for last 16 weeks
+        let sixteenWeeksAgo = calendar.date(byAdding: .day, value: -112, to: today)!
+        let watchDays16Weeks = activeDays
+            .filter { $0 >= sixteenWeeksAgo }
+            .sorted()
+
+        return (currentStreak, longestStreak, watchDays16Weeks)
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

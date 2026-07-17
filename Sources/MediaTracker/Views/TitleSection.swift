@@ -10,6 +10,7 @@ struct TitleSection: View {
     var isCustomLogo: Bool = false
     var onSelectLogo: ((String) -> Void)? = nil
     var onResetLogo: (() -> Void)? = nil
+    var onMoodChanged: ((Mood?) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
 
@@ -17,6 +18,7 @@ struct TitleSection: View {
     @State private var isLogoLight = false
     @State private var isLogosHovering = false
     @State private var showLogoPicker = false
+    @State private var showMoodPicker = false
 
     private func cleanProviderName(_ name: String) -> String {
         let lower = name.lowercased()
@@ -253,6 +255,10 @@ struct TitleSection: View {
                     Divider().frame(height: 24).opacity(0.3)
                     
                     TasteToggle(item: item, themeColor: themeColor)
+
+                    Divider().frame(height: 24).opacity(0.3)
+
+                    moodButton
                 }
                 .padding(.horizontal, AppTheme.Spacing.large)
                 .padding(.vertical, AppTheme.Spacing.compact)
@@ -267,6 +273,138 @@ struct TitleSection: View {
                 .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 10, y: 5)
             }
         }
+    }
+
+    @ViewBuilder
+    private var moodButton: some View {
+        let currentMood = item.mood.flatMap { Mood(rawValue: $0) }
+
+        Button {
+            showMoodPicker.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                if let mood = currentMood {
+                    Image(systemName: mood.emoji)
+                        .font(.system(size: 10))
+                    Text(mood.rawValue)
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                    Text("Mood")
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(currentMood != nil ? .primary : .secondary)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .popover(isPresented: $showMoodPicker) {
+            MoodPickerPopover(
+                currentMood: currentMood,
+                onSelect: { mood in
+                    onMoodChanged?(mood)
+                    showMoodPicker = false
+                },
+                onClear: {
+                    onMoodChanged?(nil)
+                    showMoodPicker = false
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Mood Picker Popover
+
+private struct MoodPickerPopover: View {
+    let currentMood: Mood?
+    let onSelect: (Mood) -> Void
+    let onClear: () -> Void
+    @State private var hoveredMood: Mood? = nil
+    @State private var clearHovered = false
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "heart.text.clipboard.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("How did it feel?")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(Mood.allCases, id: \.self) { mood in
+                    Button {
+                        if currentMood == mood {
+                            onClear()
+                        } else {
+                            onSelect(mood)
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: mood.emoji)
+                                .font(.system(size: 18, weight: .medium))
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    Circle()
+                                        .fill(mood.color.opacity(hoveredMood == mood ? 0.2 : 0.1))
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(currentMood == mood ? mood.color.opacity(0.5) : (hoveredMood == mood ? mood.color.opacity(0.2) : .clear), lineWidth: 1.5)
+                                )
+                            Text(mood.rawValue)
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundStyle(hoveredMood == mood ? .primary : .secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .scaleEffect(hoveredMood == mood ? 1.05 : 1.0)
+                    .animation(AppTheme.Animation.springSnappy, value: hoveredMood == mood)
+                    .onHover { hovering in
+                        hoveredMood = hovering ? mood : nil
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+
+            if currentMood != nil {
+                Divider()
+                    .padding(.horizontal, 14)
+                Button {
+                    onClear()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9))
+                        Text("Remove mood")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(clearHovered ? Color.primary.opacity(0.04) : .clear)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+                .onHover { hovering in
+                    clearHovered = hovering
+                }
+            }
+        }
+        .frame(width: 260)
     }
 }
 
