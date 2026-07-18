@@ -38,7 +38,9 @@ struct CastMemberCard: View {
             if let urlString = member.profileURL, let url = URL(string: urlString) {
                 CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .low, themeColor: themeColor) { _ in
                 } placeholder: {
-                    ProgressView().controlSize(.small)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .fill(Color.secondary.opacity(0.08))
+                        .shimmering()
                 }
                 .scaledToFill()
             } else {

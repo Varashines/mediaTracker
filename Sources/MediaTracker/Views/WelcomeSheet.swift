@@ -10,7 +10,7 @@ struct WelcomeSheet: View {
     @State private var showButtons = false
     @State private var isPrimaryHovered = false
     @State private var isSecondaryHovered = false
-    @State private var isDemoHovered = false
+    @State private var isEmptyHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,7 +63,7 @@ struct WelcomeSheet: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(.secondary)
+                    .background(AppTheme.Colors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                     .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
@@ -101,23 +101,23 @@ struct WelcomeSheet: View {
                     hasSeenWelcome = true
                     dismiss()
                 } label: {
-                    Text("Explore in Demo Mode")
+                    Text("Start with empty library")
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                                .fill(isDemoHovered ? Color.primary.opacity(0.06) : .clear)
+                                .fill(isEmptyHovered ? AppTheme.Colors.surfaceGhost(for: colorScheme) : .clear)
                         )
                         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
                 .buttonStyle(.plain)
-                .scaleEffect(isDemoHovered ? 1.02 : 1.0)
+                .scaleEffect(isEmptyHovered ? 1.02 : 1.0)
                 .onHover { hovering in
-                    withAnimation(AppTheme.Animation.springSnappy) { isDemoHovered = hovering }
+                    withAnimation(AppTheme.Animation.springSnappy) { isEmptyHovered = hovering }
                 }
-                .accessibilityLabel("Explore in Demo Mode")
+                .accessibilityLabel("Start with empty library")
             }
             .opacity(showButtons ? 1 : 0)
             .offset(y: showButtons ? 0 : 12)

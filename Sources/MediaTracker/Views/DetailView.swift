@@ -14,6 +14,7 @@ struct DetailView: View {
     @State private var showNavTitle = false
     @State private var showMoodBanner = false
 
+
     var onSearchActor: ((String) -> Void)? = nil
     var namespace: Namespace.ID? = nil
 
@@ -36,30 +37,32 @@ struct DetailView: View {
     }
 
     @ViewBuilder
+    private var backgroundMesh: some View {
+        let p = viewModel.vibrantThemeColor
+        ZStack {
+            AppTheme.Colors.background(for: colorScheme)
+            MeshGradient(
+                width: 3, height: 3,
+                points: [
+                    .init(0, 0), .init(0.5, 0), .init(1, 0),
+                    .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                    .init(0, 1), .init(0.5, 1), .init(1, 1)
+                ],
+                colors: [
+                    p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
+                    .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
+                    .clear, .clear, .clear
+                ]
+            )
+            .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
+        }
+    }
+
+    @ViewBuilder
     private var contentOverlay: some View {
         ZStack {
-            let p = viewModel.vibrantThemeColor
-            let baseBackground = AppTheme.Colors.background(for: colorScheme)
-
-            ZStack {
-                baseBackground
-
-                MeshGradient(
-                    width: 3, height: 3,
-                    points: [
-                        .init(0, 0), .init(0.5, 0), .init(1, 0),
-                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                        .init(0, 1), .init(0.5, 1), .init(1, 1)
-                    ],
-                    colors: [
-                        p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
-                        .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
-                        .clear, .clear, .clear
-                    ]
-                )
-                .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
-            }
-            .ignoresSafeArea()
+            backgroundMesh
+                .ignoresSafeArea()
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -108,8 +111,8 @@ struct DetailView: View {
 
             floatingActionBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 16)
-                .allowsHitTesting(!showDeleteConfirmation)
+            .padding(.bottom, 16)
+            .allowsHitTesting(!showDeleteConfirmation)
 
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -155,42 +158,41 @@ struct DetailView: View {
         }
         .tint(effectiveThemeColor)
         .background {
-            Group {
-                Button("") {
-                    if viewModel.item.type == .tvShow {
-                        viewModel.markNextEpisodeWatched()
-                        FeedbackManager.shared.trigger(.markWatched)
-                        AppErrorState.shared.showToast("Next episode marked", style: .success)
-                    } else {
-                        let wasCompleted = viewModel.item.state == .completed
-                        viewModel.toggleWatched()
-                        let isCompleted = viewModel.item.state == .completed
-                        FeedbackManager.shared.trigger(isCompleted ? .markWatched : .stateChange)
-                        AppErrorState.shared.showToast(
-                            isCompleted ? "Marked as watched" : "Moved to wishlist",
-                            style: .success
-                        )
-                        if isCompleted && !wasCompleted {
-                        }
-                    }
-                }
-                .keyboardShortcut(.space, modifiers: [])
-                
-                Button("") {
-                    viewModel.cycleStatus()
-                    AppErrorState.shared.showToast(
-                        "Moved to \(viewModel.item.state?.displayName ?? "new status")",
-                        style: .success
-                    )
-                }
-                .keyboardShortcut("w", modifiers: [])
-            }
-            .opacity(0)
+            keyboardShortcutButtons.opacity(0)
         }
     }
 
     private var effectiveThemeColor: Color {
         viewModel.themeColor
+    }
+
+    private var keyboardShortcutButtons: some View {
+        Group {
+            Button("") {
+                if viewModel.item.type == .tvShow {
+                    viewModel.markNextEpisodeWatched()
+                    FeedbackManager.shared.trigger(.markWatched)
+                    AppErrorState.shared.showToast("Next episode marked", style: .success)
+                } else {
+                    viewModel.toggleWatched()
+                    FeedbackManager.shared.trigger(.markWatched)
+                    AppErrorState.shared.showToast(
+                        viewModel.item.state == .completed ? "Marked as watched" : "Moved to wishlist",
+                        style: .success
+                    )
+                }
+            }
+            .keyboardShortcut(.space, modifiers: [])
+
+            Button("") {
+                viewModel.cycleStatus()
+                AppErrorState.shared.showToast(
+                    "Moved to \(viewModel.item.state?.displayName ?? "new status")",
+                    style: .success
+                )
+            }
+            .keyboardShortcut("w", modifiers: [])
+        }
     }
 
     private var headerSection: some View {
@@ -220,7 +222,9 @@ struct DetailView: View {
             onMoodChanged: { mood in
                 viewModel.item.mood = mood?.rawValue
                 viewModel.item.commitChange()
-            }
+            },
+            accentColor: viewModel.highContrastAccentColor,
+            bgAccentColor: viewModel.luminousAccentColor
         )
     }
 

@@ -84,6 +84,28 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
             return false
         }
     }
+
+    var moodColor: Color {
+        switch self {
+        case .home: return .clear
+        case .discover: return Color(hex: "8B5CF6") ?? .purple
+        case .upcoming, .releaseRadar, .smartUpcoming: return Color(hex: "F97316") ?? .orange
+        case .all: return .clear
+        case .movie: return Color(hex: "6366F1") ?? .indigo
+        case .tvShow: return Color(hex: "14B8A6") ?? .teal
+        case .smartHub: return Color(hex: "8B5CF6") ?? .purple
+        case .insights: return Color(hex: "6B7280") ?? .gray
+        case .inProgress: return Color(hex: "22C55E") ?? .green
+        case .watchlist: return Color(hex: "EAB308") ?? .yellow
+        case .loved: return Color(hex: "EC4899") ?? .pink
+        case .completed: return Color(hex: "22C55E") ?? .green
+        case .archive: return Color(hex: "78716C") ?? .brown
+        case .disliked: return Color(hex: "EF4444") ?? .red
+        case .binge: return Color(hex: "F97316") ?? .orange
+        case .quickBites: return Color(hex: "A855F7") ?? .purple
+        case .catchUp: return Color(hex: "3B82F6") ?? .blue
+        }
+    }
 }
 
 enum SidebarItem: Hashable, Sendable {
@@ -255,38 +277,67 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
 // MARK: - Mood Sentiment
 
 enum Mood: String, Codable, CaseIterable, Sendable {
-    case awe = "Awe"
-    case joy = "Joy"
-    case calm = "Calm"
-    case tense = "Tense"
+    case fun = "Fun"
     case heavy = "Heavy"
-    case flat = "Flat"
+    case tense = "Tense"
+    case wowed = "Wowed"
+    case cozy = "Cozy"
+    case creeped = "Creeped Out"
+    case mindBlown = "Mind Blown"
+    case meh = "Meh"
+    case firedUp = "Fired Up"
 
     var emoji: String {
         switch self {
-        case .awe: return "sparkles"
-        case .joy: return "face.smiling.fill"
-        case .calm: return "leaf.fill"
+        case .fun: return "face.smiling.fill"
+        case .heavy: return "drop.fill"
         case .tense: return "bolt.fill"
-        case .heavy: return "cloud.rain.fill"
-        case .flat: return "circle.dashed"
+        case .wowed: return "sparkle"
+        case .cozy: return "heart.fill"
+        case .creeped: return "exclamationmark.triangle.fill"
+        case .mindBlown: return "questionmark.circle.fill"
+        case .meh: return "circle.dashed"
+        case .firedUp: return "flame.fill"
+        }
+    }
+
+    var emojiChar: String {
+        switch self {
+        case .fun: return "😄"
+        case .heavy: return "😢"
+        case .tense: return "😰"
+        case .wowed: return "🤩"
+        case .cozy: return "🫶"
+        case .creeped: return "👀"
+        case .mindBlown: return "🤯"
+        case .meh: return "😐"
+        case .firedUp: return "🔥"
         }
     }
 
     var color: Color {
         switch self {
-        case .awe: return Color(red: 0.6, green: 0.35, blue: 0.9)
-        case .joy: return Color(red: 0.9, green: 0.55, blue: 0.15)
-        case .calm: return Color(red: 0.25, green: 0.65, blue: 0.6)
-        case .tense: return Color(red: 0.85, green: 0.25, blue: 0.2)
+        case .fun: return Color(red: 0.9, green: 0.55, blue: 0.15)
         case .heavy: return Color(red: 0.3, green: 0.35, blue: 0.55)
-        case .flat: return Color(red: 0.5, green: 0.5, blue: 0.5)
+        case .tense: return Color(red: 0.85, green: 0.25, blue: 0.2)
+        case .wowed: return Color(red: 0.6, green: 0.35, blue: 0.9)
+        case .cozy: return Color(red: 0.85, green: 0.3, blue: 0.45)
+        case .creeped: return Color(red: 0.35, green: 0.35, blue: 0.4)
+        case .mindBlown: return Color(red: 0.1, green: 0.6, blue: 0.65)
+        case .meh: return Color(red: 0.5, green: 0.5, blue: 0.5)
+        case .firedUp: return Color(red: 0.9, green: 0.45, blue: 0.15)
         }
     }
-}
 
-struct GenreMoodEntry: Codable, Sendable {
-    let genre: String
-    let totalCount: Int
-    let moodDistribution: [String: Int]
+    /// Map old/variant mood values to the current set so existing data is never orphaned.
+    static func normalized(_ value: String) -> Mood? {
+        switch value {
+        case "Awe", "Inspired": return .wowed
+        case "Joy", "Amused", "Calm", "Relaxed": return .fun
+        case "Nothing", "Flat": return .meh
+        case "Moved": return .heavy
+        case "Thrilled": return .tense
+        default: return Mood(rawValue: value)
+        }
+    }
 }

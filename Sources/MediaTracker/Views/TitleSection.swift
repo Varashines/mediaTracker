@@ -11,6 +11,8 @@ struct TitleSection: View {
     var onSelectLogo: ((String) -> Void)? = nil
     var onResetLogo: (() -> Void)? = nil
     var onMoodChanged: ((Mood?) -> Void)? = nil
+    var accentColor: Color? = nil
+    var bgAccentColor: Color? = nil
     @Environment(\.colorScheme) var colorScheme
 
 
@@ -102,15 +104,12 @@ struct TitleSection: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxHeight: 110, alignment: .leading)
                             .colorInvert(colorScheme == .light && isLogoLight)
-                            .onHover { hovering in
-                                isLogosHovering = hovering
-                            }
 
                             if logoOptions.count > 1 {
                                 Button {
                                     showLogoPicker.toggle()
                                 } label: {
-                                    Image(systemName: showLogoPicker ? "square.grid.3x3.fill" : "square.grid.3x3")
+                                    Image(systemName: showLogoPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.primary)
                                         .padding(7)
@@ -126,8 +125,7 @@ struct TitleSection: View {
                                 .buttonStyle(.plain)
                                 .contentShape(Rectangle())
                                 .help("Change logo")
-                                .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)
-                                .scaleEffect((isLogosHovering || showLogoPicker) ? 1 : 0.9)
+                            .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.2), value: isLogosHovering || showLogoPicker)
                                 .padding(8)
                                 .popover(isPresented: $showLogoPicker) {
@@ -147,6 +145,9 @@ struct TitleSection: View {
                                 }
                             }
                         }
+                        .onHover { hovering in
+                            isLogosHovering = hovering
+                        }
                     } else {
                         Text(item.title)
                             .font(AppTheme.Font.largeTitle)
@@ -165,9 +166,8 @@ struct TitleSection: View {
 
                 // 2. Metadata Badges
                 HStack(spacing: AppTheme.Spacing.small) {
-                    let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-                    let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
-                    
+                    let accent = accentColor ?? themeColor.highContrastAccent(colorScheme: colorScheme)
+                    let bgAccent = bgAccentColor ?? themeColor.luminousAccent(colorScheme: colorScheme)
                     Text(item.type?.rawValue.uppercased() ?? "")
                         .font(AppTheme.Font.caption2)
                         .kerning(AppTheme.Kerning.wide)
@@ -277,15 +277,15 @@ struct TitleSection: View {
 
     @ViewBuilder
     private var moodButton: some View {
-        let currentMood = item.mood.flatMap { Mood(rawValue: $0) }
+        let currentMood = item.mood.flatMap { Mood.normalized($0) }
 
         Button {
             showMoodPicker.toggle()
         } label: {
             HStack(spacing: 4) {
                 if let mood = currentMood {
-                    Image(systemName: mood.emoji)
-                        .font(.system(size: 10))
+                    Text(mood.emojiChar)
+                        .font(.system(size: 12))
                     Text(mood.rawValue)
                 } else {
                     Image(systemName: "sparkles")
@@ -347,8 +347,8 @@ private struct MoodPickerPopover: View {
                         }
                     } label: {
                         VStack(spacing: 4) {
-                            Image(systemName: mood.emoji)
-                                .font(.system(size: 18, weight: .medium))
+                            Text(mood.emojiChar)
+                                .font(.system(size: 20))
                                 .frame(width: 40, height: 40)
                                 .background(
                                     Circle()
@@ -420,7 +420,7 @@ private struct LogoPickerGrid: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: "square.grid.3x3")
+                Image(systemName: "square.stack.3d.down.right")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 Text("Select Logo")

@@ -39,15 +39,25 @@ struct OverviewSection: View {
                     .lineLimit(isExpanded ? nil : 3)
                     .overlay(alignment: .bottom) {
                         if hasTruncation {
-                            LinearGradient(
-                                stops: [
-                                    .init(color: surfaceColor.opacity(0), location: 0),
-                                    .init(color: surfaceColor, location: 0.85)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 30)
+                            ZStack(alignment: .bottom) {
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: surfaceColor.opacity(0), location: 0),
+                                        .init(color: surfaceColor, location: 0.7)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 40)
+
+                                if isHovering {
+                                    Text("Tap to expand")
+                                        .font(AppTheme.Font.caption)
+                                        .foregroundStyle(.tertiary)
+                                        .offset(y: -4)
+                                        .transition(.opacity)
+                                }
+                            }
                             .allowsHitTesting(false)
                         }
                     }

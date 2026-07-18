@@ -72,8 +72,8 @@ struct SidebarNavigation: View {
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
             .font(AppTheme.Font.smallBold)
-            .kerning(1.2)
-            .foregroundStyle(.secondary.opacity(0.7))
+            .kerning(AppTheme.Kerning.wide)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.top, AppTheme.Spacing.tiny)
             .padding(.bottom, AppTheme.Spacing.micro)
@@ -98,13 +98,13 @@ struct SidebarNavigation: View {
         }
 
         return Button {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.65)) {
+            withAnimation(AppTheme.Animation.springSnappy) {
                 selection = item
             }
             FeedbackManager.shared.trigger(.click)
         } label: {
             HStack(spacing: AppTheme.Spacing.small) {
-                CollectionIconView(systemImage: iconName, font: AppTheme.Icon.medium, color: isSelected ? .white : Color.primary.opacity(0.6))
+                CollectionIconView(systemImage: iconName, font: AppTheme.Icon.medium, color: isSelected ? .white : .secondary)
                     .frame(width: AppTheme.Spacing.large)
                     .scaleEffect(isSelected ? 1.1 : 1.0)
 
@@ -129,7 +129,7 @@ struct SidebarNavigation: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.45, dampingFraction: 0.65), value: isSelected)
+        .animation(AppTheme.Animation.springSnappy, value: isSelected)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.microInteraction) {
                 hoveredItem = hovering ? item : nil

@@ -19,6 +19,8 @@ class DetailViewModel {
     private var _nextEpisodeToWatch: TVEpisode?? = nil
     private var _darkerThemeColor: Color = .clear
     private var _lighterThemeColor: Color = .clear
+    private var _highContrastAccent: Color = .primary
+    private var _luminousAccent: Color = .clear
     
     init(item: MediaItem) {
         self.item = item
@@ -77,6 +79,8 @@ class DetailViewModel {
         #endif
         let scheme: ColorScheme = isDark ? .dark : .light
         self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
+        self._highContrastAccent = themeColor.highContrastAccent(colorScheme: scheme)
+        self._luminousAccent = themeColor.luminousAccent(colorScheme: scheme)
         
         let o = themeColor.oklch
         if o.c > 0.02 {
@@ -93,6 +97,12 @@ class DetailViewModel {
 
     /// Lighter variant of themeColor for mesh gradient edges.
     var lighterThemeColor: Color { _lighterThemeColor }
+
+    /// Cached high-contrast accent (foreground color against themeColor backgrounds).
+    var highContrastAccentColor: Color { _highContrastAccent }
+
+    /// Cached luminous accent (brighter variant of themeColor for pill backgrounds).
+    var luminousAccentColor: Color { _luminousAccent }
 
     var nextEpisodeToWatch: TVEpisode? {
         if let cached = _nextEpisodeToWatch { return cached }

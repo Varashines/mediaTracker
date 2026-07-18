@@ -31,6 +31,12 @@ struct LibraryEmptyStateView: View {
                 if !description.isEmpty {
                     Text(description)
                 }
+                if !APIClient.shared.isTMDBConfigured {
+                    Text("Connect an API key in Settings → Services to start tracking media")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 4)
+                }
             } actions: {
                 if let actionLabel, let action {
                     Button(action: action) {

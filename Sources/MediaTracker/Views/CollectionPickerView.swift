@@ -7,6 +7,12 @@ struct CollectionPickerView: View {
     @Environment(\.colorScheme) var colorScheme
     @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name) private var collections: [MediaCollection]
     let item: MediaItem
+    @State private var searchText = ""
+    
+    private var filteredCollections: [MediaCollection] {
+        guard !searchText.isEmpty else { return collections }
+        return collections.filter { $0.name.localizedStandardContains(searchText) }
+    }
     
     var body: some View {
         VStack(spacing: AppTheme.Spacing.large) {
@@ -26,15 +32,33 @@ struct CollectionPickerView: View {
                 }
                 .padding(.vertical, 40)
             } else {
-                ScrollView {
-                    VStack(spacing: AppTheme.Spacing.small) {
-                        ForEach(collections) { collection in
-                            CollectionToggleRow(collection: collection, item: item)
-                        }
+                VStack(spacing: AppTheme.Spacing.small) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                        TextField("Search collections", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .font(AppTheme.Font.body)
                     }
+                    .padding(.horizontal, AppTheme.Spacing.small)
+                    .padding(.vertical, AppTheme.Spacing.micro)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                            .fill(Color.primary.opacity(0.04))
+                    )
                     .padding(.horizontal, 4)
+
+                    ScrollView {
+                        VStack(spacing: AppTheme.Spacing.small) {
+                            ForEach(filteredCollections) { collection in
+                                CollectionToggleRow(collection: collection, item: item)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             }
             
             Button {
@@ -70,13 +94,13 @@ struct CollectionToggleRow: View {
             toggle()
         } label: {
             HStack {
-                CollectionIconView(systemImage: collection.systemImage, font: AppTheme.Font.bodyMedium, color: .blue)
+                CollectionIconView(systemImage: collection.systemImage, font: AppTheme.Font.bodyMedium, color: AppTheme.Colors.accent)
                     .frame(width: 24)
                 Text(collection.name)
                     .font(AppTheme.Font.body)
                 Spacer()
                 Image(systemName: isInCollection ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isInCollection ? .blue : .secondary)
+                    .foregroundStyle(isInCollection ? AppTheme.Colors.accent : .secondary)
             }
             .padding(AppTheme.Spacing.small)
             .background(

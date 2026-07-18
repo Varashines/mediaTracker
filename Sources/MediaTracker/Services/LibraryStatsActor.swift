@@ -487,11 +487,12 @@ actor LibraryStatsActor {
                 ))
             }
 
-            // Mood tracking
-            if let mood = item.mood {
-                stats.moodCounts[mood, default: 0] += 1
+            // Mood tracking — normalize old mood values to new set
+            if let mood = item.mood, let normalized = Mood.normalized(mood) {
+                let key = normalized.rawValue
+                stats.moodCounts[key, default: 0] += 1
                 for genre in item.cachedGenres {
-                    stats.genreMoodMap[genre, default: [:]][mood, default: 0] += 1
+                    stats.genreMoodMap[genre, default: [:]][key, default: 0] += 1
                 }
             }
 

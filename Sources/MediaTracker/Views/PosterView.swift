@@ -23,7 +23,7 @@ struct PosterView: View {
                     endRadius: glowPulse ? 260 : 250
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
-                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: glowPulse)
+                .animation(isHovering ? .easeInOut(duration: 2.0).repeatForever(autoreverses: true) : .easeInOut(duration: 0.3), value: glowPulse)
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
@@ -38,6 +38,10 @@ struct PosterView: View {
                 .frame(width: posterFrame.width, height: posterFrame.height)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
                 .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                )
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item)
                         .padding(14)
@@ -47,7 +51,7 @@ struct PosterView: View {
                         Button {
                             showPicker.toggle()
                         } label: {
-                            Image(systemName: showPicker ? "square.grid.3x3.fill" : "square.grid.3x3")
+                            Image(systemName: showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(showPicker ? Color.primary : .primary)
                                 .padding(7)
@@ -88,8 +92,15 @@ struct PosterView: View {
             .compositingGroup()
             .onHover { hovering in
                 isHovering = hovering
+                if hovering {
+                    glowPulse = true
+                } else {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        glowPulse = false
+                    }
+                }
             }
-            .onAppear { glowPulse = true }
+            .onAppear { glowPulse = false }
         }
     }
 }
@@ -107,7 +118,7 @@ private struct PosterPickerGrid: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: "square.grid.3x3")
+                Image(systemName: "square.stack.3d.down.right")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 Text("Select Poster")

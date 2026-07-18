@@ -104,7 +104,9 @@ struct DiscoveryCard: View {
                             .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: 2, y: 1)
 
                         CachedImage(url: url, targetSize: CGSize(width: 75, height: 32), priority: .low) { _ in } placeholder: {
-                            Color.secondary.opacity(0.1)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.secondary.opacity(0.08))
+                                .shimmering()
                         }
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 75, height: 32)

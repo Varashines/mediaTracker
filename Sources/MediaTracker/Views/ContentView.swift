@@ -131,21 +131,8 @@ struct LibraryDetailView: View {
     }
 
     private var categoryMoodColor: Color {
-        if isSearchActive {
-            return Color.clear
-        }
-        switch viewModel.filter.selectedCategory {
-        case .home: return Color.clear
-        case .discover: return Color.purple
-        case .upcoming: return Color.orange
-        case .all: return Color.clear
-        case .movie: return Color.indigo
-        case .tvShow: return Color.teal
-        case .smartHub: return Color.purple
-        case .insights: return Color.green
-        case .releaseRadar: return Color.pink
-        default: return Color.clear
-        }
+        if isSearchActive { return .clear }
+        return viewModel.filter.selectedCategory.moodColor
     }
 
     private var searchPlaceholder: String {

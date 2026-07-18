@@ -92,8 +92,8 @@ struct MoodCaptureBanner: View {
             }
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: mood.emoji)
-                    .font(.system(size: 20, weight: .medium))
+                Text(mood.emojiChar)
+                    .font(.system(size: 22))
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()

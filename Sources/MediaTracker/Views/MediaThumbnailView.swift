@@ -514,6 +514,32 @@ struct MediaThumbnailView: View, Equatable {
                 NSPasteboard.general.setString(item?.title ?? "", forType: .string)
                 AppErrorState.shared.showToast("Title copied", style: .success)
             }
+
+            if let item = modelContext.model(for: itemID) as? MediaItem {
+                let collectionsDescriptor = FetchDescriptor<MediaCollection>()
+                if let allCollections = try? modelContext.fetch(collectionsDescriptor) {
+                    let manual = allCollections.filter { $0.smartRulesData == nil }
+                    if !manual.isEmpty {
+                        Menu("Add to Collection") {
+                            ForEach(manual) { collection in
+                                let isIn = item.collections.contains(where: { $0.id == collection.id })
+                                Button {
+                                    if isIn {
+                                        collection.completedItemIDs.removeAll { $0 == item.id }
+                                        item.collections.removeAll(where: { $0.id == collection.id })
+                                    } else {
+                                        item.collections.append(collection)
+                                    }
+                                    SaveCoordinator.shared.requestSave(modelContext)
+                                } label: {
+                                    Label(collection.name,
+                                          systemImage: isIn ? "checkmark.circle.fill" : "plus.circle")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Section("Set Status") {

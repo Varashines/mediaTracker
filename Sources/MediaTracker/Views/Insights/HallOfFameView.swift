@@ -127,7 +127,9 @@ private struct PersonCard: View {
         if let urlString = person.profileURL, let url = URL(string: urlString) {
             CachedImage(url: url, targetSize: CGSize(width: 60, height: 88), priority: .low, themeColor: themeColor) { _ in
             } placeholder: {
-                ProgressView().controlSize(.small)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                    .fill(Color.secondary.opacity(0.08))
+                    .shimmering()
             }
             .scaledToFill()
             .frame(width: 60, height: 88)
