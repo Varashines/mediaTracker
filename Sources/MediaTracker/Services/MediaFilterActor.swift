@@ -456,6 +456,32 @@ actor MediaFilterActor {
     func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
         MediaThumbnailMetadata(item: item)
     }
+    func countItems(category: NavigationCategory, collectionID: UUID? = nil) async throws -> Int {
+        let basePredicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: category, searchToken: "", stateValue: nil, badge: nil, language: nil
+        )
+        if let cid = collectionID {
+            let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
+            if let collection = try? modelContext.fetch(colDescriptor).first {
+                if collection.isSmart && !collection.smartRules.isEmpty {
+                    // Smart rules require Swift-level evaluation — fetch minimal data and count
+                    var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
+                    desc.propertiesToFetch = [\.persistentModelID]
+                    desc.fetchLimit = 2000
+                    let items = try modelContext.fetch(desc)
+                    let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules)
+                    return refined.count
+                }
+                let itemIDs = collection.items.compactMap { $0.id }
+                if itemIDs.isEmpty { return 0 }
+                let pred = MediaFilterPredicates.buildManualCollectionPredicate(itemIDs: itemIDs, stateValue: nil)
+                return try modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: pred))
+            }
+            return 0
+        }
+        return try modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))
+    }
+
 }
 
 private struct CachedFilterActor {

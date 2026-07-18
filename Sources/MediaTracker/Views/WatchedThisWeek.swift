@@ -58,7 +58,7 @@ struct WatchedThisWeek: View {
                                 isFastScrolling: horizontalFastScrolling
                             )
                             .equatable()
-                            .compositingGroup()
+                            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
                             .frame(width: 160)
                         }
                         .buttonStyle(.interactive)

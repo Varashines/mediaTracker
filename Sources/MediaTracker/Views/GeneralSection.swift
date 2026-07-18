@@ -94,7 +94,14 @@ struct GeneralSection: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     SettingsToggleRow(title: "Prevent Sleep", subtitle: "Keep Mac awake for background sync", showDivider: true, isOn: $preventSleepMode)
-                    SettingsToggleRow(title: "Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", showDivider: false, isOn: $skipStartupTasks)
+                    SettingsToggleRow(title: "Skip Background Tasks", subtitle: "Disable automatic metadata repair on launch", showDivider: true, isOn: $skipStartupTasks)
+                    
+                    SettingsToggleRow(title: "Reduce Visual Effects", subtitle: "Disable animations, gradients, blur, and shadows to improve performance", showDivider: false, isOn: Binding(
+                        get: { AppThemeCoordinator.shared.reduceVisualEffects },
+                        set: { v in
+                            UserDefaults.standard.set(v, forKey: "reduce_visual_effects")
+                        }
+                    ))
                 }
             }
         }

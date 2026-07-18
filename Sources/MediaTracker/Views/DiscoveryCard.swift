@@ -51,13 +51,15 @@ struct DiscoveryCard: View {
                 }
             }
             .frame(height: style == .logo ? 90 : 60)
-            .compositingGroup()
+            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
         }
         .buttonStyle(.plain)
         .glassButtonStyle()
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+            view.scaleEffect(isHovered ? 1.02 : 1.0)
+                .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+                .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        }
         .onHover { isHovered = $0 }
         .accessibilityLabel("\(node.name), \(node.count) items")
         .accessibilityAddTraits(.isButton)

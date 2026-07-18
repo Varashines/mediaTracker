@@ -300,9 +300,11 @@ struct MediaThumbnailView: View, Equatable {
                     }
                     Spacer()
                 }
-                .transition(.scale.combined(with: .opacity))
-                .animation(AppTheme.Animation.springSnappy, value: capturedState)
-                .animation(AppTheme.Animation.springSnappy, value: capturedGridBadgeText)
+                .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                    $0.transition(.scale.combined(with: .opacity))
+                     .animation(AppTheme.Animation.springSnappy, value: capturedState)
+                     .animation(AppTheme.Animation.springSnappy, value: capturedGridBadgeText)
+                }
                 Spacer()
             }
             .padding(8)
@@ -323,7 +325,7 @@ struct MediaThumbnailView: View, Equatable {
                                 .padding(4)
                                 .background(AppTheme.Colors.accent)
                                 .clipShape(Circle())
-                                .shadow(radius: 2)
+                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.shadow(radius: 2) }
                         }
                     }
                     Spacer()
@@ -348,23 +350,29 @@ struct MediaThumbnailView: View, Equatable {
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .shadow(
-            color: isHovered
-                ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                : Color.clear,
-            radius: 0,
-            y: 0
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .stroke(disableHover && isHovered ? AppTheme.Colors.accent.opacity(0.5) : .clear, lineWidth: 2)
-                .animation(.easeOut(duration: 0.15), value: isHovered)
-        )
+        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+            view.shadow(
+                color: isHovered
+                    ? AppTheme.Colors.shadowElevated(for: colorScheme)
+                    : Color.clear,
+                radius: 0,
+                y: 0
+            )
+        }
+        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+            view.overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                    .stroke(disableHover && isHovered ? AppTheme.Colors.accent.opacity(0.5) : .clear, lineWidth: 2)
+                    .animation(.easeOut(duration: 0.15), value: isHovered)
+            )
+        }
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
-        .offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
+        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+            view.offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
+        }
         .onAppear {
-            if isFastScrolling || staggerIndex == nil || hasStaggerPlayed {
+            if isFastScrolling || staggerIndex == nil || hasStaggerPlayed || AppThemeCoordinator.isReducingVisualEffects {
                 isAppeared = true
                 return
             }
@@ -382,7 +390,9 @@ struct MediaThumbnailView: View, Equatable {
         .onChange(of: isFastScrolling) { _, fast in
             if fast { isHovered = false }
         }
-        .animation(!disableHover ? AppTheme.Animation.springSnappy : nil, value: isHovered)
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.animation(!disableHover ? AppTheme.Animation.springSnappy : nil, value: isHovered)
+        }
     }
 
     private func markNextEpisodeAsWatched(for item: MediaItem) {

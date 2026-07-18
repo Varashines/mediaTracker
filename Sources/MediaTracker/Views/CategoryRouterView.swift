@@ -26,7 +26,9 @@ struct CategoryRouterView: View {
                     },
                     modelContainer: modelContainer
                 )
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                    $0.transition(.move(edge: .top).combined(with: .opacity))
+                }
                 .zIndex(1)
             }
         }
@@ -34,10 +36,12 @@ struct CategoryRouterView: View {
 
     @ViewBuilder
     private var normalContent: some View {
-        let slideTransition: AnyTransition = .asymmetric(
-            insertion: .move(edge: .trailing).combined(with: .opacity),
-            removal: .move(edge: .leading).combined(with: .opacity)
-        )
+        let slideTransition: AnyTransition = AppThemeCoordinator.isReducingVisualEffects
+            ? .identity
+            : .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
 
         if viewModel.filter.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in

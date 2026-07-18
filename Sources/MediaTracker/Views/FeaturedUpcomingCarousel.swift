@@ -26,7 +26,7 @@ struct FeaturedUpcomingCarousel: View {
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
-                                .compositingGroup()
+                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
                         }
                         .buttonStyle(.interactive)
                     }

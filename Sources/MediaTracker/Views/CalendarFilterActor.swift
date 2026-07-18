@@ -115,7 +115,9 @@ actor CalendarFilterActor {
         var episodes = try modelContext.fetch(descriptor)
         
         let unindexedPredicate = #Predicate<TVEpisode> { ep in ep.airDateValue == nil }
-        let unindexedDescriptor = FetchDescriptor<TVEpisode>(predicate: unindexedPredicate)
+        var unindexedDescriptor = FetchDescriptor<TVEpisode>(predicate: unindexedPredicate)
+        unindexedDescriptor.propertiesToFetch = [\.airDateValue, \.airDate, \.airstamp, \.uniqueID, \.showID, \.seasonNumber, \.episodeNumber]
+        unindexedDescriptor.fetchLimit = 2000
         let unindexed = (try? modelContext.fetch(unindexedDescriptor)) ?? []
         let matched = unindexed.filter { ep in
             guard let date = ep.airDateAsDate else { return false }
@@ -135,7 +137,9 @@ actor CalendarFilterActor {
     }
 
     private static func healMissingDatesSync(context: ModelContext) {
-        let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
+        var descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
+        descriptor.propertiesToFetch = [\.airDateValue, \.airDate, \.airstamp, \.uniqueID, \.showID, \.seasonNumber, \.episodeNumber]
+        descriptor.fetchLimit = 2000
         guard let episodes = try? context.fetch(descriptor), !episodes.isEmpty else { return }
         let batchSize = 50
         for i in stride(from: 0, to: episodes.count, by: batchSize) {

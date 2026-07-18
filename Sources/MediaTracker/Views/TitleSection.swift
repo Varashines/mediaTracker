@@ -117,7 +117,9 @@ struct TitleSection: View {
                                             if showLogoPicker {
                                                 Circle().fill(Color.primary.opacity(0.12))
                                             } else {
-                                                Circle().fill(.ultraThinMaterial)
+                                                Circle().fill(AppThemeCoordinator.isReducingVisualEffects
+                                                    ? AnyShapeStyle(AppThemeCoordinator.shared.background(for: colorScheme))
+                                                    : AnyShapeStyle(.ultraThinMaterial))
                                             }
                                         }
                                         .shadow(color: .black.opacity(showLogoPicker ? 0.25 : 0.15), radius: showLogoPicker ? 4 : 3, x: 0, y: showLogoPicker ? 3 : 2)
@@ -263,7 +265,10 @@ struct TitleSection: View {
                 .padding(.horizontal, AppTheme.Spacing.large)
                 .padding(.vertical, AppTheme.Spacing.compact)
                 .background {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous).fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                        .fill(AppThemeCoordinator.isReducingVisualEffects
+                            ? AnyShapeStyle(AppThemeCoordinator.shared.background(for: colorScheme))
+                            : AnyShapeStyle(.ultraThinMaterial))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                 .overlay {
@@ -462,7 +467,7 @@ private struct LogoPickerGrid: View {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 10))
                         Text("Reset to default")
-                            .font(.system(size: 11))
+                            .font(AppTheme.Font.caption)
                     }
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 10)
@@ -488,6 +493,7 @@ private struct LogoThumbnail: View {
     let onSelect: () -> Void
     @State private var isHovered = false
     @State private var selectionPulse = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         if let url = URL(string: urlString) {
@@ -506,7 +512,9 @@ private struct LogoThumbnail: View {
                 if isSelected {
                     ZStack {
                         Circle()
-                            .fill(.ultraThinMaterial)
+                            .fill(AppThemeCoordinator.isReducingVisualEffects
+                                ? AnyShapeStyle(AppThemeCoordinator.shared.background(for: colorScheme))
+                                : AnyShapeStyle(.ultraThinMaterial))
                             .frame(width: 20, height: 20)
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .bold))

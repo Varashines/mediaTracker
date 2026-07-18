@@ -393,7 +393,7 @@ class BackgroundTaskManager {
                 
                 var migratedCount = 0
                 for item in allItems {
-                    try? Task.checkCancellation()
+                    guard !Task.isCancelled else { return }
                     
                     if !item.cachedWatchProviders.isEmpty {
                         continue
@@ -454,7 +454,7 @@ class BackgroundTaskManager {
             var processed = 0
             
             for item in allNeedsBackfill {
-                try? Task.checkCancellation()
+                guard !Task.isCancelled else { return }
                 
                 guard let tmdbIDString = item.id.split(separator: "_").last,
                       let tmdbID = Int(tmdbIDString) else { continue }

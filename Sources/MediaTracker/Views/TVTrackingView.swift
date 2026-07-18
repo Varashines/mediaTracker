@@ -11,11 +11,12 @@ struct TVTrackingView: View {
 
     @State private var selectedSeasonNumber: Int?
     @State private var previousSeasonComplete = false
+    @State private var sortedSeasons: [TVSeason] = []
+    @State private var showCompletedEpisodes = false
 
-    private var sortedSeasons: [TVSeason] {
-        tvDetails.seasons
-            .liveModels
-            .sorted(by: { $0.seasonNumber < $1.seasonNumber })
+    private var allSeasonsWatched: Bool {
+        let nonZero = sortedSeasons.filter { $0.seasonNumber > 0 }
+        return !nonZero.isEmpty && nonZero.allSatisfy { $0.totalEpisodesCount > 0 && $0.watchedEpisodesCount == $0.totalEpisodesCount }
     }
 
     private var selectedSeasonIsComplete: Bool {
@@ -23,6 +24,12 @@ struct TVTrackingView: View {
               let season = tvDetails.seasons.first(where: { $0.seasonNumber == selectedNumber }),
               season.totalEpisodesCount > 0 else { return false }
         return season.watchedEpisodesCount == season.totalEpisodesCount
+    }
+
+    private func updateSortedSeasons() {
+        sortedSeasons = tvDetails.seasons
+            .liveModels
+            .sorted(by: { $0.seasonNumber < $1.seasonNumber })
     }
 
     var body: some View {
@@ -45,6 +52,7 @@ struct TVTrackingView: View {
                                 isSelected: selectedSeasonNumber == season.seasonNumber,
                                 themeColor: themeColor
                             ) {
+                                showCompletedEpisodes = true
                                 withAnimation(AppTheme.Animation.easeInOut) {
                                     selectedSeasonNumber = season.seasonNumber
                                 }
@@ -58,7 +66,9 @@ struct TVTrackingView: View {
                 .scrollBounceBehavior(.basedOnSize)
 
                 // Focused Episode Grid
-                if let selectedNumber = selectedSeasonNumber,
+                if allSeasonsWatched && !showCompletedEpisodes {
+                    EmptyView()
+                } else if let selectedNumber = selectedSeasonNumber,
                     let selectedSeason = tvDetails.seasons.first(where: {
                         $0.seasonNumber == selectedNumber
                     })
@@ -80,14 +90,26 @@ struct TVTrackingView: View {
                 }
             }
         }
-        .onAppear { refreshSeasonSelection() }
-        .onChange(of: tvDetails.seasons.count) { _, _ in refreshSeasonSelection() }
+        .onAppear {
+            updateSortedSeasons()
+            refreshSeasonSelection()
+            if allSeasonsWatched { showCompletedEpisodes = false }
+        }
+        .onChange(of: tvDetails.seasons.count) { _, _ in
+            refreshSeasonSelection()
+            updateSortedSeasons()
+        }
         .onChange(of: tvDetails.item?.lastUpdated) { _, _ in refreshSeasonSelection() }
         .onChange(of: selectedSeasonIsComplete) { _, isNowComplete in
             if isNowComplete && !previousSeasonComplete {
                 onSeasonCompleted?()
             }
             previousSeasonComplete = isNowComplete
+        }
+        .onChange(of: allSeasonsWatched) { _, nowCompleted in
+            if nowCompleted {
+                showCompletedEpisodes = false
+            }
         }
     }
 
@@ -109,8 +131,14 @@ struct TVTrackingView: View {
     }
 
     private func selectInitialSeason() {
-        // 1. Prioritize non-zero seasons that have unwatched episodes
         let activeSeasons = sortedSeasons.filter { $0.seasonNumber > 0 }
+
+        // For completed shows, pick the last season and collapse the grid
+        if allSeasonsWatched, let lastActive = activeSeasons.last {
+            selectedSeasonNumber = lastActive.seasonNumber
+            onSeasonSelected?(lastActive)
+            return
+        }
 
         if let firstUnwatched = activeSeasons.first(where: { season in
             season.watchedEpisodesCount < season.totalEpisodesCount
@@ -133,6 +161,7 @@ struct TVTrackingView: View {
             onSeasonSelected?(specials)
         }
     }
+
 }
 
 private struct SeasonTab: View {

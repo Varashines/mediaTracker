@@ -13,6 +13,46 @@ struct GlassCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        Group {
+            if AppThemeCoordinator.isReducingVisualEffects {
+                reducedBody
+            } else {
+                richBody
+            }
+        }
+    }
+    
+    private var reducedBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(AppTheme.Colors.cardFill(for: scheme))
+                .allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(
+                    color != .clear
+                        ? color.opacity(scheme == .dark ? 0.25 : 0.12)
+                        : AppTheme.Colors.strokeDefault(for: scheme),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(
+            color: shadowed
+                ? (isHovered
+                    ? AppTheme.Colors.shadowElevated(for: scheme)
+                    : AppTheme.Colors.shadowAmbient(for: scheme))
+                : .clear,
+            radius: isHovered ? AppTheme.Shadow.elevated.radius : AppTheme.Shadow.card.radius,
+            y: isHovered ? AppTheme.Shadow.elevated.y : AppTheme.Shadow.card.y
+        )
+    }
+    
+    private var richBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }

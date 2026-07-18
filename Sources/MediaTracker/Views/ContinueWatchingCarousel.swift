@@ -29,7 +29,7 @@ struct ContinueWatchingCarousel: View {
                                 metadata: metadata, mode: .hero, namespace: namespace,
                                 isFastScrolling: isFastScrolling || horizontalFastScrolling)
                             .equatable()
-                            .compositingGroup()
+                            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
                         }
                         .buttonStyle(.interactive)
                     }

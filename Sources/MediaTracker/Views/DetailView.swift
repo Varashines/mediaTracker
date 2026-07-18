@@ -41,20 +41,22 @@ struct DetailView: View {
         let p = viewModel.vibrantThemeColor
         ZStack {
             AppTheme.Colors.background(for: colorScheme)
-            MeshGradient(
-                width: 3, height: 3,
-                points: [
-                    .init(0, 0), .init(0.5, 0), .init(1, 0),
-                    .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                    .init(0, 1), .init(0.5, 1), .init(1, 1)
-                ],
-                colors: [
-                    p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
-                    .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
-                    .clear, .clear, .clear
-                ]
-            )
-            .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
+            if !AppThemeCoordinator.isReducingVisualEffects {
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        .init(0, 0), .init(0.5, 0), .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
+                        .init(0, 1), .init(0.5, 1), .init(1, 1)
+                    ],
+                    colors: [
+                        p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
+                        .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
+                        .clear, .clear, .clear
+                    ]
+                )
+                .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
+            }
         }
     }
 
@@ -92,7 +94,9 @@ struct DetailView: View {
                             }
                         )
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                            $0.transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
                     tmdbWarningSection
                     castAndTrackingSection
@@ -105,8 +109,8 @@ struct DetailView: View {
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
             .coordinateSpace(name: "detailScroll")
-            .saturation(showDeleteConfirmation ? 0.3 : 1)
-            .blur(radius: showDeleteConfirmation ? 5 : 0)
+            .saturation(!AppThemeCoordinator.isReducingVisualEffects && showDeleteConfirmation ? 0.3 : 1)
+            .blur(radius: !AppThemeCoordinator.isReducingVisualEffects && showDeleteConfirmation ? 5 : 0)
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
 
             floatingActionBar
@@ -235,9 +239,20 @@ struct DetailView: View {
         
         if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
-                Text("Please add your TMDB API Key in Settings to see more details.")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.orange)
+                    Text("Please add your TMDB API Key in Settings to see more details.")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.micro)
+                .background(
+                    Capsule()
+                        .fill(.orange.opacity(0.1))
+                )
             }
         }
     }
@@ -305,8 +320,8 @@ struct DetailView: View {
                             viewModel.fetchRecommendations()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "sparkles")
-                                    .font(AppTheme.Font.body)
+                                Image(systemName: "rectangle.stack.badge.sparkles")
+                                    .font(.system(size: 16))
                                 Text("Discover similar shows")
                                     .font(AppTheme.Font.caption)
                             }
@@ -328,7 +343,7 @@ struct DetailView: View {
                     }
                 }
             }
-            } else if viewModel.item.type == .tvShow || !viewModel.item.displayCast.isEmpty {
+            } else {
                 DetailSkeletonView(
                     needsTV: viewModel.item.type == .tvShow,
                     hasCast: !viewModel.item.displayCast.isEmpty
@@ -354,7 +369,9 @@ struct DetailView: View {
                         }
                     }
                     .frame(width: 28, height: 28)
-                    .background(Capsule().fill(.ultraThinMaterial))
+                        .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
+                            ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                            : AnyShapeStyle(.ultraThinMaterial)))
                     .clipShape(.capsule)
                     .contentShape(Capsule())
                 }
@@ -366,13 +383,19 @@ struct DetailView: View {
                 .accessibilityLabel("Refresh metadata")
 
                 Button(role: .destructive) {
-                    withAnimation(AppTheme.Animation.springSnappy) {
+                    if AppThemeCoordinator.isReducingVisualEffects {
                         showDeleteConfirmation = true
+                    } else {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            showDeleteConfirmation = true
+                        }
                     }
                 } label: {
                     Image(systemName: "trash")
                         .frame(width: 28, height: 28)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                    .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
+                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                        : AnyShapeStyle(.ultraThinMaterial)))
                         .clipShape(.capsule)
                         .contentShape(Capsule())
                 }
@@ -427,7 +450,9 @@ struct DetailView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Capsule().fill(.ultraThinMaterial))
+        .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
+            ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+            : AnyShapeStyle(.ultraThinMaterial)))
     }
 
     private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -441,8 +466,12 @@ struct DetailView: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(AppTheme.Animation.springSnappy) {
+                    if AppThemeCoordinator.isReducingVisualEffects {
                         showDeleteConfirmation = false
+                    } else {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            showDeleteConfirmation = false
+                        }
                     }
                 }
                 .transition(.opacity)
@@ -474,8 +503,12 @@ struct DetailView: View {
 
                 HStack(spacing: 24) {
                     Button {
-                        withAnimation(AppTheme.Animation.springSnappy) {
+                        if AppThemeCoordinator.isReducingVisualEffects {
                             showDeleteConfirmation = false
+                        } else {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                showDeleteConfirmation = false
+                            }
                         }
                     } label: {
                         Text("No")

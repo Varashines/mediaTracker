@@ -5,16 +5,22 @@ struct LibraryBackgroundView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Color.clear
-            .adaptiveBackground()
-            .ignoresSafeArea()
-            .overlay {
-                if #available(macOS 15, *) {
-                    meshGradientBackground
-                } else {
-                    legacyGradientBackground
+        if AppThemeCoordinator.isReducingVisualEffects {
+            Color.clear
+                .adaptiveBackground()
+                .ignoresSafeArea()
+        } else {
+            Color.clear
+                .adaptiveBackground()
+                .ignoresSafeArea()
+                .overlay {
+                    if #available(macOS 15, *) {
+                        meshGradientBackground
+                    } else {
+                        legacyGradientBackground
+                    }
                 }
-            }
+        }
     }
 
     @available(macOS 15, *)

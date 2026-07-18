@@ -1,6 +1,13 @@
 import SwiftUI
 import AppKit
 
+extension View {
+    @ViewBuilder
+    func `if`(_ condition: Bool, transform: (Self) -> some View) -> some View {
+        if condition { transform(self) } else { self }
+    }
+}
+
 // Cache for parsed hex colors to avoid repeated parsing in view bodies
 private nonisolated(unsafe) let hexColorCache: NSCache<NSString, NSColor> = {
     let cache = NSCache<NSString, NSColor>()
@@ -182,7 +189,10 @@ extension Color {
 // MARK: - Shimmering Effect
 extension View {
     func shimmering() -> some View {
-        modifier(ShimmeringModifier())
+        if AppThemeCoordinator.isReducingVisualEffects {
+            return AnyView(self)
+        }
+        return AnyView(modifier(ShimmeringModifier()))
     }
 }
 
@@ -311,7 +321,10 @@ struct SkeletonPulseModifier: ViewModifier {
 
 extension View {
     func skeletonPulse() -> some View {
-        self.modifier(SkeletonPulseModifier())
+        if AppThemeCoordinator.isReducingVisualEffects {
+            return AnyView(self)
+        }
+        return AnyView(self.modifier(SkeletonPulseModifier()))
     }
 
     func adaptiveBackground() -> some View {

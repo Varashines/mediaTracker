@@ -164,7 +164,9 @@ struct LibraryDetailView: View {
 
                 if viewModel.collection.showingNoteOverlay, let collectionID = viewModel.collection.selectedCollectionID {
                     NoteOverlayView(viewModel: viewModel, collectionID: collectionID)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                            $0.transition(.move(edge: .top).combined(with: .opacity))
+                        }
                         .zIndex(100)
                 }
             }

@@ -32,7 +32,9 @@ struct HoverScaleEffect: ViewModifier {
                 radius: isHovered ? shadowRadius : 0,
                 y: isHovered ? shadowY : 0
             )
-            .animation(AppTheme.Animation.springSnappy, value: isHovered)
+            .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                $0.animation(AppTheme.Animation.springSnappy, value: isHovered)
+            }
             .onHover { isHovered = $0 }
     }
 

@@ -96,26 +96,61 @@ class SleepManager {
     }
     
     private var eventMonitor: Any?
-    
+    private let eventMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown, .mouseMoved, .scrollWheel]
+
     private func setupInteractionMonitor() {
         #if os(macOS)
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
-            // ONLY wake up if the user is interacting with the main window.
-            // This allows the MenuBar dashboard to be used without waking the heavy main app view.
-            guard let self = self, let main = NSApp.mainWindow, event.window == main else {
+        // macOS does not deliver .mouseMoved events unless the window explicitly opts in.
+        // Observe the main window so we can enable it as soon as it appears.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeMainNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.enableMouseMoveTracking()
+            }
+        }
+        // Fire once in case the main window already exists (e.g. app restored state).
+        Task { @MainActor [weak self] in
+            self?.enableMouseMoveTracking()
+        }
+
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
+            guard let self = self, let main = NSApp?.mainWindow, event.window == main else {
                 return event
             }
-            
+
+            let now = Date()
+
+            // Debounce mouse-move to 1 Hz — it fires at display refresh rate (60-120 Hz).
+            // Without debouncing, DispatchWorkItem is cancelled/recreated 60+ times/sec.
+            if event.type == .mouseMoved {
+                let elapsed = now.timeIntervalSince(self.lastInteractionDate)
+                // Wake immediately if asleep; otherwise throttle to avoid busywork
+                if !self.isAsleep && elapsed < 1.0 {
+                    return event
+                }
+            }
+
+            self.lastInteractionDate = now
             self.resetTimer()
             return event
         }
         #endif
     }
 
+    private func enableMouseMoveTracking() {
+        #if os(macOS)
+        guard let window = NSApp?.mainWindow else { return }
+        window.acceptsMouseMovedEvents = true
+        #endif
+    }
+
     @MainActor
     private func updateWindowChrome() {
         #if os(macOS)
-        guard let window = NSApp.mainWindow else { return }
+        guard let window = NSApp?.mainWindow else { return }
         if isAsleep {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
@@ -145,6 +180,7 @@ extension EnvironmentValues {
 
 struct SleepOverlayModifier: ViewModifier {
     @Environment(\.sleepManager) var sleepManager
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         ZStack {
@@ -167,13 +203,16 @@ struct SleepOverlayModifier: ViewModifier {
                             .font(.title2.bold())
                             .foregroundStyle(.secondary)
 
-                        Text("Click or press any key to wake up")
+                        Text("Move your mouse, click, or press any key to wake up")
                             .font(.subheadline)
                             .foregroundStyle(.tertiary)
                     }
                     .padding(40)
                     .background {
-                        RoundedRectangle(cornerRadius: 24).fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(AppThemeCoordinator.isReducingVisualEffects
+                                ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                                : AnyShapeStyle(.ultraThinMaterial))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 24))
                     .overlay {

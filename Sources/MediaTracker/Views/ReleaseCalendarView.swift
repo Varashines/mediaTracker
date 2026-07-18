@@ -303,6 +303,12 @@ struct ReleaseCalendarView: View {
             return res
         }()
         
+        let weekData: [(id: String, days: [CalendarDayInfo?])] = weeks.map { week in
+            let firstDay = week.compactMap { $0 }.first?.date ?? Date()
+            let id = ISO8601DateFormatter().string(from: firstDay)
+            return (id, week)
+        }
+        
         VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 6) {
                 ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
@@ -313,12 +319,14 @@ struct ReleaseCalendarView: View {
                 }
             }
             
+            let accentOKLCH = AppTheme.Colors.accent.oklch
+            
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(weeks.indices, id: \.self) { weekIdx in
+                ForEach(weekData, id: \.id) { week in
                     HStack(spacing: 6) {
                         ForEach(0..<7) { dayIdx in
-                            if let day = weeks[weekIdx][dayIdx] {
-                                calendarCell(day: day)
+                            if let day = week.days[dayIdx] {
+                                calendarCell(day: day, oklch: accentOKLCH)
                             } else {
                                 RoundedRectangle(cornerRadius: 5)
                                     .fill(Color.clear)
@@ -412,7 +420,7 @@ struct ReleaseCalendarView: View {
     }
     
     @ViewBuilder
-    private func calendarCell(day: CalendarDayInfo) -> some View {
+    private func calendarCell(day: CalendarDayInfo, oklch: Color.OKLCH) -> some View {
         let isSelected = selectedDate.map { Calendar.current.isDate(day.date, inSameDayAs: $0) } ?? false
         let isToday = Calendar.current.isDateInToday(day.date)
         
@@ -421,15 +429,14 @@ struct ReleaseCalendarView: View {
                 return Color.secondary.opacity(0.1)
             }
             
-            let o = AppTheme.Colors.accent.oklch
             if colorScheme == .dark {
                 let l = 0.8 - (day.intensity * 0.5)
-                let c = (o.c * 0.5) + (day.intensity * (o.c * 0.5))
-                return Color.fromOKLCH(l: l, c: c, h: o.h)
+                let c = (oklch.c * 0.5) + (day.intensity * (oklch.c * 0.5))
+                return Color.fromOKLCH(l: l, c: c, h: oklch.h)
             } else {
                 let l = 0.95 - (day.intensity * 0.55)
-                let c = (o.c * 0.6) + (day.intensity * (o.c * 0.4))
-                return Color.fromOKLCH(l: l, c: c, h: o.h)
+                let c = (oklch.c * 0.6) + (day.intensity * (oklch.c * 0.4))
+                return Color.fromOKLCH(l: l, c: c, h: oklch.h)
             }
         }()
         

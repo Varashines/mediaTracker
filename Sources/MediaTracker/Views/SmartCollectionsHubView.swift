@@ -254,12 +254,8 @@ struct SmartCollectionsHubView: View {
             for cat in smartCategories {
                 group.addTask {
                     do {
-                        let result = try await actor.filterAndSort(
-                            category: cat, searchText: "", sortOrder: .alphabetical,
-                            network: nil, language: nil, genre: nil, year: nil,
-                            state: nil, badge: nil, limit: 1, offset: 0
-                        )
-                        return (cat, result.totalCount)
+                        let count = try await actor.countItems(category: cat)
+                        return (cat, count)
                     } catch {
                         AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
                         return nil
@@ -279,12 +275,8 @@ struct SmartCollectionsHubView: View {
             for (collectionID, collectionName) in customCollectionIDs {
                 group.addTask {
                     do {
-                        let result = try await actor.filterAndSort(
-                            category: .all, searchText: "", sortOrder: .alphabetical,
-                            network: nil, language: nil, genre: nil, year: nil,
-                            state: nil, badge: nil, collectionID: collectionID, limit: 1, offset: 0
-                        )
-                        return (collectionID, result.totalCount)
+                        let count = try await actor.countItems(category: .all, collectionID: collectionID)
+                        return (collectionID, count)
                     } catch {
                         AppLogger.debug("Error fetching count for smart collection \(collectionName): \(error)")
                         return nil

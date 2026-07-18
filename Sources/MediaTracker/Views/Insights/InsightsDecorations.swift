@@ -13,12 +13,16 @@ struct SectionDivider: View {
                 startPoint: .leading, endPoint: .trailing
             ))
             .frame(height: 1)
-            .frame(width: hasAppeared ? 200 : 0)
+            .frame(width: hasAppeared || AppThemeCoordinator.isReducingVisualEffects ? 200 : 0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .onAppear {
-                withAnimation(AppTheme.Animation.easeInOut.delay(0.1)) {
+                if AppThemeCoordinator.isReducingVisualEffects {
                     hasAppeared = true
+                } else {
+                    withAnimation(AppTheme.Animation.easeInOut.delay(0.1)) {
+                        hasAppeared = true
+                    }
                 }
             }
     }
@@ -199,7 +203,10 @@ struct FlipCardModifier: AnimatableModifier {
     }
     
     func body(content: Content) -> some View {
-        content
+        if AppThemeCoordinator.isReducingVisualEffects {
+            return AnyView(content)
+        }
+        return AnyView(content
             .scaleEffect(scale)
             .rotation3DEffect(
                 .degrees(angle),
@@ -238,6 +245,7 @@ struct FlipCardModifier: AnimatableModifier {
                 .blendMode(.overlay)
                 .allowsHitTesting(false)
             }
+        )
     }
     
     private var scale: CGFloat {
@@ -287,7 +295,11 @@ struct FlipCard<Front: View, Back: View>: View {
     var stripCount: Int = 8
 
     var body: some View {
-        FlipCardContent(front: front, back: back, angle: isFlipped ? 180 : 0, stripCount: stripCount)
+        if AppThemeCoordinator.isReducingVisualEffects {
+            front
+        } else {
+            FlipCardContent(front: front, back: back, angle: isFlipped ? 180 : 0, stripCount: stripCount)
+        }
     }
 }
 

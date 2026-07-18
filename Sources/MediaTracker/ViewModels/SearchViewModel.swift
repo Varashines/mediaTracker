@@ -5,14 +5,25 @@ import Combine
 @MainActor
 @Observable
 class SearchViewModel {
-    var movieResults: [MediaSearchResult] = [] { didSet { recomputeAllWebResults() } }
-    var tvResults: [MediaSearchResult] = [] { didSet { recomputeAllWebResults() } }
+    var movieResults: [MediaSearchResult] = [] { didSet { scheduleRecompute() } }
+    var tvResults: [MediaSearchResult] = [] { didSet { scheduleRecompute() } }
     var filteredLocalResults: [MediaThumbnailMetadata] = []
     var isSearching = false
     var isOfflineResultsOnly = false
     var errorMessage: String?
     var showError = false
-    var displayCache: DisplayCache? { didSet { recomputeAllWebResults() } }
+    var displayCache: DisplayCache? { didSet { scheduleRecompute() } }
+
+    private var recomputeTask: Task<Void, Never>?
+
+    private func scheduleRecompute() {
+        recomputeTask?.cancel()
+        recomputeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 0)
+            guard !Task.isCancelled else { return }
+            recomputeAllWebResults()
+        }
+    }
     
     private(set) var allWebResults: [MediaSearchResult] = []
     

@@ -19,11 +19,13 @@ struct PosterView: View {
                 RadialGradient(
                     colors: [themeColor.opacity(0.5), .clear],
                     center: .center,
-                    startRadius: glowPulse ? 25 : 20,
-                    endRadius: glowPulse ? 260 : 250
+                    startRadius: 20,
+                    endRadius: 250
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
-                .animation(isHovering ? .easeInOut(duration: 2.0).repeatForever(autoreverses: true) : .easeInOut(duration: 0.3), value: glowPulse)
+                .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                    $0.animation(isHovering ? .easeInOut(duration: 2.0).repeatForever(autoreverses: true) : .easeInOut(duration: 0.3), value: glowPulse)
+                }
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
@@ -89,13 +91,17 @@ struct PosterView: View {
                     }
                 }
             }
-            .compositingGroup()
+            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
             .onHover { hovering in
                 isHovering = hovering
                 if hovering {
                     glowPulse = true
                 } else {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    if !AppThemeCoordinator.isReducingVisualEffects {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            glowPulse = false
+                        }
+                    } else {
                         glowPulse = false
                     }
                 }

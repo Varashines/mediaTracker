@@ -168,13 +168,13 @@ struct StatusBadgePrimitive: View {
             if !label.isEmpty {
                 Text(label.uppercased())
                     .font(AppTheme.Font.badge)
-                    .kerning(1.0)
+                    .kerning(AppTheme.Kerning.normal)
                     .multilineTextAlignment(.center)
             }
         }
         .frame(minHeight: 20)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, AppTheme.Spacing.compact)
+        .padding(.vertical, AppTheme.Spacing.micro)
         .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
         .background {
             if isSolid {

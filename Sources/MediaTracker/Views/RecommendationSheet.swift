@@ -59,15 +59,33 @@ struct RecommendationSheet: View {
         }
     }
 
+    @ViewBuilder
     private var cardsSection: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
-            spacing: 14
-        ) {
-            ForEach(recommendations) { rec in
-                RecommendationCard(rec: rec, themeColor: themeColor) {
-                    onSearch?(rec.name)
-                    onDismiss()
+        if recommendations.isEmpty {
+            VStack(spacing: AppTheme.Spacing.medium) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tertiary)
+                Text("No recommendations found")
+                    .font(AppTheme.Font.bodyMedium)
+                    .foregroundStyle(.secondary)
+                Text("Try exploring different categories to build your taste profile.")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppTheme.Spacing.xLarge)
+        } else {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
+                spacing: 14
+            ) {
+                ForEach(recommendations) { rec in
+                    RecommendationCard(rec: rec, themeColor: themeColor) {
+                        onSearch?(rec.name)
+                        onDismiss()
+                    }
                 }
             }
         }

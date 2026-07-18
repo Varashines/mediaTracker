@@ -19,6 +19,7 @@ enum UserDefaultsKeys: String {
     case themePreset = "theme_preset"
     case backgroundIntensity = "background_intensity"
     case useTitleLogos = "use_title_logos"
+    case reduceVisualEffects = "reduce_visual_effects"
     
     // Notifications
     case notificationsEnabled = "notifications_enabled"

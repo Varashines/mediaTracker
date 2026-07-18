@@ -6,17 +6,18 @@ import SwiftUI
 struct DetailSkeletonView: View {
     var needsTV: Bool = false
     var hasCast: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.large) {
             if needsTV {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                    .fill(Color.primary.opacity(0.04))
+                    .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                     .frame(height: 180)
             }
             if hasCast {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                    .fill(Color.primary.opacity(0.04))
+                    .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                     .frame(height: 140)
             }
         }

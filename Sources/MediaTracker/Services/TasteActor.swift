@@ -25,9 +25,15 @@ actor TasteActor {
     @MainActor private static var lastAffinityCalculation: Date?
     private let affinityCacheTTL: TimeInterval = .secondsInDay
 
+    @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, reason: String)]?
+    @MainActor private static var lastRecommendationsCache: Date?
+    private let recommendationsCacheTTL: TimeInterval = 300 // 5 minutes
+
     @MainActor static func clearCache() {
         cachedAffinityMap = nil
         lastAffinityCalculation = nil
+        cachedRecommendations = nil
+        lastRecommendationsCache = nil
     }
 
     func fetchTasteInsights() async -> TasteInsights {
@@ -167,6 +173,12 @@ actor TasteActor {
     }
 
     func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
+        // Return cached recommendations if fresh enough
+        let (cached, last) = await MainActor.run { (Self.cachedRecommendations, Self.lastRecommendationsCache) }
+        if let cached = cached, let last = last, Date().timeIntervalSince(last) < recommendationsCacheTTL {
+            return cached
+        }
+
         // Fetch Weights from UserDefaults (matches AppStorage keys in UI)
         func weight(_ key: UserDefaultsKeys, default defaultVal: Double) -> Double {
             let val = UserDefaults.standard.double(forKey: key.rawValue)
@@ -303,6 +315,11 @@ actor TasteActor {
             }
         }
 
-        return recommendations.sorted { $0.score > $1.score }.prefix(10).map { ($0.id, $0.reason) }
+        let result = recommendations.sorted { $0.score > $1.score }.prefix(10).map { ($0.id, $0.reason) }
+        await MainActor.run {
+            Self.cachedRecommendations = result
+            Self.lastRecommendationsCache = Date()
+        }
+        return result
     }
 }

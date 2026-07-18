@@ -22,18 +22,20 @@ struct MoodCaptureBanner: View {
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.tertiary)
             }
-            .opacity(appears ? 1 : 0)
-            .offset(y: appears ? 0 : -8)
+            .opacity(appears || AppThemeCoordinator.isReducingVisualEffects ? 1 : 0)
+            .offset(y: appears || AppThemeCoordinator.isReducingVisualEffects ? 0 : -8)
 
             // 2×3 mood grid
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(Array(moods.enumerated()), id: \.element) { index, mood in
-                    moodButton(mood)
-                        .opacity(appears ? 1 : 0)
-                        .offset(y: appears ? 0 : 12)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.05), value: appears)
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(Array(moods.enumerated()), id: \.element) { index, mood in
+                        moodButton(mood)
+                            .opacity(appears || AppThemeCoordinator.isReducingVisualEffects ? 1 : 0)
+                            .offset(y: appears || AppThemeCoordinator.isReducingVisualEffects ? 0 : 12)
+                            .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                                $0.animation(.spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.05), value: appears)
+                            }
+                    }
                 }
-            }
 
             // Skip
             Button("Skip") {
@@ -54,7 +56,9 @@ struct MoodCaptureBanner: View {
         .padding(.horizontal, AppTheme.Spacing.small)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(AppThemeCoordinator.isReducingVisualEffects
+                    ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                    : AnyShapeStyle(.ultraThinMaterial))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)

@@ -41,6 +41,29 @@ class DisplayCache {
         groupedItems = result.grouped
         pickOfTheDay = result.pickOfTheDay
         recommendations = result.recommendations
+        
+        // Prewarm thumbnail images as soon as data arrives — before views appear
+        prewarmCarouselImages()
+    }
+    
+    private func prewarmCarouselImages() {
+        let cache = ImageCache.shared
+        
+        // Continue Watching & Featured Upcoming — hero thumbnails at .thumbMedium
+        let heroURLs = (homeContinueWatchingItems.prefix(10) + featuredUpcomingItems.prefix(10))
+            .compactMap { $0.posterURL }
+            .compactMap { URL(string: $0) }
+        if !heroURLs.isEmpty {
+            cache.prewarmImages(urls: heroURLs, targetSize: .thumbMedium, priority: .normal)
+        }
+        
+        // Pick of the Day & For You — each card loads 2 images (poster + backdrop)
+        let cardURLs = (pickOfTheDay.prefix(6) + recommendations.prefix(6))
+            .compactMap { $0.posterURL }
+            .compactMap { URL(string: $0) }
+        if !cardURLs.isEmpty {
+            cache.prewarmImages(urls: cardURLs, targetSize: .thumbSmall, priority: .normal)
+        }
     }
 
     func trimCalendarCache(keepMonths: Int = 6) {

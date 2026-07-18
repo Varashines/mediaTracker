@@ -24,7 +24,7 @@ struct OverviewSection: View {
                     .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
 
                 Text("SYNOPSIS")
-                    .font(AppTheme.Font.bodyBold)
+                    .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .kerning(AppTheme.Kerning.wide)
 

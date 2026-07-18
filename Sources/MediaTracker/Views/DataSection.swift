@@ -98,10 +98,6 @@ struct DataSection: View {
                         await MainActor.run {
                             AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
                             let context = ModelContext(container)
-                            let descriptor = FetchDescriptor<MediaItem>()
-                            if let allItems = try? context.fetch(descriptor) {
-                                DataService.shared.refreshMetadata(for: allItems, modelContext: context, force: false)
-                            }
                             DataService.shared.runMaintenance(modelContext: context, silent: true)
                         }
                     } catch {

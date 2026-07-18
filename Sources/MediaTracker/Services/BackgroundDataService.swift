@@ -412,6 +412,7 @@ actor BackgroundDataService {
         let batchSize = 500
         while true {
             var sDesc = FetchDescriptor<TVSeason>()
+            sDesc.propertiesToFetch = [\.showID, \.seasonNumber, \.tvShowDetails, \.persistentModelID, \.totalEpisodesCount, \.watchedEpisodesCount]
             sDesc.fetchLimit = batchSize
             sDesc.fetchOffset = offset
             let batch = try modelContext.fetch(sDesc)
@@ -419,7 +420,8 @@ actor BackgroundDataService {
             if batch.count < batchSize { break }
             offset += batchSize
         }
-        let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
+        var tvDetailsDesc = FetchDescriptor<TVShowDetails>()
+        tvDetailsDesc.propertiesToFetch = [\.tmdbID, \.seasons, \.cast, \.nextEpisodeDate, \.status, \.item, \.persistentModelID]
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
 
         // Group TVShowDetails by tmdbID to find duplicates

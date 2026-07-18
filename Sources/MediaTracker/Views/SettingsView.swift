@@ -64,16 +64,22 @@ struct SettingsView: View {
                     case .about: AboutSection()
                     }
                 }
-                .transition(.opacity.combined(with: .scale(0.98)))
+                .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                    $0.transition(.opacity.combined(with: .scale(0.98)))
+                }
                 .padding(.horizontal, AppTheme.Spacing.xLarge)
                 .padding(.vertical, AppTheme.Spacing.large)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(.ultraThinMaterial)
+        .background(AppThemeCoordinator.isReducingVisualEffects
+            ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
+            : AnyShapeStyle(.ultraThinMaterial))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(maxWidth: 520, minHeight: 620)
-        .animation(AppTheme.Animation.springSnappy, value: selectedTab)
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
+        }
         .onAppear {
             Task {
                 guard let aliases = UserDefaults.standard.string(forKey: "studio_aliases"),
@@ -103,8 +109,12 @@ struct SettingsView: View {
         let isHovered = hoveredTab == tab
 
         return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
+            if AppThemeCoordinator.isReducingVisualEffects {
                 selectedTab = tab
+            } else {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    selectedTab = tab
+                }
             }
         } label: {
             Image(systemName: isSelected ? tab.fillIcon : tab.icon)
@@ -114,28 +124,38 @@ struct SettingsView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
-                    )
+                    .fill(AppThemeCoordinator.isReducingVisualEffects
+                        ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
+                        : AnyShapeStyle(.ultraThinMaterial))
+                    .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+                        view.overlay(
+                            Capsule()
+                                .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
+                        )
+                    }
             )
             .clipShape(Capsule())
-            .overlay(
-                Group {
-                    if isSelected {
-                        Capsule()
-                            .fill(AppTheme.Colors.accent.opacity(0.18))
-                            .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
+            .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
+                view.overlay(
+                    Group {
+                        if isSelected {
+                            Capsule()
+                                .fill(AppTheme.Colors.accent.opacity(0.18))
+                                .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
+                        }
                     }
-                }
-            )
+                )
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(AppTheme.Animation.microInteraction) {
+            if AppThemeCoordinator.isReducingVisualEffects {
                 hoveredTab = hovering ? tab : nil
+            } else {
+                withAnimation(AppTheme.Animation.microInteraction) {
+                    hoveredTab = hovering ? tab : nil
+                }
             }
         }
         .accessibilityLabel(tab.label)

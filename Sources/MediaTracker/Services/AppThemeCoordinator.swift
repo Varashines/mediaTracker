@@ -13,6 +13,9 @@ class AppThemeCoordinator {
     var accent: Color = .accentColor
     var themePreference: Int = 0
     var themePreset: Int = 0
+    var reduceVisualEffects: Bool = false
+    
+    static var isReducingVisualEffects: Bool { shared.reduceVisualEffects }
 
     private var lastReload: Date = .distantPast
     private let reloadDebounce: TimeInterval = 0.1
@@ -65,10 +68,12 @@ class AppThemeCoordinator {
     private func reloadSettings() {
         let newPref = UserDefaults.standard.integer(forKey: "theme_preference")
         let newPreset = UserDefaults.standard.integer(forKey: "theme_preset")
+        let newReduceEffects = UserDefaults.standard.bool(forKey: "reduce_visual_effects")
 
-        if themePreference != newPref || themePreset != newPreset {
+        if themePreference != newPref || themePreset != newPreset || reduceVisualEffects != newReduceEffects {
             themePreference = newPref
             themePreset = newPreset
+            reduceVisualEffects = newReduceEffects
             updateThemeColors()
         }
     }
