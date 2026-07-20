@@ -26,14 +26,14 @@ struct HoverScaleEffect: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isHovered ? level.scale : 1.0)
-            .shadow(
-                color: shadowColor,
-                radius: isHovered ? shadowRadius : 0,
-                y: isHovered ? shadowY : 0
-            )
             .if(!AppThemeCoordinator.isReducingVisualEffects) {
-                $0.animation(AppTheme.Animation.springSnappy, value: isHovered)
+                $0.scaleEffect(isHovered ? level.scale : 1.0)
+                    .shadow(
+                        color: shadowColor,
+                        radius: isHovered ? shadowRadius : 0,
+                        y: isHovered ? shadowY : 0
+                    )
+                    .animation(AppTheme.Animation.springSnappy, value: isHovered)
             }
             .onHover { isHovered = $0 }
     }

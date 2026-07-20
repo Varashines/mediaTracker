@@ -367,7 +367,7 @@ struct MediaThumbnailView: View, Equatable {
             )
         }
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
-        .scaleEffect(!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9)))
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9))))
         .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
             view.offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
         }

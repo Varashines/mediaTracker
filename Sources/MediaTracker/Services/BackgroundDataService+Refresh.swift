@@ -25,6 +25,14 @@ extension BackgroundDataService {
             movieDetails.voteAverage = details.voteAverage
             movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
+            for director in details.directors {
+                if let path = director.profilePath, !path.isEmpty {
+                    let check = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { $0.name == director.name })
+                    if (try? modelContext.fetch(check).first) == nil {
+                        modelContext.insert(PersonImageEntity(name: director.name, profileURL: APIClient.tmdbImageURL(path: path, size: "w185")))
+                    }
+                }
+            }
             // Parallelize OMDB + logos + color extraction
             let itemState = item.state
             let itemTaste = item.tasteValue
@@ -214,7 +222,17 @@ extension BackgroundDataService {
                 for genre in mazeGenres { mergedGenres.insert(genre) }
             }
             tvDetails.genres = Array(mergedGenres)
-            
+
+            tvDetails.creators = details.creators.map { $0.name }
+            for creator in details.creators {
+                if let path = creator.profilePath, !path.isEmpty {
+                    let check = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { $0.name == creator.name })
+                    if (try? modelContext.fetch(check).first) == nil {
+                        modelContext.insert(PersonImageEntity(name: creator.name, profileURL: APIClient.tmdbImageURL(path: path, size: "w185")))
+                    }
+                }
+            }
+
             // OMDB fetch (sequential — Sendable issues prevent parallelization with item)
             if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue),
                let imdbID = details.imdbID, !imdbID.isEmpty {

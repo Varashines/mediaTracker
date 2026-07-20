@@ -39,6 +39,7 @@ struct DetailView: View {
     @ViewBuilder
     private var backgroundMesh: some View {
         let p = viewModel.vibrantThemeColor
+        let t = viewModel.themeColor
         ZStack {
             AppTheme.Colors.background(for: colorScheme)
             if !AppThemeCoordinator.isReducingVisualEffects {
@@ -50,9 +51,9 @@ struct DetailView: View {
                         .init(0, 1), .init(0.5, 1), .init(1, 1)
                     ],
                     colors: [
-                        p.opacity(colorScheme == .dark ? 0.35 : 0.25), .clear, .clear,
-                        .clear, viewModel.themeColor.opacity(colorScheme == .dark ? 0.25 : 0.15), .clear,
-                        .clear, .clear, .clear
+                        p.opacity(colorScheme == .dark ? 0.20 : 0.14), p.opacity(colorScheme == .dark ? 0.10 : 0.06), t.opacity(colorScheme == .dark ? 0.06 : 0.04),
+                        p.opacity(colorScheme == .dark ? 0.08 : 0.05), t.opacity(colorScheme == .dark ? 0.12 : 0.08), .clear,
+                        t.opacity(colorScheme == .dark ? 0.05 : 0.03), .clear, .clear
                     ]
                 )
                 .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)

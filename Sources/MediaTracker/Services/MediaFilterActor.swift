@@ -75,7 +75,8 @@ actor MediaFilterActor {
                                    provider != nil ||
                                    category == .releaseRadar ||
                                    category == .quickBites ||
-                                   !smartRules.isEmpty
+                                   !smartRules.isEmpty ||
+                                   !processedSearch.isEmpty
 
         if !needsSwiftRefinement && groupBy == .none {
             descriptor.fetchLimit = limit

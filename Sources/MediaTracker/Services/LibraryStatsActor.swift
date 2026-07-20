@@ -25,6 +25,7 @@ struct LibraryStats: Sendable {
     let completedTVShows: Int
 
     let totalEpisodesWatched: Int
+    let watchedToday: Int
 
     // Genre DNA (for Radar Chart)
     let genreDNA: [(name: String, percentage: Double)]
@@ -64,6 +65,7 @@ struct LibraryStats: Sendable {
         totalTVShows: 0,
         completedTVShows: 0,
         totalEpisodesWatched: 0,
+        watchedToday: 0,
         genreDNA: [],
         topRatedActors: [],
         topRatedCreators: [],
@@ -111,6 +113,7 @@ struct CodableLibraryStats: Codable {
     let totalTVShows: Int
     let completedTVShows: Int
     let totalEpisodesWatched: Int
+    let watchedToday: Int
 
     let genreDNA: [NamePercentage]
     let topRatedActors: [VisualPersonStat]
@@ -141,6 +144,7 @@ struct CodableLibraryStats: Codable {
         self.totalTVShows = stats.totalTVShows
         self.completedTVShows = stats.completedTVShows
         self.totalEpisodesWatched = stats.totalEpisodesWatched
+        self.watchedToday = stats.watchedToday
         self.genreDNA = stats.genreDNA.map { NamePercentage(name: $0.name, percentage: $0.percentage) }
         self.topRatedActors = stats.topRatedActors
         self.topRatedCreators = stats.topRatedCreators
@@ -169,6 +173,7 @@ struct CodableLibraryStats: Codable {
             totalTVShows: totalTVShows,
             completedTVShows: completedTVShows,
             totalEpisodesWatched: totalEpisodesWatched,
+            watchedToday: watchedToday,
             genreDNA: genreDNA.map { ($0.name, $0.percentage) },
             topRatedActors: topRatedActors,
             topRatedCreators: topRatedCreators,
@@ -499,7 +504,7 @@ actor LibraryStatsActor {
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date]) = (0, 0, [])) async throws -> LibraryStats {
+    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) = (0, 0, [], 0)) async throws -> LibraryStats {
         // 1. Process Genre DNA
         let genreDNAMap = taste.genreTaste.map { name, stats in
             (name, stats.affinity(cutoff: 5))
@@ -524,7 +529,7 @@ actor LibraryStatsActor {
             let score = val.affinity(cutoff: 5)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(7)
+        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(8)
 
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
 
@@ -532,7 +537,7 @@ actor LibraryStatsActor {
             let score = val.affinity(cutoff: 3)
             return score >= 0 ? (name, val, score) : nil
         }
-        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(7)
+        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(8)
 
         let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 
@@ -579,6 +584,7 @@ actor LibraryStatsActor {
             totalTVShows: stats.tvCount,
             completedTVShows: stats.tvCompleted,
             totalEpisodesWatched: stats.epWatched,
+            watchedToday: streaks.todayCount,
             genreDNA: Array(genreDNA),
             topRatedActors: visualActors,
             topRatedCreators: visualCreators,
@@ -645,9 +651,11 @@ actor LibraryStatsActor {
         return suffix
     }
 
-    private func computeStreaks() async -> (current: Int, longest: Int, watchDays16Weeks: [Date]) {
+    private func computeStreaks() async -> (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) {
         var activeDays = Set<Date>()
         let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        var todayCount = 0
 
         // Collect all episode watch dates
         let epDescriptor = FetchDescriptor<TVEpisode>(
@@ -656,7 +664,9 @@ actor LibraryStatsActor {
         if let episodes = try? modelContext.fetch(epDescriptor) {
             for ep in episodes {
                 if let date = ep.lastWatchedDate {
-                    activeDays.insert(calendar.startOfDay(for: date))
+                    let day = calendar.startOfDay(for: date)
+                    activeDays.insert(day)
+                    if day == todayStart { todayCount += 1 }
                 }
             }
         }
@@ -668,12 +678,14 @@ actor LibraryStatsActor {
         if let movies = try? modelContext.fetch(movieDescriptor) {
             for movie in movies {
                 if let date = movie.lastStateChangeDate {
-                    activeDays.insert(calendar.startOfDay(for: date))
+                    let day = calendar.startOfDay(for: date)
+                    activeDays.insert(day)
+                    if day == todayStart { todayCount += 1 }
                 }
             }
         }
 
-        guard !activeDays.isEmpty else { return (0, 0, []) }
+        guard !activeDays.isEmpty else { return (0, 0, [], 0) }
 
         let sortedDays = activeDays.sorted()
         var currentStreak = 0
@@ -708,7 +720,7 @@ actor LibraryStatsActor {
             .filter { $0 >= sixteenWeeksAgo }
             .sorted()
 
-        return (currentStreak, longestStreak, watchDays16Weeks)
+        return (currentStreak, longestStreak, watchDays16Weeks, todayCount)
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

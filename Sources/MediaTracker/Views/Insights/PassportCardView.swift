@@ -5,17 +5,60 @@ struct PassportCardView: View {
     let stats: LibraryStats
     @Environment(\.colorScheme) var colorScheme
 
+    private var personalityColor: Color {
+        switch stats.ratingPersonality {
+        case "Hopeless Romantic": return .pink
+        case "Harsh Critic":      return .red
+        case "Enthusiast":        return .orange
+        case "Mystery Critic":    return .gray
+        default:                  return .yellow
+        }
+    }
+
+    private var cardGradient: LinearGradient {
+        let base = personalityColor
+        let isDark = colorScheme == .dark
+        if isDark {
+            return LinearGradient(
+                colors: [base.opacity(0.18), Color(white: 0.10)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                colors: [base.opacity(0.12), Color(white: 0.98)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             // Header
-            VStack(spacing: 6) {
-                Image(systemName: "popcorn.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(AppTheme.Colors.accent.opacity(0.6))
-                Text("CINEMA PASSPORT")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .kerning(4)
-                    .foregroundStyle(AppTheme.Colors.accent)
+            HStack(alignment: .top) {
+                Spacer(minLength: 24)
+                VStack(spacing: 6) {
+                    Image(systemName: "popcorn.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(personalityColor.opacity(0.7))
+                    Text("CINEMA PASSPORT")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .kerning(4)
+                        .foregroundStyle(personalityColor)
+                }
+                .padding(.leading, stats.currentStreak > 0 ? 50 : 0)
+                
+                Spacer()
+                
+                if stats.currentStreak > 0 {
+                    Text("🔥 \(stats.currentStreak)d streak")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.orange.opacity(0.12)))
+                }
             }
 
             // Archetype + Member Since
@@ -28,10 +71,10 @@ struct PassportCardView: View {
                             .font(.system(size: 10, weight: .semibold))
                             .kerning(1.5)
                     }
-                    .foregroundStyle(AppTheme.Colors.accent)
+                    .foregroundStyle(personalityColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
-                    .background(Capsule().fill(AppTheme.Colors.accent.opacity(0.12)))
+                    .background(Capsule().fill(personalityColor.opacity(0.12)))
                 }
                 if let memberSince = stats.memberSince {
                     Text("Member since \(memberSince.formatted(.dateTime.year()))")
@@ -110,14 +153,12 @@ struct PassportCardView: View {
         }
         .padding(.vertical, 32)
         .padding(.horizontal, 24)
-        .frame(width: 400)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(white: colorScheme == .dark ? 0.12 : 0.97))
-        )
+        .frame(width: 400, height: 550)
+        .background(cardGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(personalityColor.opacity(0.15), lineWidth: 0.8)
         )
     }
 
@@ -126,7 +167,6 @@ struct PassportCardView: View {
             Text(value)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
-                .contentTransition(.numericText())
             Text(label)
                 .font(.system(size: 9))
                 .foregroundStyle(.tertiary)
@@ -146,7 +186,7 @@ struct PassportCardView: View {
             let radius = min(size.width, size.height) / 2 - 4
             var startAngle = -90.0
 
-            for (pct, color) in [(loved, Color.red), (liked, Color.blue), (disliked, Color.orange), (unrated, Color.gray)] {
+            for (pct, color) in [(loved, Color.pink), (liked, Color.green), (disliked, Color.red.opacity(0.7)), (unrated, Color.gray.opacity(0.5))] {
                 if pct > 0 {
                     let endAngle = startAngle + pct * 360
                     var path = Path()
@@ -154,14 +194,14 @@ struct PassportCardView: View {
                     path.addArc(center: center, radius: radius,
                                 startAngle: .degrees(startAngle), endAngle: .degrees(endAngle), clockwise: false)
                     path.closeSubpath()
-                    context.fill(path, with: .color(color.opacity(0.7)))
+                    context.fill(path, with: .color(color))
                     startAngle = endAngle
                 }
             }
 
-            // Center hole
-            context.fill(Circle().path(in: CGRect(x: center.x - 12, y: center.y - 12, width: 24, height: 24)),
-                        with: .color(Color(white: 0.12)))
+            // Center hole matching gradient color approximation
+            context.fill(Circle().path(in: CGRect(x: center.x - 14, y: center.y - 14, width: 28, height: 28)),
+                        with: .color(colorScheme == .dark ? Color(white: 0.10) : Color(white: 0.98)))
         }
     }
 
@@ -178,18 +218,18 @@ struct PassportCardView: View {
 
     private func tasteColor(_ value: String) -> Color {
         switch value {
-        case "Love": return Color.red.opacity(0.7)
-        case "Like": return Color.blue.opacity(0.7)
-        case "Dislike": return Color.orange.opacity(0.7)
-        default: return Color.gray.opacity(0.3)
+        case "Love": return Color.pink.opacity(0.85)
+        case "Like": return Color.green.opacity(0.85)
+        case "Dislike": return Color.red.opacity(0.65)
+        default: return Color.gray.opacity(0.4)
         }
     }
 
     // Render to NSImage
     func renderToImage() -> NSImage? {
-        let renderView = self.environment(\.colorScheme, .dark)
+        let renderView = self.environment(\.colorScheme, colorScheme)
         let controller = NSHostingController(rootView: renderView)
-        let targetSize = controller.view.fittingSize
+        let targetSize = CGSize(width: 400, height: 550)
         controller.view.frame = CGRect(origin: .zero, size: targetSize)
 
         let bitmap = controller.view.bitmapImageRepForCachingDisplay(in: controller.view.bounds)!

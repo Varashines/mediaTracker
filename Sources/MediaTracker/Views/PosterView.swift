@@ -225,9 +225,11 @@ private struct PosterThumbnail: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.primary.opacity(0.25) : (isHovered ? Color.secondary.opacity(0.2) : .clear), lineWidth: isSelected ? 1.5 : 1)
             )
-            .scaleEffect(isHovered ? 1.03 : 1.0)
-            .scaleEffect(selectionPulse ? 0.92 : 1.0)
-            .animation(AppTheme.Animation.springSnappy, value: isHovered)
+            .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                $0.scaleEffect(isHovered ? 1.03 : 1.0)
+                    .scaleEffect(selectionPulse ? 0.92 : 1.0)
+                    .animation(AppTheme.Animation.springSnappy, value: isHovered)
+            }
             .onHover { hovering in
                 isHovered = hovering
             }

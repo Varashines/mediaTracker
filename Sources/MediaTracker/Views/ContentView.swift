@@ -489,6 +489,7 @@ struct LibraryDetailView: View {
     }
 
     private func navigateToActorSearch(_ actorName: String) {
+        viewModel.filter.resetFilters()
         viewModel.filter.selectedCategory = .all
         viewModel.filter.searchText = actorName
         viewModel.navigationPath = NavigationPath()

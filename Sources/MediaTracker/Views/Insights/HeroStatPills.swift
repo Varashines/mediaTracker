@@ -3,96 +3,140 @@ import SwiftUI
 struct HeroStatPills: View {
     let stats: LibraryStats
 
-    var body: some View {
-        let total = stats.totalMovies + stats.totalTVShows
-        let completed = stats.completedMovies + stats.completedTVShows
-        let completionRate = total > 0 ? Double(completed) / Double(total) : 0
+    private var total: Int { stats.totalMovies + stats.totalTVShows }
+    private var completed: Int { stats.completedMovies + stats.completedTVShows }
+    private var completionRate: Double { total > 0 ? Double(completed) / Double(total) : 0 }
 
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: AppTheme.Spacing.large), GridItem(.flexible(), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
-            StatPill(
-                icon: "film.stack.fill",
+    private var totalMoods: Int {
+        stats.moodBreakdown.reduce(0) { $0 + $1.count }
+    }
+
+    var body: some View {
+        let columns = [
+            GridItem(.flexible(), spacing: AppTheme.Spacing.large),
+            GridItem(.flexible(), spacing: AppTheme.Spacing.large),
+            GridItem(.flexible(), spacing: AppTheme.Spacing.large)
+        ]
+
+        LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
+            // 1. Stories
+            CozyStatCard(
+                emoji: "🍿",
                 value: "\(total)",
                 label: "Stories",
                 detail: "\(stats.totalMovies) movies · \(stats.totalTVShows) shows",
-                color: .pink
+                accentColor: .pink
             )
-            StatPill(
-                icon: "clock.fill",
+            
+            // 2. Time Spent
+            CozyStatCard(
+                emoji: "⏱️",
                 value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
-                label: "Time Well Spent",
-                detail: "\(stats.totalEpisodesWatched) episodes devoured",
-                color: .orange
+                label: "Time Spent",
+                detail: "\(stats.totalEpisodesWatched) eps watched",
+                accentColor: .orange
             )
-            StatPill(
-                icon: "checkmark.circle.fill",
+            
+            // 3. Completion
+            CozyStatCard(
+                emoji: "🏆",
                 value: String(format: "%.0f%%", completionRate * 100),
-                label: "The Finish Line",
+                label: "Completion",
                 detail: "\(completed)/\(total) completed",
-                color: .teal
+                accentColor: .teal
             )
-            StatPill(
-                icon: "tv.inset.filled",
-                value: "\(stats.totalEpisodesWatched)",
-                label: "Episodes",
-                detail: "Watched across all shows",
-                color: .purple
+            
+            // 4. Affinity
+            let statsContainer = CategoryStats(
+                loved: stats.lovedCount,
+                liked: stats.likedCount,
+                disliked: stats.dislikedCount,
+                total: stats.lovedCount + stats.likedCount + stats.dislikedCount + stats.unratedCount
             )
+            let overallAffinity = statsContainer.affinity(cutoff: 1)
+            let rated = stats.lovedCount + stats.likedCount + stats.dislikedCount
+            CozyStatCard(
+                emoji: "🧬",
+                value: String(format: "%.0f%%", overallAffinity * 100),
+                label: "Affinity",
+                detail: "Based on \(rated) ratings",
+                accentColor: .purple
+            )
+
+            // 5. Day Streak
+            CozyStatCard(
+                emoji: "🔥",
+                value: "\(stats.currentStreak)d",
+                label: "Day Streak",
+                detail: "Best streak: \(stats.longestStreak)d",
+                accentColor: .orange
+            )
+
+            // 6. Current Vibe
+            if !stats.moodBreakdown.isEmpty,
+               let top = stats.moodBreakdown.max(by: { $0.percentage < $1.percentage }),
+               let topMood = Mood(rawValue: top.name) {
+                CozyStatCard(
+                    emoji: topMood.emojiChar,
+                    value: topMood.rawValue.capitalized,
+                    label: "Current Vibe",
+                    detail: "\(totalMoods) moods logged",
+                    accentColor: .pink
+                )
+            } else {
+                CozyStatCard(
+                    emoji: "🎭",
+                    value: "—",
+                    label: "Current Vibe",
+                    detail: "No moods logged",
+                    accentColor: .pink
+                )
+            }
         }
     }
 }
 
-struct StatPill: View {
-    let icon: String
+private struct CozyStatCard: View {
+    let emoji: String
     let value: String
     let label: String
     let detail: String
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
+    let accentColor: Color
+
     @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            HStack(spacing: AppTheme.Spacing.tiny) {
-                Image(systemName: icon)
-                    .font(AppTheme.Font.title3)
-                    .foregroundStyle(color)
-                Text(label.uppercased())
-                    .font(AppTheme.Font.caption)
-                    .kerning(AppTheme.Kerning.wide)
-                    .foregroundStyle(color.opacity(0.7))
+        GlassCard(color: accentColor, isHovered: isHovered) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    Text(emoji)
+                        .font(.system(size: 24))
+                    
+                    Spacer()
+                    
+                    Text(detail.uppercased())
+                        .font(AppTheme.Font.caption2)
+                        .kerning(AppTheme.Kerning.wide)
+                        .foregroundStyle(accentColor.opacity(0.85))
+                        .lineLimit(1)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(AppTheme.Font.bodyMedium)
+                        .foregroundStyle(.secondary)
+
+                    CountUpText(value: value)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
             }
-
-            CountUpText(value: value)
-                .font(AppTheme.Font.titleLarge)
-                .foregroundStyle(.primary)
-
-            Text(detail)
-                .font(AppTheme.Font.label)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            .padding(AppTheme.Spacing.medium)
         }
-        .padding(.horizontal, AppTheme.Spacing.medium)
-        .padding(.vertical, AppTheme.Spacing.medium)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .fill(AppTheme.Colors.cardFill(for: colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(color.opacity(colorScheme == .dark ? 0.15 : 0.1), lineWidth: 0.5)
-        )
-        .overlay(alignment: .bottomTrailing) {
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .ultraLight))
-                .foregroundStyle(color.opacity(colorScheme == .dark ? 0.06 : 0.04))
-                .offset(x: 8, y: 4)
-                .allowsHitTesting(false)
-        }
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .shadow(color: .black.opacity(isHovered ? 0.06 : 0), radius: 8, y: isHovered ? 4 : 0)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { hovering in
-            withAnimation(AppTheme.Animation.springSnappy) { isHovered = hovering }
+            isHovered = hovering
         }
     }
 }
