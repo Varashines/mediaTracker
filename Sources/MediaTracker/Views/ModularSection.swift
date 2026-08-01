@@ -11,17 +11,18 @@ struct ModularSection<Content: View>: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             HStack(spacing: 0) {
                 HStack(spacing: AppTheme.Spacing.small) {
+                    let effectiveColor = (color == .secondary.opacity(0.1) || color == .secondary) ? AppTheme.Colors.accent : color
                     Image(systemName: icon)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(color == .secondary ? AppTheme.Colors.accent : color)
+                        .foregroundStyle(effectiveColor.highContrastAccent(colorScheme: colorScheme))
                         .padding(5)
                         .background(
                             Circle()
-                                .fill((color == .secondary ? AppTheme.Colors.accent : color).opacity(0.15))
+                                .fill(effectiveColor.opacity(colorScheme == .dark ? 0.25 : 0.18))
                         )
                     Text(title.uppercased())
                         .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(effectiveColor.highContrastAccent(colorScheme: colorScheme))
                         .kerning(AppTheme.Kerning.tight)
                 }
                 .padding(.horizontal, AppTheme.Spacing.small)

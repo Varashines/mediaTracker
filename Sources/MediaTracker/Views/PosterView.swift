@@ -9,6 +9,7 @@ struct PosterView: View {
     var onResetPoster: (() -> Void)? = nil
 
     private let posterFrame = CGSize(width: 260, height: 390)
+    @Environment(\.colorScheme) private var colorScheme
     @State private var glowPulse = false
     @State private var isHovering = false
     @State private var showPicker = false
@@ -17,15 +18,17 @@ struct PosterView: View {
         if let urlString = item.effectivePosterURL, let url = URL(string: urlString) {
             ZStack {
                 RadialGradient(
-                    colors: [themeColor.opacity(0.5), .clear],
+                    colors: [
+                        themeColor.opacity(colorScheme == .dark ? 0.65 : 0.65),
+                        themeColor.opacity(colorScheme == .dark ? 0.25 : 0.25),
+                        .clear
+                    ],
                     center: .center,
-                    startRadius: 20,
+                    startRadius: 10,
                     endRadius: 250
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
-                .if(!AppThemeCoordinator.isReducingVisualEffects) {
-                    $0.animation(isHovering ? .easeInOut(duration: 2.0).repeatForever(autoreverses: true) : .easeInOut(duration: 0.3), value: glowPulse)
-                }
+                .allowsHitTesting(false)
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {

@@ -47,6 +47,9 @@ struct CustomShareMenuView: View {
             Divider()
                 .background(Color.white.opacity(0.12))
 
+            Divider()
+                .background(Color.white.opacity(0.12))
+
             // System Sharing Services
             VStack(alignment: .leading, spacing: 10) {
                 Text("SHARE VIA")
@@ -109,7 +112,13 @@ struct CustomShareMenuView: View {
     }
 
     private var availableSharingServices: [NSSharingService] {
-        NSSharingService.sharingServices(forItems: [image])
+        let sel = NSSelectorFromString("sharingServicesForItems:")
+        if (NSSharingService.self as AnyObject).responds(to: sel),
+           let unmanaged = (NSSharingService.self as AnyObject).perform(sel, with: [image]),
+           let services = unmanaged.takeUnretainedValue() as? [NSSharingService] {
+            return services.filter { $0.canPerform(withItems: [image]) }
+        }
+        return []
     }
 
     private var headerRow: some View {

@@ -700,14 +700,24 @@ actor LibraryStatsActor {
         }
         longestStreak = max(longestStreak, tempStreak)
 
-        // Compute current streak: count backwards from today
-        if activeDays.contains(today) || activeDays.contains(calendar.date(byAdding: .day, value: -1, to: today)!) {
+        // Compute current streak: count backwards cleanly from today or yesterday
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        if activeDays.contains(today) {
             currentStreak = 1
-            var checkDate = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -1, to: today)!)
+            var checkDate = yesterday
             while activeDays.contains(checkDate) {
                 currentStreak += 1
                 checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
             }
+        } else if activeDays.contains(yesterday) {
+            currentStreak = 1
+            var checkDate = calendar.date(byAdding: .day, value: -1, to: yesterday)!
+            while activeDays.contains(checkDate) {
+                currentStreak += 1
+                checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+            }
+        } else {
+            currentStreak = 0
         }
 
         // Collect watch days for last 16 weeks

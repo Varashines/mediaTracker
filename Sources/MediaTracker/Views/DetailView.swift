@@ -41,40 +41,17 @@ struct DetailView: View {
 
     @ViewBuilder
     private var backgroundMesh: some View {
-        let p = viewModel.vibrantThemeColor
-        let t = viewModel.themeColor
-        let hasCustomTheme = viewModel.themeColor != Color.secondary.opacity(0.15)
-        
+        let posterTheme = viewModel.themeColor
+        let hasCustomTheme = viewModel.themeColor != Color.secondary.opacity(0.1)
+
         ZStack {
             AppTheme.Colors.background(for: colorScheme)
                 .ignoresSafeArea()
-            
-            if !AppThemeCoordinator.isReducingVisualEffects && hasCustomTheme {
-                // Top-Left Primary Poster Color Glow
-                RadialGradient(
-                    colors: [
-                        p.opacity(colorScheme == .dark ? 0.22 : 0.14),
-                        p.opacity(colorScheme == .dark ? 0.08 : 0.04),
-                        .clear
-                    ],
-                    center: .topLeading,
-                    startRadius: 0,
-                    endRadius: 550
-                )
-                .ignoresSafeArea()
-                
-                // Top-Right Accent Poster Color Glow
-                RadialGradient(
-                    colors: [
-                        t.opacity(colorScheme == .dark ? 0.16 : 0.10),
-                        t.opacity(colorScheme == .dark ? 0.04 : 0.02),
-                        .clear
-                    ],
-                    center: UnitPoint(x: 0.85, y: 0.15),
-                    startRadius: 0,
-                    endRadius: 450
-                )
-                .ignoresSafeArea()
+
+            if hasCustomTheme {
+                // Whole-page uniform poster theme background fill
+                posterTheme.opacity(colorScheme == .dark ? 0.18 : 0.12)
+                    .ignoresSafeArea()
             }
         }
     }
@@ -83,7 +60,6 @@ struct DetailView: View {
     private var contentOverlay: some View {
         ZStack {
             backgroundMesh
-                .ignoresSafeArea()
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
@@ -93,7 +69,12 @@ struct DetailView: View {
                                 let frame = geo.frame(in: .named("detailScroll"))
                                 Color.clear
                                     .onChange(of: frame.minY) { _, newValue in
-                                        showNavTitle = newValue < -50
+                                        let shouldShow = newValue < -50
+                                        if showNavTitle != shouldShow {
+                                            withAnimation(AppTheme.Animation.springSnappy) {
+                                                showNavTitle = shouldShow
+                                            }
+                                        }
                                     }
                                     .onAppear {
                                         showNavTitle = frame.minY < -50
@@ -129,10 +110,6 @@ struct DetailView: View {
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
             .coordinateSpace(name: "detailScroll")
-            .saturation(!AppThemeCoordinator.isReducingVisualEffects && (showDeleteConfirmation || showSharePreview) ? 0.3 : 1)
-            .blur(radius: !AppThemeCoordinator.isReducingVisualEffects && (showDeleteConfirmation || showSharePreview) ? 5 : 0)
-            .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
-            .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
 
             floatingActionBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -165,7 +142,7 @@ struct DetailView: View {
         .toolbar { detailToolbar }
         .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-        .navigationTitle(sleepManager.isAsleep ? "" : showNavTitle ? viewModel.item.title : "Details")
+        .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
             Task {
