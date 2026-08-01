@@ -28,6 +28,7 @@ struct KeyboardShortcutsSection: View {
                     shortcutRow(key: "W", modifiers: [], label: "Cycle Status", showDivider: true)
                     shortcutRow(key: "R", modifiers: .command, label: "Refresh Metadata", showDivider: true)
                     shortcutRow(key: .delete, modifiers: .command, label: "Delete from Library", showDivider: true)
+                    shortcutRow(key: "S", modifiers: .command, label: "Share Card / Passport", showDivider: true)
                     shortcutRow(key: "L", modifiers: .command, label: "Add to Collection", showDivider: false)
                 }
             }

@@ -7,7 +7,7 @@ final class EpisodeRangeTests: XCTestCase {
 
     func testRangeComputation_8Episodes_NoPills() {
         let episodes = makeEpisodes(count: 8, startAt: 1)
-        let ranges = computeEpisodeRanges(episodes: episodes, episodesPerRange: 10, rangeThreshold: 15)
+        _ = computeEpisodeRanges(episodes: episodes, episodesPerRange: 10, rangeThreshold: 15)
         let showPills = episodes.count > 15
         XCTAssertFalse(showPills, "8 episodes should not show range pills")
         // When no pills, all episodes should be shown

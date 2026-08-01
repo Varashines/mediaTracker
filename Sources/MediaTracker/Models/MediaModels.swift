@@ -141,12 +141,23 @@ struct TMDBTV: TMDBMedia {
 }
 
 struct TMDBTVDetailsResponse: Codable {
-    let number_of_seasons: Int, number_of_episodes: Int, status: String, vote_average: Double?, genres: [TMDBGenre], backdrop_path: String?, poster_path: String?
+    let number_of_seasons: Int?
+    let number_of_episodes: Int?
+    let status: String?
+    let vote_average: Double?
+    let genres: [TMDBGenre]?
+    let backdrop_path: String?
+    let poster_path: String?
     let overview: String?
     let original_language: String?
     let networks: [TMDBNetwork]?
     let created_by: [TMDBPerson]?
-    let seasons: [TMDBSeasonBrief]?, first_air_date: String?, next_episode_to_air: TMDBNextEpisode?, external_ids: TMDBExternalIDs?, credits: TMDBCreditsResponse?, aggregate_credits: TMDBAggregateCreditsResponse?
+    let seasons: [TMDBSeasonBrief]?
+    let first_air_date: String?
+    let next_episode_to_air: TMDBNextEpisode?
+    let external_ids: TMDBExternalIDs?
+    let credits: TMDBCreditsResponse?
+    let aggregate_credits: TMDBAggregateCreditsResponse?
     let videos: TMDBVideoResponse?
     let watch_providers: TMDBWatchProvidersResponse?
 

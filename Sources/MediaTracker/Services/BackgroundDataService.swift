@@ -3,6 +3,35 @@ import SwiftData
 import UserNotifications
 import AppKit
 
+enum ImportConflictStrategy: String, CaseIterable, Identifiable, Sendable {
+    case merge = "Merge"
+    case overwrite = "Overwrite"
+    case skip = "Skip"
+
+    var id: String { rawValue }
+
+    var title: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .merge: return "Keep existing items, fill in missing fields from backup"
+        case .overwrite: return "Replace existing matching items with backup version"
+        case .skip: return "Only add new items, preserve existing items untouched"
+        }
+    }
+}
+
+struct ImportProgress: Sendable {
+    let processedCount: Int
+    let totalCount: Int
+    let importedCount: Int
+    let mergedCount: Int
+    let skippedCount: Int
+    let currentTitle: String
+    let isCancelled: Bool
+    let isFinished: Bool
+}
+
 @ModelActor
 actor BackgroundDataService {
     private var isThermalThrottled: Bool {
@@ -38,38 +67,70 @@ actor BackgroundDataService {
             _ = await self.refreshTVShow(id: uniqueID, tmdbID: tmdbID, force: true)
         }
         
-        item.syncCachedProperties(force: true)
+        item.syncCachedProperties(dirty: .all)
         try? modelContext.save()
         return (item.persistentModelID, false)
     }
 
-    func importLibraryData(backup: LibraryBackup) async -> Int {
+    func importLibraryData(
+        backup: LibraryBackup,
+        strategy: ImportConflictStrategy = .skip,
+        onProgress: (@Sendable (ImportProgress) -> Void)? = nil
+    ) async -> (imported: Int, merged: Int, skipped: Int) {
         let context = modelContext
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id, \.typeValue]
-        let existing = (try? context.fetch(descriptor)) ?? []
-        let existingKeys = Set(existing.map { "\($0.id)_\($0.type?.rawValue ?? "")" })
+        let existingItems = (try? context.fetch(descriptor)) ?? []
+        let existingMap = Dictionary(uniqueKeysWithValues: existingItems.map { ("\($0.id)_\($0.type?.rawValue ?? "")", $0) })
         
         var importedCount = 0
-        var lastProgressReport = 0
+        var mergedCount = 0
+        var skippedCount = 0
+        var processedCount = 0
         
         let totalCount = backup.items.count
-        if totalCount > 0 {
-            await MainActor.run { AppErrorState.shared.showToast("Importing \(totalCount) items...", style: .info) }
-        }
         
         for itemData in backup.items {
+            if Task.isCancelled {
+                onProgress?(ImportProgress(
+                    processedCount: processedCount,
+                    totalCount: totalCount,
+                    importedCount: importedCount,
+                    mergedCount: mergedCount,
+                    skippedCount: skippedCount,
+                    currentTitle: itemData.title,
+                    isCancelled: true,
+                    isFinished: false
+                ))
+                return (importedCount, mergedCount, skippedCount)
+            }
+            
             let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
             let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
             let uniqueID = "\(typePrefix)_\(tmdbIDPart)"
             let key = "\(uniqueID)_\(itemData.type)"
             
-            if !existingKeys.contains(key) {
-                if importedCount > 0 && importedCount - lastProgressReport >= 5 {
-                    lastProgressReport = importedCount
-                    await MainActor.run { AppErrorState.shared.showToast("Importing \(importedCount) of \(totalCount)...", style: .info) }
+            if let existing = existingMap[key] {
+                switch strategy {
+                case .skip:
+                    skippedCount += 1
+                case .merge:
+                    if existing.tasteValue == TasteValue.none.rawValue, let newTaste = itemData.taste {
+                        existing.tasteValue = newTaste
+                    }
+                    if itemData.dateAdded < (existing.dateAdded ?? .distantFuture) {
+                        existing.dateAdded = itemData.dateAdded
+                    }
+                    existing.syncCachedProperties(dirty: .all)
+                    mergedCount += 1
+                case .overwrite:
+                    existing.state = MediaState(rawValue: itemData.state) ?? .wishlist
+                    existing.dateAdded = itemData.dateAdded
+                    existing.tasteValue = itemData.taste ?? TasteValue.none.rawValue
+                    existing.syncCachedProperties(dirty: .all)
+                    mergedCount += 1
                 }
-
+            } else {
                 let item = MediaItem(
                     id: uniqueID,
                     title: itemData.title,
@@ -81,14 +142,12 @@ actor BackgroundDataService {
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
                 item.dateAdded = itemData.dateAdded
                 item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
-                item.syncCachedProperties(force: true)
+                item.syncCachedProperties(dirty: .all)
                 context.insert(item)
                 importedCount += 1
 
-                // Restore Episode Progress — fetch real TMDB data instead of stubs
+                // Restore Episode Progress
                 if item.type == .tvShow, let watchedIDs = itemData.watchedEpisodeIDs, let tmdbID = Int(tmdbIDPart) {
-                    await MainActor.run { AppErrorState.shared.showToast("Downloading episodes for \"\(itemData.title)\"...", style: .info) }
-                    // Group watched episodes by season
                     var seasonEpisodes: [Int: Set<Int>] = [:]
                     for epID in watchedIDs {
                         let parts = epID.split(separator: "_")
@@ -99,7 +158,6 @@ actor BackgroundDataService {
                         }
                     }
 
-                    // Fetch real episode data for each season
                     for (sNum, watchedNumbers) in seasonEpisodes {
                         let seasonUniqueID = "\(tmdbID)_\(sNum)"
                         let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
@@ -112,7 +170,6 @@ actor BackgroundDataService {
                         }
 
                         guard let seasonData = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) else {
-                            // API unavailable — create stubs for watched episodes
                             for eNum in watchedNumbers {
                                 let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
                                 let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
@@ -139,7 +196,6 @@ actor BackgroundDataService {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(epData.episodeNumber)"
                             let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
                             if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
-                                // Update metadata on existing episodes (fixes stubs from previous imports)
                                 existing.name = epData.name ?? "Episode \(epData.episodeNumber)"
                                 existing.overview = epData.overview ?? ""
                                 if let runtime = epData.runtime { existing.runtime = runtime }
@@ -168,10 +224,35 @@ actor BackgroundDataService {
                     }
                 }
             }
+            
+            processedCount += 1
+            if processedCount % 2 == 0 || processedCount == totalCount {
+                try? context.save()
+                onProgress?(ImportProgress(
+                    processedCount: processedCount,
+                    totalCount: totalCount,
+                    importedCount: importedCount,
+                    mergedCount: mergedCount,
+                    skippedCount: skippedCount,
+                    currentTitle: itemData.title,
+                    isCancelled: false,
+                    isFinished: processedCount == totalCount
+                ))
+            }
         }
         
         try? context.save()
-        return importedCount
+        onProgress?(ImportProgress(
+            processedCount: totalCount,
+            totalCount: totalCount,
+            importedCount: importedCount,
+            mergedCount: mergedCount,
+            skippedCount: skippedCount,
+            currentTitle: "",
+            isCancelled: false,
+            isFinished: true
+        ))
+        return (importedCount, mergedCount, skippedCount)
     }
 
     func importCollections(backup: LibraryBackup) async {
@@ -248,6 +329,7 @@ actor BackgroundDataService {
         // Purge API detail cache so re-adding fetches fresh data
         if !tmdbID.isEmpty {
             APIClient.shared.removeCachedResponse(forKey: "\(typePrefix)_details_\(tmdbID).json")
+            APIClient.shared.removeCachedResponse(forKey: "\(typePrefix)_details_v2_\(tmdbID).json")
         }
     }
 
@@ -350,12 +432,25 @@ actor BackgroundDataService {
                         }
                     }
 
-                    // 3. Refresh network info from TMDB only if missing
+                    // 3. Refresh network info and creators from TMDB only if missing
                     let networkWasNil = tv.network == nil
-                    if tv.network == nil || tv.networkLogoPath == nil {
+                    let creatorsMissing = tv.creators.isEmpty
+                    if tv.network == nil || tv.networkLogoPath == nil || creatorsMissing {
                         if let netDetails = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
-                            tv.network = netDetails.network
-                            tv.networkLogoPath = netDetails.networkLogoPath
+                            if tv.network == nil { tv.network = netDetails.network }
+                            if tv.networkLogoPath == nil { tv.networkLogoPath = netDetails.networkLogoPath }
+                            if creatorsMissing { tv.creators = netDetails.creators.map { $0.name } }
+
+                            // Episode gap detection: if TMDB reports more episodes than stored, trigger refresh
+                            for seasonBrief in netDetails.seasons where seasonBrief.episode_count > 0 {
+                                let sUID = "\(tmdbID)_\(seasonBrief.season_number)"
+                                let sDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == sUID })
+                                if let existingSeason = try? modelContext.fetch(sDesc).first,
+                                   existingSeason.episodes.count < seasonBrief.episode_count {
+                                    _ = await self.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+                                    break
+                                }
+                            }
                         }
                     }
                     // If network was just populated, re-heal episode air dates
@@ -372,7 +467,7 @@ actor BackgroundDataService {
                 }
             }
             
-            item.syncCachedProperties(force: false)
+            item.syncCachedProperties(dirty: [.progress, .badge, .metadata, .cast])
             processedCount += 1
             }
             
@@ -627,7 +722,8 @@ actor BackgroundDataService {
 
         do {
             let itemType = item.type
-            let success = try await SyncCoordinator.shared.perform(key: "sync_\(tmdbID)") {
+            let coordKey = force ? "sync_force_\(tmdbID)" : "sync_\(tmdbID)"
+            let success = try await SyncCoordinator.shared.perform(key: coordKey) {
                 let success: Bool
                 if itemType == .movie {
                     success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
@@ -788,7 +884,7 @@ actor BackgroundDataService {
         
         tv.recalculateCachedProperties(triggerSync: true, force: true)
         refreshedItem.lastInteractionDate = Date()
-        refreshedItem.syncCachedProperties(force: true)
+        refreshedItem.syncCachedProperties(dirty: .all)
         
         // Invalidate badge scan cache since episodes changed
         BadgeEngine.invalidateScan(for: refreshedItem.persistentModelID)

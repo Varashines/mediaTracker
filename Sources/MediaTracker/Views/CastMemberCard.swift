@@ -26,8 +26,12 @@ struct CastMemberCard: View {
             textSection
         }
         .frame(width: 200, height: 90)
-        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .fill(AppTheme.Colors.cardFill(for: colorScheme))
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.06), radius: 6, x: 0, y: 3)
         .overlay(borderOverlay())
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
     }

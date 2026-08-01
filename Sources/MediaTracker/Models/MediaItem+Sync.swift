@@ -2,39 +2,41 @@ import Foundation
 import SwiftData
 
 extension MediaItem {
-    func syncCachedProperties(now: Date = Date(), force: Bool = false) {
-        // Phase 4 Optimization: Avoid relationship faulting cascades during sync
-        // If details aren't loaded, don't force a sync unless explicitly requested.
+    func syncCachedProperties(now: Date = Date(), dirty: CacheDirtyFlags = .all) {
         let currentState = state ?? .wishlist
+        let fullSync = dirty.contains(.all)
 
-        syncCastCache(force: force)
-
-        if type == .movie {
-            syncMovieProperties()
-        } else if type == .tvShow {
-            syncTVProperties(now: now, currentState: currentState, forceRecalculate: force)
+        if dirty.contains(.cast) || fullSync {
+            syncCastCache(force: fullSync)
         }
 
-        // Phase 1 Modularization: Use Centralized Badge Engine
-        let oldLabel = storedSmartBadgeLabel
-        let oldSparkle = storedSmartBadgeIsSparkle
-        if let result = BadgeEngine.calculateBadge(for: self, now: now) {
-            if result.label.rawValue != oldLabel || result.isSparkle != oldSparkle {
-                self.storedSmartBadgeLabel = result.label.rawValue
-                self.storedSmartBadgeIsSparkle = result.isSparkle
-            }
-        } else {
-            if oldLabel != nil || oldSparkle != false {
-                self.storedSmartBadgeLabel = nil
-                self.storedSmartBadgeIsSparkle = false
+        if dirty.contains(.metadata) || dirty.contains(.progress) || fullSync {
+            let skipNetwork = !fullSync && !dirty.contains(.metadata)
+            if type == .movie {
+                syncMovieProperties(skipNetwork: skipNetwork)
+            } else if type == .tvShow {
+                syncTVProperties(now: now, currentState: currentState, skipNetwork: skipNetwork, forceRecalculate: fullSync || dirty.contains(.progress))
             }
         }
 
-        // Notify DiscoverySyncService about badge changes to keep hub counts accurate.
-        // Changes are buffered and flushed as a single transaction at the next save boundary,
-        // eliminating N detached ModelActor tasks during bulk operations.
-        if oldLabel != storedSmartBadgeLabel {
-            BadgeEngine.enqueueBadgeChange(old: oldLabel, new: storedSmartBadgeLabel)
+        if dirty.contains(.badge) || fullSync {
+            let oldLabel = storedSmartBadgeLabel
+            let oldSparkle = storedSmartBadgeIsSparkle
+            if let result = BadgeEngine.calculateBadge(for: self, now: now) {
+                if result.label.rawValue != oldLabel || result.isSparkle != oldSparkle {
+                    self.storedSmartBadgeLabel = result.label.rawValue
+                    self.storedSmartBadgeIsSparkle = result.isSparkle
+                }
+            } else {
+                if oldLabel != nil || oldSparkle != false {
+                    self.storedSmartBadgeLabel = nil
+                    self.storedSmartBadgeIsSparkle = false
+                }
+            }
+
+            if oldLabel != storedSmartBadgeLabel {
+                BadgeEngine.enqueueBadgeChange(old: oldLabel, new: storedSmartBadgeLabel)
+            }
         }
 
         if let airDate = cachedNextAiringDate ?? releaseDate {
@@ -42,8 +44,8 @@ extension MediaItem {
         } else {
             self.storedIsUpcoming = false
         }
-        // Only rebuild searchable text on forced sync (badge/progress changes alter searchable fields)
-        if force {
+
+        if dirty.contains(.searchable) || fullSync {
             updateSearchableText()
         }
     }
@@ -92,25 +94,29 @@ extension MediaItem {
         }
     }
 
-    func syncMovieProperties() {
+    func syncMovieProperties(skipNetwork: Bool = false) {
         guard let movie = movieDetails else { return }
         self.cachedGenres = GenreMapper.standardize(movie.genres)
         self.cachedCreators = movie.creators
         self.cachedLanguage = movie.originalLanguage
         self.cachedNextAiringDate = self.releaseDate
         self.cachedRuntime = movie.runtime
-        self.cachedNetwork = Self.normalizeCommaSeparated(movie.network)
-        self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(movie.networkLogoPath)
+        if !skipNetwork {
+            self.cachedNetwork = Self.normalizeCommaSeparated(movie.network)
+            self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(movie.networkLogoPath)
+        }
     }
 
-    func syncTVProperties(now: Date, currentState: MediaState, forceRecalculate: Bool = false) {
+    func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false) {
         guard let tv = tvShowDetails else { return }
         
         self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
-        self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
-        self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)
+        if !skipNetwork {
+            self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
+            self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)
+        }
         
         // Use Unified Logic - Only force recalculate if explicitly requested to heal drift
         let progressResult = tv.calculateProgress(now: now, forceRecalculate: forceRecalculate)
@@ -230,13 +236,18 @@ extension MediaItem {
         self.searchableText = text.lowercased()
     }
 
-    private static func normalizeCommaSeparated(_ value: String?) -> String? {
+    static func normalizeCommaSeparated(_ value: String?) -> String? {
         guard let value else { return nil }
-        return value
-            .components(separatedBy: ",")
+        let components = value.splitCommaTrimmed()
+        guard !components.isEmpty else { return nil }
+        return components.joined(separator: ", ")
+    }
+}
+
+extension String {
+    func splitCommaTrimmed() -> [String] {
+        self.components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-            .joined(separator: ", ")
     }
-
 }

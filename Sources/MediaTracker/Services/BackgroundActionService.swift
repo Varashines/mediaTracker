@@ -23,7 +23,7 @@ actor BackgroundActionService {
             }
         }
         
-        item.syncCachedProperties()
+        item.syncCachedProperties(dirty: [.progress, .badge])
         try modelContext.save()
         
         // Notify UI

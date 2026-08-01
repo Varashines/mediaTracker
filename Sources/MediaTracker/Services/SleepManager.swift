@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 @MainActor
 @Observable
@@ -115,20 +114,27 @@ class SleepManager {
         Task { @MainActor [weak self] in
             self?.enableMouseMoveTracking()
         }
-
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
             guard let self = self, let main = NSApp?.mainWindow, event.window == main else {
                 return event
             }
 
+            // While asleep, ONLY explicit mouse clicks or keypresses wake the app.
+            // Mouse movements (.mouseMoved) and scrolls (.scrollWheel) are ignored.
+            if self.isAsleep {
+                if event.type == .leftMouseDown || event.type == .rightMouseDown || event.type == .otherMouseDown || event.type == .keyDown {
+                    self.lastInteractionDate = Date()
+                    self.resetTimer()
+                }
+                return event
+            }
+
             let now = Date()
 
-            // Debounce mouse-move to 1 Hz — it fires at display refresh rate (60-120 Hz).
-            // Without debouncing, DispatchWorkItem is cancelled/recreated 60+ times/sec.
+            // While awake, debounce mouse-move to 1 Hz
             if event.type == .mouseMoved {
                 let elapsed = now.timeIntervalSince(self.lastInteractionDate)
-                // Wake immediately if asleep; otherwise throttle to avoid busywork
-                if !self.isAsleep && elapsed < 1.0 {
+                if elapsed < 1.0 {
                     return event
                 }
             }
@@ -203,7 +209,7 @@ struct SleepOverlayModifier: ViewModifier {
                             .font(.title2.bold())
                             .foregroundStyle(.secondary)
 
-                        Text("Move your mouse, click, or press any key to wake up")
+                        Text("Click anywhere or press any key to wake up")
                             .font(.subheadline)
                             .foregroundStyle(.tertiary)
                     }
@@ -222,6 +228,10 @@ struct SleepOverlayModifier: ViewModifier {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.all)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    sleepManager.resetTimer()
+                }
                 .transition(.opacity)
             }
         }

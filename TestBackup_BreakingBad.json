@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "tv_1396",
+      "title": "Breaking Bad",
+      "type": "TV Show",
+      "state": "Completed",
+      "dateAdded": "2024-01-15T10:30:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": [
+        "1396_1_1",
+        "1396_1_2",
+        "1396_1_3",
+        "1396_1_4",
+        "1396_1_5",
+        "1396_1_6",
+        "1396_1_7",
+        "1396_2_1",
+        "1396_2_2",
+        "1396_2_3"
+      ]
+    },
+    {
+      "id": "tv_60059",
+      "title": "Better Call Saul",
+      "type": "TV Show",
+      "state": "Active",
+      "dateAdded": "2024-02-01T14:20:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": [
+        "60059_1_1",
+        "60059_1_2",
+        "60059_1_3"
+      ]
+    },
+    {
+      "id": "tv_87108",
+      "title": "Chernobyl",
+      "type": "TV Show",
+      "state": "Completed",
+      "dateAdded": "2024-03-10T18:00:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": [
+        "87108_1_1",
+        "87108_1_2",
+        "87108_1_3",
+        "87108_1_4",
+        "87108_1_5"
+      ]
+    },
+    {
+      "id": "tv_76331",
+      "title": "Succession",
+      "type": "TV Show",
+      "state": "Wishlist",
+      "dateAdded": "2024-04-05T09:15:00Z",
+      "taste": "Like",
+      "watchedEpisodeIDs": []
+    },
+    {
+      "id": "tv_95557",
+      "title": "Severance",
+      "type": "TV Show",
+      "state": "Active",
+      "dateAdded": "2024-05-12T20:45:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": [
+        "95557_1_1",
+        "95557_1_2",
+        "95557_1_3"
+      ]
+    },
+    {
+      "id": "movie_872585",
+      "title": "Oppenheimer",
+      "type": "Movie",
+      "state": "Completed",
+      "dateAdded": "2024-01-20T21:00:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": null
+    },
+    {
+      "id": "movie_155",
+      "title": "The Dark Knight",
+      "type": "Movie",
+      "state": "Completed",
+      "dateAdded": "2024-02-14T19:30:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": null
+    },
+    {
+      "id": "movie_693134",
+      "title": "Dune: Part Two",
+      "type": "Movie",
+      "state": "Completed",
+      "dateAdded": "2024-03-05T16:00:00Z",
+      "taste": "Love",
+      "watchedEpisodeIDs": null
+    }
+  ],
+  "collections": [
+    {
+      "id": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+      "name": "Top Masterpieces",
+      "systemImage": "star.fill",
+      "notes": "My favorite shows and movies of all time",
+      "isPinned": true,
+      "completedItemIDs": [],
+      "smartRulesData": null,
+      "itemIDs": [
+        "tv_1396",
+        "movie_872585",
+        "movie_155"
+      ]
+    }
+  ]
+}

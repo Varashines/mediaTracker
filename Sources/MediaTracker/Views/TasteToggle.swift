@@ -99,6 +99,7 @@ struct TastePill: View {
                 }
             }
             .clipShape(Capsule())
+            .contentShape(Capsule())
             .scaleEffect(isHovered ? 1.04 : 1.0)
             .shadow(color: isSelected ? activeColor.opacity(0.15) : .clear, radius: AppTheme.Shadow.card.radius, y: AppTheme.Shadow.card.y)
         }

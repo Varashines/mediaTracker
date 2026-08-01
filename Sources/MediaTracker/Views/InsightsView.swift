@@ -18,7 +18,9 @@ struct InsightsView: View {
     @State private var backgroundTintTask: Task<Void, Never>?
     @State private var showingShareSheet = false
     @State private var shareImage: NSImage? = nil
-    @Namespace private var flipNamespace
+    @State private var customPassportImage: NSImage? = nil
+    @State private var showCustomShareMenu = false
+    @State private var showPassportPreview = false
     var refreshID: Int = 0
 
     private var backgroundTint: Color {
@@ -40,95 +42,39 @@ struct InsightsView: View {
             } else if let stats = stats {
                 ScrollView {
                     LazyVStack(spacing: AppTheme.Spacing.section) {
-
-                        // ── Section 1: Overview ──────────────────────────
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: AppTheme.Colors.accent)
-                            
-                            HeroStatPills(stats: stats)
-                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        }
+                        SpectrumView(items: stats.barcodeData)
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         SectionDivider(color: AppTheme.Colors.accent)
 
-                        // ── Section 2: Taste DNA ──────────────────────────
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                            SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: AppTheme.Colors.accent)
+                            HeroStatPills(stats: stats)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                        SectionDivider(color: AppTheme.Colors.accent)
+
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                             SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: AppTheme.Colors.accent)
                             TasteDNAView(stats: stats)
-                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
                         SectionDivider(color: AppTheme.Colors.accent)
 
-                        // ── Section 4: Genre Constellation (bubble chart) ──
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Genre Constellation", icon: "sparkles", iconColor: AppTheme.Colors.accent)
-                            GenreConstellationView(items: Array(stats.genreDNA.prefix(5)))
+                            SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: AppTheme.Colors.accent)
+                            TopGenresView(items: Array(stats.genreDNA.prefix(6)))
                         }
 
                         SectionDivider(color: AppTheme.Colors.accent)
 
-                        // ── Section 5: Hall of Fame (carousel) ────────────
+                        StudiosNetworksView(stats: stats, modelContext: modelContext)
+
+                        SectionDivider(color: AppTheme.Colors.accent)
+
                         HallOfFameView(stats: stats)
-
-                        SectionDivider(color: AppTheme.Colors.accent)
-
-                        // ── Section 6: Streaming DNA (unified tab switcher) ─
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Streaming DNA", icon: "tv.and.mediabox.fill", iconColor: AppTheme.Colors.accent)
-                            StreamingDNAView(stats: stats, modelContext: modelContext)
-                        }
-
-                        SectionDivider(color: AppTheme.Colors.accent)
-
-                        // ── Section 7: Cinema Spectrum ────────────────────
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Cinema Signature", icon: "barcode", iconColor: AppTheme.Colors.accent)
-                            SpectrumView(items: stats.barcodeData)
-                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        }
-
-                        SectionDivider(color: AppTheme.Colors.accent)
-
-                        // ── Section 8: Cinema Passport (collectible) ──────
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                            SectionHeader(title: "Cinema Passport", icon: "wallet.pass.fill", iconColor: AppTheme.Colors.accent)
-
-                            PassportHeaderView(stats: stats)
-
-                            HStack {
-                                Spacer()
-                                Button {
-                                    let card = PassportCardView(stats: stats)
-                                    if let image = card.renderToImage() {
-                                        shareImage = image
-                                        showingShareSheet = true
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "square.and.arrow.up")
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Text("Share Passport")
-                                            .font(AppTheme.Font.bodyBold)
-                                    }
-                                    .foregroundStyle(AppTheme.Colors.accent)
-                                    .padding(.horizontal, AppTheme.Spacing.medium)
-                                    .padding(.vertical, AppTheme.Spacing.tiny)
-                                    .background(
-                                        Capsule()
-                                            .fill(AppTheme.Colors.accent.opacity(0.10))
-                                            .overlay(
-                                                Capsule()
-                                                    .stroke(AppTheme.Colors.accent.opacity(0.25), lineWidth: 0.8)
-                                            )
-                                    )
-                                    .contentShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                Spacer()
-                            }
-                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        }
                     }
                     .padding(.vertical, AppTheme.Spacing.xLarge)
                     .frame(maxWidth: .infinity)
@@ -172,6 +118,9 @@ struct InsightsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .saturation(showPassportPreview ? 0.3 : 1)
+        .blur(radius: showPassportPreview ? 5 : 0)
+        .animation(AppTheme.Animation.springSnappy, value: showPassportPreview)
         .onAppear(perform: refreshData)
         .onChange(of: refreshID) { _, _ in refreshData() }
         .onDisappear {
@@ -189,6 +138,104 @@ struct InsightsView: View {
                 showingShareSheet = false
             }
         }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if stats != nil {
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = true }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .help("Share Cinema Wrapped Passport (⌘S)")
+                }
+            }
+        }
+        .overlay {
+            if showPassportPreview, let stats {
+                ZStack {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = false } }
+                        .transition(.opacity)
+
+                    VStack(spacing: 16) {
+                        HStack {
+                            Text("CINEMA WRAPPED PASSPORT")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .kerning(1.5)
+                                .foregroundStyle(.white.opacity(0.85))
+
+                            Spacer()
+
+                            Button {
+                                withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = false }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(.white.opacity(0.4), .white.opacity(0.12))
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Circle())
+                            .help("Close")
+                        }
+
+                        PassportCardView(stats: stats)
+                            .scaleEffect(0.85)
+                            .frame(width: 420 * 0.85, height: 630 * 0.85)
+                            .environment(\.colorScheme, .dark)
+                            .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
+
+                        Button {
+                            let card = PassportCardView(stats: stats)
+                            if let image = card.renderToImage() {
+                                customPassportImage = image
+                                withAnimation(AppTheme.Animation.springSnappy) { showCustomShareMenu = true }
+                            }
+                        } label: {
+                            Label("Share Passport", systemImage: "square.and.arrow.up")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 10)
+                                .background(Capsule().fill(AppTheme.Colors.accent))
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Capsule())
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.35), radius: 8, y: 4)
+                    }
+                    .padding(20)
+                    .frame(width: 410)
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(Color(white: 0.08).opacity(0.95))
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        }
+                        .shadow(color: .black.opacity(0.6), radius: 30, y: 15)
+                    )
+
+                    if showCustomShareMenu, let img = customPassportImage {
+                        ZStack {
+                            Color.black.opacity(0.4)
+                                .ignoresSafeArea()
+                                .onTapGesture { showCustomShareMenu = false }
+
+                            CustomShareMenuView(image: img, title: "Cinema_Wrapped_Passport") {
+                                showCustomShareMenu = false
+                                showPassportPreview = false
+                            }
+                        }
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    }
+                }
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
+        }
+        .animation(AppTheme.Animation.springSnappy, value: showPassportPreview)
+        .animation(AppTheme.Animation.springSnappy, value: showCustomShareMenu)
     }
 
     private func refreshData() {
@@ -197,6 +244,7 @@ struct InsightsView: View {
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             do {
                 let result = try await actor.fetchStats(includeCinephileData: true)
+                try? await Task.sleep(nanoseconds: 350_000_000)
                 if Task.isCancelled { return }
                 await MainActor.run {
                     withAnimation(AppTheme.Animation.easeInOut) {

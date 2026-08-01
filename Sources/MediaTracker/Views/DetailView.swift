@@ -13,6 +13,9 @@ struct DetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
     @State private var showMoodBanner = false
+    @State private var showingShareSheet = false
+    @State private var shareImage: NSImage? = nil
+    @State private var showSharePreview = false
 
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -40,23 +43,38 @@ struct DetailView: View {
     private var backgroundMesh: some View {
         let p = viewModel.vibrantThemeColor
         let t = viewModel.themeColor
+        let hasCustomTheme = viewModel.themeColor != Color.secondary.opacity(0.15)
+        
         ZStack {
             AppTheme.Colors.background(for: colorScheme)
-            if !AppThemeCoordinator.isReducingVisualEffects {
-                MeshGradient(
-                    width: 3, height: 3,
-                    points: [
-                        .init(0, 0), .init(0.5, 0), .init(1, 0),
-                        .init(0, 0.5), .init(0.5, 0.5), .init(1, 0.5),
-                        .init(0, 1), .init(0.5, 1), .init(1, 1)
-                    ],
+                .ignoresSafeArea()
+            
+            if !AppThemeCoordinator.isReducingVisualEffects && hasCustomTheme {
+                // Top-Left Primary Poster Color Glow
+                RadialGradient(
                     colors: [
-                        p.opacity(colorScheme == .dark ? 0.20 : 0.14), p.opacity(colorScheme == .dark ? 0.10 : 0.06), t.opacity(colorScheme == .dark ? 0.06 : 0.04),
-                        p.opacity(colorScheme == .dark ? 0.08 : 0.05), t.opacity(colorScheme == .dark ? 0.12 : 0.08), .clear,
-                        t.opacity(colorScheme == .dark ? 0.05 : 0.03), .clear, .clear
-                    ]
+                        p.opacity(colorScheme == .dark ? 0.22 : 0.14),
+                        p.opacity(colorScheme == .dark ? 0.08 : 0.04),
+                        .clear
+                    ],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 550
                 )
-                .opacity(viewModel.themeColor == Color.secondary.opacity(0.15) ? 0 : 1)
+                .ignoresSafeArea()
+                
+                // Top-Right Accent Poster Color Glow
+                RadialGradient(
+                    colors: [
+                        t.opacity(colorScheme == .dark ? 0.16 : 0.10),
+                        t.opacity(colorScheme == .dark ? 0.04 : 0.02),
+                        .clear
+                    ],
+                    center: UnitPoint(x: 0.85, y: 0.15),
+                    startRadius: 0,
+                    endRadius: 450
+                )
+                .ignoresSafeArea()
             }
         }
     }
@@ -84,9 +102,10 @@ struct DetailView: View {
                         }
                     if showMoodBanner {
                         MoodCaptureBanner(
+                            mediaType: viewModel.item.type,
                             onSelectMood: { mood in
                                 viewModel.item.mood = mood.rawValue
-                                viewModel.item.commitChange()
+                                viewModel.item.commitChange(dirty: [.badge])
                                 AppErrorState.shared.showToast("Mood: \(mood.rawValue)", style: .info)
                                 showMoodBanner = false
                             },
@@ -110,14 +129,15 @@ struct DetailView: View {
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
             .coordinateSpace(name: "detailScroll")
-            .saturation(!AppThemeCoordinator.isReducingVisualEffects && showDeleteConfirmation ? 0.3 : 1)
-            .blur(radius: !AppThemeCoordinator.isReducingVisualEffects && showDeleteConfirmation ? 5 : 0)
+            .saturation(!AppThemeCoordinator.isReducingVisualEffects && (showDeleteConfirmation || showSharePreview) ? 0.3 : 1)
+            .blur(radius: !AppThemeCoordinator.isReducingVisualEffects && (showDeleteConfirmation || showSharePreview) ? 5 : 0)
             .animation(AppTheme.Animation.springSnappy, value: showDeleteConfirmation)
+            .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
 
             floatingActionBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 16)
-            .allowsHitTesting(!showDeleteConfirmation)
+            .allowsHitTesting(!showDeleteConfirmation && !showSharePreview)
 
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -128,7 +148,20 @@ struct DetailView: View {
                 deleteConfirmationOverlay
                     .transition(.opacity)
             }
+            if showSharePreview {
+                SharePreviewPopup(
+                    item: viewModel.item,
+                    onShare: { image in
+                        shareImage = image
+                        showingShareSheet = true
+                        withAnimation(AppTheme.Animation.springSnappy) { showSharePreview = false }
+                    },
+                    onDismiss: { withAnimation(AppTheme.Animation.springSnappy) { showSharePreview = false } }
+                )
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
         }
+        .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
         .toolbar { detailToolbar }
         .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
@@ -139,6 +172,9 @@ struct DetailView: View {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 showHeavyContent = true
             }
+        }
+        .onDisappear {
+            viewModel.cancelTasks()
         }
         .userActivity("com.vara.MediaTracker.viewItem") { activity in
             activity.title = viewModel.item.title
@@ -159,6 +195,15 @@ struct DetailView: View {
         .onChange(of: viewModel.item.themeColorHex) { _, newHex in
             if newHex != nil {
                 viewModel.updateThemeColor()
+            }
+        }
+        .onChange(of: showingShareSheet) { _, show in
+            if show, let image = shareImage {
+                let picker = NSSharingServicePicker(items: [image])
+                if let window = NSApp.keyWindow, let content = window.contentView {
+                    picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+                }
+                showingShareSheet = false
             }
         }
         .tint(effectiveThemeColor)
@@ -226,7 +271,7 @@ struct DetailView: View {
             onResetLogo: { viewModel.resetToDefaultLogo() },
             onMoodChanged: { mood in
                 viewModel.item.mood = mood?.rawValue
-                viewModel.item.commitChange()
+                viewModel.item.commitChange(dirty: [.badge])
             },
             accentColor: viewModel.highContrastAccentColor,
             bgAccentColor: viewModel.luminousAccentColor
@@ -273,7 +318,7 @@ struct DetailView: View {
                             isRefreshing: viewModel.isRefreshing,
                             onWatchedToggle: {
                                 viewModel.item.lastInteractionDate = Date()
-                                viewModel.item.syncCachedProperties()
+                                viewModel.item.syncCachedProperties(dirty: [.progress, .badge])
                             },
                             onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
                             onSeasonCompleted: {
@@ -358,7 +403,7 @@ struct DetailView: View {
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            HStack(spacing: 6) {
+            HStack(spacing: 0) {
                 Button {
                     viewModel.refreshData(force: true)
                 } label: {
@@ -370,18 +415,33 @@ struct DetailView: View {
                         }
                     }
                     .frame(width: 28, height: 28)
-                        .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
-                            ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
-                            : AnyShapeStyle(.ultraThinMaterial)))
-                    .clipShape(.capsule)
-                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
                 .help("Refresh metadata")
                 .accessibilityLabel("Refresh metadata")
+
+                Divider()
+                    .frame(height: 14)
+                    .padding(.horizontal, 2)
+
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) { showSharePreview = true }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .keyboardShortcut("s", modifiers: .command)
+                .help("Share collectible card (⌘S)")
+                .accessibilityLabel("Share collectible card")
+
+                Divider()
+                    .frame(height: 14)
+                    .padding(.horizontal, 2)
 
                 Button(role: .destructive) {
                     if AppThemeCoordinator.isReducingVisualEffects {
@@ -393,21 +453,29 @@ struct DetailView: View {
                     }
                 } label: {
                     Image(systemName: "trash")
+                        .foregroundStyle(.red.opacity(0.85))
                         .frame(width: 28, height: 28)
-                    .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
-                        : AnyShapeStyle(.ultraThinMaterial)))
-                        .clipShape(.capsule)
-                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .sensoryFeedback(.error, trigger: showDeleteConfirmation)
                 .help("Delete from library")
                 .accessibilityLabel("Delete from library")
                 .accessibilityAddTraits(.isButton)
             }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(AppThemeCoordinator.isReducingVisualEffects
+                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                        : AnyShapeStyle(.ultraThinMaterial))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+            )
         }
     }
 
@@ -546,7 +614,7 @@ struct DetailView: View {
                 y: 4
             )
             .padding(.horizontal, 80)
-            .transition(.scale(scale: 0.94).combined(with: .opacity))
+            .transition(.scale(scale: 0.95).combined(with: .opacity))
         }
     }
 

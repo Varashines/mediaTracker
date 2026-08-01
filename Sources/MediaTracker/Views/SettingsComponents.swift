@@ -70,20 +70,25 @@ struct SettingsRow<Trailing: View>: View {
 struct SettingsSectionHeader: View {
     let text: String
     var icon: String? = nil
-    var color: Color = .primary
+    var color: Color = AppTheme.Colors.accent
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.mini) {
+        HStack(spacing: AppTheme.Spacing.small) {
             if let icon {
                 Image(systemName: icon)
-                    .font(AppTheme.Font.caption)
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(color)
+                    .padding(5)
+                    .background(
+                        Circle()
+                            .fill(color.opacity(0.15))
+                    )
             }
             Text(text)
                 .font(AppTheme.Font.settingsSectionHeader)
                 .foregroundStyle(.primary)
         }
-        .padding(.bottom, AppTheme.Spacing.mini)
+        .padding(.bottom, AppTheme.Spacing.micro)
     }
 }
 

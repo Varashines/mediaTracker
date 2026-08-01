@@ -62,16 +62,31 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @ViewBuilder
     private var sortMenu: some View {
         if isLibraryCategory {
+            let isCustomSort = viewModel.filter.currentSortOrder != .recentlyAdded
             Button {
                 showSortPicker.toggle()
             } label: {
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     Image(systemName: viewModel.filter.currentSortOrder.icon)
                         .font(AppTheme.Icon.medium)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
+                .overlay(alignment: .topTrailing) {
+                    if isCustomSort {
+                        Circle()
+                            .fill(AppTheme.Colors.accent)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 6, y: -4)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(isCustomSort ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                )
             }
             .buttonStyle(.borderless)
             .tint(.primary)
@@ -91,10 +106,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @ViewBuilder
     private var groupMenu: some View {
         if isLibraryCategory {
+            let isCustomGroup = viewModel.filter.currentGroupBy != .none
             Button {
                 showGroupPicker.toggle()
             } label: {
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     Image(systemName: viewModel.filter.currentGroupBy.icon)
                         .font(AppTheme.Icon.medium)
                     Image(systemName: "chevron.down")
@@ -102,17 +118,23 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                         .foregroundStyle(.secondary)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if viewModel.filter.currentGroupBy != .none {
+                    if isCustomGroup {
                         Circle()
-                            .fill(Color.primary.opacity(0.4))
-                            .frame(width: 5, height: 5)
+                            .fill(AppTheme.Colors.accent)
+                            .frame(width: 6, height: 6)
                             .offset(x: 6, y: -4)
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(isCustomGroup ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                )
             }
             .buttonStyle(.borderless)
             .tint(.primary)
-            .help(viewModel.filter.currentGroupBy != .none ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
+            .help(isCustomGroup ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
             .popover(isPresented: $showGroupPicker) {
                 GroupPickerPopover(
                     current: viewModel.filter.currentGroupBy
@@ -179,6 +201,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             Image(systemName: "arrow.clockwise")
                 .font(AppTheme.Icon.medium)
                 .rotationEffect(.degrees(refreshRotation))
+                .padding(5)
+                .background(
+                    Circle()
+                        .fill(Color.primary.opacity(0.04))
+                )
         }
         .buttonStyle(.borderless)
         .tint(.primary)

@@ -41,7 +41,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .disliked: return "Disliked"
         case .binge: return "Binge"
         case .discover: return "Discovery Hub"
-        case .insights: return "Cinema DNA"
+        case .insights: return "Snapshot"
         case .movie: return "Movies"
         case .tvShow: return "TV Shows"
         case .smartHub: return "Smart Hub"
@@ -277,41 +277,76 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
 // MARK: - Mood Sentiment
 
 enum Mood: String, Codable, CaseIterable, Sendable {
-    case fun = "Fun"
-    case heavy = "Heavy"
-    case tense = "Tense"
-    case wowed = "Wowed"
-    case cozy = "Cozy"
-    case creeped = "Creeped Out"
-    case mindBlown = "Mind Blown"
-    case meh = "Meh"
-    case firedUp = "Fired Up"
+    // Movie & Shared Moods
+    case fun = "Vibey"
+    case heavy = "Deep"
+    case tense = "Intense"
+    case wowed = "Epic"
+    case cozy = "Warm"
+    case creeped = "Eerie"
+    case mindBlown = "Wild"
+    case meh = "Chill"
+    case firedUp = "Hype"
+
+    // TV Show Specific Moods (Short, Punchy Titles with Unique Emojis)
+    case binge = "Binge"
+    case comfort = "Cozy"
+    case cliffhanger = "Twisty"
+    case slowBurn = "Slow Burn"
+    case weeklyEvent = "Weekly"
+    case guiltyPleasure = "Guilty"
+    case masterpieceRun = "Peak"
+
+    /// Returns curated moods tailored for Movies vs TV Shows
+    static func moods(for type: MediaType?) -> [Mood] {
+        guard let type = type else { return allCases }
+        switch type {
+        case .movie:
+            return [.mindBlown, .fun, .heavy, .tense, .wowed, .cozy, .creeped, .firedUp, .meh]
+        case .tvShow:
+            return [.binge, .comfort, .cliffhanger, .slowBurn, .weeklyEvent, .guiltyPleasure, .masterpieceRun, .firedUp, .meh]
+        }
+    }
 
     var emoji: String {
         switch self {
         case .fun: return "face.smiling.fill"
-        case .heavy: return "drop.fill"
+        case .heavy: return "heart.fill"
         case .tense: return "bolt.fill"
         case .wowed: return "sparkle"
-        case .cozy: return "heart.fill"
-        case .creeped: return "exclamationmark.triangle.fill"
-        case .mindBlown: return "questionmark.circle.fill"
-        case .meh: return "circle.dashed"
+        case .cozy: return "sun.max.fill"
+        case .creeped: return "eye.fill"
+        case .mindBlown: return "brain.head.profile"
+        case .meh: return "cup.and.saucer.fill"
         case .firedUp: return "flame.fill"
+        case .binge: return "tv.fill"
+        case .comfort: return "sofa.fill"
+        case .cliffhanger: return "bolt.fill"
+        case .slowBurn: return "brain.head.profile"
+        case .weeklyEvent: return "calendar"
+        case .guiltyPleasure: return "theatermasks.fill"
+        case .masterpieceRun: return "trophy.fill"
         }
     }
 
     var emojiChar: String {
         switch self {
         case .fun: return "😄"
-        case .heavy: return "😢"
-        case .tense: return "😰"
+        case .heavy: return "🥺"
+        case .tense: return "⚡"
         case .wowed: return "🤩"
         case .cozy: return "🫶"
-        case .creeped: return "👀"
+        case .creeped: return "👻"
         case .mindBlown: return "🤯"
-        case .meh: return "😐"
+        case .meh: return "☕"
         case .firedUp: return "🔥"
+        case .binge: return "📺"
+        case .comfort: return "🛋️"
+        case .cliffhanger: return "⚡"
+        case .slowBurn: return "🧠"
+        case .weeklyEvent: return "🗓️"
+        case .guiltyPleasure: return "🎭"
+        case .masterpieceRun: return "🏆"
         }
     }
 
@@ -326,6 +361,13 @@ enum Mood: String, Codable, CaseIterable, Sendable {
         case .mindBlown: return Color(red: 0.1, green: 0.6, blue: 0.65)
         case .meh: return Color(red: 0.5, green: 0.5, blue: 0.5)
         case .firedUp: return Color(red: 0.9, green: 0.45, blue: 0.15)
+        case .binge: return Color(red: 0.95, green: 0.35, blue: 0.15)
+        case .comfort: return Color(red: 0.85, green: 0.55, blue: 0.25)
+        case .cliffhanger: return Color(red: 0.9, green: 0.2, blue: 0.25)
+        case .slowBurn: return Color(red: 0.35, green: 0.45, blue: 0.75)
+        case .weeklyEvent: return Color(red: 0.95, green: 0.65, blue: 0.1)
+        case .guiltyPleasure: return Color(red: 0.85, green: 0.3, blue: 0.6)
+        case .masterpieceRun: return Color(red: 0.95, green: 0.75, blue: 0.15)
         }
     }
 
@@ -337,6 +379,13 @@ enum Mood: String, Codable, CaseIterable, Sendable {
         case "Nothing", "Flat": return .meh
         case "Moved": return .heavy
         case "Thrilled": return .tense
+        case "Binge-Worthy", "Binge", "Bingeable": return .binge
+        case "Comfort Rewatch", "Cozy", "Rewatch": return .comfort
+        case "Cliffhanger", "Twisty": return .cliffhanger
+        case "Slow Burn", "Slowburn", "Deep ": return .slowBurn
+        case "Weekly Hype", "Weekly": return .weeklyEvent
+        case "Guilty Pleasure", "Guilty": return .guiltyPleasure
+        case "Peak TV", "Peak", "Masterpiece": return .masterpieceRun
         default: return Mood(rawValue: value)
         }
     }

@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import AppKit
 import os
 
@@ -77,6 +76,12 @@ class ImageCache: NSObject, NSCacheDelegate {
             let request = URLRequest(url: nsURL)
             URLCache.shared.removeCachedResponse(for: request)
         }
+    }
+    
+    func evictOffscreenImage(forKey key: String?, targetSize: CGSize? = nil) {
+        guard let key = key, !key.isEmpty else { return }
+        let cacheKey = generateCacheKey(key: key, size: targetSize)
+        memoryCache.removeObject(forKey: cacheKey as NSString)
     }
     
     func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {

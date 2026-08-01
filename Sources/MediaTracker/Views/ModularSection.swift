@@ -10,10 +10,15 @@ struct ModularSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             HStack(spacing: 0) {
-                HStack(spacing: AppTheme.Spacing.mini) {
+                HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: icon)
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(color == .secondary ? AppTheme.Colors.accent : color)
+                        .padding(5)
+                        .background(
+                            Circle()
+                                .fill((color == .secondary ? AppTheme.Colors.accent : color).opacity(0.15))
+                        )
                     Text(title.uppercased())
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)

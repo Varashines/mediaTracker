@@ -96,9 +96,7 @@ struct CachedImage<Placeholder: View>: View {
         let key = url.absoluteString
         
         if let container = ImageCache.shared.checkMemoryCache(forKey: key, targetSize: targetSize) {
-            withAnimation(AppTheme.Animation.easeInOut) {
-                self.image = container.image
-            }
+            self.image = container.image
             onImageLoaded?(container.image)
             return
         }
@@ -113,7 +111,7 @@ struct CachedImage<Placeholder: View>: View {
         
         if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority, alwaysPreserveAlpha: alwaysPreserveAlpha) {
             if Task.isCancelled { return }
-            withAnimation(AppTheme.Animation.easeInOut) {
+            withAnimation(.easeInOut(duration: 0.25)) {
                 self.image = container.image
             }
             onImageLoaded?(container.image)

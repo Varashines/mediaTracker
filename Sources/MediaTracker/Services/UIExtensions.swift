@@ -19,9 +19,6 @@ extension CGSize {
     static let thumbTiny = AppTheme.Thumbnail.tiny
     static let thumbSmall = AppTheme.Thumbnail.small
     static let thumbMedium = AppTheme.Thumbnail.medium
-    static let thumbLarge = AppTheme.Thumbnail.large
-    static let thumbCompact = AppTheme.Thumbnail.compact
-    static let backdropLarge = AppTheme.Thumbnail.backdropLarge
     static let backdropCompact = AppTheme.Thumbnail.backdropCompact
 }
 
@@ -221,21 +218,6 @@ struct ShimmeringModifier: ViewModifier {
 }
 
 
-
-struct SubSectionHeader: View {
-    let title: String
-    
-    init(_ title: String) {
-        self.title = title
-    }
-    
-    var body: some View {
-        Text(title.uppercased())
-            .font(.system(size: 11, weight: .bold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .tracking(1.2)
-    }
-}
 
 // MARK: - Perceptual Color Math (OKLCH)
 extension Color {

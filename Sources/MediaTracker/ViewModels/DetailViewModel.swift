@@ -176,26 +176,30 @@ class DetailViewModel {
 
     func refreshLocalItem() {
         if let context = item.modelContext {
+            context.processPendingChanges()
             let currentID = item.id
-            let tempContext = ModelContext(context.container)
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == currentID })
-            if let fresh = try? tempContext.fetch(descriptor).first {
+            if let fresh = try? context.fetch(descriptor).first {
+                self.item.cachedCreators = !fresh.cachedCreators.isEmpty ? fresh.cachedCreators : (fresh.tvShowDetails?.creators ?? [])
+                self.item.cachedGenres = fresh.cachedGenres
+                self.item.cachedNetwork = fresh.cachedNetwork
+                self.item.cachedNetworkLogoPath = fresh.cachedNetworkLogoPath
                 self.item.posterURL = fresh.posterURL ?? self.item.posterURL
                 self.item.backdropURL = fresh.backdropURL ?? self.item.backdropURL
                 self.item.themeColorHex = fresh.themeColorHex ?? self.item.themeColorHex
                 self.item.themeColorSourceURL = fresh.themeColorSourceURL ?? self.item.themeColorSourceURL
                 self.item.titleLogoURL = fresh.titleLogoURL ?? self.item.titleLogoURL
-                // Pre-warm the logo image so the CachedImage renders instantly
                 if let logoURL = self.item.titleLogoURL, let url = URL(string: logoURL) {
                     ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 780, height: 185))
                 }
             }
         }
         _nextEpisodeToWatch = nil
-        item.syncCachedProperties()
+        item.syncCachedProperties(dirty: .all)
         item.tvShowDetails?.recalculateCachedProperties()
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
+        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
     /// Fetch title logo from TMDB independently of the main refresh cycle.
@@ -209,7 +213,8 @@ class DetailViewModel {
         let originalLanguage = item.cachedLanguage
         let defaultLogo = item.effectiveLogoURL
 
-        Task {
+        logoTask?.cancel()
+        logoTask = Task {
             do {
                 var logos: [String]
                 if type == .tvShow {
@@ -246,7 +251,8 @@ class DetailViewModel {
         let originalLanguage = item.cachedLanguage
         let defaultPoster = item.effectivePosterURL
 
-        Task {
+        posterTask?.cancel()
+        posterTask = Task {
             do {
                 var options: [String] = []
                 if type == .tvShow {
@@ -284,7 +290,7 @@ class DetailViewModel {
             item.themeColorHex = nil
         }
 
-        item.commitChange()
+        item.commitChange(dirty: [.badge])
         updateThemeColor()
         AppErrorState.shared.showToast("Poster updated", style: .success)
     }
@@ -297,7 +303,7 @@ class DetailViewModel {
         // Restore theme color tracking to the default poster
         item.themeColorSourceURL = item.posterURL
 
-        item.commitChange()
+        item.commitChange(dirty: [.badge])
         updateThemeColor()
         AppErrorState.shared.showToast("Poster reset to default", style: .success)
     }
@@ -311,7 +317,7 @@ class DetailViewModel {
         guard url != item.effectiveLogoURL else { return }
 
         item.customLogoURL = url
-        item.commitChange()
+        item.commitChange(dirty: [.badge])
         AppErrorState.shared.showToast("Logo updated", style: .success)
     }
 
@@ -319,7 +325,7 @@ class DetailViewModel {
         guard item.modelContext != nil, item.customLogoURL != nil else { return }
 
         item.customLogoURL = nil
-        item.commitChange()
+        item.commitChange(dirty: [.badge])
         AppErrorState.shared.showToast("Logo reset to default", style: .success)
     }
 
@@ -327,7 +333,8 @@ class DetailViewModel {
         guard watchProviders.isEmpty else { return }
         guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { return }
         let type = item.type ?? .movie
-        Task {
+        watchProvidersTask?.cancel()
+        watchProvidersTask = Task {
             let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -335,7 +342,7 @@ class DetailViewModel {
                 let names = providers.map(\.name)
                 if self.item.cachedWatchProviders != names {
                     self.item.cachedWatchProviders = names
-                    self.item.commitChange()
+                    self.item.commitChange(dirty: [.badge, .metadata])
                 }
             }
         }
@@ -391,7 +398,7 @@ class DetailViewModel {
             item.stateValue = MediaState.completed.rawValue
             item.lastInteractionDate = Date()
             item.lastStateChangeDate = Date()
-            item.syncCachedProperties()
+            item.syncCachedProperties(dirty: [.progress, .badge])
         }
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)
@@ -399,28 +406,26 @@ class DetailViewModel {
         MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
-    func fetchEpisodes(for season: TVSeason) {
+    func fetchEpisodes(for season: TVSeason, force: Bool = false) {
         guard item.modelContext != nil else { return }
         let seasonID = season.persistentModelID
         
         isRefreshing = true
         Task { [weak self] in
-            await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: false)
+            await self?.fetchEpisodesIfNeeded(for: seasonID, markAsWatched: false, force: force)
             await MainActor.run { [weak self] in
                 self?.isRefreshing = false
             }
         }
     }
     
-    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool) async {
+    private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool, force: Bool = false) async {
         guard let tv = self.item.tvShowDetails,
               let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
         
-        // Phase 5: Resiliency Check - Skip fetching if the season brief says there are no episodes
-        if season.episodeCount == 0 { return }
-        
-        // Skip if already has episodes and not forcing
-        if season.totalEpisodesCount > 0 { return }
+        if !force {
+            if season.episodeCount > 0 && season.episodes.count >= season.episodeCount { return }
+        }
         
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
@@ -428,7 +433,7 @@ class DetailViewModel {
         
         do {
             try await SyncCoordinator.shared.perform(key: syncKey) {
-                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber)
+                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                 
                 await MainActor.run {
                     guard self.item.modelContext != nil, !self.item.isDeleted else { return }
@@ -471,7 +476,10 @@ class DetailViewModel {
                     }
                     
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
-                    self.item.syncCachedProperties()
+                    self.item.syncCachedProperties(dirty: [.progress, .badge])
+                    if currentSeason.episodeCount < episodes.count {
+                        currentSeason.episodeCount = episodes.count
+                    }
                 }
             }
         } catch {
@@ -482,6 +490,18 @@ class DetailViewModel {
     }
     
     private var recsTask: Task<Void, Never>?
+    private var logoTask: Task<Void, Never>?
+    private var posterTask: Task<Void, Never>?
+    private var watchProvidersTask: Task<Void, Never>?
+    private var episodesTask: Task<Void, Never>?
+
+    func cancelTasks() {
+        recsTask?.cancel()
+        logoTask?.cancel()
+        posterTask?.cancel()
+        watchProvidersTask?.cancel()
+        episodesTask?.cancel()
+    }
 
     func markNextEpisodeWatched() {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
@@ -500,7 +520,7 @@ class DetailViewModel {
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
             item.lastInteractionDate = Date()
-            item.syncCachedProperties()
+            item.syncCachedProperties(dirty: [.progress, .badge])
             if let context = item.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -516,7 +536,7 @@ class DetailViewModel {
             item.state = .completed
         }
         item.lastInteractionDate = Date()
-        item.syncCachedProperties()
+        item.syncCachedProperties(dirty: [.progress, .badge])
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)
         }
@@ -536,7 +556,7 @@ class DetailViewModel {
             item.state = nextState
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()
-            item.syncCachedProperties()
+            item.syncCachedProperties(dirty: [.badge, .searchable])
         }
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)

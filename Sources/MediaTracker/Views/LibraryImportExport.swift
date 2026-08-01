@@ -7,6 +7,36 @@ struct LibraryBackup: Codable, Sendable {
     let items: [MediaItemData]
     var collections: [CollectionBackupData]?
     var version: Int = 1
+
+    static func createDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            if let doubleValue = try? container.decode(Double.self) {
+                if doubleValue > 1_000_000_000 {
+                    return Date(timeIntervalSince1970: doubleValue)
+                }
+                return Date(timeIntervalSinceReferenceDate: doubleValue)
+            }
+            if let stringValue = try? container.decode(String.self) {
+                let isoFormatter = ISO8601DateFormatter()
+                if let date = isoFormatter.date(from: stringValue) {
+                    return date
+                }
+                let df = DateFormatter()
+                df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+                if let date = df.date(from: stringValue) {
+                    return date
+                }
+                df.dateFormat = "yyyy-MM-dd"
+                if let date = df.date(from: stringValue) {
+                    return date
+                }
+            }
+            return Date()
+        }
+        return decoder
+    }
 }
 
 struct MediaItemData: Codable, Sendable {

@@ -102,8 +102,7 @@ extension BackgroundDataService {
             item.cachedTrailerKey = details.trailerKey
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
             item.cachedWatchProviderLogoPaths = details.streamingProviders.map { $0.logoPath ?? "" }
-            item.syncCachedProperties(force: true)
-            item.updateSearchableText()
+            item.syncCachedProperties(dirty: .all)
             item.lastUpdated = Date()
             return true
         } catch {
@@ -266,21 +265,22 @@ extension BackgroundDataService {
                         let sNum = seasonData.season_number
                         if seasonData.episode_count == 0 { continue }
 
-                        // Skip seasons that already have episodes loaded unless force
-                        // or TMDB reports more episodes than we have (airing show with new episodes)
+                        var shouldForceSeason = force
                         if !force {
                             let seasonUniqueID = "\(tmdbID)_\(sNum)"
                             let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                            if let existing = try? modelContext.fetch(sDescriptor).first,
-                               existing.totalEpisodesCount > 0,
-                               existing.totalEpisodesCount >= seasonData.episode_count {
-                                continue
+                            if let existing = try? modelContext.fetch(sDescriptor).first {
+                                if existing.episodes.count >= seasonData.episode_count {
+                                    continue
+                                } else {
+                                    shouldForceSeason = true
+                                }
                             }
                         }
 
                         group.addTask {
                             do {
-                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
+                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)
                                 return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
                             } catch {
                                 AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
@@ -312,6 +312,7 @@ extension BackgroundDataService {
 
                     let season = seasonByID[seasonUniqueID] ?? TVSeason(seasonNumber: sNum, name: seasonData.name ?? "Season \(sNum)", episodeCount: seasonData.episodeCount, airDate: seasonData.airDate, showID: tmdbID)
                     season.showID = tmdbID
+                    season.episodeCount = seasonData.episodeCount
 
                     if season.modelContext == nil {
                         modelContext.insert(season)
@@ -355,7 +356,7 @@ extension BackgroundDataService {
                 item.cachedTrailerKey = trailer
             }
             await extractAndSavePosterColor(for: item)
-            item.syncCachedProperties(force: true)
+            item.syncCachedProperties(dirty: .all)
             item.lastUpdated = Date()
             return true
         } catch {

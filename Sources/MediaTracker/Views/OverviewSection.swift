@@ -66,7 +66,6 @@ struct OverviewSection: View {
         .padding(AppTheme.Spacing.medium)
         .background(surfaceColor)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .scaleEffect(isHovering && hasTruncation ? 1.015 : 1.0)
         .onHover { hovering in
             isHovering = hovering
         }
@@ -77,6 +76,5 @@ struct OverviewSection: View {
                 }
             }
         }
-        .animation(AppTheme.Animation.springSnappy, value: isHovering)
     }
 }

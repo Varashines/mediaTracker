@@ -23,37 +23,63 @@ struct LibraryEmptyStateView: View {
         self.action = action
     }
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
-        VStack {
-            ContentUnavailableView {
-                Label(title, systemImage: icon)
-            } description: {
+        VStack(spacing: AppTheme.Spacing.large) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.accent.opacity(0.12))
+                    .frame(width: 72, height: 72)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.accent)
+            }
+
+            VStack(spacing: AppTheme.Spacing.tiny) {
+                Text(title)
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(.primary)
+                
                 if !description.isEmpty {
                     Text(description)
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 360)
                 }
+
                 if !APIClient.shared.isTMDBConfigured {
                     Text("Connect an API key in Settings → Services to start tracking media")
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 4)
                 }
-            } actions: {
-                if let actionLabel, let action {
-                    Button(action: action) {
-                        Text(actionLabel)
-                            .font(AppTheme.Font.bodyBold)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(.secondary)
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.interactive)
+            }
+
+            if let actionLabel, let action {
+                Button(action: action) {
+                    Text(actionLabel)
+                        .font(AppTheme.Font.bodyBold)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.accent.opacity(0.15))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
+                        )
                 }
+                .buttonStyle(.interactive)
+                .hoverScaled(.subtle)
             }
         }
-        .frame(maxHeight: .infinity)
-        .padding(.top, 100)
+        .padding(AppTheme.Spacing.section)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private static func title(for category: NavigationCategory) -> String {

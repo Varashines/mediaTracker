@@ -39,7 +39,7 @@ final class Phase2PerformanceTests: XCTestCase {
         // throttling logic by directly observing that consecutive calls within
         // the throttle window are coalesced by the debounce Task.
         let isFast = false
-        var task: Task<Void, Never>? = nil
+        let task: Task<Void, Never>? = nil
         XCTAssertFalse(isFast)
         XCTAssertNil(task)
         // Just confirm the constants we'd depend on are sensible.

@@ -131,4 +131,9 @@ enum MediaFilterPredicates {
             }
         }
     }
+
+    static func hiddenStudiosSet() -> Set<String> {
+        let raw = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
+        return Set(raw.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
+    }
 }

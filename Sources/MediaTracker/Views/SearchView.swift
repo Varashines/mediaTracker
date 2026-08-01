@@ -23,11 +23,32 @@ struct SearchView: View {
 
     private func addRecentSearch(_ query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        guard trimmed.count >= 2 else { return }
         var recent = recentSearches
-        recent.removeAll { $0 == trimmed }
+        recent.removeAll { $0.lowercased() == trimmed.lowercased() }
         recent.insert(trimmed, at: 0)
-        recentSearchesData = Array(recent.prefix(10)).joined(separator: "\n")
+        recentSearchesData = Array(recent.prefix(5)).joined(separator: "\n")
+    }
+
+    private var popularSearches: [String] {
+        var titles: [String] = []
+        for movie in viewModel.trendingMovies.prefix(4) {
+            titles.append(movie.title)
+        }
+        for show in viewModel.trendingShows.prefix(4) {
+            titles.append(show.title)
+        }
+        var unique: [String] = []
+        for t in titles {
+            let trimmed = t.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty && !unique.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
+                unique.append(trimmed)
+            }
+        }
+        if unique.isEmpty {
+            return ["Breaking Bad", "Oppenheimer", "Succession", "Severance", "Chernobyl", "Dune"]
+        }
+        return Array(unique.prefix(6))
     }
 
     init(
@@ -94,6 +115,7 @@ struct SearchView: View {
         }
         .onAppear {
             searchVM.displayCache = viewModel.display
+            viewModel.fetchTrendingIfNeeded()
             if !searchText.isEmpty && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
             }
@@ -116,37 +138,69 @@ struct SearchView: View {
         }
     }
 
+    private let suggestedSearches = ["Breaking Bad", "Oppenheimer", "Succession", "Severance", "Chernobyl", "Dune"]
+
     @ViewBuilder
     private var filterBar: some View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                Picker("", selection: Binding(
-                    get: { viewModel.filter.searchTypeFilter },
-                    set: { viewModel.filter.searchTypeFilter = $0 }
-                )) {
-                    Text("All").tag(SearchType.all)
-                    Text("Movies").tag(SearchType.movie)
-                    Text("TV Shows").tag(SearchType.tvShow)
+
+                HStack(spacing: 4) {
+                    filterPill(title: "All", type: .all, shortcut: "⌘⌥1")
+                    filterPill(title: "Movies 🎬", type: .movie, shortcut: "⌘⌥2")
+                    filterPill(title: "TV Shows 📺", type: .tvShow, shortcut: "⌘⌥3")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 240)
-                .padding(AppTheme.Spacing.micro)
-                .background {
+                .padding(4)
+                .background(
                     Capsule()
-                        .fill(.ultraThinMaterial)
-                }
-                .overlay {
+                        .fill(AppTheme.Colors.cardFill(for: colorScheme))
+                )
+                .overlay(
                     Capsule()
                         .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
-                }
+                )
+
                 Spacer()
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
+
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
+    }
+
+    private func filterPill(title: String, type: SearchType, shortcut: String) -> some View {
+        let isSelected = selectedType == type
+        return Button {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                viewModel.filter.searchTypeFilter = type
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+
+                Text(shortcut)
+                    .font(AppTheme.Font.small)
+                    .foregroundStyle(isSelected ? AppTheme.Colors.accent : Color.secondary.opacity(0.6))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule()
+                            .fill(isSelected ? AppTheme.Colors.accent.opacity(0.15) : Color.primary.opacity(0.04))
+                    )
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(isSelected ? AppTheme.Colors.accent.opacity(0.2) : Color.clear)
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -203,64 +257,108 @@ struct SearchView: View {
         .scrollIndicators(.hidden)
     }
 
+    private func removeRecentSearch(_ query: String) {
+        var recent = recentSearches
+        recent.removeAll { $0 == query }
+        recentSearchesData = recent.joined(separator: "\n")
+    }
+
     @ViewBuilder
     private var recentSearchesLandingSection: some View {
-        if !recentSearches.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Label("Recent Searches", systemImage: "clock.arrow.circlepath")
-                        .font(AppTheme.Font.heading)
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    Button {
-                        recentSearchesData = ""
-                    } label: {
-                        Text("Clear History")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.red.opacity(0.8))
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            if !recentSearches.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Label("Recent Searches", systemImage: "clock.arrow.circlepath")
+                            .font(AppTheme.Font.heading)
+                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        Button {
+                            recentSearchesData = ""
+                        } label: {
+                            Text("Clear History")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    
+                    FlowLayout(spacing: 8) {
+                        ForEach(recentSearches, id: \.self) { query in
+                            HStack(spacing: 6) {
+                                Button {
+                                    withAnimation(AppTheme.Animation.springSnappy) {
+                                        searchText = query
+                                        addRecentSearch(query)
+                                    }
+                                } label: {
+                                    Text(query)
+                                        .font(AppTheme.Font.body)
+                                        .foregroundStyle(.primary)
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    withAnimation(AppTheme.Animation.springSnappy) {
+                                        removeRecentSearch(query)
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.primary.opacity(0.06))
+                            .cornerRadius(AppTheme.Radius.medium)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Label(recentSearches.isEmpty ? "Popular Searches" : "Suggested Searches", systemImage: "sparkles")
+                    .font(AppTheme.Font.heading)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
                 FlowLayout(spacing: 8) {
-                    ForEach(recentSearches, id: \.self) { query in
+                    ForEach(popularSearches, id: \.self) { query in
                         Button {
                             withAnimation(AppTheme.Animation.springSnappy) {
                                 searchText = query
+                                addRecentSearch(query)
                             }
                         } label: {
-                            Text(query)
-                                .font(AppTheme.Font.body)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.primary.opacity(0.06))
-                                .cornerRadius(AppTheme.Radius.medium)
+                            HStack(spacing: 4) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                                Text(query)
+                                    .font(AppTheme.Font.body)
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.cardFill(for: colorScheme))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                    .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+                            )
+                            .cornerRadius(AppTheme.Radius.medium)
                         }
                         .buttonStyle(.plain)
-                        .hoverScaled(.subtle)
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
-        } else {
-            VStack(spacing: AppTheme.Spacing.medium) {
-                Spacer(minLength: 40)
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.secondary.opacity(0.6))
-                Text("Search movies and TV shows")
-                    .font(AppTheme.Font.heading)
-                    .foregroundStyle(.secondary)
-                Text("Enter a title or creator name to discover media.")
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.secondary.opacity(0.8))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
     }
 
@@ -289,6 +387,7 @@ struct SearchView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(Array(searchVM.filteredLocalResults.enumerated()), id: \.element.id) { idx, metadata in
                         MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
+                            addRecentSearch(searchText)
                             if let item = modelContext.model(for: metadata.id) as? MediaItem {
                                 onSelectLocal?(item)
                             }
@@ -330,6 +429,7 @@ struct SearchView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(Array(combined.enumerated()), id: \.element.id) { idx, result in
                         MediaThumbnailView(result: result, isLocal: false) {
+                            addRecentSearch(searchText)
                             searchVM.addMedia(result, modelContext: modelContext) { item in
                                 onSelectLocal?(item)
                             }

@@ -157,7 +157,7 @@ final class TVShowDetails {
         }
         if triggerSync {
             // Pass force: false to avoid redundant full scan — denormalized counts are already updated by calculateProgress
-            item?.syncCachedProperties(force: false)
+            item?.syncCachedProperties(dirty: [.progress, .badge])
         }
     }
 }

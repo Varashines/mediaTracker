@@ -303,6 +303,7 @@ struct IconPickerGridView: View {
                             .cornerRadius(AppTheme.Radius.small)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .accessibilityLabel(iconName)
                 }
             }
@@ -422,6 +423,7 @@ struct EmojiPickerGridView: View {
                             .cornerRadius(AppTheme.Radius.small)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .accessibilityLabel(emoji)
                 }
             }

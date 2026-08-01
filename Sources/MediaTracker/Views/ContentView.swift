@@ -118,6 +118,7 @@ struct LibraryDetailView: View {
     @State private var refreshID = 0
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
+    @State private var loadMoreTask: Task<Void, Never>?
     
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     @State private var showWelcome = false
@@ -177,6 +178,16 @@ struct LibraryDetailView: View {
                 placement: .toolbar,
                 prompt: searchPlaceholder
             )
+            .onSubmit(of: .search) {
+                let query = viewModel.filter.searchText.trimmingCharacters(in: .whitespaces)
+                if query.count >= 2 {
+                    var recent = (UserDefaults.standard.string(forKey: "recent_searches") ?? "")
+                        .split(separator: "\n").map(String.init)
+                    recent.removeAll { $0.lowercased() == query.lowercased() }
+                    recent.insert(query, at: 0)
+                    UserDefaults.standard.set(Array(recent.prefix(5)).joined(separator: "\n"), forKey: "recent_searches")
+                }
+            }
             .toolbarTitleMenuIfAvailable {
                 Button("Home") {
                     viewModel.collection.selectedCollectionID = nil
@@ -307,13 +318,12 @@ struct LibraryDetailView: View {
         }
         .alert("Data Lost", isPresented: $showDataRecoveryAlert) {
             Button("Copy Error & OK") {
-                let logDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                if let logFiles = try? FileManager.default.contentsOfDirectory(at: logDir!, includingPropertiesForKeys: nil),
-                   let latestLog = logFiles.filter({ $0.pathExtension == "recovery.log" }).sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first,
-                   let logContent = try? String(contentsOf: latestLog, encoding: .utf8) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(logContent, forType: .string)
-                }
+                guard let logDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+                      let logFiles = try? FileManager.default.contentsOfDirectory(at: logDir, includingPropertiesForKeys: nil),
+                      let latestLog = logFiles.filter({ $0.pathExtension == "recovery.log" }).sorted(by: { $0.lastPathComponent > $1.lastPathComponent }).first,
+                      let logContent = try? String(contentsOf: latestLog, encoding: .utf8) else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(logContent, forType: .string)
             }
             Button("OK", role: .cancel) {}
         } message: {
@@ -450,7 +460,8 @@ struct LibraryDetailView: View {
         let nextOffset = viewModel.display.displayedItems.count
         let snapshot = FilterSnapshot(from: viewModel)
 
-        Task {
+        loadMoreTask?.cancel()
+        loadMoreTask = Task {
             do {
                 let filterActor = getFilterActor()
                 let result = try await filterActor.filterAndSort(
@@ -482,6 +493,10 @@ struct LibraryDetailView: View {
                     ImageCache.shared.prewarmImages(urls: posterURLs, targetSize: .thumbSmall)
                 }
             } catch {
+                guard !Task.isCancelled else {
+                    await MainActor.run { viewModel.pagination.isLoadingMore = false }
+                    return
+                }
                 AppLogger.debug("Error loading more: \(error)")
                 await MainActor.run { viewModel.pagination.isLoadingMore = false }
             }
@@ -514,7 +529,7 @@ struct LibraryDetailView: View {
             if let staleItems = try? context.fetch(descriptor), !staleItems.isEmpty {
                 AppLogger.info("♻️ Auto-healing \(staleItems.count) stale items...", logger: AppLogger.background)
                 for item in staleItems {
-                    item.syncCachedProperties()
+                    item.syncCachedProperties(dirty: .all)
                 }
                 try? context.save()
                 

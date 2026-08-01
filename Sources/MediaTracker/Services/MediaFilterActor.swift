@@ -149,13 +149,11 @@ actor MediaFilterActor {
         let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
         let calendar = Calendar.current
 
-        return results.filter { item in
-            // Smart rules
+        func passesNonSearchFilters(_ item: MediaItem) -> Bool {
             if !smartRules.isEmpty {
                 guard applySmartRule(item, rules: smartRules) else { return false }
             }
 
-            // Category filter: quickBites
             if category == .quickBites {
                 if item.typeValue == "Movie" {
                     let runtime = item.cachedRuntime ?? 0
@@ -168,60 +166,76 @@ actor MediaFilterActor {
                 }
             }
 
-            // Category filter: releaseRadar
             if category == .releaseRadar {
                 guard let b = item.storedSmartBadgeLabel, radarBadges.contains(b) else { return false }
                 let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
                 guard airDate <= now else { return false }
             }
 
-            // Badge filter
             if let b = badge {
                 guard item.storedSmartBadgeLabel == b else { return false }
             }
 
-            // Network filter
             if let nets = normalizedNets {
                 guard let rawNets = item.cachedNetwork else { return false }
                 let itemNets = rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 guard itemNets.contains(where: { nets.contains($0.lowercased()) }) else { return false }
             }
 
-            // Language filter
             if let lang = language, !lang.isEmpty {
                 guard item.cachedLanguage == lang else { return false }
             }
 
-            // Genre filter
             if let g = genre, !g.isEmpty {
                 guard item.cachedGenres.contains(g) else { return false }
             }
 
-            // Provider filter
             if let p = provider, !p.isEmpty {
                 guard item.cachedWatchProviders.contains(p) else { return false }
             }
 
-            // Year filter
             if let y = year, !y.isEmpty {
                 guard let date = item.releaseDate else { return false }
                 let itemYear = calendar.component(.year, from: date)
                 guard String(itemYear) == y else { return false }
             }
 
-            // State filter
             if let s = state {
                 guard item.state == s else { return false }
             }
 
-            // Search text filter
-            if let tokens = searchTokens {
-                let target = item.searchableText
-                guard tokens.allSatisfy({ target.localizedStandardContains($0) }) else { return false }
-            }
-
             return true
         }
+
+        // Step 1: Apply non-search filters
+        let nonSearchFiltered = results.filter { passesNonSearchFilters($0) }
+
+        // Step 2: Apply search filter with scoring
+        guard let tokens = searchTokens, !tokens.isEmpty else {
+            return nonSearchFiltered
+        }
+
+        let scorer = SearchScorer(tokens: tokens)
+
+        // Try AND mode first
+        var scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
+            let s = scorer.score(item: item)
+            guard scorer.passesAllTokens(item: item) else { return nil }
+            return (item, s)
+        }
+
+        // Fall back to OR mode if AND produced nothing and query has multiple tokens
+        if scored.isEmpty, tokens.count > 1 {
+            scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
+                let s = scorer.score(item: item)
+                guard s > 0 else { return nil }
+                return (item, s)
+            }
+        }
+
+        // Sort by score descending
+        scored.sort { $0.1 > $1.1 }
+        return scored.map(\.0)
     }
 
     private func applySmartRule(_ item: MediaItem, rules: [SmartRule]) -> Bool {
@@ -336,9 +350,8 @@ actor MediaFilterActor {
         ])
 
         let nets = (try? modelContext.fetch(netDescriptor)) ?? []
-        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
-        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty })
-        let filteredNets = nets.filter { !hiddenSet.contains($0.name) && $0.count >= 4 }
+        let hiddenSet = MediaFilterPredicates.hiddenStudiosSet()
+        let filteredNets = nets.filter { !hiddenSet.contains($0.name.lowercased()) && $0.count >= 4 }
 
         let snNetworks = filteredNets
             .filter { $0.kind == "network" || $0.kind.isEmpty }

@@ -7,202 +7,259 @@ struct PassportCardView: View {
 
     private var personalityColor: Color {
         switch stats.ratingPersonality {
-        case "Hopeless Romantic": return .pink
-        case "Harsh Critic":      return .red
-        case "Enthusiast":        return .orange
-        case "Mystery Critic":    return .gray
-        default:                  return .yellow
-        }
-    }
-
-    private var cardGradient: LinearGradient {
-        let base = personalityColor
-        let isDark = colorScheme == .dark
-        if isDark {
-            return LinearGradient(
-                colors: [base.opacity(0.18), Color(white: 0.10)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        } else {
-            return LinearGradient(
-                colors: [base.opacity(0.12), Color(white: 0.98)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        case "Hopeless Romantic": return Color(red: 1.0, green: 0.35, blue: 0.60)
+        case "Harsh Critic":      return Color(red: 1.0, green: 0.30, blue: 0.30)
+        case "Enthusiast":        return Color(red: 1.0, green: 0.55, blue: 0.15)
+        case "Mystery Critic":    return Color(red: 0.70, green: 0.70, blue: 0.85)
+        default:                  return Color(red: 1.0, green: 0.78, blue: 0.15)
         }
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            HStack(alignment: .top) {
-                Spacer(minLength: 24)
-                VStack(spacing: 6) {
-                    Image(systemName: "popcorn.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(personalityColor.opacity(0.7))
-                    Text("CINEMA PASSPORT")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .kerning(4)
-                        .foregroundStyle(personalityColor)
-                }
-                .padding(.leading, stats.currentStreak > 0 ? 50 : 0)
-                
-                Spacer()
-                
-                if stats.currentStreak > 0 {
-                    Text("🔥 \(stats.currentStreak)d streak")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.orange.opacity(0.12)))
-                }
-            }
+        ZStack {
+            // Dark Velvet Backdrop
+            Color(white: 0.04)
 
-            // Archetype + Member Since
-            VStack(spacing: 4) {
-                if !stats.archetype.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: archetypeIcon(stats.archetype))
-                            .font(.system(size: 10))
-                        Text(stats.archetype.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .kerning(1.5)
+            // Accent Radial Glow Top-Right
+            RadialGradient(
+                colors: [
+                    personalityColor.opacity(0.28),
+                    personalityColor.opacity(0.08),
+                    Color.clear
+                ],
+                center: .topTrailing,
+                startRadius: 20,
+                endRadius: 360
+            )
+
+            VStack(spacing: 24) {
+                // Header: Spotify Wrapped Title & MediaTracker Logo Badge
+                HStack(alignment: .center) {
+                    HStack(spacing: 10) {
+                        // MediaTracker Logo App Icon Badge
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [personalityColor, personalityColor.opacity(0.7)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 36, height: 36)
+                                .shadow(color: personalityColor.opacity(0.5), radius: 6, y: 2)
+
+                            Image(systemName: "popcorn.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MEDIATRACKER")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .kerning(2.0)
+                                .foregroundStyle(.white)
+                            Text("CINEMA WRAPPED")
+                                .font(.system(size: 20, weight: .black, design: .rounded))
+                                .foregroundStyle(personalityColor)
+                        }
                     }
-                    .foregroundStyle(personalityColor)
+
+                    Spacer()
+                }
+
+                // Badges Row: Archetype + Taste Affinity
+                HStack(spacing: 8) {
+                    if !stats.archetype.isEmpty {
+                        HStack(spacing: 5) {
+                            Image(systemName: archetypeIcon(stats.archetype))
+                                .font(.system(size: 10, weight: .bold))
+                            Text(stats.archetype.uppercased())
+                                .font(.system(size: 10, weight: .bold))
+                                .kerning(1.2)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(personalityColor)
+                        )
+                        .shadow(color: personalityColor.opacity(0.4), radius: 8, y: 3)
+                    }
+
+                    HStack(spacing: 5) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(stats.ratingPersonality.uppercased())
+                            .font(.system(size: 10, weight: .bold))
+                            .kerning(1.2)
+                    }
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(personalityColor.opacity(0.12)))
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color(white: 0.15))
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            )
+                    )
+
+                    Spacer()
                 }
-                if let memberSince = stats.memberSince {
-                    Text("Member since \(memberSince.formatted(.dateTime.year()))")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+
+                // Wrapped Metrics Grid
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        wrappedStatCard(
+                            title: "TOTAL MEDIA",
+                            value: "\(stats.totalMovies + stats.totalTVShows)",
+                            subtitle: "\(stats.totalMovies) Movies · \(stats.totalTVShows) TV",
+                            icon: "film.stack"
+                        )
+
+                        wrappedStatCard(
+                            title: "TIME WATCHED",
+                            value: stats.totalWatchTimeHuman,
+                            subtitle: "\(stats.totalEpisodesWatched) Episodes",
+                            icon: "clock.fill"
+                        )
+                    }
+
+                    HStack(spacing: 12) {
+                        wrappedStatCard(
+                            title: "TOP GENRE",
+                            value: stats.topGenre ?? "Exploring",
+                            subtitle: stats.topGenre != nil
+                                ? (stats.genreDNA.first.map { "\(Int(round($0.percentage)))% taste match" } ?? "10+ titles")
+                                : "Min. 10 titles in genre",
+                            icon: "sparkles"
+                        )
+
+                        wrappedStatCard(
+                            title: "TOP ACTOR",
+                            value: stats.topRatedActors.first?.name ?? "N/A",
+                            subtitle: stats.topRatedActors.first.map { "\($0.count) titles" } ?? "",
+                            icon: "star.fill"
+                        )
+                    }
                 }
-            }
 
-            Divider()
-                .padding(.horizontal, 40)
+                // Cinema DNA Barcode Spectrum
+                if !stats.barcodeData.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("CINEMA DNA SIGNATURE")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .kerning(2)
+                                .foregroundStyle(personalityColor)
 
-            // Stats row
-            HStack(spacing: 0) {
-                statBlock(value: "\(stats.totalMovies + stats.totalTVShows)", label: "Titles")
-                Divider().frame(height: 30)
-                statBlock(value: stats.totalWatchTimeHuman, label: "Watched")
-                Divider().frame(height: 30)
-                statBlock(value: "\(stats.totalEpisodesWatched)", label: "Episodes")
-            }
-            .padding(.horizontal, 20)
-
-            // Taste + Genres
-            HStack(alignment: .top, spacing: 24) {
-                // Mini taste donut
-                tasteDonutView
-                    .frame(width: 80, height: 80)
-
-                // Top genres
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TOP GENRES")
-                        .font(.system(size: 8, weight: .semibold))
-                        .kerning(1.5)
-                        .foregroundStyle(.tertiary)
-                    ForEach(stats.genreDNA.prefix(3), id: \.name) { genre in
-                        HStack(spacing: 4) {
-                            Text(genre.name)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.primary)
                             Spacer()
-                            Text("\(Int(genre.percentage))%")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
+
+                            Text("\(stats.barcodeData.count) TITLES")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.white.opacity(0.6))
                         }
+
+                        HStack(spacing: 1.5) {
+                            ForEach(stats.barcodeData.prefix(120)) { slice in
+                                RoundedRectangle(cornerRadius: 0.5)
+                                    .fill(tasteColor(slice.tasteValue))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 32)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                    }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color(white: 0.10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+
+                    HStack(spacing: 12) {
+                        wrappedStatCard(
+                            title: "COMPLETED",
+                            value: "\(stats.completedMovies + stats.completedTVShows)",
+                            subtitle: "\(stats.completedMovies) Movies · \(stats.completedTVShows) TV",
+                            icon: "checkmark.circle.fill"
+                        )
+
+                        wrappedStatCard(
+                            title: "TOP CREATOR",
+                            value: stats.topRatedCreators.first?.name ?? "N/A",
+                            subtitle: stats.topRatedCreators.first.map { "\($0.count) titles" } ?? "",
+                            icon: "pencil.and.outline"
+                        )
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 20)
 
-            // Spectrum barcode
-            if !stats.barcodeData.isEmpty {
-                VStack(spacing: 6) {
-                    Text("CINEMA DNA SIGNATURE")
-                        .font(.system(size: 8, weight: .semibold))
-                        .kerning(2)
-                        .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
 
-                    HStack(spacing: 1) {
-                        ForEach(stats.barcodeData.prefix(120)) { slice in
-                            RoundedRectangle(cornerRadius: 0.5)
-                                .fill(tasteColor(slice.tasteValue))
-                                .frame(width: 2.5)
-                        }
+                // Spotify Wrapped Footer Branding
+                HStack {
+                    Text("TRACKED WITH MEDIATRACKER")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    if let memberSince = stats.memberSince {
+                        Text(memberSince.formatted(.dateTime.year()))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(personalityColor)
                     }
-                    .frame(height: 24)
                 }
-                .padding(.horizontal, 20)
             }
-
-            Spacer(minLength: 0)
-
-            // Footer
-            Text("Made with MediaTracker")
-                .font(.system(size: 8))
-                .foregroundStyle(.tertiary)
+            .padding(24)
         }
-        .padding(.vertical, 32)
-        .padding(.horizontal, 24)
-        .frame(width: 400, height: 550)
-        .background(cardGradient)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(width: 420, height: 630)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(personalityColor.opacity(0.15), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(personalityColor.opacity(0.4), lineWidth: 1.2)
         )
     }
 
-    private func statBlock(value: String, label: String) -> some View {
-        VStack(spacing: 1) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(label)
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var tasteDonutView: some View {
-        let total = Double(max(stats.lovedCount + stats.likedCount + stats.dislikedCount + stats.unratedCount, 1))
-        let loved = Double(stats.lovedCount) / total
-        let liked = Double(stats.likedCount) / total
-        let disliked = Double(stats.dislikedCount) / total
-        let unrated = Double(stats.unratedCount) / total
-
-        return Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = min(size.width, size.height) / 2 - 4
-            var startAngle = -90.0
-
-            for (pct, color) in [(loved, Color.pink), (liked, Color.green), (disliked, Color.red.opacity(0.7)), (unrated, Color.gray.opacity(0.5))] {
-                if pct > 0 {
-                    let endAngle = startAngle + pct * 360
-                    var path = Path()
-                    path.move(to: center)
-                    path.addArc(center: center, radius: radius,
-                                startAngle: .degrees(startAngle), endAngle: .degrees(endAngle), clockwise: false)
-                    path.closeSubpath()
-                    context.fill(path, with: .color(color))
-                    startAngle = endAngle
-                }
+    private func wrappedStatCard(title: String, value: String, subtitle: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(personalityColor)
+                Spacer()
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.6))
             }
 
-            // Center hole matching gradient color approximation
-            context.fill(Circle().path(in: CGRect(x: center.x - 14, y: center.y - 14, width: 28, height: 28)),
-                        with: .color(colorScheme == .dark ? Color(white: 0.10) : Color(white: 0.98)))
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+            }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(white: 0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
     }
 
     private func archetypeIcon(_ archetype: String) -> String {
@@ -218,36 +275,40 @@ struct PassportCardView: View {
 
     private func tasteColor(_ value: String) -> Color {
         switch value {
-        case "Love": return Color.pink.opacity(0.85)
-        case "Like": return Color.green.opacity(0.85)
-        case "Dislike": return Color.red.opacity(0.65)
-        default: return Color.gray.opacity(0.4)
+        case "Love": return Color(red: 1.0, green: 0.40, blue: 0.70)
+        case "Like": return Color(red: 0.30, green: 0.85, blue: 0.50)
+        case "Dislike": return Color(red: 1.0, green: 0.35, blue: 0.35)
+        default: return Color(white: 0.45)
         }
     }
 
-    // Render to NSImage
+    // Render high-resolution uncropped 3x Retina NSImage using SwiftUI ImageRenderer
+    @MainActor
     func renderToImage() -> NSImage? {
-        let renderView = self.environment(\.colorScheme, colorScheme)
-        let controller = NSHostingController(rootView: renderView)
-        let targetSize = CGSize(width: 400, height: 550)
-        controller.view.frame = CGRect(origin: .zero, size: targetSize)
+        let exportCanvas = ZStack {
+            Color(white: 0.04)
 
-        let bitmap = controller.view.bitmapImageRepForCachingDisplay(in: controller.view.bounds)!
-        controller.view.cacheDisplay(in: controller.view.bounds, to: bitmap)
+            self
+                .frame(width: 420, height: 630)
+                .padding(24)
+        }
+        .frame(width: 468, height: 678)
+        .environment(\.colorScheme, .dark)
 
-        let image = NSImage(size: targetSize)
-        image.addRepresentation(bitmap)
-        return image
+        return exportCanvas.renderToNSImage(width: 468, height: 678)
     }
 }
 
 extension LibraryStats {
     var totalWatchTimeHuman: String {
-        let hours = totalWatchTimeMinutes / 60
-        let minutes = totalWatchTimeMinutes % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
+        let totalHours = totalWatchTimeMinutes / 60
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        if days > 0 {
+            return "\(days)d \(hours)h"
+        } else if hours > 0 {
+            return "\(hours)h"
         }
-        return "\(minutes)m"
+        return "\(totalWatchTimeMinutes)m"
     }
 }

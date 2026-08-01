@@ -5,10 +5,17 @@ import SwiftData
 import AppKit
 #endif
 
+import Observation
+
 /// Coordinates background synchronization and database healing tasks while the app is idle or closed.
 @MainActor
+@Observable
 class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
+    
+    var isImportActive: Bool = false
+    var activeTaskDescription: String? = nil
+
     private var isScheduled = false
     private var container: ModelContainer?
     
@@ -28,7 +35,7 @@ class BackgroundTaskManager {
     }
 
     private func performDripSync() async {
-        guard let container = container else { isDripSyncing = false; return }
+        guard let container = container, !isImportActive else { isDripSyncing = false; return }
         defer { isDripSyncing = false }
 
         let context = ModelContext(container)
@@ -346,7 +353,7 @@ class BackgroundTaskManager {
                 AppLogger.info("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...", logger: AppLogger.background)
                 for item in allStale {
                     try Task.checkCancellation()
-                    item.syncCachedProperties(now: now)
+                    item.syncCachedProperties(now: now, dirty: [.badge])
                 }
                 await BadgeEngine.flushBadgeChanges(container: container)
                 try context.save()

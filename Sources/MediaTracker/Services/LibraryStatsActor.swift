@@ -49,6 +49,7 @@ struct LibraryStats: Sendable {
     // Passport personality
     let ratingPersonality: String
     let archetype: String
+    let topGenre: String?
     let memberSince: Date?
 
     let currentStreak: Int
@@ -81,6 +82,7 @@ struct LibraryStats: Sendable {
         barcodeData: [],
         ratingPersonality: "",
         archetype: "",
+        topGenre: nil,
         memberSince: nil,
         currentStreak: 0,
         longestStreak: 0,
@@ -133,6 +135,7 @@ struct CodableLibraryStats: Codable {
 
     let ratingPersonality: String
     let archetype: String
+    let topGenre: String?
     let memberSince: Date?
     let currentStreak: Int
     let longestStreak: Int
@@ -160,6 +163,7 @@ struct CodableLibraryStats: Codable {
         self.barcodeData = stats.barcodeData
         self.ratingPersonality = stats.ratingPersonality
         self.archetype = stats.archetype
+        self.topGenre = stats.topGenre
         self.memberSince = stats.memberSince
         self.currentStreak = stats.currentStreak
         self.longestStreak = stats.longestStreak
@@ -189,6 +193,7 @@ struct CodableLibraryStats: Codable {
             barcodeData: barcodeData,
             ratingPersonality: ratingPersonality,
             archetype: archetype,
+            topGenre: topGenre,
             memberSince: memberSince,
             currentStreak: currentStreak,
             longestStreak: longestStreak,
@@ -286,23 +291,7 @@ actor LibraryStatsActor {
         var statsContainer = RawStatsContainer()
         var tasteMaps = TasteMapsContainer()
 
-        let hiddenStudios = UserDefaults.standard.string(forKey: UserDefaultsKeys.hiddenStudios.rawValue) ?? ""
-        let hiddenSet = Set(hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }.map { $0.lowercased() })
-
-        // Single query pre-fetch of watched TV episodes to avoid N+1 traversals during stats calculations
-        var tvWatchedEpisodesMap: [Int: [TVEpisode]] = [:]
-        if includeCinephileData {
-            let epDescriptor = FetchDescriptor<TVEpisode>(
-                predicate: #Predicate<TVEpisode> { $0.isWatched }
-            )
-            if let watchedEpisodes = try? modelContext.fetch(epDescriptor) {
-                for ep in watchedEpisodes {
-                    if let showID = ep.showID {
-                        tvWatchedEpisodesMap[showID, default: []].append(ep)
-                    }
-                }
-            }
-        }
+        let hiddenSet = MediaFilterPredicates.hiddenStudiosSet()
 
         let batchSize = 500
         var offset = 0
@@ -323,7 +312,7 @@ actor LibraryStatsActor {
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
             
-            processBatch(items, stats: &statsContainer, taste: &tasteMaps, hiddenSet: hiddenSet, tvWatchedEpisodesMap: tvWatchedEpisodesMap, includeCinephileData: includeCinephileData)
+            processBatch(items, stats: &statsContainer, taste: &tasteMaps, hiddenSet: hiddenSet)
             
             offset += batchSize
         }
@@ -333,7 +322,7 @@ actor LibraryStatsActor {
         // Compute streaks from episode + movie watch dates
         let streaks = await computeStreaks()
 
-        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, includeCinephileData: includeCinephileData, streaks: streaks)
+        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps, streaks: streaks)
 
         let calculationDate = Date()
         await MainActor.run {
@@ -390,7 +379,7 @@ actor LibraryStatsActor {
         var providerStats: [String: (count: Int, runtime: Int)] = [:]
     }
 
-    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>, tvWatchedEpisodesMap: [Int: [TVEpisode]], includeCinephileData: Bool = true) {
+    private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>) {
         for item in items {
             let isCompleted = item.stateValue == "Completed"
             let tasteValue = item.tasteValue
@@ -504,13 +493,14 @@ actor LibraryStatsActor {
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, includeCinephileData: Bool = true, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) = (0, 0, [], 0)) async throws -> LibraryStats {
-        // 1. Process Genre DNA
-        let genreDNAMap = taste.genreTaste.map { name, stats in
-            (name, stats.affinity(cutoff: 5))
+    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) = (0, 0, [], 0)) async throws -> LibraryStats {
+        // 1. Process Genre DNA - Require minimum 10 titles watched, ranked strictly by Taste Affinity score
+        let genreDNAMap = taste.genreTaste.compactMap { name, categoryStats -> (String, Double)? in
+            guard categoryStats.total >= 10 else { return nil }
+            let tasteAffinityScore = categoryStats.affinity(cutoff: 5) * 100.0
+            return (name, tasteAffinityScore)
         }
         let genreDNA = genreDNAMap
-            .filter { $0.1 >= 0 }
             .sorted { $0.1 > $1.1 }
             .prefix(10)
 
@@ -554,7 +544,12 @@ actor LibraryStatsActor {
             .prefix(8)
             .map { $0 }
 
-        let topGenre = genreDNA.first?.0
+        let qualifyingGenres = taste.genreTaste.filter { $0.value.total >= 10 }
+        let topGenre = qualifyingGenres
+            .map { ($0.key, $0.value.affinity(cutoff: 5)) }
+            .filter { $0.1 >= 0 }
+            .sorted { $0.1 > $1.1 }
+            .first?.0
 
         let totalMoods = stats.moodCounts.values.reduce(0, +)
         let topMood: (name: String, percentage: Double)? = {
@@ -600,6 +595,7 @@ actor LibraryStatsActor {
             barcodeData: stats.barcodeData,
             ratingPersonality: personality,
             archetype: archetype,
+            topGenre: topGenre,
             memberSince: stats.earliestDateAdded,
             currentStreak: streaks.current,
             longestStreak: streaks.longest,

@@ -147,7 +147,7 @@ final class ColorExtractorTests: XCTestCase {
         }
         let pair = await ColorExtractor.topTwoColors(from: image)
         let hex = pair.primary.toHex()
-        let rVal = Int(hex.prefix(2), radix: 16) ?? 0
+        _ = Int(hex.prefix(2), radix: 16) ?? 0
 
         // Should extract something in the warm range, not pure gray
         // Warm center is (255,200,50) → r should be > 100

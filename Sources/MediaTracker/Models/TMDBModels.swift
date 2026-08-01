@@ -63,12 +63,12 @@ struct TMDBGenreMap {
 struct TMDBGenre: Codable { let name: String }
 
 struct TMDBNetwork: Codable {
-    let name: String
+    let name: String?
     let logo_path: String?
 }
 
 struct TMDBPerson: Codable {
-    let name: String
+    let name: String?
     let profile_path: String?
 }
 
@@ -91,13 +91,13 @@ struct TMDBCreditsResponse: Codable {
 }
 
 struct TMDBMovieCrewMember: Codable {
-    let name: String
+    let name: String?
     let job: String?
     let profile_path: String?
 }
 
 struct TMDBMovieCastMember: Codable {
-    let name: String
+    let name: String?
     let character: String?
     let profile_path: String?
     let order: Int
@@ -109,7 +109,7 @@ struct TMDBAggregateCreditsResponse: Codable {
 }
 
 struct TMDBAggregateCastMember: Codable {
-    let name: String
+    let name: String?
     let roles: [TMDBRole]
     let profile_path: String?
     let order: Int

@@ -56,7 +56,7 @@ class SearchViewModel {
 
     private func setupSearchDebounce() {
         searchSubject
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
             .sink { [weak self] text, selectedType in
                 self?.searchTask?.cancel()
                 self?.searchTask = Task {

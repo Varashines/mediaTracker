@@ -58,6 +58,7 @@ struct ArchetypeBadge: View {
             )
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
     }
 
     private var archetypeIcon: String {

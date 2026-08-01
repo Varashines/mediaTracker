@@ -7,15 +7,19 @@ struct DataSection: View {
     @State private var showClearConfirmation = false
     @State private var exportData: Data?
     @State private var showExportDialog = false
-    @State private var showImportDialog = false
+    @State private var showImportSheet = false
+
+    private var backgroundManager: BackgroundTaskManager {
+        BackgroundTaskManager.shared
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            SettingsSectionHeader(text: "Backup", icon: "tray.and.arrow.down.fill", color: .blue)
+            SettingsSectionHeader(text: "Backup & Import", icon: "tray.and.arrow.down.fill", color: .blue)
 
             SettingsCard(color: .blue) {
                 VStack(spacing: 0) {
-                    SettingsRow(title: "Export Library", subtitle: "Save a backup of your collection", showDivider: true) {
+                    SettingsRow(title: "Export Library", subtitle: "Save a JSON backup of your collection", showDivider: true) {
                         SettingsButton(title: "Export") {
                             let container = modelContext.container
                             Task {
@@ -29,9 +33,9 @@ struct DataSection: View {
                             }
                         }
                     }
-                    SettingsRow(title: "Import Library", subtitle: "Restore from a backup file", showDivider: true) {
-                        SettingsButton(title: "Import") {
-                            showImportDialog = true
+                    SettingsRow(title: "Import Library", subtitle: "Restore from a MediaTracker backup file", showDivider: true) {
+                        SettingsButton(title: "Import Wizard...") {
+                            showImportSheet = true
                         }
                     }
                     SettingsRow(title: "Auto Backups", subtitle: "View automatic backup folder", showDivider: false) {
@@ -44,6 +48,38 @@ struct DataSection: View {
                         }
                     }
                 }
+            }
+
+            SettingsSectionHeader(text: "Background Operations", icon: "gearshape.arrow.triangle.2.circlepath", color: .teal)
+
+            SettingsCard(color: .teal) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Background Task Queue")
+                                .font(AppTheme.Font.bodyMedium)
+                                .foregroundStyle(.primary)
+                            if let activeTask = backgroundManager.activeTaskDescription {
+                                Text(activeTask)
+                                    .font(AppTheme.Font.caption)
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                            } else {
+                                Text("All background tasks idle")
+                                    .font(AppTheme.Font.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if backgroundManager.isImportActive {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+                .padding(AppTheme.Spacing.medium)
             }
 
             SettingsSectionHeader(text: "Maintenance", icon: "wrench.and.screwdriver.fill", color: .orange)
@@ -73,6 +109,9 @@ struct DataSection: View {
                 }
             }
         }
+        .sheet(isPresented: $showImportSheet) {
+            ImportWizardSheet()
+        }
         .confirmationDialog("Delete Everything?", isPresented: $showClearConfirmation) {
             Button("Delete All Library Data", role: .destructive) {
                 DataService.shared.clearDatabase(modelContext: modelContext)
@@ -83,32 +122,6 @@ struct DataSection: View {
                 AppErrorState.shared.surfaceError("Export failed: \(error.localizedDescription)")
             }
             exportData = nil
-        }
-        .fileImporter(isPresented: $showImportDialog, allowedContentTypes: [.json]) { result in
-            switch result {
-            case .success(let url):
-                let container = modelContext.container
-                Task.detached(priority: .userInitiated) {
-                    do {
-                        let data = try Data(contentsOf: url)
-                        let backup = try JSONDecoder().decode(LibraryBackup.self, from: data)
-                        let importService = BackgroundDataService(modelContainer: container)
-                        let count = await importService.importLibraryData(backup: backup)
-                        await importService.importCollections(backup: backup)
-                        await MainActor.run {
-                            AppErrorState.shared.showToast("Imported \(count) items.", style: .success)
-                            let context = ModelContext(container)
-                            DataService.shared.runMaintenance(modelContext: context, silent: true)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            AppErrorState.shared.surfaceError("Import failed: \(error.localizedDescription)")
-                        }
-                    }
-                }
-            case .failure(let error):
-                AppErrorState.shared.surfaceError("Import cancelled: \(error.localizedDescription)")
-            }
         }
     }
 }

@@ -76,7 +76,7 @@ struct SettingsView: View {
             ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
             : AnyShapeStyle(.ultraThinMaterial))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(maxWidth: 520, minHeight: 620)
+        .frame(minWidth: 580, maxWidth: 640, minHeight: 640)
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
@@ -95,13 +95,21 @@ struct SettingsView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: AppTheme.Spacing.small) {
+        HStack(spacing: 4) {
             ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
                 tabButton(tab: tab)
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.xLarge)
-        .frame(maxWidth: .infinity)
+        .padding(4)
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.cardFill(for: scheme))
+        )
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+        )
+        .padding(.horizontal, AppTheme.Spacing.smallMedium)
     }
 
     private func tabButton(tab: SettingsTab) -> some View {
@@ -117,45 +125,36 @@ struct SettingsView: View {
                 }
             }
         } label: {
-            Image(systemName: isSelected ? tab.fillIcon : tab.icon)
-                .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary.opacity(0.5) : .secondary))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
-                        : AnyShapeStyle(.ultraThinMaterial))
-                    .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
-                        view.overlay(
-                            Capsule()
-                                .stroke(isHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06), lineWidth: 0.5)
-                        )
-                    }
-            )
-            .clipShape(Capsule())
-            .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
-                view.overlay(
-                    Group {
-                        if isSelected {
-                            Capsule()
-                                .fill(AppTheme.Colors.accent.opacity(0.18))
-                                .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
-                        }
-                    }
-                )
+            HStack(spacing: 5) {
+                Image(systemName: isSelected ? tab.fillIcon : tab.icon)
+                    .font(.system(size: 11, weight: .bold))
+                
+                Text(tab.label)
+                    .font(AppTheme.Font.bodyBold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
+            .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary : .secondary))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Group {
+                    if isSelected {
+                        Capsule()
+                            .fill(AppTheme.Colors.accent.opacity(0.18))
+                            .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
+                    } else if isHovered {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.04))
+                    }
+                }
+            )
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            if AppThemeCoordinator.isReducingVisualEffects {
+            withAnimation(AppTheme.Animation.microInteraction) {
                 hoveredTab = hovering ? tab : nil
-            } else {
-                withAnimation(AppTheme.Animation.microInteraction) {
-                    hoveredTab = hovering ? tab : nil
-                }
             }
         }
         .accessibilityLabel(tab.label)

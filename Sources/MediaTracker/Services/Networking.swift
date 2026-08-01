@@ -1,5 +1,4 @@
 import Foundation
-import UniformTypeIdentifiers
 
 enum APIError: Error, LocalizedError {
     case missingApiKey(String)
@@ -323,12 +322,14 @@ actor APIClient {
     }
 
     private nonisolated func processMovieDetails(_ details: TMDBMovieDetailsResponse) -> MovieDetailsResult {
-        let cast = details.credits?.cast.prefix(30).map { 
-            CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
+        let cast: [CastMemberResult] = details.credits?.cast.prefix(30).compactMap { member in
+            guard let name = member.name, !name.isEmpty else { return nil }
+            return CastMemberResult(name: name, character: member.character ?? "Unknown", profilePath: member.profile_path, order: member.order)
         } ?? []
         
-        let directors = details.credits?.crew?.filter { $0.job == "Director" }.map { 
-            CastMemberResult(name: $0.name, character: "Director", profilePath: $0.profile_path, order: -1)
+        let directors: [CastMemberResult] = details.credits?.crew?.filter { $0.job == "Director" }.compactMap { member in
+            guard let name = member.name, !name.isEmpty else { return nil }
+            return CastMemberResult(name: name, character: "Director", profilePath: member.profile_path, order: -1)
         } ?? []
         
         // Phase 3: Dynamic release date prioritization
@@ -389,8 +390,9 @@ actor APIClient {
 
     func fetchTVDetails(tmdbID: Int, force: Bool = false) async throws -> TVDetailsResult {
         let cacheKey = "tv_details_v2_\(tmdbID).json"
-        if !force,
-           let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
+        if force {
+            removeCachedResponse(forKey: cacheKey)
+        } else if let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             let result = processTVDetails(d)
             if !result.streamingProviders.isEmpty { providerCache[tmdbID] = result.streamingProviders }
@@ -398,13 +400,14 @@ actor APIClient {
         }
 
         // Coalesce concurrent in-flight requests for the same show to share one network call
-        if let existing = inFlightTVDetails[tmdbID] {
+        // Only coalesce non-force requests — force requests always fetch fresh data
+        if !force, let existing = inFlightTVDetails[tmdbID] {
             return try await existing.value
         }
         let task = Task<TVDetailsResult, Error> {
             defer { self.inFlightTVDetails.removeValue(forKey: tmdbID) }
             let result = try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,aggregate_credits,videos,watch/providers")])
+                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits,aggregate_credits,videos,watch/providers")])
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
@@ -424,34 +427,60 @@ actor APIClient {
         if let aggregate = d.aggregate_credits {
             // Sort by episode count descending to ensure leads (like Steve Carell) appear first
             let sortedAggregate = aggregate.cast.sorted { $0.total_episode_count > $1.total_episode_count }
-            cast = sortedAggregate.prefix(30).map { member in
+            cast = sortedAggregate.prefix(30).compactMap { member in
+                guard let name = member.name, !name.isEmpty else { return nil }
                 let character = member.roles.first?.character ?? "Unknown"
-                return CastMemberResult(name: member.name, character: character, profilePath: member.profile_path, order: member.order)
+                return CastMemberResult(name: name, character: character, profilePath: member.profile_path, order: member.order)
             }
         } else {
-            cast = d.credits?.cast.prefix(15).map { 
-                CastMemberResult(name: $0.name, character: $0.character ?? "Unknown", profilePath: $0.profile_path, order: $0.order)
+            cast = d.credits?.cast.prefix(15).compactMap { member in
+                guard let name = member.name, !name.isEmpty else { return nil }
+                return CastMemberResult(name: name, character: member.character ?? "Unknown", profilePath: member.profile_path, order: member.order)
             } ?? []
         }
         
-        let creators = d.created_by?.map { 
-            CastMemberResult(name: $0.name, character: "Creator", profilePath: $0.profile_path, order: -1)
-        } ?? []
-        let network = d.networks?.first
+        var creators: [CastMemberResult] = []
+        if let createdBy = d.created_by {
+            creators = createdBy.compactMap { p in
+                guard let name = p.name, !name.isEmpty else { return nil }
+                return CastMemberResult(name: name, character: "Creator", profilePath: p.profile_path, order: -1)
+            }
+        }
+
+        if creators.isEmpty {
+            let crew = d.aggregate_credits?.crew ?? d.credits?.crew ?? []
+            let showrunners = crew.compactMap { member -> (name: String, job: String, profilePath: String?)? in
+                guard let name = member.name, !name.isEmpty else { return nil }
+                guard let job = member.job?.lowercased() else { return nil }
+                if job == "creator" || job == "showrunner" || job == "executive producer" || job == "director" {
+                    return (name: name, job: member.job ?? "Creator", profilePath: member.profile_path)
+                }
+                return nil
+            }
+            var seen = Set<String>()
+            for member in showrunners {
+                if !seen.contains(member.name) {
+                    seen.insert(member.name)
+                    creators.append(CastMemberResult(name: member.name, character: member.job, profilePath: member.profilePath, order: -1))
+                    if creators.count >= 3 { break }
+                }
+            }
+        }
+        let network = d.networks?.first?.name
         
         let imdbID = d.external_ids?.imdb_id
         let trailerKey = Self.extractTrailerKey(from: d.videos)
 
         return TVDetailsResult(
-            status: d.status,
+            status: d.status ?? "Ended",
             voteAverage: d.vote_average,
             imdbID: imdbID,
-            genres: d.genres.map { $0.name },
+            genres: d.genres?.compactMap { $0.name } ?? [],
             backdropPath: d.backdrop_path,
             posterPath: d.poster_path,
             overview: d.overview,
-            network: network?.name,
-            networkLogoPath: network?.logo_path,
+            network: network,
+            networkLogoPath: d.networks?.first?.logo_path,
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
             firstAirDate: d.first_air_date,

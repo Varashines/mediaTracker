@@ -120,6 +120,10 @@ struct SidebarNavigation: View {
                 if isSelected {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(AppTheme.Colors.accent)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                        }
                         .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)

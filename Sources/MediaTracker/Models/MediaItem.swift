@@ -1,6 +1,16 @@
 import Foundation
 import SwiftData
 
+struct CacheDirtyFlags: OptionSet, Sendable {
+    let rawValue: Int
+    static let progress   = CacheDirtyFlags(rawValue: 1 << 0)
+    static let badge      = CacheDirtyFlags(rawValue: 1 << 1)
+    static let metadata   = CacheDirtyFlags(rawValue: 1 << 2)
+    static let cast       = CacheDirtyFlags(rawValue: 1 << 3)
+    static let searchable = CacheDirtyFlags(rawValue: 1 << 4)
+    static let all: CacheDirtyFlags = [.progress, .badge, .metadata, .cast, .searchable]
+}
+
 @Model
 final class MediaItem: Identifiable {
     #Index<MediaItem>([
@@ -79,8 +89,8 @@ final class MediaItem: Identifiable {
         self.dateAdded = now
     }
 
-    nonisolated func commitChange(forceRecalc: Bool = false) {
-        syncCachedProperties(force: forceRecalc)
+    nonisolated func commitChange(dirty: CacheDirtyFlags = .all) {
+        syncCachedProperties(dirty: dirty)
         nonisolated(unsafe) let context = modelContext
         let pid = persistentModelID
         Task { @MainActor in
@@ -103,7 +113,7 @@ final class MediaItem: Identifiable {
             tasteValue = newValue?.rawValue ?? "None"
             if old != tasteValue {
                 lastInteractionDate = Date()
-                syncCachedProperties()
+                syncCachedProperties(dirty: [.badge, .searchable])
             }
         }
     }
@@ -170,7 +180,7 @@ final class MediaItem: Identifiable {
             }
             
             if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
-            commitChange(forceRecalc: true)
+            commitChange(dirty: .all)
         }
     }
 
@@ -179,19 +189,16 @@ final class MediaItem: Identifiable {
         if didChange {
             tasteValue = newTaste.rawValue
             lastInteractionDate = Date()
-            commitChange()
+            commitChange(dirty: [.badge, .searchable])
         }
     }
 
-    /// Marks this item as soft-deleted. The item is hidden from grid views but can be restored
-    /// within the undo window by calling `restoreFromSoftDelete()`. A background purge task
-    /// hard-deletes items older than the undo window.
     func softDelete(now: Date = Date()) {
         guard !isSoftDeleted else { return }
         isSoftDeleted = true
         softDeletedAt = now
         lastInteractionDate = now
-        commitChange()
+        commitChange(dirty: .all)
     }
 
     func restoreFromSoftDelete() {
@@ -199,7 +206,7 @@ final class MediaItem: Identifiable {
         isSoftDeleted = false
         softDeletedAt = nil
         lastInteractionDate = Date()
-        commitChange()
+        commitChange(dirty: .all)
     }
 
     @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?

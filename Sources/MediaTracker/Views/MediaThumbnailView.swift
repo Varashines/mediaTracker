@@ -240,6 +240,12 @@ struct MediaThumbnailView: View, Equatable {
                     for: id, type: capturedType, state: capturedState, progress: capturedProgress)
             }
         }
+        .onDisappear {
+            if isFastScrolling, let url = posterURL {
+                let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
+                ImageCache.shared.evictOffscreenImage(forKey: url, targetSize: targetSize)
+            }
+        }
     }
 
     private var accessibilityLabel: String {
@@ -359,13 +365,6 @@ struct MediaThumbnailView: View, Equatable {
                 y: 0
             )
         }
-        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
-            view.overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                    .stroke(disableHover && isHovered ? AppTheme.Colors.accent.opacity(0.5) : .clear, lineWidth: 2)
-                    .animation(.easeOut(duration: 0.15), value: isHovered)
-            )
-        }
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9))))
         .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
@@ -411,8 +410,9 @@ struct MediaThumbnailView: View, Equatable {
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
             item.lastInteractionDate = Date()
+            FeedbackManager.shared.trigger(.markWatched)
             Task { @MainActor in
-                item.syncCachedProperties()
+                item.syncCachedProperties(dirty: [.progress, .badge])
                 if let context = item.modelContext {
                     SaveCoordinator.shared.requestSave(context)
                 }
@@ -560,7 +560,7 @@ struct MediaThumbnailView: View, Equatable {
                         withAnimation(AppTheme.Animation.springSnappy) {
                             item.state = targetState
                             item.lastUpdated = Date()
-                            item.syncCachedProperties()
+                            item.syncCachedProperties(dirty: [.badge, .searchable])
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
                     }

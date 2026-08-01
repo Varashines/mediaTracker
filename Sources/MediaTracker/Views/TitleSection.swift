@@ -157,7 +157,9 @@ struct TitleSection: View {
                             .foregroundStyle(.primary)
                     }
 
-                    let creators = item.cachedCreators
+                    let creators = !item.cachedCreators.isEmpty 
+                        ? item.cachedCreators 
+                        : (item.tvShowDetails?.creators ?? [])
 
                     if !creators.isEmpty {
                         Text("\(item.type == .movie ? "Directed by" : "Created by") \(creators.joined(separator: ", "))")
@@ -306,6 +308,7 @@ struct TitleSection: View {
         .popover(isPresented: $showMoodPicker) {
             MoodPickerPopover(
                 currentMood: currentMood,
+                mediaType: item.type,
                 onSelect: { mood in
                     onMoodChanged?(mood)
                     showMoodPicker = false
@@ -323,93 +326,82 @@ struct TitleSection: View {
 
 private struct MoodPickerPopover: View {
     let currentMood: Mood?
+    var mediaType: MediaType? = nil
     let onSelect: (Mood) -> Void
     let onClear: () -> Void
     @State private var hoveredMood: Mood? = nil
-    @State private var clearHovered = false
+    @Environment(\.colorScheme) var colorScheme
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "heart.text.clipboard.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                Text("How did it feel?")
-                    .font(.system(size: 12, weight: .semibold))
+        VStack(spacing: AppTheme.Spacing.small) {
+            HStack {
+                Text("Vibe")
+                    .font(AppTheme.Font.heading)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                if currentMood != nil {
+                    Button("Clear") {
+                        onClear()
+                    }
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.red.opacity(0.8))
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(.top, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal, AppTheme.Spacing.smallMedium)
+            .padding(.top, AppTheme.Spacing.smallMedium)
 
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Mood.allCases, id: \.self) { mood in
+                ForEach(Mood.moods(for: mediaType), id: \.self) { mood in
+                    let isSelected = currentMood == mood
+                    let isHovered = hoveredMood == mood
+
                     Button {
-                        if currentMood == mood {
+                        if isSelected {
                             onClear()
                         } else {
                             onSelect(mood)
                         }
                     } label: {
-                        VStack(spacing: 4) {
+                        VStack(spacing: 3) {
                             Text(mood.emojiChar)
-                                .font(.system(size: 20))
-                                .frame(width: 40, height: 40)
+                                .font(.system(size: 22))
+                                .scaleEffect(isHovered ? 1.15 : 1.0)
+                                .frame(width: 44, height: 44)
                                 .background(
                                     Circle()
-                                        .fill(mood.color.opacity(hoveredMood == mood ? 0.2 : 0.1))
+                                        .fill(isSelected ? mood.color.opacity(0.25) : (isHovered ? mood.color.opacity(0.12) : Color.primary.opacity(0.04)))
                                 )
                                 .overlay(
                                     Circle()
-                                        .stroke(currentMood == mood ? mood.color.opacity(0.5) : (hoveredMood == mood ? mood.color.opacity(0.2) : .clear), lineWidth: 1.5)
+                                        .stroke(isSelected ? mood.color : (isHovered ? mood.color.opacity(0.3) : Color.clear), lineWidth: isSelected ? 1.5 : 0.5)
                                 )
+
                             Text(mood.rawValue)
-                                .font(.system(size: 8, weight: .medium))
-                                .foregroundStyle(hoveredMood == mood ? .primary : .secondary)
+                                .font(.system(size: 9, weight: isSelected ? .bold : .medium))
+                                .foregroundStyle(isSelected ? .primary : (isHovered ? .primary : .secondary))
+                                .lineLimit(1)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .scaleEffect(hoveredMood == mood ? 1.05 : 1.0)
-                    .animation(AppTheme.Animation.springSnappy, value: hoveredMood == mood)
                     .onHover { hovering in
-                        hoveredMood = hovering ? mood : nil
+                        withAnimation(AppTheme.Animation.microInteraction) {
+                            hoveredMood = hovering ? mood : nil
+                        }
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
-
-            if currentMood != nil {
-                Divider()
-                    .padding(.horizontal, 14)
-                Button {
-                    onClear()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9))
-                        Text("Remove mood")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(clearHovered ? Color.primary.opacity(0.04) : .clear)
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
-                .onHover { hovering in
-                    clearHovered = hovering
-                }
-            }
+            .padding(.horizontal, AppTheme.Spacing.smallMedium)
+            .padding(.bottom, AppTheme.Spacing.smallMedium)
         }
-        .frame(width: 260)
+        .frame(width: 220)
     }
 }
 

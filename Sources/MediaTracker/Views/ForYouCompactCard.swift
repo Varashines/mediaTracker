@@ -112,7 +112,7 @@ struct ForYouCompactCard: View, Equatable {
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .stroke(Color.white.opacity(isHovered ? 0.2 : 0.08), lineWidth: 0.8)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
         }
         .shadow(color: isHovered ? AppTheme.Colors.shadowElevated(for: colorScheme) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 8, y: 4)
         .scaleEffect(isHovered ? 1.03 : 1.0)
