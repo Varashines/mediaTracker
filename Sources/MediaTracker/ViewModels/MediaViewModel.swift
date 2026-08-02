@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-struct FilterSnapshot: Sendable {
+struct FilterSnapshot: Sendable, Hashable {
     let category: NavigationCategory
     let searchText: String
     let sortOrder: SortOrder

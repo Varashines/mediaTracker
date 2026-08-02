@@ -223,10 +223,14 @@ struct InsightsView: View {
                                 .ignoresSafeArea()
                                 .onTapGesture { showCustomShareMenu = false }
 
-                            CustomShareMenuView(image: img, title: "Cinema_Wrapped_Passport") {
-                                showCustomShareMenu = false
-                                showPassportPreview = false
-                            }
+                            CustomShareMenuView(
+                                image: img,
+                                title: "Cinema_Wrapped_Passport",
+                                onDismiss: {
+                                    showCustomShareMenu = false
+                                    showPassportPreview = false
+                                }
+                            )
                         }
                         .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }

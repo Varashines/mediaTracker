@@ -218,7 +218,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             predicate: #Predicate<MediaItem> { $0.storedIsUpcoming == true }
         )
         guard let upcomingItemsFetched = try? context.fetch(descriptor) else { 
-            onProgress?("❌ Failed to fetch items")
+            onProgress?("Failed to fetch items")
             return 
         }
         
@@ -228,7 +228,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return date1 < date2
         }
         
-        onProgress?("🔔 Found \(upcomingItems.count) upcoming items")
+        onProgress?("Found \(upcomingItems.count) upcoming items")
         
         // System limit is 64 total notifications. We schedule 2 per item.
         let limit = 32 
@@ -236,7 +236,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         
         for item in itemsToProcess {
             if Task.isCancelled { break }
-            onProgress?("⏳ Processing \(item.title)...")
+            onProgress?("Processing \(item.title)...")
             
             // Sequential processing with a small breather for the system daemon
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
@@ -255,9 +255,9 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                     nextEpisodeTime: tv?.nextEpisodeTime
                 )
             }
-            onProgress?("✅ Finished \(item.title)")
+            onProgress?("Finished \(item.title)")
         }
-        onProgress?("🏁 Sync Complete")
+        onProgress?("Sync Complete")
     }
     
     // MARK: - UNUserNotificationCenterDelegate

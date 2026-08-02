@@ -221,15 +221,6 @@ enum TasteValue: String, Codable, CaseIterable, Sendable {
         case .none: return .secondary
         }
     }
-
-    var emoji: String {
-        switch self {
-        case .love: return "♥"
-        case .like: return "👍"
-        case .dislike: return "👎"
-        case .none: return ""
-        }
-    }
 }
 
 enum SortOrder: String, CaseIterable, Identifiable, Sendable {
@@ -326,27 +317,6 @@ enum Mood: String, Codable, CaseIterable, Sendable {
         case .weeklyEvent: return "calendar"
         case .guiltyPleasure: return "theatermasks.fill"
         case .masterpieceRun: return "trophy.fill"
-        }
-    }
-
-    var emojiChar: String {
-        switch self {
-        case .fun: return "😄"
-        case .heavy: return "🥺"
-        case .tense: return "⚡"
-        case .wowed: return "🤩"
-        case .cozy: return "🫶"
-        case .creeped: return "👻"
-        case .mindBlown: return "🤯"
-        case .meh: return "☕"
-        case .firedUp: return "🔥"
-        case .binge: return "📺"
-        case .comfort: return "🛋️"
-        case .cliffhanger: return "⚡"
-        case .slowBurn: return "🧠"
-        case .weeklyEvent: return "🗓️"
-        case .guiltyPleasure: return "🎭"
-        case .masterpieceRun: return "🏆"
         }
     }
 

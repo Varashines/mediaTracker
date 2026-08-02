@@ -422,30 +422,28 @@ struct MediaThumbnailView: View, Equatable {
     }
 
     private var typeBadge: some View {
-        let themeColor = capturedThemeColor
-        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
-        let bgAccent = themeColor.luminousAccent(colorScheme: colorScheme)
-
         return Group {
             switch type {
             case .movie:
-                Image(systemName: "film")
+                Image(systemName: "film.fill")
             case .tvShow:
-                Image(systemName: "tv")
+                Image(systemName: "tv.fill")
             }
         }
         .font(AppTheme.Icon.small)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .foregroundStyle(accent)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .foregroundStyle(.white)
         .background {
-            Capsule()
-                .fill(bgAccent.opacity(colorScheme == .dark ? 0.25 : 0.35))
+            Capsule().fill(Color.black.opacity(0.85))
         }
         .overlay {
-            Capsule().stroke(accent.opacity(0.15), lineWidth: 0.5)
+            Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
         }
         .clipShape(Capsule())
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.shadow(color: Color.black.opacity(0.25), radius: 2, y: 1)
+        }
     }
 
     @ViewBuilder

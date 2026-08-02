@@ -178,7 +178,7 @@ actor MediaFilterActor {
 
             if let nets = normalizedNets {
                 guard let rawNets = item.cachedNetwork else { return false }
-                let itemNets = rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let itemNets = rawNets.commaSeparatedValues
                 guard itemNets.contains(where: { nets.contains($0.lowercased()) }) else { return false }
             }
 

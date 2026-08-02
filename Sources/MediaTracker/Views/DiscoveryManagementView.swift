@@ -111,7 +111,7 @@ struct DiscoveryManagementView: View {
             .map { $0.name }
             .sorted()
         
-        let allHidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
+        let allHidden = hiddenStudios.commaSeparatedValues
         hiddenList = allHidden.filter { name in
             networkEntities.first(where: { $0.name == name })?.count ?? 0 >= 4
         }.sorted()
@@ -129,7 +129,7 @@ struct DiscoveryManagementView: View {
     }
     
     private func toggleHidden(_ name: String) {
-        var hidden = hiddenStudios.components(separatedBy: ",").filter { !$0.isEmpty }
+        var hidden = hiddenStudios.commaSeparatedValues
         if let index = hidden.firstIndex(of: name) {
             hidden.remove(at: index)
         } else {

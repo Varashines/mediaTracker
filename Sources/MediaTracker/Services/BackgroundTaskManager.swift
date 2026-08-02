@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SQLite3
 
 #if os(macOS)
 import AppKit
@@ -86,8 +87,10 @@ class BackgroundTaskManager {
             Task.detached(priority: .background) {
                 await self.refreshStaleBadges()
                 await self.runPosterColorMigrationV6IfNeeded()
+                await self.runPosterColorMigrationV7IfNeeded()
                 await self.runWatchProviderMigrationIfNeeded()
                 await self.runNetworkKindMigrationIfNeeded()
+                await self.migrateWatchDatesFromLegacyStoreIfNeeded()
             }
         }
 
@@ -223,6 +226,71 @@ class BackgroundTaskManager {
             AppLogger.error("🎨 Poster color migration v6 failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
+
+    /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
+    func runPosterColorMigrationV7IfNeeded() async {
+        let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
+        guard currentVersion < 7 else { return }
+        guard let container = container else { return }
+
+        let extractionVersionKey = "colorExtractionVersion"
+        let batchSize = 50
+        let interBatchSleepNs: UInt64 = 250_000_000
+
+        do {
+            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV7", container: container) {
+                let context = ModelContext(container)
+
+                var descriptor = FetchDescriptor<MediaItem>(
+                    sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
+                )
+                descriptor.propertiesToFetch = [
+                    \.id, \.posterURL, \.themeColorHex, \.themeColorSourceURL,
+                    \.themeSecondaryColorHex, \.themeMutedColorHex, \.lastInteractionDate
+                ]
+                let allItems = (try? context.fetch(descriptor)) ?? []
+
+                var processed = 0
+                let total = allItems.count
+                AppLogger.info("🎨 Poster color migration v7 starting: \(total) items", logger: AppLogger.background)
+
+                for item in allItems {
+                    try Task.checkCancellation()
+                    guard !item.isDeleted else { continue }
+                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
+
+                    var cgImage: CGImage?
+                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
+                        cgImage = cached.image
+                    } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
+                              let image = NSImage(data: data) {
+                        cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                    }
+
+                    if let cgImage {
+                        let palette = await ColorExtractor.extractThemePalette(from: cgImage)
+                        item.themeColorHex = palette.primary.toHex()
+                        item.themeSecondaryColorHex = palette.secondary.toHex()
+                        item.themeMutedColorHex = palette.muted.toHex()
+                        item.themeColorSourceURL = poster
+                    }
+
+                    processed += 1
+                    if processed % batchSize == 0 {
+                        try? context.save()
+                        UserDefaults.standard.set(7, forKey: extractionVersionKey)
+                        try? await Task.sleep(nanoseconds: interBatchSleepNs)
+                    }
+                }
+
+                try? context.save()
+                UserDefaults.standard.set(7, forKey: extractionVersionKey)
+                AppLogger.info("🎨 Poster color migration v7 complete: \(processed) items", logger: AppLogger.background)
+            }
+        } catch {
+            AppLogger.error("🎨 Poster color migration v7 failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
     
     private func performBackgroundSync() async {
         guard let container = container else { return }
@@ -249,27 +317,26 @@ class BackgroundTaskManager {
             // BEFORE crossing into the @MainActor LibraryImportExportService boundary.
             var backupDesc = FetchDescriptor<MediaItem>()
             backupDesc.propertiesToFetch = [
-                \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue
+                \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue, \.lastInteractionDate,
+                \.posterURL, \.overview, \.backdropURL, \.releaseDate, \.lastUpdated, \.titleLogoURL,
+                \.themeColorHex, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
+                \.remainingEpisodesCount, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.mood
             ]
             if let allItems = try? context.fetch(backupDesc) {
                 let exportItems = allItems.map { item -> MediaItemData in
                     var watchedIDs: [String]? = nil
+                    var watchedDates: [String: Date]? = nil
                     if item.type == .tvShow, let tv = item.tvShowDetails {
-                        watchedIDs = tv.seasons
+                        let watchedEps = tv.seasons
                             .liveModels
                             .flatMap { $0.episodes.liveModels }
                             .filter { $0.isWatched }
-                            .map { $0.uniqueID ?? "" }
+                        watchedIDs = watchedEps.map { $0.uniqueID ?? "" }
+                        watchedDates = Dictionary(uniqueKeysWithValues: watchedEps.compactMap { ep in
+                            ep.uniqueID.flatMap { ($0, ep.lastWatchedDate ?? Date()) }
+                        })
                     }
-                    return MediaItemData(
-                        id: item.id,
-                        title: item.title,
-                        type: item.type?.rawValue ?? "Movie",
-                        state: item.state?.rawValue ?? "Wishlist",
-                        dateAdded: item.dateAdded ?? Date(),
-                        taste: item.tasteValue,
-                        watchedEpisodeIDs: watchedIDs
-                    )
+                    return MediaItemData(item: item, watchedIDs: watchedIDs, watchedDates: watchedDates)
                 }
 
                 var collectionBackup: [CollectionBackupData]? = nil
@@ -518,7 +585,7 @@ class BackgroundTaskManager {
             
             for item in batch {
                 guard let rawName = item.cachedNetwork else { continue }
-                let names = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let names = rawName.commaSeparatedValues
                 let isMovie = item.typeValue == "Movie"
                 for name in names where !name.isEmpty {
                     var counts = networkKindCounts[name] ?? (network: 0, studio: 0)
@@ -555,8 +622,101 @@ class BackgroundTaskManager {
         UserDefaults.standard.set(1, forKey: migrationVersionKey)
     }
 
-    // MARK: - Automated JSON Backup
+    // MARK: - Watch-Dates Recovery Migration
 
+    /// One-shot migration: pulls the real `lastInteractionDate` / episode
+    /// `lastWatchedDate` values out of the legacy store (saved aside before the
+    /// rewatch-schema cleanup) and patches the current store, so "Recently
+    /// Watched" reflects true watch times after a restore.
+    func migrateWatchDatesFromLegacyStoreIfNeeded() async {
+        let flag = "watchDatesMigrationV1"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        guard let container else { return }
+
+        let legacyPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/default_store_backup_rewatch/default.store")
+
+        guard FileManager.default.fileExists(atPath: legacyPath.path) else {
+            UserDefaults.standard.set(true, forKey: flag)
+            return
+        }
+
+        // Read the legacy store off the main actor (read-only).
+        let path = legacyPath.path
+        let (itemDates, episodeDates) = await Task.detached(priority: .utility) {
+            (Self.readLastInteractionDates(from: path), Self.readEpisodeWatchDates(from: path))
+        }.value
+
+        guard !itemDates.isEmpty || !episodeDates.isEmpty else {
+            UserDefaults.standard.set(true, forKey: flag)
+            return
+        }
+
+        let context = ModelContext(container)
+        if !itemDates.isEmpty {
+            var itemDesc = FetchDescriptor<MediaItem>()
+            itemDesc.propertiesToFetch = [\.id]
+            let items = (try? context.fetch(itemDesc)) ?? []
+            var updated = 0
+            for item in items {
+                // Overwrite the flattened import-time date with the real legacy date.
+                if let date = itemDates[item.id] {
+                    item.lastInteractionDate = date
+                    updated += 1
+                }
+            }
+            if updated > 0 { AppLogger.info("📅 Watch-dates migration: restored \(updated) items", logger: AppLogger.background) }
+        }
+
+        if !episodeDates.isEmpty {
+            var epDesc = FetchDescriptor<TVEpisode>()
+            epDesc.propertiesToFetch = [\.uniqueID, \.isWatched, \.lastWatchedDate]
+            let episodes = (try? context.fetch(epDesc)) ?? []
+            var updated = 0
+            for ep in episodes where ep.isWatched {
+                if let uid = ep.uniqueID, let date = episodeDates[uid] {
+                    ep.lastWatchedDate = date
+                    updated += 1
+                }
+            }
+            if updated > 0 { AppLogger.info("📅 Watch-dates migration: restored \(updated) episodes", logger: AppLogger.background) }
+        }
+
+        try? context.save()
+        await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    private nonisolated static func readLastInteractionDates(from path: String) -> [String: Date] {
+        readDates(path: path, query: "SELECT ZID, ZLASTINTERACTIONDATE FROM ZMEDIAITEM WHERE ZLASTINTERACTIONDATE IS NOT NULL")
+    }
+
+    private nonisolated static func readEpisodeWatchDates(from path: String) -> [String: Date] {
+        readDates(path: path, query: "SELECT ZUNIQUEID, ZLASTWATCHEDDATE FROM ZTVEPISODE WHERE ZLASTWATCHEDDATE IS NOT NULL")
+    }
+
+    private nonisolated static func readDates(path: String, query: String) -> [String: Date] {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return [:] }
+        defer { sqlite3_close(db) }
+
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else { return [:] }
+        defer { sqlite3_finalize(stmt) }
+
+        var result: [String: Date] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idC = sqlite3_column_text(stmt, 0) else { continue }
+            let id = String(cString: idC)
+            let ts = sqlite3_column_double(stmt, 1)
+            if ts > 0 {
+                result[id] = Date(timeIntervalSinceReferenceDate: ts)
+            }
+        }
+        return result
+    }
+
+    // MARK: - Automated JSON Backup
     private var lastBackupKey: String { "com.vara.mediatracker.lastAutoBackup" }
 
     private func runAutomatedBackup() async {
@@ -566,20 +726,26 @@ class BackgroundTaskManager {
         guard let container else { return }
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<MediaItem>()
-        descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue]
+        descriptor.propertiesToFetch = [
+            \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue, \.lastInteractionDate,
+            \.posterURL, \.overview, \.backdropURL, \.releaseDate, \.lastUpdated, \.titleLogoURL,
+            \.themeColorHex, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
+            \.remainingEpisodesCount, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.mood
+        ]
         let items = (try? context.fetch(descriptor)) ?? []
         guard !items.isEmpty else { return }
 
         let exportItems = items.map { item -> MediaItemData in
             var watchedIDs: [String]? = nil
+            var watchedDates: [String: Date]? = nil
             if item.type == .tvShow, let tv = item.tvShowDetails {
-                watchedIDs = tv.seasons.liveModels.flatMap { $0.episodes.liveModels }.filter { $0.isWatched }.map { $0.uniqueID ?? "" }
+                let watchedEps = tv.seasons.liveModels.flatMap { $0.episodes.liveModels }.filter { $0.isWatched }
+                watchedIDs = watchedEps.map { $0.uniqueID ?? "" }
+                watchedDates = Dictionary(uniqueKeysWithValues: watchedEps.compactMap { ep in
+                    ep.uniqueID.flatMap { ($0, ep.lastWatchedDate ?? Date()) }
+                })
             }
-            return MediaItemData(
-                id: item.id, title: item.title, type: item.type?.rawValue ?? "Movie",
-                state: item.state?.rawValue ?? "Wishlist", dateAdded: item.dateAdded ?? Date(),
-                taste: item.tasteValue, watchedEpisodeIDs: watchedIDs
-            )
+            return MediaItemData(item: item, watchedIDs: watchedIDs, watchedDates: watchedDates)
         }
 
         var collectionBackup: [CollectionBackupData]? = nil

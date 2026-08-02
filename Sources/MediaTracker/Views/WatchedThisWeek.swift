@@ -1,13 +1,63 @@
 import SwiftUI
 import SwiftData
 
+private enum WatchFilter: String, CaseIterable {
+    case all
+    case movies
+    case shows
+
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .movies: return "Movies"
+        case .shows: return "TV Shows"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "rectangle.stack.fill"
+        case .movies: return "film.fill"
+        case .shows: return "tv.fill"
+        }
+    }
+}
+
 struct WatchedThisWeek: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var items: [MediaItem] = []
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var movieItems: [MediaItem] = []
+    @State private var showItems: [MediaItem] = []
     @State private var isLoading = true
+    @State private var filter: WatchFilter = .all
     @State private var scrollProgress: Double = 0
     @State private var horizontalFastScrolling = false
     private let scrollSpace = "WTW_Scroll"
+
+    private let minCount = 10
+    private let weekCap = 30
+    private let fillWindows: [TimeInterval] = [.days14, .days30]
+
+    private var filteredItems: [MediaItem] {
+        switch filter {
+        case .all:
+            return (movieItems + showItems).sorted {
+                ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
+            }
+        case .movies:
+            return movieItems
+        case .shows:
+            return showItems
+        }
+    }
+
+    private var filteredEmptyMessage: String {
+        switch filter {
+        case .all: return "Nothing watched this week"
+        case .movies: return "No movies watched this week"
+        case .shows: return "No TV shows watched this week"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -15,7 +65,8 @@ struct WatchedThisWeek: View {
                 title: "Watched This Week",
                 icon: "clock.fill",
                 iconColor: .green,
-                scrollProgress: scrollProgress
+                scrollProgress: scrollProgress,
+                trailingAccessory: { AnyView(filterPills) }
             )
 
             if isLoading {
@@ -35,7 +86,7 @@ struct WatchedThisWeek: View {
                     .padding(.vertical, AppTheme.Spacing.medium - 1)
                 }
                 .scrollBounceBehavior(.basedOnSize)
-            } else if items.isEmpty {
+            } else if movieItems.isEmpty && showItems.isEmpty {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(AppTheme.Font.title3)
@@ -47,9 +98,23 @@ struct WatchedThisWeek: View {
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, AppTheme.Spacing.small)
+                .transition(.mediaRowArrival)
+            } else if filteredItems.isEmpty {
+                HStack(spacing: AppTheme.Spacing.small) {
+                    Image(systemName: filter.icon)
+                        .font(AppTheme.Font.title3)
+                        .foregroundStyle(.green.opacity(0.4))
+                    Text(filteredEmptyMessage)
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, AppTheme.Spacing.small)
+                .transition(.mediaRowArrival)
             } else {
                 ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
-                    ForEach(items, id: \.persistentModelID) { item in
+                    ForEach(filteredItems, id: \.persistentModelID) { item in
                         NavigationLink(value: item) {
                             MediaThumbnailView(
                                 item: item,
@@ -64,22 +129,85 @@ struct WatchedThisWeek: View {
                         .buttonStyle(.interactive)
                     }
                 }
+                .id(filter)
+                .transition(.mediaRowArrival)
             }
         }
         .task { fetchRecentItems() }
+        .animation(AppTheme.Animation.easeInOut, value: filter)
     }
 
     private func fetchRecentItems() {
-        let cutoff = Date(timeIntervalSinceNow: -TimeInterval.days7)
+        movieItems = fetchPool(type: .movie)
+        showItems = fetchPool(type: .tvShow)
+        withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
+    }
+
+    /// Watched this week; if fewer than `minCount` of a type, expand the window until we have 10.
+    private func fetchPool(type: MediaType) -> [MediaItem] {
+        let raw = type.rawValue
+
+        // Phase 1 — strict "watched this week", no filling. Show the whole week.
+        let week = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -.days7), limit: weekCap)
+        if week.count >= minCount { return week }
+
+        // Phase 2 — <10 this week → pull the last 10 from older history.
+        var best = week
+        for window in fillWindows {
+            let results = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -window), limit: minCount)
+            best = results
+            if results.count >= minCount { return results }
+        }
+        let allTime = fetch(typeRaw: raw, cutoff: .distantPast, limit: minCount)
+        return allTime.count >= best.count ? allTime : best
+    }
+
+    private func fetch(typeRaw: String, cutoff: Date, limit: Int?) -> [MediaItem] {
         let predicate = #Predicate<MediaItem> {
-            ($0.lastInteractionDate ?? cutoff) >= cutoff && $0.stateValue != "Wishlist"
+            ($0.lastInteractionDate ?? cutoff) >= cutoff && $0.stateValue != "Wishlist" && $0.typeValue == typeRaw
         }
         var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
-        descriptor.fetchLimit = 20
+        descriptor.fetchLimit = limit
         descriptor.sortBy = [SortDescriptor(\.lastInteractionDate, order: .reverse)]
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
 
-        items = (try? modelContext.fetch(descriptor)) ?? []
-        withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
+    private var filterPills: some View {
+        HStack(spacing: 2) {
+            ForEach(WatchFilter.allCases, id: \.self) { option in
+                filterPill(option)
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(AppTheme.Colors.cardFill(for: colorScheme)))
+        .overlay(Capsule().stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5))
+        .animation(AppTheme.Animation.springSnappy, value: filter)
+    }
+
+    private func filterPill(_ option: WatchFilter) -> some View {
+        let isSelected = filter == option
+        return Button {
+            filter = option
+            scrollProgress = 0
+            FeedbackManager.shared.trigger(.click)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: option.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(option.title)
+                    .font(isSelected ? AppTheme.Font.caption : AppTheme.Font.label)
+            }
+            .foregroundStyle(isSelected ? Color.white : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background {
+                Capsule().fill(isSelected ? AppTheme.Colors.accent : Color.clear)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(option.title)
+        .accessibilityLabel(option.title)
     }
 }

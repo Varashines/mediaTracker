@@ -135,8 +135,9 @@ struct MoodCaptureBanner: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Text(mood.emojiChar)
-                    .font(.system(size: 20))
+                Image(systemName: mood.emoji)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(mood.color)
                     .scaleEffect(isHovered ? 1.2 : 1.0)
 
                 Text(mood.rawValue)

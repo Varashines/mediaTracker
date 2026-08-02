@@ -29,6 +29,7 @@ struct GroupedMediaGrid: View {
                                 gridCell(for: metadata)
                             }
                             .buttonStyle(.interactive)
+                            .transition(.mediaRowArrival)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)

@@ -7,6 +7,7 @@ struct SectionHeader: View {
     var subtitle: String? = nil
     var scrollProgress: Double? = nil
     var showDivider: Bool = false
+    var trailingAccessory: (() -> AnyView)? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -31,6 +32,10 @@ struct SectionHeader: View {
                 }
                 
                 Spacer()
+                
+                if let trailingAccessory {
+                    trailingAccessory()
+                }
                 
                 if let progress = scrollProgress {
                     GeometryReader { geo in

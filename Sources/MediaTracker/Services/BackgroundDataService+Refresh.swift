@@ -271,6 +271,12 @@ extension BackgroundDataService {
                             let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
                             if let existing = try? modelContext.fetch(sDescriptor).first {
                                 if existing.episodes.count >= seasonData.episode_count {
+                                    // Season already has episodes — skip the API fetch, but make sure
+                                    // it's attached to this show's TVShowDetails (import restores can
+                                    // leave seasons orphaned with tvShowDetails == nil).
+                                    if existing.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
+                                        existing.tvShowDetails = tvDetails
+                                    }
                                     continue
                                 } else {
                                     shouldForceSeason = true
@@ -382,8 +388,10 @@ extension BackgroundDataService {
         }
 
         if let cgImage {
-            let pair = await ColorExtractor.topTwoColors(from: cgImage)
-            item.themeColorHex = pair.primary.toHex()
+            let palette = await ColorExtractor.extractThemePalette(from: cgImage)
+            item.themeColorHex = palette.primary.toHex()
+            item.themeSecondaryColorHex = palette.secondary.toHex()
+            item.themeMutedColorHex = palette.muted.toHex()
             item.themeColorSourceURL = poster
         }
     }

@@ -88,7 +88,7 @@ actor ScopedStatsActor {
 
         for item in items {
             if let nSet = networkNames, let rawNets = item.cachedNetwork {
-                let itemNets = rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                let itemNets = rawNets.commaSeparatedValues.map { $0.lowercased() }
                 guard itemNets.contains(where: { nSet.contains($0) }) else { continue }
             }
             if let pName = providerName {
@@ -109,7 +109,7 @@ actor ScopedStatsActor {
 
             // Networks — raw count
             if let rawNetwork = item.cachedNetwork {
-                for n in rawNetwork.components(separatedBy: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) where !n.isEmpty {
+                for n in rawNetwork.commaSeparatedValues {
                     networkCounts[n, default: 0] += 1
                 }
             }

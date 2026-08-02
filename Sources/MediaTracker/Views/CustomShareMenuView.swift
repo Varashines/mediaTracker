@@ -7,6 +7,11 @@ struct CustomShareMenuView: View {
     let title: String
     let onDismiss: () -> Void
 
+    var themeColor: Color = AppTheme.Colors.accent
+    var secondaryColor: Color? = nil
+    var mutedColor: Color? = nil
+
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showCopiedToast = false
 
     var body: some View {
@@ -21,7 +26,7 @@ struct CustomShareMenuView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.4), radius: 16, y: 8)
 
@@ -30,7 +35,7 @@ struct CustomShareMenuView: View {
                 quickActionButton(
                     title: showCopiedToast ? "Copied!" : "Copy Image",
                     icon: showCopiedToast ? "checkmark" : "doc.on.doc",
-                    accent: showCopiedToast ? .green : AppTheme.Colors.accent
+                    accent: showCopiedToast ? .green : themeColor
                 ) {
                     copyToClipboard()
                 }
@@ -38,30 +43,27 @@ struct CustomShareMenuView: View {
                 quickActionButton(
                     title: "Save PNG...",
                     icon: "square.and.arrow.down",
-                    accent: .blue
+                    accent: secondaryColor ?? .blue
                 ) {
                     saveImageToFile()
                 }
             }
 
             Divider()
-                .background(Color.white.opacity(0.12))
-
-            Divider()
-                .background(Color.white.opacity(0.12))
+                .background(AppTheme.Colors.strokeDefault(for: colorScheme))
 
             // System Sharing Services
             VStack(alignment: .leading, spacing: 10) {
                 Text("SHARE VIA")
                     .font(.system(size: 10, weight: .black, design: .monospaced))
                     .kerning(1.5)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(themeColor.opacity(0.7))
 
                 let services = availableSharingServices
                 if services.isEmpty {
                     Text("No sharing services available")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
@@ -73,7 +75,7 @@ struct CustomShareMenuView: View {
                                     VStack(spacing: 6) {
                                         ZStack {
                                             Circle()
-                                                .fill(Color.white.opacity(0.12))
+                                                .fill(Color.primary.opacity(0.08))
                                                 .frame(width: 44, height: 44)
 
                                             Image(nsImage: service.image)
@@ -84,7 +86,7 @@ struct CustomShareMenuView: View {
 
                                         Text(service.title)
                                             .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(.white.opacity(0.85))
+                                            .foregroundStyle(.primary.opacity(0.85))
                                             .lineLimit(1)
                                     }
                                     .frame(width: 60)
@@ -103,11 +105,22 @@ struct CustomShareMenuView: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(white: 0.08).opacity(0.96))
+                    .fill(AppTheme.Colors.background(for: colorScheme))
+                if let muted = mutedColor {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(muted.opacity(colorScheme == .dark ? 0.20 : 0.10))
+                }
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [themeColor.opacity(0.4), (secondaryColor ?? themeColor).opacity(0.2), AppTheme.Colors.strokeDefault(for: colorScheme)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             }
-            .shadow(color: .black.opacity(0.6), radius: 30, y: 15)
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 15)
         )
     }
 
@@ -123,10 +136,23 @@ struct CustomShareMenuView: View {
 
     private var headerRow: some View {
         HStack {
-            Text("SHARE CARD")
-                .font(.system(size: 12, weight: .black, design: .monospaced))
-                .kerning(1.8)
-                .foregroundStyle(.white.opacity(0.85))
+            HStack(spacing: 8) {
+                if let secondary = secondaryColor {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [themeColor, secondary],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 18, height: 18)
+                }
+                Text("SHARE CARD")
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .kerning(1.8)
+                    .foregroundStyle(themeColor)
+            }
 
             Spacer()
 
@@ -135,7 +161,7 @@ struct CustomShareMenuView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(.white.opacity(0.4), .white.opacity(0.12))
+                    .foregroundStyle(.secondary, .quaternary)
             }
             .buttonStyle(.plain)
             .contentShape(Circle())

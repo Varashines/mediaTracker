@@ -109,7 +109,8 @@ actor BackgroundDataService {
             let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
             let uniqueID = "\(typePrefix)_\(tmdbIDPart)"
             let key = "\(uniqueID)_\(itemData.type)"
-            
+            let watchedDates = itemData.watchedEpisodeDates ?? [:]
+
             if let existing = existingMap[key] {
                 switch strategy {
                 case .skip:
@@ -121,12 +122,19 @@ actor BackgroundDataService {
                     if itemData.dateAdded < (existing.dateAdded ?? .distantFuture) {
                         existing.dateAdded = itemData.dateAdded
                     }
+                    if let backupDate = itemData.lastInteractionDate,
+                       backupDate > (existing.lastInteractionDate ?? .distantPast) {
+                        existing.lastInteractionDate = backupDate
+                    }
+                    itemData.applyMetadata(to: existing)
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 case .overwrite:
                     existing.state = MediaState(rawValue: itemData.state) ?? .wishlist
                     existing.dateAdded = itemData.dateAdded
                     existing.tasteValue = itemData.taste ?? TasteValue.none.rawValue
+                    existing.lastInteractionDate = itemData.lastInteractionDate ?? existing.lastInteractionDate
+                    itemData.applyMetadata(to: existing)
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 }
@@ -142,6 +150,8 @@ actor BackgroundDataService {
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
                 item.dateAdded = itemData.dateAdded
                 item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
+                item.lastInteractionDate = itemData.lastInteractionDate
+                itemData.applyMetadata(to: item)
                 item.syncCachedProperties(dirty: .all)
                 context.insert(item)
                 importedCount += 1
@@ -175,6 +185,7 @@ actor BackgroundDataService {
                                 let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
                                 if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
                                     existing.markWatched(true)
+                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d }
                                     continue
                                 }
                                 let episode = TVEpisode(
@@ -184,6 +195,7 @@ actor BackgroundDataService {
                                     isWatched: true, showID: tmdbID
                                 )
                                 episode.uniqueID = epUniqueID
+                                episode.lastWatchedDate = watchedDates[epUniqueID]
                                 episode.season = season
                                 context.insert(episode)
                             }
@@ -203,6 +215,7 @@ actor BackgroundDataService {
                                 existing.season = season
                                 if watchedNumbers.contains(epData.episodeNumber) {
                                     existing.markWatched(true)
+                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d }
                                 }
                                 continue
                             }
@@ -218,6 +231,9 @@ actor BackgroundDataService {
                                 showID: tmdbID
                             )
                             episode.uniqueID = epUniqueID
+                            if watchedNumbers.contains(epData.episodeNumber) {
+                                episode.lastWatchedDate = watchedDates[epUniqueID]
+                            }
                             episode.season = season
                             context.insert(episode)
                         }
@@ -403,6 +419,19 @@ actor BackgroundDataService {
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
                 if let tv = item.tvShowDetails {
+                    // 0. Reattach any orphaned seasons (tvShowDetails == nil) to this show,
+                    // so imported/restored shows don't end up with empty season lists.
+                    let orphanDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
+                    if let candidates = try? modelContext.fetch(orphanDesc) {
+                        let orphans = candidates.filter { $0.tvShowDetails == nil }
+                        if !orphans.isEmpty {
+                            for season in orphans {
+                                season.tvShowDetails = tv
+                            }
+                            AppLogger.info("🔗 Reattached \(orphans.count) orphaned seasons for \(item.title)", logger: AppLogger.background)
+                        }
+                    }
+
                     // 1. Standardize Seasons and Episodes first
                     let liveSeasons = tv.seasons.liveModels
                     for season in liveSeasons {
@@ -464,6 +493,16 @@ actor BackgroundDataService {
 
                     // 4. Single recalculate at the end (was 3 separate calls)
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
+
+                    // 5. Heal: keep lastInteractionDate in sync with the most recent episode watch,
+                    // so "Recently Watched" reflects real watch times.
+                    if let latestWatch = liveSeasons
+                        .flatMap({ $0.episodes.liveModels })
+                        .compactMap({ $0.lastWatchedDate })
+                        .max(),
+                       latestWatch > (item.lastInteractionDate ?? .distantPast) {
+                        item.lastInteractionDate = latestWatch
+                    }
                 }
             }
             
@@ -507,7 +546,6 @@ actor BackgroundDataService {
         let batchSize = 500
         while true {
             var sDesc = FetchDescriptor<TVSeason>()
-            sDesc.propertiesToFetch = [\.showID, \.seasonNumber, \.tvShowDetails, \.persistentModelID, \.totalEpisodesCount, \.watchedEpisodesCount]
             sDesc.fetchLimit = batchSize
             sDesc.fetchOffset = offset
             let batch = try modelContext.fetch(sDesc)
@@ -515,8 +553,7 @@ actor BackgroundDataService {
             if batch.count < batchSize { break }
             offset += batchSize
         }
-        var tvDetailsDesc = FetchDescriptor<TVShowDetails>()
-        tvDetailsDesc.propertiesToFetch = [\.tmdbID, \.seasons, \.cast, \.nextEpisodeDate, \.status, \.item, \.persistentModelID]
+        let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
 
         // Group TVShowDetails by tmdbID to find duplicates
@@ -603,7 +640,6 @@ actor BackgroundDataService {
         var epOffset = 0
         while true {
             var eDesc = FetchDescriptor<TVEpisode>()
-            eDesc.propertiesToFetch = [\.uniqueID, \.showID, \.seasonNumber]
             eDesc.fetchLimit = batchSize
             eDesc.fetchOffset = epOffset
             let batch = try modelContext.fetch(eDesc)

@@ -147,9 +147,9 @@ struct SearchView: View {
                 Spacer()
 
                 HStack(spacing: 4) {
-                    filterPill(title: "All", type: .all, shortcut: "⌘⌥1")
-                    filterPill(title: "Movies 🎬", type: .movie, shortcut: "⌘⌥2")
-                    filterPill(title: "TV Shows 📺", type: .tvShow, shortcut: "⌘⌥3")
+                    filterPill(title: "All", icon: nil, type: .all, shortcut: "⌘⌥1")
+                    filterPill(title: "Movies", icon: "film.fill", type: .movie, shortcut: "⌘⌥2")
+                    filterPill(title: "TV Shows", icon: "tv.fill", type: .tvShow, shortcut: "⌘⌥3")
                 }
                 .padding(4)
                 .background(
@@ -170,7 +170,7 @@ struct SearchView: View {
         }
     }
 
-    private func filterPill(title: String, type: SearchType, shortcut: String) -> some View {
+    private func filterPill(title: String, icon: String?, type: SearchType, shortcut: String) -> some View {
         let isSelected = selectedType == type
         return Button {
             withAnimation(AppTheme.Animation.springSnappy) {
@@ -178,6 +178,11 @@ struct SearchView: View {
             }
         } label: {
             HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+
                 Text(title)
                     .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
                     .foregroundStyle(isSelected ? .primary : .secondary)
@@ -252,6 +257,9 @@ struct SearchView: View {
                 }
             }
             .padding(.vertical, AppTheme.Spacing.xLarge)
+            .id(selectedType)
+            .transition(.mediaRowArrival)
+            .animation(AppTheme.Animation.easeInOut, value: selectedType)
         }
         .scrollBounceBehavior(.always)
         .scrollIndicators(.hidden)

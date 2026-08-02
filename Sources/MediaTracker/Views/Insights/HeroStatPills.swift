@@ -21,7 +21,7 @@ struct HeroStatPills: View {
         LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
             // 1. Stories
             CozyStatCard(
-                emoji: "🍿",
+                icon: "popcorn.fill",
                 value: "\(total)",
                 label: "Stories",
                 detail: "\(stats.totalMovies) movies · \(stats.totalTVShows) shows",
@@ -30,7 +30,7 @@ struct HeroStatPills: View {
             
             // 2. Time Spent
             CozyStatCard(
-                emoji: "⏱️",
+                icon: "timer",
                 value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
                 label: "Time Spent",
                 detail: "\(stats.totalEpisodesWatched) eps watched",
@@ -39,7 +39,7 @@ struct HeroStatPills: View {
             
             // 3. Completion
             CozyStatCard(
-                emoji: "🏆",
+                icon: "trophy.fill",
                 value: String(format: "%.0f%%", completionRate * 100),
                 label: "Completion",
                 detail: "\(completed)/\(total) completed",
@@ -56,7 +56,7 @@ struct HeroStatPills: View {
             let overallAffinity = statsContainer.affinity(cutoff: 1)
             let rated = stats.lovedCount + stats.likedCount + stats.dislikedCount
             CozyStatCard(
-                emoji: "🧬",
+                icon: "dna",
                 value: String(format: "%.0f%%", overallAffinity * 100),
                 label: "Affinity",
                 detail: "Based on \(rated) ratings",
@@ -65,7 +65,7 @@ struct HeroStatPills: View {
 
             // 5. Day Streak
             CozyStatCard(
-                emoji: "🔥",
+                icon: "flame.fill",
                 value: "\(stats.currentStreak)d",
                 label: "Day Streak",
                 detail: "Best streak: \(stats.longestStreak)d",
@@ -77,7 +77,7 @@ struct HeroStatPills: View {
                let top = stats.moodBreakdown.max(by: { $0.percentage < $1.percentage }),
                let topMood = Mood(rawValue: top.name) {
                 CozyStatCard(
-                    emoji: topMood.emojiChar,
+                    icon: topMood.emoji,
                     value: topMood.rawValue.capitalized,
                     label: "Current Vibe",
                     detail: "\(totalMoods) moods logged",
@@ -85,7 +85,7 @@ struct HeroStatPills: View {
                 )
             } else {
                 CozyStatCard(
-                    emoji: "🎭",
+                    icon: "theatermasks.fill",
                     value: "—",
                     label: "Current Vibe",
                     detail: "No moods logged",
@@ -97,7 +97,7 @@ struct HeroStatPills: View {
 }
 
 private struct CozyStatCard: View {
-    let emoji: String
+    let icon: String
     let value: String
     let label: String
     let detail: String
@@ -109,8 +109,9 @@ private struct CozyStatCard: View {
         GlassCard(color: accentColor, isHovered: isHovered) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 HStack(spacing: AppTheme.Spacing.tiny) {
-                    Text(emoji)
-                        .font(.system(size: 24))
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(accentColor)
                     
                     Spacer()
                     

@@ -5,7 +5,13 @@ import SwiftData
 class DetailViewModel {
     var item: MediaItem
     var isRefreshing = false
-    var themeColor: Color = Color.secondary.opacity(0.1)
+    var themeColor: Color = Color.secondary.opacity(0.15)
+    /// True when the theme color came from poster extraction / network theme,
+    /// not the neutral fallback. Used by the background mesh to skip the tint.
+    var hasDerivedThemeColor = false
+    /// Secondary accent + muted wash from the poster palette (premium detail view).
+    var secondaryThemeColor: Color?
+    var mutedThemeColor: Color?
     
     // Phase 5 Performance: Cache scheme-aware colors to avoid per-frame math in MeshGradient
     var vibrantThemeColor: Color = .clear
@@ -31,6 +37,11 @@ class DetailViewModel {
     var needsUpdate: Bool {
         guard let lastUpdated = item.lastUpdated else { return true }
         
+        // TV shows with missing seasons must always force update
+        if item.type == .tvShow && (item.tvShowDetails?.seasons.isEmpty ?? true) {
+            return true
+        }
+
         // Active TV shows should check for updates every 24 hours
         if item.type == .tvShow && item.state == .active {
             return Date().timeIntervalSince(lastUpdated) > TimeInterval.secondsInDay
@@ -50,8 +61,11 @@ class DetailViewModel {
 
         // Priority 1: Pre-calculated Poster Color from SwiftData
         if let hex = item.themeColorHex,
-           let cachedColor = Color(hex: hex.contains("|") ? String(hex.split(separator: "|")[0]) : hex) {
+           let cachedColor = Color(themeHex: hex) {
             self.themeColor = cachedColor
+            self.secondaryThemeColor = item.themeSecondaryColorHex.flatMap { Color(themeHex: $0) }
+            self.mutedThemeColor = item.themeMutedColorHex.flatMap { Color(themeHex: $0) }
+            self.hasDerivedThemeColor = true
             self.recalculateVibrantPalette()
             return
         }
@@ -61,6 +75,9 @@ class DetailViewModel {
             let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
             if let netColor = NetworkThemeManager.shared.color(for: first) {
                 self.themeColor = netColor
+                self.secondaryThemeColor = nil
+                self.mutedThemeColor = nil
+                self.hasDerivedThemeColor = true
                 self.recalculateVibrantPalette()
                 return
             }
@@ -68,6 +85,9 @@ class DetailViewModel {
 
         // Priority 3: Neutral fallback (never use global accent)
         self.themeColor = Color.secondary.opacity(0.15)
+        self.secondaryThemeColor = nil
+        self.mutedThemeColor = nil
+        self.hasDerivedThemeColor = false
         self.recalculateVibrantPalette()
     }
 

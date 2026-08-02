@@ -41,17 +41,20 @@ struct DetailView: View {
 
     @ViewBuilder
     private var backgroundMesh: some View {
-        let posterTheme = viewModel.themeColor
-        let hasCustomTheme = viewModel.themeColor != Color.secondary.opacity(0.1)
-
         ZStack {
             AppTheme.Colors.background(for: colorScheme)
                 .ignoresSafeArea()
 
-            if hasCustomTheme {
-                // Whole-page uniform poster theme background fill
-                posterTheme.opacity(colorScheme == .dark ? 0.18 : 0.12)
+            if viewModel.hasDerivedThemeColor {
+                // Whole-page poster theme background fill (primary tint)
+                viewModel.themeColor.opacity(colorScheme == .dark ? 0.18 : 0.12)
                     .ignoresSafeArea()
+
+                // Subtle muted wash for depth (premium palette)
+                if let muted = viewModel.mutedThemeColor {
+                    muted.opacity(colorScheme == .dark ? 0.07 : 0.05)
+                        .ignoresSafeArea()
+                }
             }
         }
     }

@@ -37,6 +37,9 @@ final class MediaItem: Identifiable {
     var tasteValue: String = "None"
     var themeColorHex: String?
     var themeColorSourceURL: String?
+    /// Secondary accent + muted wash from the poster palette (premium detail view).
+    var themeSecondaryColorHex: String?
+    var themeMutedColorHex: String?
     var lastInteractionDate: Date?
     var lastStateChangeDate: Date?
     var dateAdded: Date?

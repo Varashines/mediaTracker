@@ -11,7 +11,7 @@ extension MediaFilterActor {
             case .language: return item.cachedLanguage ?? "Unknown"
             case .network:
                 if let rawNetwork = item.cachedNetwork {
-                    return rawNetwork.components(separatedBy: ",").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?.trimmingCharacters(in: .whitespaces) ?? "Unknown"
+                    return rawNetwork.commaSeparatedValues.first ?? "Unknown"
                 }
                 return "Unknown"
             case .year: return item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? "Unknown"

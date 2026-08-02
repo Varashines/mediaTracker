@@ -29,20 +29,55 @@ class SearchViewModel {
     
     private func recomputeAllWebResults() {
         let ids = displayCache?.libraryTMDBIDs ?? []
-        var results: [MediaSearchResult] = []
-        if ids.isEmpty {
-            results.append(contentsOf: movieResults.prefix(15))
-            results.append(contentsOf: tvResults.prefix(15))
-        } else {
-            results.append(contentsOf: movieResults.filter { !ids.contains("movie_\($0.id)") }.prefix(15))
-            results.append(contentsOf: tvResults.filter { !ids.contains("tv_\($0.id)") }.prefix(15))
+        let movies = ids.isEmpty ? movieResults : movieResults.filter { !ids.contains("movie_\($0.id)") }
+        let tv = ids.isEmpty ? tvResults : tvResults.filter { !ids.contains("tv_\($0.id)") }
+        let merged = Array(movies.prefix(15)) + Array(tv.prefix(15))
+        allWebResults = rankWebResults(merged)
+    }
+    
+    /// Relevance-rank merged API results with the same scorer used for library search.
+    /// Title matches dominate; overview/genre matches add smaller weight. On equal scores,
+    /// movie/TV results are interleaved so a relevant show isn't always buried after films.
+    private func rankWebResults(_ results: [MediaSearchResult]) -> [MediaSearchResult] {
+        guard results.contains(where: { $0.type == .movie }),
+              results.contains(where: { $0.type == .tvShow }),
+              !lastSearchTokens.isEmpty else { return results }
+
+        let scorer = SearchScorer(tokens: lastSearchTokens)
+        let movies = results.filter { $0.type == .movie }
+        let tv = results.filter { $0.type == .tvShow }
+        return interleave(movies: movies, tv: tv, scorer: scorer)
+    }
+
+    private func interleave(movies: [MediaSearchResult], tv: [MediaSearchResult], scorer: SearchScorer) -> [MediaSearchResult] {
+        var result: [MediaSearchResult] = []
+        var m = 0
+        var t = 0
+        var takeMovie = true
+
+        while m < movies.count || t < tv.count {
+            let movieScore = m < movies.count ? scorer.score(item: movies[m]) : Int.min
+            let tvScore = t < tv.count ? scorer.score(item: tv[t]) : Int.min
+
+            if movieScore > tvScore {
+                result.append(movies[m]); m += 1
+            } else if tvScore > movieScore {
+                result.append(tv[t]); t += 1
+            } else if m < movies.count && (takeMovie || t >= tv.count) {
+                result.append(movies[m]); m += 1
+                takeMovie.toggle()
+            } else if t < tv.count {
+                result.append(tv[t]); t += 1
+                takeMovie.toggle()
+            }
         }
-        allWebResults = results
+        return result
     }
     
     private var searchTask: Task<Void, Never>?
     private let modelContainer: ModelContainer
     private var cancellables = Set<AnyCancellable>()
+    private var lastSearchTokens: [String] = []
 
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContainer)
@@ -84,6 +119,7 @@ class SearchViewModel {
     func clearWebResults() {
         movieResults = []
         tvResults = []
+        lastSearchTokens = []
     }
 
     func cancelAllSearchOperations() {
@@ -93,6 +129,7 @@ class SearchViewModel {
         tvResults = []
         filteredLocalResults = []
         isSearching = false
+        lastSearchTokens = []
     }
 
     func cancelSearchTaskOnly() {
@@ -104,6 +141,7 @@ class SearchViewModel {
     func performSearch(text: String, selectedType: SearchType) async {
         guard !SleepManager.shared.isAsleep else { return }
         
+        lastSearchTokens = text.split(separator: " ").map(String.init)
         isSearching = true
         isOfflineResultsOnly = false
         

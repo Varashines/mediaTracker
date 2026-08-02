@@ -78,7 +78,7 @@ actor DiscoverySyncService {
             let sides = aliasPart.components(separatedBy: "=")
             guard sides.count >= 2 else { continue }
             let target = sides[0].trimmingCharacters(in: .whitespaces)
-            let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let sources = sides[1].commaSeparatedValues
             var preferredLogoSource: String? = nil
             if let logoStr = logoPart, logoStr.contains("Logo:") {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
@@ -124,8 +124,8 @@ actor DiscoverySyncService {
                 // Normalize name to lowercase+trimmed to match how the filter compares networks
                 let itemKind = item.typeValue == "Movie" ? "studio" : "network"
                 if let rawName = item.cachedNetwork {
-                    let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                    let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+                    let networkNames = rawName.commaSeparatedValues
+                    let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
                     
                     var seenTargets = Set<String>()
                     for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
@@ -295,8 +295,8 @@ actor DiscoverySyncService {
         // Incremental Network update
         let itemKind = item.typeValue == "Movie" ? "studio" : "network"
         if let rawName = item.cachedNetwork {
-            let networkNames = rawName.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            let logoPaths = item.cachedNetworkLogoPath?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+            let networkNames = rawName.commaSeparatedValues
+            let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
             
             var seenTargets = Set<String>()
             for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
@@ -426,7 +426,7 @@ actor DiscoverySyncService {
         let (sourceToTarget, _) = await getAliasMaps()
 
         if let networkString = network {
-            let networks = networkString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let networks = networkString.commaSeparatedValues
             var seenTargets = Set<String>()
             for originalName in networks where !originalName.isEmpty {
                 let normalizedName = originalName.lowercased()

@@ -8,6 +8,14 @@ extension View {
     }
 }
 
+extension String {
+    /// Splits a comma-separated list, trimming whitespace and dropping empty entries.
+    /// e.g. "Netflix, HBO ," -> ["Netflix", "HBO"]
+    var commaSeparatedValues: [String] {
+        split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
 // Cache for parsed hex colors to avoid repeated parsing in view bodies
 private nonisolated(unsafe) let hexColorCache: NSCache<NSString, NSColor> = {
     let cache = NSCache<NSString, NSColor>()
@@ -109,6 +117,12 @@ extension Color {
         if let nsColor = NSColor(self).usingColorSpace(.sRGB) {
             hexColorCache.setObject(nsColor, forKey: cacheKey)
         }
+    }
+
+    /// Resolves a stored theme-color hex, stripping any `|...` variant suffix.
+    init?(themeHex: String) {
+        let clean = themeHex.contains("|") ? String(themeHex.split(separator: "|")[0]) : themeHex
+        self.init(hex: clean)
     }
 
     func toHex() -> String {
@@ -349,3 +363,10 @@ struct AdaptiveBackgroundModifier: ViewModifier {
     }
 }
 
+
+extension AnyTransition {
+    /// Subtle crossfade for filtered content — calm fade, no scale/rise.
+    static var mediaRowArrival: AnyTransition {
+        .opacity
+    }
+}

@@ -14,6 +14,15 @@ struct SearchScorer: Sendable {
         for token in tokens {
             total += scoreToken(token, item: item)
         }
+        // Multi-token phrase match in the title dominates per-token matches.
+        if tokens.count > 1 {
+            let phrase = tokens.joined(separator: " ").lowercased()
+            if item.searchTitle == phrase {
+                total += 500
+            } else if item.searchTitle.contains(phrase) {
+                total += 300
+            }
+        }
         return total
     }
 
@@ -98,4 +107,14 @@ extension MediaItem: SearchScorable {
     var searchCast: [String] { displayCast.map { $0.name.lowercased() } }
     var searchGenres: [String] { cachedGenres.map { $0.lowercased() } }
     var searchNetwork: String? { cachedNetwork?.lowercased() }
+}
+
+extension MediaSearchResult: SearchScorable {
+    var searchTitle: String { title.lowercased() }
+    var searchOverview: String { overview.lowercased() }
+    var searchCreators: [String] { [] }
+    var searchCast: [String] { [] }
+    var searchGenres: [String] { genres.map { $0.lowercased() } }
+    var searchNetwork: String? { nil }
+    var searchableText: String { "\(title) \(overview)".lowercased() }
 }

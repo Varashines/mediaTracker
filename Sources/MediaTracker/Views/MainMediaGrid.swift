@@ -22,6 +22,7 @@ struct MainMediaGrid: View {
                     gridCell(for: metadata, at: idx)
                 }
                 .buttonStyle(.interactive)
+                .transition(.mediaRowArrival)
             }
             
             if isLoadingMore {

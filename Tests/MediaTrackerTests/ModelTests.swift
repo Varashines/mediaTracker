@@ -263,7 +263,7 @@ final class MediaStateTests: XCTestCase {
         XCTAssertEqual(NavigationCategory.movie.title, "Movies")
         XCTAssertEqual(NavigationCategory.tvShow.title, "TV Shows")
         XCTAssertEqual(NavigationCategory.discover.title, "Discovery Hub")
-        XCTAssertEqual(NavigationCategory.insights.title, "Cinema DNA")
+        XCTAssertEqual(NavigationCategory.insights.title, "Snapshot")
     }
 
     func testSmartCategoryDetection() {

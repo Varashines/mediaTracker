@@ -291,8 +291,9 @@ struct TitleSection: View {
         } label: {
             HStack(spacing: 4) {
                 if let mood = currentMood {
-                    Text(mood.emojiChar)
-                        .font(.system(size: 12))
+                    Image(systemName: mood.emoji)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(mood.color)
                     Text(mood.rawValue)
                 } else {
                     Image(systemName: "sparkles")
@@ -368,8 +369,9 @@ private struct MoodPickerPopover: View {
                         }
                     } label: {
                         VStack(spacing: 3) {
-                            Text(mood.emojiChar)
-                                .font(.system(size: 22))
+                            Image(systemName: mood.emoji)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(mood.color)
                                 .scaleEffect(isHovered ? 1.15 : 1.0)
                                 .frame(width: 44, height: 44)
                                 .background(

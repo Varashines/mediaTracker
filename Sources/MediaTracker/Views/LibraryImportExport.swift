@@ -47,6 +47,78 @@ struct MediaItemData: Codable, Sendable {
     let dateAdded: Date
     let taste: String?
     let watchedEpisodeIDs: [String]?
+    /// Most recent interaction (watch/taste/state change) — preserved across restores.
+    let lastInteractionDate: Date?
+    /// Maps watched-episode uniqueID → its last watched date, so restores keep
+    /// the real "recently watched" ordering instead of resetting to import time.
+    let watchedEpisodeDates: [String: Date]?
+
+    // Scalar metadata — carried so a restore doesn't force a full re-fetch.
+    let posterURL: String?
+    let overview: String?
+    let backdropURL: String?
+    let releaseDate: Date?
+    let lastUpdated: Date?
+    let titleLogoURL: String?
+    let themeColorHex: String?
+    let cachedRuntime: Int?
+    let cachedEpisodeRuntime: Int?
+    let cachedWatchedEpisodeCount: Int?
+    let remainingEpisodesCount: Int?
+    let cachedLanguage: String?
+    let cachedNetwork: String?
+    let cachedNetworkLogoPath: String?
+    let mood: String?
+}
+
+extension MediaItemData {
+    init(item: MediaItem, watchedIDs: [String]?, watchedDates: [String: Date]?) {
+        self.init(
+            id: item.id,
+            title: item.title,
+            type: item.type?.rawValue ?? "Movie",
+            state: item.state?.rawValue ?? "Wishlist",
+            dateAdded: item.dateAdded ?? Date(),
+            taste: item.tasteValue,
+            watchedEpisodeIDs: watchedIDs,
+            lastInteractionDate: item.lastInteractionDate,
+            watchedEpisodeDates: watchedDates,
+            posterURL: item.posterURL,
+            overview: item.overview.isEmpty ? nil : item.overview,
+            backdropURL: item.backdropURL,
+            releaseDate: item.releaseDate,
+            lastUpdated: item.lastUpdated,
+            titleLogoURL: item.titleLogoURL,
+            themeColorHex: item.themeColorHex,
+            cachedRuntime: item.cachedRuntime,
+            cachedEpisodeRuntime: item.cachedEpisodeRuntime,
+            cachedWatchedEpisodeCount: item.cachedWatchedEpisodeCount,
+            remainingEpisodesCount: item.remainingEpisodesCount,
+            cachedLanguage: item.cachedLanguage,
+            cachedNetwork: item.cachedNetwork,
+            cachedNetworkLogoPath: item.cachedNetworkLogoPath,
+            mood: item.mood
+        )
+    }
+
+    /// Applies the scalar metadata carried in this backup onto a MediaItem (restore path).
+    func applyMetadata(to item: MediaItem) {
+        if let posterURL, !posterURL.isEmpty { item.posterURL = posterURL }
+        if let overview, !overview.isEmpty { item.overview = overview }
+        if let backdropURL, !backdropURL.isEmpty { item.backdropURL = backdropURL }
+        if let releaseDate { item.releaseDate = releaseDate }
+        if let lastUpdated { item.lastUpdated = lastUpdated }
+        if let titleLogoURL, !titleLogoURL.isEmpty { item.titleLogoURL = titleLogoURL }
+        if let themeColorHex, !themeColorHex.isEmpty { item.themeColorHex = themeColorHex }
+        if let cachedRuntime { item.cachedRuntime = cachedRuntime }
+        if let cachedEpisodeRuntime { item.cachedEpisodeRuntime = cachedEpisodeRuntime }
+        if let cachedWatchedEpisodeCount { item.cachedWatchedEpisodeCount = cachedWatchedEpisodeCount }
+        if let remainingEpisodesCount { item.remainingEpisodesCount = remainingEpisodesCount }
+        if let cachedLanguage, !cachedLanguage.isEmpty { item.cachedLanguage = cachedLanguage }
+        if let cachedNetwork, !cachedNetwork.isEmpty { item.cachedNetwork = cachedNetwork }
+        if let cachedNetworkLogoPath, !cachedNetworkLogoPath.isEmpty { item.cachedNetworkLogoPath = cachedNetworkLogoPath }
+        if let mood, !mood.isEmpty { item.mood = mood }
+    }
 }
 
 struct CollectionBackupData: Codable, Sendable {
@@ -88,22 +160,18 @@ class LibraryImportExportService {
     func prepareExportData(items: [MediaItem], context: ModelContext) -> Data? {
         let exportItems = items.map { item -> MediaItemData in
             var watchedIDs: [String]? = nil
+            var watchedDates: [String: Date]? = nil
             if item.type == .tvShow, let tv = item.tvShowDetails {
-                watchedIDs = tv.seasons
+                let watchedEps = tv.seasons
                     .liveModels
                     .flatMap { $0.episodes.liveModels }
                     .filter { $0.isWatched }
-                    .map { $0.uniqueID ?? "" }
+                watchedIDs = watchedEps.map { $0.uniqueID ?? "" }
+                watchedDates = Dictionary(uniqueKeysWithValues: watchedEps.compactMap { ep in
+                    ep.uniqueID.flatMap { ($0, ep.lastWatchedDate ?? Date()) }
+                })
             }
-            return MediaItemData(
-                id: item.id,
-                title: item.title,
-                type: item.type?.rawValue ?? "Movie",
-                state: item.state?.rawValue ?? "Wishlist",
-                dateAdded: item.dateAdded ?? Date(),
-                taste: item.tasteValue,
-                watchedEpisodeIDs: watchedIDs
-            )
+            return MediaItemData(item: item, watchedIDs: watchedIDs, watchedDates: watchedDates)
         }
 
         var collectionBackup: [CollectionBackupData]? = nil

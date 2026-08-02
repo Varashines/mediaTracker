@@ -270,7 +270,8 @@ struct ImportWizardSheet: View {
                         VStack(spacing: 4) {
                             ForEach(backup.items.prefix(5), id: \.id) { item in
                                 HStack {
-                                    Text(item.type == "Movie" ? "🎬" : "📺")
+                                    Image(systemName: item.type == "Movie" ? "film.fill" : "tv.fill")
+                                        .foregroundStyle(.secondary)
                                     Text(item.title)
                                         .font(AppTheme.Font.label)
                                         .lineLimit(1)

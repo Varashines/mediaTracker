@@ -18,6 +18,18 @@ struct SharePreviewPopup: View {
         availableCast.filter { selectedCastIDs.contains($0.id) }
     }
 
+    private var shareThemePrimary: Color {
+        item.themeColorHex.flatMap { Color(themeHex: $0) } ?? AppTheme.Colors.accent
+    }
+
+    private var shareThemeSecondary: Color? {
+        item.themeSecondaryColorHex.flatMap { Color(themeHex: $0) }
+    }
+
+    private var shareThemeMuted: Color? {
+        item.themeMutedColorHex.flatMap { Color(themeHex: $0) }
+    }
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.3)
@@ -38,10 +50,17 @@ struct SharePreviewPopup: View {
                         .ignoresSafeArea()
                         .onTapGesture { showCustomShareMenu = false }
 
-                    CustomShareMenuView(image: img, title: item.title) {
-                        showCustomShareMenu = false
-                        onDismiss()
-                    }
+                    CustomShareMenuView(
+                        image: img,
+                        title: item.title,
+                        onDismiss: {
+                            showCustomShareMenu = false
+                            onDismiss()
+                        },
+                        themeColor: shareThemePrimary,
+                        secondaryColor: shareThemeSecondary,
+                        mutedColor: shareThemeMuted
+                    )
                 }
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             }

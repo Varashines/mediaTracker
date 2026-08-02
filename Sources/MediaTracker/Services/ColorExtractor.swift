@@ -7,6 +7,13 @@ struct DominantPair: Sendable, Equatable {
     let secondary: Color
 }
 
+/// A cohesive poster palette: primary (theme), secondary (accent), muted (subtle wash).
+struct DominantTriple: Sendable, Equatable {
+    let primary: Color
+    let secondary: Color
+    let muted: Color
+}
+
 enum ColorExtractor {
     private static let defaultGray = Color(red: 0.3, green: 0.3, blue: 0.3)
     private static let secondaryGray = Color(red: 0.2, green: 0.2, blue: 0.2)
@@ -348,5 +355,287 @@ enum ColorExtractor {
             hue = 60 * (((r - g) / delta) + 4)
         }
         return hue < 0 ? hue + 360 : hue
+    }
+
+    // MARK: - Theme Palette (saliency-weighted CIELAB k-means)
+    //
+    // Premium poster palette: saliency-weighted weighted k-means in CIELAB,
+    // scored for a vibrant-but-cohesive theme color. Produces primary, secondary,
+    // and a derived muted swatch. The existing topTwoColors/dominantColor paths are
+    // kept for logo-contrast detection (light/dark signal).
+
+    private struct LabPoint: Sendable {
+        var L: Double, a: Double, b: Double
+    }
+    private struct LabSample {
+        var lab: LabPoint
+        var weight: Double
+    }
+    private struct LabCluster {
+        var centroid: LabPoint
+        var mass: Double = 0
+    }
+
+    static func extractThemePalette(from cgImage: CGImage) async -> DominantTriple {
+        let fallback = DominantTriple(
+            primary: defaultGray,
+            secondary: secondaryGray,
+            muted: Color(red: 0.22, green: 0.22, blue: 0.22)
+        )
+
+        let w = cgImage.width
+        let h = cgImage.height
+        guard w > 0, h > 0 else { return fallback }
+
+        // Downscale to cap sample count (one-time, but keep it sane).
+        let maxDim: CGFloat = 150
+        let scale = min(1, maxDim / CGFloat(max(w, h)))
+        let tw = max(1, Int(CGFloat(w) * scale))
+        let th = max(1, Int(CGFloat(h) * scale))
+
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * tw
+        var rawData = [UInt8](repeating: 0, count: tw * th * bytesPerPixel)
+        guard let ctx = CGContext(
+            data: &rawData, width: tw, height: th,
+            bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return fallback }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: tw, height: th))
+
+        let saliency = await generateSaliencyData(from: cgImage)
+        let salW = saliency?.width ?? 0
+        let salH = saliency?.height ?? 0
+        let salVals = saliency?.values
+
+        var samples: [LabSample] = []
+        samples.reserveCapacity(tw * th)
+
+        for y in 0..<th {
+            let row = y * bytesPerRow
+            for x in 0..<tw {
+                let i = row + x * bytesPerPixel
+                let r = rawData[i]
+                let g = rawData[i + 1]
+                let b = rawData[i + 2]
+                let a = rawData[i + 3]
+                guard a > 30 else { continue }
+                guard max(r, g, b) > 20 else { continue }
+
+                var weight: Double = 0.15
+                if let salVals, salW > 0, salH > 0 {
+                    let sx = min(x * salW / tw, salW - 1)
+                    let sy = min(y * salH / th, salH - 1)
+                    weight = max(0.1, Double(salVals[sy * salW + sx]))
+                }
+                // Border mask: strongly de-emphasize the outer ~4% (bars/borders).
+                let bx = Double(min(x, tw - 1 - x)) / Double(tw)
+                let by = Double(min(y, th - 1 - y)) / Double(th)
+                if bx < 0.04 || by < 0.04 { weight *= 0.05 }
+
+                let lab = sRGBToLab(r: Double(r) / 255.0, g: Double(g) / 255.0, b: Double(b) / 255.0)
+                samples.append(LabSample(lab: lab, weight: weight))
+            }
+        }
+
+        guard samples.count >= 9 else { return fallback }
+
+        // Weighted mean lightness & chroma for grayscale detection.
+        var totalW = 0.0
+        var lum = 0.0
+        var chromaAcc = 0.0
+        for s in samples {
+            totalW += s.weight
+            lum += s.lab.L * s.weight
+            chromaAcc += (s.lab.a * s.lab.a + s.lab.b * s.lab.b).squareRoot() * s.weight
+        }
+        guard totalW > 0 else { return fallback }
+        lum /= totalW
+        let avgChroma = chromaAcc / totalW
+
+        if avgChroma < 6 {
+            let gray = clamp(lum / 100.0, 0, 1)
+            return DominantTriple(
+                primary: Color(red: gray, green: gray, blue: gray),
+                secondary: Color(red: max(0, gray - 0.1), green: max(0, gray - 0.1), blue: max(0, gray - 0.1)),
+                muted: Color(red: max(0, gray - 0.18), green: max(0, gray - 0.18), blue: max(0, gray - 0.18))
+            )
+        }
+
+        let clusters = weightedKMeans(samples: samples, k: 6, iterations: 20)
+
+        // Score each cluster for the theme color.
+        var scored: [(index: Int, cluster: LabCluster, score: Double)] = []
+        for (i, cluster) in clusters.enumerated() {
+            let chroma = (cluster.centroid.a * cluster.centroid.a + cluster.centroid.b * cluster.centroid.b).squareRoot()
+            var chromaScore = min(chroma / 45.0, 1.0)
+            if chroma > 60 {
+                // Soft penalty for very saturated colors — never zeroes them out
+                // (a solid red poster should still resolve to red).
+                chromaScore *= max(0.45, 1 - (chroma - 60) / 140)
+            }
+            let lightnessScore = exp(-pow((cluster.centroid.L - 52) / 22.0, 2))
+            scored.append((i, cluster, cluster.mass * chromaScore * lightnessScore))
+        }
+
+        scored.sort { $0.score > $1.score }
+        guard let primary = scored.first, primary.score > 0 else { return fallback }
+
+        // Secondary: highest-hue-difference cluster from primary with meaningful mass.
+        let primaryHue = labHue(primary.cluster.centroid)
+        var secondary = primary.cluster
+        var bestDiff = -1.0
+        for (i, cluster) in scored.enumerated() where i > 0 && cluster.cluster.mass > primary.cluster.mass * 0.15 {
+            let diff = hueDistance(labHue(cluster.cluster.centroid), primaryHue)
+            if diff > bestDiff {
+                bestDiff = diff
+                secondary = cluster.cluster
+            }
+        }
+
+        let primaryColor = labToSRGBColor(primary.cluster.centroid)
+        let secondaryColor = labToSRGBColor(secondary.centroid)
+        let mutedColor = labToSRGBColor(derivedMuted(from: primary.cluster.centroid))
+
+        return DominantTriple(primary: primaryColor, secondary: secondaryColor, muted: mutedColor)
+    }
+
+    // MARK: - CIELAB helpers
+
+    private static func clamp(_ v: Double, _ lo: Double, _ hi: Double) -> Double {
+        min(max(v, lo), hi)
+    }
+
+    private static func sRGBToLab(r: Double, g: Double, b: Double) -> LabPoint {
+        func lin(_ c: Double) -> Double {
+            c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let rl = lin(r), gl = lin(g), bl = lin(b)
+        let x = 0.4124 * rl + 0.3576 * gl + 0.1805 * bl
+        let y = 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
+        let z = 0.0193 * rl + 0.1192 * gl + 0.9505 * bl
+
+        func f(_ t: Double) -> Double {
+            let e = 216.0 / 24389.0
+            let k = 24389.0 / 27.0
+            return t > e ? pow(t, 1.0 / 3.0) : (k * t + 16.0) / 116.0
+        }
+        let xn = 0.95047, yn = 1.0, zn = 1.08883
+        let fx = f(x / xn), fy = f(y / yn), fz = f(z / zn)
+        return LabPoint(L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz))
+    }
+
+    private static func labToSRGBColor(_ p: LabPoint) -> Color {
+        func fInv(_ t: Double) -> Double {
+            let e = 216.0 / 24389.0
+            let k = 24389.0 / 27.0
+            return t * t * t > e ? t * t * t : (116 * t - 16) / k
+        }
+        let xn = 0.95047, yn = 1.0, zn = 1.08883
+        let fy = (p.L + 16) / 116
+        let fx = fy + p.a / 500
+        let fz = fy - p.b / 200
+        let x = xn * fInv(fx)
+        let y = yn * fInv(fy)
+        let z = zn * fInv(fz)
+
+        func gamma(_ c: Double) -> Double {
+            let lin = 3.2406 * x + -1.5372 * y + -0.4986 * z
+            let ling = -0.9689 * x + 1.8758 * y + 0.0415 * z
+            let linb = 0.0557 * x + -0.2040 * y + 1.0570 * z
+            let v = c == x ? lin : (c == y ? ling : linb)
+            return v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055
+        }
+        let r = clamp(gamma(x), 0, 1)
+        let g = clamp(gamma(y), 0, 1)
+        let b = clamp(gamma(z), 0, 1)
+        return Color(red: r, green: g, blue: b)
+    }
+
+    private static func labHue(_ p: LabPoint) -> Double {
+        var h = atan2(p.b, p.a) * 180 / .pi
+        if h < 0 { h += 360 }
+        return h
+    }
+
+    private static func hueDistance(_ a: Double, _ b: Double) -> Double {
+        let d = abs(a - b)
+        return min(d, 360 - d)
+    }
+
+    /// Chroma-reduced, mid-lightness blend of the primary → a harmonious muted wash.
+    private static func derivedMuted(from p: LabPoint) -> LabPoint {
+        let chroma = (p.a * p.a + p.b * p.b).squareRoot()
+        let factor = chroma > 0 ? (chroma * 0.38) / chroma : 0
+        return LabPoint(
+            L: clamp(p.L * 0.55 + 52 * 0.45, 38, 64),
+            a: p.a * factor,
+            b: p.b * factor
+        )
+    }
+
+    private static func weightedKMeans(samples: [LabSample], k: Int, iterations: Int) -> [LabCluster] {
+        func dist(_ a: LabPoint, _ b: LabPoint) -> Double {
+            let dl = a.L - b.L, da = a.a - b.a, db = a.b - b.b
+            return (dl * dl + da * da + db * db).squareRoot()
+        }
+
+        // Deterministic k-means++ seeding.
+        var centroids: [LabPoint] = []
+        centroids.append(samples[samples.count / 2].lab)
+        var seed = 7
+        while centroids.count < k {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff
+            var distSum = 0.0
+            var dists = [Double](repeating: 0, count: samples.count)
+            for (i, s) in samples.enumerated() {
+                let d = centroids.map { dist(s.lab, $0) }.min() ?? 0
+                dists[i] = d * d
+                distSum += dists[i]
+            }
+            if distSum <= 0 { break }
+            let r = (Double(seed % 1000) / 1000.0) * distSum
+            var acc = 0.0
+            var pick = 0
+            for (i, d) in dists.enumerated() {
+                acc += d
+                if acc >= r { pick = i; break }
+            }
+            centroids.append(samples[pick].lab)
+        }
+
+        var assignment = [Int](repeating: 0, count: samples.count)
+        for _ in 0..<iterations {
+            for (i, s) in samples.enumerated() {
+                var best = 0
+                var bestD = Double.greatestFiniteMagnitude
+                for (ci, c) in centroids.enumerated() {
+                    let d = dist(s.lab, c)
+                    if d < bestD { bestD = d; best = ci }
+                }
+                assignment[i] = best
+            }
+            var sums = [LabPoint](repeating: LabPoint(L: 0, a: 0, b: 0), count: k)
+            var wsums = [Double](repeating: 0, count: k)
+            for (i, s) in samples.enumerated() {
+                let ci = assignment[i]
+                let wt = s.weight
+                sums[ci].L += s.lab.L * wt
+                sums[ci].a += s.lab.a * wt
+                sums[ci].b += s.lab.b * wt
+                wsums[ci] += wt
+            }
+            for ci in 0..<k where wsums[ci] > 0 {
+                centroids[ci] = LabPoint(L: sums[ci].L / wsums[ci], a: sums[ci].a / wsums[ci], b: sums[ci].b / wsums[ci])
+            }
+        }
+
+        // Final mass per cluster.
+        var mass = [Double](repeating: 0, count: k)
+        for (i, s) in samples.enumerated() {
+            mass[assignment[i]] += s.weight
+        }
+        return centroids.enumerated().map { LabCluster(centroid: $0.element, mass: mass[$0.offset]) }
     }
 }

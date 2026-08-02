@@ -36,10 +36,24 @@ struct TVTrackingView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
 
             if tvDetails.seasons.isEmpty {
-                ContentUnavailableView(
-                    "No season data", systemImage: "tv.slash",
-                    description: Text("Season information hasn't been loaded yet.")
-                )
+                ContentUnavailableView {
+                    Label("No season data", systemImage: "tv.slash")
+                } description: {
+                    Text("Season information hasn't been loaded yet.")
+                } actions: {
+                    Button("Fetch Seasons") {
+                        if let item = tvDetails.item {
+                            let tmdbString = item.id.split(separator: "_").last ?? ""
+                            if Int(tmdbString) != nil, let modelContext = tvDetails.modelContext {
+                                Task {
+                                    let backgroundService = BackgroundDataService(modelContainer: modelContext.container)
+                                    _ = await backgroundService.refreshSingleItem(id: item.id, force: true)
+                                }
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
                 .font(.caption)
                 .foregroundStyle(.secondary)
             } else {

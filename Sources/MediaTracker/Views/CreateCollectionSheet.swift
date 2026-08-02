@@ -13,11 +13,6 @@ struct CreateCollectionSheet: View {
     @State private var iconSearchText = ""
     @State private var isSmart = false
     @State private var smartRules: [SmartRule] = []
-    @State private var pickerMode = 0 // 0 for SF Symbols, 1 for Emojis
-    
-    let suggestedEmojis = [
-        "🍿", "🎬", "📺", "🎭", "⭐️", "🔥", "💖", "👾", "🎮", "📚", "📅", "⏰", "📁", "💿", "📼", "🎟️", "🎙️", "👀", "🚨", "🏆", "🌟", "✨", "🍕", "🍔", "☕️", "🍺", "🍷", "🎉", "✈️", "🚗", "🏖️", "💤"
-    ]
     
     let suggestedIcons = [
         // Media & Apps
@@ -56,14 +51,6 @@ struct CreateCollectionSheet: View {
             return suggestedIcons
         } else {
             return suggestedIcons.filter { $0.lowercased().contains(iconSearchText.lowercased()) }
-        }
-    }
-    
-    var filteredEmojis: [String] {
-        if iconSearchText.isEmpty {
-            return suggestedEmojis
-        } else {
-            return suggestedEmojis.filter { $0.contains(iconSearchText) }
         }
     }
     
@@ -122,16 +109,7 @@ struct CreateCollectionSheet: View {
                 // Icon Picker
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Picker("", selection: $pickerMode) {
-                            Text("Symbols").tag(0)
-                            Text("Emojis").tag(1)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 160)
-                        
-                        Spacer()
-                        
-                        TextField(pickerMode == 0 ? "Search symbols..." : "Search emojis...", text: $iconSearchText)
+                        TextField("Search symbols...", text: $iconSearchText)
                             .textFieldStyle(.plain)
                             .font(AppTheme.Font.caption)
                             .padding(.horizontal, 10)
@@ -139,13 +117,11 @@ struct CreateCollectionSheet: View {
                             .background(Color.primary.opacity(0.05))
                             .cornerRadius(AppTheme.Radius.small)
                             .frame(width: 180)
+                        
+                        Spacer()
                     }
                     
-                    if pickerMode == 0 {
-                        IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
-                    } else {
-                        EmojiPickerGridView(selectedIcon: $icon, filteredEmojis: filteredEmojis)
-                    }
+                    IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
                 }
             }
             
@@ -201,9 +177,6 @@ struct CreateCollectionSheet: View {
                 icon = editing.systemImage
                 isSmart = editing.isSmart
                 smartRules = editing.smartRules
-                if icon.isEmoji {
-                    pickerMode = 1
-                }
             } else {
                 isSmart = initialIsSmart
             }
@@ -402,34 +375,5 @@ struct RuleAddMenu: View {
             Label("Add Rule", systemImage: "plus.circle")
                 .font(AppTheme.Font.caption)
         }
-    }
-}
-
-struct EmojiPickerGridView: View {
-    @Binding var selectedIcon: String
-    let filteredEmojis: [String]
-    
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
-                    Button {
-                        withAnimation(AppTheme.Animation.springSnappy) { selectedIcon = emoji }
-                    } label: {
-                        Text(emoji)
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
-                            .background(selectedIcon == emoji ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.primary.opacity(0.05)))
-                            .cornerRadius(AppTheme.Radius.small)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel(emoji)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(height: 180)
     }
 }

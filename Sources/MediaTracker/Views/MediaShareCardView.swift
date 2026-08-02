@@ -5,19 +5,24 @@ struct MediaShareCardView: View {
     var customCast: [SimpleCastMember]? = nil
 
     private var themeColor: Color {
-        if let hex = item.themeColorHex {
-            let cleanHex = hex.contains("|") ? String(hex.split(separator: "|")[0]) : hex
-            if let color = Color(hex: cleanHex) {
-                return color
-            }
+        if let hex = item.themeColorHex, let color = Color(themeHex: hex) {
+            return color
         }
         if let networkName = item.cachedNetwork {
-            let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
+            let first = networkName.commaSeparatedValues.first ?? networkName
             if let netColor = NetworkThemeManager.shared.color(for: first) {
                 return netColor
             }
         }
         return Color(red: 0.25, green: 0.45, blue: 0.65)
+    }
+
+    private var secondaryColor: Color {
+        item.themeSecondaryColorHex.flatMap { Color(themeHex: $0) } ?? themeColor
+    }
+
+    private var mutedColor: Color {
+        item.themeMutedColorHex.flatMap { Color(themeHex: $0) } ?? themeColor
     }
 
     private var releaseYearString: String? {
@@ -28,7 +33,7 @@ struct MediaShareCardView: View {
 
     private var networkNameString: String? {
         guard let net = item.cachedNetwork else { return nil }
-        return net.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces)
+        return net.commaSeparatedValues.first
     }
 
     private var seasonsCountString: String? {
@@ -63,7 +68,7 @@ struct MediaShareCardView: View {
             ZStack {
                 Color(white: 0.04)
                 RadialGradient(
-                    colors: [themeColor.opacity(0.52), themeColor.opacity(0.18), Color(white: 0.04)],
+                    colors: [themeColor.opacity(0.52), mutedColor.opacity(0.28), Color(white: 0.04)],
                     center: .top,
                     startRadius: 10,
                     endRadius: 520
@@ -75,7 +80,7 @@ struct MediaShareCardView: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [themeColor.opacity(0.55), themeColor.opacity(0.2), Color.white.opacity(0.12)],
+                        colors: [themeColor.opacity(0.55), secondaryColor.opacity(0.3), Color.white.opacity(0.12)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -281,7 +286,9 @@ struct MediaShareCardView: View {
             HStack(spacing: 10) {
                 if let taste = item.taste, taste != TasteValue.none {
                     HStack(spacing: 5) {
-                        Text(taste.emoji).font(.system(size: 11))
+                        Image(systemName: taste.iconName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(taste.color)
                         Text(taste.rawValue.uppercased())
                             .font(.system(size: 10, weight: .bold))
                             .kerning(1.1)
@@ -296,7 +303,9 @@ struct MediaShareCardView: View {
 
                 if let moodRaw = item.mood, let mood = Mood(rawValue: moodRaw) {
                     HStack(spacing: 5) {
-                        Text(mood.emojiChar).font(.system(size: 11))
+                        Image(systemName: mood.emoji)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(mood.color)
                         Text(mood.rawValue)
                             .font(.system(size: 10, weight: .bold))
                             .kerning(1.1)

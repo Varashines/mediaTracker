@@ -59,5 +59,6 @@ struct LibraryGridSection: View {
                 }
             }
         }
+        .animation(AppTheme.Animation.easeInOut, value: FilterSnapshot(from: viewModel))
     }
 }

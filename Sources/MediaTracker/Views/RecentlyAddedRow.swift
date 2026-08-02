@@ -18,6 +18,7 @@ struct RecentlyAddedRow: View {
                                 .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
                         }
                         .buttonStyle(.interactive)
+                        .transition(.mediaRowArrival)
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)

@@ -438,7 +438,7 @@ actor LibraryStatsActor {
                     TasteMath.updateTaste(&taste.genreTaste, g, tasteValue)
                 }
                 if let rawNetwork = item.cachedNetwork {
-                    let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                    let networks = rawNetwork.commaSeparatedValues
                     for n in networks where !n.isEmpty {
                         if !hiddenSet.contains(n.lowercased()) {
                             if item.type == .movie {

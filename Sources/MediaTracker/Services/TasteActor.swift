@@ -145,7 +145,7 @@ actor TasteActor {
             let taste = item.tasteValue
             for g in item.cachedGenres { TasteMath.updateTaste(&acc.genreStats, g, taste) }
             if let rawNetwork = item.cachedNetwork {
-                let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let networks = rawNetwork.commaSeparatedValues
                 for n in networks where !n.isEmpty {
                     TasteMath.updateTaste(&acc.networkStats, n, taste)
                 }
@@ -226,7 +226,7 @@ actor TasteActor {
             // Network matching
             var networkAff: Double = 0
             if let rawNetwork = item.cachedNetwork {
-                let networks = rawNetwork.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let networks = rawNetwork.commaSeparatedValues
                 var totalAff: Double = 0
                 var matchedCount = 0
                 for n in networks where !n.isEmpty {

@@ -214,7 +214,7 @@ struct StudioAliasManagerView: View {
             let sides = aliasPart.components(separatedBy: "=")
             guard sides.count >= 2 else { continue }
             let target = sides[0].trimmingCharacters(in: .whitespaces)
-            let sources = sides[1].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            let sources = sides[1].commaSeparatedValues
             var preferredLogoSource: String? = nil
             if let logoStr = logoPart, logoStr.contains("Logo:") {
                 preferredLogoSource = logoStr.components(separatedBy: "Logo:").last?.trimmingCharacters(in: .whitespaces)
