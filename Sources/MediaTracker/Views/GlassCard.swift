@@ -37,7 +37,9 @@ struct GlassCard<Content: View>: View {
                 .stroke(
                     color != .clear
                         ? color.opacity(scheme == .dark ? 0.25 : 0.12)
-                        : AppTheme.Colors.strokeDefault(for: scheme),
+                        : (isHovered
+                            ? AppTheme.Colors.strokeHover(for: scheme)
+                            : AppTheme.Colors.strokeDefault(for: scheme)),
                     lineWidth: 0.8
                 )
         }
@@ -67,7 +69,9 @@ struct GlassCard<Content: View>: View {
                 .stroke(
                     color != .clear
                         ? color.opacity(scheme == .dark ? 0.25 : 0.12)
-                        : AppTheme.Colors.strokeDefault(for: scheme),
+                        : (isHovered
+                            ? AppTheme.Colors.strokeHover(for: scheme)
+                            : AppTheme.Colors.strokeDefault(for: scheme)),
                     lineWidth: 0.8
                 )
         }

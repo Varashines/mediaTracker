@@ -10,10 +10,20 @@ struct SearchScorer: Sendable {
     }
 
     func score(item: SearchScorable) -> Int {
+        evaluate(item: item).score
+    }
+
+    func evaluate(item: SearchScorable) -> (score: Int, matchesAll: Bool, matchesAny: Bool) {
         var total = 0
+        var matchesAll = true
+        var matchesAny = false
         for token in tokens {
-            total += scoreToken(token, item: item)
+            let tokenScore = scoreToken(token, item: item)
+            total += tokenScore
+            matchesAll = matchesAll && tokenScore > 0
+            matchesAny = matchesAny || tokenScore > 0
         }
+
         // Multi-token phrase match in the title dominates per-token matches.
         if tokens.count > 1 {
             let phrase = tokens.joined(separator: " ").lowercased()
@@ -23,7 +33,7 @@ struct SearchScorer: Sendable {
                 total += 300
             }
         }
-        return total
+        return (total, matchesAll, matchesAny)
     }
 
     private func scoreToken(_ token: String, item: SearchScorable) -> Int {
@@ -55,19 +65,13 @@ struct SearchScorer: Sendable {
     /// Each token must contribute at least some score (AND-like)
     func passesAllTokens(item: SearchScorable) -> Bool {
         guard !tokens.isEmpty else { return true }
-        for token in tokens {
-            if scoreToken(token, item: item) == 0 { return false }
-        }
-        return true
+        return evaluate(item: item).matchesAll
     }
 
     /// At least one token contributes score (OR-like)
     func passesAnyToken(item: SearchScorable) -> Bool {
         guard !tokens.isEmpty else { return true }
-        for token in tokens {
-            if scoreToken(token, item: item) > 0 { return true }
-        }
-        return false
+        return evaluate(item: item).matchesAny
     }
 
     private func trigramSimilarity(_ a: String, _ b: String) -> Double {

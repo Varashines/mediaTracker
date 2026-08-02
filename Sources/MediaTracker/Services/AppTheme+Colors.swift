@@ -50,6 +50,18 @@ extension AppTheme {
             Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.06)
         }
 
+        /// Stronger outline for hovered interactive surfaces.
+        @MainActor
+        static func strokeHover(for colorScheme: ColorScheme) -> Color {
+            Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.12)
+        }
+
+        /// Accent-tinted outline for selected interactive surfaces.
+        @MainActor
+        static func strokeSelected(for colorScheme: ColorScheme) -> Color {
+            accent.opacity(colorScheme == .dark ? 0.45 : 0.3)
+        }
+
         /// Hover border — interactive elements on hover
         /// Accent-colored border — selected, active, themed elements
         // MARK: - Semantic Shadows

@@ -148,6 +148,7 @@ struct InsightsView: View {
                     }
                     .keyboardShortcut("s", modifiers: .command)
                     .help("Share Cinema Wrapped Passport (⌘S)")
+                    .accessibilityLabel("Share Cinema Wrapped Passport")
                 }
             }
         }

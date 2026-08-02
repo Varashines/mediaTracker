@@ -81,14 +81,27 @@ actor MediaFilterActor {
         if !needsSwiftRefinement && groupBy == .none {
             descriptor.fetchLimit = limit
             descriptor.fetchOffset = offset
-        } else {
-            descriptor.fetchLimit = 2000
         }
 
         try Task.checkCancellation()
         var results: [MediaItem] = []
         do {
-            results = try modelContext.fetch(descriptor)
+            if !needsSwiftRefinement && groupBy == .none {
+                results = try modelContext.fetch(descriptor)
+            } else {
+                let batchSize = 500
+                var fetchOffset = 0
+                while true {
+                    try Task.checkCancellation()
+                    var batchDescriptor = descriptor
+                    batchDescriptor.fetchLimit = batchSize
+                    batchDescriptor.fetchOffset = fetchOffset
+                    let batch = try modelContext.fetch(batchDescriptor)
+                    results.append(contentsOf: batch)
+                    fetchOffset += batch.count
+                    if batch.count < batchSize { break }
+                }
+            }
         } catch {
             AppLogger.warning("Fetch failed: \(error)", logger: AppLogger.data)
             results = []
@@ -124,8 +137,10 @@ actor MediaFilterActor {
         let recentAddedItems: [MediaThumbnailMetadata]
         if category == .home {
             recentAddedItems = []
-        } else {
+        } else if category == .all && searchText.isEmpty && network?.isEmpty != false {
             recentAddedItems = fetchRecentlyAdded(category: category)
+        } else {
+            recentAddedItems = []
         }
 
         return PaginatedResult(
@@ -219,17 +234,17 @@ actor MediaFilterActor {
 
         // Try AND mode first
         var scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
-            let s = scorer.score(item: item)
-            guard scorer.passesAllTokens(item: item) else { return nil }
-            return (item, s)
+            let evaluation = scorer.evaluate(item: item)
+            guard evaluation.matchesAll else { return nil }
+            return (item, evaluation.score)
         }
 
         // Fall back to OR mode if AND produced nothing and query has multiple tokens
         if scored.isEmpty, tokens.count > 1 {
             scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
-                let s = scorer.score(item: item)
-                guard s > 0 else { return nil }
-                return (item, s)
+                let evaluation = scorer.evaluate(item: item)
+                guard evaluation.matchesAny else { return nil }
+                return (item, evaluation.score)
             }
         }
 

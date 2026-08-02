@@ -11,6 +11,7 @@ struct DiscoveryHubView: View {
     @State private var hasDataLoaded = false
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
+    @State private var refreshTask: Task<Void, Never>?
     @State private var networkTab: NetworkTab = .networks
     
     enum NetworkTab { case networks, studios }
@@ -131,6 +132,10 @@ struct DiscoveryHubView: View {
                 refreshData(force: false)
             }
         }
+        .onDisappear {
+            refreshTask?.cancel()
+            refreshTask = nil
+        }
     }
     
     private func refreshData(force: Bool) {
@@ -144,7 +149,9 @@ struct DiscoveryHubView: View {
             }
         }
 
-        Task {
+        refreshTask?.cancel()
+        refreshTask = Task {
+            defer { refreshTask = nil }
             if force {
                 let oldLogos = viewModel.discovery.cachedNetworks.compactMap(\.logoPath)
                 for path in oldLogos {
@@ -158,6 +165,8 @@ struct DiscoveryHubView: View {
             let localHidden = hiddenStudios
             let syncService = DiscoverySyncService(modelContainer: container)
 
+            guard !Task.isCancelled else { return }
+
             let isEmpty = await syncService.isHubDataEmpty()
             if !isEmpty {
                 self.hasDataLoaded = true
@@ -167,9 +176,12 @@ struct DiscoveryHubView: View {
                 await syncService.syncLibrary(force: force)
             }
 
+            guard !Task.isCancelled else { return }
+
             let hubData = await syncService.fetchHubData(hiddenStudios: localHidden)
 
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 withAnimation(AppTheme.Animation.springGentle) {
                     self.viewModel.discovery.lastDiscoveryRefresh = Date()
                     self.viewModel.discovery.cachedNetworks = hubData.networks

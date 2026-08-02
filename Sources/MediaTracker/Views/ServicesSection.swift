@@ -44,7 +44,7 @@ struct ServicesSection: View {
                         }
 
                     if notificationsEnabled {
-                        SettingsRow(title: "Channels", subtitle: "Select notification categories", showDivider: true) {
+                        SettingsLabeledRow(title: "Channels", subtitle: "Select notification categories", showDivider: true) {
                             HStack(spacing: AppTheme.Spacing.tiny) {
                                 channelChip("Movies", isOn: $movieNotificationsEnabled)
                                 channelChip("TV Shows", isOn: $tvNotificationsEnabled)

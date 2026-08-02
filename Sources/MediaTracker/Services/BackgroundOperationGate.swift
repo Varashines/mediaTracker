@@ -5,14 +5,15 @@ actor BackgroundOperationGate {
     static let shared = BackgroundOperationGate()
 
     private var isRunning: [String: Bool] = [:]
+    private let storeResource = "swiftdata_store"
 
     func perform(label: String, container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
-        guard !(isRunning[label] ?? false) else {
+        guard !(isRunning[storeResource] ?? false) else {
             AppLogger.debug("⏭️ Skipping \(label) — already running", logger: AppLogger.background)
             return
         }
-        isRunning[label] = true
-        defer { isRunning[label] = false }
+        isRunning[storeResource] = true
+        defer { isRunning[storeResource] = false }
         try await operation()
     }
 

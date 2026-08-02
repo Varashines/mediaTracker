@@ -26,41 +26,14 @@ struct HomeViewSections: View {
     var body: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             // 0. SECTION TOGGLES
-            HStack(spacing: 8) {
-                Spacer()
-                sectionButton(
-                    section: .forYou,
-                    icon: "sparkles",
-                    label: "For You",
-                    isActive: visibleSection == .forYou
-                )
-                sectionButton(
-                    section: .recentlyWatched,
-                    icon: "clock.fill",
-                    label: "Recently Watched",
-                    isActive: visibleSection == .recentlyWatched
-                )
-                if !pickOfTheDay.isEmpty {
-                    sectionButton(
-                        section: .pickOfTheDay,
-                        icon: "star.fill",
-                        label: "Pick of the Day",
-                        isActive: visibleSection == .pickOfTheDay
-                    )
+            ViewThatFits(in: .horizontal) {
+                sectionButtons
+                    .frame(maxWidth: .infinity)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    sectionButtons
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                sectionButton(
-                    section: .trendingMovies,
-                    icon: "flame.fill",
-                    label: "Trending Movies",
-                    isActive: visibleSection == .trendingMovies
-                )
-                sectionButton(
-                    section: .trendingShows,
-                    icon: "flame.fill",
-                    label: "Trending Shows",
-                    isActive: visibleSection == .trendingShows
-                )
-                Spacer()
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
@@ -126,6 +99,46 @@ struct HomeViewSections: View {
             }
         }
         .padding(.top, AppTheme.Spacing.medium)
+    }
+
+    @ViewBuilder
+    private var sectionButtons: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            sectionButton(
+                section: .forYou,
+                icon: "sparkles",
+                label: "For You",
+                isActive: visibleSection == .forYou
+            )
+            sectionButton(
+                section: .recentlyWatched,
+                icon: "clock.fill",
+                label: "Recently Watched",
+                isActive: visibleSection == .recentlyWatched
+            )
+            if !pickOfTheDay.isEmpty {
+                sectionButton(
+                    section: .pickOfTheDay,
+                    icon: "star.fill",
+                    label: "Pick of the Day",
+                    isActive: visibleSection == .pickOfTheDay
+                )
+            }
+            sectionButton(
+                section: .trendingMovies,
+                icon: "flame.fill",
+                label: "Trending Movies",
+                isActive: visibleSection == .trendingMovies
+            )
+            sectionButton(
+                section: .trendingShows,
+                icon: "flame.fill",
+                label: "Trending Shows",
+                isActive: visibleSection == .trendingShows
+            )
+            Spacer(minLength: 0)
+        }
     }
 
     private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {

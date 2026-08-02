@@ -320,6 +320,7 @@ struct SearchView: View {
                                         .foregroundStyle(.tertiary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Remove \(query) from recent searches")
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)

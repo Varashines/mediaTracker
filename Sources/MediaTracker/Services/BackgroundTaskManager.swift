@@ -212,8 +212,6 @@ class BackgroundTaskManager {
                     processed += 1
                     if processed % batchSize == 0 {
                         try? context.save()
-                        // Save progress incrementally so interrupted migrations don't restart
-                        UserDefaults.standard.set(6, forKey: extractionVersionKey)
                         try? await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }
@@ -278,7 +276,6 @@ class BackgroundTaskManager {
                     processed += 1
                     if processed % batchSize == 0 {
                         try? context.save()
-                        UserDefaults.standard.set(7, forKey: extractionVersionKey)
                         try? await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }

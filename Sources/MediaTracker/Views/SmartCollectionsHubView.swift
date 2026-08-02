@@ -355,6 +355,7 @@ private struct SmartCollectionCard: View {
     
     @State private var isHovered = false
     @State private var showingEditSheet = false
+    @State private var showingDeleteConfirmation = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
     
@@ -393,12 +394,9 @@ private struct SmartCollectionCard: View {
                             FeedbackManager.shared.trigger(.click)
                         }
                         
-                        if let collection = collection {
+                        if collection != nil {
                             HoverIconButton(systemImage: "trash", color: .red) {
-                                modelContext.delete(collection)
-                                SaveCoordinator.shared.requestSave(modelContext)
-                                MediaStateService.shared.postMediaStateChanged()
-                                FeedbackManager.shared.trigger(.click)
+                                showingDeleteConfirmation = true
                             }
                         }
                     }
@@ -455,6 +453,12 @@ private struct SmartCollectionCard: View {
         .onTapGesture {
             action()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(description)")
+        .accessibilityValue(count.map { "\($0) items" } ?? "Loading")
+        .accessibilityHint("Open collection")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
         .onHover { isHovered = $0 }
         .contextMenu {
             if let collection = collection {
@@ -473,9 +477,7 @@ private struct SmartCollectionCard: View {
                 Divider()
                 
                 Button(role: .destructive) {
-                    modelContext.delete(collection)
-                    SaveCoordinator.shared.requestSave(modelContext)
-                    MediaStateService.shared.postMediaStateChanged()
+                    showingDeleteConfirmation = true
                 } label: {
                     Label("Delete Collection", systemImage: "trash")
                 }
@@ -491,6 +493,18 @@ private struct SmartCollectionCard: View {
             if let collection = collection {
                 CreateCollectionSheet(editingCollection: collection)
             }
+        }
+        .alert("Delete Collection?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                guard let collection else { return }
+                modelContext.delete(collection)
+                SaveCoordinator.shared.requestSave(modelContext)
+                MediaStateService.shared.postMediaStateChanged()
+                FeedbackManager.shared.trigger(.click)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(title) and its organization will be removed. Media in your library will not be deleted.")
         }
     }
 }

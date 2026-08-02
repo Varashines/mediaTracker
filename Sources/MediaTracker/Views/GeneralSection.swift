@@ -36,7 +36,7 @@ struct GeneralSection: View {
                     .opacity(isSystem ? 0.4 : 1.0)
                     .allowsHitTesting(!isSystem)
 
-                    SettingsRow(title: "Theme Palette", showDivider: true) {
+                    SettingsLabeledRow(title: "Theme Palette", showDivider: true) {
                         HStack(spacing: AppTheme.Spacing.medium) {
                             ForEach(0..<AppThemeCoordinator.presets.count, id: \.self) { index in
                                 let preset = AppThemeCoordinator.presets[index]

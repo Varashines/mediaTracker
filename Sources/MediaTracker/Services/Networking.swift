@@ -97,6 +97,13 @@ actor APIClient {
         lastSearchTime.removeValue(forKey: oldestKey)
     }
 
+    private func searchCacheKey(prefix: String, query: String) -> String {
+        let safeQuery = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_."))) ?? "query"
+        return "\(prefix)_\(safeQuery)"
+    }
+
     func clearMemoryCaches() {
         clearSearchCache()
         trendingMoviesCache = nil
@@ -200,7 +207,7 @@ actor APIClient {
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
         let (cleanQuery, year) = parseQueryAndYear(from: query)
-        let cacheKey = "search_movie_\(query)" // Use raw query for unique cache per year filter
+        let cacheKey = searchCacheKey(prefix: "search_movie", query: query)
         
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []
@@ -245,7 +252,7 @@ actor APIClient {
     
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
         let (cleanQuery, year) = parseQueryAndYear(from: query)
-        let cacheKey = "search_tv_\(query)" // Use raw query for unique cache per year filter
+        let cacheKey = searchCacheKey(prefix: "search_tv", query: query)
         
         if let date = lastSearchTime[cacheKey], Date().timeIntervalSince(date) < cacheExpiry {
             return searchCache[cacheKey] ?? []

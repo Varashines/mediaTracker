@@ -39,6 +39,7 @@ struct HoverScaleEffect: ViewModifier {
     }
 
     private var shadowColor: Color {
+        guard shadowEnabled else { return .clear }
         if isHovered, let themeColor {
             return themeColor.opacity(colorScheme == .dark ? 0.2 : 0.15)
         }

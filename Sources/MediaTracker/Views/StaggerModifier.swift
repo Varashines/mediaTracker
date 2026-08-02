@@ -10,11 +10,15 @@ struct StaggerModifier: ViewModifier {
     @State private var hasAppeared = false
 
     func body(content: Content) -> some View {
+        let skipAnimation = index >= modulo * 2
         content
-            .opacity(hasAppeared || isFastScrolling ? 1 : 0)
-            .offset(y: hasAppeared || isFastScrolling ? 0 : verticalOffset)
+            .opacity(hasAppeared || isFastScrolling || skipAnimation ? 1 : 0)
+            .offset(y: hasAppeared || isFastScrolling || skipAnimation ? 0 : verticalOffset)
             .onAppear {
-                if isFastScrolling || hasAppeared { return }
+                if isFastScrolling || hasAppeared || skipAnimation {
+                    hasAppeared = true
+                    return
+                }
                 withAnimation(AppTheme.Animation.springGentle.delay(Double(index % modulo) * delayPerStep)) {
                     hasAppeared = true
                 }

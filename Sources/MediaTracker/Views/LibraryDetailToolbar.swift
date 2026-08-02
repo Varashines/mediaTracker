@@ -91,6 +91,8 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             .buttonStyle(.borderless)
             .tint(.primary)
             .help(viewModel.filter.currentSortOrder.rawValue)
+            .accessibilityLabel("Sort library")
+            .accessibilityValue(viewModel.filter.currentSortOrder.rawValue)
             .popover(isPresented: $showSortPicker) {
                 SortPickerPopover(
                     current: viewModel.filter.currentSortOrder
@@ -135,6 +137,8 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             .buttonStyle(.borderless)
             .tint(.primary)
             .help(isCustomGroup ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
+            .accessibilityLabel("Group library")
+            .accessibilityValue(viewModel.filter.currentGroupBy.rawValue)
             .popover(isPresented: $showGroupPicker) {
                 GroupPickerPopover(
                     current: viewModel.filter.currentGroupBy
@@ -162,6 +166,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             }
             .tint(.primary)
             .help("Go Back")
+            .accessibilityLabel("Back to collections")
 
             Button {
                 withAnimation(AppTheme.Animation.springSnappy) {
