@@ -1,19 +1,19 @@
 import SwiftUI
 
-private func genreIconAndColor(_ name: String) -> (icon: String, color: Color) {
+private func genreColor(_ name: String) -> Color {
     let lower = name.lowercased()
-    if lower.contains("action") || lower.contains("adventure") { return ("flame.fill", .orange) }
-    if lower.contains("comedy") { return ("face.smiling.fill", .yellow) }
-    if lower.contains("drama") { return ("theatermasks.fill", .indigo) }
-    if lower.contains("horror") || lower.contains("thriller") { return ("bolt.heart.fill", .red) }
-    if lower.contains("romance") { return ("heart.fill", .pink) }
-    if lower.contains("sci-fi") || lower.contains("science") { return ("atom", .cyan) }
-    if lower.contains("fantasy") || lower.contains("animation") { return ("sparkles", .purple) }
-    if lower.contains("crime") || lower.contains("mystery") { return ("magnifyingglass", .teal) }
-    if lower.contains("documentary") || lower.contains("history") { return ("book.closed.fill", .brown) }
-    if lower.contains("family") { return ("house.fill", .green) }
-    if lower.contains("music") || lower.contains("musical") { return ("music.note", .mint) }
-    return ("film.fill", .blue)
+    if lower.contains("action") || lower.contains("adventure") { return .orange }
+    if lower.contains("comedy") { return .yellow }
+    if lower.contains("drama") { return .indigo }
+    if lower.contains("horror") || lower.contains("thriller") { return .red }
+    if lower.contains("romance") { return .pink }
+    if lower.contains("sci-fi") || lower.contains("science") { return .cyan }
+    if lower.contains("fantasy") || lower.contains("animation") { return .purple }
+    if lower.contains("crime") || lower.contains("mystery") { return .teal }
+    if lower.contains("documentary") || lower.contains("history") { return .brown }
+    if lower.contains("family") { return .green }
+    if lower.contains("music") || lower.contains("musical") { return .mint }
+    return .blue
 }
 
 struct TopGenresView: View {
@@ -69,44 +69,40 @@ private struct GenrePillCard: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var isHovered = false
 
-    private var style: (icon: String, color: Color) {
-        genreIconAndColor(name)
+    private var color: Color {
+        genreColor(name)
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 4) {
-                Image(systemName: style.icon)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(style.color)
-
                 Text(name)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 if isHovered {
-                    Text("\(Int(round(percentage)))%")
+                    Text("\(Int(round(percentage)))% taste match")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(style.color)
+                        .foregroundStyle(color)
                         .transition(.opacity)
                 }
             }
 
             Text("\(rank)")
                 .font(.system(size: 70, weight: .black, design: .rounded))
-                .foregroundStyle(style.color.opacity(isHovered ? 0.22 : 0.10))
+                .foregroundStyle(color.opacity(isHovered ? 0.22 : 0.10))
                 .offset(x: -10, y: -6)
                 .allowsHitTesting(false)
         }
         .frame(width: 160, height: 90)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(isHovered ? style.color.opacity(colorScheme == .dark ? 0.06 : 0.03) : AppTheme.Colors.cardFill(for: colorScheme))
+                .fill(isHovered ? color.opacity(colorScheme == .dark ? 0.06 : 0.03) : AppTheme.Colors.cardFill(for: colorScheme))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .stroke(style.color.opacity(isHovered ? 0.25 : 0.08), lineWidth: 0.5)
+                .stroke(color.opacity(isHovered ? 0.25 : 0.08), lineWidth: 0.5)
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .scaleEffect(isHovered ? 1.02 : 1.0)

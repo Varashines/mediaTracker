@@ -30,8 +30,10 @@ struct WatchedThisWeek: View {
     @State private var showItems: [MediaItem] = []
     @State private var isLoading = true
     @State private var filter: WatchFilter = .all
+    @State private var hoveredPill: WatchFilter? = nil
     @State private var scrollProgress: Double = 0
     @State private var horizontalFastScrolling = false
+    @Namespace private var filterAnimation
     private let scrollSpace = "WTW_Scroll"
 
     private let minCount = 10
@@ -179,35 +181,77 @@ struct WatchedThisWeek: View {
                 filterPill(option)
             }
         }
-        .padding(2)
-        .background(Capsule().fill(AppTheme.Colors.cardFill(for: colorScheme)))
-        .overlay(Capsule().stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5))
-        .animation(AppTheme.Animation.springSnappy, value: filter)
+        .padding(3)
+        .background {
+            Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
+                ? AnyShapeStyle(AppTheme.Colors.cardFill(for: colorScheme))
+                : AnyShapeStyle(.ultraThinMaterial))
+        }
+        .overlay {
+            Capsule().stroke(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.18), AppTheme.Colors.strokeDefault(for: colorScheme)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.5
+            )
+        }
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 6, y: 2)
+        }
     }
 
     private func filterPill(_ option: WatchFilter) -> some View {
         let isSelected = filter == option
+        let isHovered = hoveredPill == option
         return Button {
-            filter = option
+            withAnimation(AppTheme.Animation.springSnappy) {
+                filter = option
+            }
             scrollProgress = 0
             FeedbackManager.shared.trigger(.click)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Image(systemName: option.icon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                 Text(option.title)
-                    .font(isSelected ? AppTheme.Font.caption : AppTheme.Font.label)
+                    .font(.system(size: 11, weight: .semibold))
             }
-            .foregroundStyle(isSelected ? Color.white : .secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .foregroundStyle(isSelected ? Color.white : (isHovered ? Color.primary : Color.secondary))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             .background {
-                Capsule().fill(isSelected ? AppTheme.Colors.accent : Color.clear)
+                if isSelected {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.accent, AppTheme.Colors.accent.opacity(0.85)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .matchedGeometryEffect(id: "activeFilterPill", in: filterAnimation)
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.35), radius: 4, y: 1)
+                }
+            }
+            .overlay {
+                if isSelected {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                        .matchedGeometryEffect(id: "activeFilterPillStroke", in: filterAnimation)
+                }
             }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.springSnappy) {
+                hoveredPill = hovering ? option : nil
+            }
+        }
         .help(option.title)
         .accessibilityLabel(option.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -5,7 +5,7 @@ struct HallOfFameView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            if !stats.topRatedActors.isEmpty {
+            if stats.topRatedActors.count > 1 {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill")
@@ -37,7 +37,7 @@ struct HallOfFameView: View {
                 }
             }
 
-            if !stats.topRatedCreators.isEmpty {
+            if stats.topRatedCreators.count > 1 {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "pencil.and.outline")
@@ -102,7 +102,7 @@ private struct PersonPillCard: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
 
-                    Text("\(String(format: "%.0f", score * 100))%")
+                    Text("\(String(format: "%.0f", score * 100))% taste match")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(themeColor)
                 }
@@ -121,7 +121,7 @@ private struct PersonPillCard: View {
                         .multilineTextAlignment(.center)
 
                     if isHovered {
-                        Text("\(String(format: "%.0f", score * 100))%")
+                        Text("\(String(format: "%.0f", score * 100))% taste match")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(themeColor)
                             .transition(.opacity)

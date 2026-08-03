@@ -45,7 +45,7 @@ struct StudiosNetworksView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
             // Studios
             let studioItems = cachedStudioItems
-            if !studioItems.isEmpty {
+            if studioItems.count > 1 {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Studios", icon: "building.2.fill", iconColor: AppTheme.Colors.accent)
 
@@ -70,7 +70,7 @@ struct StudiosNetworksView: View {
 
             // Networks
             let networkItems = cachedNetworkItems
-            if !networkItems.isEmpty {
+            if networkItems.count > 1 {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Networks", icon: "antenna.radiowaves.left.and.right", iconColor: AppTheme.Colors.accent)
 
@@ -94,7 +94,7 @@ struct StudiosNetworksView: View {
             }
 
             // Languages
-            if !stats.topRatedLanguages.isEmpty {
+            if stats.topRatedLanguages.count > 1 {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     SectionHeader(title: "Languages", icon: "globe", iconColor: AppTheme.Colors.accent)
 
@@ -173,7 +173,7 @@ private struct RankedCard: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
 
-                    Text("\(String(format: "%.0f", score * 100))%")
+                    Text("\(String(format: "%.0f", score * 100))% taste match")
                         .font(AppTheme.Font.monoCaption)
                         .foregroundStyle(themeColor)
                 }
@@ -189,7 +189,7 @@ private struct RankedCard: View {
                         .multilineTextAlignment(.center)
 
                     if isHovered {
-                        Text("\(String(format: "%.0f", score * 100))%")
+                        Text("\(String(format: "%.0f", score * 100))% taste match")
                             .font(AppTheme.Font.monoCaption)
                             .foregroundStyle(themeColor)
                             .transition(.opacity)

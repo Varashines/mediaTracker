@@ -305,9 +305,9 @@ extension LibraryStats {
         let days = totalHours / 24
         let hours = totalHours % 24
         if days > 0 {
-            return "\(days)d \(hours)h"
+            return "\(pluralizedDaysLabel(days)) \(pluralizedHoursLabel(hours))"
         } else if hours > 0 {
-            return "\(hours)h"
+            return pluralizedHoursLabel(hours)
         }
         return "\(totalWatchTimeMinutes)m"
     }

@@ -93,10 +93,10 @@ final class SyncCachedPropertiesTests: XCTestCase {
         tv.remainingEpisodesCount = 2
         try context.save()
 
-        // Verify BadgeEngine calculates BINGE directly
+        // Verify BadgeEngine calculates HOOKED directly
         let badgeResult = BadgeEngine.calculateBadge(for: item, now: Date())
         XCTAssertNotNil(badgeResult, "BadgeEngine should return a badge for 3 recently watched episodes with remaining")
-        XCTAssertEqual(badgeResult?.label, .binge)
+        XCTAssertEqual(badgeResult?.label, .hooked)
     }
 
     @MainActor

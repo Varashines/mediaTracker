@@ -217,7 +217,7 @@ enum TasteValue: String, Codable, CaseIterable, Sendable {
         switch self {
         case .love: return .red
         case .like: return .blue
-        case .dislike: return .orange
+        case .dislike: return .gray
         case .none: return .secondary
         }
     }

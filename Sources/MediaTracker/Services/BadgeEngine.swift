@@ -12,10 +12,10 @@ enum SmartBadge: String, CaseIterable, Sendable {
     case behind = "BEHIND"
     case new = "NEW"
     case soon = "SOON"
-    case streak = "STREAK"
+    case hooked = "HOOKED"
 
-    static let radarBadges: Set<SmartBadge> = [.new, .bingeDrop, .premiere, .finale, .streak]
-    static let recentBadges: Set<SmartBadge> = [.new, .bingeDrop, .finale, .premiere, .streak]
+    static let radarBadges: Set<SmartBadge> = [.new, .bingeDrop, .premiere, .finale, .hooked]
+    static let recentBadges: Set<SmartBadge> = [.new, .bingeDrop, .finale, .premiere, .hooked]
 }
 
 // MARK: - Badge Logic Engine
@@ -244,7 +244,7 @@ struct BadgeEngine {
         guard remainingCount > 0 else { return nil }
 
         if scan.recentlyWatchedCount >= bingeEngagementThreshold {
-            return BadgeResult(label: .binge, isSparkle: true)
+            return BadgeResult(label: .hooked, isSparkle: true)
         }
 
         let isLikedOrLoved = item.taste == .like || item.taste == .love

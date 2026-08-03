@@ -371,8 +371,8 @@ final class BingeLogicTests: XCTestCase {
         // Manually trigger the sync with the fixed time
         item.syncCachedProperties(now: fixedNow)
         
-        // Should show BINGE because 3 episodes were watched recently and there are remaining episodes
-        XCTAssertEqual(item.storedSmartBadgeLabel, "BINGE")
+        // Should show HOOKED because 3 episodes were watched recently and there are remaining episodes
+        XCTAssertEqual(item.storedSmartBadgeLabel, "HOOKED")
         
         // Now mark ep4 as watched and sync again
         ep4.markWatched(true)
@@ -380,8 +380,8 @@ final class BingeLogicTests: XCTestCase {
         try context.save()
         item.syncCachedProperties(now: fixedNow)
         
-        // Should NOT show BINGE because it's now a completed series (remainingCount == 0)
-        XCTAssertNotEqual(item.storedSmartBadgeLabel, "BINGE")
+        // Should NOT show HOOKED because it's now a completed series (remainingCount == 0)
+        XCTAssertNotEqual(item.storedSmartBadgeLabel, "HOOKED")
     }
 }
 

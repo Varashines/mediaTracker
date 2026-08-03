@@ -374,10 +374,10 @@ final class BadgeEngineTests: XCTestCase {
         XCTAssertEqual(result?.label, .premiere)
     }
 
-    // MARK: - Level 3: Behavioral BINGE
+    // MARK: - Level 3: Behavioral HOOKED
 
     @MainActor
-    func testBehavioralBingeWith3RecentWatched() throws {
+    func testHookedWith3RecentWatched() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
@@ -417,7 +417,7 @@ final class BadgeEngineTests: XCTestCase {
         tv.remainingEpisodesCount = 1
 
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
-        XCTAssertEqual(result?.label, .binge)
+        XCTAssertEqual(result?.label, .hooked)
         XCTAssertTrue(result!.isSparkle)
     }
 

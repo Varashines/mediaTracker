@@ -36,8 +36,8 @@ struct GeneralSection: View {
                     .opacity(isSystem ? 0.4 : 1.0)
                     .allowsHitTesting(!isSystem)
 
-                    SettingsLabeledRow(title: "Theme Palette", showDivider: true) {
-                        HStack(spacing: AppTheme.Spacing.medium) {
+                    SettingsRow(title: "Theme Palette", showDivider: true) {
+                        HStack(spacing: AppTheme.Spacing.small) {
                             ForEach(0..<AppThemeCoordinator.presets.count, id: \.self) { index in
                                 let preset = AppThemeCoordinator.presets[index]
                                 let isSelected = themePreset == index
@@ -51,12 +51,12 @@ struct GeneralSection: View {
                                     ZStack {
                                         Capsule()
                                             .fill(color)
-                                            .frame(width: 40, height: 24)
+                                            .frame(width: 32, height: 22)
 
                                         if isSelected {
                                             Circle()
                                                 .fill(.white)
-                                                .frame(width: 6, height: 6)
+                                                .frame(width: 5.5, height: 5.5)
                                                 .shadow(color: .black.opacity(0.3), radius: 1)
                                         }
                                     }

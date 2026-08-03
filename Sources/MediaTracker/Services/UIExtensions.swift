@@ -1,6 +1,16 @@
 import SwiftUI
 import AppKit
 
+/// "1 day" / "5 days" — pluralized day count for stats labels.
+func pluralizedDaysLabel(_ days: Int) -> String {
+    days == 1 ? "1 day" : "\(days) days"
+}
+
+/// "1 hr" / "5 hrs" — pluralized hour count for stats labels.
+func pluralizedHoursLabel(_ hours: Int) -> String {
+    hours == 1 ? "1 hr" : "\(hours) hrs"
+}
+
 extension View {
     @ViewBuilder
     func `if`(_ condition: Bool, transform: (Self) -> some View) -> some View {

@@ -10,87 +10,74 @@ struct ScopedInsightsHeader: View {
     @State private var logoMap: [String: String] = [:]
     @State private var themeColorMap: [String: String] = [:]
 
-    private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)]
+    private let columns = [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: AppTheme.Spacing.large)]
 
+    private var hasAnySection: Bool {
+        if stats.topActors.count > 1 { return true }
+        if filterType != .genre && stats.topGenres.count > 1 { return true }
+        if filterType != .network && filterType != .studio && stats.topNetworks.count > 1 { return true }
+        if filterType != .provider && stats.topProviders.count > 1 { return true }
+        if filterType != .language && stats.topLanguages.count > 1 { return true }
+        return false
+    }
+
+    @ViewBuilder
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-            if !stats.topActors.isEmpty {
-                actorSection
+        if hasAnySection {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                if stats.topActors.count > 1 {
+                    actorSection
+                }
+                if filterType != .genre && stats.topGenres.count > 1 {
+                    genreSection
+                }
+                if filterType != .network && filterType != .studio && stats.topNetworks.count > 1 {
+                    networkSection
+                }
+                if filterType != .provider && stats.topProviders.count > 1 {
+                    providerSection
+                }
+                if filterType != .language && stats.topLanguages.count > 1 {
+                    languageSection
+                }
             }
-            if filterType != .genre && !stats.topGenres.isEmpty {
-                genreSection
+            .padding(AppTheme.Spacing.large)
+            .background(AppTheme.Colors.cardFill(for: colorScheme))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                    .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
+            )
+            .task {
+                await loadLogos()
             }
-            if filterType != .network && filterType != .studio && !stats.topNetworks.isEmpty {
-                networkSection
-            }
-            if filterType != .provider && !stats.topProviders.isEmpty {
-                providerSection
-            }
-            if filterType != .language && !stats.topLanguages.isEmpty {
-                languageSection
-            }
-        }
-        .padding(AppTheme.Spacing.large)
-        .background(AppTheme.Colors.cardFill(for: colorScheme))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
-        )
-        .task {
-            await loadLogos()
         }
     }
 
-    // MARK: - Top Cast (Detail View style — grid of person cards)
+    // MARK: - Top Cast (Detail View style — horizontal cast cards)
 
     private var actorSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             headerLabel("Top Cast")
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topActors.prefix(6)) { actor in
-                    actorCard(actor)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: AppTheme.Spacing.medium) {
+                    ForEach(stats.topActors.prefix(6)) { actor in
+                        CastMemberCard(
+                            member: SimpleCastMember(
+                                id: actor.name,
+                                name: actor.name,
+                                characterName: "",
+                                profileURL: actor.profileURL,
+                                order: 0
+                            ),
+                            themeColor: .orange
+                        )
+                    }
                 }
+                .padding(.horizontal, AppTheme.Spacing.compact)
+                .padding(.vertical, AppTheme.Spacing.small)
             }
-        }
-    }
-
-    private func actorCard(_ actor: ScoredPerson) -> some View {
-        HStack(spacing: 0) {
-            if let path = actor.profileURL, let url = URL(string: APIClient.tmdbImageURL(path: path, size: "w185") ?? "") {
-                CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .low) {
-                    personPlaceholder
-                }
-                .frame(width: 60, height: 90)
-                .clipped()
-            } else {
-                personPlaceholder
-            }
-
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
-                Text(actor.name)
-                    .font(AppTheme.Font.bodyBold)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                Text("\(Int(actor.score * 100))%")
-                    .font(AppTheme.Font.monoCaption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppTheme.Spacing.small)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 90)
-        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous).stroke(Color.primary.opacity(0.10), lineWidth: 0.5))
-    }
-
-    private var personPlaceholder: some View {
-        ZStack {
-            AppTheme.Colors.surfaceGhost(for: colorScheme)
-            Image(systemName: "person.fill")
-                .font(.title2)
-                .foregroundStyle(.tertiary)
+            .scrollBounceBehavior(.basedOnSize)
         }
     }
 

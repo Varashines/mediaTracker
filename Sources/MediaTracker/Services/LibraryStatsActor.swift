@@ -36,8 +36,6 @@ struct LibraryStats: Sendable {
     let topRatedNetworks: [(name: String, score: Double)]
     let topRatedStudios: [(name: String, score: Double)]
     let topRatedLanguages: [(name: String, score: Double)]
-    let topProviders: [(name: String, count: Int, percentage: Double, runtime: Int)]
-    let providerCoverage: Double
 
     let lovedCount: Int
     let likedCount: Int
@@ -56,8 +54,6 @@ struct LibraryStats: Sendable {
     let longestStreak: Int
     let topMood: (name: String, percentage: Double)?
     let moodBreakdown: [(name: String, count: Int, percentage: Double)]
-    let genreMoodMap: [String: [String: Int]]
-    let watchDaysLast16Weeks: [Date]
 
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
@@ -73,8 +69,6 @@ struct LibraryStats: Sendable {
         topRatedNetworks: [],
         topRatedStudios: [],
         topRatedLanguages: [],
-        topProviders: [],
-        providerCoverage: 0,
         lovedCount: 0,
         likedCount: 0,
         dislikedCount: 0,
@@ -87,9 +81,7 @@ struct LibraryStats: Sendable {
         currentStreak: 0,
         longestStreak: 0,
         topMood: nil,
-        moodBreakdown: [],
-        genreMoodMap: [:],
-        watchDaysLast16Weeks: []
+        moodBreakdown: []
     )
 }
 
@@ -102,13 +94,6 @@ struct CodableLibraryStats: Codable {
         let name: String
         let score: Double
     }
-    struct ProviderStats: Codable {
-        let name: String
-        let count: Int
-        let percentage: Double
-        let runtime: Int
-    }
-
     let totalWatchTimeMinutes: Int
     let totalMovies: Int
     let completedMovies: Int
@@ -123,8 +108,6 @@ struct CodableLibraryStats: Codable {
     let topRatedNetworks: [NameScore]
     let topRatedStudios: [NameScore]
     let topRatedLanguages: [NameScore]
-    let topProviders: [ProviderStats]
-    let providerCoverage: Double
 
     let lovedCount: Int
     let likedCount: Int
@@ -154,8 +137,6 @@ struct CodableLibraryStats: Codable {
         self.topRatedNetworks = stats.topRatedNetworks.map { NameScore(name: $0.name, score: $0.score) }
         self.topRatedStudios = stats.topRatedStudios.map { NameScore(name: $0.name, score: $0.score) }
         self.topRatedLanguages = stats.topRatedLanguages.map { NameScore(name: $0.name, score: $0.score) }
-        self.topProviders = stats.topProviders.map { ProviderStats(name: $0.name, count: $0.count, percentage: $0.percentage, runtime: $0.runtime) }
-        self.providerCoverage = stats.providerCoverage
         self.lovedCount = stats.lovedCount
         self.likedCount = stats.likedCount
         self.dislikedCount = stats.dislikedCount
@@ -184,8 +165,6 @@ struct CodableLibraryStats: Codable {
             topRatedNetworks: topRatedNetworks.map { ($0.name, $0.score) },
             topRatedStudios: topRatedStudios.map { ($0.name, $0.score) },
             topRatedLanguages: topRatedLanguages.map { ($0.name, $0.score) },
-            topProviders: topProviders.map { ($0.name, $0.count, $0.percentage, $0.runtime) },
-            providerCoverage: providerCoverage,
             lovedCount: lovedCount,
             likedCount: likedCount,
             dislikedCount: dislikedCount,
@@ -198,9 +177,7 @@ struct CodableLibraryStats: Codable {
             currentStreak: currentStreak,
             longestStreak: longestStreak,
             topMood: nil,
-            moodBreakdown: [],
-            genreMoodMap: [:],
-            watchDaysLast16Weeks: []
+            moodBreakdown: []
         )
     }
 }
@@ -304,7 +281,7 @@ actor LibraryStatsActor {
                 \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
                 \.lastInteractionDate, \.lastStateChangeDate,
                 \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
-                \.cachedWatchProviders, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
+                \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
                 \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast, \.mood
             ]
             descriptor.fetchLimit = batchSize
@@ -357,6 +334,7 @@ actor LibraryStatsActor {
         var movieCompleted = 0
         var tvCount = 0
         var tvCompleted = 0
+        var tvWatchTime = 0
         var epWatched = 0
         var loved = 0
         var liked = 0
@@ -364,9 +342,7 @@ actor LibraryStatsActor {
         var unrated = 0
         var barcodeData: [BarcodeSlice] = []
         var earliestDateAdded: Date?
-        var itemsWithProviders = 0
         var moodCounts: [String: Int] = [:]
-        var genreMoodMap: [String: [String: Int]] = [:]
     }
 
     private struct TasteMapsContainer {
@@ -376,7 +352,6 @@ actor LibraryStatsActor {
         var actorTaste: [String: CategoryStats] = [:]
         var creatorTaste: [String: CategoryStats] = [:]
         var languageTaste: [String: CategoryStats] = [:]
-        var providerStats: [String: (count: Int, runtime: Int)] = [:]
     }
 
     private func processBatch(_ items: [MediaItem], stats: inout RawStatsContainer, taste: inout TasteMapsContainer, hiddenSet: Set<String>) {
@@ -422,9 +397,14 @@ actor LibraryStatsActor {
                 stats.tvCount += 1
                 if isCompleted { stats.tvCompleted += 1 }
                 
-                let runtime = item.cachedRuntime ?? 0
+                let watchedEpisodes = item.cachedWatchedEpisodeCount ?? 0
+                let episodeRuntime = item.cachedEpisodeRuntime ?? 0
+                let runtime = watchedEpisodes > 0 && episodeRuntime > 0
+                    ? episodeRuntime * watchedEpisodes
+                    : (item.cachedRuntime ?? 0)
                 stats.watchTime += runtime
-                stats.epWatched += item.cachedWatchedEpisodeCount ?? 0
+                stats.tvWatchTime += runtime
+                stats.epWatched += watchedEpisodes
 
                 for c in item.cachedCreators {
                     let profileURL = item.displayCast.first { $0.name == c }?.profileURL
@@ -459,18 +439,6 @@ actor LibraryStatsActor {
                 }
             }
 
-            // Provider distribution counts and runtime
-            let itemRuntime = item.cachedRuntime ?? 0
-            if !item.cachedWatchProviders.isEmpty {
-                stats.itemsWithProviders += 1
-                for provider in item.cachedWatchProviders where !provider.isEmpty {
-                    var entry = taste.providerStats[provider] ?? (count: 0, runtime: 0)
-                    entry.count += 1
-                    entry.runtime += itemRuntime
-                    taste.providerStats[provider] = entry
-                }
-            }
-
             // Barcode data for SpectrumView
             if stats.barcodeData.count < 200 {
                 stats.barcodeData.append(BarcodeSlice(
@@ -485,49 +453,50 @@ actor LibraryStatsActor {
             if let mood = item.mood, let normalized = Mood.normalized(mood) {
                 let key = normalized.rawValue
                 stats.moodCounts[key, default: 0] += 1
-                for genre in item.cachedGenres {
-                    stats.genreMoodMap[genre, default: [:]][key, default: 0] += 1
-                }
             }
 
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, streaks: (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) = (0, 0, [], 0)) async throws -> LibraryStats {
+    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer, streaks: (current: Int, longest: Int, todayCount: Int) = (0, 0, 0)) async throws -> LibraryStats {
         // 1. Process Genre DNA - Require minimum 10 titles watched, ranked strictly by Taste Affinity score
         let genreDNAMap = taste.genreTaste.compactMap { name, categoryStats -> (String, Double)? in
-            guard categoryStats.total >= 10 else { return nil }
+            guard categoryStats.total >= 10, categoryStats.ratedCount >= 5 else { return nil }
             let tasteAffinityScore = categoryStats.affinity(cutoff: 5) * 100.0
+            guard tasteAffinityScore > 0 else { return nil }
             return (name, tasteAffinityScore)
         }
         let genreDNA = genreDNAMap
             .sorted { $0.1 > $1.1 }
-            .prefix(10)
+            .prefix(6)
 
         // 2. Process Taste-based Rankings
         let mapTaste: ([String: CategoryStats]) -> [(String, Double)] = { statsMap in
-            let affinityPairs = statsMap.map { ($0.key, $0.value.affinity(cutoff: 5)) }
+            let affinityPairs = statsMap.compactMap { name, categoryStats -> (String, Double)? in
+                guard categoryStats.ratedCount >= 5 else { return nil }
+                let score = categoryStats.affinity(cutoff: 5)
+                return score > 0 ? (name, score) : nil
+            }
             return affinityPairs
-                .filter { $0.1 >= 0 }
                 .sorted { $0.1 > $1.1 }
-                .prefix(10)
+                .prefix(6)
                 .map { $0 }
         }
 
         // 3. Visual Stats Resolution (capped at 5+5 to limit API calls)
         let actorWithScore: [(String, CategoryStats, Double)] = taste.actorTaste.compactMap { name, val in
             let score = val.affinity(cutoff: 5)
-            return score >= 0 ? (name, val, score) : nil
+            return score > 0 ? (name, val, score) : nil
         }
-        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(8)
+        let topActors = actorWithScore.sorted { $0.2 > $1.2 }.prefix(6)
 
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 5)
 
         let creatorWithScore: [(String, CategoryStats, Double)] = taste.creatorTaste.compactMap { name, val in
             let score = val.affinity(cutoff: 3)
-            return score >= 0 ? (name, val, score) : nil
+            return score > 0 ? (name, val, score) : nil
         }
-        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(8)
+        let topCreators = creatorWithScore.sorted { $0.2 > $1.2 }.prefix(6)
 
         let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) }, cutoff: 3)
 
@@ -535,19 +504,10 @@ actor LibraryStatsActor {
             (LanguageUtils.languageName(for: $0.0), $0.1)
         }
 
-        // Provider distribution (top 8 by count)
-        let totalItems = stats.movieCount + stats.tvCount
-        let providerCoverage = totalItems > 0 ? Double(stats.itemsWithProviders) / Double(totalItems) : 0
-        let topProviders: [(name: String, count: Int, percentage: Double, runtime: Int)] = taste.providerStats
-            .map { ($0.key, $0.value.count, totalItems > 0 ? Double($0.value.count) / Double(totalItems) * 100 : 0, $0.value.runtime) }
-            .sorted { $0.1 > $1.1 }
-            .prefix(8)
-            .map { $0 }
-
-        let qualifyingGenres = taste.genreTaste.filter { $0.value.total >= 10 }
+        let qualifyingGenres = taste.genreTaste.filter { $0.value.total >= 10 && $0.value.ratedCount >= 5 }
         let topGenre = qualifyingGenres
             .map { ($0.key, $0.value.affinity(cutoff: 5)) }
-            .filter { $0.1 >= 0 }
+            .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
             .first?.0
 
@@ -568,7 +528,7 @@ actor LibraryStatsActor {
             totalMovies: stats.movieCount, completedMovies: stats.movieCompleted,
             totalTV: stats.tvCount, completedTV: stats.tvCompleted,
             loved: stats.loved, liked: stats.liked, disliked: stats.disliked,
-            tvWatchTime: stats.watchTime, totalWatchTime: stats.watchTime,
+            tvWatchTime: stats.tvWatchTime, totalWatchTime: stats.watchTime,
             topGenre: topGenre
         )
 
@@ -586,8 +546,6 @@ actor LibraryStatsActor {
             topRatedNetworks: mapTaste(taste.networkTaste),
             topRatedStudios: mapTaste(taste.studioTaste),
             topRatedLanguages: languageRankings,
-            topProviders: topProviders,
-            providerCoverage: providerCoverage,
             lovedCount: stats.loved,
             likedCount: stats.liked,
             dislikedCount: stats.disliked,
@@ -600,9 +558,7 @@ actor LibraryStatsActor {
             currentStreak: streaks.current,
             longestStreak: streaks.longest,
             topMood: topMood,
-            moodBreakdown: moodBreakdown,
-            genreMoodMap: stats.genreMoodMap,
-            watchDaysLast16Weeks: streaks.watchDays16Weeks
+            moodBreakdown: moodBreakdown
         )
     }
 
@@ -647,7 +603,7 @@ actor LibraryStatsActor {
         return suffix
     }
 
-    private func computeStreaks() async -> (current: Int, longest: Int, watchDays16Weeks: [Date], todayCount: Int) {
+    private func computeStreaks() async -> (current: Int, longest: Int, todayCount: Int) {
         var activeDays = Set<Date>()
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
@@ -681,7 +637,7 @@ actor LibraryStatsActor {
             }
         }
 
-        guard !activeDays.isEmpty else { return (0, 0, [], 0) }
+        guard !activeDays.isEmpty else { return (0, 0, 0) }
 
         let sortedDays = activeDays.sorted()
         var currentStreak = 0
@@ -720,13 +676,7 @@ actor LibraryStatsActor {
             currentStreak = 0
         }
 
-        // Collect watch days for last 16 weeks
-        let sixteenWeeksAgo = calendar.date(byAdding: .day, value: -112, to: today)!
-        let watchDays16Weeks = activeDays
-            .filter { $0 >= sixteenWeeksAgo }
-            .sorted()
-
-        return (currentStreak, longestStreak, watchDays16Weeks, todayCount)
+        return (currentStreak, longestStreak, todayCount)
     }
 
     private func resolvePeopleImages(people: [PersonInput], cutoff: Int) async throws -> [VisualPersonStat] {

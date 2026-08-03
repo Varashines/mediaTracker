@@ -56,7 +56,7 @@ struct SpectrumView: View {
                 }
                 .transition(.opacity)
             } else {
-                Text("HOVER TO SCAN")
+                Text("\(validItems.count) TITLES")
                     .font(AppTheme.Font.mono)
                     .foregroundStyle(.secondary.opacity(0.4))
             }

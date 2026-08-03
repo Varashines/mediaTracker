@@ -16,8 +16,8 @@ struct SmartBadgeView: View {
         .new: (Color.fromOKLCH(l: 0.75, c: 0.18, h: 150), Color.white),
         .soon: (Color.fromOKLCH(l: 0.7, c: 0.2, h: 45), Color.white),
         .behind: (Color.fromOKLCH(l: 0.55, c: 0.12, h: 240), Color.white),
-        .binge: (Color.fromOKLCH(l: 0.6, c: 0.28, h: 25), Color.white),
-        .streak: (Color.fromOKLCH(l: 0.68, c: 0.22, h: 55), Color.white),
+        .binge: (Color.fromOKLCH(l: 0.58, c: 0.20, h: 275), Color.white),
+        .hooked: (Color.fromOKLCH(l: 0.62, c: 0.28, h: 25), Color.white),
     ]
 
 

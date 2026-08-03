@@ -108,7 +108,7 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
-                .padding(.bottom, 56)
+                .padding(.bottom, 16)
             }
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)

@@ -66,9 +66,9 @@ struct HeroStatPills: View {
             // 5. Day Streak
             CozyStatCard(
                 icon: "flame.fill",
-                value: "\(stats.currentStreak)d",
+                value: pluralizedDaysLabel(stats.currentStreak),
                 label: "Day Streak",
-                detail: "Best streak: \(stats.longestStreak)d",
+                detail: "Best streak: \(pluralizedDaysLabel(stats.longestStreak))",
                 accentColor: .orange
             )
 
@@ -145,6 +145,6 @@ private struct CozyStatCard: View {
 func formatWatchTimeCompact(minutes: Int) -> String {
     let days = minutes / 1440
     let hours = (minutes % 1440) / 60
-    if days > 0 { return "\(days)d \(hours)h" }
-    return "\(hours)h \(minutes % 60)m"
+    if days > 0 { return "\(pluralizedDaysLabel(days)) \(pluralizedHoursLabel(hours))" }
+    return "\(pluralizedHoursLabel(hours)) \(minutes % 60)m"
 }

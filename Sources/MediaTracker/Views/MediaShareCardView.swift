@@ -66,12 +66,18 @@ struct MediaShareCardView: View {
         .frame(width: 440, height: 630)
         .background {
             ZStack {
-                Color(white: 0.04)
+                Color(white: 0.03)
                 RadialGradient(
-                    colors: [themeColor.opacity(0.52), mutedColor.opacity(0.28), Color(white: 0.04)],
-                    center: .top,
+                    colors: [themeColor.opacity(0.68), mutedColor.opacity(0.35), Color(white: 0.03)],
+                    center: .topLeading,
                     startRadius: 10,
-                    endRadius: 520
+                    endRadius: 540
+                )
+                RadialGradient(
+                    colors: [secondaryColor.opacity(0.42), Color.clear],
+                    center: .bottomTrailing,
+                    startRadius: 20,
+                    endRadius: 400
                 )
             }
         }
@@ -80,7 +86,12 @@ struct MediaShareCardView: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [themeColor.opacity(0.55), secondaryColor.opacity(0.3), Color.white.opacity(0.12)],
+                        colors: [
+                            themeColor.opacity(0.80),
+                            Color.white.opacity(0.40),
+                            secondaryColor.opacity(0.60),
+                            Color.white.opacity(0.15)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -169,10 +180,17 @@ struct MediaShareCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.40), themeColor.opacity(0.30), Color.white.opacity(0.15)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
-        .shadow(color: themeColor.opacity(0.45), radius: 24, x: 0, y: 12)
-        .shadow(color: .black.opacity(0.6), radius: 12, x: 0, y: 6)
+        .shadow(color: themeColor.opacity(0.65), radius: 28, x: 0, y: 14)
+        .shadow(color: .black.opacity(0.75), radius: 14, x: 0, y: 8)
     }
 
     private var posterWithSideSpecs: some View {

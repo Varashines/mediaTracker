@@ -9,6 +9,7 @@ struct InsightsView: View {
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
+    @State private var isRefreshing = false
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
     @State private var scrollOffset: CGFloat = 0
@@ -48,7 +49,14 @@ struct InsightsView: View {
                         SectionDivider(color: AppTheme.Colors.accent)
 
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Overview", icon: "chart.bar.fill", iconColor: AppTheme.Colors.accent)
+                            SectionHeader(
+                                title: "Overview",
+                                icon: "chart.bar.fill",
+                                iconColor: AppTheme.Colors.accent,
+                                trailingAccessory: stats.archetype.isEmpty
+                                    ? nil
+                                    : { AnyView(ArchetypeBadge(archetype: stats.archetype)) }
+                            )
                             HeroStatPills(stats: stats)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -61,20 +69,26 @@ struct InsightsView: View {
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                        SectionDivider(color: AppTheme.Colors.accent)
+                        if stats.genreDNA.count > 1 {
+                            SectionDivider(color: AppTheme.Colors.accent)
 
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: AppTheme.Colors.accent)
-                            TopGenresView(items: Array(stats.genreDNA.prefix(6)))
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                                SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: AppTheme.Colors.accent)
+                                TopGenresView(items: Array(stats.genreDNA.prefix(6)))
+                            }
                         }
 
-                        SectionDivider(color: AppTheme.Colors.accent)
+                        if stats.topRatedStudios.count > 1 || stats.topRatedNetworks.count > 1 || stats.topRatedLanguages.count > 1 {
+                            SectionDivider(color: AppTheme.Colors.accent)
 
-                        StudiosNetworksView(stats: stats, modelContext: modelContext)
+                            StudiosNetworksView(stats: stats, modelContext: modelContext)
+                        }
 
-                        SectionDivider(color: AppTheme.Colors.accent)
+                        if stats.topRatedActors.count > 1 || stats.topRatedCreators.count > 1 {
+                            SectionDivider(color: AppTheme.Colors.accent)
 
-                        HallOfFameView(stats: stats)
+                            HallOfFameView(stats: stats)
+                        }
                     }
                     .padding(.vertical, AppTheme.Spacing.xLarge)
                     .frame(maxWidth: .infinity)
@@ -142,9 +156,14 @@ struct InsightsView: View {
             ToolbarItem(placement: .primaryAction) {
                 if stats != nil {
                     Button {
+                        if isRefreshing { return }
                         withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = true }
                     } label: {
-                        Image(systemName: "square.and.arrow.up")
+                        if isRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                     }
                     .keyboardShortcut("s", modifiers: .command)
                     .help("Share Cinema Wrapped Passport (⌘S)")
@@ -245,6 +264,7 @@ struct InsightsView: View {
 
     private func refreshData() {
         statsTask?.cancel()
+        isRefreshing = stats != nil
         statsTask = Task {
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             do {
@@ -255,6 +275,7 @@ struct InsightsView: View {
                     withAnimation(AppTheme.Animation.easeInOut) {
                         self.stats = result
                         self.isLoading = false
+                        self.isRefreshing = false
                     }
                 }
             } catch {
@@ -263,6 +284,7 @@ struct InsightsView: View {
                     await MainActor.run {
                         self.errorMessage = error.localizedDescription
                         self.isLoading = false
+                        self.isRefreshing = false
                     }
                 }
             }

@@ -111,9 +111,9 @@ final class DateUtilsTests: XCTestCase {
         XCTAssertEqual(DateUtils.formatRuntime(nil), "N/A")
         XCTAssertEqual(DateUtils.formatRuntime(0), "N/A")
         XCTAssertEqual(DateUtils.formatRuntime(45), "45m")
-        XCTAssertEqual(DateUtils.formatRuntime(60), "1h")
-        XCTAssertEqual(DateUtils.formatRuntime(90), "1h 30m")
-        XCTAssertEqual(DateUtils.formatRuntime(120), "2h")
+        XCTAssertEqual(DateUtils.formatRuntime(60), "1 hr")
+        XCTAssertEqual(DateUtils.formatRuntime(90), "1 hr 30m")
+        XCTAssertEqual(DateUtils.formatRuntime(120), "2 hrs")
     }
 
     func testParseFullDate() {
