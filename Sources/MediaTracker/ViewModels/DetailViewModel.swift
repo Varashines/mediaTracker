@@ -124,6 +124,15 @@ class DetailViewModel {
     /// Cached luminous accent (brighter variant of themeColor for pill backgrounds).
     var luminousAccentColor: Color { _luminousAccent }
 
+    /// Recomputes the scheme-aware cached accent colors when the appearance changes
+    /// while the detail view is open. Without this, the TitleSection pills keep the
+    /// previous scheme's colors until the view is reopened.
+    func refreshSchemeColors(for colorScheme: ColorScheme) {
+        self._highContrastAccent = themeColor.highContrastAccent(colorScheme: colorScheme)
+        self._luminousAccent = themeColor.luminousAccent(colorScheme: colorScheme)
+        self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: colorScheme)
+    }
+
     var nextEpisodeToWatch: TVEpisode? {
         if let cached = _nextEpisodeToWatch { return cached }
         let result = computeNextEpisodeToWatch()

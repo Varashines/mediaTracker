@@ -51,18 +51,111 @@ struct DetailView: View {
                 .ignoresSafeArea()
 
             if viewModel.hasDerivedThemeColor {
-                // Whole-page poster theme background fill (primary tint)
-                viewModel.themeColor.opacity(colorScheme == .dark ? 0.14 : 0.09)
-                    .ignoresSafeArea()
-
-                // Subtle muted wash for depth (premium palette)
-                if let muted = viewModel.mutedThemeColor {
-                    muted.opacity(colorScheme == .dark ? 0.05 : 0.03)
-                        .ignoresSafeArea()
+                // Layer 2+3: Atmospheric poster bloom. MeshGradient on macOS 15+,
+                // layered radial blooms otherwise. All behind Reduce Visual Effects.
+                if !AppThemeCoordinator.isReducingVisualEffects {
+                    if #available(macOS 15, *) {
+                        atmosphericMesh
+                    } else {
+                        atmosphericGradients
+                    }
+                } else {
+                    reducedAtmosphere
                 }
             }
         }
-        .drawingGroup()
+        .animation(AppTheme.Animation.springGentle, value: viewModel.hasDerivedThemeColor)
+    }
+
+    @ViewBuilder
+    private var reducedAtmosphere: some View {
+        viewModel.themeColor.opacity(colorScheme == .dark ? 0.14 : 0.09)
+            .ignoresSafeArea()
+        if let muted = viewModel.mutedThemeColor {
+            muted.opacity(colorScheme == .dark ? 0.05 : 0.03)
+                .ignoresSafeArea()
+        }
+    }
+
+    @available(macOS 15, *)
+    private var atmosphericMesh: some View {
+        let primary = viewModel.themeColor.luminousAccent(colorScheme: colorScheme)
+        let secondary = (viewModel.mutedThemeColor ?? viewModel.themeColor)
+            .hueShift(by: 0.08)
+            .luminousAccent(colorScheme: colorScheme)
+        let isDark = colorScheme == .dark
+
+        return ZStack {
+            MeshGradient(
+                width: 3, height: 3,
+                points: [
+                    [0, 0], [0.5, 0], [1, 0],
+                    [0, 0.5], [0.5, 0.5], [1, 0.5],
+                    [0, 1], [0.5, 1], [1, 1]
+                ],
+                colors: [
+                    .clear,
+                    primary.opacity(isDark ? 0.07 : 0.12),
+                    primary.opacity(isDark ? 0.13 : 0.22),
+                    secondary.opacity(isDark ? 0.03 : 0.05),
+                    .clear,
+                    primary.opacity(isDark ? 0.06 : 0.10),
+                    secondary.opacity(isDark ? 0.05 : 0.08),
+                    .clear,
+                    .clear
+                ]
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            topChrome
+        }
+    }
+
+    private var atmosphericGradients: some View {
+        ZStack {
+            // Layer 2: Radial bloom from top-right (keeps the poster side clean)
+            RadialGradient(
+                colors: [
+                    viewModel.themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.13 : 0.22),
+                    .clear
+                ],
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 700
+            )
+            .ignoresSafeArea()
+
+            // Layer 3: Subtle counter-bloom from bottom-right
+            if let muted = viewModel.mutedThemeColor {
+                RadialGradient(
+                    colors: [
+                        muted.hueShift(by: 0.08).luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.05 : 0.08),
+                        .clear
+                    ],
+                    center: .bottomTrailing,
+                    startRadius: 0,
+                    endRadius: 500
+                )
+                .ignoresSafeArea()
+            }
+
+            topChrome
+        }
+    }
+
+    /// Layer 4: Narrow top-edge chrome so the poster color "bleeds" into the toolbar area.
+    private var topChrome: some View {
+        LinearGradient(
+            colors: [
+                viewModel.themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.10 : 0.18),
+                .clear
+            ],
+            startPoint: .top,
+            endPoint: UnitPoint(x: 0.5, y: 0.28)
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -176,6 +269,9 @@ struct DetailView: View {
             if newHex != nil {
                 viewModel.updateThemeColor()
             }
+        }
+        .onChange(of: colorScheme) { _, newScheme in
+            viewModel.refreshSchemeColors(for: newScheme)
         }
         .onChange(of: showingShareSheet) { _, show in
             if show, let image = shareImage {
@@ -522,7 +618,7 @@ struct DetailView: View {
 
                 if viewModel.hasDerivedThemeColor {
                     Capsule()
-                        .fill(effectiveThemeColor.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                        .fill(effectiveThemeColor.opacity(colorScheme == .dark ? 0.22 : 0.14))
                 }
             }
         }
@@ -535,12 +631,12 @@ struct DetailView: View {
                     lineWidth: 0.8
                 )
         )
+        .shadow(color: Color.black.opacity(0.20), radius: 8, y: 3)
         .shadow(
             color: viewModel.hasDerivedThemeColor
-                ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.25 : 0.15)
-                : Color.black.opacity(0.15),
-            radius: 12,
-            y: 4
+                ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.30 : 0.18)
+                : .clear,
+            radius: 16, y: 2
         )
     }
 
@@ -551,19 +647,22 @@ struct DetailView: View {
     @ViewBuilder
     private var deleteConfirmationOverlay: some View {
         ZStack {
-            Color.black.opacity(colorScheme == .dark ? 0.4 : 0.25)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if AppThemeCoordinator.isReducingVisualEffects {
-                        showDeleteConfirmation = false
-                    } else {
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            showDeleteConfirmation = false
-                        }
-                    }
+            Group {
+                if AppThemeCoordinator.isReducingVisualEffects {
+                    Color.black.opacity(colorScheme == .dark ? 0.4 : 0.25)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { showDeleteConfirmation = false }
+                } else {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                        .overlay(Color.black.opacity(colorScheme == .dark ? 0.25 : 0.12))
+                        .contentShape(Rectangle())
+                        .onTapGesture { showDeleteConfirmation = false }
                 }
-                .transition(.opacity)
+            }
+            .transition(.opacity)
 
             VStack(spacing: AppTheme.Spacing.compact) {
                 if let posterURL = viewModel.item.effectivePosterURL, let url = URL(string: posterURL) {
@@ -592,13 +691,7 @@ struct DetailView: View {
 
                 HStack(spacing: 24) {
                     Button {
-                        if AppThemeCoordinator.isReducingVisualEffects {
-                            showDeleteConfirmation = false
-                        } else {
-                            withAnimation(AppTheme.Animation.springSnappy) {
-                                showDeleteConfirmation = false
-                            }
-                        }
+                        showDeleteConfirmation = false
                     } label: {
                         Text("No")
                             .font(AppTheme.Font.bodyMedium)
@@ -621,18 +714,13 @@ struct DetailView: View {
             }
             .padding(AppTheme.Spacing.large)
             .frame(maxWidth: 280)
-            .background(
-                GlassCard(color: effectiveThemeColor, material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: true) {
+            .background {
+                GlassCard(color: effectiveThemeColor, material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: false) {
                     Color.clear
                 }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.3 : 0.15),
-                radius: 8,
-                x: 0,
-                y: 4
-            )
+            }
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+            .shadow(color: effectiveThemeColor.opacity(colorScheme == .dark ? 0.2 : 0.08), radius: 16, y: 4)
             .padding(.horizontal, 80)
             .transition(.scale(scale: 0.95).combined(with: .opacity))
         }
@@ -683,6 +771,7 @@ private struct ActionChipButton: View {
     let label: String
     let action: () -> Void
     @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
@@ -694,7 +783,18 @@ private struct ActionChipButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isHovered ? Color.primary.opacity(0.06) : .clear)
+            .background {
+                Capsule()
+                    .fill(isHovered
+                        ? AnyShapeStyle(.ultraThinMaterial)
+                        : AnyShapeStyle(Color.clear))
+                    .overlay {
+                        if isHovered {
+                            Capsule()
+                                .stroke(AppTheme.Colors.strokeHover(for: colorScheme), lineWidth: 0.5)
+                        }
+                    }
+            }
             .clipShape(Capsule())
             .contentShape(Capsule())
         }

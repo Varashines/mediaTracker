@@ -8,10 +8,11 @@ struct ModularSection<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let effectiveColor = (color == .secondary.opacity(0.1) || color == .secondary) ? AppTheme.Colors.accent : color
+
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             HStack(spacing: 0) {
                 HStack(spacing: AppTheme.Spacing.small) {
-                    let effectiveColor = (color == .secondary.opacity(0.1) || color == .secondary) ? AppTheme.Colors.accent : color
                     Image(systemName: icon)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(effectiveColor.highContrastAccent(colorScheme: colorScheme))
@@ -39,7 +40,7 @@ struct ModularSection<Content: View>: View {
                 Spacer()
             }
 
-            GlassCard(material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: true) {
+            GlassCard(color: effectiveColor, material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.large, shadowed: true) {
                 content
                     .padding(AppTheme.Spacing.medium)
             }

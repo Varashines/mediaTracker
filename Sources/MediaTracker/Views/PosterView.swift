@@ -10,7 +10,7 @@ struct PosterView: View {
 
     private let posterFrame = CGSize(width: 260, height: 390)
     @Environment(\.colorScheme) private var colorScheme
-    @State private var glowPulse = false
+    @State private var isBreathing = false
     @State private var isHovering = false
     @State private var showPicker = false
 
@@ -30,6 +30,8 @@ struct PosterView: View {
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .drawingGroup()
                 .allowsHitTesting(false)
+                .opacity(isBreathing ? 1.0 : 0.85)
+                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isBreathing)
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
@@ -37,17 +39,31 @@ struct PosterView: View {
                             .overlay {
                                 Image(systemName: item.type == .movie ? "film" : "tv")
                                     .foregroundStyle(AppTheme.Colors.accent)
-                                    .font(.system(size: 24, weight: .medium))
+                                    .font(AppTheme.Font.title2)
                             }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: posterFrame.width, height: posterFrame.height)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
+                .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 10)
+                .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                    $0.shadow(color: themeColor.opacity(colorScheme == .dark ? 0.30 : 0.15), radius: 20, x: 0, y: 6)
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    themeColor.opacity(isHovering ? 0.55 : 0.08),
+                                    themeColor.opacity(isHovering ? 0.25 : 0.04)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: isHovering ? 1.5 : 0.5
+                        )
                 )
+                .animation(AppTheme.Animation.springSnappy, value: isHovering)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item)
                         .padding(14)
@@ -97,20 +113,15 @@ struct PosterView: View {
             }
             .compositingGroupIfNeeded()
             .onHover { hovering in
-                isHovering = hovering
-                if hovering {
-                    glowPulse = true
-                } else {
-                    if !AppThemeCoordinator.isReducingVisualEffects {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            glowPulse = false
-                        }
-                    } else {
-                        glowPulse = false
-                    }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isHovering = hovering
                 }
             }
-            .onAppear { glowPulse = false }
+            .onAppear {
+                if !AppThemeCoordinator.isReducingVisualEffects {
+                    isBreathing = true
+                }
+            }
         }
     }
 }

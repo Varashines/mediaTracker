@@ -37,35 +37,45 @@ struct OverviewSection: View {
                     .lineSpacing(AppTheme.Spacing.tiny)
                     .foregroundStyle(.primary)
                     .lineLimit(isExpanded ? nil : 3)
+                    .mask(
+                        LinearGradient(
+                            stops: hasTruncation
+                                ? [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.6),
+                                    .init(color: .clear, location: 1)
+                                ]
+                                : [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 1)
+                                ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     .overlay(alignment: .bottom) {
-                        if hasTruncation {
-                            ZStack(alignment: .bottom) {
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: surfaceColor.opacity(0), location: 0),
-                                        .init(color: surfaceColor, location: 0.7)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .frame(height: 40)
-
-                                if isHovering {
-                                    Text("Tap to expand")
-                                        .font(AppTheme.Font.caption)
-                                        .foregroundStyle(.tertiary)
-                                        .offset(y: -4)
-                                        .transition(.opacity)
-                                }
-                            }
-                            .allowsHitTesting(false)
+                        if hasTruncation && isHovering {
+                            Text("Tap to expand")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.tertiary)
+                                .offset(y: -4)
+                                .transition(.opacity)
                         }
                     }
             }
         }
         .padding(AppTheme.Spacing.medium)
-        .background(surfaceColor)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                .fill(AppThemeCoordinator.isReducingVisualEffects
+                    ? AnyShapeStyle(surfaceColor)
+                    : AnyShapeStyle(.ultraThinMaterial))
+        }
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+        }
         .onHover { hovering in
             isHovering = hovering
         }

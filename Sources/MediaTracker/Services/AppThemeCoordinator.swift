@@ -37,8 +37,8 @@ class AppThemeCoordinator {
         .init(name: "Beige",   accent: "#B8845F", darkBG: "#1C1917", lightBG: "#FAF6F0", darkSurface: "#221E1B", lightSurface: "#EDE5D9", cardFillOpacity: 0.05),
         .init(name: "Slate",   accent: "#64748B", darkBG: "#17181A", lightBG: "#F3F4F7", darkSurface: "#1B1D20", lightSurface: "#E7E9EE", cardFillOpacity: 0.06),
         .init(name: "Sage",    accent: "#6F9F5E", darkBG: "#1B1D18", lightBG: "#F5F8F2", darkSurface: "#20231B", lightSurface: "#E7EBDD", cardFillOpacity: 0.05),
-        .init(name: "Crimson", accent: "#E85066", darkBG: "#1C1719", lightBG: "#FBF3F4", darkSurface: "#231A1D", lightSurface: "#F1E0E3", cardFillOpacity: 0.05),
-        .init(name: "Amber",   accent: "#E8930B", darkBG: "#1C1813", lightBG: "#FDF8F0", darkSurface: "#231D16", lightSurface: "#F2E7D4", cardFillOpacity: 0.05),
+        .init(name: "Indigo",  accent: "#6366F1", darkBG: "#171720", lightBG: "#F2F2FB", darkSurface: "#1B1B26", lightSurface: "#E6E6F2", cardFillOpacity: 0.05),
+        .init(name: "Cyan",    accent: "#06B6D4", darkBG: "#101B1E", lightBG: "#EFF9FB", darkSurface: "#152226", lightSurface: "#DBF0F4", cardFillOpacity: 0.05),
     ]
 
     private var activePreset: ThemePreset {
