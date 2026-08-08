@@ -26,7 +26,7 @@ struct FeaturedUpcomingCarousel: View {
                         Button { onSelect(metadata) } label: {
                             MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
-                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+                                .compositingGroupIfNeeded()
                         }
                         .buttonStyle(.interactive)
                     }
@@ -39,9 +39,6 @@ struct FeaturedUpcomingCarousel: View {
     }
 
     private func prewarm(items: [MediaThumbnailMetadata]) {
-        let urls = items.prefix(10).compactMap { $0.posterURL }.compactMap { URL(string: $0) }
-        if !urls.isEmpty {
-            ImageCache.shared.prewarmImages(urls: urls, targetSize: .thumbMedium, priority: .normal)
-        }
+        ImageCache.shared.prewarmImages(items, targetSize: .thumbMedium, priority: .normal)
     }
 }

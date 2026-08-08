@@ -7,7 +7,6 @@ class DisplayCache {
     var displayedItems: [MediaThumbnailMetadata] = []
     var recentlyAddedItems: [MediaThumbnailMetadata] = []
     var homeContinueWatchingItems: [MediaThumbnailMetadata] = []
-    var spotlightHero: MediaThumbnailMetadata? = nil
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
     var pickOfTheDay: [MediaThumbnailMetadata] = []
@@ -20,7 +19,6 @@ class DisplayCache {
         displayedItems = []
         recentlyAddedItems = []
         homeContinueWatchingItems = []
-        spotlightHero = nil
         groupedItems = []
         recommendations = []
         pickOfTheDay = []
@@ -37,7 +35,6 @@ class DisplayCache {
         featuredUpcomingItems = result.featuredUpcoming
         recentlyAddedItems = result.recentlyAdded
         homeContinueWatchingItems = result.homeContinueWatching
-        spotlightHero = result.spotlightHero
         groupedItems = result.grouped
         pickOfTheDay = result.pickOfTheDay
         recommendations = result.recommendations
@@ -50,20 +47,12 @@ class DisplayCache {
         let cache = ImageCache.shared
         
         // Continue Watching & Featured Upcoming — hero thumbnails at .thumbMedium
-        let heroURLs = (homeContinueWatchingItems.prefix(10) + featuredUpcomingItems.prefix(10))
-            .compactMap { $0.posterURL }
-            .compactMap { URL(string: $0) }
-        if !heroURLs.isEmpty {
-            cache.prewarmImages(urls: heroURLs, targetSize: .thumbMedium, priority: .normal)
-        }
+        cache.prewarmImages(homeContinueWatchingItems, limit: 10, targetSize: .thumbMedium, priority: .normal)
+        cache.prewarmImages(featuredUpcomingItems, limit: 10, targetSize: .thumbMedium, priority: .normal)
         
         // Pick of the Day & For You — each card loads 2 images (poster + backdrop)
-        let cardURLs = (pickOfTheDay.prefix(6) + recommendations.prefix(6))
-            .compactMap { $0.posterURL }
-            .compactMap { URL(string: $0) }
-        if !cardURLs.isEmpty {
-            cache.prewarmImages(urls: cardURLs, targetSize: .thumbSmall, priority: .normal)
-        }
+        cache.prewarmImages(pickOfTheDay, limit: 6, targetSize: .thumbSmall, priority: .normal)
+        cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .normal)
     }
 
     func trimCalendarCache(keepMonths: Int = 6) {
@@ -93,14 +82,6 @@ class DisplayCache {
             track("featuredUpcoming", &self.featuredUpcomingItems)
             track("recommendations", &self.recommendations)
             track("pickOfTheDay", &self.pickOfTheDay)
-
-            if let updated, self.spotlightHero?.id == id {
-                self.spotlightHero = updated
-                changedLists.append("spotlight")
-            } else if self.spotlightHero?.id == id && updated == nil {
-                self.spotlightHero = nil
-                changedLists.append("spotlight")
-            }
 
             for i in 0..<self.groupedItems.count {
                 let before = self.groupedItems[i].1.count

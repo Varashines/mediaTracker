@@ -69,7 +69,7 @@ struct HeroStatPills: View {
                 value: pluralizedDaysLabel(stats.currentStreak),
                 label: "Day Streak",
                 detail: "Best streak: \(pluralizedDaysLabel(stats.longestStreak))",
-                accentColor: .orange
+                accentColor: .red
             )
 
             // 6. Current Vibe
@@ -81,7 +81,7 @@ struct HeroStatPills: View {
                     value: topMood.rawValue.capitalized,
                     label: "Current Vibe",
                     detail: "\(totalMoods) moods logged",
-                    accentColor: .pink
+                    accentColor: .indigo
                 )
             } else {
                 CozyStatCard(
@@ -89,7 +89,7 @@ struct HeroStatPills: View {
                     value: "—",
                     label: "Current Vibe",
                     detail: "No moods logged",
-                    accentColor: .pink
+                    accentColor: .indigo
                 )
             }
         }
@@ -113,14 +113,17 @@ private struct CozyStatCard: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(accentColor)
                     
-                    Spacer()
+                    Spacer(minLength: 4)
                     
                     Text(detail.uppercased())
                         .font(AppTheme.Font.caption2)
                         .kerning(AppTheme.Kerning.wide)
-                        .foregroundStyle(accentColor.opacity(0.85))
+                        .foregroundStyle(accentColor)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
+
+                Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
@@ -130,9 +133,12 @@ private struct CozyStatCard: View {
                     CountUpText(value: value)
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
             .padding(AppTheme.Spacing.medium)
+            .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
         }
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)

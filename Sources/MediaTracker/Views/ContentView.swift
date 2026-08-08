@@ -112,7 +112,6 @@ struct LibraryDetailView: View {
     @Environment(\.sleepManager) private var sleepManager
     @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
     
-    @State private var isSyncHovered = false
     @State private var showingBulkManager = false
     @State private var hasInitiallyLoaded = false
     @State private var refreshID = 0
@@ -265,7 +264,6 @@ struct LibraryDetailView: View {
                     viewModel: viewModel,
                     sidebarSelection: $sidebarSelection,
                     showingBulkManager: $showingBulkManager,
-                    isSyncHovered: $isSyncHovered,
                     isSystemSmartCategory: isSystemSmartCategory,
                     isSearchActive: isSearchActive,
                     modelContext: modelContext,

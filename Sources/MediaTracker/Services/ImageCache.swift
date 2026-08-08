@@ -81,7 +81,11 @@ class ImageCache: NSObject, NSCacheDelegate {
     func evictOffscreenImage(forKey key: String?, targetSize: CGSize? = nil) {
         guard let key = key, !key.isEmpty else { return }
         let cacheKey = generateCacheKey(key: key, size: targetSize)
-        memoryCache.removeObject(forKey: cacheKey as NSString)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            self.memoryCache.removeObject(forKey: cacheKey as NSString)
+        }
     }
     
     func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {
@@ -135,6 +139,11 @@ class ImageCache: NSObject, NSCacheDelegate {
             }
         }
         loadNext()
+    }
+    
+    func prewarmImages(_ metadata: [MediaThumbnailMetadata], limit: Int = 10, targetSize: CGSize? = nil, priority: ImagePriority = .normal) {
+        let urls = metadata.prefix(limit).compactMap { $0.posterURL }.compactMap { URL(string: $0) }
+        prewarmImages(urls: urls, targetSize: targetSize, priority: priority)
     }
     
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {

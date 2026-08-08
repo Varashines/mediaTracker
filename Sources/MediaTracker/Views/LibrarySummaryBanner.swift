@@ -6,7 +6,6 @@ struct LibrarySummaryBanner: View {
     @State private var stats: Stats?
     
     struct Stats {
-        let total: Int
         let movies: Int
         let shows: Int
         let active: Int
@@ -75,7 +74,6 @@ struct LibrarySummaryBanner: View {
         
         await MainActor.run {
             self.stats = Stats(
-                total: items.count,
                 movies: movieCount,
                 shows: showCount,
                 active: activeCount,

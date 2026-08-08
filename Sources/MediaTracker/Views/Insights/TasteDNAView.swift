@@ -116,28 +116,34 @@ struct TasteDNAView: View {
         let chartSegments: [ChartSegment] = distribution.map {
             ChartSegment(label: $0.label, value: Double($0.count), color: $0.color)
         }
+        let topSegment = distribution.max(by: { $0.pct < $1.pct })
 
         return ZStack {
             Chart(chartSegments) { seg in
                 SectorMark(
                     angle: .value("Count", seg.value),
                     innerRadius: .ratio(0.6),
-                    angularInset: 1.0
+                    angularInset: 2.5
                 )
                 .foregroundStyle(seg.color)
-                .cornerRadius(4)
+                .cornerRadius(5)
             }
             .chartLegend(.hidden)
             .frame(width: 150, height: 150)
             .animation(AppTheme.Animation.chartReveal, value: distribution.map(\.count))
 
-            VStack(spacing: 2) {
-                Text(stats.ratingPersonality.isEmpty ? "—" : stats.ratingPersonality)
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 70)
+            if let top = topSegment {
+                VStack(spacing: 1) {
+                    Text(top.label.capitalized)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .fixedSize()
+                    Text("\(Int(top.pct))%")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(top.color)
+                }
+                .frame(width: 70)
             }
         }
         .frame(maxHeight: .infinity)

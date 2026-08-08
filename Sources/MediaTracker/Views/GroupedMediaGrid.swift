@@ -22,7 +22,7 @@ struct GroupedMediaGrid: View {
                         iconColor: .secondary
                     )
                     
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: AppTheme.Spacing.grid) {
                         let groupArray = Array(groupMetadatas.enumerated())
                         ForEach(groupArray, id: \.element.id) { idx, metadata in
                             NavigationLink(value: metadata.id) {

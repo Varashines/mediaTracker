@@ -26,7 +26,6 @@ final class Phase4ArchitectureTests: XCTestCase {
         cache.recentlyAddedItems = [initial]
         cache.homeContinueWatchingItems = [initial]
         cache.featuredUpcomingItems = [initial]
-        cache.spotlightHero = initial
         cache.groupedItems = [("Group", [initial])]
         cache.pickOfTheDay = [initial]
         cache.recommendations = [initial]
@@ -42,7 +41,6 @@ final class Phase4ArchitectureTests: XCTestCase {
         XCTAssertEqual(cache.recentlyAddedItems.first?.state, .completed)
         XCTAssertEqual(cache.homeContinueWatchingItems.first?.state, .completed)
         XCTAssertEqual(cache.featuredUpcomingItems.first?.state, .completed)
-        XCTAssertEqual(cache.spotlightHero?.state, .completed)
         XCTAssertEqual(cache.groupedItems.first?.1.first?.state, .completed)
         XCTAssertEqual(cache.pickOfTheDay.first?.state, .completed)
         XCTAssertEqual(cache.recommendations.first?.state, .completed)
@@ -61,7 +59,6 @@ final class Phase4ArchitectureTests: XCTestCase {
         cache.recentlyAddedItems = [m]
         cache.featuredUpcomingItems = [m]
         cache.groupedItems = [("G", [m])]
-        cache.spotlightHero = m
 
         cache.applyUpdate(nil, id: item.persistentModelID, animated: false)
 
@@ -69,7 +66,6 @@ final class Phase4ArchitectureTests: XCTestCase {
         XCTAssertTrue(cache.recentlyAddedItems.isEmpty)
         XCTAssertTrue(cache.featuredUpcomingItems.isEmpty)
         XCTAssertTrue(cache.groupedItems.first?.1.isEmpty ?? false)
-        XCTAssertNil(cache.spotlightHero)
     }
 
     func testApplyUpdateIsNoopForUnknownID() throws {

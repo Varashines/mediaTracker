@@ -21,20 +21,20 @@ struct HoverMetadataPills: View, Equatable {
             Spacer()
 
             // Row 1: Name Pill
-            HoverPill(text: title, isHovered: isHovered, offset: 20, style: .title)
+            HoverPill(text: title, isHovered: isHovered, style: .title)
                 .offset(y: isHovered ? 0 : 20)
                 .opacity(isHovered ? 1 : 0)
 
             // Row 2: Consolidated Metadata (Year, Episode, Airing Date)
             HStack(spacing: 6) {
                 if let year {
-                    HoverPill(text: year, isHovered: isHovered, offset: 30, style: .meta)
+                    HoverPill(text: year, isHovered: isHovered, style: .meta)
                 }
                 if let episode = nextEpisodeLabel {
-                    HoverPill(text: episode, isHovered: isHovered, offset: 30, style: .meta)
+                    HoverPill(text: episode, isHovered: isHovered, style: .meta)
                 }
                 if let nextDate = nextAiringDate, nextDate > Date() {
-                    HoverPill(text: nextDate.formatted(.dateTime.month().day()), isHovered: isHovered, offset: 30, style: .meta)
+                    HoverPill(text: nextDate.formatted(.dateTime.month().day()), isHovered: isHovered, style: .meta)
                 }
             }
             .offset(y: isHovered ? 0 : 30)
@@ -53,7 +53,6 @@ private enum HoverPillStyle {
 private struct HoverPill: View {
     let text: String
     let isHovered: Bool
-    let offset: CGFloat
     let style: HoverPillStyle
 
     @Environment(\.colorScheme) var colorScheme

@@ -49,6 +49,7 @@ struct CastSectionView: View {
             }
             .padding(.horizontal, AppTheme.Spacing.compact)
             .padding(.vertical, AppTheme.Spacing.small)
+            .scrollTargetLayout()
         }
         .scrollBounceBehavior(.basedOnSize)
     }

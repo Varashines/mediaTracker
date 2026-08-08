@@ -5,7 +5,6 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @Bindable var viewModel: MediaViewModel
     @Binding var sidebarSelection: SidebarItem?
     @Binding var showingBulkManager: Bool
-    @Binding var isSyncHovered: Bool
     let isSystemSmartCategory: Bool
     let isSearchActive: Bool
     let modelContext: ModelContext
@@ -177,7 +176,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 let hasNote = !viewModel.collection.currentCollectionNote.isEmpty
                 Image(systemName: icon)
                     .font(AppTheme.Icon.medium)
-                    .foregroundStyle(hasNote ? .secondary : Color.secondary)
+                    .foregroundStyle(hasNote ? AppTheme.Colors.accent : Color.secondary)
             }
             .tint(.primary)
             .help("Collection Notes")

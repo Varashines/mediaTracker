@@ -101,7 +101,7 @@ struct InsightsView: View {
                     }
                 }
                 .coordinateSpace(name: insightsScrollName)
-                .scrollBounceBehavior(.always)
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .background {
                     ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)

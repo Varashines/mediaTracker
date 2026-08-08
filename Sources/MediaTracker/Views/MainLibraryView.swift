@@ -83,7 +83,7 @@ struct MainLibraryView: View {
                     }
                 }
             }
-            .scrollBounceBehavior(.always)
+            .scrollBounceBehavior(selectedCategory == .home ? .always : .basedOnSize)
             .scrollIndicators(.hidden)
             .background {
                 ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)

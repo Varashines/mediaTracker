@@ -28,6 +28,7 @@ struct PosterView: View {
                     endRadius: 250
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
+                .drawingGroup()
                 .allowsHitTesting(false)
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
@@ -94,7 +95,7 @@ struct PosterView: View {
                     }
                 }
             }
-            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+            .compositingGroupIfNeeded()
             .onHover { hovering in
                 isHovering = hovering
                 if hovering {

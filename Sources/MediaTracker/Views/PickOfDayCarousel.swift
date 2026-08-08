@@ -25,7 +25,7 @@ struct PickOfDayCarousel: View {
                         Button { onSelect(metadata) } label: {
                             ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
-                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+                                .compositingGroupIfNeeded()
                         }
                         .buttonStyle(.interactive)
                     }

@@ -49,22 +49,28 @@ struct GeneralSection: View {
                                     }
                                 } label: {
                                     ZStack {
-                                        Capsule()
+                                        Circle()
                                             .fill(color)
-                                            .frame(width: 32, height: 22)
+                                            .frame(width: 22, height: 22)
 
                                         if isSelected {
                                             Circle()
-                                                .fill(.white)
-                                                .frame(width: 5.5, height: 5.5)
-                                                .shadow(color: .black.opacity(0.3), radius: 1)
+                                                .fill(color.isLightColor ? .black : .white)
+                                                .frame(width: 6, height: 6)
                                         }
                                     }
-                                    .contentShape(Capsule())
+                                    .overlay {
+                                        Circle()
+                                            .stroke(isSelected ? color : Color.primary.opacity(0.15), lineWidth: isSelected ? 2 : 1)
+                                            .padding(-4)
+                                    }
+                                    .contentShape(Circle())
                                     .help(preset.name)
                                     .accessibilityLabel(preset.name)
+                                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                                 }
                                 .buttonStyle(.plain)
+                                .animation(AppTheme.Animation.springSnappy, value: isSelected)
                             }
                         }
                     }

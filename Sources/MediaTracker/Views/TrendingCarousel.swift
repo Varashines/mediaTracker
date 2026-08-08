@@ -36,7 +36,7 @@ struct TrendingCarousel: View {
                     ForEach(items) { item in
                         TrendingPosterCard(item: item, isFastScrolling: horizontalFastScrolling)
                             .equatable()
-                            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+                            .compositingGroupIfNeeded()
                             .onTapGesture { onSelect(item) }
                     }
                 }

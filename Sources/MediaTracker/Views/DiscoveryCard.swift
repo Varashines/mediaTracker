@@ -51,7 +51,7 @@ struct DiscoveryCard: View {
                 }
             }
             .frame(height: style == .logo ? 90 : 60)
-            .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+            .compositingGroupIfNeeded()
         }
         .buttonStyle(.plain)
         .glassButtonStyle()

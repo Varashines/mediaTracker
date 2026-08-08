@@ -268,94 +268,49 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
 // MARK: - Mood Sentiment
 
 enum Mood: String, Codable, CaseIterable, Sendable {
-    // Movie & Shared Moods
-    case fun = "Vibey"
-    case heavy = "Deep"
-    case tense = "Intense"
-    case wowed = "Epic"
-    case cozy = "Warm"
-    case creeped = "Eerie"
-    case mindBlown = "Wild"
-    case meh = "Chill"
-    case firedUp = "Hype"
+    case cozy = "Cozy"
+    case intense = "Intense"
+    case mindBending = "Trippy"
+    case epic = "Epic"
+    case emotional = "Sad"
+    case chill = "Chill"
 
-    // TV Show Specific Moods (Short, Punchy Titles with Unique Emojis)
-    case binge = "Binge"
-    case comfort = "Cozy"
-    case cliffhanger = "Twisty"
-    case slowBurn = "Slow Burn"
-    case weeklyEvent = "Weekly"
-    case guiltyPleasure = "Guilty"
-    case masterpieceRun = "Peak"
-
-    /// Returns curated moods tailored for Movies vs TV Shows
+    /// Unified 6-Vibe Taxonomy across Movies & TV Shows
     static func moods(for type: MediaType?) -> [Mood] {
-        guard let type = type else { return allCases }
-        switch type {
-        case .movie:
-            return [.mindBlown, .fun, .heavy, .tense, .wowed, .cozy, .creeped, .firedUp, .meh]
-        case .tvShow:
-            return [.binge, .comfort, .cliffhanger, .slowBurn, .weeklyEvent, .guiltyPleasure, .masterpieceRun, .firedUp, .meh]
-        }
+        return [.cozy, .intense, .mindBending, .epic, .emotional, .chill]
     }
 
     var emoji: String {
         switch self {
-        case .fun: return "face.smiling.fill"
-        case .heavy: return "heart.fill"
-        case .tense: return "bolt.fill"
-        case .wowed: return "sparkle"
-        case .cozy: return "sun.max.fill"
-        case .creeped: return "eye.fill"
-        case .mindBlown: return "brain.head.profile"
-        case .meh: return "cup.and.saucer.fill"
-        case .firedUp: return "flame.fill"
-        case .binge: return "tv.fill"
-        case .comfort: return "sofa.fill"
-        case .cliffhanger: return "bolt.fill"
-        case .slowBurn: return "brain.head.profile"
-        case .weeklyEvent: return "calendar"
-        case .guiltyPleasure: return "theatermasks.fill"
-        case .masterpieceRun: return "trophy.fill"
+        case .cozy: return "cloud.fill"
+        case .intense: return "flame.fill"
+        case .mindBending: return "infinity"
+        case .epic: return "crown.fill"
+        case .emotional: return "cloud.drizzle.fill"
+        case .chill: return "popcorn.fill"
         }
     }
 
     var color: Color {
         switch self {
-        case .fun: return Color(red: 0.9, green: 0.55, blue: 0.15)
-        case .heavy: return Color(red: 0.3, green: 0.35, blue: 0.55)
-        case .tense: return Color(red: 0.85, green: 0.25, blue: 0.2)
-        case .wowed: return Color(red: 0.6, green: 0.35, blue: 0.9)
-        case .cozy: return Color(red: 0.85, green: 0.3, blue: 0.45)
-        case .creeped: return Color(red: 0.35, green: 0.35, blue: 0.4)
-        case .mindBlown: return Color(red: 0.1, green: 0.6, blue: 0.65)
-        case .meh: return Color(red: 0.5, green: 0.5, blue: 0.5)
-        case .firedUp: return Color(red: 0.9, green: 0.45, blue: 0.15)
-        case .binge: return Color(red: 0.95, green: 0.35, blue: 0.15)
-        case .comfort: return Color(red: 0.85, green: 0.55, blue: 0.25)
-        case .cliffhanger: return Color(red: 0.9, green: 0.2, blue: 0.25)
-        case .slowBurn: return Color(red: 0.35, green: 0.45, blue: 0.75)
-        case .weeklyEvent: return Color(red: 0.95, green: 0.65, blue: 0.1)
-        case .guiltyPleasure: return Color(red: 0.85, green: 0.3, blue: 0.6)
-        case .masterpieceRun: return Color(red: 0.95, green: 0.75, blue: 0.15)
+        case .cozy: return Color(red: 0.95, green: 0.60, blue: 0.20)         // Warm Amber
+        case .intense: return Color(red: 0.92, green: 0.25, blue: 0.30)      // Crimson Red
+        case .mindBending: return Color(red: 0.15, green: 0.70, blue: 0.85)  // Electric Cyan
+        case .epic: return Color(red: 0.65, green: 0.40, blue: 0.95)         // Royal Violet
+        case .emotional: return Color(red: 0.88, green: 0.35, blue: 0.55)    // Soft Rose Pink
+        case .chill: return Color(red: 0.45, green: 0.75, blue: 0.50)        // Sage Emerald Green
         }
     }
 
-    /// Map old/variant mood values to the current set so existing data is never orphaned.
+    /// Map legacy/variant mood strings seamlessly to the 6 canonical vibes so zero user data is lost.
     static func normalized(_ value: String) -> Mood? {
         switch value {
-        case "Awe", "Inspired": return .wowed
-        case "Joy", "Amused", "Calm", "Relaxed": return .fun
-        case "Nothing", "Flat": return .meh
-        case "Moved": return .heavy
-        case "Thrilled": return .tense
-        case "Binge-Worthy", "Binge", "Bingeable": return .binge
-        case "Comfort Rewatch", "Cozy", "Rewatch": return .comfort
-        case "Cliffhanger", "Twisty": return .cliffhanger
-        case "Slow Burn", "Slowburn", "Deep ": return .slowBurn
-        case "Weekly Hype", "Weekly": return .weeklyEvent
-        case "Guilty Pleasure", "Guilty": return .guiltyPleasure
-        case "Peak TV", "Peak", "Masterpiece": return .masterpieceRun
+        case "Warm", "Comfort", "Cozy", "Comfort Rewatch", "Rewatch": return .cozy
+        case "Intense", "Tense", "Hype", "Hype ", "Wild", "Twisty", "Cliffhanger", "Thrilled": return .intense
+        case "Mind-Bending", "Mind Bending", "Brain", "Slow Burn", "Slowburn", "Deep ": return .mindBending
+        case "Epic", "Wowed", "Peak", "Peak TV", "Masterpiece", "MasterpieceRun", "Inspired", "Awe": return .epic
+        case "Emotional", "Deep", "Heavy", "Moved": return .emotional
+        case "Chill", "Vibey", "Fun", "Meh", "Binge", "Bingeable", "Weekly", "Guilty", "Guilty Pleasure", "Relaxed", "Calm", "Amused", "Joy", "Nothing", "Flat": return .chill
         default: return Mood(rawValue: value)
         }
     }

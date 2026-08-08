@@ -16,6 +16,17 @@ extension View {
     func `if`(_ condition: Bool, transform: (Self) -> some View) -> some View {
         if condition { transform(self) } else { self }
     }
+
+    /// Groups the view into a single compositing layer unless the user has enabled
+    /// Reduce Visual Effects. Used on poster/card images to avoid shadow artifacts.
+    @ViewBuilder
+    func compositingGroupIfNeeded() -> some View {
+        if !AppThemeCoordinator.isReducingVisualEffects {
+            compositingGroup()
+        } else {
+            self
+        }
+    }
 }
 
 extension String {
@@ -55,6 +66,14 @@ extension Color {
             return Color.red
         } else {
             return Color(red: 0.75, green: 0.1, blue: 0.1)
+        }
+    }
+
+    static func semanticGold(for colorScheme: ColorScheme) -> Color {
+        if colorScheme == .dark {
+            return Color(red: 0.95, green: 0.78, blue: 0.3)
+        } else {
+            return Color(red: 0.85, green: 0.65, blue: 0.15)
         }
     }
 

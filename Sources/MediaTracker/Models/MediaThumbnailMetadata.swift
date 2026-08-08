@@ -145,7 +145,6 @@ struct PaginatedResult: Sendable {
     let featuredUpcoming: [MediaThumbnailMetadata]
     let recentlyAdded: [MediaThumbnailMetadata]
     let homeContinueWatching: [MediaThumbnailMetadata]
-    let spotlightHero: MediaThumbnailMetadata?
     let grouped: [(String, [MediaThumbnailMetadata])]
     let pickOfTheDay: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]

@@ -10,6 +10,7 @@ struct FilteredLibraryGridView: View {
     var onNavigateToSearch: ((String) -> Void)? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.sleepManager) private var sleepManager
 
     @State private var items: [MediaThumbnailMetadata] = []
     @State private var networkColor: Color? = nil
@@ -47,7 +48,7 @@ struct FilteredLibraryGridView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(0..<12, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                                 .fill(Color.secondary.opacity(0.08))
                                 .frame(width: 160, height: 240)
                                 .shimmering()
@@ -55,7 +56,7 @@ struct FilteredLibraryGridView: View {
                     }
                     .padding(AppTheme.Spacing.pageMargin)
                 }
-                .scrollBounceBehavior(.always)
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
             } else if items.isEmpty && !isLoading {
                 ContentUnavailableView(
@@ -93,7 +94,7 @@ struct FilteredLibraryGridView: View {
                     }
                     .padding(AppTheme.Spacing.pageMargin)
                 }
-                .scrollBounceBehavior(.always)
+                .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .background {
                     ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
@@ -106,7 +107,11 @@ struct FilteredLibraryGridView: View {
                 }
             }
         }
-        .navigationTitle(filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
+        .navigationTitle(
+            sleepManager.isAsleep
+                ? ""
+                : (filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
+        )
         .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
             ScopedStatsActor.invalidateCache()
             let itemID = MediaStateService.shared.lastChangedItemID

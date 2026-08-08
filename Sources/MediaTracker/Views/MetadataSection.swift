@@ -17,32 +17,16 @@ struct MetadataSection: View {
         }
     }
 
-    var body: some View {
-        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+    private var accent: Color {
+        themeColor.highContrastAccent(colorScheme: colorScheme)
+    }
 
+    var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            // Row 1: All metadata in one line
-            HStack(spacing: AppTheme.Spacing.small) {
-                if let rating = voteAverage, rating > 0 {
-                    ratingPill(icon: "star.fill", value: String(format: "%.1f", rating), color: ratingColor(for: rating), accent: accent)
-                }
-                if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
-                    let rtIcon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
-                    let rtColor: Color = rt >= 60 ? .green : .red
-                    ratingPill(icon: rtIcon, value: "\(rt)%", color: rtColor, accent: accent)
-                }
-                if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
-                    infoPill(text: net, accent: accent)
-                }
-                if let date = item.releaseDate {
-                    infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
-                }
-                if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
-                    infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
-                }
-                if let lang = item.cachedLanguage, !lang.isEmpty {
-                    infoPill(text: LanguageUtils.languageName(for: lang), icon: "globe", accent: accent)
-                }
+            // Row 1: All metadata pills — single line when it fits, wrapping flow otherwise
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AppTheme.Spacing.small) { metadataPills }
+                FlowLayout(spacing: AppTheme.Spacing.small) { metadataPills }
             }
 
             // Row 2: Genres (pills)
@@ -88,8 +72,32 @@ struct MetadataSection: View {
 
     // MARK: - Components
 
+    @ViewBuilder
+    private var metadataPills: some View {
+        if let rating = voteAverage, rating > 0 {
+            ratingPill(icon: "star.fill", value: String(format: "%.1f", rating), color: ratingColor(for: rating), accent: accent)
+        }
+        if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
+            let rtIcon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+            let rtColor: Color = rt >= 60 ? .green : .red
+            ratingPill(icon: rtIcon, value: "\(rt)%", color: rtColor, accent: accent)
+        }
+        if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
+            infoPill(text: net, accent: accent)
+        }
+        if let date = item.releaseDate {
+            infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
+        }
+        if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
+            infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
+        }
+        if let lang = item.cachedLanguage, !lang.isEmpty {
+            infoPill(text: LanguageUtils.languageName(for: lang), icon: "globe", accent: accent)
+        }
+    }
+
     private func ratingColor(for rating: Double) -> Color {
-        if rating >= 7 { return .green }
+        if rating >= 7 { return Color.semanticGold(for: colorScheme) }
         if rating >= 5 { return .yellow }
         return .red
     }

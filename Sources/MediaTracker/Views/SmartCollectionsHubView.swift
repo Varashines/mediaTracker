@@ -157,7 +157,7 @@ struct SmartCollectionsHubView: View {
                 Spacer(minLength: 50)
             }
         }
-        .scrollBounceBehavior(.always)
+        .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
         .sheet(isPresented: $showingCreateSheet) {
             CreateCollectionSheet(initialIsSmart: initialIsSmart)

@@ -14,6 +14,7 @@ struct AppTheme {
         static let xLarge: CGFloat = 32
         static let section: CGFloat = 40
         static let pageMargin: CGFloat = 40
+        static let grid: CGFloat = 20
     }
 
     struct Radius {

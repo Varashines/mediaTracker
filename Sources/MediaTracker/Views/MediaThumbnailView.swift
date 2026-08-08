@@ -361,8 +361,8 @@ struct MediaThumbnailView: View, Equatable {
                 color: isHovered
                     ? AppTheme.Colors.shadowElevated(for: colorScheme)
                     : Color.clear,
-                radius: 0,
-                y: 0
+                radius: AppTheme.Shadow.cardHover.radius,
+                y: AppTheme.Shadow.cardHover.y
             )
         }
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
@@ -659,7 +659,7 @@ struct ThumbnailPosterLayer: View {
                 let baseColor = themeColorHex.flatMap { Color(hex: $0) }
                 let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
 
-                let content = CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
+                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
@@ -668,21 +668,15 @@ struct ThumbnailPosterLayer: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)
                 .clipped()
-
-                if namespace != nil, !itemID.isEmpty {
-                    content
-                } else {
-                    content
-                }
             } else {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .overlay {
-                            Image(systemName: type == .movie ? "film" : "tv")
-                                .font(.system(size: mode == .hero ? 40 : 30))
-                                .foregroundStyle(AppTheme.Colors.accent)
-                        }
-                        .frame(width: width, height: height)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .overlay {
+                        Image(systemName: type == .movie ? "film" : "tv")
+                            .font(.system(size: mode == .hero ? 40 : 30))
+                            .foregroundStyle(AppTheme.Colors.accent)
+                    }
+                    .frame(width: width, height: height)
             }
         }
     }

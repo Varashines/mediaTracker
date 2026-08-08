@@ -33,12 +33,12 @@ class AppThemeCoordinator {
     }
 
     static let presets: [ThemePreset] = [
-        .init(name: "Blue",    accent: "#007AFF", darkBG: "#1E1E1E", lightBG: "#F2F2F7", darkSurface: "#222222", lightSurface: "#E5E5EA", cardFillOpacity: 0.05),
-        .init(name: "Beige",   accent: "#D4A574", darkBG: "#2A2420", lightBG: "#FCF6EE", darkSurface: "#2C2824", lightSurface: "#F0E8DC", cardFillOpacity: 0.05),
-        .init(name: "Slate",   accent: "#8E8E93", darkBG: "#1C1C1E", lightBG: "#F2F2F7", darkSurface: "#222224", lightSurface: "#E5E5EA", cardFillOpacity: 0.06),
-        .init(name: "Sage",    accent: "#7B9B6D", darkBG: "#1C1E1A", lightBG: "#F5F7F2", darkSurface: "#22241E", lightSurface: "#E8EAE2", cardFillOpacity: 0.05),
-        .init(name: "Crimson", accent: "#FF2D55", darkBG: "#25171A", lightBG: "#FFF4F6", darkSurface: "#2C1B1F", lightSurface: "#FFE6EA", cardFillOpacity: 0.05),
-        .init(name: "Amber",   accent: "#FF9500", darkBG: "#262017", lightBG: "#FFF9F0", darkSurface: "#2D251A", lightSurface: "#FFEDD5", cardFillOpacity: 0.05),
+        .init(name: "Blue",    accent: "#3B82F6", darkBG: "#171B1E", lightBG: "#F2F5F9", darkSurface: "#1B1F23", lightSurface: "#E8EDF4", cardFillOpacity: 0.05),
+        .init(name: "Beige",   accent: "#B8845F", darkBG: "#1C1917", lightBG: "#FAF6F0", darkSurface: "#221E1B", lightSurface: "#EDE5D9", cardFillOpacity: 0.05),
+        .init(name: "Slate",   accent: "#64748B", darkBG: "#17181A", lightBG: "#F3F4F7", darkSurface: "#1B1D20", lightSurface: "#E7E9EE", cardFillOpacity: 0.06),
+        .init(name: "Sage",    accent: "#6F9F5E", darkBG: "#1B1D18", lightBG: "#F5F8F2", darkSurface: "#20231B", lightSurface: "#E7EBDD", cardFillOpacity: 0.05),
+        .init(name: "Crimson", accent: "#E85066", darkBG: "#1C1719", lightBG: "#FBF3F4", darkSurface: "#231A1D", lightSurface: "#F1E0E3", cardFillOpacity: 0.05),
+        .init(name: "Amber",   accent: "#E8930B", darkBG: "#1C1813", lightBG: "#FDF8F0", darkSurface: "#231D16", lightSurface: "#F2E7D4", cardFillOpacity: 0.05),
     ]
 
     private var activePreset: ThemePreset {

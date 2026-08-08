@@ -234,6 +234,8 @@ struct TitleSection: View {
                                 Text(providersText(watchProviders))
                                     .font(AppTheme.Font.caption2)
                                     .kerning(AppTheme.Kerning.wide)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                             }
                             .padding(.horizontal, AppTheme.Spacing.compact)
                             .padding(.vertical, AppTheme.Spacing.micro)
@@ -253,31 +255,40 @@ struct TitleSection: View {
                 }
                 
                 // 3. Unified Glass Action Bar
-                HStack(spacing: AppTheme.Spacing.large) {
-                    StatusPicker(item: item, onChange: onStatusChange)
-                    
-                    Divider().frame(height: 24).opacity(0.3)
-                    
-                    TasteToggle(item: item, themeColor: themeColor)
+                GlassCard(cornerRadius: AppTheme.Radius.large) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: AppTheme.Spacing.large) {
+                            StatusPicker(item: item, onChange: onStatusChange)
 
-                    Divider().frame(height: 24).opacity(0.3)
+                            Divider().frame(height: 24).opacity(0.3)
 
-                    moodButton
+                            TasteToggle(item: item, themeColor: themeColor)
+
+                            if (item.taste == .love || item.taste == .like || item.state == .completed) && item.taste != .dislike || item.mood != nil {
+                                Divider().frame(height: 24).opacity(0.3)
+
+                                moodButton
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                            HStack(spacing: AppTheme.Spacing.large) {
+                                StatusPicker(item: item, onChange: onStatusChange)
+
+                                Divider().frame(height: 24).opacity(0.3)
+
+                                TasteToggle(item: item, themeColor: themeColor)
+                            }
+
+                            if (item.taste == .love || item.taste == .like || item.state == .completed) && item.taste != .dislike || item.mood != nil {
+                                Divider().opacity(0.3)
+                                moodButton
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.large)
+                    .padding(.vertical, AppTheme.Spacing.compact)
                 }
-                .padding(.horizontal, AppTheme.Spacing.large)
-                .padding(.vertical, AppTheme.Spacing.compact)
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(AppThemeCoordinator.isReducingVisualEffects
-                            ? AnyShapeStyle(AppThemeCoordinator.shared.background(for: colorScheme))
-                            : AnyShapeStyle(.ultraThinMaterial))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                }
-                .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 10, y: 5)
             }
         }
     }
@@ -289,23 +300,46 @@ struct TitleSection: View {
         Button {
             showMoodPicker.toggle()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 if let mood = currentMood {
                     Image(systemName: mood.emoji)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(mood.color)
                     Text(mood.rawValue)
+                        .font(.system(size: 11, weight: .bold))
                 } else {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                    Text("Mood")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(themeColor)
+                    Text("Add Mood")
+                        .font(.system(size: 11, weight: .medium))
                 }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.tertiary)
             }
-            .font(.system(size: 11, weight: .medium))
             .foregroundStyle(currentMood != nil ? .primary : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(currentMood != nil
+                        ? currentMood!.color.opacity(colorScheme == .dark ? 0.20 : 0.12)
+                        : themeColor.opacity(colorScheme == .dark ? 0.12 : 0.08))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(
+                        currentMood != nil
+                            ? currentMood!.color.opacity(0.4)
+                            : themeColor.opacity(0.25),
+                        lineWidth: 0.8
+                    )
+            )
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
+        .contentShape(Capsule())
+        .hoverScaled(.subtle)
         .popover(isPresented: $showMoodPicker) {
             MoodPickerPopover(
                 currentMood: currentMood,
@@ -333,29 +367,40 @@ private struct MoodPickerPopover: View {
     @State private var hoveredMood: Mood? = nil
     @Environment(\.colorScheme) var colorScheme
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.small) {
+        VStack(spacing: AppTheme.Spacing.smallMedium) {
+            // Header bar
             HStack {
-                Text("Vibe")
-                    .font(AppTheme.Font.heading)
-                    .foregroundStyle(.primary)
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppTheme.Colors.accent)
+                    Text("Select Vibe")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
 
                 Spacer()
 
                 if currentMood != nil {
-                    Button("Clear") {
+                    Button {
                         onClear()
+                    } label: {
+                        Text("Reset")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.primary.opacity(0.06)))
                     }
-                    .font(AppTheme.Font.caption)
-                    .foregroundStyle(.red.opacity(0.8))
                     .buttonStyle(.plain)
+                    .contentShape(Capsule())
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.smallMedium)
-            .padding(.top, AppTheme.Spacing.smallMedium)
 
+            // 6-Vibe Grid
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(Mood.moods(for: mediaType), id: \.self) { mood in
                     let isSelected = currentMood == mood
@@ -368,42 +413,57 @@ private struct MoodPickerPopover: View {
                             onSelect(mood)
                         }
                     } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: mood.emoji)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(mood.color)
-                                .scaleEffect(isHovered ? 1.15 : 1.0)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    Circle()
-                                        .fill(isSelected ? mood.color.opacity(0.25) : (isHovered ? mood.color.opacity(0.12) : Color.primary.opacity(0.04)))
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(isSelected ? mood.color : (isHovered ? mood.color.opacity(0.3) : Color.clear), lineWidth: isSelected ? 1.5 : 0.5)
-                                )
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .fill(mood.color.opacity(isSelected ? 0.28 : (isHovered ? 0.18 : 0.08)))
+                                    .frame(width: 42, height: 42)
+
+                                Image(systemName: mood.emoji)
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(mood.color)
+                                    .scaleEffect(isHovered ? 1.18 : (isSelected ? 1.08 : 1.0))
+                            }
+                            .shadow(color: isSelected ? mood.color.opacity(0.4) : (isHovered ? mood.color.opacity(0.25) : .clear), radius: 6, y: 2)
 
                             Text(mood.rawValue)
-                                .font(.system(size: 9, weight: isSelected ? .bold : .medium))
+                                .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .rounded))
                                 .foregroundStyle(isSelected ? .primary : (isHovered ? .primary : .secondary))
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(isSelected ? mood.color.opacity(colorScheme == .dark ? 0.16 : 0.10) : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .stroke(
+                                    isSelected ? mood.color.opacity(0.6) : (isHovered ? mood.color.opacity(0.3) : Color.clear),
+                                    lineWidth: isSelected ? 1.5 : 0.5
+                                )
+                        )
+                        .scaleEffect(isHovered ? 1.04 : 1.0)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .onHover { hovering in
-                        withAnimation(AppTheme.Animation.microInteraction) {
+                        withAnimation(AppTheme.Animation.springSnappy) {
                             hoveredMood = hovering ? mood : nil
                         }
                     }
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.smallMedium)
-            .padding(.bottom, AppTheme.Spacing.smallMedium)
         }
-        .frame(width: 220)
+        .padding(AppTheme.Spacing.medium)
+        .frame(width: 248)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+        }
     }
 }
 

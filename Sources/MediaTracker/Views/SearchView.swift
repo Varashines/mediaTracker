@@ -138,8 +138,6 @@ struct SearchView: View {
         }
     }
 
-    private let suggestedSearches = ["Breaking Bad", "Oppenheimer", "Succession", "Severance", "Chernobyl", "Dune"]
-
     @ViewBuilder
     private var filterBar: some View {
         VStack(spacing: 0) {
@@ -261,7 +259,7 @@ struct SearchView: View {
             .transition(.mediaRowArrival)
             .animation(AppTheme.Animation.easeInOut, value: selectedType)
         }
-        .scrollBounceBehavior(.always)
+        .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
     }
 

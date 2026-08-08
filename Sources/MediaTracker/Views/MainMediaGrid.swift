@@ -16,7 +16,7 @@ struct MainMediaGrid: View {
     @State private var completedIDs: Set<String> = []
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: AppTheme.Spacing.grid) {
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
                 NavigationLink(value: metadata.id) {
                     gridCell(for: metadata, at: idx)

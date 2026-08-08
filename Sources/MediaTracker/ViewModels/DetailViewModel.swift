@@ -523,17 +523,18 @@ class DetailViewModel {
         episodesTask?.cancel()
     }
 
-    func markNextEpisodeWatched() {
-        guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
+    @discardableResult
+    func markNextEpisodeWatched() -> TVEpisode? {
+        guard item.modelContext != nil, let tv = item.tvShowDetails else { return nil }
         
         // Optimize: Make sure seasons are loaded
         let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return }
+        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return nil }
         
         // Make sure episodes are loaded or fetched
         if currentSeason.episodes.isEmpty {
             fetchEpisodes(for: currentSeason)
-            return
+            return nil
         }
         
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
@@ -545,7 +546,9 @@ class DetailViewModel {
                 SaveCoordinator.shared.requestSave(context)
             }
             MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+            return next
         }
+        return nil
     }
 
     func toggleWatched() {

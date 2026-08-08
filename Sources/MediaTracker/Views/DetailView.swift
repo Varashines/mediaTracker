@@ -8,7 +8,9 @@ struct DetailView: View {
     @Environment(\.sleepManager) private var sleepManager
 
     @State private var viewModel: DetailViewModel
-    @State private var showHeavyContent = false
+    @State private var showSeasons = false
+    @State private var showCast = false
+    @State private var showRecommendations = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
@@ -16,6 +18,9 @@ struct DetailView: View {
     @State private var showingShareSheet = false
     @State private var shareImage: NSImage? = nil
     @State private var showSharePreview = false
+    @State private var isHoveringRefresh = false
+    @State private var isHoveringShare = false
+    @State private var isHoveringDelete = false
 
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -47,16 +52,17 @@ struct DetailView: View {
 
             if viewModel.hasDerivedThemeColor {
                 // Whole-page poster theme background fill (primary tint)
-                viewModel.themeColor.opacity(colorScheme == .dark ? 0.18 : 0.12)
+                viewModel.themeColor.opacity(colorScheme == .dark ? 0.14 : 0.09)
                     .ignoresSafeArea()
 
                 // Subtle muted wash for depth (premium palette)
                 if let muted = viewModel.mutedThemeColor {
-                    muted.opacity(colorScheme == .dark ? 0.07 : 0.05)
+                    muted.opacity(colorScheme == .dark ? 0.05 : 0.03)
                         .ignoresSafeArea()
                 }
             }
         }
+        .drawingGroup()
     }
 
     @ViewBuilder
@@ -65,25 +71,8 @@ struct DetailView: View {
             backgroundMesh
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
                     headerSection
-                        .background(alignment: .top) {
-                            GeometryReader { geo in
-                                let frame = geo.frame(in: .named("detailScroll"))
-                                Color.clear
-                                    .onChange(of: frame.minY) { _, newValue in
-                                        let shouldShow = newValue < -50
-                                        if showNavTitle != shouldShow {
-                                            withAnimation(AppTheme.Animation.springSnappy) {
-                                                showNavTitle = shouldShow
-                                            }
-                                        }
-                                    }
-                                    .onAppear {
-                                        showNavTitle = frame.minY < -50
-                                    }
-                            }
-                        }
                     if showMoodBanner {
                         MoodCaptureBanner(
                             mediaType: viewModel.item.type,
@@ -108,11 +97,18 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
-                .padding(.bottom, 16)
             }
             .scrollBounceBehavior(.always)
             .scrollIndicators(.hidden)
-            .coordinateSpace(name: "detailScroll")
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y > (AppTheme.Spacing.section - 30)
+            } action: { _, shouldShow in
+                if showNavTitle != shouldShow {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        showNavTitle = shouldShow
+                    }
+                }
+            }
 
             floatingActionBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -148,9 +144,13 @@ struct DetailView: View {
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
-            Task {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                showHeavyContent = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                showSeasons = true
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                showCast = true
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                showRecommendations = true
             }
         }
         .onDisappear {
@@ -200,9 +200,12 @@ struct DetailView: View {
         Group {
             Button("") {
                 if viewModel.item.type == .tvShow {
-                    viewModel.markNextEpisodeWatched()
-                    FeedbackManager.shared.trigger(.markWatched)
-                    AppErrorState.shared.showToast("Next episode marked", style: .success)
+                    if let marked = viewModel.markNextEpisodeWatched() {
+                        FeedbackManager.shared.trigger(.markWatched)
+                        AppErrorState.shared.showToast("Marked S\(marked.seasonNumber) • E\(marked.episodeNumber) watched", style: .success)
+                    } else {
+                        AppErrorState.shared.showToast("All episodes watched", style: .info)
+                    }
                 } else {
                     viewModel.toggleWatched()
                     FeedbackManager.shared.trigger(.markWatched)
@@ -262,7 +265,7 @@ struct DetailView: View {
     private var tmdbWarningSection: some View {
         let hasNoGenres = viewModel.item.type == .movie && viewModel.item.cachedGenres.isEmpty
         let hasNoNetwork = viewModel.item.type == .tvShow && viewModel.item.cachedNetwork == nil
-        
+
         if hasNoGenres || hasNoNetwork {
             if !APIClient.shared.isTMDBConfigured {
                 HStack(spacing: AppTheme.Spacing.tiny) {
@@ -286,44 +289,40 @@ struct DetailView: View {
     @ViewBuilder
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            if showHeavyContent {
-
-
-                // 1. TV TRACKING (Modular Card)
-                if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
-                    ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {
-                        TVTrackingView(
-                            tvDetails: tv,
-                            themeColor: effectiveThemeColor,
-                            isRefreshing: viewModel.isRefreshing,
-                            onWatchedToggle: {
-                                viewModel.item.lastInteractionDate = Date()
-                                viewModel.item.syncCachedProperties(dirty: [.progress, .badge])
-                            },
-                            onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
-                            onSeasonCompleted: {
-                                // Handled via badge/haptic
-                            }
-                        )
-                        .padding(.top, 4)
-                    }
-                }
-
-
-                // 2. TOP CAST (Modular Card)
-                if !viewModel.item.displayCast.isEmpty {
-                    ModularSection(title: "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
-                        CastSectionView(
-                            cast: viewModel.item.displayCast,
-                            themeColor: effectiveThemeColor
-                        ) { actorName in
-                            onSearchActor?(actorName)
+            // 1. TV TRACKING (Modular Card)
+            if showSeasons, viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
+                ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {
+                    TVTrackingView(
+                        tvDetails: tv,
+                        themeColor: effectiveThemeColor,
+                        isRefreshing: viewModel.isRefreshing,
+                        onWatchedToggle: {
+                            viewModel.item.lastInteractionDate = Date()
+                            viewModel.item.syncCachedProperties(dirty: [.progress, .badge])
+                        },
+                        onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
+                        onSeasonCompleted: {
+                            // Handled via badge/haptic
                         }
+                    )
+                    .padding(.top, 4)
+                }
+            }
+
+            // 2. TOP CAST (Modular Card)
+            if showCast, !viewModel.item.displayCast.isEmpty {
+                ModularSection(title: "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
+                    CastSectionView(
+                        cast: viewModel.item.displayCast,
+                        themeColor: effectiveThemeColor
+                    ) { actorName in
+                        onSearchActor?(actorName)
                     }
                 }
+            }
 
-                // 3. RECOMMENDATIONS (Modular Card)
-                if MooreMetricsService.shared.isConfigured {
+            // 3. RECOMMENDATIONS (Modular Card)
+            if showRecommendations, MooreMetricsService.shared.isConfigured {
                     let detailTraits = viewModel.debugSelectedTraits
                     let detailTitle: String = {
                         if !detailTraits.isEmpty {
@@ -369,7 +368,7 @@ struct DetailView: View {
                     }
                 }
             }
-            } else {
+            if !showSeasons {
                 DetailSkeletonView(
                     needsTV: viewModel.item.type == .tvShow,
                     hasCast: !viewModel.item.displayCast.isEmpty
@@ -377,7 +376,7 @@ struct DetailView: View {
                 .shimmering()
             }
         }
-        .animation(AppTheme.Animation.springGentle, value: showHeavyContent)
+        .animation(AppTheme.Animation.springGentle, value: showSeasons)
     }
 
     @ToolbarContentBuilder
@@ -395,6 +394,10 @@ struct DetailView: View {
                         }
                     }
                     .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(isHoveringRefresh ? Color.primary.opacity(0.08) : .clear)
+                    )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -402,6 +405,7 @@ struct DetailView: View {
                 .keyboardShortcut("r", modifiers: [.command])
                 .help("Refresh metadata")
                 .accessibilityLabel("Refresh metadata")
+                .onHover { isHoveringRefresh = $0 }
 
                 Divider()
                     .frame(height: 14)
@@ -412,12 +416,17 @@ struct DetailView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(isHoveringShare ? Color.primary.opacity(0.08) : .clear)
+                        )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
                 .keyboardShortcut("s", modifiers: .command)
                 .help("Share collectible card (⌘S)")
                 .accessibilityLabel("Share collectible card")
+                .onHover { isHoveringShare = $0 }
 
                 Divider()
                     .frame(height: 14)
@@ -435,6 +444,10 @@ struct DetailView: View {
                     Image(systemName: "trash")
                         .foregroundStyle(.red.opacity(0.85))
                         .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(isHoveringDelete ? Color.red.opacity(0.12) : .clear)
+                        )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -443,6 +456,7 @@ struct DetailView: View {
                 .help("Delete from library")
                 .accessibilityLabel("Delete from library")
                 .accessibilityAddTraits(.isButton)
+                .onHover { isHoveringDelete = $0 }
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
@@ -499,9 +513,35 @@ struct DetailView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
-            ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
-            : AnyShapeStyle(.ultraThinMaterial)))
+        .background {
+            ZStack {
+                Capsule()
+                    .fill(AppThemeCoordinator.isReducingVisualEffects
+                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                        : AnyShapeStyle(.ultraThinMaterial))
+
+                if viewModel.hasDerivedThemeColor {
+                    Capsule()
+                        .fill(effectiveThemeColor.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                }
+            }
+        }
+        .overlay(
+            Capsule()
+                .stroke(
+                    viewModel.hasDerivedThemeColor
+                        ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                        : Color.primary.opacity(0.08),
+                    lineWidth: 0.8
+                )
+        )
+        .shadow(
+            color: viewModel.hasDerivedThemeColor
+                ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.25 : 0.15)
+                : Color.black.opacity(0.15),
+            radius: 12,
+            y: 4
+        )
     }
 
     private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -619,15 +659,15 @@ struct DetailView: View {
         Task {
             try? await Task.sleep(for: .seconds(0.75))
             NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
-            
+
             let container = modelContext.container
             Task.detached(priority: .background) {
                 let backgroundService = BackgroundDataService(modelContainer: container)
                 await backgroundService.deleteMediaItem(id: itemID)
-                
+
                 let sync = DiscoverySyncService(modelContainer: container)
                 await sync.updateItemDeleted(network: network, genres: genres, language: lang, badge: badge, providers: providers)
-                
+
                 try? await Task.sleep(for: .seconds(0.3))
                 await MainActor.run {
                     MediaStateService.shared.postMediaStateChanged()

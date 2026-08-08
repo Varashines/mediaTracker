@@ -148,7 +148,6 @@ actor MediaFilterActor {
             featuredUpcoming: featuredUpcoming,
             recentlyAdded: recentAddedItems,
             homeContinueWatching: [],
-            spotlightHero: nil,
             grouped: finalGroupedItems,
             pickOfTheDay: [],
             recommendations: [],

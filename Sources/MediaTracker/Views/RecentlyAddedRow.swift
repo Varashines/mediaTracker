@@ -15,7 +15,7 @@ struct RecentlyAddedRow: View {
                         NavigationLink(value: metadata.id) {
                             MediaThumbnailView(metadata: metadata, mode: .grid, namespace: namespace, isFastScrolling: isFastScrolling)
                                 .equatable()
-                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.compositingGroup() }
+                                .compositingGroupIfNeeded()
                         }
                         .buttonStyle(.interactive)
                         .transition(.mediaRowArrival)

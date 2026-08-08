@@ -76,7 +76,6 @@ extension MediaFilterActor {
                 return (a.lastInteractionDate ?? .distantPast) > (b.lastInteractionDate ?? .distantPast)
             }
 
-        let spotlight = activeItems.first { $0.stateValue == MediaState.activeRaw }
         let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
 
         let comingSoonItems = homeResults.filter { item in
@@ -98,7 +97,6 @@ extension MediaFilterActor {
             featuredUpcoming: [],
             recentlyAdded: [],
             homeContinueWatching: homeContinueWatching,
-            spotlightHero: spotlight.map { toMetadata($0) },
             grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,
             recommendations: recommendations,
