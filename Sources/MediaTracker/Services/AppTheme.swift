@@ -15,6 +15,8 @@ struct AppTheme {
         static let section: CGFloat = 40
         static let pageMargin: CGFloat = 40
         static let grid: CGFloat = 20
+        static let sectionGap: CGFloat = 35
+        static let cardGap: CGFloat = 25
     }
 
     struct Radius {
@@ -78,6 +80,11 @@ struct AppTheme {
         // Settings
         static let settingsIcon = SwiftUI.Font.system(size: 18, weight: .medium)
         static let titleMedium = SwiftUI.Font.system(size: 18, weight: .semibold, design: .rounded)
+
+        // Stats / numeric values
+        static let statValue = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded)
+        static let valueMedium = SwiftUI.Font.system(size: 24, weight: .bold, design: .rounded)
+        static let valueSmall = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
     }
 
     struct ShadowConfig {
@@ -92,6 +99,8 @@ struct AppTheme {
         static let card = ShadowConfig(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
         static let cardHover = ShadowConfig(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
         static let elevated = ShadowConfig(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+        static let poster = ShadowConfig(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
+        static let glow = ShadowConfig(color: .clear, radius: 8, x: 0, y: 0)
     }
 
     struct Animation {
@@ -101,6 +110,11 @@ struct AppTheme {
         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
         static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
         static let chartReveal: SwiftUI.Animation = .easeInOut(duration: 0.8)
+
+        /// Per-item stagger delay for grid/carousel reveals.
+        static func stagger(index: Int, step: Double = 0.04) -> SwiftUI.Animation {
+            .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * step)
+        }
     }
 
     struct Thumbnail {

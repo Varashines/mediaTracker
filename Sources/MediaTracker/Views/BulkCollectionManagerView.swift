@@ -206,6 +206,7 @@ struct BulkItemCard: View {
             }
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .accessibilityLabel("Toggle \(item.title)")
         .accessibilityAddTraits(.isButton)
         .padding(4)

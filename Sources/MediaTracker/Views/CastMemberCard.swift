@@ -31,7 +31,7 @@ struct CastMemberCard: View {
                 .fill(AppTheme.Colors.cardFill(for: colorScheme))
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.06), radius: 6, x: 0, y: 3)
+        .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: AppTheme.Shadow.card.radius, x: AppTheme.Shadow.card.x, y: AppTheme.Shadow.card.y)
         .overlay(borderOverlay())
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
     }

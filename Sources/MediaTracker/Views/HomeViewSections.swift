@@ -22,6 +22,7 @@ struct HomeViewSections: View {
     @State private var visibleSection: HomeSection? = nil
     @State private var hoveredPill: HomeSection? = nil
     @Namespace private var pillNamespace
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -85,8 +86,7 @@ struct HomeViewSections: View {
             ) {
                 onCategorySelected(.discover)
             }
-            .padding(.top, AppTheme.Spacing.small)
-            .padding(.bottom, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.small)
 
             // 2. COMING SOON (Limited to 10)
             let comingSoon = featuredCarouselItems.isEmpty ? (groupedItems.first(where: { $0.0 == "Coming Soon" })?.1 ?? []) : featuredCarouselItems
@@ -103,7 +103,7 @@ struct HomeViewSections: View {
 
     @ViewBuilder
     private var sectionButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppTheme.Spacing.tiny) {
             Spacer(minLength: 0)
             sectionButton(
                 section: .forYou,
@@ -151,17 +151,17 @@ struct HomeViewSections: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: AppTheme.Spacing.mini) {
                 Image(systemName: icon)
                     .font(AppTheme.Font.caption2)
                 Text(label)
                     .font(AppTheme.Font.caption)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.mini)
             .background {
                 Capsule()
-                    .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? Color.primary.opacity(0.1) : Color.primary.opacity(0.06)))
+                    .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? AppTheme.Colors.surfaceMuted(for: scheme) : AppTheme.Colors.surfaceSubtle(for: scheme)))
                     .overlay {
                         if isActive {
                             Capsule()
@@ -170,7 +170,8 @@ struct HomeViewSections: View {
                         }
                     }
             }
-            .foregroundStyle(isActive ? .white : .primary)
+            .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
+            .foregroundStyle(isActive ? AppTheme.Colors.accent.isLightColor ? .black : .white : .primary)
             .clipShape(Capsule())
             .contentShape(Capsule())
         }

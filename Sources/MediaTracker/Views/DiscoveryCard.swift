@@ -21,18 +21,7 @@ struct DiscoveryCard: View {
             return Color(white: 0.3)
         }
         if baseColor == .indigo {
-            switch node.name {
-            case "Action", "Adventure": return .orange
-            case "Comedy": return .yellow
-            case "Drama": return .blue
-            case "Sci-Fi", "Science Fiction", "Fantasy": return .purple
-            case "Horror", "Thriller": return .red
-            case "Mystery", "Crime": return .indigo
-            case "Documentary": return .gray
-            case "Animation": return .pink
-            case "Family": return .green
-            default: return baseColor
-            }
+            return AppTheme.Colors.genreColor(for: node.name, default: baseColor)
         }
         return baseColor
     }
@@ -54,7 +43,6 @@ struct DiscoveryCard: View {
             .compositingGroupIfNeeded()
         }
         .buttonStyle(.plain)
-        .glassButtonStyle()
         .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
             view.scaleEffect(isHovered ? 1.02 : 1.0)
                 .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
@@ -82,7 +70,7 @@ struct DiscoveryCard: View {
 
     @ViewBuilder
     private func textCard(cornerRadius: CGFloat) -> some View {
-        let bg = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.12 : 0.07) : (isHovered ? 0.12 : 0.07))
+        let bg = themeColor.opacity(colorScheme == .dark ? (isHovered ? 0.10 : 0.06) : (isHovered ? 0.14 : 0.08))
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(bg)
             .overlay {

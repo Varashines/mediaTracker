@@ -271,7 +271,7 @@ struct DetailView: View {
                 HStack(spacing: AppTheme.Spacing.tiny) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(AppTheme.Font.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.semanticGold(for: colorScheme))
                     Text("Please add your TMDB API Key in Settings to see more details.")
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
@@ -280,7 +280,7 @@ struct DetailView: View {
                 .padding(.vertical, AppTheme.Spacing.micro)
                 .background(
                     Capsule()
-                        .fill(.orange.opacity(0.1))
+                        .fill(Color.semanticGold(for: colorScheme).opacity(0.12))
                 )
             }
         }
@@ -442,7 +442,7 @@ struct DetailView: View {
                     }
                 } label: {
                     Image(systemName: "trash")
-                        .foregroundStyle(.red.opacity(0.85))
+                        .foregroundStyle(Color.semanticRed(for: colorScheme))
                         .frame(width: 28, height: 28)
                         .background(
                             Circle()

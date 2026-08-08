@@ -115,7 +115,7 @@ struct TitleSection: View {
                                         .padding(7)
                                         .background {
                                             if showLogoPicker {
-                                                Circle().fill(Color.primary.opacity(0.12))
+                                                Circle().fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
                                             } else {
                                                 Circle().fill(AppThemeCoordinator.isReducingVisualEffects
                                                     ? AnyShapeStyle(AppThemeCoordinator.shared.background(for: colorScheme))
@@ -303,16 +303,16 @@ struct TitleSection: View {
             HStack(spacing: 5) {
                 if let mood = currentMood {
                     Image(systemName: mood.emoji)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppTheme.Font.caption2.weight(.semibold))
                         .foregroundStyle(mood.color)
                     Text(mood.rawValue)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppTheme.Font.caption2.weight(.bold))
                 } else {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(AppTheme.Font.label)
                         .foregroundStyle(themeColor)
                     Text("Add Mood")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(AppTheme.Font.label)
                 }
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
@@ -325,7 +325,7 @@ struct TitleSection: View {
                 Capsule()
                     .fill(currentMood != nil
                         ? currentMood!.color.opacity(colorScheme == .dark ? 0.20 : 0.12)
-                        : themeColor.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                        : AppTheme.Colors.surfaceSubtle(for: colorScheme))
             )
             .overlay(
                 Capsule()
@@ -375,10 +375,10 @@ private struct MoodPickerPopover: View {
             HStack {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppTheme.Font.caption2.weight(.bold))
                         .foregroundStyle(AppTheme.Colors.accent)
                     Text("Select Vibe")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.label.weight(.bold))
                         .foregroundStyle(.primary)
                 }
 
@@ -389,11 +389,11 @@ private struct MoodPickerPopover: View {
                         onClear()
                     } label: {
                         Text("Reset")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.caption2.weight(.bold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.primary.opacity(0.06)))
+                            .background(Capsule().fill(AppTheme.Colors.surfaceGhost(for: colorScheme)))
                     }
                     .buttonStyle(.plain)
                     .contentShape(Capsule())
@@ -427,7 +427,7 @@ private struct MoodPickerPopover: View {
                             .shadow(color: isSelected ? mood.color.opacity(0.4) : (isHovered ? mood.color.opacity(0.25) : .clear), radius: 6, y: 2)
 
                             Text(mood.rawValue)
-                                .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .rounded))
+                                .font(AppTheme.Font.caption2.weight(isSelected ? .bold : .medium))
                                 .foregroundStyle(isSelected ? .primary : (isHovered ? .primary : .secondary))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -437,7 +437,7 @@ private struct MoodPickerPopover: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                                .fill(isSelected ? mood.color.opacity(colorScheme == .dark ? 0.16 : 0.10) : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+                                .fill(isSelected ? mood.color.opacity(colorScheme == .dark ? 0.16 : 0.10) : (isHovered ? AppTheme.Colors.surfaceGhost(for: colorScheme) : Color.clear))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
@@ -473,6 +473,7 @@ private struct LogoPickerGrid: View {
     let isCustom: Bool
     let onSelect: (String) -> Void
     let onReset: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     private let columns = [GridItem(.flexible(), spacing: 8)]
 
@@ -480,15 +481,15 @@ private struct LogoPickerGrid: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "square.stack.3d.down.right")
-                    .font(.system(size: 10))
+                    .font(AppTheme.Font.caption2)
                     .foregroundStyle(.secondary)
                 Text("Select Logo")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Font.label.weight(.semibold))
                 Text("·")
-                    .font(.system(size: 11))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(.tertiary)
                 Text("\(options.count)")
-                    .font(.system(size: 11))
+                    .font(AppTheme.Font.label)
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
             }
@@ -519,7 +520,7 @@ private struct LogoPickerGrid: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 10))
+                            .font(AppTheme.Font.caption2)
                         Text("Reset to default")
                             .font(AppTheme.Font.caption)
                     }
@@ -528,7 +529,7 @@ private struct LogoPickerGrid: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.primary.opacity(0.04))
+                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                     )
                     .contentShape(Rectangle())
                 }
@@ -571,7 +572,7 @@ private struct LogoThumbnail: View {
                                 : AnyShapeStyle(.ultraThinMaterial))
                             .frame(width: 20, height: 20)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(AppTheme.Font.caption2.weight(.bold))
                             .foregroundStyle(.primary)
                     }
                     .padding(.trailing, 8)

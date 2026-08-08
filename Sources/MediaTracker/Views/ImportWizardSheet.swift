@@ -60,6 +60,7 @@ struct ImportWizardSheet: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Circle())
                 }
             }
             .padding(AppTheme.Spacing.large)
@@ -133,7 +134,7 @@ struct ImportWizardSheet: View {
                         cancelImport()
                     }
                     .buttonStyle(.bordered)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.semanticRed(for: colorScheme))
 
                 case .summary:
                     Button("Done") {
@@ -200,10 +201,10 @@ struct ImportWizardSheet: View {
             if let error = errorMessage {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.semanticRed(for: colorScheme))
                     Text(error)
                         .font(AppTheme.Font.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.semanticRed(for: colorScheme))
                 }
             }
         }
@@ -233,7 +234,7 @@ struct ImportWizardSheet: View {
                                     .font(AppTheme.Font.caption)
                                     .foregroundStyle(.secondary)
                                 Text("\(backup.items.count)")
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .font(AppTheme.Font.title2)
                             }
 
                             Divider().frame(height: 30)
@@ -243,7 +244,7 @@ struct ImportWizardSheet: View {
                                     .font(AppTheme.Font.caption)
                                     .foregroundStyle(.secondary)
                                 Text("\(backup.collections?.count ?? 0)")
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .font(AppTheme.Font.title2)
                             }
 
                             Divider().frame(height: 30)
@@ -384,7 +385,7 @@ struct ImportWizardSheet: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 50))
-                .foregroundStyle(Color.green)
+                .foregroundStyle(Color.semanticGreen(for: colorScheme))
 
             Text("Import Completed Successfully!")
                 .font(AppTheme.Font.bodyBold)
@@ -397,8 +398,8 @@ struct ImportWizardSheet: View {
                             .font(AppTheme.Font.caption)
                             .foregroundStyle(.secondary)
                         Text("\(info.importedCount)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(.green)
+                            .font(AppTheme.Font.title3)
+                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
                     }
 
                     Divider().frame(height: 30)
@@ -408,8 +409,8 @@ struct ImportWizardSheet: View {
                             .font(AppTheme.Font.caption)
                             .foregroundStyle(.secondary)
                         Text("\(info.mergedCount)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(.orange)
+                            .font(AppTheme.Font.title3)
+                            .foregroundStyle(Color.semanticGold(for: colorScheme))
                     }
 
                     Divider().frame(height: 30)
@@ -419,7 +420,7 @@ struct ImportWizardSheet: View {
                             .font(AppTheme.Font.caption)
                             .foregroundStyle(.secondary)
                         Text("\(info.skippedCount)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(AppTheme.Font.title3)
                             .foregroundStyle(.secondary)
                     }
                 }

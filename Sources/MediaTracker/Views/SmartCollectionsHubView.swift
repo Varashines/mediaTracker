@@ -46,13 +46,13 @@ struct SmartCollectionsHubView: View {
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 35) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sectionGap) {
                 // 1. SYSTEM SMART COLLECTIONS
                 sectionHeaderMini("System Intelligence")
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.top, 40)
+                    .padding(.top, AppTheme.Spacing.section)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: AppTheme.Spacing.cardGap)], spacing: AppTheme.Spacing.cardGap) {
                     let pinnedList = pinnedSystemCategories.split(separator: ",").map(String.init)
                     ForEach(smartCategories, id: \.self) { category in
                         SmartCollectionCard(
@@ -60,7 +60,7 @@ struct SmartCollectionsHubView: View {
                             icon: category.icon,
                             description: description(for: category),
                             count: countsLoaded ? counts[category] : nil,
-                            accentColor: .secondary,
+                            accentColor: AppTheme.Colors.accent,
                             isPinned: pinnedList.contains(category.rawValue),
                             onPinToggle: { togglePinned(category) }
                         ) {
@@ -335,6 +335,7 @@ private struct HoverIconButton: View {
                 }
                 .scaleEffect(isButtonHovered ? 1.1 : 1.0)
                 .shadow(color: Color.black.opacity(isButtonHovered ? 0.08 : 0), radius: 3, y: 1.5)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .onHover { isButtonHovered = $0 }

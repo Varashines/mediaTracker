@@ -29,7 +29,7 @@ struct StatusPicker: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: AppTheme.Spacing.mini) {
                     Image(systemName: currentState.iconName)
                         .symbolEffect(.bounce, value: currentState)
                         .font(AppTheme.Font.label)
@@ -39,17 +39,22 @@ struct StatusPicker: View {
                         .font(AppTheme.Font.tiny)
                         .opacity(0.5)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.mini)
                 .foregroundStyle(accent.isLightColor ? .black : .white)
                 .background {
                     Capsule()
-                        .fill(accent)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Capsule()
+                                .fill(accent.opacity(colorScheme == .dark ? 0.85 : 0.9))
+                        )
                 }
                 .overlay {
                     Capsule()
                         .stroke(accent.opacity(0.3), lineWidth: 0.8)
                 }
+                .shadow(color: accent.opacity(isHovered ? 0.25 : 0), radius: 8, y: 3)
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)

@@ -9,6 +9,7 @@ struct SidebarNavigation: View {
     @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     @State private var hoveredItem: SidebarItem? = nil
     @Namespace private var sidebarNamespace
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         List {
@@ -120,6 +121,7 @@ struct SidebarNavigation: View {
                 if isSelected {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(AppTheme.Colors.accent)
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.25), radius: 6, y: 2)
                         .overlay {
                             RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                                 .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
@@ -127,7 +129,7 @@ struct SidebarNavigation: View {
                         .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(isHovered ? Color.primary.opacity(0.04) : .clear)
+                        .fill(isHovered ? AppTheme.Colors.surfaceGhost(for: scheme) : .clear)
                 }
             }
             .contentShape(Rectangle())

@@ -76,12 +76,13 @@ struct WatchedThisWeek: View {
                     LazyHStack(spacing: AppTheme.Spacing.large) {
                         ForEach(0..<3, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                .fill(Color.secondary.opacity(0.2))
+                                .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 1)
                                 }
                                 .frame(width: AppTheme.Thumbnail.small.width, height: AppTheme.Thumbnail.small.height)
+                                .shimmering()
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -92,7 +93,7 @@ struct WatchedThisWeek: View {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(AppTheme.Font.title3)
-                        .foregroundStyle(.green.opacity(0.5))
+                        .foregroundStyle(Color.semanticGreen(for: colorScheme).opacity(0.5))
                     Text("Nothing watched this week")
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
@@ -105,7 +106,7 @@ struct WatchedThisWeek: View {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: filter.icon)
                         .font(AppTheme.Font.title3)
-                        .foregroundStyle(.green.opacity(0.4))
+                        .foregroundStyle(Color.semanticGreen(for: colorScheme).opacity(0.4))
                     Text(filteredEmptyMessage)
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
@@ -214,11 +215,11 @@ struct WatchedThisWeek: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: option.icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppTheme.Font.caption2)
                 Text(option.title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppTheme.Font.caption2)
             }
-            .foregroundStyle(isSelected ? Color.white : (isHovered ? Color.primary : Color.secondary))
+            .foregroundStyle(isSelected ? (AppTheme.Colors.accent.isLightColor ? .black : .white) : (isHovered ? Color.primary : Color.secondary))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background {

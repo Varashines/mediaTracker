@@ -110,7 +110,7 @@ private struct CozyStatCard: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                 HStack(spacing: AppTheme.Spacing.tiny) {
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(AppTheme.Font.title3)
                         .foregroundStyle(accentColor)
                     
                     Spacer(minLength: 4)
@@ -131,7 +131,7 @@ private struct CozyStatCard: View {
                         .foregroundStyle(.secondary)
 
                     CountUpText(value: value)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(AppTheme.Font.statValue)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)

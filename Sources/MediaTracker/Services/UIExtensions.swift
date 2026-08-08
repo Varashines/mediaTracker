@@ -355,13 +355,6 @@ extension View {
     func adaptiveBackground() -> some View {
         self.modifier(AdaptiveBackgroundModifier())
     }
-
-    @ViewBuilder
-    func glassButtonStyle() -> some View {
-        self.buttonStyle(.plain)
-    }
-
-
 }
 
 extension View {

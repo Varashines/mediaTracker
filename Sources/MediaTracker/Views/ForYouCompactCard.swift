@@ -18,7 +18,7 @@ struct ForYouCompactCard: View, Equatable {
     private let cardHeight: CGFloat = 200
     private let posterWidth: CGFloat = 110
     private let posterHeight: CGFloat = 160
-    private let posterCornerRadius: CGFloat = 12
+    private let posterCornerRadius: CGFloat = AppTheme.Radius.medium
     private let posterPadding: CGFloat = 16
 
     private var themeColor: Color {
@@ -34,6 +34,7 @@ struct ForYouCompactCard: View, Equatable {
             if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
                 CachedImage(url: url, targetSize: .backdropCompact, priority: .low, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
+                        .shimmering()
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
@@ -46,7 +47,7 @@ struct ForYouCompactCard: View, Equatable {
             
             // 2. Matching Your Taste Tag (Top Right)
             if let context = recommendationContext {
-                let accent: Color = .secondary
+                let accent: Color = AppTheme.Colors.accent
                 VStack {
                     HStack {
                         Spacer()
@@ -59,7 +60,7 @@ struct ForYouCompactCard: View, Equatable {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .foregroundStyle(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(AppTheme.Colors.accent.isLightColor ? .black : .white)
                         .background {
                             Capsule()
                                 .fill(accent.opacity(colorScheme == .dark ? 0.25 : 0.35))
@@ -83,6 +84,7 @@ struct ForYouCompactCard: View, Equatable {
                         CachedImage(url: url, targetSize: .thumbSmall, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                             RoundedRectangle(cornerRadius: posterCornerRadius, style: .continuous)
                                 .fill(Color.secondary.opacity(0.15))
+                                .shimmering()
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: posterWidth, height: posterHeight)

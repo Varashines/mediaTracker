@@ -4,6 +4,7 @@ struct TrendingPosterCard: View, Equatable {
     let item: MediaSearchResult
     var isFastScrolling: Bool = false
     @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
     
     nonisolated static func == (lhs: TrendingPosterCard, rhs: TrendingPosterCard) -> Bool {
         lhs.item.id == rhs.item.id && lhs.isFastScrolling == rhs.isFastScrolling
@@ -16,8 +17,12 @@ struct TrendingPosterCard: View, Equatable {
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
 
             if isHovered {
-                Color.black.opacity(0.3)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.5)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
 
                 Image(systemName: "plus.circle.fill")
                     .font(AppTheme.Font.title)
@@ -41,7 +46,7 @@ struct TrendingPosterCard: View, Equatable {
         }
         .frame(width: 160, height: 240)
         .scaleEffect(isHovered ? 1.03 : 1.0)
-        .shadow(color: AppTheme.Colors.shadowAmbient(for: .dark), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
+        .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in
@@ -57,14 +62,16 @@ struct TrendingPosterCard: View, Equatable {
             CachedImage(url: url, targetSize: CGSize(width: 160, height: 240), isFastScrolling: isFastScrolling) { _ in
             } placeholder: {
                 Color.secondary.opacity(0.1)
+                    .shimmering()
             }
             .scaledToFill()
         } else {
             ZStack {
                 Color.secondary.opacity(0.1)
+                    .shimmering()
                     Image(systemName: item.type == .movie ? "film" : "tv")
                         .foregroundStyle(AppTheme.Colors.accent)
-                        .font(.title2)
+                        .font(AppTheme.Font.title2)
             }
         }
     }

@@ -4,6 +4,7 @@ import SwiftData
 struct LibrarySummaryBanner: View {
     let modelContainer: ModelContainer
     @State private var stats: Stats?
+    @Environment(\.colorScheme) private var colorScheme
     
     struct Stats {
         let movies: Int
@@ -21,6 +22,17 @@ struct LibrarySummaryBanner: View {
                 statPill(icon: "play.fill", value: stats.active, label: "Active")
                 statPill(icon: "checkmark.circle.fill", value: stats.completed, label: "Done")
                 statPill(icon: "heart.fill", value: stats.wishlist, label: "Wishlist")
+            }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .task { await loadStats() }
+        } else {
+            HStack(spacing: AppTheme.Spacing.large) {
+                ForEach(0..<5, id: \.self) { _ in
+                    Capsule()
+                        .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+                        .frame(width: 92, height: 28)
+                        .shimmering()
+                }
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .task { await loadStats() }

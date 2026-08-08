@@ -21,24 +21,55 @@ struct ReleaseCalendarView: View {
     var body: some View {
         Group {
             if isLoading && calendarData == nil {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
+                        Capsule()
+                            .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+                            .frame(width: 200, height: 24)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.tiny), count: 7), spacing: AppTheme.Spacing.tiny) {
+                            ForEach(0..<35, id: \.self) { _ in
+                                Circle()
+                                    .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                                    .frame(height: 32)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.xLarge)
+                    .frame(width: 320)
+                    .adaptiveBackground()
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                        Capsule()
+                            .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+                            .frame(width: 240, height: 20)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                            .frame(height: 140)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                            .frame(height: 140)
+                    }
+                    .padding(AppTheme.Spacing.xLarge)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .shimmering()
             } else {
                 HStack(spacing: 0) {
                     // 1. LEFT PANE: The Contribution Graph
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 30) {
-                            VStack(alignment: .leading, spacing: 15) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                                 monthNavigation
                             }
-                            .padding(.top, 30)
+                            .padding(.top, AppTheme.Spacing.xLarge)
 
                             if let data = calendarData {
                                 contributionGraph(data: data)
                             }
                         }
-                        .padding(.horizontal, 30)
+                        .padding(.horizontal, AppTheme.Spacing.xLarge)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(width: 320)
@@ -349,6 +380,11 @@ struct ReleaseCalendarView: View {
             }
             .padding(.top, 10)
         }
+        .id(currentDisplayMonth)
+        .transition(.asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        ))
     }
     
     @ViewBuilder

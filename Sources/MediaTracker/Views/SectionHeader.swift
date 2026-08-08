@@ -8,6 +8,7 @@ struct SectionHeader: View {
     var scrollProgress: Double? = nil
     var showDivider: Bool = false
     var trailingAccessory: (() -> AnyView)? = nil
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -45,13 +46,14 @@ struct SectionHeader: View {
                         
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.secondary.opacity(0.1))
+                                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                                 .frame(height: AppTheme.Spacing.micro)
                             
                             Capsule()
                                 .fill(AppTheme.Colors.accent.gradient)
                                 .frame(width: itemWidth, height: AppTheme.Spacing.micro)
                                 .offset(x: progress * scrollableTrackWidth)
+                                .animation(.easeOut, value: progress)
                         }
                         .frame(maxHeight: .infinity, alignment: .center)
                     }

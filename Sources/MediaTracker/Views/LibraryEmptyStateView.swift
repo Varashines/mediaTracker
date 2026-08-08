@@ -33,7 +33,7 @@ struct LibraryEmptyStateView: View {
                     .frame(width: 72, height: 72)
                 
                 Image(systemName: icon)
-                    .font(.system(size: 32, weight: .bold))
+                    .font(AppTheme.Font.title)
                     .foregroundStyle(AppTheme.Colors.accent)
             }
 

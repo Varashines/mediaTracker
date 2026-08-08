@@ -70,7 +70,7 @@ struct ScopedInsightsHeader: View {
                                 profileURL: actor.profileURL,
                                 order: 0
                             ),
-                            themeColor: .orange
+                            themeColor: AppTheme.Colors.accent
                         )
                     }
                 }
@@ -160,7 +160,7 @@ struct ScopedInsightsHeader: View {
 
     private func headerLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
+            .font(AppTheme.Font.caption2)
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
     }

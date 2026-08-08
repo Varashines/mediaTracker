@@ -62,6 +62,23 @@ extension AppTheme {
             accent.opacity(colorScheme == .dark ? 0.45 : 0.3)
         }
 
+        /// Semantic genre→color mapping shared by DiscoveryCard and ScopedInsightsHeader.
+        /// Falls back to the passed-in default when the genre isn't recognized.
+        static func genreColor(for genre: String, default defaultColor: Color) -> Color {
+            switch genre {
+            case "Action", "Adventure": return .orange
+            case "Comedy": return .yellow
+            case "Drama": return .blue
+            case "Sci-Fi", "Science Fiction", "Fantasy": return .purple
+            case "Horror", "Thriller": return .red
+            case "Mystery", "Crime": return .indigo
+            case "Documentary": return .gray
+            case "Animation": return .pink
+            case "Family": return .green
+            default: return defaultColor
+            }
+        }
+
         /// Hover border — interactive elements on hover
         /// Accent-colored border — selected, active, themed elements
         // MARK: - Semantic Shadows
