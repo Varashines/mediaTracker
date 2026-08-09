@@ -68,7 +68,7 @@ struct SidebarNavigation: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .background(AppTheme.Colors.background(for: scheme))
+        .background(.ultraThinMaterial)
     }
 
     private func sectionHeader(_ text: String) -> some View {

@@ -269,7 +269,7 @@ struct LibraryDetailView: View {
                     onRefresh: refreshAction
                 )
             }
-            .toolbarBackground(sleepManager.isAsleep ? .hidden : .automatic, for: .windowToolbar)
+            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
             .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
             .background {
                 Group {
