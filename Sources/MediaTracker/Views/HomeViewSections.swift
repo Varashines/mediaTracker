@@ -88,11 +88,11 @@ struct HomeViewSections: View {
             }
             .padding(.vertical, AppTheme.Spacing.small)
 
-            // 2. COMING SOON (Limited to 10)
+            // 2. COMING SOON (Limited to 20)
             let comingSoon = featuredCarouselItems.isEmpty ? (groupedItems.first(where: { $0.0 == "Coming Soon" })?.1 ?? []) : featuredCarouselItems
             if !comingSoon.isEmpty {
                 FeaturedUpcomingCarousel(
-                    items: Array(comingSoon.prefix(10)), namespace: namespace,
+                    items: Array(comingSoon.prefix(20)), namespace: namespace,
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
@@ -171,7 +171,7 @@ struct HomeViewSections: View {
                     }
             }
             .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
-            .foregroundStyle(isActive ? AppTheme.Colors.accent.isLightColor ? .black : .white : .primary)
+            .foregroundStyle(isActive ? AppTheme.Colors.accent.readableForeground : .primary)
             .clipShape(Capsule())
             .contentShape(Capsule())
         }

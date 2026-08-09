@@ -31,7 +31,7 @@ struct ModularSection<Content: View>: View {
                 .background {
                     if AppThemeCoordinator.isReducingVisualEffects {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                            .fill(AppTheme.Colors.background(for: colorScheme))
+                            .fill(AppTheme.Colors.neutralBackground(for: colorScheme))
                     } else {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                             .fill(.ultraThinMaterial)

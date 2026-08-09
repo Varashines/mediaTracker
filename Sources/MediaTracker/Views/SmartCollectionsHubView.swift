@@ -23,7 +23,6 @@ private actor HubCountsCache {
 }
 
 struct SmartCollectionsHubView: View {
-    let namespace: Namespace.ID
     @Binding var selection: SidebarItem?
     var refreshID: Int = 0
     
@@ -90,7 +89,7 @@ struct SmartCollectionsHubView: View {
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
                     if customSmartCollections.isEmpty {
-                        emptyStatePlaceholder(title: "No Smart Playlists", subtitle: "Automate your library organization.", color: .purple) {
+                        emptyStatePlaceholder(title: "No Smart Playlists", subtitle: "Automate your library organization.", color: AppTheme.Colors.accent) {
                             initialIsSmart = true
                             showingCreateSheet = true
                         }
@@ -102,7 +101,7 @@ struct SmartCollectionsHubView: View {
                                 icon: collection.systemImage,
                                 description: "Dynamic playlist based on smart rules.",
                                  count: countsLoaded ? customSmartCounts[collection.id] : nil,
-                                accentColor: .purple
+                                accentColor: AppTheme.Colors.accent
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }
@@ -132,7 +131,7 @@ struct SmartCollectionsHubView: View {
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
                     if manualCollections.isEmpty {
-                        emptyStatePlaceholder(title: "No Manual Collections", subtitle: "Curate your own media sets.", color: .blue) {
+                        emptyStatePlaceholder(title: "No Manual Collections", subtitle: "Curate your own media sets.", color: AppTheme.Colors.accent) {
                             initialIsSmart = false
                             showingCreateSheet = true
                         }
@@ -144,7 +143,7 @@ struct SmartCollectionsHubView: View {
                                 icon: collection.systemImage,
                                 description: "Hand-picked items for custom viewing.",
                                 count: collection.items.count,
-                                accentColor: .blue
+                                accentColor: AppTheme.Colors.accent
                             ) {
                                 selection = .collection(collection.id, name: collection.name, icon: collection.systemImage)
                             }

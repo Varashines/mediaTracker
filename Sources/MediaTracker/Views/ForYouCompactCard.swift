@@ -3,7 +3,6 @@ import SwiftData
 
 struct ForYouCompactCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
-    let namespace: Namespace.ID
     var isFastScrolling: Bool = false
     @State private var isHovered = false
     @Environment(\.modelContext) private var modelContext
@@ -20,13 +19,8 @@ struct ForYouCompactCard: View, Equatable {
     private let posterHeight: CGFloat = 160
     private let posterCornerRadius: CGFloat = AppTheme.Radius.medium
     private let posterPadding: CGFloat = 16
-
-    private var themeColor: Color {
-        if let hex = metadata.themeColorHex, let color = Color(hex: hex) {
-            return color
-        }
-        return .accentColor
-    }
+    @State private var isLogoLight = false
+    @AppStorage("use_title_logos") private var useTitleLogos = true
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -60,7 +54,7 @@ struct ForYouCompactCard: View, Equatable {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .foregroundStyle(AppTheme.Colors.accent.isLightColor ? .black : .white)
+                        .foregroundStyle(AppTheme.Colors.accent.readableForeground)
                         .background {
                             Capsule()
                                 .fill(accent.opacity(colorScheme == .dark ? 0.25 : 0.35))
@@ -95,11 +89,30 @@ struct ForYouCompactCard: View, Equatable {
 
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(metadata.title)
-                            .font(AppTheme.Font.title3)
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                        
+                        if useTitleLogos, let logoURL = item?.effectiveLogoURL, let url = URL(string: logoURL) {
+                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { cgImage in
+                                Task.detached(priority: .utility) {
+                                    let dominant = await ColorExtractor.dominantColor(from: cgImage)
+                                    await MainActor.run {
+                                        isLogoLight = dominant.isNearlyWhite
+                                    }
+                                }
+                            } placeholder: {
+                                Text(metadata.title)
+                                    .font(AppTheme.Font.title3)
+                                    .foregroundStyle(.white)
+                                    .lineLimit(2)
+                            }
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 260, maxHeight: 52, alignment: .leading)
+                            .colorInvert(colorScheme == .light && isLogoLight)
+                        } else {
+                            Text(metadata.title)
+                                .font(AppTheme.Font.title3)
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                        }
+
                         Text(metadata.formattedMetadata)
                             .font(AppTheme.Font.caption)
                             .foregroundStyle(.white.opacity(0.8))

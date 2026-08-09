@@ -27,6 +27,7 @@ struct RecentlyAddedRow: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
         }
+        .padding(.top, AppTheme.Spacing.medium)
         Divider().padding(.horizontal, AppTheme.Spacing.pageMargin).padding(.bottom, 20)
     }
 }

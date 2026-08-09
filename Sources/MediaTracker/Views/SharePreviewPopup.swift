@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SharePreviewPopup: View {
     let item: MediaItem
-    let onShare: (NSImage) -> Void
     let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme

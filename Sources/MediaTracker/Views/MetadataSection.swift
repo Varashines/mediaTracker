@@ -4,7 +4,6 @@ import SwiftData
 struct MetadataSection: View {
     let item: MediaItem
     let themeColor: Color
-    let watchProviders: [WatchProviderResult]
     
     @Environment(\.colorScheme) var colorScheme
     @State private var showAllGenres = false

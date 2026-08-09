@@ -97,6 +97,11 @@ extension Color {
         return luminance > 0.5
     }
 
+    /// Contrasting black/white foreground for text/icons sitting on this color.
+    var readableForeground: Color {
+        isLightColor ? .black : .white
+    }
+
     var isNearlyWhite: Bool {
         guard let rgbColor = NSColor(self).usingColorSpace(.sRGB) else { return false }
         var r: CGFloat = 0

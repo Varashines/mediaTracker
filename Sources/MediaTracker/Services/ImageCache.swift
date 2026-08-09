@@ -203,13 +203,15 @@ class ImageCache: NSObject, NSCacheDelegate {
                     return nil
                 }.value
                 
-                if Task.isCancelled { return nil }
-                
                 if let cgImage = finalCGImage {
-                    let container = ImageContainer(image: cgImage)
                     let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: cacheKey)
                     self.memoryCache.setObject(wrapper, forKey: cacheKey as NSString, cost: cgImage.bytesPerRow * cgImage.height)
-                    return container
+
+                    // Populate the cache even if the requesting cell scrolled away — the image
+                    // is fully decoded, so discarding it forces a wasteful re-decode on scrub-back.
+                    if Task.isCancelled { return nil }
+
+                    return ImageContainer(image: cgImage)
                 }
             } catch {
                 // Silently ignore or delegate error log

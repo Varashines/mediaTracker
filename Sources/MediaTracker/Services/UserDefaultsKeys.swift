@@ -30,6 +30,7 @@ enum UserDefaultsKeys: String {
     // Discovery
     case hiddenStudios = "hidden_studios"
     case studioAliases = "studio_aliases"
+    case discoveryAutoSync = "discovery_auto_sync"
     
     // Collections
     case pinnedSystemCategories = "pinned_system_categories"
@@ -39,6 +40,7 @@ enum UserDefaultsKeys: String {
     
     // Migrations
     case genreDeconstructionV1 = "genre_deconstruction_v1"
+    case searchableLanguageV1 = "searchable_language_v1"
     case colorExtractionVersion = "colorExtractionVersion"
     
     // Taste weights

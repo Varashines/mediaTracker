@@ -540,6 +540,33 @@ actor BackgroundDataService {
         AppLogger.info("✅ Maintenance: Library heal complete.", logger: AppLogger.background)
     }
 
+    /// One-time migration: rebuild `searchableText` so localized language names are searchable.
+    func performSearchableLanguageMigration() async throws {
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+        descriptor.fetchLimit = 100
+
+        var offset = 0
+        var processedCount = 0
+        var hasMore = true
+
+        while hasMore {
+            descriptor.fetchOffset = offset
+            let items = try modelContext.fetch(descriptor)
+            hasMore = items.count == 100
+
+            for item in items {
+                if Task.isCancelled { return }
+                item.syncCachedProperties(dirty: .searchable)
+            }
+
+            processedCount += items.count
+            try modelContext.save()
+            offset += 100
+            AppLogger.debug("♻️ Searchable language migration: \(processedCount) items processed", logger: AppLogger.background)
+        }
+    }
+
     private func repairOrphanedEntities() async throws {
         var allSeasons: [TVSeason] = []
         var offset = 0

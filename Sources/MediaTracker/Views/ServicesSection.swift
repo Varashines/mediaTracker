@@ -13,21 +13,30 @@ struct ServicesSection: View {
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
     @State private var showMMKey = false
+    @State private var tmdbValidation: KeyValidationState = .idle
+    @State private var omdbValidation: KeyValidationState = .idle
     @Environment(\.colorScheme) var scheme
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            SettingsSectionHeader(text: "API Keys", icon: "key.fill", color: .green)
+    enum KeyValidationState: Equatable {
+        case idle
+        case testing
+        case valid
+        case invalid
+    }
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SettingsCard(color: .green) {
                 VStack(spacing: 0) {
-                    apiKeyRow("TMDB", subtitle: "Movie & TV metadata", binding: $tmdbApiKey, showKey: $showTMDBKey, link: "https://www.themoviedb.org/settings/api", showDivider: true)
-                    apiKeyRow("OMDb", subtitle: "Rotten Tomatoes scores", binding: $omdbApiKey, showKey: $showOMDBKey, link: "https://www.omdbapi.com/apikey.aspx", showDivider: true)
-                    apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: $mmApiKey, showKey: $showMMKey, link: "https://www.mooremetrics.com", showDivider: false)
+                    apiKeyRow("TMDB", subtitle: "Movie & TV metadata", binding: $tmdbApiKey, showKey: $showTMDBKey, link: "https://www.themoviedb.org/settings/api", validation: $tmdbValidation) {
+                        await APIClient.shared.validateTMDBKey(key: tmdbApiKey)
+                    }
+                    apiKeyRow("OMDb", subtitle: "Rotten Tomatoes scores", binding: $omdbApiKey, showKey: $showOMDBKey, link: "https://www.omdbapi.com/apikey.aspx", validation: $omdbValidation) {
+                        await APIClient.shared.validateOMDBKey(key: omdbApiKey)
+                    }
+                    apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: $mmApiKey, showKey: $showMMKey, link: "https://www.mooremetrics.com", validation: nil)
                 }
             }
-
-            SettingsSectionHeader(text: "Notifications", icon: "bell.badge.fill", color: .red)
 
             SettingsCard(color: .red) {
                 VStack(spacing: 0) {
@@ -44,14 +53,14 @@ struct ServicesSection: View {
                         }
 
                     if notificationsEnabled {
-                        SettingsLabeledRow(title: "Channels", subtitle: "Select notification categories", showDivider: true) {
+                        SettingsLabeledRow(title: "Channels", subtitle: nil, showDivider: true) {
                             HStack(spacing: AppTheme.Spacing.tiny) {
                                 channelChip("Movies", isOn: $movieNotificationsEnabled)
                                 channelChip("TV Shows", isOn: $tvNotificationsEnabled)
                             }
                         }
 
-                        SettingsLabeledRow(title: "Delivery Time", subtitle: "Daily notification schedule", showDivider: true) {
+                        SettingsLabeledRow(title: "Delivery Time", subtitle: nil, showDivider: true) {
                             DatePicker("", selection: Binding(
                                 get: { Date(timeIntervalSince1970: notificationTime) },
                                 set: { notificationTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: TimeInterval.secondsInDay) }
@@ -71,9 +80,9 @@ struct ServicesSection: View {
         }
     }
 
-    private func apiKeyRow(_ name: String, subtitle: String, binding: Binding<String>, showKey: Binding<Bool>, link: String, showDivider: Bool) -> some View {
+    private func apiKeyRow(_ name: String, subtitle: String, binding: Binding<String>, showKey: Binding<Bool>, link: String, validation: Binding<KeyValidationState>?, testAction: (() async -> Bool)? = nil) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center) {
+            HStack(alignment: .center, spacing: AppTheme.Spacing.small) {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
                     HStack(spacing: AppTheme.Spacing.mini) {
                         Text(name)
@@ -85,57 +94,86 @@ struct ServicesSection: View {
                         .font(AppTheme.Font.settingsSubtitle)
                         .foregroundStyle(.secondary)
                 }
+
                 Spacer()
-                Link(destination: URL(string: link)!) {
-                    Image(systemName: "arrow.up.right.square")
-                        .font(AppTheme.Font.label)
-                        .foregroundStyle(.secondary)
+
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    ZStack(alignment: .trailing) {
+                        if showKey.wrappedValue {
+                            TextField("Enter API key...", text: binding)
+                        } else {
+                            SecureField("Enter API key...", text: binding)
+                        }
+                    }
+                    .textFieldStyle(.plain)
+                    .font(AppTheme.Font.label)
+                    .padding(.vertical, AppTheme.Spacing.mini)
+                    .padding(.horizontal, AppTheme.Spacing.tiny)
+                    .frame(width: 180)
+                    .background(AppTheme.Colors.surfaceGhost(for: scheme))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                            .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+                    )
+
+                    Button {
+                        showKey.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: showKey.wrappedValue ? "eye.slash" : "eye")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .accessibilityLabel(showKey.wrappedValue ? "Hide API key" : "Show API key")
+
+                    if let validation, let testAction {
+                        let state = validation.wrappedValue
+                        if state != .idle {
+                            Image(systemName: state == .valid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(state == .valid ? .green : .red)
+                                .help(state == .valid ? "Key is valid" : "Key could not be validated")
+                        }
+
+                        Button {
+                            guard !binding.wrappedValue.isEmpty else { return }
+                            validation.wrappedValue = .testing
+                            Task {
+                                let isValid = await testAction()
+                                await MainActor.run {
+                                    validation.wrappedValue = isValid ? .valid : .invalid
+                                }
+                            }
+                        } label: {
+                            if validation.wrappedValue == .testing {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Image(systemName: "checkmark.seal")
+                                    .font(AppTheme.Font.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .disabled(binding.wrappedValue.isEmpty || validation.wrappedValue == .testing)
+                        .accessibilityLabel("Test \(name) API key")
+                    }
+
+                    Link(destination: URL(string: link)!) {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(AppTheme.Font.label)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .help("Get a \(name) API key")
                 }
-                .buttonStyle(.plain)
-                .contentShape(Circle())
             }
             .padding(.horizontal, AppTheme.Spacing.medium)
             .padding(.vertical, AppTheme.Spacing.small)
-
-            HStack(spacing: AppTheme.Spacing.tiny) {
-                ZStack(alignment: .trailing) {
-                    if showKey.wrappedValue {
-                        TextField("Enter API key...", text: binding)
-                    } else {
-                        SecureField("Enter API key...", text: binding)
-                    }
-                }
-                .textFieldStyle(.plain)
-                .font(AppTheme.Font.label)
-                .padding(.vertical, AppTheme.Spacing.mini)
-                .padding(.horizontal, AppTheme.Spacing.tiny)
-                .background(AppTheme.Colors.surfaceGhost(for: scheme))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
-                )
-
-                Button {
-                    showKey.wrappedValue.toggle()
-                } label: {
-                    Image(systemName: showKey.wrappedValue ? "eye.slash" : "eye")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Circle())
-                .accessibilityLabel(showKey.wrappedValue ? "Hide API key" : "Show API key")
-            }
-            .padding(.horizontal, AppTheme.Spacing.medium)
-            .padding(.bottom, AppTheme.Spacing.small)
-
-            if showDivider {
-                Rectangle()
-                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
-                    .frame(height: 1)
-                    .padding(.leading, AppTheme.Spacing.medium)
-            }
         }
     }
 

@@ -59,11 +59,45 @@ struct FilteredLibraryGridView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
             } else if items.isEmpty && !isLoading {
-                ContentUnavailableView(
-                    "No items found",
-                    systemImage: "square.grid.3x3",
-                    description: Text("Try a different filter or add new titles to your library.")
-                )
+                if !searchText.isEmpty {
+                    VStack(spacing: AppTheme.Spacing.large) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No results for \"\(searchText)\"")
+                            .font(AppTheme.Font.subtitle)
+                        Text("Try a different search term or clear the search to see all \(filter.name) titles.")
+                            .font(AppTheme.Font.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Clear Search") {
+                            searchText = ""
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.Colors.accent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(AppTheme.Spacing.xLarge)
+                } else {
+                    VStack(spacing: AppTheme.Spacing.large) {
+                        Image(systemName: "square.grid.3x3")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No \(filter.name) titles")
+                            .font(AppTheme.Font.subtitle)
+                        Text("There are no titles matching this \(filter.type.rawValue.lowercased()) in your library yet.")
+                            .font(AppTheme.Font.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Browse Discovery") {
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.Colors.accent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(AppTheme.Spacing.xLarge)
+                }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {

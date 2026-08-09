@@ -33,12 +33,11 @@ class AppThemeCoordinator {
     }
 
     static let presets: [ThemePreset] = [
-        .init(name: "Blue",    accent: "#3B82F6", darkBG: "#171B1E", lightBG: "#F2F5F9", darkSurface: "#1B1F23", lightSurface: "#E8EDF4", cardFillOpacity: 0.05),
-        .init(name: "Beige",   accent: "#B8845F", darkBG: "#1C1917", lightBG: "#FAF6F0", darkSurface: "#221E1B", lightSurface: "#EDE5D9", cardFillOpacity: 0.05),
-        .init(name: "Slate",   accent: "#64748B", darkBG: "#17181A", lightBG: "#F3F4F7", darkSurface: "#1B1D20", lightSurface: "#E7E9EE", cardFillOpacity: 0.06),
-        .init(name: "Sage",    accent: "#6F9F5E", darkBG: "#1B1D18", lightBG: "#F5F8F2", darkSurface: "#20231B", lightSurface: "#E7EBDD", cardFillOpacity: 0.05),
-        .init(name: "Indigo",  accent: "#6366F1", darkBG: "#171720", lightBG: "#F2F2FB", darkSurface: "#1B1B26", lightSurface: "#E6E6F2", cardFillOpacity: 0.05),
-        .init(name: "Cyan",    accent: "#06B6D4", darkBG: "#101B1E", lightBG: "#EFF9FB", darkSurface: "#152226", lightSurface: "#DBF0F4", cardFillOpacity: 0.05),
+        .init(name: "Mac",        accent: "#0A84FF", darkBG: "#1C1D20", lightBG: "#F4F5F7", darkSurface: "#222428", lightSurface: "#ECEDEF", cardFillOpacity: 0.05),
+        .init(name: "Trippy",     accent: "#3E9DB0", darkBG: "#1A1D1F", lightBG: "#F1F7F8", darkSurface: "#212426", lightSurface: "#E6EEF0", cardFillOpacity: 0.05),
+        .init(name: "Chill",      accent: "#67A06B", darkBG: "#1A1E1B", lightBG: "#F2F7F2", darkSurface: "#212621", lightSurface: "#E6EDE4", cardFillOpacity: 0.05),
+        .init(name: "Epic",       accent: "#8C66A8", darkBG: "#1B1A21", lightBG: "#F3F1F8", darkSurface: "#222130", lightSurface: "#E9E5F2", cardFillOpacity: 0.05),
+        .init(name: "Emotional",  accent: "#D06A93", darkBG: "#1F1A1D", lightBG: "#F8F1F4", darkSurface: "#262024", lightSurface: "#EDE2E7", cardFillOpacity: 0.05),
     ]
 
     private var activePreset: ThemePreset {
@@ -81,6 +80,11 @@ class AppThemeCoordinator {
     }
 
     func updateThemeColors() {
+        // Mac (index 0) uses the system accent for a true neutral default.
+        if themePreset == 0 {
+            self.accent = .accentColor
+            return
+        }
         let preset = activePreset
         self.accent = Color(hex: preset.accent) ?? .accentColor
     }
@@ -123,6 +127,19 @@ class AppThemeCoordinator {
         return accentColor.opacity(isDarkActive ? preset.cardFillOpacity : preset.cardFillOpacity * 0.6)
     }
 
+    /// Neutral background for DetailView — uses the Mac preset's neutral palette
+    /// (ignores the active theme tint) so the detail page always sits on a clear base.
+    func neutralBackground(for colorScheme: ColorScheme) -> Color {
+        let mac = Self.presets[0]
+        return Color(hex: isDarkActive ? mac.darkBG : mac.lightBG)
+            ?? Color(white: isDarkActive ? 0.07 : 0.98)
+    }
+
+    /// Neutral card fill for DetailView — ignores the palette accent.
+    func neutralCardFill(for colorScheme: ColorScheme) -> Color {
+        Color.primary.opacity(isDarkActive ? 0.04 : 0.02)
+    }
+
     // MARK: - Mood Color
 
     func updateMood(for colors: [Color], colorScheme: ColorScheme, force: Bool = false) {
@@ -135,9 +152,7 @@ class AppThemeCoordinator {
         lastUpdate = Date()
 
         guard !colors.isEmpty else {
-            withAnimation(AppTheme.Animation.springGentle) {
-                self.categoryMoodColor = .clear
-            }
+            self.categoryMoodColor = .clear
             return
         }
 
@@ -171,9 +186,9 @@ class AppThemeCoordinator {
             ))
 
             await MainActor.run {
-                withAnimation(AppTheme.Animation.springGentle) {
-                    self.categoryMoodColor = finalColor
-                }
+                // No withAnimation: animating the full-window MeshGradient on every
+                // single-item update is wasteful. The throttle above already paces this.
+                self.categoryMoodColor = finalColor
             }
         }
     }

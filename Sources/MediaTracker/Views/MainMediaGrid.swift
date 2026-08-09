@@ -3,7 +3,6 @@ import SwiftData
 
 struct MainMediaGrid: View {
     let items: [MediaThumbnailMetadata]
-    let featuredCount: Int
     let isCategoryPage: Bool
     let namespace: Namespace.ID
     let isFastScrolling: Bool

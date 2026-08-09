@@ -24,7 +24,7 @@ struct ForYouCarousel: View {
                 ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { metadata in
                         Button { onSelect(metadata) } label: {
-                            ForYouCompactCard(metadata: metadata, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
+                            ForYouCompactCard(metadata: metadata, isFastScrolling: isFastScrolling || horizontalFastScrolling)
                                 .equatable()
                                 .compositingGroupIfNeeded()
                         }

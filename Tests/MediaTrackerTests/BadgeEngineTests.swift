@@ -116,7 +116,8 @@ final class BadgeEngineTests: XCTestCase {
         tv.recalculateCachedProperties()
         item.syncCachedProperties(now: testNow)
 
-        XCTAssertNotEqual(item.storedSmartBadgeLabel, "PREMIERE")
+        // Any upcoming premiere (no matter how far out) now receives the badge.
+        XCTAssertEqual(item.storedSmartBadgeLabel, "PREMIERE")
     }
 
     // MARK: - Level 1: Milestone Events - FINALE

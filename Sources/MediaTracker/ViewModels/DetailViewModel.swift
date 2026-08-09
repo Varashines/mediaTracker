@@ -9,12 +9,8 @@ class DetailViewModel {
     /// True when the theme color came from poster extraction / network theme,
     /// not the neutral fallback. Used by the background mesh to skip the tint.
     var hasDerivedThemeColor = false
-    /// Secondary accent + muted wash from the poster palette (premium detail view).
-    var secondaryThemeColor: Color?
     var mutedThemeColor: Color?
     
-    // Phase 5 Performance: Cache scheme-aware colors to avoid per-frame math in MeshGradient
-    var vibrantThemeColor: Color = .clear
     var recommendations: [MooreMetricsRecommendation] = []
     var isLoadingRecommendations = false
     var trailerKey: String?
@@ -23,8 +19,6 @@ class DetailViewModel {
     var logoOptions: [String] = []
     var debugSelectedTraits: [String] = []
     private var _nextEpisodeToWatch: TVEpisode?? = nil
-    private var _darkerThemeColor: Color = .clear
-    private var _lighterThemeColor: Color = .clear
     private var _highContrastAccent: Color = .primary
     private var _luminousAccent: Color = .clear
     
@@ -63,7 +57,6 @@ class DetailViewModel {
         if let hex = item.themeColorHex,
            let cachedColor = Color(themeHex: hex) {
             self.themeColor = cachedColor
-            self.secondaryThemeColor = item.themeSecondaryColorHex.flatMap { Color(themeHex: $0) }
             self.mutedThemeColor = item.themeMutedColorHex.flatMap { Color(themeHex: $0) }
             self.hasDerivedThemeColor = true
             self.recalculateVibrantPalette()
@@ -75,7 +68,6 @@ class DetailViewModel {
             let first = networkName.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? networkName
             if let netColor = NetworkThemeManager.shared.color(for: first) {
                 self.themeColor = netColor
-                self.secondaryThemeColor = nil
                 self.mutedThemeColor = nil
                 self.hasDerivedThemeColor = true
                 self.recalculateVibrantPalette()
@@ -85,7 +77,6 @@ class DetailViewModel {
 
         // Priority 3: Neutral fallback (never use global accent)
         self.themeColor = Color.secondary.opacity(0.15)
-        self.secondaryThemeColor = nil
         self.mutedThemeColor = nil
         self.hasDerivedThemeColor = false
         self.recalculateVibrantPalette()
@@ -98,25 +89,9 @@ class DetailViewModel {
         let isDark = false
         #endif
         let scheme: ColorScheme = isDark ? .dark : .light
-        self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: scheme)
         self._highContrastAccent = themeColor.highContrastAccent(colorScheme: scheme)
         self._luminousAccent = themeColor.luminousAccent(colorScheme: scheme)
-        
-        let o = themeColor.oklch
-        if o.c > 0.02 {
-            _darkerThemeColor = Color.fromOKLCH(l: max(o.l - 0.12, 0.1), c: o.c, h: o.h)
-            _lighterThemeColor = Color.fromOKLCH(l: min(o.l + 0.08, 0.95), c: o.c, h: o.h)
-        } else {
-            _darkerThemeColor = Color(white: max(o.l - 0.12, 0.1))
-            _lighterThemeColor = Color(white: min(o.l + 0.08, 0.95))
-        }
     }
-
-    /// Darker variant of themeColor for mesh gradient corners.
-    var darkerThemeColor: Color { _darkerThemeColor }
-
-    /// Lighter variant of themeColor for mesh gradient edges.
-    var lighterThemeColor: Color { _lighterThemeColor }
 
     /// Cached high-contrast accent (foreground color against themeColor backgrounds).
     var highContrastAccentColor: Color { _highContrastAccent }
@@ -130,7 +105,6 @@ class DetailViewModel {
     func refreshSchemeColors(for colorScheme: ColorScheme) {
         self._highContrastAccent = themeColor.highContrastAccent(colorScheme: colorScheme)
         self._luminousAccent = themeColor.luminousAccent(colorScheme: colorScheme)
-        self.vibrantThemeColor = themeColor.luminousAccent(colorScheme: colorScheme)
     }
 
     var nextEpisodeToWatch: TVEpisode? {
@@ -522,14 +496,12 @@ class DetailViewModel {
     private var logoTask: Task<Void, Never>?
     private var posterTask: Task<Void, Never>?
     private var watchProvidersTask: Task<Void, Never>?
-    private var episodesTask: Task<Void, Never>?
 
     func cancelTasks() {
         recsTask?.cancel()
         logoTask?.cancel()
         posterTask?.cancel()
         watchProvidersTask?.cancel()
-        episodesTask?.cancel()
     }
 
     @discardableResult

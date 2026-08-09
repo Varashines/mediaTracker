@@ -72,19 +72,13 @@ struct AppTheme {
 
         // Monospaced
         static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
-        static let monoBody = SwiftUI.Font.system(size: 13, weight: .bold, design: .monospaced)
         static let monoCaption = SwiftUI.Font.system(size: 11, weight: .semibold, design: .monospaced)
-        static let monoLarge = SwiftUI.Font.system(size: 30, weight: .heavy, design: .rounded)
-        static let monoLabel = SwiftUI.Font.system(size: 10, weight: .medium, design: .monospaced)
 
         // Settings
-        static let settingsIcon = SwiftUI.Font.system(size: 18, weight: .medium)
         static let titleMedium = SwiftUI.Font.system(size: 18, weight: .semibold, design: .rounded)
 
         // Stats / numeric values
         static let statValue = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded)
-        static let valueMedium = SwiftUI.Font.system(size: 24, weight: .bold, design: .rounded)
-        static let valueSmall = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
     }
 
     struct ShadowConfig {
@@ -95,12 +89,9 @@ struct AppTheme {
     }
 
     struct Shadow {
-        static let subtle = ShadowConfig(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
         static let card = ShadowConfig(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
         static let cardHover = ShadowConfig(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
         static let elevated = ShadowConfig(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
-        static let poster = ShadowConfig(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
-        static let glow = ShadowConfig(color: .clear, radius: 8, x: 0, y: 0)
     }
 
     struct Animation {
@@ -110,11 +101,6 @@ struct AppTheme {
         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
         static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
         static let chartReveal: SwiftUI.Animation = .easeInOut(duration: 0.8)
-
-        /// Per-item stagger delay for grid/carousel reveals.
-        static func stagger(index: Int, step: Double = 0.04) -> SwiftUI.Animation {
-            .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * step)
-        }
     }
 
     struct Thumbnail {
@@ -122,8 +108,6 @@ struct AppTheme {
         static let small = CGSize(width: 160, height: 240)
         static let medium = CGSize(width: 400, height: 600)
         static let large = CGSize(width: 800, height: 1200)
-        static let compact = CGSize(width: 210, height: 105)
-        static let backdropLarge = CGSize(width: 2000, height: 1125)
         static let backdropCompact = CGSize(width: 400, height: 226)
     }
 
@@ -134,9 +118,6 @@ struct AppTheme {
     }
 
     struct Gradient {
-        static func accentPrimary(_ color: Color) -> SwiftUI.Gradient {
-            SwiftUI.Gradient(colors: [color, color.opacity(0.8)])
-        }
         static func surfaceTint(_ color: Color, for scheme: ColorScheme) -> SwiftUI.Gradient {
             SwiftUI.Gradient(colors: [
                 color.opacity(scheme == .dark ? 0.15 : 0.1),

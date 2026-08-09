@@ -36,10 +36,9 @@ struct MainLibraryView: View {
             if selectedCategory != .home && !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
                 if let networks = selectedNetworks, !networks.isEmpty {
                     LibraryHeaderView(
-                        selectedCategory: selectedCategory,
-                        selectedNetworks: networks, isCategoryPage: isCategoryPage,
-                        onNetworkSelected: onNetworkSelected, onBack: onBack,
-                        viewModel: viewModel)
+                        selectedNetworks: networks,
+                        onNetworkSelected: onNetworkSelected
+                    )
                 }
             }
 

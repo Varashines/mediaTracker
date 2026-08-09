@@ -133,7 +133,7 @@ struct PassportCardView: View {
                             title: "TOP GENRE",
                             value: stats.topGenre ?? "Exploring",
                             subtitle: stats.topGenre != nil
-                                ? (stats.genreDNA.first.map { "\(Int(round($0.percentage)))% taste match" } ?? "10+ titles")
+                                ? (stats.genreDNA.first.map { "\(Int(round($0.percentage)))%" } ?? "10+ titles")
                                 : "Min. 10 titles in genre",
                             icon: "sparkles"
                         )

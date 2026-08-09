@@ -6,12 +6,16 @@ struct CategoryStats: Sendable {
     var liked = 0
     var disliked = 0
     var total = 0
+    /// Number of distinct rated titles (unweighted). Used as the qualification
+    /// cutoff so weighted affinity points never inflate the "how many titles"
+    /// requirement.
+    var ratedTitles = 0
     var profileURL: String? = nil
 
     var ratedCount: Int { loved + liked + disliked }
 
     func affinity(cutoff: Int = 5, belowCutoffValue: Double = 0) -> Double {
-        guard ratedCount >= cutoff else { return belowCutoffValue }
+        guard ratedTitles >= cutoff else { return belowCutoffValue }
         let lovedWeight = Double(3 * loved)
         let likedWeight = Double(liked)
         let dislikedWeight = Double(2 * disliked)
@@ -22,18 +26,30 @@ struct CategoryStats: Sendable {
 }
 
 enum TasteMath {
-    static func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String, profileURL: String? = nil) {
+    static func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String, profileURL: String? = nil, weight: Int = 1) {
         var s = map[key, default: CategoryStats()]
         s.total += 1
         if let tasteVal = TasteValue(rawValue: taste) {
             switch tasteVal {
-            case .love: s.loved += 1
-            case .like: s.liked += 1
-            case .dislike: s.disliked += 1
+            case .love: s.loved += weight
+            case .like: s.liked += weight
+            case .dislike: s.disliked += weight
             case .none: break
             }
+            if tasteVal != .none { s.ratedTitles += 1 }
         }
         if let url = profileURL { s.profileURL = url }
         map[key] = s
+    }
+
+    /// Rank comparator: affinity score (desc), then title count (desc), then
+    /// alphabetical (case-insensitive). Used for Hall of Fame and taste rankings.
+    static func compareByAffinityCountName(
+        _ a: (score: Double, count: Int, name: String),
+        _ b: (score: Double, count: Int, name: String)
+    ) -> Bool {
+        if a.score != b.score { return a.score > b.score }
+        if a.count != b.count { return a.count > b.count }
+        return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
     }
 }

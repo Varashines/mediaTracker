@@ -197,10 +197,6 @@ private struct SeasonTab: View {
         progress >= 1.0
     }
 
-    private var isOngoing: Bool {
-        progress > 0 && progress < 1.0
-    }
-
     var body: some View {
         Button(action: action) {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
@@ -585,7 +581,7 @@ private struct EpisodeCube: View {
 
                             HStack(spacing: 5) {
                                 if let runtime = episode.runtime, runtime > 0 {
-                                    Text("\(runtime)m")
+                                    Text(DateUtils.formatRuntime(runtime))
                                         .foregroundStyle(.secondary.opacity(0.4))
                                 }
 
@@ -688,7 +684,7 @@ private struct EpisodeCube: View {
 
             let dateString: String? = episode.airDateAsDate?.formatted(
                 date: .abbreviated, time: .omitted)
-            let runtimeString: String? = (episode.runtime ?? 0) > 0 ? "\(episode.runtime!)m" : nil
+            let runtimeString: String? = (episode.runtime ?? 0) > 0 ? DateUtils.formatRuntime(episode.runtime) : nil
 
             if dateString != nil || runtimeString != nil {
                 HStack(spacing: 0) {

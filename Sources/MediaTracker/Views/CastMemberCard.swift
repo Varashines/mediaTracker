@@ -28,7 +28,7 @@ struct CastMemberCard: View {
         .frame(width: 200, height: 90)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .fill(AppTheme.Colors.cardFill(for: colorScheme))
+                .fill(AppTheme.Colors.neutralCardFill(for: colorScheme))
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: AppTheme.Shadow.card.radius, x: AppTheme.Shadow.card.x, y: AppTheme.Shadow.card.y)

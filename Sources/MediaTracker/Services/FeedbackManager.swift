@@ -19,6 +19,8 @@ class FeedbackManager {
         case tasteDislike   // Heavy rejection
         case addToLibrary   // Clean addition
         case removeFromLibrary // Destructive warning
+        case moodSelected(Mood) // Capturing a viewing mood
+        case moodCleared    // Clearing a selected mood
     }
     
     func trigger(_ type: FeedbackType) {
@@ -63,7 +65,7 @@ class FeedbackManager {
                 NSSound(named: "Bottle")?.play()
             }
 
-        case .unmarkWatched:
+        case .unmarkWatched, .moodCleared:
             if hapticsEnabled {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
@@ -93,6 +95,40 @@ class FeedbackManager {
             }
             if audioEnabled {
                 NSSound(named: "Basso")?.play()
+            }
+
+        case .moodSelected(let mood):
+            switch mood {
+            case .cozy:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Purr")?.play() }
+            case .intense:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Basso")?.play() }
+            case .mindBending:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Frog")?.play() }
+            case .epic:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Hero")?.play() }
+            case .emotional:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Glass")?.play() }
+            case .chill:
+                if hapticsEnabled {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                }
+                if audioEnabled { NSSound(named: "Pop")?.play() }
             }
         }
     }

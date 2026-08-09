@@ -27,10 +27,10 @@ struct BadgeEngine {
     }
 
     private static let recentlyWatchedCutoff: TimeInterval = -TimeInterval.days2
-    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...2592000
+    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...TimeInterval.greatestFiniteMagnitude
     private static let newBadgeWindow: ClosedRange<TimeInterval> = -1209600...0
     private static let soonBadgeWindow: ClosedRange<TimeInterval> = 0...TimeInterval.days2
-    private static let premiereDaysWindow: ClosedRange<Double> = -30...3
+    private static let premiereDaysWindow: ClosedRange<Double> = -Double.greatestFiniteMagnitude...3
     private static let finaleDaysWindow: ClosedRange<Double> = -7...14
     private static let milestoneDaysWindow: ClosedRange<Double> = -14...14
     private static let behindWindowDays: Double = 7

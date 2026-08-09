@@ -230,7 +230,7 @@ extension MediaItem {
         }
         
         if let lang = cachedLanguage {
-            text += " \(lang)"
+            text += " \(lang) \(LanguageUtils.languageName(for: lang).lowercased())"
         }
         
         self.searchableText = text.lowercased()

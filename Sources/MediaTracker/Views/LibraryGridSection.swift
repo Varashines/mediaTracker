@@ -39,7 +39,6 @@ struct LibraryGridSection: View {
                 if viewModel.filter.currentGroupBy == .none {
                     MainMediaGrid(
                         items: items,
-                        featuredCount: 0,
                         isCategoryPage: isCategoryPage, namespace: namespace,
                         isFastScrolling: isFastScrolling,
                         disableHover: disableHover,

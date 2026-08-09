@@ -79,10 +79,10 @@ struct CreateCollectionSheet: View {
                     Toggle(isOn: $isSmart.animation(AppTheme.Animation.springSnappy)) {
                         HStack(spacing: 12) {
                             ZStack {
-                                Circle().fill(.purple.opacity(0.1))
+                                Circle().fill(AppTheme.Colors.accent.opacity(0.12))
                                     .frame(width: 32, height: 32)
                                 Image(systemName: "sparkles")
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(AppTheme.Colors.accent)
                                     .font(AppTheme.Font.heading)
                             }
                             
@@ -163,7 +163,7 @@ struct CreateCollectionSheet: View {
                 .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(.secondary))
+                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(AppTheme.Colors.accent))
                 .foregroundStyle(.white)
                 .cornerRadius(AppTheme.Radius.medium)
             }

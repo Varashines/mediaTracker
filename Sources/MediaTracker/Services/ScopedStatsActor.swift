@@ -66,6 +66,10 @@ actor ScopedStatsActor {
             return ScopedLibraryStats.empty
         }
 
+        // Build source→target alias map so network/studio counting matches hub grouping.
+        let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []
+        let aliasMap = DiscoverySyncService.buildSourceToTargetMap(from: aliasEntities)
+
         if filter.type == .genre {
             items = items.filter { $0.cachedGenres.contains(name) }
         }
@@ -107,10 +111,11 @@ actor ScopedStatsActor {
                 TasteMath.updateTaste(&genreTaste, g, item.tasteValue)
             }
 
-            // Networks — raw count
+            // Networks — grouped by alias target
             if let rawNetwork = item.cachedNetwork {
                 for n in rawNetwork.commaSeparatedValues {
-                    networkCounts[n, default: 0] += 1
+                    let groupedName = aliasMap[n.lowercased()] ?? n
+                    networkCounts[groupedName, default: 0] += 1
                 }
             }
 
@@ -130,18 +135,24 @@ actor ScopedStatsActor {
             let score = val.affinity(cutoff: 3)
             guard score > 0 else { return nil }
             return ScoredPerson(id: actorName, name: actorName, score: score, count: val.total, profileURL: val.profileURL)
-        }.sorted { $0.score > $1.score }.prefix(6).map { $0 }
+        }.sorted { TasteMath.compareByAffinityCountName(($0.score, $0.count, $0.name), ($1.score, $1.count, $1.name)) }.prefix(6).map { $0 }
 
-        let topGenres: [(name: String, score: Double)] = genreTaste.compactMap { genreName, val in
+        let topGenres: [(name: String, score: Double)] = genreTaste.compactMap { genreName, val -> (String, Double, Int)? in
             let score = val.affinity(cutoff: 5)
             guard score > 0 else { return nil }
-            return (genreName, score)
-        }.sorted { $0.1 > $1.1 }.prefix(8).map { $0 }
+            return (genreName, score, val.total)
+        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1) }
 
-        // Count-based: networks, providers, languages
-        let topNetworks = networkCounts.sorted { $0.1 > $1.1 }.prefix(8).map { ($0.0, $0.1) }
-        let topProviders = providerCounts.sorted { $0.1 > $1.1 }.prefix(8).map { ($0.0, $0.1) }
-        let topLanguages = languageCounts.sorted { $0.1 > $1.1 }.prefix(8).map { ($0.0, $0.1) }
+        // Count-based: networks, providers, languages (alpha tie-break on equal counts)
+        let topNetworks = networkCounts.sorted {
+            $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
+        }.prefix(8).map { ($0.0, $0.1) }
+        let topProviders = providerCounts.sorted {
+            $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
+        }.prefix(8).map { ($0.0, $0.1) }
+        let topLanguages = languageCounts.sorted {
+            $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
+        }.prefix(8).map { ($0.0, $0.1) }
 
         let result = ScopedLibraryStats(
             totalItems: items.count,

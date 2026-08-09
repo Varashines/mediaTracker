@@ -55,7 +55,7 @@ struct CategoryRouterView: View {
             InsightsView(refreshID: refreshID)
                 .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
-            SmartCollectionsHubView(namespace: posterNamespace, selection: $sidebarSelection, refreshID: refreshID)
+            SmartCollectionsHubView(selection: $sidebarSelection, refreshID: refreshID)
                 .transition(slideTransition)
         } else {
             MainLibraryView(

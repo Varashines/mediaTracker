@@ -68,6 +68,7 @@ struct SidebarNavigation: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .background(AppTheme.Colors.background(for: scheme))
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -105,13 +106,14 @@ struct SidebarNavigation: View {
             FeedbackManager.shared.trigger(.click)
         } label: {
             HStack(spacing: AppTheme.Spacing.small) {
-                CollectionIconView(systemImage: iconName, font: AppTheme.Icon.medium, color: isSelected ? .white : .secondary)
+                CollectionIconView(systemImage: iconName, font: AppTheme.Icon.medium, color: isSelected ? .white : (isHovered ? .primary : .secondary))
+                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: AppTheme.Spacing.large)
                     .scaleEffect(isSelected ? 1.1 : 1.0)
 
                 Text(title)
                     .font(AppTheme.Font.body.weight(isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? .white : Color.secondary)
+                    .foregroundStyle(isSelected ? .white : (isHovered ? .primary : Color.secondary))
 
                 Spacer()
             }
@@ -129,7 +131,7 @@ struct SidebarNavigation: View {
                         .matchedGeometryEffect(id: "sidebar_selection", in: sidebarNamespace)
                 } else {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(isHovered ? AppTheme.Colors.surfaceGhost(for: scheme) : .clear)
+                        .fill(isHovered ? AppTheme.Colors.surfaceSubtle(for: scheme) : .clear)
                 }
             }
             .contentShape(Rectangle())

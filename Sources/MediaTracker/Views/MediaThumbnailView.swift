@@ -205,7 +205,6 @@ struct MediaThumbnailView: View, Equatable {
     private var posterURL: String? { capturedPosterURL }
     private var type: MediaType { capturedType }
     private var safeState: MediaState { capturedState }
-    private var safeProgress: Double? { capturedProgress }
 
     private var yearLabel: String? { capturedDisplayYear }
 
@@ -278,9 +277,7 @@ struct MediaThumbnailView: View, Equatable {
                 type: type,
                 isFastScrolling: isFastScrolling,
                 width: width,
-                height: height,
-                namespace: namespace,
-                itemID: capturedItemID
+                height: height
             )
 
             // 2. Hover Metadata Pills (Floating capsules)
@@ -611,7 +608,7 @@ struct MediaThumbnailView: View, Equatable {
                 }
             }
         } label: {
-            Label("Remove", systemImage: "trash")
+            Label("Remove from Library", systemImage: "trash")
         }
     }
 }
@@ -650,8 +647,6 @@ struct ThumbnailPosterLayer: View {
     let isFastScrolling: Bool
     let width: CGFloat
     let height: CGFloat
-    var namespace: Namespace.ID? = nil
-    var itemID: String = ""
 
     var body: some View {
         Group {

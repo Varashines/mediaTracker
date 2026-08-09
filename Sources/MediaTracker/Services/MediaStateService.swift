@@ -12,6 +12,9 @@ final class MediaStateService {
     private(set) var needsFullRefreshCount = 0
     private(set) var needsSingleItemUpdateCount = 0
 
+    // Discovery hub — forced clear + re-sync
+    private(set) var discoveryResyncCount = 0
+
     // DetailView — trigger targeted item refresh
     private(set) var refreshedItemID: String?
 
@@ -49,6 +52,13 @@ final class MediaStateService {
         needsFullRefreshCount += 1
         lastChangedItemID = nil
         debouncedTasteClear()
+    }
+
+    /// Requests a forced re-sync of the Discovery hub (clear + refresh) from any view.
+    func requestDiscoveryResync() {
+        discoveryResyncCount += 1
+        needsFullRefreshCount += 1
+        lastChangedItemID = nil
     }
 
     /// Debounce taste cache clear — coalesce rapid state changes into a single invalidation

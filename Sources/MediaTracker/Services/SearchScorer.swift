@@ -1,5 +1,17 @@
 import Foundation
 
+/// Precomputed lowercased search fields. Building this once per item avoids
+/// re-lowercasing every field for every token during multi-token searches.
+struct SearchPayload: Sendable {
+    let title: String
+    let overview: String
+    let creators: [String]
+    let cast: [String]
+    let genres: [String]
+    let network: String?
+    let language: String?
+}
+
 struct SearchScorer: Sendable {
     let tokens: [String]
     private let tokenSet: Set<String>
@@ -14,11 +26,15 @@ struct SearchScorer: Sendable {
     }
 
     func evaluate(item: SearchScorable) -> (score: Int, matchesAll: Bool, matchesAny: Bool) {
+        evaluate(payload: item.searchPayload)
+    }
+
+    func evaluate(payload: SearchPayload) -> (score: Int, matchesAll: Bool, matchesAny: Bool) {
         var total = 0
         var matchesAll = true
         var matchesAny = false
         for token in tokens {
-            let tokenScore = scoreToken(token, item: item)
+            let tokenScore = scoreToken(token, payload: payload)
             total += tokenScore
             matchesAll = matchesAll && tokenScore > 0
             matchesAny = matchesAny || tokenScore > 0
@@ -27,22 +43,23 @@ struct SearchScorer: Sendable {
         // Multi-token phrase match in the title dominates per-token matches.
         if tokens.count > 1 {
             let phrase = tokens.joined(separator: " ").lowercased()
-            if item.searchTitle == phrase {
+            if payload.title == phrase {
                 total += 500
-            } else if item.searchTitle.contains(phrase) {
+            } else if payload.title.contains(phrase) {
                 total += 300
             }
         }
         return (total, matchesAll, matchesAny)
     }
 
-    private func scoreToken(_ token: String, item: SearchScorable) -> Int {
-        let title = item.searchTitle
-        let overview = item.searchOverview
-        let creators = item.searchCreators
-        let castNames = item.searchCast
-        let genres = item.searchGenres
-        let network = item.searchNetwork
+    private func scoreToken(_ token: String, payload: SearchPayload) -> Int {
+        let title = payload.title
+        let overview = payload.overview
+        let creators = payload.creators
+        let castNames = payload.cast
+        let genres = payload.genres
+        let network = payload.network
+        let language = payload.language
 
         // Title scoring — fuzzy and weighted
         if title == token { return 500 }
@@ -58,6 +75,7 @@ struct SearchScorer: Sendable {
         if genres.contains(where: { $0.localizedStandardContains(token) }) { return 30 }
         if overview.localizedStandardContains(token) { return 15 }
         if let net = network, net.localizedStandardContains(token) { return 10 }
+        if let lang = language, lang.localizedStandardContains(token) { return 10 }
 
         return 0
     }
@@ -95,30 +113,41 @@ struct SearchScorer: Sendable {
 }
 
 protocol SearchScorable {
-    var searchTitle: String { get }
-    var searchOverview: String { get }
-    var searchCreators: [String] { get }
-    var searchCast: [String] { get }
-    var searchGenres: [String] { get }
-    var searchNetwork: String? { get }
+    var searchPayload: SearchPayload { get }
     var searchableText: String { get }
 }
 
 extension MediaItem: SearchScorable {
-    var searchTitle: String { title.lowercased() }
-    var searchOverview: String { overview.lowercased() }
-    var searchCreators: [String] { cachedCreators.map { $0.lowercased() } }
-    var searchCast: [String] { displayCast.map { $0.name.lowercased() } }
-    var searchGenres: [String] { cachedGenres.map { $0.lowercased() } }
-    var searchNetwork: String? { cachedNetwork?.lowercased() }
+    var searchPayload: SearchPayload {
+        SearchPayload(
+            title: title.lowercased(),
+            overview: overview.lowercased(),
+            creators: cachedCreators.map { $0.lowercased() },
+            cast: displayCast.map { $0.name.lowercased() },
+            genres: cachedGenres.map { $0.lowercased() },
+            network: cachedNetwork?.lowercased(),
+            language: cachedLanguage.map {
+                let code = $0.lowercased()
+                return "\(code) \(LanguageUtils.languageName(for: $0).lowercased())"
+            }
+        )
+    }
 }
 
 extension MediaSearchResult: SearchScorable {
-    var searchTitle: String { title.lowercased() }
-    var searchOverview: String { overview.lowercased() }
-    var searchCreators: [String] { [] }
-    var searchCast: [String] { [] }
-    var searchGenres: [String] { genres.map { $0.lowercased() } }
-    var searchNetwork: String? { nil }
+    var searchPayload: SearchPayload {
+        SearchPayload(
+            title: title.lowercased(),
+            overview: overview.lowercased(),
+            creators: [],
+            cast: [],
+            genres: genres.map { $0.lowercased() },
+            network: nil,
+            language: originalLanguage.map {
+                let code = $0.lowercased()
+                return "\(code) \(LanguageUtils.languageName(for: $0).lowercased())"
+            }
+        )
+    }
     var searchableText: String { "\(title) \(overview)".lowercased() }
 }

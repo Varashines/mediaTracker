@@ -22,6 +22,18 @@ extension AppTheme {
             AppThemeCoordinator.shared.cardFill(for: colorScheme)
         }
 
+        /// Neutral background for DetailView — ignores the theme palette tint.
+        @MainActor
+        static func neutralBackground(for colorScheme: ColorScheme) -> Color {
+            AppThemeCoordinator.shared.neutralBackground(for: colorScheme)
+        }
+
+        /// Neutral card fill for DetailView — ignores the palette accent.
+        @MainActor
+        static func neutralCardFill(for colorScheme: ColorScheme) -> Color {
+            AppThemeCoordinator.shared.neutralCardFill(for: colorScheme)
+        }
+
         // MARK: - Semantic Surface Fills
 
         /// Barely visible background — ghost fills, very subtle tints
@@ -54,12 +66,6 @@ extension AppTheme {
         @MainActor
         static func strokeHover(for colorScheme: ColorScheme) -> Color {
             Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.12)
-        }
-
-        /// Accent-tinted outline for selected interactive surfaces.
-        @MainActor
-        static func strokeSelected(for colorScheme: ColorScheme) -> Color {
-            accent.opacity(colorScheme == .dark ? 0.45 : 0.3)
         }
 
         /// Semantic genre→color mapping shared by DiscoveryCard and ScopedInsightsHeader.

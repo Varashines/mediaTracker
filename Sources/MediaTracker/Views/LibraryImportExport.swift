@@ -239,4 +239,22 @@ class LibraryImportExportService {
             }
         }
     }
+
+    /// Returns the number of auto-backups and the date of the most recent one.
+    static func autoBackupInfo() -> (count: Int, lastDate: Date?) {
+        let backupDir = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey]),
+              !files.isEmpty else {
+            return (0, nil)
+        }
+        let infos = files.compactMap { url -> (URL, Date)? in
+            guard url.pathExtension == "json",
+                  let attrs = try? fm.attributesOfItem(atPath: url.path),
+                  let creationDate = attrs[.creationDate] as? Date else { return nil }
+            return (url, creationDate)
+        }
+        let lastDate = infos.map(\.1).max()
+        return (infos.count, lastDate)
+    }
 }

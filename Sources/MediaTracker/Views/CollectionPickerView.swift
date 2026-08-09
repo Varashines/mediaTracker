@@ -128,7 +128,8 @@ struct CollectionToggleRow: View {
         }
         
         if let context = item.modelContext {
-            SaveCoordinator.shared.requestSave(context)
+            SaveCoordinator.shared.forceSave(context)
         }
+        MediaStateService.shared.postMediaStateChanged()
     }
 }

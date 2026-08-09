@@ -8,15 +8,28 @@ struct DataSection: View {
     @State private var exportData: Data?
     @State private var showExportDialog = false
     @State private var showImportSheet = false
+    @State private var backupCount = 0
+    @State private var lastBackupDate: Date?
+
+    private var backupSubtitle: String {
+        if backupCount == 0 {
+            return "No automatic backups yet"
+        }
+        if let date = lastBackupDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            return "\(backupCount) backups · Last: \(formatter.string(from: date))"
+        }
+        return "\(backupCount) backups stored"
+    }
 
     private var backgroundManager: BackgroundTaskManager {
         BackgroundTaskManager.shared
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            SettingsSectionHeader(text: "Backup & Import", icon: "tray.and.arrow.down.fill", color: .blue)
-
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SettingsCard(color: .blue) {
                 VStack(spacing: 0) {
                     SettingsRow(title: "Export Library", subtitle: "Save a JSON backup of your collection", showDivider: true) {
@@ -25,10 +38,13 @@ struct DataSection: View {
                             Task {
                                 let context = ModelContext(container)
                                 let descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
-                                if let items = try? context.fetch(descriptor) {
+                                do {
+                                    let items = try context.fetch(descriptor)
                                     let exportItems = LibraryImportExportService.shared.prepareExportData(items: items, context: context)
                                     exportData = exportItems
                                     showExportDialog = true
+                                } catch {
+                                    AppErrorState.shared.surfaceError("Export failed: \(error.localizedDescription)")
                                 }
                             }
                         }
@@ -38,7 +54,7 @@ struct DataSection: View {
                             showImportSheet = true
                         }
                     }
-                    SettingsRow(title: "Auto Backups", subtitle: "View automatic backup folder", showDivider: false) {
+                    SettingsRow(title: "Auto Backups", subtitle: backupSubtitle, showDivider: false) {
                         SettingsButton(title: "Show in Finder") {
                             let url = URL.applicationSupportDirectory.appendingPathComponent("AutoBackups")
                             if !FileManager.default.fileExists(atPath: url.path) {
@@ -49,8 +65,6 @@ struct DataSection: View {
                     }
                 }
             }
-
-            SettingsSectionHeader(text: "Background Operations", icon: "gearshape.arrow.triangle.2.circlepath", color: .teal)
 
             SettingsCard(color: .teal) {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
@@ -82,8 +96,6 @@ struct DataSection: View {
                 .padding(AppTheme.Spacing.medium)
             }
 
-            SettingsSectionHeader(text: "Maintenance", icon: "wrench.and.screwdriver.fill", color: .orange)
-
             SettingsCard(color: .orange) {
                 VStack(spacing: 0) {
                     SettingsRow(title: "Database Repair", subtitle: "Fix relationships and remove duplicates", showDivider: true) {
@@ -99,8 +111,6 @@ struct DataSection: View {
                 }
             }
 
-            SettingsSectionHeader(text: "Danger Zone", icon: "exclamationmark.triangle.fill", color: .red)
-
             GroupContainer(isDangerZone: true) {
                 SettingsRow(title: "Delete All Data", subtitle: "Permanently wipe your entire library", showDivider: false) {
                     SettingsButton(title: "Delete", color: .red) {
@@ -111,6 +121,11 @@ struct DataSection: View {
         }
         .sheet(isPresented: $showImportSheet) {
             ImportWizardSheet()
+        }
+        .onAppear {
+            let info = LibraryImportExportService.autoBackupInfo()
+            backupCount = info.count
+            lastBackupDate = info.lastDate
         }
         .confirmationDialog("Delete Everything?", isPresented: $showClearConfirmation) {
             Button("Delete All Library Data", role: .destructive) {

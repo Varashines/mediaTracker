@@ -3,9 +3,7 @@ import SwiftUI
 struct KeyboardShortcutsSection: View {
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            SettingsSectionHeader(text: "Navigation", icon: "command", color: .blue)
-
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SettingsCard(color: .blue) {
                 VStack(spacing: 0) {
                     shortcutRow(key: "1", modifiers: .command, label: "Home", showDivider: true)
@@ -20,8 +18,6 @@ struct KeyboardShortcutsSection: View {
                 }
             }
 
-            SettingsSectionHeader(text: "Media Actions", icon: "play.rectangle", color: .purple)
-
             SettingsCard(color: .purple) {
                 VStack(spacing: 0) {
                     shortcutRow(key: .space, modifiers: [], label: "Mark Watched / Toggle", showDivider: true)
@@ -33,8 +29,6 @@ struct KeyboardShortcutsSection: View {
                 }
             }
 
-            SettingsSectionHeader(text: "Search Filters", icon: "line.3.horizontal.decrease.circle", color: .green)
-
             SettingsCard(color: .green) {
                 VStack(spacing: 0) {
                     shortcutRow(key: "1", modifiers: [.command, .option], label: "All Types", showDivider: true)
@@ -42,8 +36,6 @@ struct KeyboardShortcutsSection: View {
                     shortcutRow(key: "3", modifiers: [.command, .option], label: "TV Shows Only", showDivider: false)
                 }
             }
-
-            SettingsSectionHeader(text: "General", icon: "gearshape", color: .orange)
 
             SettingsCard(color: .orange) {
                 VStack(spacing: 0) {

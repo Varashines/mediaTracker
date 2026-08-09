@@ -97,7 +97,7 @@ extension MediaFilterActor {
             featuredUpcoming: [],
             recentlyAdded: [],
             homeContinueWatching: homeContinueWatching,
-            grouped: [("Coming Soon", comingSoonItems.prefix(20).map { toMetadata($0) })],
+            grouped: [("Coming Soon", comingSoonItems.prefix(40).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,
             recommendations: recommendations,
             totalCount: totalCount

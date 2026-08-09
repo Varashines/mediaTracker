@@ -10,7 +10,7 @@ struct StatusPicker: View {
     var body: some View {
         if item.modelContext != nil {
             let currentState = MediaState(rawValue: item.stateValue) ?? .wishlist
-            let accent = stateColor(for: currentState)
+            let accent = currentState.accentColor
             
             Menu {
                 ForEach(availableStates, id: \.self) { state in
@@ -41,7 +41,7 @@ struct StatusPicker: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.small)
                 .padding(.vertical, AppTheme.Spacing.mini)
-                .foregroundStyle(accent.isLightColor ? .black : .white)
+                .foregroundStyle(accent.readableForeground)
                 .background {
                     Capsule()
                         .fill(.ultraThinMaterial)
@@ -64,10 +64,6 @@ struct StatusPicker: View {
             .accessibilityHint("Double tap to change status")
             .onHover { isHovered = $0 }
         }
-    }
-    
-    private func stateColor(for state: MediaState) -> Color {
-        return state.accentColor
     }
     
     private var availableStates: [MediaState] {

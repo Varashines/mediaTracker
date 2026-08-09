@@ -16,7 +16,6 @@ struct ImportWizardSheet: View {
     }
 
     @State private var currentStep: WizardStep = .selectFile
-    @State private var selectedFileURL: URL?
     @State private var backupData: LibraryBackup?
     @State private var existingMatchCount: Int = 0
     @State private var newItemsCount: Int = 0
@@ -471,7 +470,6 @@ struct ImportWizardSheet: View {
                 }
 
                 await MainActor.run {
-                    self.selectedFileURL = url
                     self.backupData = backup
                     self.existingMatchCount = match
                     self.newItemsCount = newCount

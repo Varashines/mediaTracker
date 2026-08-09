@@ -4,7 +4,6 @@ struct MediaHeaderView: View {
     let item: MediaItem
     let themeColor: Color
     let watchProviders: [WatchProviderResult]
-    var namespace: Namespace.ID? = nil
     var onStatusChange: ((MediaState?) -> Void)? = nil
     var posterOptions: [String] = []
     var isCustomPoster: Bool = false
@@ -46,7 +45,7 @@ struct MediaHeaderView: View {
                         bgAccentColor: bgAccentColor
                     )
                     
-                    MetadataSection(item: item, themeColor: themeColor, watchProviders: watchProviders)
+                    MetadataSection(item: item, themeColor: themeColor)
                     
                     OverviewSection(overview: item.overview, themeColor: themeColor)
                 }

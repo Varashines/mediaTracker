@@ -2,12 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct LibraryHeaderView: View {
-    let selectedCategory: NavigationCategory
     let selectedNetworks: [String]?
-    let isCategoryPage: Bool
     let onNetworkSelected: ([String]) -> Void
-    let onBack: (() -> Void)?
-    var viewModel: MediaViewModel? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {

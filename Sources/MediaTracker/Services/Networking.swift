@@ -915,4 +915,37 @@ actor APIClient {
         if http.statusCode == 429 { throw APIError.rateLimited }
         if !(200...299).contains(http.statusCode) { throw APIError.requestFailed(http.statusCode) }
     }
+
+    // MARK: - Key Validation
+
+    /// Validates a TMDB API key with a lightweight /configuration request.
+    func validateTMDBKey(key: String) async -> Bool {
+        guard !key.isEmpty else { return false }
+        var components = URLComponents(string: "https://api.themoviedb.org/3/configuration")
+        components?.queryItems = [URLQueryItem(name: "api_key", value: key)]
+        guard let url = components?.url else { return false }
+        do {
+            let (_, response) = try await session.data(from: url)
+            try validateResponse(response)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Validates an OMDb API key with a lightweight query against the endpoint.
+    func validateOMDBKey(key: String) async -> Bool {
+        guard !key.isEmpty else { return false }
+        var components = URLComponents(string: "https://www.omdbapi.com")
+        components?.queryItems = [URLQueryItem(name: "apikey", value: key)]
+        guard let url = components?.url else { return false }
+        do {
+            let (data, response) = try await session.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            let decoded = try? decoder.decode(OMDBResponse.self, from: data)
+            return decoded?.isSuccess == true
+        } catch {
+            return false
+        }
+    }
 }

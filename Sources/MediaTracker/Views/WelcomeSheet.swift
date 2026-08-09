@@ -4,6 +4,7 @@ struct WelcomeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
+    var onImportBackup: (() -> Void)? = nil
     @State private var showIcon = false
     @State private var showTitle = false
     @State private var showDescription = false
@@ -11,6 +12,7 @@ struct WelcomeSheet: View {
     @State private var isPrimaryHovered = false
     @State private var isSecondaryHovered = false
     @State private var isEmptyHovered = false
+    @State private var isImportHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -96,6 +98,33 @@ struct WelcomeSheet: View {
                     withAnimation(AppTheme.Animation.springSnappy) { isSecondaryHovered = hovering }
                 }
                 .accessibilityLabel("I already have a key")
+
+                Button {
+                    hasSeenWelcome = true
+                    dismiss()
+                    onImportBackup?()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(AppTheme.Font.caption)
+                        Text("Import from Backup")
+                            .font(AppTheme.Font.body)
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                            .fill(isImportHovered ? AppTheme.Colors.accent.opacity(0.08) : .clear)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                }
+                .buttonStyle(.plain)
+                .scaleEffect(isImportHovered ? 1.02 : 1.0)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.springSnappy) { isImportHovered = hovering }
+                }
+                .accessibilityLabel("Import from Backup")
 
                 Button {
                     hasSeenWelcome = true

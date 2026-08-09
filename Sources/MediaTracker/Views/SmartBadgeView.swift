@@ -124,7 +124,7 @@ struct SmartBadgeView: View {
                 accentColor: finalAccent,
                 isSolid: isSolid,
                 progress: showProgressBar ? progress : nil,
-                foregroundColor: finalAccent.isLightColor ? .black : .white
+                foregroundColor: currentState.badgeForegroundColor
             )
         }
     }
@@ -157,13 +157,12 @@ struct StatusBadgePrimitive: View {
     let accentColor: Color
     let isSolid: Bool
     let progress: Double?
-    var isCompact: Bool = false
     var foregroundColor: Color? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         let contrastColor = accentColor.highContrastAccent(colorScheme: colorScheme)
-        
+
         HStack(spacing: 0) {
             if !label.isEmpty {
                 Text(label.uppercased())

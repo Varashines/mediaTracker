@@ -35,6 +35,39 @@ struct AboutSection: View {
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.secondary)
                         .lineSpacing(AppTheme.Spacing.micro)
+
+                    Divider()
+                        .padding(.vertical, AppTheme.Spacing.small)
+
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.smallMedium) {
+                        Label("Data & Credits", systemImage: "books.vertical.fill")
+                            .font(AppTheme.Font.bodyMedium)
+                            .foregroundStyle(.primary)
+
+                        Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+                            .font(AppTheme.Font.label)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: AppTheme.Spacing.small) {
+                            Link(destination: URL(string: "https://www.themoviedb.org")!) {
+                                Text("TMDB")
+                                    .font(AppTheme.Font.label)
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                            }
+                            Link(destination: URL(string: "https://www.omdbapi.com")!) {
+                                Text("OMDb")
+                                    .font(AppTheme.Font.label)
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                            }
+                            Link(destination: URL(string: "https://www.tvmaze.com")!) {
+                                Text("TVMaze")
+                                    .font(AppTheme.Font.label)
+                                    .foregroundStyle(AppTheme.Colors.accent)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, AppTheme.Spacing.medium)
                 .padding(.vertical, AppTheme.Spacing.medium)

@@ -9,7 +9,6 @@ struct RecommendationSheet: View {
     var debugTraits: [String] = []
 
     @Environment(\.colorScheme) var colorScheme
-    @State private var addedIDs: Set<String> = []
 
     private var themeColor: Color {
         Color.secondary

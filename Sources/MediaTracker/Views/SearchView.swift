@@ -399,6 +399,7 @@ struct SearchView: View {
                                 onSelectLocal?(item)
                             }
                         }
+                        .equatable()
                         .accessibilityAddTraits(.isButton)
                         .modifier(StaggerModifier(index: idx, modulo: 6, delayPerStep: 0.04, verticalOffset: 6))
                     }
@@ -441,6 +442,7 @@ struct SearchView: View {
                                 onSelectLocal?(item)
                             }
                         }
+                        .equatable()
                         .accessibilityAddTraits(.isButton)
                         .modifier(StaggerModifier(index: idx, modulo: 6, delayPerStep: 0.04, verticalOffset: 6))
                     }

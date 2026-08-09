@@ -24,71 +24,35 @@ struct SettingsRow<Trailing: View>: View {
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(AppTheme.Font.settingsRowTitle)
-                        .foregroundStyle(.primary)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(AppTheme.Font.settingsSubtitle)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                trailing()
-            }
-            .padding(.horizontal, AppTheme.Spacing.medium)
-            .padding(.vertical, AppTheme.Spacing.small)
-            .background {
-                if isHovered {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .allowsHitTesting(false)
-                        .padding(.horizontal, AppTheme.Spacing.tiny)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppTheme.Font.settingsRowTitle)
+                    .foregroundStyle(.primary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(AppTheme.Font.settingsSubtitle)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .onHover { hovered in
-                withAnimation(AppTheme.Animation.easeInOut) {
-                    isHovered = hovered
-                }
-            }
-
-            if showDivider {
-                Rectangle()
-                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
-                    .frame(height: 1)
-                    .padding(.leading, AppTheme.Spacing.medium)
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .padding(.vertical, AppTheme.Spacing.small)
+        .background {
+            if isHovered {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .allowsHitTesting(false)
+                    .padding(.horizontal, AppTheme.Spacing.tiny)
             }
         }
-    }
-}
-
-// MARK: - SectionHeader
-
-struct SettingsSectionHeader: View {
-    let text: String
-    var icon: String? = nil
-    var color: Color = AppTheme.Colors.accent
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.small) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(color)
-                    .padding(5)
-                    .background(
-                        Circle()
-                            .fill(color.opacity(0.15))
-                    )
+        .onHover { hovered in
+            withAnimation(AppTheme.Animation.easeInOut) {
+                isHovered = hovered
             }
-            Text(text)
-                .font(AppTheme.Font.settingsSectionHeader)
-                .foregroundStyle(.primary)
         }
-        .padding(.bottom, AppTheme.Spacing.micro)
     }
 }
 
@@ -159,14 +123,6 @@ struct SettingsLabeledRow<Trailing: View>: View {
         .onHover { hovered in
             withAnimation(AppTheme.Animation.easeInOut) {
                 isHovered = hovered
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if showDivider {
-                Rectangle()
-                    .fill(AppTheme.Colors.strokeDefault(for: scheme))
-                    .frame(height: 1)
-                    .padding(.leading, AppTheme.Spacing.medium)
             }
         }
     }

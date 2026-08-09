@@ -28,8 +28,6 @@ struct DiscoveryHubView: View {
                         !viewModel.discovery.cachedProviders.isEmpty
 
                     if hasAnyContent {
-                        LibrarySummaryBanner(modelContainer: modelContext.container)
-
                         if !viewModel.discovery.cachedBadges.isEmpty {
                             DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text, isFastScrolling: isFastScrolling, limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
@@ -126,10 +124,16 @@ struct DiscoveryHubView: View {
             hasDataLoaded = false
             refreshData(force: false)
         }
+        .onChange(of: MediaStateService.shared.discoveryResyncCount) { _, _ in
+            hasDataLoaded = false
+            refreshData(force: true)
+        }
         .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
             if !isAsleep {
                 hasDataLoaded = false
-                refreshData(force: false)
+                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discoveryAutoSync.rawValue) {
+                    refreshData(force: false)
+                }
             }
         }
         .onDisappear {

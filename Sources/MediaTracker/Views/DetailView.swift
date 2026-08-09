@@ -15,12 +15,12 @@ struct DetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
     @State private var showMoodBanner = false
-    @State private var showingShareSheet = false
-    @State private var shareImage: NSImage? = nil
     @State private var showSharePreview = false
     @State private var isHoveringRefresh = false
     @State private var isHoveringShare = false
     @State private var isHoveringDelete = false
+    @State private var isTitleCopied = false
+    @State private var titleCopiedTask: Task<Void, Never>?
 
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -36,7 +36,7 @@ struct DetailView: View {
     var body: some View {
         ZStack {
             if viewModel.item.modelContext == nil {
-                AppTheme.Colors.background(for: colorScheme).ignoresSafeArea()
+                AppTheme.Colors.neutralBackground(for: colorScheme).ignoresSafeArea()
             } else {
                 contentOverlay
             }
@@ -47,7 +47,7 @@ struct DetailView: View {
     @ViewBuilder
     private var backgroundMesh: some View {
         ZStack {
-            AppTheme.Colors.background(for: colorScheme)
+            AppTheme.Colors.neutralBackground(for: colorScheme)
                 .ignoresSafeArea()
 
             if viewModel.hasDerivedThemeColor {
@@ -172,6 +172,7 @@ struct DetailView: View {
                             onSelectMood: { mood in
                                 viewModel.item.mood = mood.rawValue
                                 viewModel.item.commitChange(dirty: [.badge])
+                                FeedbackManager.shared.trigger(.moodSelected(mood))
                                 AppErrorState.shared.showToast("Mood: \(mood.rawValue)", style: .info)
                                 showMoodBanner = false
                             },
@@ -220,11 +221,6 @@ struct DetailView: View {
             if showSharePreview {
                 SharePreviewPopup(
                     item: viewModel.item,
-                    onShare: { image in
-                        shareImage = image
-                        showingShareSheet = true
-                        withAnimation(AppTheme.Animation.springSnappy) { showSharePreview = false }
-                    },
                     onDismiss: { withAnimation(AppTheme.Animation.springSnappy) { showSharePreview = false } }
                 )
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -273,15 +269,6 @@ struct DetailView: View {
         .onChange(of: colorScheme) { _, newScheme in
             viewModel.refreshSchemeColors(for: newScheme)
         }
-        .onChange(of: showingShareSheet) { _, show in
-            if show, let image = shareImage {
-                let picker = NSSharingServicePicker(items: [image])
-                if let window = NSApp.keyWindow, let content = window.contentView {
-                    picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
-                }
-                showingShareSheet = false
-            }
-        }
         .tint(effectiveThemeColor)
         .background {
             keyboardShortcutButtons.opacity(0)
@@ -329,7 +316,6 @@ struct DetailView: View {
             item: viewModel.item,
             themeColor: effectiveThemeColor,
             watchProviders: viewModel.watchProviders,
-            namespace: namespace,
             onStatusChange: { newState in
                 if newState == .completed {
                     viewModel.markAllAsWatched()
@@ -351,6 +337,11 @@ struct DetailView: View {
             onMoodChanged: { mood in
                 viewModel.item.mood = mood?.rawValue
                 viewModel.item.commitChange(dirty: [.badge])
+                if let mood {
+                    FeedbackManager.shared.trigger(.moodSelected(mood))
+                } else {
+                    FeedbackManager.shared.trigger(.moodCleared)
+                }
             },
             accentColor: viewModel.highContrastAccentColor,
             bgAccentColor: viewModel.luminousAccentColor
@@ -559,7 +550,7 @@ struct DetailView: View {
             .background(
                 Capsule()
                     .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                        ? AnyShapeStyle(AppTheme.Colors.neutralBackground(for: colorScheme))
                         : AnyShapeStyle(.ultraThinMaterial))
             )
             .overlay(
@@ -581,6 +572,14 @@ struct DetailView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(viewModel.item.title, forType: .string)
         AppErrorState.shared.showToast("Title copied", style: .success)
+
+        isTitleCopied = true
+        titleCopiedTask?.cancel()
+        titleCopiedTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            isTitleCopied = false
+        }
     }
 
     @ViewBuilder
@@ -601,11 +600,19 @@ struct DetailView: View {
             )
             .keyboardShortcut("l", modifiers: [.command])
 
-            actionChip(
-                icon: "doc.on.doc",
-                label: "Copy Title",
-                action: copyTitle
-            )
+            if isTitleCopied {
+                actionChip(
+                    icon: "checkmark",
+                    label: "Copied",
+                    action: {}
+                )
+            } else {
+                actionChip(
+                    icon: "doc.on.doc",
+                    label: "Copy Title",
+                    action: copyTitle
+                )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -613,7 +620,7 @@ struct DetailView: View {
             ZStack {
                 Capsule()
                     .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
+                        ? AnyShapeStyle(AppTheme.Colors.neutralBackground(for: colorScheme))
                         : AnyShapeStyle(.ultraThinMaterial))
 
                 if viewModel.hasDerivedThemeColor {
@@ -727,6 +734,7 @@ struct DetailView: View {
     }
 
     private func deleteItem() {
+        guard !viewModel.item.isDeleted else { return }
         let itemToDelete = viewModel.item
         let itemID = itemToDelete.id
         let itemType = itemToDelete.type ?? .movie
@@ -735,21 +743,40 @@ struct DetailView: View {
         let lang = itemToDelete.cachedLanguage
         let badge = itemToDelete.storedSmartBadgeLabel
         let providers = itemToDelete.cachedWatchProviders
+        let persistentID = itemToDelete.persistentModelID
 
         showDeleteConfirmation = false
         FeedbackManager.shared.trigger(.removeFromLibrary)
+
+        // Soft-delete so the user can undo within the 5s window.
+        itemToDelete.softDelete()
+        NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
+
+        let undo: @MainActor () -> Void = { [modelContext] in
+            guard let live = modelContext.model(for: persistentID) as? MediaItem, !live.isDeleted else { return }
+            live.restoreFromSoftDelete()
+        }
+
+        AppErrorState.shared.showToast(
+            "Removed \"\(itemToDelete.title)\"",
+            style: .warning,
+            duration: 5,
+            undoAction: undo
+        )
 
         Task {
             try? await Task.sleep(for: .milliseconds(250))
             dismiss()
         }
 
-        Task {
-            try? await Task.sleep(for: .seconds(0.75))
-            NotificationManager.shared.cancelNotification(id: itemID, type: itemType)
-
-            let container = modelContext.container
-            Task.detached(priority: .background) {
+        // Discovery entity counts are only adjusted after the undo window closes,
+        // so an undo within 5s leaves the hub counts intact.
+        let container = modelContext.container
+        Task.detached(priority: .background) {
+            try? await Task.sleep(for: .seconds(5))
+            if Task.isCancelled { return }
+            let context = ModelContext(container)
+            if let live = context.model(for: persistentID) as? MediaItem, live.isSoftDeleted {
                 let backgroundService = BackgroundDataService(modelContainer: container)
                 await backgroundService.deleteMediaItem(id: itemID)
 

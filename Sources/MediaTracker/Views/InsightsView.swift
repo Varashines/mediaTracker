@@ -12,13 +12,10 @@ struct InsightsView: View {
     @State private var isRefreshing = false
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
-    @State private var scrollOffset: CGFloat = 0
     @State private var scrollOffsetDebounced: CGFloat = 0
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
     @State private var backgroundTintTask: Task<Void, Never>?
-    @State private var showingShareSheet = false
-    @State private var shareImage: NSImage? = nil
     @State private var customPassportImage: NSImage? = nil
     @State private var showCustomShareMenu = false
     @State private var showPassportPreview = false
@@ -42,52 +39,30 @@ struct InsightsView: View {
                 InsightsSkeletonView()
             } else if let stats = stats {
                 ScrollView {
-                    LazyVStack(spacing: AppTheme.Spacing.section) {
+                    LazyVStack(spacing: AppTheme.Spacing.xLarge) {
+                        // ── Cinema DNA card ───────────────────────────────
                         SpectrumView(items: stats.barcodeData)
                             .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                            .padding(.top, AppTheme.Spacing.xLarge)
 
-                        SectionDivider(color: AppTheme.Colors.accent)
-
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(
-                                title: "Overview",
-                                icon: "chart.bar.fill",
-                                iconColor: AppTheme.Colors.accent,
-                                trailingAccessory: stats.archetype.isEmpty
-                                    ? nil
-                                    : { AnyView(ArchetypeBadge(archetype: stats.archetype)) }
-                            )
+                        // ── Overview ─────────────────────────────────────
+                        InsightsSectionCard(title: "Overview", secondLine: "At a Glance") {
                             HeroStatPills(stats: stats)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.top, AppTheme.Spacing.xLarge)
 
-                        SectionDivider(color: AppTheme.Colors.accent)
-
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                            SectionHeader(title: "Taste DNA", icon: "heart.circle.fill", iconColor: AppTheme.Colors.accent)
-                            TasteDNAView(stats: stats)
+                        // ── Taste Profile ─────────────────────────────────
+                        InsightsSectionCard(title: "Taste Profile", secondLine: "Signature") {
+                            TasteProfileCard(stats: stats)
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.top, AppTheme.Spacing.xLarge)
 
-                        if stats.genreDNA.count > 1 {
-                            SectionDivider(color: AppTheme.Colors.accent)
-
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                                SectionHeader(title: "Top Genres", icon: "sparkles", iconColor: AppTheme.Colors.accent)
-                                TopGenresView(items: Array(stats.genreDNA.prefix(6)))
-                            }
-                        }
-
-                        if stats.topRatedStudios.count > 1 || stats.topRatedNetworks.count > 1 || stats.topRatedLanguages.count > 1 {
-                            SectionDivider(color: AppTheme.Colors.accent)
-
-                            StudiosNetworksView(stats: stats, modelContext: modelContext)
-                        }
-
+                        // ── Hall of Fame – full-bleed sections ────────────
                         if stats.topRatedActors.count > 1 || stats.topRatedCreators.count > 1 {
-                            SectionDivider(color: AppTheme.Colors.accent)
-
                             HallOfFameView(stats: stats)
+                                .padding(.top, AppTheme.Spacing.xLarge)
                         }
                     }
                     .padding(.vertical, AppTheme.Spacing.xLarge)
@@ -108,7 +83,6 @@ struct InsightsView: View {
                 }
                 .onPreferenceChange(ScrollOffsetKey.self) { offsets in
                     let newOffset = offsets[insightsScrollName] ?? 0
-                    scrollOffset = newOffset
                     backgroundTintTask?.cancel()
                     backgroundTintTask = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -142,15 +116,6 @@ struct InsightsView: View {
             statsTask = nil
             backgroundTintTask?.cancel()
             backgroundTintTask = nil
-        }
-        .onChange(of: showingShareSheet) { _, show in
-            if show, let image = shareImage {
-                let picker = NSSharingServicePicker(items: [image])
-                if let window = NSApp.keyWindow, let content = window.contentView {
-                    picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
-                }
-                showingShareSheet = false
-            }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -282,7 +247,7 @@ struct InsightsView: View {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error fetching stats: \(error)")
                     await MainActor.run {
-                        self.errorMessage = error.localizedDescription
+                        self.errorMessage = "Something went wrong while loading your insights. Try Database Repair in Settings > Data, then retry."
                         self.isLoading = false
                         self.isRefreshing = false
                     }

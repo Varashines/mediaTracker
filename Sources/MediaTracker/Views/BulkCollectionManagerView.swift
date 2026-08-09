@@ -6,6 +6,7 @@ struct BulkItem: Identifiable {
     let title: String
     let posterURL: String?
     let typeValue: String?
+    let searchPayload: SearchPayload
 }
 
 struct BulkCollectionManagerView: View {
@@ -18,11 +19,38 @@ struct BulkCollectionManagerView: View {
     @State private var allItems: [BulkItem] = []
     @State private var isLoading = true
     
+    var collectionMemberIDs: Set<String> {
+        Set(collection.items.map { $0.id })
+    }
+    
     var filteredItems: [BulkItem] {
         if searchText.isEmpty {
             return allItems
         } else {
-            return allItems.filter { $0.title.lowercased().contains(searchText.lowercased()) }
+            let tokens = searchText.split(separator: " ").map(String.init)
+            let scorer = SearchScorer(tokens: tokens)
+            let members = collectionMemberIDs
+            
+            // AND pass first, mirroring MediaFilterActor.refineResults semantics
+            var scored = allItems.compactMap { item -> (BulkItem, Int)? in
+                guard !members.contains(item.id) else { return nil }
+                let evaluation = scorer.evaluate(payload: item.searchPayload)
+                guard evaluation.matchesAll else { return nil }
+                return (item, evaluation.score)
+            }
+            
+            // Fall back to OR if AND produced nothing and query has multiple tokens
+            if scored.isEmpty, tokens.count > 1 {
+                scored = allItems.compactMap { item -> (BulkItem, Int)? in
+                    guard !members.contains(item.id) else { return nil }
+                    let evaluation = scorer.evaluate(payload: item.searchPayload)
+                    guard evaluation.matchesAny else { return nil }
+                    return (item, evaluation.score)
+                }
+            }
+            
+            scored.sort { $0.1 > $1.1 }
+            return scored.map(\.0)
         }
     }
     
@@ -109,9 +137,17 @@ struct BulkCollectionManagerView: View {
                 let container = modelContext.container
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<MediaItem>(sortBy: [SortDescriptor(\.title)])
-                descriptor.propertiesToFetch = [\.id, \.title, \.posterURL, \.typeValue]
+                descriptor.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast + [\.overview]
                 let items = (try? context.fetch(descriptor)) ?? []
-                let bulkItems = items.map { BulkItem(id: $0.id, title: $0.title, posterURL: $0.posterURL, typeValue: $0.typeValue) }
+                let bulkItems = items.map { item in
+                    BulkItem(
+                        id: item.id,
+                        title: item.title,
+                        posterURL: item.posterURL,
+                        typeValue: item.typeValue,
+                        searchPayload: item.searchPayload
+                    )
+                }
                 await MainActor.run {
                     allItems = bulkItems
                     isLoading = false
@@ -151,7 +187,7 @@ struct BulkCollectionManagerView: View {
             }
         }
         
-        SaveCoordinator.shared.requestSave(modelContext)
+        SaveCoordinator.shared.forceSave(modelContext)
         MediaStateService.shared.postMediaStateChanged()
     }
 }

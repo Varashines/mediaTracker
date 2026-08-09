@@ -59,6 +59,18 @@ actor DiscoverySyncService {
         }
         return (sourceToTarget, targetToLogoSource)
     }
+
+    /// Builds a source→target alias map from the given StudioAliasEntity list.
+    /// Shared by stats actors so network/studio scoring matches hub grouping.
+    nonisolated static func buildSourceToTargetMap(from entities: [StudioAliasEntity]) -> [String: String] {
+        var map: [String: String] = [:]
+        for entity in entities {
+            for source in entity.sources {
+                map[source.lowercased().trimmingCharacters(in: .whitespaces)] = entity.target
+            }
+        }
+        return map
+    }
     
     private func getAliasMaps() async -> (sourceToTarget: [String: String], targetToLogoSource: [String: String]) {
         if let cached = await MainActor.run(body: { Self.cachedAliasMaps }) {

@@ -231,17 +231,21 @@ actor MediaFilterActor {
 
         let scorer = SearchScorer(tokens: tokens)
 
+        // Precompute the lowercased search payload once per item and reuse it for
+        // both the AND and OR passes (avoids re-lowercasing every field per token).
+        let payloads: [(MediaItem, SearchPayload)] = nonSearchFiltered.map { ($0, $0.searchPayload) }
+
         // Try AND mode first
-        var scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
-            let evaluation = scorer.evaluate(item: item)
+        var scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
+            let evaluation = scorer.evaluate(payload: payload)
             guard evaluation.matchesAll else { return nil }
             return (item, evaluation.score)
         }
 
         // Fall back to OR mode if AND produced nothing and query has multiple tokens
         if scored.isEmpty, tokens.count > 1 {
-            scored = nonSearchFiltered.compactMap { item -> (MediaItem, Int)? in
-                let evaluation = scorer.evaluate(item: item)
+            scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
+                let evaluation = scorer.evaluate(payload: payload)
                 guard evaluation.matchesAny else { return nil }
                 return (item, evaluation.score)
             }

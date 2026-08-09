@@ -6,147 +6,173 @@ struct HallOfFameView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             if stats.topRatedActors.count > 1 {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.orange)
-                        Text("Hall of Fame — Cast")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.orange)
-                            .kerning(1.2)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
+                InsightsSectionCard(title: "Hall of Fame", secondLine: "Cast") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: AppTheme.Spacing.large) {
-                            ForEach(Array(stats.topRatedActors.prefix(6).enumerated()), id: \.element.name) { index, person in
-                                PersonPillCard(
+                            ForEach(Array(stats.topRatedActors.prefix(10).enumerated()), id: \.element.name) { index, person in
+                                PersonRankCard(
                                     rank: index + 1,
                                     name: person.name,
                                     score: person.score,
                                     profileURL: person.profileURL,
-                                    themeColor: .orange
+                                    accentColor: .purple,
+                                    style: .cast
                                 )
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 8)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
 
             if stats.topRatedCreators.count > 1 {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "pencil.and.outline")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.green)
-                        Text("Hall of Fame — Creators")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.green)
-                            .kerning(1.2)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
+                InsightsSectionCard(title: "Directors", secondLine: "Visionaries") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: AppTheme.Spacing.large) {
-                            ForEach(Array(stats.topRatedCreators.prefix(6).enumerated()), id: \.element.name) { index, person in
-                                PersonPillCard(
+                            ForEach(Array(stats.topRatedCreators.prefix(10).enumerated()), id: \.element.name) { index, person in
+                                PersonRankCard(
                                     rank: index + 1,
                                     name: person.name,
                                     score: person.score,
                                     profileURL: person.profileURL,
-                                    themeColor: .green
+                                    accentColor: .indigo,
+                                    style: .director
                                 )
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 8)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
         }
     }
 }
 
-private struct PersonPillCard: View {
+/// Person rank card: giant outlined rank typography overlapping a Top Cast-style
+/// rectangular card (image left + name/score right).
+private struct PersonRankCard: View {
+    enum Style {
+        case cast
+        case director
+    }
+
     let rank: Int
     let name: String
     let score: Double
     let profileURL: String?
-    let themeColor: Color
+    let accentColor: Color
+    let style: Style
+
     @Environment(\.colorScheme) var colorScheme
     @State private var isHovered = false
 
+    private var cardRadius: CGFloat {
+        style == .cast ? AppTheme.Radius.medium : AppTheme.Radius.small
+    }
+
     var body: some View {
-        ZStack {
-            if let profileURL, let url = URL(string: profileURL) {
-                CachedImage(url: url, targetSize: CGSize(width: 70, height: 90), priority: .low, themeColor: themeColor) { _ in
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.secondary.opacity(0.1))
-                }
-                .scaledToFill()
-                .frame(width: 70, height: 90)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .opacity(isHovered ? 0 : 1)
-                .scaleEffect(isHovered ? 0.95 : 1.0)
+        HStack(alignment: .center, spacing: -12) {
+            // Giant outlined rank number
+            ZStack {
+                Text("\(rank)")
+                    .font(.system(size: 72, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        colorScheme == .dark
+                            ? Color.white.opacity(0.12)
+                            : Color.black.opacity(0.08)
+                    )
 
-                VStack(spacing: 4) {
-                    Text(name)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
+                Text("\(rank)")
+                    .font(.system(size: 72, weight: .black, design: .rounded))
+                    .foregroundStyle(.clear)
+                    .overlay(
+                        Text("\(rank)")
+                            .font(.system(size: 72, weight: .black, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        accentColor,
+                                        accentColor.opacity(0.45)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+            }
+            .frame(width: rank >= 10 ? 95 : 50, height: 80, alignment: .center)
+            .allowsHitTesting(false)
 
-                    Text("\(String(format: "%.0f", score * 100))% taste match")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(themeColor)
-                }
-                .padding(.horizontal, 4)
-                .opacity(isHovered ? 1 : 0)
-            } else {
-                VStack(spacing: 4) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(themeColor.opacity(0.5))
-
-                    Text(name)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-
-                    if isHovered {
-                        Text("\(String(format: "%.0f", score * 100))% taste match")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(themeColor)
-                            .transition(.opacity)
+            // Rectangular card: photo left, text right
+            HStack(spacing: 0) {
+                Group {
+                    if let profileURL, let url = URL(string: profileURL) {
+                        CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .low) { _ in
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                                .shimmering()
+                        }
+                        .scaledToFill()
+                    } else {
+                        ZStack {
+                            LinearGradient(
+                                colors: [
+                                    accentColor.opacity(colorScheme == .dark ? 0.25 : 0.15),
+                                    accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            Image(systemName: style == .cast ? "person.fill" : "video.fill")
+                                .font(AppTheme.Font.title2)
+                                .foregroundStyle(accentColor.opacity(0.7))
+                        }
                     }
                 }
-            }
+                .frame(width: 60, height: 90)
+                .clipped()
 
-            Text("\(rank)")
-                .font(.system(size: 70, weight: .black, design: .rounded))
-                .foregroundStyle(themeColor.opacity(isHovered ? 0.22 : 0.10))
-                .offset(x: -10, y: -6)
-                .allowsHitTesting(false)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+                    Text(name)
+                        .font(AppTheme.Font.bodyBold)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(accentColor)
+                        Text("\(String(format: "%.0f", score * 100))%")
+                            .font(AppTheme.Font.caption2.monospacedDigit())
+                            .foregroundStyle(accentColor)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(width: 175, height: 90)
+            .background(ClaymorphicSurface(cornerRadius: cardRadius, isHovered: isHovered))
+            .overlay(
+                RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                    .stroke(
+                        style == .cast
+                            ? accentColor.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                            : accentColor.opacity(colorScheme == .dark ? 0.2 : 0.12),
+                        lineWidth: 0.75
+                    )
+            )
+            .shadow(color: .black.opacity(isHovered ? 0.08 : 0), radius: 6, y: 3)
         }
-        .frame(width: 160, height: 100)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(isHovered ? themeColor.opacity(colorScheme == .dark ? 0.06 : 0.03) : AppTheme.Colors.cardFill(for: colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .stroke(themeColor.opacity(isHovered ? 0.25 : 0.08), lineWidth: 0.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .scaleEffect(isHovered ? 1.02 : 1.0)
-        .shadow(color: .black.opacity(isHovered ? 0.08 : 0), radius: 8, y: isHovered ? 4 : 0)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
     }

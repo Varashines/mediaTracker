@@ -219,7 +219,7 @@ struct WatchedThisWeek: View {
                 Text(option.title)
                     .font(AppTheme.Font.caption2)
             }
-            .foregroundStyle(isSelected ? (AppTheme.Colors.accent.isLightColor ? .black : .white) : (isHovered ? Color.primary : Color.secondary))
+            .foregroundStyle(isSelected ? AppTheme.Colors.accent.readableForeground : (isHovered ? Color.primary : Color.secondary))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background {

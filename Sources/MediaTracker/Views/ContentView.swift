@@ -121,10 +121,9 @@ struct LibraryDetailView: View {
     
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     @State private var showWelcome = false
+    @State private var showImportSheet = false
     @State private var showDataRecoveryAlert = false
     @State private var recoveryLog: String?
-    @AppStorage("theme_preference") private var themePreference = 0
-    @AppStorage("custom_theme_palette") private var customThemePalette = 0
 
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
@@ -312,7 +311,12 @@ struct LibraryDetailView: View {
             }
         }
         .sheet(isPresented: $showWelcome) {
-            WelcomeSheet()
+            WelcomeSheet {
+                showImportSheet = true
+            }
+        }
+        .sheet(isPresented: $showImportSheet) {
+            ImportWizardSheet()
         }
         .alert("Data Lost", isPresented: $showDataRecoveryAlert) {
             Button("Copy Error & OK") {
@@ -394,6 +398,19 @@ struct LibraryDetailView: View {
                         try await service.performLibraryHeal()
                     }
                     UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
+                }
+            }
+
+            // Phase 8: Searchable language migration
+            let languageMigrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.searchableLanguageV1.rawValue)
+            if !languageMigrated {
+                let container = modelContext.container
+                Task.detached(priority: .background) {
+                    try? await BackgroundOperationGate.shared.performHeal(label: "searchableLanguage", container: container) {
+                        let service = BackgroundDataService(modelContainer: container)
+                        try await service.performSearchableLanguageMigration()
+                    }
+                    UserDefaults.standard.set(true, forKey: UserDefaultsKeys.searchableLanguageV1.rawValue)
                 }
             }
         }

@@ -163,14 +163,24 @@ enum MediaState: String, Codable, CaseIterable, Sendable {
     }
 
     var accentColor: Color {
-        switch self {
-        case .active, .rewatching: return Color.fromOKLCH(l: 0.55, c: 0.2, h: 250)
-        case .wishlist: return Color.fromOKLCH(l: 0.7, c: 0.18, h: 75)
-        case .onHold: return Color.fromOKLCH(l: 0.5, c: 0.05, h: 250)
-        case .dropped: return Color.fromOKLCH(l: 0.6, c: 0.15, h: 25)
-        case .completed: return Color.fromOKLCH(l: 0.65, c: 0.2, h: 145)
-        }
+        Self.accentColors[self] ?? Color.gray
     }
+
+    /// Precomputed on/off foreground for the accent capsule (avoids per-cell NSColor work).
+    var badgeForegroundColor: Color {
+        Self.accentForegrounds[self] ?? .white
+    }
+
+    private static let accentColors: [MediaState: Color] = [
+        .active: Color.fromOKLCH(l: 0.55, c: 0.2, h: 250),
+        .rewatching: Color.fromOKLCH(l: 0.55, c: 0.2, h: 250),
+        .wishlist: Color.fromOKLCH(l: 0.7, c: 0.18, h: 75),
+        .onHold: Color.fromOKLCH(l: 0.5, c: 0.05, h: 250),
+        .dropped: Color.fromOKLCH(l: 0.6, c: 0.15, h: 25),
+        .completed: Color.fromOKLCH(l: 0.65, c: 0.2, h: 145)
+    ]
+
+    private static let accentForegrounds: [MediaState: Color] = accentColors.mapValues { $0.isLightColor ? .black : .white }
 }
 
 enum MediaType: String, Codable, CaseIterable, Sendable {
