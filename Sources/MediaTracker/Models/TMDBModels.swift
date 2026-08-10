@@ -73,7 +73,33 @@ struct TMDBPerson: Codable {
 }
 
 struct TMDBPersonSearchEntry: Codable {
+    let id: Int?
+    let name: String?
     let profile_path: String?
+    let popularity: Double?
+    let known_for_department: String?
+    let known_for: [TMDBPersonCredit]?
+}
+
+struct TMDBPersonCredit: Codable {
+    let id: Int?
+    let title: String?
+    let name: String?
+    let media_type: String?
+    let poster_path: String?
+    let overview: String?
+    let genre_ids: [Int]?
+    let release_date: String?
+    let first_air_date: String?
+    let character: String?
+    let original_language: String?
+    let job: String?
+    let popularity: Double?
+}
+
+struct TMDBCombinedCreditsResponse: Codable {
+    let cast: [TMDBPersonCredit]
+    let crew: [TMDBPersonCredit]?
 }
 
 struct TMDBExternalIDs: Codable {

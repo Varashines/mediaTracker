@@ -4,6 +4,7 @@ enum SearchType: String, CaseIterable {
     case all = "All"
     case movie = "Movies"
     case tvShow = "TV Shows"
+    case castCrew = "Cast & Crew"
 }
 
 @Observable @MainActor

@@ -110,6 +110,7 @@ struct DetailView: View {
 
             topChrome
         }
+        .drawingGroup()
     }
 
     private var atmosphericGradients: some View {
@@ -192,15 +193,13 @@ struct DetailView: View {
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.vertical, AppTheme.Spacing.section)
             }
-            .scrollBounceBehavior(.always)
+            .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y > (AppTheme.Spacing.section - 30)
             } action: { _, shouldShow in
                 if showNavTitle != shouldShow {
-                    withAnimation(AppTheme.Animation.springSnappy) {
-                        showNavTitle = shouldShow
-                    }
+                    showNavTitle = shouldShow
                 }
             }
 
@@ -228,7 +227,6 @@ struct DetailView: View {
         }
         .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
         .toolbar { detailToolbar }
-        .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {

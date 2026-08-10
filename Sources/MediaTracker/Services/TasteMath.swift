@@ -16,12 +16,11 @@ struct CategoryStats: Sendable {
 
     func affinity(cutoff: Int = 5, belowCutoffValue: Double = 0) -> Double {
         guard ratedTitles >= cutoff else { return belowCutoffValue }
-        let lovedWeight = Double(3 * loved)
-        let likedWeight = Double(liked)
-        let dislikedWeight = Double(2 * disliked)
-        let totalWeight = Double(3 * ratedCount)
-        let score = (lovedWeight + likedWeight - dislikedWeight) / totalWeight
-        return max(0, score)
+        // Bayesian-smoothed taste score (prior 0.5, strength 5):
+        // Loved = 1.0, Liked = 0.5, Disliked = 0. Small samples regress toward
+        // the neutral prior so a few perfect ratings don't outrank larger libraries.
+        let sum = Double(loved) + 0.5 * Double(liked)
+        return (sum + 2.5) / (Double(ratedCount) + 5.0)
     }
 }
 

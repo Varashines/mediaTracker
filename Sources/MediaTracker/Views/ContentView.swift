@@ -139,6 +139,7 @@ struct LibraryDetailView: View {
         case .all: return "Search movies & shows"
         case .movie: return "Search movies"
         case .tvShow: return "Search TV shows"
+        case .castCrew: return "Search cast & crew"
         }
     }
 
@@ -269,7 +270,6 @@ struct LibraryDetailView: View {
                     onRefresh: refreshAction
                 )
             }
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
             .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
             .background {
                 Group {

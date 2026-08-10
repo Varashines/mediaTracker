@@ -465,25 +465,17 @@ actor LibraryStatsActor {
         let visualActors = try await resolvePeopleImages(people: topActors.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) })
 
         let creatorWithScore: [(String, CategoryStats, Double)] = taste.creatorTaste.compactMap { name, val in
-            let score = val.affinity(cutoff: 5)
+            let score = val.affinity(cutoff: 4)
             return score >= 0.25 ? (name, val, score) : nil
         }
         let topCreators = creatorWithScore.sorted { TasteMath.compareByAffinityCountName(($0.2, $0.1.total, $0.0), ($1.2, $1.1.total, $1.0)) }.prefix(10)
 
         let visualCreators = try await resolvePeopleImages(people: topCreators.map { PersonInput(name: $0.0, stats: $0.1, precomputedScore: $0.2) })
 
-        // Deduplicate people who appear in both lists (e.g. an actor-director).
-        // Keep them in the list where they scored higher, drop the duplicate.
-        let actorNames = Set(visualActors.map(\.name))
-        let dedupedCreators = visualCreators.filter { creator in
-            guard actorNames.contains(creator.name),
-                  let actor = visualActors.first(where: { $0.name == creator.name }) else { return true }
-            return creator.score > actor.score
-        }
-        let dedupedActors = visualActors.filter { actor in
-            guard let creator = dedupedCreators.first(where: { $0.name == actor.name }) else { return true }
-            return actor.score >= creator.score
-        }
+        // Actor-directors are kept in BOTH lists (no dedup) so people like
+        // Jon Favreau / S.S. Rajamouli appear in Cast and Directors alike.
+        let dedupedCreators = visualCreators
+        let dedupedActors = visualActors
 
         let languageRankings = mapTaste(taste.languageTaste).map {
             (LanguageUtils.languageName(for: $0.0), $0.1)

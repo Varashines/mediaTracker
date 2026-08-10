@@ -231,6 +231,11 @@ actor MediaFilterActor {
 
         let scorer = SearchScorer(tokens: tokens)
 
+        // Drop weak matches (pure genre/overview/network/language hits) by
+        // requiring a minimum score. Title (50+) and cast/creator (60+) matches
+        // are preserved; overview(15)/genre(30)/network/language(10) are not.
+        let minSearchScore = 50
+
         // Precompute the lowercased search payload once per item and reuse it for
         // both the AND and OR passes (avoids re-lowercasing every field per token).
         let payloads: [(MediaItem, SearchPayload)] = nonSearchFiltered.map { ($0, $0.searchPayload) }
@@ -238,7 +243,7 @@ actor MediaFilterActor {
         // Try AND mode first
         var scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
             let evaluation = scorer.evaluate(payload: payload)
-            guard evaluation.matchesAll else { return nil }
+            guard evaluation.matchesAll, evaluation.score >= minSearchScore else { return nil }
             return (item, evaluation.score)
         }
 
@@ -246,7 +251,7 @@ actor MediaFilterActor {
         if scored.isEmpty, tokens.count > 1 {
             scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
                 let evaluation = scorer.evaluate(payload: payload)
-                guard evaluation.matchesAny else { return nil }
+                guard evaluation.matchesAny, evaluation.score >= minSearchScore else { return nil }
                 return (item, evaluation.score)
             }
         }

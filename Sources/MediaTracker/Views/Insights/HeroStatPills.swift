@@ -50,7 +50,7 @@ struct HeroStatPills: View {
                         emoji: "💖",
                         value: String(format: "%.0f%%", overallAffinity * 100),
                         label: "Affinity",
-                        detail: "\(stats.lovedCount)♥ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
+                        detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
                         color: .purple
                     )
                 }
@@ -85,7 +85,7 @@ struct HeroStatPills: View {
                             emoji: "💖",
                             value: String(format: "%.0f%%", overallAffinity * 100),
                             label: "Affinity",
-                            detail: "\(stats.lovedCount)♥ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
+                            detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
                             color: .purple
                         )
                     }

@@ -8,11 +8,21 @@ class SearchViewModel {
     var movieResults: [MediaSearchResult] = [] { didSet { scheduleRecompute() } }
     var tvResults: [MediaSearchResult] = [] { didSet { scheduleRecompute() } }
     var filteredLocalResults: [MediaThumbnailMetadata] = []
+    var personMatches: [TMDBPersonSearchEntry] = []
+    var selectedPerson: TMDBPersonSearchEntry?
+    var castCrewShowingAll: Bool = false
     var isSearching = false
     var isOfflineResultsOnly = false
     var errorMessage: String?
     var showError = false
     var displayCache: DisplayCache? { didSet { scheduleRecompute() } }
+
+    /// Filmography of the selected person with ownership flags (for the
+    /// merged Cast & Crew grid). Entries already in the library have
+    /// `isLocal: true` so the grid can badge them instead of hiding them.
+    private(set) var castCrewResults: [(result: MediaSearchResult, isLocal: Bool)] = []
+
+    static let castCrewCap = 30
 
     private var recomputeTask: Task<Void, Never>?
 
@@ -122,12 +132,51 @@ class SearchViewModel {
         lastSearchTokens = []
     }
 
+    /// User picked a specific person from the Cast & Crew picker.
+    func selectPerson(_ person: TMDBPersonSearchEntry) {
+        guard person.id != selectedPerson?.id else { return }
+        selectedPerson = person
+        isSearching = true
+        Task {
+            await loadCredits(for: person)
+            isSearching = false
+        }
+    }
+
+    private func loadCredits(for person: TMDBPersonSearchEntry) async {
+        guard let personID = person.id,
+              let credits = try? await APIClient.shared.fetchPersonCredits(personID: personID)
+        else {
+            movieResults = []
+            tvResults = []
+            castCrewResults = []
+            return
+        }
+
+        // Compute ownership for the merged Cast & Crew grid.
+        let ids = displayCache?.libraryTMDBIDs ?? []
+        var seen = Set<String>()
+        castCrewResults = credits.compactMap { result in
+            let key = "\(result.type == .movie ? "movie" : "tv")_\(result.id)"
+            guard seen.insert(key).inserted else { return nil }
+            let isLocal = ids.contains(key)
+            return (result, isLocal)
+        }
+
+        movieResults = credits.filter { $0.type == .movie }
+        tvResults = credits.filter { $0.type == .tvShow }
+        castCrewShowingAll = false
+    }
+
     func cancelAllSearchOperations() {
         searchTask?.cancel()
         searchTask = nil
         movieResults = []
         tvResults = []
         filteredLocalResults = []
+        personMatches = []
+        selectedPerson = nil
+        castCrewResults = []
         isSearching = false
         lastSearchTokens = []
     }
@@ -173,6 +222,33 @@ class SearchViewModel {
         }
 
         do {
+            if selectedType == .castCrew {
+                // Cast & Crew: search TMDB people (Acting/Directing) + local library titles.
+                async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
+                async let people = (try? await APIClient.shared.searchPeople(query: text)) ?? []
+
+                let (local, matches) = await (localSearch, people)
+                if Task.isCancelled { return }
+
+                self.filteredLocalResults = local
+                self.personMatches = matches
+
+                // Auto-select the most popular match (matches are sorted by
+                // popularity); the pills allow switching to another person.
+                if let person = matches.first {
+                    self.selectedPerson = person
+                    await self.loadCredits(for: person)
+                } else {
+                    self.selectedPerson = nil
+                    self.movieResults = []
+                    self.tvResults = []
+                    self.castCrewResults = []
+                }
+                self.isSearching = false
+                self.isOfflineResultsOnly = matches.isEmpty
+                return
+            }
+
             // Parallel Search: Local + Web
             async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
 
@@ -227,7 +303,7 @@ class SearchViewModel {
     private func performLocalSearch(text: String, selectedType: SearchType) async -> [MediaThumbnailMetadata] {
         let category: NavigationCategory
         switch selectedType {
-        case .all: category = .all
+        case .all, .castCrew: category = .all
         case .movie: category = .movie
         case .tvShow: category = .tvShow
         }

@@ -608,6 +608,100 @@ actor APIClient {
         }
     }
 
+    /// Searches for a person and returns the best (highest popularity) match.
+    func searchPersonDetails(query: String) async throws -> TMDBPersonSearchEntry? {
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/search/person", queryItems: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "include_adult", value: "false")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
+            return decoded.results
+                .sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+                .first
+        }
+    }
+
+    /// Searches for people, returning all matches in Acting or Directing
+    /// (sorted by popularity). Used by the Cast & Crew search picker.
+    func searchPeople(query: String) async throws -> [TMDBPersonSearchEntry] {
+        return try await executeWithRetry {
+            let url = try self.tmdbURL(path: "/search/person", queryItems: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "include_adult", value: "false")
+            ])
+            let (data, response) = try await self.session.data(from: url)
+            try self.validateResponse(response)
+            let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
+            let eligible: Set<String> = ["Acting", "Directing"]
+            return decoded.results
+                .filter { eligible.contains($0.known_for_department ?? "") }
+                .sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+        }
+    }
+
+    /// Fetches a person's full filmography (combined cast + crew credits).
+    func fetchPersonCredits(personID: Int) async throws -> [MediaSearchResult] {
+        let url = try tmdbURL(path: "/person/\(personID)/combined_credits")
+        let (data, response) = try await session.data(from: url)
+        try validateResponse(response)
+        let decoded = try decoder.decode(TMDBCombinedCreditsResponse.self, from: data)
+
+        // Deduplicate by TMDB id (a title can appear in both cast and crew,
+        // and even multiple times in crew). Prefer the cast / first occurrence.
+        var seen = Set<Int>()
+        let unique = (decoded.cast + (decoded.crew ?? [])).filter { credit in
+            guard let id = credit.id else { return false }
+            return seen.insert(id).inserted
+        }
+
+        // Sort by TMDB popularity so the filmography shows the most popular titles first.
+        let sorted = unique.sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+
+        return Self.mapPersonCredits(sorted)
+    }
+
+    /// Roles worth showing for crew credits; skips noise like "Thanks"/"Presenter".
+    nonisolated private static let keyCrewRoles: Set<String> = [
+        "Director", "Writer", "Screenplay", "Producer",
+        "Executive Producer", "Creator", "Original Story"
+    ]
+
+    /// Maps person credits to MediaSearchResult (movies use `title`/`release_date`,
+    /// TV uses `name`/`first_air_date`). Crew credits are limited to key roles.
+    nonisolated static func mapPersonCredits(_ credits: [TMDBPersonCredit]) -> [MediaSearchResult] {
+        credits.compactMap { credit in
+            guard let rawID = credit.id else { return nil }
+            let type: MediaType = credit.media_type == "movie" ? .movie : .tvShow
+            let displayTitle = (type == .movie ? credit.title : credit.name) ?? credit.title ?? credit.name ?? ""
+            guard !displayTitle.isEmpty else { return nil }
+
+            // Cast credits always included; crew only for key roles.
+            if let job = credit.job, !keyCrewRoles.contains(job) {
+                return nil
+            }
+
+            let genres = credit.genre_ids?.compactMap { id in
+                type == .movie ? TMDBGenreMap.movieGenres[id] : TMDBGenreMap.tvGenres[id]
+            }.prefix(2) ?? []
+
+            let date = type == .movie ? credit.release_date : credit.first_air_date
+
+            return MediaSearchResult(
+                id: String(rawID),
+                title: displayTitle,
+                overview: credit.overview ?? "",
+                posterURL: APIClient.tmdbImageURL(path: credit.poster_path),
+                releaseDate: date,
+                genres: Array(genres),
+                type: type,
+                originalLanguage: credit.original_language
+            )
+        }
+    }
+
     // MARK: - Title Logos
 
     func fetchMovieLogos(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {

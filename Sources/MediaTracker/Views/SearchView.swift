@@ -78,7 +78,11 @@ struct SearchView: View {
         VStack(spacing: 0) {
             filterBar
             offlineWarningSection
-            resultsScrollView
+            if selectedType == .castCrew && !searchText.isEmpty && !searchVM.personMatches.isEmpty {
+                castCrewTwoPaneLayout
+            } else {
+                resultsScrollView
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Search movies and shows")
@@ -132,6 +136,8 @@ struct SearchView: View {
                         .keyboardShortcut("2", modifiers: [.command, .option])
                     Button("") { viewModel.filter.searchTypeFilter = .tvShow }
                         .keyboardShortcut("3", modifiers: [.command, .option])
+                    Button("") { viewModel.filter.searchTypeFilter = .castCrew }
+                        .keyboardShortcut("4", modifiers: [.command, .option])
                 }
                 .opacity(0)
             }
@@ -148,6 +154,7 @@ struct SearchView: View {
                     filterPill(title: "All", icon: nil, type: .all, shortcut: "⌘⌥1")
                     filterPill(title: "Movies", icon: "film.fill", type: .movie, shortcut: "⌘⌥2")
                     filterPill(title: "TV Shows", icon: "tv.fill", type: .tvShow, shortcut: "⌘⌥3")
+                    filterPill(title: "Cast & Crew", icon: "person.2.fill", type: .castCrew, shortcut: "⌘⌥4")
                 }
                 .padding(4)
                 .background(
@@ -194,6 +201,7 @@ struct SearchView: View {
                         Capsule()
                             .fill(isSelected ? AppTheme.Colors.accent.opacity(0.15) : Color.primary.opacity(0.04))
                     )
+                    .opacity(0) // shortcuts still work via background buttons; badge hidden
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -261,6 +269,128 @@ struct SearchView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
+    }
+
+    // MARK: – Cast & Crew layout
+
+    private var showingCastCrewResults: Bool {
+        !searchVM.castCrewResults.isEmpty
+    }
+
+    private var castCrewTwoPaneLayout: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+                personPillsRow
+                castCrewGridSection
+            }
+            .padding(.vertical, AppTheme.Spacing.xLarge)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
+    }
+
+    /// Centered horizontal row of person cast cards.
+    private var personPillsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppTheme.Spacing.medium) {
+                ForEach(searchVM.personMatches, id: \.id) { person in
+                    personCastCard(person)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .padding(.vertical, AppTheme.Spacing.small)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private func personCastCard(_ person: TMDBPersonSearchEntry) -> some View {
+        let isSelected = searchVM.selectedPerson?.id == person.id
+        let member = SimpleCastMember(
+            id: String(person.id ?? 0),
+            name: person.name ?? "Unknown",
+            characterName: person.known_for_department ?? "",
+            profileURL: APIClient.tmdbImageURL(path: person.profile_path, size: "w185"),
+            order: 0
+        )
+        return CastMemberCard(member: member, themeColor: AppTheme.Colors.accent) {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                searchVM.selectPerson(person)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                .stroke(isSelected ? AppTheme.Colors.accent : Color.clear, lineWidth: 2)
+        )
+        .shadow(color: isSelected ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 6, y: 2)
+        .accessibilityLabel(person.name ?? "person")
+    }
+
+    @ViewBuilder
+    private var castCrewGridSection: some View {        if showingCastCrewResults {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.stack.fill")
+                        .foregroundStyle(.secondary)
+                    Text("Filmography")
+                        .font(AppTheme.Font.title3)
+                    Text("\(searchVM.castCrewResults.count)")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.secondary.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                let visible = searchVM.castCrewShowingAll
+                    ? searchVM.castCrewResults
+                    : Array(searchVM.castCrewResults.prefix(SearchViewModel.castCrewCap))
+                let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                    ForEach(Array(visible.enumerated()), id: \.element.result.id) { idx, entry in
+                        CastCrewCell(
+                            entry: entry,
+                            staggerIndex: idx,
+                            onAddRecent: { addRecentSearch(searchText) },
+                            onAdd: { searchVM.addMedia(entry.result, modelContext: modelContext) { item in
+                                onSelectLocal?(item)
+                            } }
+                        )
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+                if searchVM.castCrewResults.count > SearchViewModel.castCrewCap {
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            searchVM.castCrewShowingAll.toggle()
+                        }
+                    } label: {
+                        Text(searchVM.castCrewShowingAll ? "Show less" : "Show all (\(searchVM.castCrewResults.count))")
+                            .font(AppTheme.Font.bodyBold)
+                            .foregroundStyle(AppTheme.Colors.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .contentShape(Rectangle())
+                }
+            }
+            Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
+        } else if !searchVM.isSearching {
+            VStack(spacing: AppTheme.Spacing.small) {
+                Image(systemName: "person.2.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary.opacity(0.5))
+                Text("Select a person to see their filmography")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, AppTheme.Spacing.xLarge)
+        }
     }
 
     private func removeRecentSearch(_ query: String) {
@@ -450,7 +580,21 @@ struct SearchView: View {
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
             }
         } else if !searchVM.isSearching && !searchText.isEmpty {
-            ContentUnavailableView.search(text: searchText)
+            if selectedType == .castCrew && searchVM.personMatches.count > 1 && searchVM.selectedPerson == nil {
+                // Picker is showing but no person chosen yet — prompt instead of "no results".
+                VStack(spacing: AppTheme.Spacing.small) {
+                    Image(systemName: "person.2.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary.opacity(0.5))
+                    Text("Select a person above to see their filmography")
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, AppTheme.Spacing.large)
+            } else {
+                ContentUnavailableView.search(text: searchText)
+            }
         }
     }
 }
@@ -471,3 +615,45 @@ struct SearchView: View {
         modelContainer: container
     )
 }
+
+/// A filmography grid cell for Cast & Crew results. Owned titles show a small
+/// library-icon pill (top-left) that fades out on hover.
+private struct CastCrewCell: View {
+    let entry: (result: MediaSearchResult, isLocal: Bool)
+    let staggerIndex: Int
+    let onAddRecent: () -> Void
+    let onAdd: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            MediaThumbnailView(result: entry.result, isLocal: entry.isLocal) {
+                onAddRecent()
+                if !entry.isLocal {
+                    onAdd()
+                }
+            }
+            .equatable()
+            .accessibilityAddTraits(.isButton)
+            .modifier(StaggerModifier(index: staggerIndex, modulo: 6, delayPerStep: 0.04, verticalOffset: 6))
+
+            if entry.isLocal {
+                Image(systemName: "tray.full.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(Capsule().fill(.green.opacity(0.85)))
+                    .padding(6)
+                    .opacity(isHovered ? 0 : 1)
+                    .animation(.easeOut(duration: 0.15), value: isHovered)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
