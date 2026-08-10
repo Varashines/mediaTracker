@@ -24,13 +24,16 @@ final class MediaStateService {
     // Debounce taste cache invalidation — avoid full library re-scan on rapid state changes
     private var tasteCacheDebounceTask: Task<Void, Never>?
 
+    // Debounce full-refresh broadcasts so rapid state changes (e.g. toggling
+    // many episodes) trigger a single library reload instead of one per change.
+    private var fullRefreshDebounceTask: Task<Void, Never>?
+
     func postMediaStateChanged(itemID: PersistentIdentifier? = nil) {
         if let itemID {
             needsSingleItemUpdateCount += 1
             lastChangedItemID = itemID
         } else {
-            needsFullRefreshCount += 1
-            lastChangedItemID = nil
+            scheduleDebouncedFullRefresh()
         }
         debouncedTasteClear()
     }
@@ -41,24 +44,33 @@ final class MediaStateService {
             refreshedItemID = id
             lastChangedItemID = persistentID
         } else {
-            needsFullRefreshCount += 1
+            scheduleDebouncedFullRefresh()
             refreshedItemID = id
-            lastChangedItemID = nil
         }
         debouncedTasteClear()
     }
 
     func postBulkRefreshed() {
-        needsFullRefreshCount += 1
-        lastChangedItemID = nil
+        scheduleDebouncedFullRefresh()
         debouncedTasteClear()
     }
 
     /// Requests a forced re-sync of the Discovery hub (clear + refresh) from any view.
     func requestDiscoveryResync() {
         discoveryResyncCount += 1
-        needsFullRefreshCount += 1
-        lastChangedItemID = nil
+        scheduleDebouncedFullRefresh()
+    }
+
+    /// Coalesces full-refresh broadcasts within a short window. Single-item
+    /// updates are unaffected — only the expensive whole-library reload is debounced.
+    private func scheduleDebouncedFullRefresh() {
+        fullRefreshDebounceTask?.cancel()
+        fullRefreshDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000) // 120ms debounce
+            guard !Task.isCancelled else { return }
+            needsFullRefreshCount += 1
+            lastChangedItemID = nil
+        }
     }
 
     /// Debounce taste cache clear — coalesce rapid state changes into a single invalidation

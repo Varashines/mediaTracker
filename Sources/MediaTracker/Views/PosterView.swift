@@ -10,7 +10,6 @@ struct PosterView: View {
 
     private let posterFrame = CGSize(width: 260, height: 390)
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isBreathing = false
     @State private var isHovering = false
     @State private var showPicker = false
 
@@ -30,8 +29,6 @@ struct PosterView: View {
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .drawingGroup()
                 .allowsHitTesting(false)
-                .opacity(isBreathing ? 1.0 : 0.85)
-                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isBreathing)
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
@@ -115,11 +112,6 @@ struct PosterView: View {
             .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isHovering = hovering
-                }
-            }
-            .onAppear {
-                if !AppThemeCoordinator.isReducingVisualEffects {
-                    isBreathing = true
                 }
             }
         }

@@ -84,6 +84,10 @@ class ImageCache: NSObject, NSCacheDelegate {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
+            // Skip eviction if the image is being actively re-requested — e.g. the
+            // cell scrolled back into view while this task was waiting. Evicting it
+            // would force a wasteful re-decode on scrub-back.
+            guard activeTasks[cacheKey] == nil else { return }
             self.memoryCache.removeObject(forKey: cacheKey as NSString)
         }
     }

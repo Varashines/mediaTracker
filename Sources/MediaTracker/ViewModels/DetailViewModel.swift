@@ -18,7 +18,6 @@ class DetailViewModel {
     var posterOptions: [String] = []
     var logoOptions: [String] = []
     var debugSelectedTraits: [String] = []
-    private var _nextEpisodeToWatch: TVEpisode?? = nil
     private var _highContrastAccent: Color = .primary
     private var _luminousAccent: Color = .clear
     
@@ -107,25 +106,6 @@ class DetailViewModel {
         self._luminousAccent = themeColor.luminousAccent(colorScheme: colorScheme)
     }
 
-    var nextEpisodeToWatch: TVEpisode? {
-        if let cached = _nextEpisodeToWatch { return cached }
-        let result = computeNextEpisodeToWatch()
-        _nextEpisodeToWatch = result
-        return result
-    }
-
-    private func computeNextEpisodeToWatch() -> TVEpisode? {
-        guard let tv = item.tvShowDetails else { return nil }
-        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-        for season in sortedSeasons where season.seasonNumber > 0 {
-            let sortedEpisodes = season.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-            if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
-                return next
-            }
-        }
-        return nil
-    }
-    
     private var needsOMDBData: Bool {
         let apiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? ""
         guard !apiKey.isEmpty else { return false }
@@ -197,9 +177,10 @@ class DetailViewModel {
                 }
             }
         }
-        _nextEpisodeToWatch = nil
         item.syncCachedProperties(dirty: .all)
-        item.tvShowDetails?.recalculateCachedProperties()
+        // .all already recomputes progress + badge. Only the badge-scan cache needs
+        // explicit invalidation here, so skip the redundant recalculateCachedProperties().
+        BadgeEngine.invalidateScan(for: item.persistentModelID)
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
         MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)

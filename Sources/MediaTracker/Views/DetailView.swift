@@ -51,20 +51,15 @@ struct DetailView: View {
                 .ignoresSafeArea()
 
             if viewModel.hasDerivedThemeColor {
-                // Layer 2+3: Atmospheric poster bloom. MeshGradient on macOS 15+,
-                // layered radial blooms otherwise. All behind Reduce Visual Effects.
-                if !AppThemeCoordinator.isReducingVisualEffects {
-                    if #available(macOS 15, *) {
-                        atmosphericMesh
-                    } else {
-                        atmosphericGradients
-                    }
-                } else {
+                // Layer 2+3: Atmospheric poster bloom. Static radial gradients only —
+                // a full-window MeshGradient re-rasterizes on every scroll frame.
+                if AppThemeCoordinator.isReducingVisualEffects {
                     reducedAtmosphere
+                } else {
+                    atmosphericGradients
                 }
             }
         }
-        .animation(AppTheme.Animation.springGentle, value: viewModel.hasDerivedThemeColor)
     }
 
     @ViewBuilder
@@ -75,42 +70,6 @@ struct DetailView: View {
             muted.opacity(colorScheme == .dark ? 0.05 : 0.03)
                 .ignoresSafeArea()
         }
-    }
-
-    @available(macOS 15, *)
-    private var atmosphericMesh: some View {
-        let primary = viewModel.themeColor.luminousAccent(colorScheme: colorScheme)
-        let secondary = (viewModel.mutedThemeColor ?? viewModel.themeColor)
-            .hueShift(by: 0.08)
-            .luminousAccent(colorScheme: colorScheme)
-        let isDark = colorScheme == .dark
-
-        return ZStack {
-            MeshGradient(
-                width: 3, height: 3,
-                points: [
-                    [0, 0], [0.5, 0], [1, 0],
-                    [0, 0.5], [0.5, 0.5], [1, 0.5],
-                    [0, 1], [0.5, 1], [1, 1]
-                ],
-                colors: [
-                    .clear,
-                    primary.opacity(isDark ? 0.07 : 0.12),
-                    primary.opacity(isDark ? 0.13 : 0.22),
-                    secondary.opacity(isDark ? 0.03 : 0.05),
-                    .clear,
-                    primary.opacity(isDark ? 0.06 : 0.10),
-                    secondary.opacity(isDark ? 0.05 : 0.08),
-                    .clear,
-                    .clear
-                ]
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-
-            topChrome
-        }
-        .drawingGroup()
     }
 
     private var atmosphericGradients: some View {
