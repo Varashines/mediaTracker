@@ -113,6 +113,7 @@ extension MediaItem {
         self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
+        self.cachedSeasonCount = tv.numberOfSeasons ?? tv.seasons.count
         if !skipNetwork {
             self.cachedNetwork = Self.normalizeCommaSeparated(tv.network)
             self.cachedNetworkLogoPath = Self.normalizeCommaSeparated(tv.networkLogoPath)

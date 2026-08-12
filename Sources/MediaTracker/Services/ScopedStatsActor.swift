@@ -41,7 +41,7 @@ actor ScopedStatsActor {
             \.id, \.title,
             \.typeValue, \.tasteValue,
             \.cachedGenres, \.cachedLanguage, \.cachedNetwork,
-            \.cachedWatchProviders, \.cachedRuntime, \.storedCast
+            \.cachedWatchProviders, \.cachedRuntime, \.storedCast, \.cachedSeasonCount
         ]
         descriptor.fetchLimit = 2000
 
@@ -101,14 +101,16 @@ actor ScopedStatsActor {
 
             totalRuntime += item.cachedRuntime ?? 0
 
+            let titleWeight = TasteMath.titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
+
             // Actors — pick top 5 cast per title for cross-title affinity
             for actor in item.displayCast.prefix(5) {
-                TasteMath.updateTaste(&actorTaste, actor.name, item.tasteValue, profileURL: actor.profileURL)
+                TasteMath.updateTaste(&actorTaste, actor.name, item.tasteValue, profileURL: actor.profileURL, weight: titleWeight)
             }
 
             // Genres
             for g in item.cachedGenres {
-                TasteMath.updateTaste(&genreTaste, g, item.tasteValue)
+                TasteMath.updateTaste(&genreTaste, g, item.tasteValue, weight: titleWeight)
             }
 
             // Networks — grouped by alias target

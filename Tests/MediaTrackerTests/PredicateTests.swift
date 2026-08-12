@@ -5,7 +5,7 @@ import SwiftData
 final class PredicateTests: XCTestCase {
     @MainActor
     func makeContainer() -> ModelContainer {
-        let schema = Schema([MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self])
+        let schema = Schema([MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
     }

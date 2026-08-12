@@ -6,7 +6,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testSyncCompletesShowFromActive() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
@@ -38,7 +38,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testSyncDoesNotCompleteRewatching() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "2", title: "Show", overview: "", type: .tvShow)
@@ -70,7 +70,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testSyncActivatesFromWishlist() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "3", title: "Show", overview: "", type: .tvShow)
@@ -102,7 +102,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testSyncDoesNotTransitionToActiveFromOnHold() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "9", title: "Show", overview: "", type: .tvShow)
@@ -134,7 +134,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testCheckOverallCompletionCompletesShow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "4", title: "Show", overview: "", type: .tvShow)
@@ -169,7 +169,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testCheckOverallCompletionDoesNotOverrideRewatching() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "5", title: "Show", overview: "", type: .tvShow)
@@ -204,7 +204,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testCheckOverallCompletionActivatesFromWishlist() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "6", title: "Show", overview: "", type: .tvShow)
@@ -237,7 +237,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testCheckOverallCompletionRevertsToWishlist() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "7", title: "Show", overview: "", type: .tvShow)
@@ -270,7 +270,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testCheckOverallCompletionNoChangeForOnHold() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "8", title: "Show", overview: "", type: .tvShow)
@@ -315,7 +315,7 @@ final class StateTransitionTests: XCTestCase {
     @MainActor
     func testRecalculateHealsDriftAndCompletesShow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "heal_drift", title: "Show", overview: "", type: .tvShow)

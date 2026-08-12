@@ -258,7 +258,7 @@ actor LibraryStatsActor {
                 \.lastInteractionDate, \.lastStateChangeDate,
                 \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
                 \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
-                \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast, \.mood
+                \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast, \.mood, \.cachedSeasonCount
             ]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
@@ -387,8 +387,9 @@ actor LibraryStatsActor {
 
             // Common traits (Volume & Quality)
             if item.stateValue != "Wishlist" || tasteValue != TasteValue.none.rawValue {
+                let titleWeight = TasteMath.titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
                 for g in item.cachedGenres {
-                    TasteMath.updateTaste(&taste.genreTaste, g, tasteValue)
+                    TasteMath.updateTaste(&taste.genreTaste, g, tasteValue, weight: titleWeight)
                 }
                 if let rawNetwork = item.cachedNetwork {
                     let networks = rawNetwork.commaSeparatedValues
@@ -398,22 +399,22 @@ actor LibraryStatsActor {
                         let groupedName = aliasMap[n.lowercased()] ?? n
                         if !hiddenSet.contains(groupedName.lowercased()) {
                             if item.type == .movie {
-                                TasteMath.updateTaste(&taste.studioTaste, groupedName, tasteValue)
+                                TasteMath.updateTaste(&taste.studioTaste, groupedName, tasteValue, weight: titleWeight)
                             } else {
-                                TasteMath.updateTaste(&taste.networkTaste, groupedName, tasteValue)
+                                TasteMath.updateTaste(&taste.networkTaste, groupedName, tasteValue, weight: titleWeight)
                             }
                         }
                     }
                 }
                 if let lang = item.cachedLanguage {
-                    TasteMath.updateTaste(&taste.languageTaste, lang, tasteValue)
+                    TasteMath.updateTaste(&taste.languageTaste, lang, tasteValue, weight: titleWeight)
                 }
 
                 // Cast affinity — only top-billed cast (5 movie / 10 TV).
                 // Support cast is deliberately excluded from Hall of Fame.
                 let castLimit = item.type == .movie ? 5 : 10
                 for actor in item.displayCast.prefix(castLimit) {
-                    TasteMath.updateTaste(&taste.actorTaste, actor.name, tasteValue, profileURL: actor.profileURL, weight: 1)
+                    TasteMath.updateTaste(&taste.actorTaste, actor.name, tasteValue, profileURL: actor.profileURL, weight: titleWeight)
                 }
             }
 

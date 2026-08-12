@@ -134,7 +134,18 @@ struct TMDBAggregateCreditsResponse: Codable {
     let crew: [TMDBMovieCrewMember]?
 }
 
+/// Result model for per-season aggregate credits.
+struct SeasonAggregateCastResult: Sendable {
+    let tmdbPersonID: Int
+    let name: String
+    let characterName: String
+    let profileURL: String?
+    let episodeCount: Int
+    let order: Int
+}
+
 struct TMDBAggregateCastMember: Codable {
+    let id: Int?
     let name: String?
     let roles: [TMDBRole]
     let profile_path: String?

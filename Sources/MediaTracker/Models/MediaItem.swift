@@ -60,6 +60,8 @@ final class MediaItem: Identifiable {
     var cachedEpisodeRuntime: Int?
     var cachedWatchedEpisodeCount: Int?
     var remainingEpisodesCount: Int?
+    /// Number of seasons for a TV show. O(1) lookup for taste weight tiers.
+    var cachedSeasonCount: Int = 0
 
     var storedSmartBadgeLabel: String?
     var storedSmartBadgeIsSparkle: Bool = false
@@ -271,6 +273,7 @@ extension MediaItem {
         \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
         \.cachedNetworkLogoPath, \.cachedWatchProviders, \.cachedWatchProviderLogoPaths, \.cachedNextAiringDate, \.cachedRuntime,
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
+        \.cachedSeasonCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
         \.searchableText,

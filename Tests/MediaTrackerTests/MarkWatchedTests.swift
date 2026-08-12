@@ -6,7 +6,7 @@ final class MarkWatchedTests: XCTestCase {
     @MainActor
     func testMarkWatchedSetsProperties() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
@@ -43,7 +43,7 @@ final class MarkWatchedTests: XCTestCase {
     @MainActor
     func testMarkWatchedUpdatesRuntime() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "2", title: "Show", overview: "", type: .tvShow)
@@ -79,7 +79,7 @@ final class MarkWatchedTests: XCTestCase {
     @MainActor
     func testMarkWatchedUpdatesRemainingForAiredEpisode() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "3", title: "Show", overview: "", type: .tvShow)
@@ -124,7 +124,7 @@ final class MarkWatchedTests: XCTestCase {
     @MainActor
     func testDoubleMarkWatchedIsNoOp() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "4", title: "Show", overview: "", type: .tvShow)

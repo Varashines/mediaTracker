@@ -6,7 +6,7 @@ import SwiftData
 final class Phase1StabilityTests: XCTestCase {
     private func makeContainer() -> ModelContainer {
         let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self,
+            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self,
             CastMember.self, MediaCollection.self, NetworkEntity.self, GenreEntity.self, LanguageEntity.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

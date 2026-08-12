@@ -6,7 +6,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testFullProgressSingleSeason() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
@@ -38,7 +38,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testPartialWatchProgress() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "2", title: "Show", overview: "", type: .tvShow)
@@ -76,7 +76,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testRemainingEpisodesOnlyCountsAired() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "3", title: "Show", overview: "", type: .tvShow)
@@ -113,7 +113,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testSpecialsExcluded() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "4", title: "Show", overview: "", type: .tvShow)
@@ -156,7 +156,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testCachedResultUsedWhenAvailable() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "5", title: "Show", overview: "", type: .tvShow)
@@ -193,7 +193,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testMultiSeasonProgress() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "6", title: "Show", overview: "", type: .tvShow)
@@ -229,7 +229,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testRemainingEpisodesCountForFutureEpisodes() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "7", title: "Show", overview: "", type: .tvShow)
@@ -265,7 +265,7 @@ final class ProgressCalculationTests: XCTestCase {
     @MainActor
     func testForceRecalculateIgnoresCache() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "8", title: "Show", overview: "", type: .tvShow)

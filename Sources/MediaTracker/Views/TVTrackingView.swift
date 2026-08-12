@@ -8,8 +8,8 @@ struct TVTrackingView: View {
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     var onSeasonCompleted: (() -> Void)? = nil
+    @Binding var selectedSeasonNumber: Int?
 
-    @State private var selectedSeasonNumber: Int?
     @State private var previousSeasonComplete = false
     @State private var sortedSeasons: [TVSeason] = []
     @State private var showCompletedEpisodes = false
@@ -250,6 +250,7 @@ private struct SeasonSection: View {
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedRangeStart: Int = 1
+    @State private var showTastePopover = false
 
     @State private var cachedSortedEpisodes: [TVEpisode] = []
     @State private var cachedEpisodeRanges: [ClosedRange<Int>] = []
@@ -264,6 +265,47 @@ private struct SeasonSection: View {
 
     private var isAllWatched: Bool {
         season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
+    }
+
+    /// Whether this is a single-season show (no per-season taste/cast scope).
+    private var isSingleSeason: Bool {
+        (season.tvShowDetails?.seasons.liveModels.filter { $0.seasonNumber > 0 }.count ?? 0) <= 1
+    }
+
+    /// Whether the season supports per-season taste (not specials, not a
+    /// single-season show).
+    private var canRateSeason: Bool {
+        season.seasonNumber > 0 && !isSingleSeason
+    }
+
+    /// Effective taste for this season: the manual override if set, else the
+    /// show's overall taste — inherited only for fully watched seasons.
+    private var effectiveSeasonTaste: TasteValue? {
+        if let override = season.tasteOverride { return override }
+        guard season.isFullyWatched else { return nil }
+        return season.tvShowDetails?.item?.taste
+    }
+
+    /// SF symbol reflecting the effective taste (nil when unset).
+    private var effectiveTasteIcon: String? {
+        guard let taste = effectiveSeasonTaste else { return nil }
+        switch taste {
+        case .love: return "heart.fill"
+        case .like: return "hand.thumbsup.fill"
+        case .dislike: return "hand.thumbsdown.fill"
+        case .none: return nil
+        }
+    }
+
+    /// Fill color for the season title, reflecting the effective taste.
+    private var seasonTasteColor: Color {
+        guard let taste = effectiveSeasonTaste else { return .primary }
+        switch taste {
+        case .love: return .red
+        case .like: return .blue
+        case .dislike: return .gray
+        case .none: return .primary
+        }
     }
 
     private var filteredEpisodes: [TVEpisode] {
@@ -330,8 +372,27 @@ private struct SeasonSection: View {
         VStack(alignment: .leading, spacing: 16) {
             // Compact single-line header
             HStack(alignment: .center, spacing: AppTheme.Spacing.tiny) {
-                Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
-                    .font(AppTheme.Font.title3)
+                // Season title doubles as the hover-popover taste control
+                // (hidden for Season 0 / single-season shows).
+                HStack(spacing: AppTheme.Spacing.mini) {
+                    if let icon = effectiveTasteIcon {
+                        Image(systemName: icon)
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.white)
+                            .frame(width: 16, height: 16)
+                            .background(Circle().fill(seasonTasteColor))
+                    }
+                    Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
+                        .font(AppTheme.Font.title3)
+                        .foregroundStyle(seasonTasteColor)
+                }
+                .onHover { hovering in
+                    if hovering && canRateSeason { showTastePopover = true }
+                }
+                .popover(isPresented: $showTastePopover, arrowEdge: .bottom) {
+                    seasonTastePopover
+                }
+                .help(canRateSeason ? "Rate this season" : "")
 
                 if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
                     Text(parsed.formatted(.dateTime.year()))
@@ -498,6 +559,53 @@ private struct SeasonSection: View {
             let itemID = season.tvShowDetails?.item?.persistentModelID
             MediaStateService.shared.postMediaStateChanged(itemID: itemID)
         }
+    }
+
+    private func setSeasonTaste(_ val: TasteValue) {
+        guard season.modelContext != nil else { return }
+        season.tasteOverride = val
+        FeedbackManager.shared.trigger(.click)
+        AppErrorState.shared.showToast("Season rated \(val.rawValue)", style: .success)
+        invalidateTasteCaches()
+    }
+
+    private func invalidateTasteCaches() {
+        Task { @MainActor in
+            TasteActor.clearCache()
+            ScopedStatsActor.invalidateCache()
+            if let context = season.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            let itemID = season.tvShowDetails?.item?.persistentModelID
+            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+        }
+    }
+
+    private var seasonTastePopover: some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            tasteIconButton(.love, icon: "heart", color: .red)
+            tasteIconButton(.like, icon: "hand.thumbsup", color: .blue)
+            tasteIconButton(.dislike, icon: "hand.thumbsdown", color: .gray)
+        }
+        .padding(AppTheme.Spacing.small)
+    }
+
+    private func tasteIconButton(_ value: TasteValue, icon: String, color: Color) -> some View {
+        let isSelected = effectiveSeasonTaste == value
+        return Button {
+            setSeasonTaste(value)
+            showTastePopover = false
+        } label: {
+            Image(systemName: isSelected ? "\(icon).fill" : icon)
+                .font(AppTheme.Font.title3)
+                .frame(width: 34, height: 34)
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .background(Circle().fill(isSelected ? color : Color.primary.opacity(0.06)))
+                .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(value.rawValue)
     }
 }
 
@@ -733,7 +841,13 @@ private struct EpisodeCube: View {
             return d
         }()
 
-        return TVTrackingView(tvDetails: details, themeColor: AppTheme.Colors.accent) {}
-            .padding()
+        return TVTrackingView(
+            tvDetails: details,
+            themeColor: AppTheme.Colors.accent,
+            onWatchedToggle: {},
+            selectedSeasonNumber: .constant(1)
+        )
+        .padding()
     }
 #endif
+

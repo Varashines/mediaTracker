@@ -7,7 +7,7 @@ final class PersistenceTests: XCTestCase {
     func testFullSchemaInitializesWithoutError() throws {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self,
-            TVSeason.self, TVEpisode.self, CastMember.self,
+            TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self,
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
             BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self,
@@ -21,7 +21,7 @@ final class PersistenceTests: XCTestCase {
     @MainActor
     func testTVEpisodePersistence() async throws {
         let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, MediaCollection.self
+            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])

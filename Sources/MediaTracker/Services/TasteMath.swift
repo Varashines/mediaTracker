@@ -25,6 +25,34 @@ struct CategoryStats: Sendable {
 }
 
 enum TasteMath {
+    /// Weight for a disliked season in the per-season taste model. 0 = neutral
+    /// (a hated season neither rewards nor penalizes the actors in it). Set to
+    /// -1 to actively subtract actors present in seasons you dislike.
+    static let dislikedSeasonWeight: Double = 0
+
+    /// Whole-title weight tier so longer shows count more than movies/short shows
+    /// in genre/network/creator affinity. Movie = 1; show by season count:
+    /// 0-2 → 1, 3-6 → 2, 7+ → 3.
+    static func titleWeight(seasonCount: Int) -> Int {
+        switch seasonCount {
+        case 3...6: return 2
+        case 7...:  return 3
+        default:    return 1
+        }
+    }
+
+    /// Per-season taste weight: Loved = 2, Liked = 1, Disliked = dislikedSeasonWeight,
+    /// None/empty = 0.
+    static func seasonWeight(_ tasteValue: String?) -> Double {
+        guard let tasteValue, let taste = TasteValue(rawValue: tasteValue) else { return 0 }
+        switch taste {
+        case .love:    return 2
+        case .like:    return 1
+        case .dislike: return dislikedSeasonWeight
+        case .none:    return 0
+        }
+    }
+
     static func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String, profileURL: String? = nil, weight: Int = 1) {
         var s = map[key, default: CategoryStats()]
         s.total += 1

@@ -103,6 +103,7 @@ actor TasteActor {
         }
 
         var accumulators = AffinityAccumulators()
+        let lookups = await buildSeasonLookups()
 
         let batchSize = 500
         var offset = 0
@@ -112,13 +113,13 @@ actor TasteActor {
                 \.id, \.title,
                 \.typeValue, \.stateValue, \.tasteValue,
                 \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
-                \.storedCast
+                \.storedCast, \.cachedSeasonCount
             ]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset
             
             guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
-            accumulateBatch(items, into: &accumulators)
+            accumulateBatch(items, into: &accumulators, lookups: lookups)
             
             offset += batchSize
         }
@@ -132,30 +133,104 @@ actor TasteActor {
         return result
     }
 
+    /// Pre-fetch per-season cast and season taste overrides once per affinity
+    /// calculation, keyed by show id, so the hot accumulation loop avoids
+    /// relationship faults.
+    private func buildSeasonLookups() async -> SeasonLookups {
+        var lookups = SeasonLookups()
+
+        var seasonCastDesc = FetchDescriptor<SeasonCastMember>(predicate: #Predicate { $0.episodeCount > 0 })
+        seasonCastDesc.propertiesToFetch = [
+            \.showID, \.seasonNumber, \.name, \.tmdbPersonID, \.episodeCount
+        ]
+        if let allSeasonCast = try? modelContext.fetch(seasonCastDesc) {
+            for sc in allSeasonCast where sc.qualifiesForTaste && sc.seasonNumber > 0 {
+                lookups.castByShow[sc.showID, default: []].append(sc)
+            }
+        }
+
+        // Fetch all seasons once: overrides AND watched status (inheritance of
+        // the show's taste only applies to fully watched seasons).
+        var seasonDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID != nil })
+        seasonDesc.propertiesToFetch = [\.showID, \.seasonNumber, \.tasteOverrideRaw, \.watchedEpisodesCount, \.totalEpisodesCount, \.episodeCount]
+        if let allSeasons = try? modelContext.fetch(seasonDesc) {
+            for s in allSeasons {
+                guard let sid = s.showID else { continue }
+                if let ov = s.tasteOverrideRaw {
+                    lookups.overrideByShowSeason[sid, default: [:]][s.seasonNumber] = ov
+                }
+                let total = max(s.totalEpisodesCount, s.episodeCount)
+                if total > 0 && s.watchedEpisodesCount >= total {
+                    lookups.watchedByShowSeason[sid, default: []].insert(s.seasonNumber)
+                }
+            }
+        }
+        return lookups
+    }
+
+    private struct SeasonLookups {
+        var castByShow: [Int: [SeasonCastMember]] = [:]
+        var overrideByShowSeason: [Int: [Int: String]] = [:]
+        var watchedByShowSeason: [Int: Set<Int>] = [:]
+    }
+
+    /// Extracts the TMDb id from a MediaItem id ("tv_1418" -> 1418). Movies have
+    /// no tv_ prefix and return nil (they don't use season-based cast scoring).
+    private nonisolated static func tmdbID(from id: String) -> Int? {
+        guard id.hasPrefix("tv_") else { return nil }
+        return Int(id.dropFirst(3))
+    }
+
     private struct AffinityAccumulators {
         var genreStats: [String: CategoryStats] = [:]
         var networkStats: [String: CategoryStats] = [:]
-        var castStats: [String: CategoryStats] = [:]
+        var castScore: [String: Double] = [:]
         var creatorStats: [String: CategoryStats] = [:]
         var languageStats: [String: CategoryStats] = [:]
     }
 
-    private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators) {
+    private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators, lookups: SeasonLookups) {
         for item in items {
             let taste = item.tasteValue
-            for g in item.cachedGenres { TasteMath.updateTaste(&acc.genreStats, g, taste) }
+            let titleWeight = TasteMath.titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
+
+            for g in item.cachedGenres { TasteMath.updateTaste(&acc.genreStats, g, taste, weight: titleWeight) }
             if let rawNetwork = item.cachedNetwork {
-                let networks = rawNetwork.commaSeparatedValues
-                for n in networks where !n.isEmpty {
-                    TasteMath.updateTaste(&acc.networkStats, n, taste)
+                for n in rawNetwork.commaSeparatedValues where !n.isEmpty {
+                    TasteMath.updateTaste(&acc.networkStats, n, taste, weight: titleWeight)
                 }
             }
-            if let l = item.cachedLanguage { TasteMath.updateTaste(&acc.languageStats, l, taste) }
+            if let l = item.cachedLanguage { TasteMath.updateTaste(&acc.languageStats, l, taste, weight: titleWeight) }
+            for creator in item.cachedCreators { TasteMath.updateTaste(&acc.creatorStats, creator, taste, weight: titleWeight) }
 
-            let limit = item.type == .movie ? 5 : 10
-            let cast = item.displayCast.prefix(limit).map { $0.name }
-            for actor in cast { TasteMath.updateTaste(&acc.castStats, actor, taste) }
-            for creator in item.cachedCreators { TasteMath.updateTaste(&acc.creatorStats, creator, taste) }
+            // Cast affinity: per-season when season-cast data exists, else top-billed fallback.
+            if item.type == .tvShow, let tmdbID = Self.tmdbID(from: item.id),
+               let members = lookups.castByShow[tmdbID], !members.isEmpty {
+                var points: [String: Double] = [:]
+                for m in members {
+                    // Effective taste: manual override wins; otherwise the show's
+                    // taste is inherited only if the season has been watched.
+                    let effective: String?
+                    if let ov = lookups.overrideByShowSeason[tmdbID]?[m.seasonNumber] {
+                        effective = ov
+                    } else if lookups.watchedByShowSeason[tmdbID]?.contains(m.seasonNumber) == true {
+                        effective = taste
+                    } else {
+                        effective = nil
+                    }
+                    let w = TasteMath.seasonWeight(effective)
+                    if w != 0 { points[m.name, default: 0] += w }
+                }
+                for (name, p) in points { acc.castScore[name, default: 0] += p }
+            } else {
+                let limit = item.type == .movie ? 5 : 10
+                let w = TasteMath.seasonWeight(taste) * Double(titleWeight)
+                if w != 0 {
+                    for actor in item.displayCast.prefix(limit) {
+                        acc.castScore[actor.name, default: 0] += w
+                    }
+                }
+            }
         }
     }
 
@@ -166,7 +241,7 @@ actor TasteActor {
         return (
             acc.genreStats.mapValues { $0.affinity(cutoff: 5) },
             acc.networkStats.mapValues { $0.affinity(cutoff: 5) },
-            acc.castStats.mapValues { $0.affinity(cutoff: 5) },
+            acc.castScore,
             acc.creatorStats.mapValues { $0.affinity(cutoff: 3) },
             acc.languageStats.mapValues { $0.affinity(cutoff: 5) }
         )

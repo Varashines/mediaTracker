@@ -300,6 +300,10 @@ class BackgroundTaskManager {
         await refreshStaleBadges()
         await purgeSoftDeleted()
 
+        // Opportunistic: backfill per-season aggregate cast for shows that
+        // predate the feature (bounded to a few seasons per run).
+        await refreshMissingSeasonCast()
+
         // Opportunistic: if v4 poster color migration hasn't run yet, kick it off.
         if UserDefaults.standard.integer(forKey: "colorExtractionVersion") < 4 {
             await runPosterColorMigrationV6IfNeeded()
@@ -372,13 +376,36 @@ class BackgroundTaskManager {
     
     /// Scans for items that have crossed a time threshold (e.g. from Upcoming to Recent)
     /// and triggers a badge recalculation so the UI is always accurate.
+    /// Backfills per-season aggregate cast for shows that predate the feature.
+    /// Bounded to a few seasons per run to avoid hammering the API.
+    func refreshMissingSeasonCast(cap: Int = 15) async {
+        guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else { return }
+        let context = ModelContext(container)
+        guard let seasons = try? context.fetch(FetchDescriptor<TVSeason>()) else { return }
+
+        let candidates = seasons
+            .filter { $0.seasonNumber > 0 && $0.episodeCount > 0 && $0.seasonCast.isEmpty }
+            .prefix(cap)
+        guard !candidates.isEmpty else { return }
+
+        var fetched = 0
+        for season in candidates {
+            guard let showID = season.showID else { continue }
+            let service = BackgroundDataService(modelContainer: container)
+            await service.refreshSeasonCast(tmdbID: showID, seasonNumber: season.seasonNumber)
+            fetched += 1
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons", logger: AppLogger.background)
+    }
+
     func refreshStaleBadges() async {
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
         let now = Date()
-        let twoDaysAgo = now.addingTimeInterval(-TimeInterval.days2)
-        
+        let twoDaysAgo = now.addingTimeInterval(-TimeInterval.days2)        
         let distantFuture = Date.distantFuture
         // Phase 5 Performance: Split complex predicates to avoid compiler timeouts
         // Target 1: Upcoming -> Released (Past air date)
