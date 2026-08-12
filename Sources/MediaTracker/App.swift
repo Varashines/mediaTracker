@@ -183,6 +183,7 @@ struct MediaTrackerApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var errorState = AppErrorState.shared
+    @State private var lockService = AppLockService.shared
     @State private var systemColorScheme: ColorScheme = .light
     @State private var appearanceObserver: AnyCancellable?
 
@@ -213,31 +214,42 @@ struct MediaTrackerApp: App {
 
     @ViewBuilder
     private var appMainContent: some View {
-        ContentView()
-            .environment(\.sleepManager, SleepManager.shared)
-            .sleepModeSupport()
-            .preferredColorScheme(mappedScheme)
-            .tint(AppTheme.Colors.accent)
-            .appErrorToast(state: errorState)
-            .onAppear {
-                updateSystemColorScheme()
-                observeSystemAppearance()
-                applyTheme(themePreference)
+        ZStack {
+            ContentView()
+                .environment(\.sleepManager, SleepManager.shared)
+                .sleepModeSupport()
+                .blur(radius: lockService.isLocked ? 6 : 0)
+
+            if lockService.isLocked {
+                LockScreenView()
+                    .transition(.opacity)
+                    .zIndex(100)
             }
-            .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
-            .onChange(of: scenePhase) { _, newValue in
-                if newValue == .background {
-                    ImageCache.shared.clearMemoryCache()
-                } else if newValue == .active {
-                    Task {
-                        await BackgroundTaskManager.shared.refreshStaleBadges()
-                    }
+        }
+        .preferredColorScheme(mappedScheme)
+        .tint(AppTheme.Colors.accent)
+        .appErrorToast(state: errorState)
+        .onAppear {
+            updateSystemColorScheme()
+            observeSystemAppearance()
+            applyTheme(themePreference)
+            lockService.lock()
+        }
+        .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .background || newValue == .inactive {
+                if newValue == .background { ImageCache.shared.clearMemoryCache() }
+                lockService.lock()
+            } else if newValue == .active {
+                Task {
+                    await BackgroundTaskManager.shared.refreshStaleBadges()
                 }
             }
-            .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
-                guard let id = activity.userInfo?["id"] as? String else { return }
-                NavigationRouter.shared.pendingSpotlightItemID = id
-            }
+        }
+        .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
+            guard let id = activity.userInfo?["id"] as? String else { return }
+            NavigationRouter.shared.pendingSpotlightItemID = id
+        }
     }
 
     @ViewBuilder

@@ -62,15 +62,15 @@ struct MediaShareCardView: View {
     private var creditLabel: String { isTV ? "CREATED BY" : "DIR." }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             headerBar
             posterSection
             infoSection
             tasteAndMoodSection
         }
-        .padding(.vertical, 24)
-        .padding(.horizontal, 24)
-        .frame(width: 440, height: 630)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(width: 400, height: 700)
         .background {
             ZStack {
                 Color(white: 0.03)
@@ -183,7 +183,7 @@ struct MediaShareCardView: View {
             posterPlaceholder
         }
         .aspectRatio(contentMode: .fill)
-        .frame(width: 240, height: 360)
+        .frame(width: 260, height: 390)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -243,7 +243,7 @@ struct MediaShareCardView: View {
     // MARK: - Info Section
 
     private var infoSection: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
             Text(item.title)
                 .font(.system(size: item.title.count > 24 ? 16.5 : 20, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -253,31 +253,33 @@ struct MediaShareCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 8) {
-                if let creator = item.cachedCreators.first {
-                    HStack(spacing: 3) {
-                        Text(creditLabel)
-                            .font(.system(size: 9, weight: .black, design: .monospaced))
-                            .foregroundStyle(themeColor)
-                        Text(creator)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-                }
-
-                if item.cachedCreators.first != nil && !item.displayCast.isEmpty {
-                    Text("•")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.3))
-                }
-
-                let topCast = customCast ?? Array(item.displayCast.prefix(3))
-                if !topCast.isEmpty {
-                    Text(topCast.map(\.name).joined(separator: ", "))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
+            if let creator = item.cachedCreators.first {
+                HStack(spacing: 5) {
+                    Text(creditLabel)
+                        .font(.system(size: 8.5, weight: .black, design: .monospaced))
+                        .kerning(0.6)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(brightAccent.opacity(0.20)))
+                        .overlay(Capsule().stroke(brightAccent.opacity(0.55), lineWidth: 0.7))
+                    Text(creator)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
+            }
+
+            let topCast = customCast ?? Array(item.displayCast.prefix(3))
+            if !topCast.isEmpty {
+                let castNames = topCast.map(\.name).joined(separator: ", ")
+                Text(castNames)
+                    .font(.system(size: castNames.count > 45 ? 10 : castNames.count > 30 ? 11 : 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.center)
             }
 
             if !item.cachedGenres.isEmpty {
@@ -298,6 +300,11 @@ struct MediaShareCardView: View {
                 .padding(.top, 2)
             }
         }
+    }
+
+    /// Theme accent brightened for legibility on the card's dark background.
+    private var brightAccent: Color {
+        themeColor.highContrastAccent(colorScheme: .dark)
     }
 
     // MARK: - Taste & Mood
@@ -354,7 +361,7 @@ struct MediaShareCardView: View {
 
     @MainActor
     func renderToImage() -> NSImage? {
-        renderToNSImage(width: 440, height: 630)
+        renderToNSImage(width: 400, height: 700)
     }
 }
 

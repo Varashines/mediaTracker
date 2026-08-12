@@ -220,6 +220,11 @@ struct FilteredLibraryGridView: View {
                 debugTraits: debugSelectedTraits
             )
         }
+        .background {
+            Button("") { dismiss() }
+                .keyboardShortcut(.leftArrow, modifiers: .command)
+                .opacity(0)
+        }
     }
 
     private func loadMoreItems() {

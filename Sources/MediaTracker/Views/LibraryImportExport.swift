@@ -52,6 +52,9 @@ struct MediaItemData: Codable, Sendable {
     /// Maps watched-episode uniqueID → its last watched date, so restores keep
     /// the real "recently watched" ordering instead of resetting to import time.
     let watchedEpisodeDates: [String: Date]?
+    /// Per-season taste overrides (seasonNumber → "Love"/"Like"/"Dislike").
+    /// Optional so older backups without season likes still decode cleanly.
+    let seasonTasteOverrides: [Int: String]?
 
     // Scalar metadata — carried so a restore doesn't force a full re-fetch.
     let posterURL: String?
@@ -73,6 +76,16 @@ struct MediaItemData: Codable, Sendable {
 
 extension MediaItemData {
     init(item: MediaItem, watchedIDs: [String]?, watchedDates: [String: Date]?) {
+        var seasonTaste: [Int: String]? = nil
+        if item.type == .tvShow, let tv = item.tvShowDetails {
+            let overrides = tv.seasons.liveModels.compactMap { season -> (Int, String)? in
+                guard let raw = season.tasteOverrideRaw, season.seasonNumber > 0 else { return nil }
+                return (season.seasonNumber, raw)
+            }
+            if !overrides.isEmpty {
+                seasonTaste = Dictionary(uniqueKeysWithValues: overrides)
+            }
+        }
         self.init(
             id: item.id,
             title: item.title,
@@ -83,6 +96,7 @@ extension MediaItemData {
             watchedEpisodeIDs: watchedIDs,
             lastInteractionDate: item.lastInteractionDate,
             watchedEpisodeDates: watchedDates,
+            seasonTasteOverrides: seasonTaste,
             posterURL: item.posterURL,
             overview: item.overview.isEmpty ? nil : item.overview,
             backdropURL: item.backdropURL,
@@ -118,6 +132,29 @@ extension MediaItemData {
         if let cachedNetwork, !cachedNetwork.isEmpty { item.cachedNetwork = cachedNetwork }
         if let cachedNetworkLogoPath, !cachedNetworkLogoPath.isEmpty { item.cachedNetworkLogoPath = cachedNetworkLogoPath }
         if let mood, !mood.isEmpty { item.mood = mood }
+    }
+
+    /// Restores per-season taste overrides onto the item's seasons. Creates a
+    /// season row if needed so the override isn't lost before a refresh attaches it.
+    func applySeasonTasteOverrides(to item: MediaItem, in context: ModelContext, mergeOnlyIfEmpty: Bool = false) {
+        guard let overrides = seasonTasteOverrides, !overrides.isEmpty,
+              item.type == .tvShow,
+              let tmdbID = Int(item.id.split(separator: "_").last ?? "") else { return }
+
+        for (seasonNumber, tasteRaw) in overrides where seasonNumber > 0 {
+            let seasonUniqueID = "\(tmdbID)_\(seasonNumber)"
+            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
+            let season = (try? context.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: seasonNumber, name: "Season \(seasonNumber)", episodeCount: 0, airDate: nil)
+
+            if season.modelContext == nil {
+                season.uniqueID = seasonUniqueID
+                season.showID = tmdbID
+                if let tv = item.tvShowDetails { season.tvShowDetails = tv }
+                context.insert(season)
+            }
+            if mergeOnlyIfEmpty, season.tasteOverrideRaw != nil { continue }
+            season.tasteOverrideRaw = tasteRaw
+        }
     }
 }
 
