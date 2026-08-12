@@ -6,7 +6,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testUpdateSearchableTextIncludesTitleAndOverview() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "The Matrix", overview: "A computer hacker learns about reality", type: .movie)
@@ -22,7 +22,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testUpdateSearchableTextIncludesGenres() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
@@ -39,7 +39,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testUpdateSearchableTextIncludesCast() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
@@ -55,7 +55,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testBadgeRecalculatedOnSync() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
@@ -102,7 +102,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testSyncMoviePropertiesCopiesGenresAndCreators() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, CastMember.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
@@ -130,7 +130,7 @@ final class SyncCachedPropertiesTests: XCTestCase {
     @MainActor
     func testStoredIsUpcomingSetForFutureDate() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "1", title: "Upcoming", overview: "", type: .movie)

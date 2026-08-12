@@ -29,7 +29,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testPremiereForEpisode1WithinWindow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "p1", title: "Premiere Show", overview: "", type: .tvShow)
@@ -59,7 +59,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testPremiereOutsidePastWindow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "p2", title: "Old Premiere", overview: "", type: .tvShow)
@@ -91,7 +91,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testPremiereBeyondFutureWindow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "p3", title: "Far Premiere", overview: "", type: .tvShow)
@@ -125,7 +125,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testFinaleForLastEpisodeWithinWindow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "f1", title: "Finale Show", overview: "", type: .tvShow)
@@ -166,7 +166,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testFinaleOutsideWindow() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "f2", title: "Old Finale", overview: "", type: .tvShow)
@@ -206,7 +206,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testFinaleWithNoAirDate() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "f3", title: "Undated Finale", overview: "", type: .tvShow)
@@ -247,7 +247,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testBingeDropMultipleEpisodesSameDay() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bd1", title: "Binge Drop Show", overview: "", type: .tvShow)
@@ -304,7 +304,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testSoonBadgeForTVShowWithin48Hours() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "s1", title: "Soon Show", overview: "", type: .tvShow)
@@ -336,7 +336,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testSoonBadgeNotShownBeyond48Hours() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "s2", title: "Far Show", overview: "", type: .tvShow)
@@ -380,7 +380,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testHookedWith3RecentWatched() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bb1", title: "Binge Show", overview: "", type: .tvShow)
@@ -425,7 +425,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testNoBingeWhenCompleted() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bb2", title: "Completed Binge", overview: "", type: .tvShow)
@@ -462,7 +462,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testBehindBadgeForLikedShowWithNextAiringSoon() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bh1", title: "Behind Show", overview: "", type: .tvShow)
@@ -505,7 +505,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testBacklogBingeAt20PercentProgress() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bl1", title: "Backlog Show", overview: "", type: .tvShow)
@@ -542,7 +542,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testNoBacklogBingeBelow20Percent() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "bl2", title: "No Backlog Show", overview: "", type: .tvShow)
@@ -579,7 +579,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testPremiereOverridesSoon() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "po1", title: "Pecking Show", overview: "", type: .tvShow)
@@ -612,7 +612,7 @@ final class BadgeEngineTests: XCTestCase {
     @MainActor
     func testAllBadgeLevelsSkippedWhenDropped() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
 
         let item = MediaItem(id: "dr1", title: "Dropped Show", overview: "", type: .tvShow)

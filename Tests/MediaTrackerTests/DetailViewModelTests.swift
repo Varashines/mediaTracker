@@ -7,7 +7,7 @@ final class DetailViewModelTests: XCTestCase {
     @MainActor
     func testNeedsUpdateReturnsTrueWhenLastUpdatedIsNil() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
         context.insert(item)
@@ -20,7 +20,7 @@ final class DetailViewModelTests: XCTestCase {
     @MainActor
     func testNeedsUpdateReturnsFalseWhenRecentlyUpdated() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
         item.lastUpdated = Date()
@@ -34,7 +34,7 @@ final class DetailViewModelTests: XCTestCase {
     @MainActor
     func testNeedsUpdateReturnsTrueWhenStale() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, TVEpisode.self, configurations: config)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
         let item = MediaItem(id: "1", title: "Movie", overview: "", type: .movie)
         item.lastUpdated = Date().addingTimeInterval(-.days7)

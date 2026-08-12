@@ -1,0 +1,63 @@
+import SwiftUI
+import SwiftData
+
+/// Season-scoped cast strip. Shows the floor-qualifying cast (min(2, 10% of
+/// season episodes)) by default — unlike the series "Top Cast", it is not
+/// capped to the first six — with a "+N" pill to reveal the rest (cameos).
+struct SeasonCastSection: View {
+    let cast: [SeasonCastMember]
+    let themeColor: Color
+    var onCastSelected: ((String) -> Void)? = nil
+    @State private var showAll = false
+    @State private var isShowAllHovered = false
+    @Environment(\.colorScheme) var colorScheme
+
+    private var qualifying: [SeasonCastMember] {
+        cast.filter { $0.qualifiesForTaste }
+    }
+    private var cameos: [SeasonCastMember] {
+        cast.filter { !$0.qualifiesForTaste }
+    }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: AppTheme.Spacing.medium) {
+                ForEach(showAll ? cast : qualifying, id: \.persistentModelID) { member in
+                    SeasonCastMemberCard(member: member, themeColor: themeColor) {
+                        onCastSelected?(member.name)
+                    }
+                }
+                if !showAll && !cameos.isEmpty {
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            showAll = true
+                        }
+                    } label: {
+                        Text("+\(cameos.count)")
+                            .font(AppTheme.Font.bodyBold)
+                            .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                            .padding(.horizontal, AppTheme.Spacing.small)
+                            .padding(.vertical, AppTheme.Spacing.mini)
+                            .background(
+                                Capsule()
+                                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.10))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(themeColor.opacity(0.2), lineWidth: 0.5)
+                            )
+                            .frame(height: 90)
+                            .scaleEffect(isShowAllHovered ? 1.04 : 1.0)
+                            .animation(AppTheme.Animation.springSnappy, value: isShowAllHovered)
+                    }
+                    .buttonStyle(.interactive)
+                    .onHover { isShowAllHovered = $0 }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.compact)
+            .padding(.vertical, AppTheme.Spacing.small)
+            .scrollTargetLayout()
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+}

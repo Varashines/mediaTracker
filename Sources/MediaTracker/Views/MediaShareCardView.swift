@@ -38,15 +38,22 @@ struct MediaShareCardView: View {
 
     private var seasonsCountString: String? {
         guard let tv = item.tvShowDetails else { return nil }
-        let count = (tv.numberOfSeasons ?? 0) > 0 ? (tv.numberOfSeasons ?? 0) : tv.seasons.count
+        // Exclude Season 0 (Specials) from the fallback season count.
+        let count = (tv.numberOfSeasons ?? 0) > 0
+            ? (tv.numberOfSeasons ?? 0)
+            : tv.seasons.liveModels.filter { $0.seasonNumber > 0 }.count
         return count > 0 ? "\(count) SEASON\(count == 1 ? "" : "S")" : nil
     }
 
     private var episodesCountString: String? {
         guard let tv = item.tvShowDetails else { return nil }
+        // totalEpisodesCount and numberOfEpisodes already exclude Season 0;
+        // the reduce fallback must also skip specials.
         let count = tv.totalEpisodesCount > 0
             ? tv.totalEpisodesCount
-            : (tv.numberOfEpisodes ?? tv.seasons.reduce(0) { $0 + max($1.episodeCount, $1.episodes.count) })
+            : (tv.numberOfEpisodes ?? tv.seasons.liveModels
+                .filter { $0.seasonNumber > 0 }
+                .reduce(0) { $0 + max($1.episodeCount, $1.episodes.count) })
         return count > 0 ? "\(count) EPISODE\(count == 1 ? "" : "S")" : nil
     }
 

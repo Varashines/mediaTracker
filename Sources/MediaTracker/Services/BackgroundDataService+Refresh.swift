@@ -256,9 +256,12 @@ extension BackgroundDataService {
                     let episodeCount: Int
                     let airDate: String?
                     let episodes: [TVEpisodeResult]
+                    let seasonCast: [SeasonAggregateCastResult]
                 }
 
                 var fetchedSeasons: [FetchedSeasonData] = []
+
+                var didWriteSeasonCast = false
 
                 fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
                     for seasonData in seasonsToSync {
@@ -266,18 +269,19 @@ extension BackgroundDataService {
                         if seasonData.episode_count == 0 { continue }
 
                         var shouldForceSeason = force
+                        var skipEpisodeFetch = false
                         if !force {
                             let seasonUniqueID = "\(tmdbID)_\(sNum)"
                             let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
                             if let existing = try? modelContext.fetch(sDescriptor).first {
                                 if existing.episodes.count >= seasonData.episode_count {
-                                    // Season already has episodes — skip the API fetch, but make sure
+                                    // Season already has episodes — skip the episode API fetch, but make sure
                                     // it's attached to this show's TVShowDetails (import restores can
                                     // leave seasons orphaned with tvShowDetails == nil).
                                     if existing.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
                                         existing.tvShowDetails = tvDetails
                                     }
-                                    continue
+                                    skipEpisodeFetch = true
                                 } else {
                                     shouldForceSeason = true
                                 }
@@ -285,9 +289,14 @@ extension BackgroundDataService {
                         }
 
                         group.addTask {
+                            // Always fetch per-season aggregate credits (new data; existing seasons lack it).
+                            let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
+                            if skipEpisodeFetch {
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: [], seasonCast: credits)
+                            }
                             do {
                                 let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits)
                             } catch {
                                 AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
                                 return nil
@@ -353,8 +362,42 @@ extension BackgroundDataService {
                             episode.updateAirDateValue()
                         }
                     }
+
+                    // Persist per-season aggregate credits
+                    var existingCastByID: [String: SeasonCastMember] = [:]
+                    for c in season.seasonCast.liveModels {
+                        if let uid = c.uniqueID { existingCastByID[uid] = c }
+                    }
+                    var seenCastIDs = Set<String>()
+                    for cr in seasonData.seasonCast {
+                        let uid = "\(tmdbID)_\(sNum)_\(cr.tmdbPersonID)"
+                        seenCastIDs.insert(uid)
+                        let member = existingCastByID[uid]
+                            ?? SeasonCastMember(seasonNumber: sNum, tmdbPersonID: cr.tmdbPersonID, name: cr.name, characterName: cr.characterName, profileURL: cr.profileURL, episodeCount: cr.episodeCount, order: cr.order, showID: tmdbID)
+                        member.name = cr.name
+                        member.characterName = cr.characterName
+                        member.profileURL = cr.profileURL
+                        member.episodeCount = cr.episodeCount
+                        member.order = cr.order
+                        member.seasonNumber = sNum
+                        if member.modelContext == nil {
+                            member.season = season
+                            modelContext.insert(member)
+                            didWriteSeasonCast = true
+                        } else if member.season?.persistentModelID != season.persistentModelID {
+                            member.season = season
+                        }
+                    }
+                    for (uid, member) in existingCastByID where !seenCastIDs.contains(uid) {
+                        modelContext.delete(member)
+                        didWriteSeasonCast = true
+                    }
                 }
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
+                if didWriteSeasonCast {
+                    await MainActor.run { TasteActor.clearCache() }
+                    ScopedStatsActor.invalidateCache()
+                }
             }
             item.cachedWatchProviders = details.streamingProviders.map { $0.name }
             item.cachedWatchProviderLogoPaths = details.streamingProviders.map { $0.logoPath ?? "" }
@@ -371,8 +414,46 @@ extension BackgroundDataService {
     }
 
 
-    func extractAndSavePosterColor(for item: MediaItem) async {
-        let effectivePoster = item.effectivePosterURL
+    /// On-demand fetch of a single season's aggregate credits, persisting
+    /// SeasonCastMember rows and invalidating taste caches. Used when a user
+    /// requests "This season" cast for a show that hasn't been synced yet.
+    func refreshSeasonCast(tmdbID: Int, seasonNumber: Int) async {
+        guard let cast = try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: seasonNumber) else { return }
+
+        let seasonUniqueID = "\(tmdbID)_\(seasonNumber)"
+        guard let season = (try? modelContext.fetch(FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })))?.first else { return }
+
+        var existing: [String: SeasonCastMember] = [:]
+        for c in season.seasonCast.liveModels {
+            if let uid = c.uniqueID { existing[uid] = c }
+        }
+        var seen = Set<String>()
+        for cr in cast {
+            let uid = "\(tmdbID)_\(seasonNumber)_\(cr.tmdbPersonID)"
+            seen.insert(uid)
+            let member = existing[uid]
+                ?? SeasonCastMember(seasonNumber: seasonNumber, tmdbPersonID: cr.tmdbPersonID, name: cr.name, characterName: cr.characterName, profileURL: cr.profileURL, episodeCount: cr.episodeCount, order: cr.order, showID: tmdbID)
+            member.name = cr.name
+            member.characterName = cr.characterName
+            member.profileURL = cr.profileURL
+            member.episodeCount = cr.episodeCount
+            member.order = cr.order
+            if member.modelContext == nil {
+                member.season = season
+                modelContext.insert(member)
+            }
+        }
+        for (uid, member) in existing where !seen.contains(uid) {
+            modelContext.delete(member)
+        }
+
+        try? modelContext.save()
+        await MainActor.run { TasteActor.clearCache() }
+        ScopedStatsActor.invalidateCache()
+    }
+
+
+    func extractAndSavePosterColor(for item: MediaItem) async {        let effectivePoster = item.effectivePosterURL
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
               let poster = effectivePoster else { return }

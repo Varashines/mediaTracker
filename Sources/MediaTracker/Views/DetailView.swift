@@ -1,6 +1,13 @@
 import SwiftData
 import SwiftUI
 
+/// Which cast to show in the Top Cast section. Defaults to the full series;
+/// "this season" shows the selected season's per-season cast.
+private enum CastScope: String, CaseIterable {
+    case series
+    case season
+}
+
 struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
@@ -21,6 +28,9 @@ struct DetailView: View {
     @State private var isHoveringDelete = false
     @State private var isTitleCopied = false
     @State private var titleCopiedTask: Task<Void, Never>?
+    @State private var castScope: CastScope = .series
+    @State private var selectedSeasonNumber: Int?
+    @State private var isLoadingSeasonCast = false
 
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -31,6 +41,90 @@ struct DetailView: View {
         _viewModel = State(initialValue: DetailViewModel(item: item))
         self.onSearchActor = onSearchActor
         self.namespace = namespace
+    }
+
+    /// The selected season's cast, sorted by per-season episode count.
+    /// nil when there's no TV season selected or no season-cast data loaded yet.
+    private var seasonScopeCast: [SeasonCastMember]? {
+        guard viewModel.item.type == .tvShow,
+              let tv = viewModel.item.tvShowDetails,
+              let snum = selectedSeasonNumber,
+              let season = tv.seasons.first(where: { $0.seasonNumber == snum }),
+              !season.seasonCast.isEmpty else { return nil }
+        return season.seasonCast.liveModels.sorted {
+            if $0.episodeCount != $1.episodeCount { return $0.episodeCount > $1.episodeCount }
+            return $0.order < $1.order
+        }
+    }
+
+    @ViewBuilder
+    private var castBody: some View {
+        if viewModel.item.type != .tvShow || castScope == .series || !showCastScopeToggle {
+            CastSectionView(cast: viewModel.item.displayCast, themeColor: effectiveThemeColor) { actorName in
+                onSearchActor?(actorName)
+            }
+        } else if let seasonCast = seasonScopeCast {
+            SeasonCastSection(cast: seasonCast, themeColor: effectiveThemeColor) { actorName in
+                onSearchActor?(actorName)
+            }
+        } else if isLoadingSeasonCast {
+            HStack(spacing: AppTheme.Spacing.small) {
+                ProgressView().controlSize(.small)
+                Text("Loading season cast…")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, AppTheme.Spacing.small)
+        } else {
+            HStack(spacing: AppTheme.Spacing.small) {
+                Text("Season cast not loaded yet.")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.secondary)
+                Button("Fetch") { fetchSeasonCast() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.vertical, AppTheme.Spacing.small)
+        }
+    }
+
+    /// Whether the Series | This season toggle should show: only for multi-season
+    /// TV shows, and not when the selected season is Season 0 (specials).
+    private var showCastScopeToggle: Bool {
+        guard viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails else { return false }
+        let realSeasons = tv.seasons.liveModels.filter { $0.seasonNumber > 0 }.count
+        guard realSeasons > 1 else { return false }
+        return (selectedSeasonNumber ?? 0) != 0
+    }
+
+    /// Stable identity for the cast body, so switching between the series scope
+    /// and different seasons triggers a single smooth transition.
+    private var castKey: String {
+        if viewModel.item.type != .tvShow || castScope == .series || !showCastScopeToggle {
+            return "series"
+        }
+        return "season-\(selectedSeasonNumber ?? 0)"
+    }
+
+    private func ensureSeasonCastLoaded() {
+        guard viewModel.item.type == .tvShow,
+              let tv = viewModel.item.tvShowDetails,
+              let snum = selectedSeasonNumber,
+              let season = tv.seasons.first(where: { $0.seasonNumber == snum }),
+              season.seasonCast.isEmpty else { return }
+        fetchSeasonCast()
+    }
+
+    private func fetchSeasonCast() {
+        guard let tv = viewModel.item.tvShowDetails, let snum = selectedSeasonNumber else { return }
+        let container = modelContext.container
+        let tmdbID = tv.tmdbID
+        isLoadingSeasonCast = true
+        Task {
+            let service = BackgroundDataService(modelContainer: container)
+            await service.refreshSeasonCast(tmdbID: tmdbID, seasonNumber: snum)
+            await MainActor.run { isLoadingSeasonCast = false }
+        }
     }
 
     var body: some View {
@@ -347,20 +441,36 @@ struct DetailView: View {
                         onSeasonSelected: { season in viewModel.fetchEpisodes(for: season) },
                         onSeasonCompleted: {
                             // Handled via badge/haptic
-                        }
+                        },
+                        selectedSeasonNumber: $selectedSeasonNumber
                     )
                     .padding(.top, 4)
                 }
             }
 
             // 2. TOP CAST (Modular Card)
-            if showCast, !viewModel.item.displayCast.isEmpty {
-                ModularSection(title: "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
-                    CastSectionView(
-                        cast: viewModel.item.displayCast,
-                        themeColor: effectiveThemeColor
-                    ) { actorName in
-                        onSearchActor?(actorName)
+            let showCastSection = !viewModel.item.displayCast.isEmpty || seasonScopeCast != nil
+            if showCast, showCastSection {
+                ModularSection(title: (castScope == .season && showCastScopeToggle) ? "Top Cast · Season \(selectedSeasonNumber ?? 0)" : "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                        if showCastScopeToggle {
+                            CastScopeToggle(scope: $castScope)
+                        }
+                        castBody
+                            .id(castKey)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
+                    .padding(.top, 4)
+                    .animation(AppTheme.Animation.easeInOut, value: castKey)
+                }
+                .onChange(of: castScope) { _, newScope in
+                    if newScope == .season { ensureSeasonCastLoaded() }
+                }
+                .onChange(of: selectedSeasonNumber) { _, _ in
+                    if castScope == .season && !showCastScopeToggle {
+                        castScope = .series
+                    } else if castScope == .season {
+                        ensureSeasonCastLoaded()
                     }
                 }
             }
@@ -791,5 +901,48 @@ private struct ActionChipButton: View {
                 isHovered = hovering
             }
         }
+    }
+}
+
+// MARK: - Cast Scope Toggle
+
+private struct CastScopeToggle: View {
+    @Binding var scope: CastScope
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.mini) {
+            scopePill(.series, label: "Series", icon: "square.stack.3d.up.fill")
+            scopePill(.season, label: "This season", icon: "calendar")
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.primary.opacity(0.06)))
+    }
+
+    private func scopePill(_ value: CastScope, label: String, icon: String) -> some View {
+        let isSelected = scope == value
+        return Button {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                scope = value
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                Text(label)
+            }
+            .font(AppTheme.Font.caption)
+            .padding(.horizontal, AppTheme.Spacing.smallMedium)
+            .padding(.vertical, AppTheme.Spacing.tiny)
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .background {
+                if isSelected {
+                    Capsule().fill(Color.primary)
+                } else {
+                    Capsule().fill(Color.clear)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

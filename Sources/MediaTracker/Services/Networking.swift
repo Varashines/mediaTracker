@@ -42,6 +42,7 @@ actor APIClient {
     private var inFlightMovieDetails: [Int: Task<MovieDetailsResult, Error>] = [:]
     private var inFlightTVDetails: [Int: Task<TVDetailsResult, Error>] = [:]
     private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
+    private var inFlightSeasonAggregateCredits: [String: Task<[SeasonAggregateCastResult], Error>] = [:]
     
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
     private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
@@ -593,6 +594,56 @@ actor APIClient {
         }
         inFlightSeasonDetails[coalescingKey] = task
         return try await task.value
+    }
+
+    /// Fetches per-season aggregate credits (regulars + supporting cast with
+    /// per-season episode counts) from /tv/{id}/season/{n}/aggregate_credits.
+    func fetchSeasonAggregateCredits(tmdbID: Int, seasonNumber: Int, force: Bool = false) async throws -> [SeasonAggregateCastResult] {
+        let cacheKey = "season_agg_credits_\(tmdbID)_\(seasonNumber).json"
+        let coalescingKey = cacheKey
+
+        let ttl: TimeInterval = force ? -1 : 7 * .secondsInDay
+        if let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
+           let decoded = try? decoder.decode(TMDBAggregateCreditsResponse.self, from: cachedData) {
+            return Self.mapSeasonAggregate(decoded)
+        }
+
+        if let existing = inFlightSeasonAggregateCredits[coalescingKey] {
+            return try await existing.value
+        }
+        let task = Task<[SeasonAggregateCastResult], Error> {
+            defer { self.inFlightSeasonAggregateCredits.removeValue(forKey: coalescingKey) }
+            do {
+                return try await self.executeWithRetry {
+                    let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)/aggregate_credits")
+                    let (data, response) = try await self.session.data(from: url)
+                    try self.validateResponse(response)
+                    self.saveToCache(data: data, forKey: cacheKey)
+                    let decoded = try self.decoder.decode(TMDBAggregateCreditsResponse.self, from: data)
+                    return Self.mapSeasonAggregate(decoded)
+                }
+            } catch APIError.requestFailed(let code) where code == 404 {
+                AppLogger.debug("ℹ️ Season aggregate credits not found (404) for show \(tmdbID), season \(seasonNumber). Returning empty.", logger: AppLogger.network)
+                return []
+            }
+        }
+        inFlightSeasonAggregateCredits[coalescingKey] = task
+        return try await task.value
+    }
+
+    private static func mapSeasonAggregate(_ d: TMDBAggregateCreditsResponse) -> [SeasonAggregateCastResult] {
+        d.cast.compactMap { member in
+            guard let id = member.id, let name = member.name, !name.isEmpty else { return nil }
+            let character = member.roles.first?.character ?? "Unknown"
+            return SeasonAggregateCastResult(
+                tmdbPersonID: id,
+                name: name,
+                characterName: character,
+                profileURL: member.profile_path.flatMap { APIClient.tmdbImageURL(path: $0, size: "w185") },
+                episodeCount: member.total_episode_count,
+                order: member.order
+            )
+        }
     }
 
     func searchPerson(query: String) async throws -> String? {

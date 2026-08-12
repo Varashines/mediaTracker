@@ -4,7 +4,7 @@ struct AboutSection: View {
     @Environment(\.colorScheme) var scheme
 
     private var appVersion: String {
-        "8.0.2"
+        "8.1.0"
     }
 
     private var buildNumber: String {

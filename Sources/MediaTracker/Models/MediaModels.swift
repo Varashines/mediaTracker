@@ -180,10 +180,30 @@ final class TVSeason {
     @Attribute(.unique) var uniqueID: String?
     var tvShowDetails: TVShowDetails?
     @Relationship(deleteRule: .cascade, inverse: \TVEpisode.season) var episodes: [TVEpisode] = []
+    /// Per-season cast credits (aggregate credits). Cascade-deleted with the season.
+    @Relationship(deleteRule: .cascade, inverse: \SeasonCastMember.season) var seasonCast: [SeasonCastMember] = []
+
+    /// Per-season taste override. nil = inherit the show's overall taste.
+    /// Stored as a raw string so enums-as-raw-strings convention applies.
+    var tasteOverrideRaw: String?
 
     /// Denormalized counts for O(1) UI performance
     var watchedEpisodesCount: Int = 0
     var totalEpisodesCount: Int = 0
+
+    /// Convenience: the season's effective taste (override, or nil when it inherits the show).
+    var tasteOverride: TasteValue? {
+        get { tasteOverrideRaw.flatMap(TasteValue.init(rawValue:)) }
+        set { tasteOverrideRaw = newValue?.rawValue }
+    }
+
+    /// Whether every episode in the season has been watched. Used to decide
+    /// whether the season inherits the show's overall taste.
+    var isFullyWatched: Bool {
+        let total = max(totalEpisodesCount, episodeCount)
+        return total > 0 && watchedEpisodesCount >= total
+    }
+
 
     init(seasonNumber: Int, name: String, episodeCount: Int, airDate: String? = nil, showID: Int? = nil) {
         self.seasonNumber = seasonNumber
