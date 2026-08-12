@@ -118,6 +118,28 @@ struct GeneralSection: View {
                 }
             }
 
+            // MARK: - Security
+            SettingsCard {
+                VStack(spacing: 0) {
+                    if AppLockService.biometricsAvailable {
+                        SettingsToggleRow(
+                            title: "Require Touch ID to unlock",
+                            subtitle: "Lock the app when you open it or leave it inactive.",
+                            showDivider: false,
+                            isOn: Binding(
+                                get: { AppLockService.shared.isEnabled },
+                                set: { AppLockService.shared.isEnabled = $0 }
+                            )
+                        )
+                    } else {
+                        SettingsRow(title: "Touch ID unavailable", subtitle: "Enable Touch ID in System Settings to use app lock.", showDivider: false) {
+                            Image(systemName: "touchid")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
             // MARK: - Performance
             SettingsCard {
                 VStack(spacing: 0) {
@@ -155,11 +177,13 @@ struct GeneralSection: View {
             .themePreference, .themePreset, .backgroundIntensity, .useTitleLogos,
             .reduceVisualEffects, .hapticsEnabled, .audioEnabled, .preventSleepMode,
             .skipStartupTasks, .notificationsEnabled, .notificationsMovies,
-            .notificationsTV, .notificationsTime, .discoveryAutoSync, .recentSearches
+            .notificationsTV, .notificationsTime, .discoveryAutoSync, .recentSearches,
+            .appLockEnabled
         ]
         for key in keys {
             defaults.removeObject(forKey: key.rawValue)
         }
+        AppLockService.shared.isEnabled = false
         // Fallback keys written via @AppStorage raw strings
         defaults.removeObject(forKey: "notifications_time")
 

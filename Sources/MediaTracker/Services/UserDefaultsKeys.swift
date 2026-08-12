@@ -13,6 +13,7 @@ enum UserDefaultsKeys: String {
     case preventSleepMode = "prevent_sleep_mode"
     case skipStartupTasks = "skip_startup_background_tasks"
     case autoMarkEpisodesWatched = "auto_mark_episodes_watched"
+    case appLockEnabled = "app_lock_enabled"
     
     // Appearance
     case themePreference = "theme_preference"

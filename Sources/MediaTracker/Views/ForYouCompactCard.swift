@@ -51,19 +51,21 @@ struct ForYouCompactCard: View, Equatable {
                             Text(context.uppercased())
                                 .font(AppTheme.Font.small)
                                 .tracking(0.8)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .foregroundStyle(AppTheme.Colors.accent.readableForeground)
                         .background {
                             Capsule()
-                                .fill(accent.opacity(colorScheme == .dark ? 0.25 : 0.35))
-                                .background(.thinMaterial)
+                                .fill(accent)
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(accent.opacity(0.4), lineWidth: 0.8)
+                            Capsule().stroke(Color.white.opacity(0.35), lineWidth: 0.8)
                         }
+                        .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
                         .padding(12)
                     }
                     Spacer()

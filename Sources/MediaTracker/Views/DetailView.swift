@@ -454,14 +454,17 @@ struct DetailView: View {
                 ModularSection(title: (castScope == .season && showCastScopeToggle) ? "Top Cast · Season \(selectedSeasonNumber ?? 0)" : "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                         if showCastScopeToggle {
-                            CastScopeToggle(scope: $castScope)
+                            CastScopeToggle(scope: $castScope, themeColor: effectiveThemeColor)
                         }
                         castBody
                             .id(castKey)
-                            .transition(.opacity.combined(with: .move(edge: .trailing)))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
+                                removal: .opacity.animation(.easeOut(duration: 0.12))
+                            ))
                     }
                     .padding(.top, 4)
-                    .animation(AppTheme.Animation.easeInOut, value: castKey)
+                    .animation(AppTheme.Animation.springGentle, value: castKey)
                 }
                 .onChange(of: castScope) { _, newScope in
                     if newScope == .season { ensureSeasonCastLoaded() }
@@ -908,37 +911,59 @@ private struct ActionChipButton: View {
 
 private struct CastScopeToggle: View {
     @Binding var scope: CastScope
+    let themeColor: Color
     @Environment(\.colorScheme) var colorScheme
+    @Namespace private var sliderNamespace
 
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.mini) {
-            scopePill(.series, label: "Series", icon: "square.stack.3d.up.fill")
-            scopePill(.season, label: "This season", icon: "calendar")
+    private func label(_ value: CastScope) -> String {
+        switch value {
+        case .series: return "Series"
+        case .season: return "This season"
         }
-        .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(0.06)))
     }
 
-    private func scopePill(_ value: CastScope, label: String, icon: String) -> some View {
+    private func icon(_ value: CastScope) -> String {
+        switch value {
+        case .series: return "square.stack.3d.up.fill"
+        case .season: return "calendar"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(CastScope.allCases, id: \.self) { option in
+                scopePill(option)
+            }
+        }
+        .padding(3)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(Color.primary.opacity(0.12), lineWidth: 1))
+        }
+    }
+
+    private func scopePill(_ value: CastScope) -> some View {
         let isSelected = scope == value
+        let contrast = themeColor.readableForeground
         return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
+            withAnimation(AppTheme.Animation.springGentle) {
                 scope = value
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: icon)
-                Text(label)
+                Image(systemName: icon(value))
+                Text(label(value))
             }
             .font(AppTheme.Font.caption)
             .padding(.horizontal, AppTheme.Spacing.smallMedium)
             .padding(.vertical, AppTheme.Spacing.tiny)
-            .foregroundStyle(isSelected ? .white : .secondary)
+            .foregroundStyle(isSelected ? contrast : .secondary)
             .background {
                 if isSelected {
-                    Capsule().fill(Color.primary)
-                } else {
-                    Capsule().fill(Color.clear)
+                    Capsule()
+                        .fill(themeColor)
+                        .matchedGeometryEffect(id: "castScopeSlider", in: sliderNamespace)
                 }
             }
             .contentShape(Capsule())

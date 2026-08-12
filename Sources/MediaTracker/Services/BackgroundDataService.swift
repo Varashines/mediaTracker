@@ -138,6 +138,7 @@ actor BackgroundDataService {
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 }
+                itemData.applySeasonTasteOverrides(to: existing, in: context, mergeOnlyIfEmpty: strategy == .merge)
             } else {
                 let item = MediaItem(
                     id: uniqueID,
@@ -155,6 +156,8 @@ actor BackgroundDataService {
                 item.syncCachedProperties(dirty: .all)
                 context.insert(item)
                 importedCount += 1
+
+                itemData.applySeasonTasteOverrides(to: item, in: context)
 
                 // Restore Episode Progress
                 if item.type == .tvShow, let watchedIDs = itemData.watchedEpisodeIDs, let tmdbID = Int(tmdbIDPart) {
