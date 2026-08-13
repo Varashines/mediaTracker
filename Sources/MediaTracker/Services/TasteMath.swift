@@ -53,6 +53,33 @@ enum TasteMath {
         }
     }
 
+    /// Single source of truth for a season's effective taste: a manual override
+    /// always wins; otherwise the show's taste is inherited only for fully
+    /// watched seasons. Used by both the UI and the affinity scoring.
+    static func effectiveSeasonTasteRaw(override: String?, isFullyWatched: Bool, showTaste: String?) -> String? {
+        if let override { return override }
+        guard isFullyWatched else { return nil }
+        return showTaste
+    }
+
+    /// Weight for a title: 1 for movies, else the season-count tier for TV.
+    static func titleWeight(for item: MediaItem) -> Int {
+        titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
+    }
+
+    /// Shared genre accumulation so the aggregation actors don't hand-roll it.
+    static func accumulateGenres(_ map: inout [String: CategoryStats], genres: [String], taste: String, weight: Int) {
+        for g in genres { updateTaste(&map, g, taste, weight: weight) }
+    }
+
+    /// Shared top-billed cast accumulation (used by the non-season aggregation
+    /// paths). Season-based cast scoring lives separately in TasteActor.
+    static func accumulateTopBilledCast(_ map: inout [String: CategoryStats], cast: [SimpleCastMember], taste: String, limit: Int, weight: Int) {
+        for actor in cast.prefix(limit) {
+            updateTaste(&map, actor.name, taste, profileURL: actor.profileURL, weight: weight)
+        }
+    }
+
     static func updateTaste(_ map: inout [String: CategoryStats], _ key: String, _ taste: String, profileURL: String? = nil, weight: Int = 1) {
         var s = map[key, default: CategoryStats()]
         s.total += 1

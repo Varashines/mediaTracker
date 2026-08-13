@@ -78,7 +78,7 @@ struct SharePreviewPopup: View {
             MediaShareCardView(item: item)
                 .environment(\.colorScheme, .dark)
                 .scaleEffect(0.85)
-                .frame(width: 400 * 0.85, height: 700 * 0.85)
+                .frame(width: MediaShareCardView.cardSize.width * 0.85, height: MediaShareCardView.cardSize.height * 0.85)
                 .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
 
             shareButton {
@@ -103,7 +103,7 @@ struct SharePreviewPopup: View {
                     MediaShareCardView(item: item, customCast: selectedCastMembers)
                         .environment(\.colorScheme, .dark)
                         .scaleEffect(0.65)
-                        .frame(width: 400 * 0.65, height: 700 * 0.65)
+                        .frame(width: MediaShareCardView.cardSize.width * 0.65, height: MediaShareCardView.cardSize.height * 0.65)
                         .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
 
                     shareButton {

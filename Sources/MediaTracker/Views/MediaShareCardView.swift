@@ -4,6 +4,10 @@ struct MediaShareCardView: View {
     let item: MediaItem
     var customCast: [SimpleCastMember]? = nil
 
+    /// Single source of truth for the card's rendered dimensions. The preview
+    /// scales from this, so it can never drift from the exported image.
+    static let cardSize = CGSize(width: 400, height: 700)
+
     private var themeColor: Color {
         if let hex = item.themeColorHex, let color = Color(themeHex: hex) {
             return color
@@ -70,7 +74,7 @@ struct MediaShareCardView: View {
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
-        .frame(width: 400, height: 700)
+        .frame(width: Self.cardSize.width, height: Self.cardSize.height)
         .background {
             ZStack {
                 Color(white: 0.03)
@@ -361,7 +365,7 @@ struct MediaShareCardView: View {
 
     @MainActor
     func renderToImage() -> NSImage? {
-        renderToNSImage(width: 400, height: 700)
+        renderToNSImage(width: Self.cardSize.width, height: Self.cardSize.height)
     }
 }
 
