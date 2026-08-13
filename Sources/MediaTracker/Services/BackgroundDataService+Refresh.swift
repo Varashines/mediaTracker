@@ -178,6 +178,39 @@ extension BackgroundDataService {
                 return dict
             }()
 
+            // TVMaze is the authoritative source for per-season episode counts
+            // (TMDB can misreport, e.g. for certain shows). Fall back to TMDB's
+            // count when TVMaze data isn't available.
+            let mazeSeasonCounts: [Int: Int] = {
+                var counts: [Int: Int] = [:]
+                for ep in mazeEpisodes {
+                    if let s = ep.season { counts[s, default: 0] += 1 }
+                }
+                return counts
+            }()
+
+            // Pre-compute TVMaze episodes grouped by season (Sendable, so it can
+            // be captured safely by the concurrent task group).
+            let mazeEpisodesBySeason: [Int: [TVEpisodeResult]] = {
+                var bySeason: [Int: [TVEpisodeResult]] = [:]
+                for ep in mazeEpisodes {
+                    guard let s = ep.season, let n = ep.number else { continue }
+                    bySeason[s, default: []].append(
+                        TVEpisodeResult(
+                            episodeNumber: n,
+                            name: ep.name,
+                            overview: ep.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines),
+                            airDate: ep.airdate,
+                            runtime: ep.runtime
+                        )
+                    )
+                }
+                for (s, eps) in bySeason {
+                    bySeason[s] = eps.sorted { $0.episodeNumber < $1.episodeNumber }
+                }
+                return bySeason
+            }()
+
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
             // Short-circuit: quick check before expensive sort-and-zip
@@ -266,7 +299,9 @@ extension BackgroundDataService {
                 fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
-                        if seasonData.episode_count == 0 { continue }
+                        // Prefer TVMaze's per-season episode count; fall back to TMDB.
+                        let episodeCount = mazeSeasonCounts[sNum] ?? seasonData.episode_count
+                        if episodeCount == 0 { continue }
 
                         var shouldForceSeason = force
                         var skipEpisodeFetch = false
@@ -274,7 +309,7 @@ extension BackgroundDataService {
                             let seasonUniqueID = "\(tmdbID)_\(sNum)"
                             let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
                             if let existing = try? modelContext.fetch(sDescriptor).first {
-                                if existing.episodes.count >= seasonData.episode_count {
+                                if existing.episodes.count >= episodeCount {
                                     // Season already has episodes — skip the episode API fetch, but make sure
                                     // it's attached to this show's TVShowDetails (import restores can
                                     // leave seasons orphaned with tvShowDetails == nil).
@@ -292,15 +327,23 @@ extension BackgroundDataService {
                             // Always fetch per-season aggregate credits (new data; existing seasons lack it).
                             let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
                             if skipEpisodeFetch {
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: [], seasonCast: credits)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], seasonCast: credits)
                             }
-                            do {
-                                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: seasonData.episode_count, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits)
-                            } catch {
-                                AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
-                                return nil
+
+                            // Prefer TVMaze episodes (authoritative). Fall back to TMDB when
+                            // TVMaze has no episodes for this season.
+                            let episodes: [TVEpisodeResult]
+                            if let mazeSeasonEps = mazeEpisodesBySeason[sNum], !mazeSeasonEps.isEmpty {
+                                episodes = mazeSeasonEps
+                            } else {
+                                do {
+                                    episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)
+                                } catch {
+                                    AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
+                                    return nil
+                                }
                             }
+                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits)
                         }
                     }
                     var results: [FetchedSeasonData] = []
