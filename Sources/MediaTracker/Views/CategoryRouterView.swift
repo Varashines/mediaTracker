@@ -40,10 +40,7 @@ struct CategoryRouterView: View {
     private var normalContent: some View {
         let slideTransition: AnyTransition = AppThemeCoordinator.isReducingVisualEffects
             ? .identity
-            : .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            )
+            : .opacity
 
         if viewModel.filter.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
