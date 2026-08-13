@@ -32,7 +32,7 @@ struct CategoryRouterView: View {
                 .zIndex(1)
             }
         }
-        .animation(AppTheme.Animation.springGentle, value: viewModel.filter.selectedCategory)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.filter.selectedCategory)
         .animation(AppTheme.Animation.easeInOut, value: isSearchActive)
     }
 
