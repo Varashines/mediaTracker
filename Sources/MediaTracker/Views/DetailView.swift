@@ -459,10 +459,12 @@ struct DetailView: View {
                         }
                         castBody
                             .id(castKey)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
-                                removal: .opacity.animation(.easeOut(duration: 0.12))
-                            ))
+                            .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                                $0.transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
+                                    removal: .opacity.animation(.easeOut(duration: 0.12))
+                                ))
+                            }
                     }
                     .padding(.top, 4)
                     .animation(AppTheme.Animation.springGentle, value: castKey)

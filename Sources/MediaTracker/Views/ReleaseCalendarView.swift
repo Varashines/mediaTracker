@@ -381,10 +381,12 @@ struct ReleaseCalendarView: View {
             .padding(.top, 10)
         }
         .id(currentDisplayMonth)
-        .transition(.asymmetric(
-            insertion: .move(edge: .trailing).combined(with: .opacity),
-            removal: .move(edge: .leading).combined(with: .opacity)
-        ))
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            ))
+        }
     }
     
     @ViewBuilder

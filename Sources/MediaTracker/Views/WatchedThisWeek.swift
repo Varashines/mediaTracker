@@ -98,11 +98,10 @@ struct WatchedThisWeek: View {
                         .font(AppTheme.Font.body)
                         .foregroundStyle(.tertiary)
                 }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.mediaRowArrival)
-            } else if filteredItems.isEmpty {
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, AppTheme.Spacing.small)
+                } else if filteredItems.isEmpty {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: filter.icon)
                         .font(AppTheme.Font.title3)

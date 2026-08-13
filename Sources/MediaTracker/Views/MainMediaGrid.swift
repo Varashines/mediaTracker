@@ -17,14 +17,13 @@ struct MainMediaGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: AppTheme.Spacing.grid) {
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
-                NavigationLink(value: metadata.id) {
-                    gridCell(for: metadata, at: idx)
+                    NavigationLink(value: metadata.id) {
+                        gridCell(for: metadata, at: idx)
+                    }
+                    .buttonStyle(.interactive)
                 }
-                .buttonStyle(.interactive)
-                .transition(.mediaRowArrival)
-            }
-            
-            if isLoadingMore {
+                
+                if isLoadingMore {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)

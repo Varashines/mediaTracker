@@ -24,14 +24,13 @@ struct GroupedMediaGrid: View {
                     
                     LazyVGrid(columns: columns, alignment: .leading, spacing: AppTheme.Spacing.grid) {
                         ForEach(groupMetadatas, id: \.id) { metadata in
-                            NavigationLink(value: metadata.id) {
-                                gridCell(for: metadata)
+                                NavigationLink(value: metadata.id) {
+                                    gridCell(for: metadata)
+                                }
+                                .buttonStyle(.interactive)
                             }
-                            .buttonStyle(.interactive)
-                            .transition(.mediaRowArrival)
                         }
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, 10)
                 }
             }

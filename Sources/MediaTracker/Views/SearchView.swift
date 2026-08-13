@@ -263,10 +263,9 @@ struct SearchView: View {
                     webResultsSection
                 }
             }
-            .padding(.vertical, AppTheme.Spacing.xLarge)
-            .id(selectedType)
-            .transition(.mediaRowArrival)
-            .animation(AppTheme.Animation.easeInOut, value: selectedType)
+                .padding(.vertical, AppTheme.Spacing.xLarge)
+                .id(selectedType)
+                .animation(AppTheme.Animation.easeInOut, value: selectedType)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
