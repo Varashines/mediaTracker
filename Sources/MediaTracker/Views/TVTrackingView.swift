@@ -94,7 +94,6 @@ struct TVTrackingView: View {
                         onSeasonSelected: onSeasonSelected
                     )
                     .id(selectedNumber)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .onAppear {
                         autoFetchIfNeeded(season: selectedSeason)
                     }

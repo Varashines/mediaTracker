@@ -177,12 +177,14 @@ struct SearchView: View {
 
     private func filterPill(title: String, icon: String?, type: SearchType, shortcut: String) -> some View {
         let isSelected = selectedType == type
+        let accent = AppTheme.Colors.accent
+        let contrast = accent.readableForeground
         return Button {
             withAnimation(AppTheme.Animation.springSnappy) {
                 viewModel.filter.searchTypeFilter = type
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 if let icon {
                     Image(systemName: icon)
                         .font(.system(size: 11, weight: .semibold))
@@ -190,24 +192,23 @@ struct SearchView: View {
 
                 Text(title)
                     .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
-                    .foregroundStyle(isSelected ? .primary : .secondary)
 
                 Text(shortcut)
-                    .font(AppTheme.Font.small)
-                    .foregroundStyle(isSelected ? AppTheme.Colors.accent : Color.secondary.opacity(0.6))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(isSelected ? contrast.opacity(0.9) : Color.secondary.opacity(0.75))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(
                         Capsule()
-                            .fill(isSelected ? AppTheme.Colors.accent.opacity(0.15) : Color.primary.opacity(0.04))
+                            .fill(isSelected ? Color.white.opacity(0.22) : Color.primary.opacity(0.06))
                     )
-                    .opacity(0) // shortcuts still work via background buttons; badge hidden
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
+            .foregroundStyle(isSelected ? contrast : .secondary)
             .background(
                 Capsule()
-                    .fill(isSelected ? AppTheme.Colors.accent.opacity(0.2) : Color.clear)
+                    .fill(isSelected ? accent : Color.primary.opacity(0.04))
             )
             .contentShape(Capsule())
         }
