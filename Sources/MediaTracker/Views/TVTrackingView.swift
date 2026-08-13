@@ -281,9 +281,12 @@ private struct SeasonSection: View {
     /// Effective taste for this season: the manual override if set, else the
     /// show's overall taste — inherited only for fully watched seasons.
     private var effectiveSeasonTaste: TasteValue? {
-        if let override = season.tasteOverride { return override }
-        guard season.isFullyWatched else { return nil }
-        return season.tvShowDetails?.item?.taste
+        let raw = TasteMath.effectiveSeasonTasteRaw(
+            override: season.tasteOverrideRaw,
+            isFullyWatched: season.isFullyWatched,
+            showTaste: season.tvShowDetails?.item?.tasteValue
+        )
+        return raw.flatMap(TasteValue.init(rawValue:))
     }
 
     /// SF symbol reflecting the effective taste (nil when unset).

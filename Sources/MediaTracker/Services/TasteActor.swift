@@ -159,8 +159,7 @@ actor TasteActor {
                 if let ov = s.tasteOverrideRaw {
                     lookups.overrideByShowSeason[sid, default: [:]][s.seasonNumber] = ov
                 }
-                let total = max(s.totalEpisodesCount, s.episodeCount)
-                if total > 0 && s.watchedEpisodesCount >= total {
+                if s.isFullyWatched {
                     lookups.watchedByShowSeason[sid, default: []].insert(s.seasonNumber)
                 }
             }
@@ -192,9 +191,9 @@ actor TasteActor {
     private func accumulateBatch(_ items: [MediaItem], into acc: inout AffinityAccumulators, lookups: SeasonLookups) {
         for item in items {
             let taste = item.tasteValue
-            let titleWeight = TasteMath.titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
+            let titleWeight = TasteMath.titleWeight(for: item)
 
-            for g in item.cachedGenres { TasteMath.updateTaste(&acc.genreStats, g, taste, weight: titleWeight) }
+            TasteMath.accumulateGenres(&acc.genreStats, genres: item.cachedGenres, taste: taste, weight: titleWeight)
             if let rawNetwork = item.cachedNetwork {
                 for n in rawNetwork.commaSeparatedValues where !n.isEmpty {
                     TasteMath.updateTaste(&acc.networkStats, n, taste, weight: titleWeight)
@@ -208,16 +207,12 @@ actor TasteActor {
                let members = lookups.castByShow[tmdbID], !members.isEmpty {
                 var points: [String: Double] = [:]
                 for m in members {
-                    // Effective taste: manual override wins; otherwise the show's
-                    // taste is inherited only if the season has been watched.
-                    let effective: String?
-                    if let ov = lookups.overrideByShowSeason[tmdbID]?[m.seasonNumber] {
-                        effective = ov
-                    } else if lookups.watchedByShowSeason[tmdbID]?.contains(m.seasonNumber) == true {
-                        effective = taste
-                    } else {
-                        effective = nil
-                    }
+                    let isFullyWatched = lookups.watchedByShowSeason[tmdbID]?.contains(m.seasonNumber) == true
+                    let effective = TasteMath.effectiveSeasonTasteRaw(
+                        override: lookups.overrideByShowSeason[tmdbID]?[m.seasonNumber],
+                        isFullyWatched: isFullyWatched,
+                        showTaste: taste
+                    )
                     let w = TasteMath.seasonWeight(effective)
                     if w != 0 { points[m.name, default: 0] += w }
                 }

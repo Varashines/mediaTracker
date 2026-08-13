@@ -387,10 +387,8 @@ actor LibraryStatsActor {
 
             // Common traits (Volume & Quality)
             if item.stateValue != "Wishlist" || tasteValue != TasteValue.none.rawValue {
-                let titleWeight = TasteMath.titleWeight(seasonCount: item.type == .tvShow ? item.cachedSeasonCount : 0)
-                for g in item.cachedGenres {
-                    TasteMath.updateTaste(&taste.genreTaste, g, tasteValue, weight: titleWeight)
-                }
+                let titleWeight = TasteMath.titleWeight(for: item)
+                TasteMath.accumulateGenres(&taste.genreTaste, genres: item.cachedGenres, taste: tasteValue, weight: titleWeight)
                 if let rawNetwork = item.cachedNetwork {
                     let networks = rawNetwork.commaSeparatedValues
                     for n in networks where !n.isEmpty {
@@ -413,9 +411,7 @@ actor LibraryStatsActor {
                 // Cast affinity — only top-billed cast (5 movie / 10 TV).
                 // Support cast is deliberately excluded from Hall of Fame.
                 let castLimit = item.type == .movie ? 5 : 10
-                for actor in item.displayCast.prefix(castLimit) {
-                    TasteMath.updateTaste(&taste.actorTaste, actor.name, tasteValue, profileURL: actor.profileURL, weight: titleWeight)
-                }
+                TasteMath.accumulateTopBilledCast(&taste.actorTaste, cast: item.displayCast, taste: tasteValue, limit: castLimit, weight: titleWeight)
             }
 
             // Barcode data for SpectrumView
