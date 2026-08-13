@@ -185,7 +185,7 @@ final class MediaItem: Identifiable {
             }
             
             if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
-            commitChange(dirty: .all)
+            commitChange(dirty: [.badge, .searchable])
         }
     }
 
@@ -203,7 +203,7 @@ final class MediaItem: Identifiable {
         isSoftDeleted = true
         softDeletedAt = now
         lastInteractionDate = now
-        commitChange(dirty: .all)
+        commitChange(dirty: [.badge])
     }
 
     func restoreFromSoftDelete() {
@@ -211,7 +211,7 @@ final class MediaItem: Identifiable {
         isSoftDeleted = false
         softDeletedAt = nil
         lastInteractionDate = Date()
-        commitChange(dirty: .all)
+        commitChange(dirty: [.badge])
     }
 
     @Relationship(deleteRule: .cascade, inverse: \MovieDetails.item) var movieDetails: MovieDetails?

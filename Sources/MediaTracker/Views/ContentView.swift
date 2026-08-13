@@ -270,7 +270,7 @@ struct LibraryDetailView: View {
                     onRefresh: refreshAction
                 )
             }
-            .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
+            .toolbar(.hidden, for: .windowToolbar)
             .background {
                 Group {
                     Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
