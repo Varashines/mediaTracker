@@ -406,11 +406,13 @@ class DetailViewModel {
     private func fetchEpisodesIfNeeded(for seasonID: PersistentIdentifier, markAsWatched: Bool, force: Bool = false) async {
         guard let tv = self.item.tvShowDetails,
               let season = tv.seasons.first(where: { $0.persistentModelID == seasonID }) else { return }
-        
-        if !force {
-            if season.episodeCount > 0 && season.episodes.count >= season.episodeCount { return }
-        }
-        
+
+        // Whether we need to (re)populate episode rows. We always re-resolve the
+        // authoritative (TVMaze) episode count so stale TMDB counts get
+        // corrected, but only run the upsert/mark-watched pass when loading
+        // (otherwise we'd unwatch already-watched episodes).
+        let needsFullLoad = force || !(season.episodeCount > 0 && season.episodes.count >= season.episodeCount)
+
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
         let tvMazeID = tv.tvMazeID
@@ -477,19 +479,24 @@ class DetailViewModel {
                         } else if episode.season?.persistentModelID != currentSeason.persistentModelID {
                             episode.season = currentSeason
                         }
-                        
-                        episode.markWatched(markAsWatched)
+
+                        if needsFullLoad {
+                            episode.markWatched(markAsWatched)
+                        }
                     }
-                    
+
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
                     self.item.syncCachedProperties(dirty: [.progress, .badge])
                     // Authoritative count from the source we just fetched (TVMaze-first).
+                    // Always corrected, even when episodes were already loaded.
                     currentSeason.episodeCount = episodes.count
-                    // Prune stored episodes this season no longer in the source.
-                    let validIDs = Set(episodes.map { "\(tmdbID)_\(seasonNum)_\($0.episodeNumber)" })
-                    let prefix = "\(tmdbID)_\(seasonNum)_"
-                    for (uid, ep) in existingMap where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
-                        if ep.modelContext != nil { self.item.modelContext?.delete(ep) }
+                    if needsFullLoad {
+                        // Prune stored episodes this season no longer in the source.
+                        let validIDs = Set(episodes.map { "\(tmdbID)_\(seasonNum)_\($0.episodeNumber)" })
+                        let prefix = "\(tmdbID)_\(seasonNum)_"
+                        for (uid, ep) in existingMap where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
+                            if ep.modelContext != nil { self.item.modelContext?.delete(ep) }
+                        }
                     }
                 }
             }
