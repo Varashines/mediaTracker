@@ -978,10 +978,10 @@ actor APIClient {
         }
     }
 
-    func fetchTVMazeEpisodes(tvMazeID: Int) async throws -> [TVMazeEpisode] {
+    func fetchTVMazeEpisodes(tvMazeID: Int, force: Bool = false) async throws -> [TVMazeEpisode] {
         // Check 24h disk cache
         let cacheKey = "tvmaze_episodes_\(tvMazeID)"
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay) {
+        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay) {
             return try decoder.decode([TVMazeEpisode].self, from: cachedData)
         }
 

@@ -164,7 +164,7 @@ extension BackgroundDataService {
                     }
                 }
                 
-                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID)) ?? []
+                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID, force: force)) ?? []
             }
 
             let mazeDict: [String: TVMazeEpisode] = {
