@@ -37,6 +37,8 @@ Every item in your library gets an immersive, beautifully crafted detail profile
 * **TV Episode Progress Tracking:** Drill into deep season grids. Toggle individual episodes as watched, check off entire seasons at once, and view upcoming air dates.
 * **Six Media States:** Structure your library fluidly across *Want to Watch*, *Active (Currently Watching)*, *On Hold*, *Dropped*, *Rewatching*, and *Completed*.
 * **Taste Ratings:** Log your affinity via instant sentiment inputs—*Loved (❤️)*, *Liked (👍)*, or *Disliked (👎)*—to power recommendations and personalized analytics dashboards.
+* **Season-Level Taste:** Rate individual seasons (hover the season number) so "loved the show, hated that one season" is captured — seasons inherit the show's taste once fully watched, and a season's *actual cast* feeds your taste profile.
+* **Per-Season Cast:** See exactly who was in each season, with episode counts, via a "This season" toggle in Top Cast.
 
 ---
 
@@ -97,6 +99,7 @@ Browse your library filtered by metadata category groupings using visual, color-
 * **Actionable Prompts:** Check off an episode as "Watched" directly from the native system notification banner.
 * **Interface Tuning:** Toggle between Light, Dark, or System visual themes mapped across Earth Tones, Cool Tones, or Standard palettes.
 * **App Behaviors:** Opt to toggle haptic/audio interaction feedback, enable launch-at-login parameters, or turn on *Prevent Sleep* to keep your Mac awake during intensive background sync passes.
+* **Biometric App Lock:** Require Touch ID to unlock the app on launch and when you return to it — enable in **Settings > General**.
 
 ### 💾 Backup, Restore, & Safety
 
@@ -120,6 +123,7 @@ Navigate your entire tracking station like a power user without leaving the keyb
 | **`Cmd + L`** | Quick-add title to a custom list collection |
 | **`Cmd + R`** | Force refresh backend API metadata |
 | **`Cmd + Delete`** | Purge item completely from local database library |
+| **`Cmd + ←`** | Back: pop a detail, then exit a collection / filtered view |
 
 ---
 

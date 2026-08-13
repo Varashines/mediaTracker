@@ -49,6 +49,7 @@ Sources/MediaTracker/
 │   ├── TVShowDetails.swift        # TV show metadata + progress calculation
 │   ├── MediaModels.swift          # MovieDetails, TVSeason, API response structs
 │   ├── TVEpisode.swift            # Episode model with watch propagation
+│   ├── SeasonCastMember.swift     # Per-season aggregate cast
 │   ├── MediaCollection.swift      # User collections (manual + smart rules)
 │   ├── EntityModels.swift         # Discovery entities, StudioAlias, SearchCache
 │   ├── CastMember.swift           # Cast relationship model
@@ -78,8 +79,10 @@ Sources/MediaTracker/
 │   ├── BackgroundTaskManager.swift       # Periodic work orchestrator
 │   ├── DiscoverySyncService.swift        # Hub entity sync
 │   ├── LibraryStatsActor.swift           # Analytics computation
+│   ├── ScopedStatsActor.swift            # Per-filter scoped stats
 │   ├── TasteActor.swift                  # Taste profile + recommendations
-│   ├── TasteMath.swift                   # Affinity calculation math
+│   ├── TasteMath.swift                   # Affinity math + season-taste rule
+│   ├── AppLockService.swift              # Biometric (Touch ID) app lock
 │   ├── MediaStateService.swift           # Change broadcasting
 │   ├── NotificationManager.swift         # UNNotification management
 │   ├── MooreMetricsService.swift         # External recommendation API
@@ -189,7 +192,7 @@ View → DataService → dispatches to BackgroundDataService (@ModelActor)
 
 ## 3. Data Layer
 
-### 3.1 SwiftData Models (14 `@Model` classes)
+### 3.1 SwiftData Models (15 `@Model` classes)
 
 #### 3.1.1 MediaItem — The Core Entity
 
@@ -396,6 +399,21 @@ Propagates count deltas upward through the model graph:
 | `SearchCacheEntity` | `key` | `query`, `type`, `resultsData: Data`, `timestamp: Date` |
 | `PersonImageEntity` | `name` | `profileURL: String?` |
 
+#### 3.1.9 SeasonCastMember (SeasonCastMember.swift)
+
+Per-season aggregate cast from TMDb's `/tv/{id}/season/{n}/aggregate_credits` — includes supporting cast, unlike the top-billed `CastMember` list.
+
+| Field | Notes |
+|---|---|
+| `uniqueID` (`"\(showID)_\(seasonNumber)_\(tmdbPersonID)"`) | unique |
+| `tmdbPersonID: Int` | stable across seasons (aggregation key) |
+| `name`, `characterName`, `profileURL?` | person info |
+| `episodeCount: Int` | episodes appeared in *this* season (drives the "counts a season" floor and the sort) |
+| `seasonNumber`, `order`, `showID` | linkage |
+| `season: TVSeason?` | inverse, cascade delete |
+
+It backs both the **"This season" cast view** (`SeasonCastMemberCard`/`SeasonCastSection`) and the **season-based cast affinity** in `TasteActor`. `TVSeason.tasteOverrideRaw` (per-season taste) and `MediaItem.cachedSeasonCount` (weight-tier lookup) support the feature.
+
 ### 3.2 Relationship Cascade Chain
 
 ```
@@ -405,6 +423,7 @@ MediaItem deletion
   └── TVShowDetails deletion (.cascade)
        └── TVSeason deletion (.cascade)
             └── TVEpisode deletion (.cascade)
+            └── SeasonCastMember deletion (.cascade)
        └── CastMember deletion (.cascade)
 ```
 
@@ -703,7 +722,9 @@ The centralized change-broadcasting service. Views observe these properties via 
    - Cast member (weight 15)
    - Network (weight 5)
    - Language (weight 10)
-3. Cache for 24 hours (static `@MainActor` cache)
+   - Genres/creators/network/language are weighted by `TasteMath.titleWeight(for:)` (movie 1, show tier by season count) so longer shows outrank shorter ones/movies.
+3. **Cast affinity is season-based for TV shows:** each actor's score sums the *effective season taste* across the seasons they appear in (from `SeasonCastMember`), Love = 2 / Like = 1 / Dislike = 0, using the "counts a season" floor `> min(2, 10% of season episodes)` and excluding Season 0. Falls back to top-billed cast when season data isn't present yet.
+4. Cache for 24 hours (static `@MainActor` cache)
 
 **`calculateRecommendations()`:**
 1. Fetch wishlist items (without recommendations, or force refresh)
@@ -719,12 +740,18 @@ The centralized change-broadcasting service. Views observe these properties via 
 
 ```swift
 struct CategoryStats {
-    var loved: Int, liked: Int, disliked: Int, total: Int
+    var loved: Int, liked: Int, disliked: Int, total: Int, ratedTitles: Int
     func affinity(cutoff: Int = 5) -> Double
 }
 ```
 
-`affinity(cutoff:)`: `(loved * 3 + liked * 1 + disliked * (-2)) / max(cutoff, total)`. Minimum `cutoff` items required for non-zero affinity.
+`affinity(cutoff:)` is **Bayesian-smoothed**: `(loved + 0.5*liked + 2.5) / (ratedCount + 5)` with a `cutoff` on `ratedTitles` (unweighted distinct titles) for qualification — small samples regress toward a neutral prior so a few perfect ratings don't outrank a larger library.
+
+**Shared helpers (single source of truth):**
+- `titleWeight(seasonCount:)` / `titleWeight(for:)` — 1 (movie / ≤2 seasons), 2 (3–6), 3 (7+).
+- `seasonWeight(_:)` — Loved 2, Like 1, Dislike 0.
+- `effectiveSeasonTasteRaw(override:isFullyWatched:showTaste:)` — the override wins, else the show's taste is inherited only for **fully watched** seasons. Used by both `TasteActor` (scoring) and `TVTrackingView` (UI).
+- `accumulateGenres(_:...)` / `accumulateTopBilledCast(_:...)` — shared loops used by `TasteActor`, `LibraryStatsActor`, and `ScopedStatsActor`.
 
 ### 4.11 Library Statistics
 
@@ -790,6 +817,7 @@ Computes `CalendarResult` for the Release Calendar view: aggregates items by rel
 | `PrefetchManager` | `@MainActor` | Debounced image pre-fetching during scroll |
 | `FeedbackManager` | `@MainActor` | Haptic + audio feedback for 8 gesture types |
 | `MooreMetricsService` | `actor` | External recommendation API client |
+| `AppLockService` | `@MainActor @Observable` | Biometric (Touch ID) app lock via `LocalAuthentication`; lock on launch/inactive, `LockScreenView` overlay |
 | `SafeSave` | free function | Error-handled `context.save()` with logging |
 | `AppLogger` | static enum | 8 categorized `Logger` instances (debug-only) |
 | `AppErrorState` | `@MainActor @Observable` | Toast notification system with 4 severity levels |
@@ -1179,6 +1207,8 @@ enum Thumbnail {
 | Spacebar | DetailView (TV) | `viewModel.markNextEpisodeWatched()` + haptic `.markWatched` |
 | Spacebar | DetailView (Movie) | `viewModel.toggleWatched()` + haptic `.markWatched` / `.stateChange` |
 | W | DetailView | `viewModel.cycleStatus()` + haptic response |
+| Cmd + Left Arrow | Global (`ContentView`) | Back: pop a pushed detail, then exit the current collection |
+| Cmd + Left Arrow | `FilteredLibraryGridView` | Pop the filtered grid |
 
 ### 7.4 Haptic Feedback
 

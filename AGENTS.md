@@ -7,26 +7,33 @@ Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 14+, Swift 
 ```bash
 swift build                          # debug build
 swift build -c release               # release build
-swift test                           # run all tests (79 tests, XCTest)
+swift test                           # run all tests (XCTest)
 swift test --filter <TestCase>       # run single test class
 swift test --filter "BadgeEngineTests|DetailViewModelTests"  # run multiple test classes
 ```
 
-**Note**: `DiscoverySyncServiceTests/testNetworkCountDeduplication` is flaky in isolation — it passes alone but crashes during full suite runs due to a container deallocation race. Do not treat it as a real failure.
+**Note**: `DiscoverySyncServiceTests/testNetworkCountDeduplication` previously made **real network calls** (via `extractMissingColors`); it is now stubbed with `MockURLProtocol` (through `ImageCache.configureForTesting`) and is deterministic/fast in isolation. A **separate, general SwiftData in-memory-container teardown autosave race** can still crash a *full-suite* run (`ModelContext.save() called after its ModelContainer has been deallocated`). All assertions pass — it is a SwiftData issue, not a real failure.
+
+### GitHub workflows
+- `.github/workflows/release.yml` — triggers on `v*` tags; builds both-arch DMGs **and creates a public GitHub Release**.
+- `.github/workflows/build-only.yml` — manual `workflow_dispatch`; builds both-arch DMGs and uploads them as **artifacts only** (no release). Version is a workflow input.
 
 ## Architecture
 
 Single executable target, no packages/dependencies. All code in `Sources/MediaTracker/`.
 
 ### Key entrypoints
-- `App.swift` — scene setup, model container, theme application
+- `App.swift` — scene setup, model container, theme application, biometric app-lock gate
 - `ContentView.swift` — `LibraryDetailView` with `NavigationStack`, sidebar routing, filter/pagination
 - `MediaViewModel.swift` — central state: navigation, filters, displayed items, discovery caches
 
 ### Data layer
 - `MediaItem.swift` — core `@Model` with 40+ properties, `syncCachedProperties()` for cache invalidation
 - `MediaFilterActor.swift` — filtering/sorting (split into `MediaSorting.swift`, `MediaGrouping.swift`, `HomeCategoryProcessor.swift`)
-- `BackgroundDataService.swift` + `BackgroundDataService+Refresh.swift` — API sync, metadata refresh
+- `BackgroundDataService.swift` + `BackgroundDataService+Refresh.swift` — API sync, metadata refresh, per-season cast
+- `SeasonCastMember.swift` — per-season aggregate cast (`/tv/{id}/season/{n}/aggregate_credits`), linked to `TVSeason`
+- `TasteMath.swift` — central taste math: title-weight tiers, season weights, effective-season-taste rule
+- `AppLockService.swift` — biometric (Touch ID) app lock, lock on launch/inactive
 - `SaveCoordinator.swift` — debounced saves. **Never call `context.save()` in hot paths**
 - `MediaStateService.swift` — change broadcasting via count-based invalidation
 
@@ -81,6 +88,7 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
   - TV Shows: Marks the next unwatched episode as seen via `viewModel.markNextEpisodeWatched()` and triggers haptic `.markWatched`.
   - Movies: Toggles overall completion via `viewModel.toggleWatched()` and triggers haptic `.markWatched` / `.stateChange`.
 - **Status Cycling**: Use the `w` shortcut to cycle state (`viewModel.cycleStatus()`) with haptic responses.
+- **Back Shortcut** (`Cmd + Left`): Global handler in `ContentView` pops a pushed detail first, then exits the current collection (`selectedCollectionID = nil`). `FilteredLibraryGridView` has its own local Cmd+Left that pops the filtered grid.
 
 ### Time constants
 - Use `TimeInterval.days7`, `.days30`, `.secondsInDay` — never raw `86400`
