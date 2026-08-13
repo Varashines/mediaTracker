@@ -294,6 +294,9 @@ extension BackgroundDataService {
                     let airDate: String?
                     let episodes: [TVEpisodeResult]
                     let seasonCast: [SeasonAggregateCastResult]
+                    /// True when episodes came from TVMaze (authoritative). When true,
+                    /// stale episodes beyond the TVMaze source are pruned on save.
+                    let sourcedFromTVMaze: Bool
                 }
 
                 var fetchedSeasons: [FetchedSeasonData] = []
@@ -331,11 +334,12 @@ extension BackgroundDataService {
                             // Always fetch per-season aggregate credits (new data; existing seasons lack it).
                             let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
                             if skipEpisodeFetch {
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], seasonCast: credits)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], seasonCast: credits, sourcedFromTVMaze: false)
                             }
 
                             // Prefer TVMaze episodes (authoritative). Fall back to TMDB when
                             // TVMaze has no episodes for this season.
+                            let usesTVMaze = !(mazeEpisodesBySeason[sNum]?.isEmpty ?? true)
                             let episodes: [TVEpisodeResult]
                             if let mazeSeasonEps = mazeEpisodesBySeason[sNum], !mazeSeasonEps.isEmpty {
                                 episodes = mazeSeasonEps
@@ -347,7 +351,7 @@ extension BackgroundDataService {
                                     return nil
                                 }
                             }
-                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits)
+                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits, sourcedFromTVMaze: usesTVMaze)
                         }
                     }
                     var results: [FetchedSeasonData] = []
@@ -407,6 +411,18 @@ extension BackgroundDataService {
                             episode.airstamp = matchingMaze?.airstamp
                             episode.runtime = ep.runtime
                             episode.updateAirDateValue()
+                        }
+                    }
+
+                    // When TVMaze is authoritative, prune stored episodes that no
+                    // longer exist in the TVMaze source (e.g. planned-but-unaired
+                    // episodes of a currently-airing show). Only unwatched surplus
+                    // episodes are affected in practice.
+                    if seasonData.sourcedFromTVMaze {
+                        let validIDs = Set(seasonData.episodes.map { "\(tmdbID)_\(sNum)_\($0.episodeNumber)" })
+                        let prefix = "\(tmdbID)_\(sNum)_"
+                        for (uid, ep) in episodeByID where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
+                            if ep.modelContext != nil { modelContext.delete(ep) }
                         }
                     }
 
