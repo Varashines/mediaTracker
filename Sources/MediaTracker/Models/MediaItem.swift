@@ -94,16 +94,13 @@ final class MediaItem: Identifiable {
         self.dateAdded = now
     }
 
-    nonisolated func commitChange(dirty: CacheDirtyFlags = .all) {
+    @MainActor
+    func commitChange(dirty: CacheDirtyFlags = .all) {
         syncCachedProperties(dirty: dirty)
-        nonisolated(unsafe) let context = modelContext
-        let pid = persistentModelID
-        Task { @MainActor in
-            if let ctx = context {
-                SaveCoordinator.shared.requestSave(ctx)
-            }
-            MediaStateService.shared.postMediaStateChanged(itemID: pid)
+        if let context = modelContext {
+            SaveCoordinator.shared.requestSave(context)
         }
+        MediaStateService.shared.postMediaStateChanged(itemID: persistentModelID)
     }
 
     var type: MediaType? {
@@ -132,6 +129,10 @@ final class MediaItem: Identifiable {
                 lastInteractionDate = Date()
                 lastStateChangeDate = Date()
                 
+                if typeValue == "TV Show" {
+                    BadgeEngine.invalidateScan(for: persistentModelID)
+                }
+                
                 if typeValue == "TV Show" && stateValue == "Completed" {
                     if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
                         markLoadedEpisodesAsWatched()
@@ -144,6 +145,8 @@ final class MediaItem: Identifiable {
                         }
                     }
                 }
+                
+                syncCachedProperties(dirty: [.badge, .searchable])
             }
         }
     }
@@ -160,35 +163,11 @@ final class MediaItem: Identifiable {
         details.recalculateCachedProperties(triggerSync: true)
         nonisolated(unsafe) let ctx = modelContext
         Task { @MainActor in
-            if let ctx { SaveCoordinator.shared.forceSave(ctx) }
+            if let ctx { SaveCoordinator.shared.requestSave(ctx) }
         }
     }
 
-    func applyStateChange(_ newState: MediaState) {
-        let didChange = stateValue != newState.rawValue
-        if didChange {
-            stateValue = newState.rawValue
-            lastInteractionDate = Date()
-            lastStateChangeDate = Date()
-            
-            if typeValue == "TV Show" && stateValue == "Completed" {
-                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
-                    markLoadedEpisodesAsWatched()
-                    if let container = modelContext?.container {
-                        let rawID = id
-                        Task.detached(priority: .userInitiated) {
-                            let backgroundService = BackgroundDataService(modelContainer: container)
-                            await backgroundService.markAllEpisodesAsWatched(itemID: rawID)
-                        }
-                    }
-                }
-            }
-            
-            if type == .tvShow { BadgeEngine.invalidateScan(for: persistentModelID) }
-            commitChange(dirty: [.badge, .searchable])
-        }
-    }
-
+    @MainActor
     func applyTasteChange(_ newTaste: TasteValue) {
         let didChange = tasteValue != newTaste.rawValue
         if didChange {
@@ -198,6 +177,7 @@ final class MediaItem: Identifiable {
         }
     }
 
+    @MainActor
     func softDelete(now: Date = Date()) {
         guard !isSoftDeleted else { return }
         isSoftDeleted = true
@@ -206,6 +186,7 @@ final class MediaItem: Identifiable {
         commitChange(dirty: [.badge])
     }
 
+    @MainActor
     func restoreFromSoftDelete() {
         guard isSoftDeleted else { return }
         isSoftDeleted = false
