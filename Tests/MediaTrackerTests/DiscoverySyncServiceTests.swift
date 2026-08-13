@@ -29,6 +29,19 @@ final class DiscoverySyncServiceTests: XCTestCase {
 
         try context.save()
 
+        // Stub the image session so extractMissingColors doesn't hit the real
+        // network for the fake logo paths — keeps the test deterministic.
+        let sessionConfig = URLSessionConfiguration.ephemeral
+        sessionConfig.protocolClasses = [MockURLProtocol.self]
+        ImageCache.shared.configureForTesting(session: URLSession(configuration: sessionConfig))
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.cannotLoadFromNetwork)
+        }
+        defer {
+            MockURLProtocol.requestHandler = nil
+            ImageCache.shared.configureForTesting()
+        }
+
         // Initialize sync service
         let syncService = DiscoverySyncService(modelContainer: container)
 

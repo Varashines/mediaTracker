@@ -57,8 +57,9 @@ MediaTracker follows a **Service-Oriented MVVM** pattern with heavy use of Swift
 | `MediaItem` | `MediaItem.swift` | Core entity — a movie or TV show | `movieDetails` 1:1, `tvShowDetails` 1:1, `collections` N:M |
 | `MovieDetails` | `MovieDetails.swift` | Movie-specific metadata | `item` inverse, `cast` 1:N |
 | `TVShowDetails` | `TVShowDetails.swift` | TV show metadata + progress | `item` inverse, `seasons` 1:N, `cast` 1:N |
-| `TVSeason` | `TVSeason.swift` | Season within a show | `tvShowDetails` inverse, `episodes` 1:N |
+| `TVSeason` | `MediaModels.swift` | Season within a show | `tvShowDetails` inverse, `episodes` 1:N, `seasonCast` 1:N |
 | `TVEpisode` | `TVEpisode.swift` | Episode within a season | `season` inverse |
+| `SeasonCastMember` | `SeasonCastMember.swift` | Per-season aggregate cast (from TMDb `season/{n}/aggregate_credits`) with per-season episode counts | `season` inverse (cascade) |
 | `CastMember` | `CastMember.swift` | Actor/crew attached to media | `movieDetails` or `tvShowDetails` |
 | `MediaCollection` | `MediaCollection.swift` | User-created or smart collections | `items` N:M via `MediaItem.collections` |
 | `NetworkEntity` | `EntityModels.swift` | TV network / streaming service | Standalone |
@@ -82,9 +83,9 @@ The schema is defined in `SchemaMigration.swift` using `SchemaV1` and the `Media
 cachedGenres, cachedCreators, cachedLanguage, cachedNetwork,
 cachedNetworkLogoPath, cachedNextAiringDate, cachedRuntime,
 cachedEpisodeRuntime, cachedWatchedEpisodeCount, remainingEpisodesCount,
-storedSmartBadgeLabel, storedSmartBadgeIsSparkle, storedIsUpcoming,
-storedNextEpisodeLabel, storedWatchProgressLabel, storedProgress,
-searchableText, storedCast
+cachedSeasonCount, storedSmartBadgeLabel, storedSmartBadgeIsSparkle,
+storedIsUpcoming, storedNextEpisodeLabel, storedWatchProgressLabel,
+storedProgress, searchableText, storedCast
 ```
 
 These are kept in sync via `syncCachedProperties()` (called from `MediaItem+Sync.swift`). The sync is triggered on state changes, after metadata refresh, and during library heal operations.
@@ -216,6 +217,10 @@ Recommendation engine that analyzes completed/liked items to find suggestions in
 3. Returns top recommendations with explanations.
 4. Caches results for 24 hours.
 
+**Season-based cast affinity:** Cast affinity for TV shows is now derived from per-season cast data (`SeasonCastMember`) rather than top-billed titles. Each actor's score sums the effective season taste across the seasons they appear in (Love = 2, Like = 1, Dislike = 0), applying a "counts a season" floor of `> min(2, 10% of season episodes)` and excluding Season 0. The effective season taste (`override ?? show taste`, inherited only for **fully watched** seasons) is centralized in `TasteMath.effectiveSeasonTasteRaw(...)` and shared with the UI.
+
+**`TasteMath` (`static`)** — central taste math: `titleWeight(seasonCount:)`/`titleWeight(for:)` (movie 1, show 1–2/3–6/7+ tier), `seasonWeight(_:)`, `effectiveSeasonTasteRaw(...)`, plus shared `accumulateGenres(...)`/`accumulateTopBilledCast(...)` helpers used by the aggregation actors.
+
 ### 4.6 MediaStateService (`@MainActor @Observable`)
 
 **File:** `MediaStateService.swift` (38 lines)
@@ -238,6 +243,12 @@ Maintains a denormalized entity store (NetworkEntity, GenreEntity, LanguageEntit
 **File:** `SaveCoordinator.swift`
 
 Debounces SwiftData save requests (350ms by default) to prevent IO bottlenecks during rapid state changes (e.g., toggling multiple episodes watched). Supports `forceSave()` for immediate writes.
+
+### 4.9 AppLockService (`@MainActor @Observable`)
+
+**File:** `AppLockService.swift`
+
+Biometric (Touch ID) app lock using `LocalAuthentication`. Locks on launch and on `.inactive`/`.background`; the `LockScreenView` overlay prompts for Touch ID. Enabled via **Settings > General**. It is a UI privacy gate only — it no-ops if Touch ID becomes unavailable so the user is never trapped. No passcode, no disk encryption (at-rest protection relies on FileVault).
 
 ---
 
@@ -431,8 +442,8 @@ All background tasks respect thermal state and idle/sleep conditions.
 
 - **Swift Package Manager** (no Xcode project).
 - **Swift 6.0** with strict concurrency checking.
-- **macOS 15.0** deployment target.
-- **Apple Silicon (arm64)** only.
+- **macOS 14.0** deployment target.
+- **Apple Silicon (arm64) and Intel (x86_64)** — the release workflow builds both.
 
 ### 8.2 Build Commands
 
@@ -440,8 +451,12 @@ All background tasks respect thermal state and idle/sleep conditions.
 # Development build
 swift build
 
-# Release build
+# Release build (single arch)
 swift build -c release --arch arm64
+
+# Release build (universal / both arches, as CI does)
+swift build -c release --arch arm64
+swift build -c release --arch x86_64
 
 # Run tests
 swift test
@@ -468,11 +483,14 @@ Sources/MediaTracker/
 ├── MediaFilterGrouper.swift     # Grouping logic
 ├── MediaFilterHomeProcessor.swift # Home page curation
 ├── BadgeEngine.swift            # Smart badge logic
-├── TasteActor.swift             # Recommendations
+├── TasteActor.swift             # Recommendations + season-based cast affinity
+├── TasteMath.swift              # Taste weights + effective-season-taste rule
+├── AppLockService.swift         # Biometric (Touch ID) app lock
 ├── DiscoverySyncService.swift   # Discovery entity sync
 ├── BackgroundTaskManager.swift  # Periodic background work
 ├── CalendarFilterActor.swift    # Calendar data
 ├── LibraryStatsActor.swift      # Library statistics
+├── ScopedStatsActor.swift       # Per-filter scoped stats
 ├── FileIOActor.swift            # File system operations
 ├── Networking.swift             # APIClient actor
 ├── ImageCache.swift             # Image caching system
@@ -482,8 +500,9 @@ Sources/MediaTracker/
 ├── MediaCollection.swift        # Collection model
 ├── MovieDetails.swift           # Movie metadata model
 ├── TVShowDetails.swift          # TV metadata + progress
-├── TVSeason.swift               # Season model
+├── TVSeason.swift               # Season model (MediaModels.swift)
 ├── TVEpisode.swift              # Episode model
+├── SeasonCastMember.swift       # Per-season aggregate cast
 ├── CastMember.swift             # Cast model
 ├── EntityModels.swift           # Discovery + utility entities
 ├── MovieModels.swift            # TMDB movie API models
@@ -516,12 +535,14 @@ Sources/MediaTracker/
 
 ### 8.4 CI/CD
 
-**File:** `.github/workflows/release.yml`
+Two GitHub Actions workflows:
 
-- Triggered by `v*` tags.
-- Builds ARM64 release, generates app icon, packages `.app` bundle.
-- Creates DMG archive.
-- Publishes GitHub Release with the DMG.
+**`release.yml`** — triggered by `v*` tags.
+- Builds both ARM64 and x86_64 releases, generates the app icon, packages `.app` bundles.
+- Creates DMGs and publishes a GitHub Release with them.
+
+**`build-only.yml`** — manual `workflow_dispatch` (Actions tab).
+- Builds both arch DMGs and uploads them as **artifacts only** (no release). The app version is a workflow input (defaults to the latest release).
 
 ---
 

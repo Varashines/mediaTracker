@@ -281,7 +281,13 @@ struct LibraryDetailView: View {
                     Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
                     Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
                     Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                    Button("") { if !viewModel.navigationPath.isEmpty { viewModel.navigationPath.removeLast() } }.keyboardShortcut(.leftArrow, modifiers: .command)
+                    Button("") {
+                        if !viewModel.navigationPath.isEmpty {
+                            viewModel.navigationPath.removeLast()
+                        } else if viewModel.collection.selectedCollectionID != nil {
+                            viewModel.collection.selectedCollectionID = nil
+                        }
+                    }.keyboardShortcut(.leftArrow, modifiers: .command)
                     Button("") {
                         if !viewModel.filter.searchText.isEmpty {
                             viewModel.filter.searchText = ""

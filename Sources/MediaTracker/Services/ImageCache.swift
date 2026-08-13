@@ -31,7 +31,16 @@ enum ImagePriority {
 class ImageCache: NSObject, NSCacheDelegate {
     static let shared = ImageCache()
     
-    nonisolated var imageSession: URLSession { .shared }
+    /// Network session used for image downloads (e.g. logo color extraction).
+    /// Swappable via `configureForTesting(session:)` so tests can stub it with
+    /// `MockURLProtocol` instead of hitting the network.
+    nonisolated(unsafe) var imageSession: URLSession = .shared
+
+    /// Replaces the image download session. Test-only; restores the system
+    /// session when passed nil.
+    func configureForTesting(session: URLSession? = nil) {
+        imageSession = session ?? .shared
+    }
     
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
