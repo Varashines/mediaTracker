@@ -71,24 +71,30 @@ extension BackgroundDataService {
             
             let newCastResults = details.cast
             let currentCast = item.displayCast
-            // Short-circuit: quick check before expensive sort-and-zip
-            let hasChanged = currentCast.count != newCastResults.count ||
-                            (currentCast.first?.name != newCastResults.first?.name) ||
-                            (currentCast.last?.name != newCastResults.last?.name) ||
-                            zip(currentCast.sorted(by: { $0.name < $1.name }), 
-                                newCastResults.sorted(by: { $0.name < $1.name }))
-                            .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+            // Short-circuit: quick check before expensive sort-and-zip.
+            // Normalize the TMDB list the same way syncCastCache builds storedCast
+            // (exclude Creator/Director, dedupe by name+character, cap at 30) so the
+            // comparison is like-for-like instead of uncapped-vs-capped.
+            var seen = Set<String>()
+            var normalizedNew: [CastMemberResult] = []
+            for c in newCastResults {
+                guard c.character != "Creator", c.character != "Director" else { continue }
+                let key = "\(c.name)|\(c.character)"
+                guard seen.insert(key).inserted else { continue }
+                normalizedNew.append(c)
+                if normalizedNew.count >= 30 { break }
+            }
+            let currentNormalized = currentCast.map { (name: $0.name, character: $0.characterName) }
+            let newNormalized = normalizedNew.map { (name: $0.name, character: $0.character) }
+            let hasChanged = currentNormalized.count != newNormalized.count ||
+                            zip(currentNormalized, newNormalized)
+                            .contains(where: { $0.name != $1.name || $0.character != $1.character })
 
             if hasChanged || movieDetails.cast.isEmpty {
                 movieDetails.cast.forEach { modelContext.delete($0) }
-                
-                var seen = Set<String>()
+
                 var newCastList: [CastMember] = []
-                for c in newCastResults {
-                    let key = "\(c.name)|\(c.character)"
-                    if seen.contains(key) { continue }
-                    seen.insert(key)
-                    
+                for c in normalizedNew {
                     let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
                     let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
                     member.movieDetails = movieDetails

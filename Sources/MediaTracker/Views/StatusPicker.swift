@@ -16,7 +16,7 @@ struct StatusPicker: View {
                 ForEach(availableStates, id: \.self) { state in
                     Button {
                         withAnimation(AppTheme.Animation.easeInOut) {
-                            item.applyStateChange(state)
+                            item.state = state
                             onChange?(state)
                             if state == .completed {
                                 FeedbackManager.shared.trigger(.markWatched)

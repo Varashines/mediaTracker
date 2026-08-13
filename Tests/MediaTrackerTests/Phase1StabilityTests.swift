@@ -13,35 +13,33 @@ final class Phase1StabilityTests: XCTestCase {
         return try! ModelContainer(for: schema, configurations: [config])
     }
 
-    // MARK: - applyStateChange / applyTasteChange
+    // MARK: - state setter / applyTasteChange
 
-    func testApplyStateChangePersistsAndUpdatesTimestamps() throws {
+    func testStateSetterPersistsAndUpdatesTimestamps() throws {
         let container = makeContainer()
         let context = container.mainContext
         let item = MediaItem(id: "1", title: "Test", overview: "", type: .movie)
         context.insert(item)
         try context.save()
 
-        let before = item.lastUpdated
-        item.applyStateChange(.completed)
+        item.state = .completed
 
         XCTAssertEqual(item.state, .completed)
         XCTAssertEqual(item.stateValue, "Completed")
         XCTAssertNotNil(item.lastStateChangeDate)
-        XCTAssertNotNil(item.lastUpdated)
-        XCTAssertNotEqual(item.lastUpdated, before)
+        XCTAssertNotNil(item.lastInteractionDate)
     }
 
-    func testApplyStateChangeIsNoOpWhenUnchanged() throws {
+    func testStateSetterIsNoOpWhenUnchanged() throws {
         let container = makeContainer()
         let context = container.mainContext
         let item = MediaItem(id: "1", title: "Test", overview: "", type: .movie)
         context.insert(item)
         try context.save()
 
-        let before = item.lastUpdated
-        item.applyStateChange(.wishlist) // already wishlist
-        XCTAssertEqual(item.lastUpdated, before)
+        let before = item.lastInteractionDate
+        item.state = .wishlist // already wishlist
+        XCTAssertEqual(item.lastInteractionDate, before)
     }
 
     func testApplyTasteChangePersists() throws {
