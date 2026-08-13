@@ -460,14 +460,11 @@ struct DetailView: View {
                         castBody
                             .id(castKey)
                             .if(!AppThemeCoordinator.isReducingVisualEffects) {
-                                $0.transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
-                                    removal: .opacity.animation(.easeOut(duration: 0.12))
-                                ))
+                                $0.transition(.opacity)
                             }
                     }
                     .padding(.top, 4)
-                    .animation(AppTheme.Animation.springGentle, value: castKey)
+                    .animation(.easeInOut(duration: 0.2), value: castKey)
                 }
                 .onChange(of: castScope) { _, newScope in
                     if newScope == .season { ensureSeasonCastLoaded() }
