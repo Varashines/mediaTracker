@@ -387,6 +387,7 @@ struct ReleaseCalendarView: View {
                 removal: .move(edge: .leading).combined(with: .opacity)
             ))
         }
+        .animation(AppTheme.Animation.easeInOut, value: currentDisplayMonth)
     }
     
     @ViewBuilder
