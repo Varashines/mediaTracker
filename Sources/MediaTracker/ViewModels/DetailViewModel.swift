@@ -413,11 +413,33 @@ class DetailViewModel {
         
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
+        let tvMazeID = tv.tvMazeID
         let syncKey = "fetch_episodes_\(tmdbID)_\(seasonNumber)"
         
         do {
             try await SyncCoordinator.shared.perform(key: syncKey) {
-                let episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                // Source episodes from TVMaze (authoritative), falling back to TMDB.
+                let episodes: [TVEpisodeResult]
+                if let mazeID = tvMazeID, mazeID > 0 {
+                    let mazeSeason = ((try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeID, force: force)) ?? [])
+                        .filter { $0.season == seasonNumber }
+                        .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+                    if !mazeSeason.isEmpty {
+                        episodes = mazeSeason.map {
+                            TVEpisodeResult(
+                                episodeNumber: $0.number ?? 0,
+                                name: $0.name,
+                                overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines),
+                                airDate: $0.airdate,
+                                runtime: $0.runtime
+                            )
+                        }
+                    } else {
+                        episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                    }
+                } else {
+                    episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                }
                 
                 await MainActor.run {
                     guard self.item.modelContext != nil, !self.item.isDeleted else { return }
@@ -461,8 +483,13 @@ class DetailViewModel {
                     
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
                     self.item.syncCachedProperties(dirty: [.progress, .badge])
-                    if currentSeason.episodeCount < episodes.count {
-                        currentSeason.episodeCount = episodes.count
+                    // Authoritative count from the source we just fetched (TVMaze-first).
+                    currentSeason.episodeCount = episodes.count
+                    // Prune stored episodes this season no longer in the source.
+                    let validIDs = Set(episodes.map { "\(tmdbID)_\(seasonNum)_\($0.episodeNumber)" })
+                    let prefix = "\(tmdbID)_\(seasonNum)_"
+                    for (uid, ep) in existingMap where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
+                        if ep.modelContext != nil { self.item.modelContext?.delete(ep) }
                     }
                 }
             }
