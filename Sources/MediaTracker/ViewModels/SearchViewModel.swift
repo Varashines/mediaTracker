@@ -319,7 +319,7 @@ class SearchViewModel {
             state: nil,
             badge: nil,
             provider: nil,
-            limit: 200,
+            limit: 500,
             offset: 0
         )
         return result?.displayed ?? []
