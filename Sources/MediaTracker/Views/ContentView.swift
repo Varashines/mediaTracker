@@ -75,7 +75,7 @@ struct ContentView: View {
                 viewModel: viewModel
             )
         }
-        .navigationSplitViewStyle(.balanced)
+        .navigationSplitViewStyle(.automatic)
         .frame(minWidth: 900, minHeight: 600)
         .onChange(of: isSearchActive) { _, active in
             if !active {
