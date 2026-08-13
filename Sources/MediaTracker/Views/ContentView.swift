@@ -286,6 +286,8 @@ struct LibraryDetailView: View {
                             viewModel.navigationPath.removeLast()
                         } else if viewModel.collection.selectedCollectionID != nil {
                             viewModel.collection.selectedCollectionID = nil
+                        } else if viewModel.filter.selectedCategory.isSmartCategory {
+                            sidebarSelection = .category(.smartHub)
                         }
                     }.keyboardShortcut(.leftArrow, modifiers: .command)
                     Button("") {
