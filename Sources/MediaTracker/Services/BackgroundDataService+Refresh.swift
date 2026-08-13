@@ -137,7 +137,11 @@ extension BackgroundDataService {
             }
             
             var tvMazeID = tvDetails.tvMazeID
-            if tvMazeID == nil {
+            // Look up the TVMaze id if unknown, or re-attempt on a forced refresh
+            // (a prior failed lookup stores -1, which would otherwise disable
+            // TVMaze episodes/counts for the life of the item).
+            let needsLookup = tvMazeID == nil || (force && (tvMazeID ?? -1) <= 0)
+            if needsLookup {
                 if let tvdbID = details.tvdbID {
                     tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
                 }
