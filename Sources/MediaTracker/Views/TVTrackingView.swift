@@ -67,9 +67,7 @@ struct TVTrackingView: View {
                                 themeColor: themeColor
                             ) {
                                 showCompletedEpisodes = true
-                                withAnimation(AppTheme.Animation.easeInOut) {
-                                    selectedSeasonNumber = season.seasonNumber
-                                }
+                                selectedSeasonNumber = season.seasonNumber
                                 onSeasonSelected?(season)
                             }
                         }
@@ -93,7 +91,6 @@ struct TVTrackingView: View {
                         onWatchedToggle: onWatchedToggle,
                         onSeasonSelected: onSeasonSelected
                     )
-                    .id(selectedNumber)
                     .onAppear {
                         autoFetchIfNeeded(season: selectedSeason)
                     }
@@ -540,6 +537,12 @@ private struct SeasonSection: View {
         }
         .onChange(of: season.watchedEpisodesCount) { _, _ in
             updateCachedData()
+        }
+        .onChange(of: season.seasonNumber) { _, _ in
+            // Reuse this view instance across seasons (no .id recreate), so refresh
+            // the cached episodes and reset the range selection when the season changes.
+            updateCachedData()
+            selectedRangeStart = 1
         }
     }
 
