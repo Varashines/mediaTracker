@@ -281,7 +281,7 @@ struct DetailView: View {
         .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
         .toolbar { detailToolbar }
         .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-        .toolbarBackground(.hidden, for: .windowToolbar)
+        .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
