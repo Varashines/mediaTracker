@@ -168,6 +168,7 @@ struct MediaTrackerApp: App {
     }()
 
     init() {
+        KeychainStore.migrateLegacyKeys()
         NotificationManager.shared.setModelContainer(sharedModelContainer)
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)

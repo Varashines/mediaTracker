@@ -17,11 +17,9 @@ class DataService {
 
     // Feedback State
     var isRunningMaintenance = false
-    private var modelContainer: ModelContainer?
-    nonisolated(unsafe) static var modelContainer: ModelContainer?
+    @MainActor static var modelContainer: ModelContainer?
 
     func setModelContainer(_ container: ModelContainer) {
-        self.modelContainer = container
         DataService.modelContainer = container
     }
 

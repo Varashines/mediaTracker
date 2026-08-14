@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct StreamingServiceRule: Codable {
     let patterns: [String]
@@ -27,36 +28,36 @@ struct StreamingServiceRule: Codable {
 }
 
 struct DateUtils {
-    private static let formattersLock = NSLock()
-    nonisolated(unsafe) private static var formatters: [String: DateFormatter] = [:]
-    nonisolated(unsafe) private static var isoFormatterInstance: ISO8601DateFormatter? = nil
-    
-    private static func getIsoFormatter() -> ISO8601DateFormatter {
-        formattersLock.lock()
-        defer { formattersLock.unlock() }
-        if let formatter = isoFormatterInstance { return formatter }
-        let formatter = ISO8601DateFormatter()
-        isoFormatterInstance = formatter
-        return formatter
+    private struct ISOFormatterBox: @unchecked Sendable {
+        var formatter: ISO8601DateFormatter?
     }
-    
+
+    private static let formatters = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
+    private static let isoFormatterInstance = OSAllocatedUnfairLock<ISOFormatterBox>(uncheckedState: ISOFormatterBox(formatter: nil))
+
+    private static func parseISO(_ airstamp: String) -> Date? {
+        isoFormatterInstance.withLock { box in
+            if box.formatter == nil { box.formatter = ISO8601DateFormatter() }
+            return box.formatter?.date(from: airstamp)
+        }
+    }
+
     private static func getFormatter(format: String, timeZoneIdentifier: String?) -> DateFormatter {
         let key = "\(format)_\(timeZoneIdentifier ?? "nil")"
-        formattersLock.lock()
-        defer { formattersLock.unlock() }
-        
-        if let formatter = formatters[key] {
+        return formatters.withLock { formatters in
+            if let formatter = formatters[key] {
+                return formatter.copy() as! DateFormatter
+            }
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            if let tzName = timeZoneIdentifier, let tz = TimeZone(identifier: tzName) {
+                formatter.timeZone = tz
+            }
+            formatters[key] = formatter
             return formatter.copy() as! DateFormatter
         }
-        
-        let formatter = DateFormatter()
-        formatter.dateFormat = format
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        if let tzName = timeZoneIdentifier, let tz = TimeZone(identifier: tzName) {
-            formatter.timeZone = tz
-        }
-        formatters[key] = formatter
-        return formatter.copy() as! DateFormatter
     }
 
     static func parseDate(_ dateString: String?) -> Date? {
@@ -118,7 +119,7 @@ struct DateUtils {
         //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT for Thai shows).
         if let airstamp = airstamp,
            (service == "youtube" || !airstamp.contains("T12:00:00+00:00")),
-           let date = getIsoFormatter().date(from: airstamp) {
+           let date = parseISO(airstamp) {
             return date
         }
         

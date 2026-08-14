@@ -107,7 +107,7 @@ class DetailViewModel {
     }
 
     private var needsOMDBData: Bool {
-        let apiKey = UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? ""
+        let apiKey = KeychainStore.read(UserDefaultsKeys.omdbAPIKey.rawValue) ?? ""
         guard !apiKey.isEmpty else { return false }
         
         if item.type == .movie {
