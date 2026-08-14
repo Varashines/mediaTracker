@@ -117,17 +117,22 @@ jobs:
             "MediaTracker.app"
 
       - name: Notarize DMG
-        if: ${{ secrets.APPLE_APP_ID != '' && secrets.APPLE_APP_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+        if: ${{ secrets.APPLE_APP_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_APP_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           ARCH="${{ matrix.arch }}"
           DMG_NAME="MediaTracker-${ARCH}"
 
+          NOTARY_ARGS=(--apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --wait)
+          if [ -n "$APPLE_TEAM_ID" ]; then
+            NOTARY_ARGS+=(--team-id "$APPLE_TEAM_ID")
+          fi
+
           echo "🚀 Submitting ${DMG_NAME}.dmg to Apple notary service..."
-          xcrun notarytool submit "${DMG_NAME}.dmg" \
-            --apple-id "${{ secrets.APPLE_APP_ID }}" \
-            --password "${{ secrets.APPLE_APP_PASSWORD }}" \
-            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
-            --wait
+          xcrun notarytool submit "${DMG_NAME}.dmg" "${NOTARY_ARGS[@]}"
 
           echo "📌 Stapling notarization ticket..."
           xcrun stapler staple "${DMG_NAME}.dmg"
