@@ -50,32 +50,22 @@ struct BadgeEngine {
 
     /// Cache episode scans per show to avoid re-iterating all seasons/episodes on every badge call.
     /// Cleared on episode state changes (see MediaItem.syncCachedProperties).
-    nonisolated(unsafe) private static var scanCacheLock = os_unfair_lock()
-    nonisolated(unsafe) private static var episodeScanCache: [PersistentIdentifier: EpisodeScan] = [:]
+    private static let episodeScanCache = OSAllocatedUnfairLock<[PersistentIdentifier: EpisodeScan]>(uncheckedState: [:])
 
     nonisolated static func invalidateScan(for showID: PersistentIdentifier) {
-        os_unfair_lock_lock(&scanCacheLock)
-        episodeScanCache.removeValue(forKey: showID)
-        os_unfair_lock_unlock(&scanCacheLock)
+        _ = episodeScanCache.withLock { $0.removeValue(forKey: showID) }
     }
 
     nonisolated static func clearScanCache() {
-        os_unfair_lock_lock(&scanCacheLock)
-        episodeScanCache.removeAll()
-        os_unfair_lock_unlock(&scanCacheLock)
+        episodeScanCache.withLock { $0.removeAll() }
     }
 
     nonisolated private static func readScanCache(_ showID: PersistentIdentifier) -> EpisodeScan? {
-        os_unfair_lock_lock(&scanCacheLock)
-        let result = episodeScanCache[showID]
-        os_unfair_lock_unlock(&scanCacheLock)
-        return result
+        episodeScanCache.withLock { $0[showID] }
     }
 
     nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan) {
-        os_unfair_lock_lock(&scanCacheLock)
-        episodeScanCache[showID] = scan
-        os_unfair_lock_unlock(&scanCacheLock)
+        episodeScanCache.withLock { $0[showID] = scan }
     }
 
     static func calculateBadge(for item: MediaItem, now: Date = Date()) -> BadgeResult? {

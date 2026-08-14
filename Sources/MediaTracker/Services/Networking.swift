@@ -44,8 +44,8 @@ actor APIClient {
     private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
     private var inFlightSeasonAggregateCredits: [String: Task<[SeasonAggregateCastResult], Error>] = [:]
     
-    private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
-    private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
+    private nonisolated var tmdbApiKey: String { KeychainStore.read(UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
+    private nonisolated var omdbApiKey: String { KeychainStore.read(UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
 
     // Trending cache (1-hour TTL)
     private var trendingMoviesCache: (data: [MediaSearchResult], timestamp: Date)?
@@ -113,7 +113,7 @@ actor APIClient {
     }
 
     nonisolated var isTMDBConfigured: Bool {
-        UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue)?.isEmpty == false
+        !tmdbApiKey.isEmpty
     }
     
     private nonisolated func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {

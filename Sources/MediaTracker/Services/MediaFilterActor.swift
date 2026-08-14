@@ -89,9 +89,14 @@ actor MediaFilterActor {
             if !needsSwiftRefinement && groupBy == .none {
                 results = try modelContext.fetch(descriptor)
             } else {
+                // Swift-level refinement requires materializing candidates in memory.
+                // Cap the scan (matches the documented 2000-item ceiling in ARCHITECTURE.md)
+                // so network/genre/year filters or smart collections can't load the whole
+                // library per keystroke; totalCount is derived from what was scanned.
+                let scanCap = 2000
                 let batchSize = 500
                 var fetchOffset = 0
-                while true {
+                while results.count < scanCap {
                     try Task.checkCancellation()
                     var batchDescriptor = descriptor
                     batchDescriptor.fetchLimit = batchSize
