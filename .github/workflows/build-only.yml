@@ -116,6 +116,24 @@ jobs:
             "${DMG_NAME}.dmg" \
             "MediaTracker.app"
 
+      - name: Notarize DMG
+        if: ${{ secrets.APPLE_APP_ID != '' && secrets.APPLE_APP_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+        run: |
+          ARCH="${{ matrix.arch }}"
+          DMG_NAME="MediaTracker-${ARCH}"
+
+          echo "🚀 Submitting ${DMG_NAME}.dmg to Apple notary service..."
+          xcrun notarytool submit "${DMG_NAME}.dmg" \
+            --apple-id "${{ secrets.APPLE_APP_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --wait
+
+          echo "📌 Stapling notarization ticket..."
+          xcrun stapler staple "${DMG_NAME}.dmg"
+          xcrun stapler validate "${DMG_NAME}.dmg"
+          echo "✅ ${DMG_NAME}.dmg notarized and stapled"
+
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
