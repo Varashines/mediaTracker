@@ -53,6 +53,9 @@ struct CategoryRouterView: View {
         } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
                 .transition(slideTransition)
+        } else if sidebarSelection == .yearReview {
+            YearReviewView(modelContainer: modelContainer)
+                .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
             SmartCollectionsHubView(selection: $sidebarSelection, refreshID: refreshID)
                 .transition(slideTransition)

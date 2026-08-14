@@ -35,8 +35,8 @@ gh api -X PUT repos/Varashines/mediaTracker/branches/main/protection \
       Teams (HTTP 403); requires a paid Developer Program membership. DMGs stay
       ad-hoc signed; users right-click → Open. Revisit only if you join the
       program.
-- [ ] **Milestones** — create a milestone per release version (`8.1.1`, …); tag
-      PRs to it so the release has a scope. `release.yml` already uses
+- [x] **Milestones** — `8.1.1`, `8.2.0`, `9.0.0` created. Tag PRs to a milestone so
+      the release has a scope; `release.yml` already uses
       `generate_release_notes: true`.
 - [ ] **Version bump consistency** — `release.yml` derives the version from the
       tag (`${GITHUB_REF_NAME#v}`); make milestone names match tags.
@@ -46,17 +46,12 @@ gh api -X PUT repos/Varashines/mediaTracker/branches/main/protection \
 - [x] **CodeQL workflow** — `.github/workflows/codeql.yml` added (weekly + PRs).
       Repo is public so Advanced Security is free; just **enable** code scanning
       in Settings → Code security → Code scanning.
-- [x] **Secret scanning enablement** — free for public repos; enable in
-      Settings → Code security → Secret scanning.
+- [x] **Secret scanning** — enabled by default (public repo); verify in
+      Settings → Code security & analysis.
 - [x] **PR template + `CONTRIBUTING.md`** — added `.github/pull_request_template.md`
       and `CONTRIBUTING.md`.
-- [ ] **Labels** (`enhancement`, `bug`, `perf`, `concurrency`, `tech-debt`) — not
-      created yet:
-      ```bash
-      for name in enhancement bug perf concurrency tech-debt; do
-        gh label create "$name" --force
-      done
-      ```
+- [x] **Labels** — `enhancement`, `bug`, `perf`, `concurrency`, `tech-debt`
+      created.
 - [x] **Audit follow-ups (tech debt):**
       - `#7` API keys moved from `UserDefaults` to the **Keychain**
         (`KeychainStore`, migrated at launch).
