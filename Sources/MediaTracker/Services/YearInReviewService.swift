@@ -44,6 +44,54 @@ struct YearInReview: Sendable {
     /// Items whose release date is unknown (excluded from the 2026 sections).
     let unknownReleaseCount: Int
 
+    func monthStats(for month: Date) -> (movies: Int, episodes: Int, minutes: Int) {
+        let calendar = Calendar.current
+        var movies = 0
+        var episodes = 0
+        var minutes = 0
+        for (day, act) in activityByDay {
+            if calendar.isDate(day, equalTo: month, toGranularity: .month) {
+                movies += act.movies
+                episodes += act.episodes
+                minutes += act.minutes
+            }
+        }
+        return (movies, episodes, minutes)
+    }
+
+    func monthTitles(for month: Date) -> [YearWatchedTitle] {
+        let calendar = Calendar.current
+        var seen = Set<PersistentIdentifier>()
+        var result: [YearWatchedTitle] = []
+        let sortedDays = titlesByDay.keys
+            .filter { calendar.isDate($0, equalTo: month, toGranularity: .month) }
+            .sorted()
+
+        for day in sortedDays {
+            for title in titlesByDay[day] ?? [] {
+                if seen.insert(title.id).inserted {
+                    result.append(title)
+                }
+            }
+        }
+
+        return result.sorted {
+            let r0 = tasteRank($0.tasteValue)
+            let r1 = tasteRank($1.tasteValue)
+            if r0 != r1 { return r0 < r1 }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    private func tasteRank(_ taste: String) -> Int {
+        switch taste {
+        case "Loved": return 0
+        case "Liked": return 1
+        case "Disliked": return 3
+        default: return 2
+        }
+    }
+
     static func empty(year: Int) -> YearInReview {
         YearInReview(
             year: year,
