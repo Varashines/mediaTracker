@@ -117,12 +117,16 @@ jobs:
             "MediaTracker.app"
 
       - name: Notarize DMG
-        if: ${{ secrets.APPLE_APP_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_APP_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ]; then
+            echo "Skipping notarization: set APPLE_APP_ID and APPLE_APP_PASSWORD secrets to enable."
+            exit 0
+          fi
+
           ARCH="${{ matrix.arch }}"
           DMG_NAME="MediaTracker-${ARCH}"
 
