@@ -63,6 +63,9 @@ struct SidebarNavigation: View {
             sidebarRow(
                 title: NavigationCategory.insights.title,
                 icon: NavigationCategory.insights.icon, item: .category(.insights))
+            sidebarRow(
+                title: "Year in Review",
+                icon: "calendar.badge.sparkles", item: .yearReview)
 
             Spacer().frame(height: AppTheme.Spacing.tiny)
         }

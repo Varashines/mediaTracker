@@ -30,6 +30,8 @@ struct ContentView: View {
                             viewModel.collection.selectedCollectionID = id
                             viewModel.collection.selectedCollectionName = name
                             viewModel.filter.resetFilters()
+                        case .yearReview:
+                            break
                         }
 
                         viewModel.filterSubject.send()

@@ -111,11 +111,13 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
 enum SidebarItem: Hashable, Sendable {
     case category(NavigationCategory)
     case collection(UUID, name: String, icon: String)
+    case yearReview
 
     var id: String {
         switch self {
         case .category(let cat): return cat.rawValue
         case .collection(let id, _, _): return id.uuidString
+        case .yearReview: return "yearReview"
         }
     }
 }
