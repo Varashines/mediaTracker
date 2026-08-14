@@ -23,18 +23,11 @@ PR is "green or blocked".
 
 ## Phase 2 — Release polish
 
-- [ ] **Notarization (in progress)** — `.github/workflows/release.yml` and
-      `build-only.yml` now contain a secrets-gated `notarytool` submit +
-      `stapler` step (free Apple ID route). To activate:
-      - Create an app-specific password at
-        https://appleid.apple.com → Sign-In & Security.
-      - Add repo secrets: `APPLE_APP_ID`, `APPLE_APP_PASSWORD`,
-        `APPLE_TEAM_ID` (Team ID is optional for single-team/free accounts;
-        set it if `notarytool` complains).
-      - Run the build-only workflow manually to verify end-to-end before the
-        next tag.
-      - Note: free notarization scans + staples the DMG but does **not** give a
-        clean Gatekeeper launch — that needs a Developer ID cert ($99/yr).
+- [x] ~~Notarization~~ **Dropped** — Apple's notary service rejects free Personal
+      Teams (HTTP 403); requires a paid Developer Program membership. DMGs stay
+      ad-hoc signed; users right-click → Open. Revisit only if you join the
+      program (add `APPLE_APP_ID` / `APPLE_APP_PASSWORD` / `APPLE_TEAM_ID`
+      secrets and re-add the `notarytool` step).
 - [ ] **Milestones** — create a milestone per release version (`8.1.1`, …); tag
       PRs to it so the release has a scope. `release.yml` already uses
       `generate_release_notes: true`.
