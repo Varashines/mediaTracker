@@ -102,7 +102,6 @@ final class YearInReviewTests: XCTestCase {
         XCTAssertEqual(review.totalEpisodes, 3)
         XCTAssertEqual(review.totalMovies, 1)
         XCTAssertEqual(review.totalDaysWatched, 2)
-        XCTAssertEqual(review.longestStreak, 1)
         XCTAssertEqual(review.busiestDay?.minutes, 210)
     }
 
@@ -221,13 +220,13 @@ final class YearInReviewTests: XCTestCase {
         let context = container.mainContext
 
         let show = makeItem(id: "tv_70", title: "Month Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
-        show.tasteValue = "Loved"
+        show.tasteValue = TasteValue.love.rawValue
         context.insert(show)
         context.insert(makeEpisode(showID: 70, watchedAt: date(2026, 8, 10), runtime: 50, episodeNumber: 1))
         context.insert(makeEpisode(showID: 70, watchedAt: date(2026, 8, 11), runtime: 50, episodeNumber: 2))
 
         let movie = makeItem(id: "movie_71", title: "Month Movie", type: .movie, releaseDate: date(2026, 2, 1), state: "Completed")
-        movie.tasteValue = "Liked"
+        movie.tasteValue = TasteValue.like.rawValue
         movie.lastStateChangeDate = date(2026, 8, 15)
         movie.cachedRuntime = 100
         context.insert(movie)
@@ -237,7 +236,7 @@ final class YearInReviewTests: XCTestCase {
         let augStats = review.monthStats(for: date(2026, 8, 1))
 
         XCTAssertEqual(augStats.movies, 1)
-        XCTAssertEqual(augStats.episodes, 2)
+        XCTAssertEqual(augStats.series, 1)
         XCTAssertEqual(augStats.minutes, 200)
 
         let augTitles = review.monthTitles(for: date(2026, 8, 1))

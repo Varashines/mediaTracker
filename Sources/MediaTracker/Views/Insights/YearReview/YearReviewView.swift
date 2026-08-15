@@ -54,29 +54,33 @@ struct YearReviewView: View {
                 // ── Hero ──────────────────────────────────────────────
                 YearHeroSection(review: review, colorScheme: colorScheme)
 
-                // ── Divider ───────────────────────────────────────────
                 Divider()
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, AppTheme.Spacing.large)
 
-                // ── Month strip + calendar grid ───────────────────────
-                YearCalendarSection(
-                    review: review,
-                    selectedMonth: $selectedMonth,
-                    selectedDay: $selectedDay,
-                    colorScheme: colorScheme,
-                    ns: ns
-                )
+                // ── Two-pane: calendar left, overview right ───────────
+                HStack(alignment: .center, spacing: 0) {
+                    YearCalendarSection(
+                        review: review,
+                        selectedMonth: $selectedMonth,
+                        selectedDay: $selectedDay,
+                        colorScheme: colorScheme,
+                        ns: ns
+                    )
+                    .frame(width: 360)
 
-                // ── Context panel (month stats OR day detail) ─────────
-                YearContextPanel(
-                    review: review,
-                    selectedMonth: selectedMonth,
-                    selectedDay: selectedDay,
-                    colorScheme: colorScheme,
-                    ns: ns,
-                    onSelectTitle: onSelectTitle
-                )
+                    Divider()
+
+                    YearContextPanel(
+                        review: review,
+                        selectedMonth: selectedMonth,
+                        selectedDay: selectedDay,
+                        colorScheme: colorScheme,
+                        ns: ns,
+                        onSelectTitle: onSelectTitle
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
 
                 // ── Year-wide taste section ───────────────────────────
                 if !review.topGenres.isEmpty || !review.topNetworks.isEmpty || !review.topActors.isEmpty {
@@ -87,7 +91,6 @@ struct YearReviewView: View {
                     YearTasteSection(review: review, colorScheme: colorScheme)
                 }
 
-                // Bottom breathing room
                 Spacer().frame(height: AppTheme.Spacing.section)
             }
         }
@@ -122,7 +125,6 @@ private struct YearHeroSection: View {
     let colorScheme: ColorScheme
 
     private var hoursWatched: Int { review.totalMinutes / 60 }
-    private var daysEquivalent: Double { Double(review.totalMinutes) / 60.0 / 24.0 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -143,24 +145,19 @@ private struct YearHeroSection: View {
             // Right: stat tiles
             HStack(alignment: .top, spacing: AppTheme.Spacing.medium) {
                 heroStat(
+                    value: "\(review.totalSeries)",
+                    label: "Series",
+                    icon: "tv.fill"
+                )
+                heroStat(
                     value: "\(review.totalMovies)",
                     label: "Movies",
                     icon: "film.fill"
                 )
                 heroStat(
-                    value: "\(review.totalEpisodes)",
-                    label: "Episodes",
-                    icon: "tv.fill"
-                )
-                heroStat(
                     value: "\(hoursWatched)h",
                     label: "Watched",
                     icon: "clock.fill"
-                )
-                heroStat(
-                    value: "\(review.longestStreak)d",
-                    label: "Best Streak",
-                    icon: "flame.fill"
                 )
             }
         }
@@ -198,90 +195,85 @@ private struct YearCalendarSection: View {
     let ns: Namespace.ID
 
     @State private var hoverDate: Date? = nil
-    private let cellSize: CGFloat = 28
-    private let cellSpacing: CGFloat = 4
+    private let cellSize: CGFloat = 32
+    private let cellSpacing: CGFloat = 6
 
     private var calendar: Calendar { .current }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            // Month strip
-            monthStrip
-
-            // Day-of-week header + grid
-            VStack(alignment: .leading, spacing: cellSpacing) {
-                dayOfWeekHeader
-                dayGrid
-            }
-
-            // Legend
+            monthNav
+            dayGrid
             legend
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
-        .padding(.bottom, AppTheme.Spacing.large)
+        .padding(.vertical, AppTheme.Spacing.large)
     }
 
-    // Month strip — 12 pill buttons
-    private var monthStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppTheme.Spacing.tiny) {
-                ForEach(monthDates(), id: \.self) { month in
-                    monthPill(month)
-                }
+    // Month navigation — arrows to shuffle across months
+    private var monthNav: some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            Button {
+                changeMonth(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(6)
+                    .background(Color.primary.opacity(0.06), in: Circle())
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(monthLabel(selectedMonth))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Spacer()
+
+            Button {
+                changeMonth(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(6)
+                    .background(Color.primary.opacity(0.06), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
 
-    private func monthPill(_ month: Date) -> some View {
-        let isSelected = calendar.isDate(month, equalTo: selectedMonth, toGranularity: .month)
-        let label = month.formatted(.dateTime.month(.abbreviated))
-
-        return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                selectedMonth = month
-                // If currently selected day is not in this month, clear it
-                if let day = selectedDay, !calendar.isDate(day, equalTo: month, toGranularity: .month) {
+    private func changeMonth(by value: Int) {
+        withAnimation(AppTheme.Animation.springSnappy) {
+            if let newMonth = calendar.date(byAdding: .month, value: value, to: selectedMonth) {
+                selectedMonth = newMonth
+                if let day = selectedDay, !calendar.isDate(day, equalTo: newMonth, toGranularity: .month) {
                     selectedDay = nil
                 }
             }
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
-                .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.18 : 0.12))
-                            .matchedGeometryEffect(id: "month_pill", in: ns)
-                    } else {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.05))
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // Day-of-week header
-    private var dayOfWeekHeader: some View {
-        HStack(spacing: cellSpacing) {
-            ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { label in
-                Text(label)
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary.opacity(0.6))
-                    .frame(width: cellSize)
-            }
         }
     }
 
-    // Day grid
+    private func monthLabel(_ month: Date) -> String {
+        "\(month.formatted(.dateTime.month(.wide))), \(calendar.component(.year, from: month))"
+    }
+
     private var dayGrid: some View {
         let weeks = computeWeeks()
         return VStack(alignment: .leading, spacing: cellSpacing) {
+            HStack(spacing: cellSpacing) {
+                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { label in
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .frame(width: cellSize)
+                }
+            }
+
             ForEach(0..<weeks.count, id: \.self) { wi in
                 HStack(spacing: cellSpacing) {
                     ForEach(0..<7, id: \.self) { di in
@@ -330,28 +322,8 @@ private struct YearCalendarSection: View {
             Text("More")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary.opacity(0.7))
-
-            if let busiest = review.busiestDay {
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(AppTheme.Colors.accent)
-                    Text("Best day: \(busiest.day.formatted(.dateTime.month(.abbreviated).day())) · \(busiest.minutes / 60)h \(busiest.minutes % 60)m")
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .padding(.top, 2)
-    }
-
-    // Helpers
-    private func monthDates() -> [Date] {
-        let year = Calendar.current.component(.year, from: Date())
-        return (1...12).compactMap {
-            calendar.date(from: DateComponents(year: year, month: $0, day: 1))
-        }
     }
 
     private func computeWeeks() -> [[Date?]] {
@@ -393,24 +365,24 @@ private struct ReviewDayCell: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                RoundedRectangle(cornerRadius: cellSize * 0.16, style: .continuous)
                     .fill(Self.fillColor(minutes: minutes, colorScheme: colorScheme, accent: accent))
                     .scaleEffect(isHovered || isSelected ? 1.15 : 1.0)
 
                 Text("\(Calendar.current.component(.day, from: date))")
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: cellSize * 0.3, weight: .medium))
                     .foregroundStyle(minutes > 0 ? Color.white.opacity(0.92) : Color.primary.opacity(0.5))
-                    .offset(y: isToday ? -3 : 0)
+                    .offset(y: isToday ? -cellSize * 0.11 : 0)
 
                 if isToday {
                     Circle()
                         .fill(minutes > 0 ? Color.white : accent)
-                        .frame(width: 3, height: 3)
-                        .offset(y: 8.5)
+                        .frame(width: cellSize * 0.11, height: cellSize * 0.11)
+                        .offset(y: cellSize * 0.3)
                 }
 
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: cellSize * 0.16, style: .continuous)
                         .stroke(accent, lineWidth: 1.8)
                         .padding(-1)
                 }
@@ -461,39 +433,34 @@ private struct YearContextPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-            Group {
-                if let day = selectedDay {
-                    DayDetailPanel(
-                        day: day,
-                        review: review,
-                        colorScheme: colorScheme,
-                        onSelectTitle: onSelectTitle
-                    )
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                    .id("day_\(day)")
-                } else {
-                    MonthDetailPanel(
-                        month: selectedMonth,
-                        review: review,
-                        colorScheme: colorScheme,
-                        onSelectTitle: onSelectTitle
-                    )
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                    .id("month_\(selectedMonth)")
-                }
+            if let day = selectedDay {
+                DayDetailPanel(
+                    day: day,
+                    review: review,
+                    colorScheme: colorScheme,
+                    onSelectTitle: onSelectTitle
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+                .id("day_\(day)")
+            } else {
+                MonthDetailPanel(
+                    month: selectedMonth,
+                    review: review,
+                    colorScheme: colorScheme,
+                    onSelectTitle: onSelectTitle
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity
+                ))
+                .id("month_\(selectedMonth)")
             }
-            .animation(AppTheme.Animation.springSnappy, value: selectedDay)
-            .animation(AppTheme.Animation.springSnappy, value: selectedMonth)
         }
+        .animation(AppTheme.Animation.springSnappy, value: selectedDay)
+        .animation(AppTheme.Animation.springSnappy, value: selectedMonth)
     }
 }
 
@@ -505,7 +472,9 @@ private struct MonthDetailPanel: View {
     let colorScheme: ColorScheme
     let onSelectTitle: ((PersistentIdentifier) -> Void)?
 
-    private var stats: (movies: Int, episodes: Int, minutes: Int) {
+    @State private var scrolled = false
+
+    private var stats: (movies: Int, series: Int, minutes: Int) {
         review.monthStats(for: month)
     }
     private var titles: [YearWatchedTitle] {
@@ -521,7 +490,7 @@ private struct MonthDetailPanel: View {
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .kerning(1.2)
                         .foregroundStyle(AppTheme.Colors.accent)
-                    Text(month.formatted(.dateTime.month(.wide).year()))
+                    Text("\(month.formatted(.dateTime.month(.wide))), \(Calendar.current.component(.year, from: month))")
                         .font(.system(size: 32, weight: .heavy, design: .rounded))
                         .foregroundStyle(.primary)
                 }
@@ -531,10 +500,10 @@ private struct MonthDetailPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Stat row
+            // Stat row — series first
             HStack(spacing: AppTheme.Spacing.medium) {
+                monthStatTile(value: "\(stats.series)", label: "Series", icon: "tv.fill")
                 monthStatTile(value: "\(stats.movies)", label: "Movies", icon: "film.fill")
-                monthStatTile(value: "\(stats.episodes)", label: "Episodes", icon: "tv.fill")
                 monthStatTile(
                     value: formatTime(stats.minutes),
                     label: "Watch Time",
@@ -542,11 +511,63 @@ private struct MonthDetailPanel: View {
                 )
             }
 
-            // Poster wall
+            // Poster mosaic — bare posters, no captions
             if titles.isEmpty {
                 emptyMonth
             } else {
-                posterWall(titles)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                    Text("TITLES WATCHED (\(titles.count))")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .kerning(1.0)
+                        .foregroundStyle(.secondary)
+
+                    if scrolled {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(titles) { title in
+                                    PosterTile(title: title, onTap: { onSelectTitle?(title.id) }, width: 28)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    } else {
+                        // Single row; a "+N" pill expands to horizontal scroll.
+                        GeometryReader { geo in
+                            let capacity = max(1, Int((geo.size.width + 6) / 40))
+                            let shown = min(titles.count, capacity)
+                            HStack(alignment: .top, spacing: 6) {
+                                ForEach(titles.prefix(shown)) { title in
+                                    PosterTile(title: title, onTap: { onSelectTitle?(title.id) }, width: 28)
+                                }
+                                if titles.count > shown {
+                                    Button {
+                                        withAnimation(AppTheme.Animation.springSnappy) { scrolled = true }
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Text("+\(titles.count - shown)")
+                                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            Text("more")
+                                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .foregroundStyle(AppTheme.Colors.accent)
+                                        .frame(width: 42, height: 42)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .fill(AppTheme.Colors.accent.opacity(0.12))
+                                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contentShape(Rectangle())
+                                    .help("Show all titles")
+                                }
+                            }
+                        }
+                        .frame(height: 42)
+                    }
+                }
+                .onChange(of: month) { _, _ in scrolled = false }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -586,25 +607,6 @@ private struct MonthDetailPanel: View {
         )
     }
 
-    private func posterWall(_ titles: [YearWatchedTitle]) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            Text("TITLES WATCHED (\(titles.count))")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .kerning(1.0)
-                .foregroundStyle(.secondary)
-
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 10)],
-                alignment: .leading,
-                spacing: 12
-            ) {
-                ForEach(titles) { title in
-                    PosterTile(title: title, onTap: { onSelectTitle?(title.id) })
-                }
-            }
-        }
-    }
-
     private var emptyMonth: some View {
         HStack {
             Spacer()
@@ -630,6 +632,8 @@ private struct DayDetailPanel: View {
     let colorScheme: ColorScheme
     let onSelectTitle: ((PersistentIdentifier) -> Void)?
 
+    @State private var scrolled = false
+
     private var titles: [YearWatchedTitle] {
         let key = Calendar.current.startOfDay(for: day)
         return review.titlesByDay[key] ?? []
@@ -638,13 +642,19 @@ private struct DayDetailPanel: View {
         let key = Calendar.current.startOfDay(for: day)
         return review.activityByDay[key] ?? .zero
     }
+    private var seriesCount: Int {
+        titles.filter { $0.type == .tvShow }.count
+    }
+    private var movieCount: Int {
+        titles.filter { $0.type == .movie }.count
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             // Header
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("DAY DETAIL")
+                    Text("DAY OVERVIEW")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .kerning(1.2)
                         .foregroundStyle(AppTheme.Colors.accent)
@@ -663,6 +673,14 @@ private struct DayDetailPanel: View {
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+
+            // Series / Movies overview
+            if !titles.isEmpty {
+                HStack(spacing: AppTheme.Spacing.medium) {
+                    dayStatTile(value: "\(seriesCount)", label: "Series")
+                    dayStatTile(value: "\(movieCount)", label: "Movies")
                 }
             }
 
@@ -687,86 +705,127 @@ private struct DayDetailPanel: View {
                         .kerning(1.0)
                         .foregroundStyle(.secondary)
 
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 10)],
-                        alignment: .leading,
-                        spacing: 12
-                    ) {
-                        ForEach(titles) { title in
-                            PosterTile(title: title, onTap: { onSelectTitle?(title.id) })
+                    // Single row of posters; "+N more" pill if it exceeds the row
+                    if scrolled {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(titles) { title in
+                                    PosterTile(title: title, onTap: { onSelectTitle?(title.id) }, width: 56)
+                                }
+                            }
+                            .padding(.vertical, 10)
                         }
+                    } else {
+                        GeometryReader { geo in
+                            let capacity = max(1, Int((geo.size.width + 6) / 62))
+                            let shown = min(titles.count, capacity)
+                            HStack(alignment: .top, spacing: 6) {
+                                ForEach(titles.prefix(shown)) { title in
+                                    PosterTile(title: title, onTap: { onSelectTitle?(title.id) }, width: 56)
+                                }
+                                if titles.count > shown {
+                                    Button {
+                                        withAnimation(AppTheme.Animation.springSnappy) { scrolled = true }
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Text("+\(titles.count - shown)")
+                                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            Text("more")
+                                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .foregroundStyle(AppTheme.Colors.accent)
+                                        .frame(width: 56, height: 84)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .fill(AppTheme.Colors.accent.opacity(0.12))
+                                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contentShape(Rectangle())
+                                    .help("Show all titles")
+                                }
+                            }
+                        }
+                        .frame(height: 84)
                     }
                 }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.vertical, AppTheme.Spacing.large)
+        .onChange(of: day) { _, _ in scrolled = false }
+    }
+
+    private func dayStatTile(value: String, label: String) -> some View {
+        HStack(spacing: 8) {
+            Text(value)
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundStyle(.primary)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .kerning(0.8)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .padding(.vertical, AppTheme.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                )
+        )
     }
 }
 
-// MARK: - Poster Tile (shared by month & day panels)
+// MARK: - Poster Tile (heatmap-cell sized, bare — no captions)
 
 private struct PosterTile: View {
     let title: YearWatchedTitle
     let onTap: () -> Void
+    var width: CGFloat = 28
     @State private var isHovered = false
 
-    private let w: CGFloat = 76
-    private var h: CGFloat { w * 1.5 }
+    private var h: CGFloat { width * 1.5 }
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 5) {
-                ZStack(alignment: .topTrailing) {
-                    // Poster background
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(width: w, height: h)
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: width, height: h)
 
-                    // Poster image
-                    if let urlStr = title.posterURL, let url = URL(string: urlStr) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                                    .frame(width: w, height: h)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            default:
-                                fallbackIcon
-                            }
+                if let urlStr = title.posterURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                                .frame(width: width, height: h)
+                                .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+                        default:
+                            fallbackIcon
                         }
-                    } else {
-                        fallbackIcon
                     }
-
-                    // Taste badge
-                    tasteBadge
+                } else {
+                    fallbackIcon
                 }
-                .frame(width: w, height: h)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                )
-                .scaleEffect(isHovered ? 1.04 : 1.0)
-                .shadow(
-                    color: isHovered ? .black.opacity(0.2) : .clear,
-                    radius: 8, y: 4
-                )
 
-                // Title label
-                Text(title.title)
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .lineLimit(2)
-                    .foregroundStyle(.primary.opacity(0.85))
-                    .frame(width: w, alignment: .leading)
-
-                // Subtitle
-                Text(title.episodeCount > 0 ? "\(title.episodeCount) ep\(title.episodeCount == 1 ? "" : "s")" : "Movie")
-                    .font(.system(size: 8.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                tasteBadge
             }
-            .frame(width: w)
+            .frame(width: width, height: h)
+            .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+            )
+            .scaleEffect(isHovered ? 1.25 : 1.0)
+            .shadow(
+                color: isHovered ? .black.opacity(0.25) : .clear,
+                radius: 6, y: 3
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -777,9 +836,9 @@ private struct PosterTile: View {
 
     private var fallbackIcon: some View {
         Image(systemName: title.type == .movie ? "film" : "tv")
-            .font(.system(size: 16, weight: .regular))
+            .font(.system(size: 8, weight: .regular))
             .foregroundStyle(Color.primary.opacity(0.3))
-            .frame(width: w, height: h)
+            .frame(width: width, height: h)
     }
 
     @ViewBuilder
@@ -796,11 +855,11 @@ private struct PosterTile: View {
 
     private func badge(_ icon: String, color: Color) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 7, weight: .bold))
+            .font(.system(size: 4.5, weight: .bold))
             .foregroundStyle(.white)
-            .padding(4)
+            .padding(2)
             .background(color.opacity(0.9), in: Circle())
-            .padding(4)
+            .padding(2)
     }
 }
 
@@ -812,36 +871,48 @@ private struct YearTasteSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            // Section label
             Text("YOUR \(review.year) TASTE")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .kerning(1.2)
                 .foregroundStyle(AppTheme.Colors.accent)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-            // Genres
             if !review.topGenres.isEmpty {
                 tasteRow(title: "Top Genres") {
                     ForEach(review.topGenres.prefix(6), id: \.name) { genre in
-                        capsule(text: genre.name, value: "\(Int(genre.score * 100))%", color: AppTheme.Colors.accent)
+                        DiscoveryCard(
+                            node: DiscoveryNode(name: genre.name, logoPath: nil, count: genre.count),
+                            style: .text,
+                            baseColor: .indigo
+                        ) {}
+                        .frame(width: 170, height: 60)
                     }
                 }
             }
 
-            // Networks
             if !review.topNetworks.isEmpty {
                 tasteRow(title: "Networks You Binged") {
-                    ForEach(review.topNetworks.prefix(5), id: \.name) { n in
-                        capsule(text: n.name, value: "\(n.count)", color: .secondary)
+                    ForEach(review.topNetworks.prefix(6), id: \.name) { network in
+                        DiscoveryCard(
+                            node: DiscoveryNode(name: network.name, logoPath: network.logoPath, count: network.count),
+                            style: .logo
+                        ) {}
+                        .frame(width: 170, height: 90)
                     }
                 }
             }
 
-            // Actors
             if !review.topActors.isEmpty {
                 tasteRow(title: "Actors of Your Year") {
-                    ForEach(review.topActors.prefix(6), id: \.id) { actor in
-                        actorAvatar(actor)
+                    ForEach(Array(review.topActors.prefix(6).enumerated()), id: \.element.id) { index, actor in
+                        PersonRankCard(
+                            rank: index + 1,
+                            name: actor.name,
+                            score: actor.score,
+                            profileURL: actor.profileURL,
+                            accentColor: AppTheme.Colors.accent,
+                            style: .cast
+                        )
                     }
                 }
             }
@@ -852,74 +923,20 @@ private struct YearTasteSection: View {
     private func tasteRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .kerning(0.8)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .kerning(1.0)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.tiny) {
+                HStack(spacing: AppTheme.Spacing.small) {
                     content()
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.vertical, 8)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-    }
-
-    private func capsule(text: String, value: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Text(text)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(value)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, AppTheme.Spacing.medium)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(color.opacity(colorScheme == .dark ? 0.1 : 0.07))
-                .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5))
-        )
-    }
-
-    private func actorAvatar(_ actor: ScoredPerson) -> some View {
-        VStack(spacing: 5) {
-            if let url = actor.profileURL, let url = URL(string: url) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let img):
-                        img.resizable().scaledToFill()
-                            .frame(width: 52, height: 52)
-                            .clipShape(Circle())
-                    default:
-                        initialCircle(actor.name)
-                    }
-                }
-            } else {
-                initialCircle(actor.name)
-            }
-
-            Text(actor.name)
-                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .foregroundStyle(.primary.opacity(0.85))
-                .frame(width: 60)
-        }
-        .frame(width: 60)
-    }
-
-    private func initialCircle(_ name: String) -> some View {
-        Circle()
-            .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.22 : 0.15))
-            .frame(width: 52, height: 52)
-            .overlay(
-                Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.Colors.accent)
-            )
     }
 }
 
@@ -930,46 +947,44 @@ private struct YearReviewSkeleton: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
-            // Hero skeleton
             HStack {
                 RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.08)).frame(width: 130, height: 70)
                 Spacer()
                 HStack(spacing: 16) {
-                    ForEach(0..<4, id: \.self) { _ in
+                    ForEach(0..<3, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)).frame(width: 70, height: 56)
                     }
                 }
             }
 
-            // Month strip skeleton
-            HStack(spacing: 8) {
-                ForEach(0..<6, id: \.self) { _ in
-                    Capsule().fill(Color.primary.opacity(0.07)).frame(width: 48, height: 28)
-                }
-            }
-
-            // Grid skeleton
-            VStack(spacing: 4) {
-                ForEach(0..<5, id: \.self) { _ in
-                    HStack(spacing: 4) {
-                        ForEach(0..<7, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.07)).frame(width: 28, height: 28)
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    Capsule().fill(Color.primary.opacity(0.07)).frame(width: 120, height: 22)
+                    VStack(spacing: 4) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            HStack(spacing: 4) {
+                                ForEach(0..<7, id: \.self) { _ in
+                                    RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.07)).frame(width: 28, height: 28)
+                                }
+                            }
                         }
                     }
                 }
-            }
+                .frame(width: 280)
+                .padding(.trailing, AppTheme.Spacing.large)
 
-            // Stats skeleton
-            HStack(spacing: 12) {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)).frame(height: 72)
-                }
-            }
-
-            // Poster skeleton
-            HStack(spacing: 10) {
-                ForEach(0..<7, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)).frame(width: 76, height: 114)
+                VStack(alignment: .leading, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)).frame(width: 200, height: 24)
+                    HStack(spacing: 12) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)).frame(width: 120, height: 72)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        ForEach(0..<8, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06)).frame(width: 28, height: 42)
+                        }
+                    }
                 }
             }
         }

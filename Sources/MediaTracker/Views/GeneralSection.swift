@@ -190,10 +190,6 @@ struct GeneralSection: View {
         defaults.removeObject(forKey: "mm_api_key")
         defaults.removeObject(forKey: "mm_debug_mode")
 
-        for key in [UserDefaultsKeys.tmdbAPIKey, .omdbAPIKey, .mmAPIKey] {
-            KeychainStore.delete(key.rawValue)
-        }
-
         if launchAtLogin {
             try? SMAppService.mainApp.unregister()
             launchAtLogin = SMAppService.mainApp.status == .enabled
