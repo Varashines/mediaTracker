@@ -1,6 +1,30 @@
 import Foundation
 import SwiftData
 
+/// In-memory snapshot cache for the year review (mirrors `ScopedStatsCache`).
+/// Revisits are instant; invalidated on any media state change. Holds a strong
+/// reference to the container so its `ObjectIdentifier` can't be reused by a
+/// deallocated container (which would return a stale review for another store).
+@MainActor
+final class YearReviewCache {
+    static let shared = YearReviewCache()
+    private init() {}
+
+    private var cache: [ObjectIdentifier: (container: ModelContainer, review: YearInReview)] = [:]
+
+    func review(containerID: ObjectIdentifier, year: Int) -> YearInReview? {
+        cache[containerID]?.review
+    }
+
+    func setReview(_ review: YearInReview, containerID: ObjectIdentifier, year: Int, container: ModelContainer) {
+        cache[containerID] = (container, review)
+    }
+
+    func invalidate() {
+        cache.removeAll()
+    }
+}
+
 /// Per-day watch activity for a single day of the review year.
 struct YearDayActivity: Sendable, Equatable {
     var minutes: Int
@@ -30,8 +54,6 @@ struct YearInReview: Sendable {
     let activityByDay: [Date: YearDayActivity]
     /// Titles watched per calendar day (for day drill-down + month collages).
     let titlesByDay: [Date: [YearWatchedTitle]]
-    let releasedMovies: [MediaThumbnailMetadata]
-    let releasedTVShows: [MediaThumbnailMetadata]
     let topGenres: [(name: String, score: Double, count: Int)]
     let topNetworks: [(name: String, count: Int, logoPath: String?)]
     let topActors: [ScoredPerson]
@@ -41,8 +63,6 @@ struct YearInReview: Sendable {
     let totalSeries: Int
     let totalDaysWatched: Int
     let busiestDay: (day: Date, minutes: Int)?
-    /// Items whose release date is unknown (excluded from the 2026 sections).
-    let unknownReleaseCount: Int
 
     func monthStats(for month: Date) -> (movies: Int, series: Int, minutes: Int) {
         let calendar = Calendar.current
@@ -102,8 +122,6 @@ struct YearInReview: Sendable {
             year: year,
             activityByDay: [:],
             titlesByDay: [:],
-            releasedMovies: [],
-            releasedTVShows: [],
             topGenres: [],
             topNetworks: [],
             topActors: [],
@@ -112,8 +130,7 @@ struct YearInReview: Sendable {
             totalMovies: 0,
             totalSeries: 0,
             totalDaysWatched: 0,
-            busiestDay: nil,
-            unknownReleaseCount: 0
+            busiestDay: nil
         )
     }
 }
@@ -124,30 +141,20 @@ actor YearInReviewService {
         YearInReviewService(modelContainer: modelContainer)
     }
 
-    private func accumulateTaste(
-        _ item: MediaItem,
-        into genreTaste: inout [String: CategoryStats],
-        _ networkCounts: inout [String: Int],
-        _ networkLogos: inout [String: String],
-        _ actorTaste: inout [String: CategoryStats],
-        aliasMap: [String: String]
-    ) {
-        let titleWeight = TasteMath.titleWeight(for: item)
-        TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
-        TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
-        if let rawNetwork = item.cachedNetwork {
-            let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
-            for (index, network) in rawNetwork.commaSeparatedValues.enumerated() {
-                let groupedName = aliasMap[network.lowercased()] ?? network
-                networkCounts[groupedName, default: 0] += 1
-                if networkLogos[groupedName] == nil, index < logoPaths.count, !logoPaths[index].isEmpty {
-                    networkLogos[groupedName] = logoPaths[index]
-                }
-            }
-        }
-    }
+    /// Only the fields the review actually reads — avoids dragging searchable/
+    /// badge/cast blobs for every library item on each visit.
+    nonisolated(unsafe) private static let reviewItemProperties: [PartialKeyPath<MediaItem>] = [
+        \.id, \.title, \.posterURL, \.customPosterURL, \.typeValue, \.tasteValue,
+        \.cachedGenres, \.cachedNetwork, \.cachedNetworkLogoPath, \.cachedSeasonCount, \.storedCast
+    ]
 
     func compute(year: Int) async -> YearInReview {
+        // Fast path: return the in-memory snapshot if one exists for this store.
+        let containerID = ObjectIdentifier(modelContext.container)
+        if let cached = await YearReviewCache.shared.review(containerID: containerID, year: year) {
+            return cached
+        }
+
         let calendar = Calendar.current
         guard let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
               let end = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1)) else {
@@ -207,9 +214,10 @@ actor YearInReviewService {
             ))
         }
 
-        // 3. Titles released in the target year AND watched by the user.
+        // 3. TV show metadata for titlesByDay + taste (narrow fetch — only the
+        //    fields the review reads; no searchable/badge blobs).
         var itemDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.isSoftDeleted == false })
-        itemDescriptor.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+        itemDescriptor.propertiesToFetch = Self.reviewItemProperties
         itemDescriptor.fetchLimit = 2000
         let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
 
@@ -235,35 +243,6 @@ actor YearInReviewService {
             }
         }
 
-        var releasedMovies: [MediaThumbnailMetadata] = []
-        var releasedTVShows: [MediaThumbnailMetadata] = []
-        var unknownReleaseCount = 0
-
-        for item in allItems {
-            guard let releaseDate = item.releaseDate else {
-                unknownReleaseCount += 1
-                continue
-            }
-            guard releaseDate >= start && releaseDate < end else { continue }
-
-            let isWatchedByMe: Bool
-            if item.typeValue == "Movie" {
-                isWatchedByMe = item.stateValue == "Completed"
-            } else {
-                let tmdbString = item.id.split(separator: "_").last.map(String.init) ?? ""
-                guard let tmdbID = Int(tmdbString) else { continue }
-                isWatchedByMe = watchedShowIDs.contains(tmdbID)
-            }
-            guard isWatchedByMe else { continue }
-
-            let metadata = MediaThumbnailMetadata(item: item)
-            if item.typeValue == "Movie" {
-                releasedMovies.append(metadata)
-            } else {
-                releasedTVShows.append(metadata)
-            }
-        }
-
         // Taste over everything watched this year (movies completed + TV with
         // watched episodes in the year). No affinity cutoff — single titles count.
         var genreTaste: [String: CategoryStats] = [:]
@@ -277,9 +256,6 @@ actor YearInReviewService {
         for movie in completedMovies {
             accumulateTaste(movie, into: &genreTaste, &networkCounts, &networkLogos, &actorTaste, aliasMap: aliasMap)
         }
-
-        releasedMovies.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
-        releasedTVShows.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
 
         let topGenres = genreTaste.compactMap { name, val -> (String, Double, Int)? in
             let score = val.affinity(cutoff: 1)
@@ -299,12 +275,10 @@ actor YearInReviewService {
 
         let busiestDay = activity.max { $0.value.minutes < $1.value.minutes }.map { ($0.key, $0.value.minutes) }
 
-        return YearInReview(
+        let result = YearInReview(
             year: year,
             activityByDay: activity,
             titlesByDay: titlesByDay,
-            releasedMovies: releasedMovies,
-            releasedTVShows: releasedTVShows,
             topGenres: topGenres,
             topNetworks: topNetworks,
             topActors: Array(topActors),
@@ -313,8 +287,32 @@ actor YearInReviewService {
             totalMovies: totalMovies,
             totalSeries: watchedTVItems.count,
             totalDaysWatched: activity.count,
-            busiestDay: busiestDay,
-            unknownReleaseCount: unknownReleaseCount
+            busiestDay: busiestDay
         )
+        await YearReviewCache.shared.setReview(result, containerID: containerID, year: year, container: modelContext.container)
+        return result
+    }
+
+    private func accumulateTaste(
+        _ item: MediaItem,
+        into genreTaste: inout [String: CategoryStats],
+        _ networkCounts: inout [String: Int],
+        _ networkLogos: inout [String: String],
+        _ actorTaste: inout [String: CategoryStats],
+        aliasMap: [String: String]
+    ) {
+        let titleWeight = TasteMath.titleWeight(for: item)
+        TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
+        TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
+        if let rawNetwork = item.cachedNetwork {
+            let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
+            for (index, network) in rawNetwork.commaSeparatedValues.enumerated() {
+                let groupedName = aliasMap[network.lowercased()] ?? network
+                networkCounts[groupedName, default: 0] += 1
+                if networkLogos[groupedName] == nil, index < logoPaths.count, !logoPaths[index].isEmpty {
+                    networkLogos[groupedName] = logoPaths[index]
+                }
+            }
+        }
     }
 }

@@ -80,6 +80,7 @@ final class MediaStateService {
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
             guard !Task.isCancelled else { return }
             TasteActor.clearCache()
+            YearReviewCache.shared.invalidate()
         }
     }
 }

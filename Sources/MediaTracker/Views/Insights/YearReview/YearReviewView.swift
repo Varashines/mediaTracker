@@ -104,8 +104,6 @@ struct YearReviewView: View {
         loadTask?.cancel()
         isLoading = true
         loadTask = Task {
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            if Task.isCancelled { return }
             let year = Calendar.current.component(.year, from: Date())
             let service = YearInReviewService(modelContainer: modelContainer)
             let result = await service.compute(year: year)
