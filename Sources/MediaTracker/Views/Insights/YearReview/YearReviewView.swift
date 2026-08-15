@@ -904,7 +904,8 @@ private struct YearTasteSection: View {
                         DiscoveryCard(
                             node: DiscoveryNode(name: genre.name, logoPath: nil, count: genre.count),
                             style: .text,
-                            baseColor: .indigo
+                            baseColor: .indigo,
+                            badgeValue: "\(Int(genre.score * 100))%"
                         ) {}
                         .frame(width: 170, height: 60)
                     }
@@ -919,6 +920,20 @@ private struct YearTasteSection: View {
                             style: .logo
                         ) {}
                         .frame(width: 170, height: 90)
+                    }
+                }
+            }
+
+            if !review.topLanguages.isEmpty {
+                tasteRow(title: "Languages You Loved") {
+                    ForEach(review.topLanguages.prefix(6), id: \.name) { language in
+                        DiscoveryCard(
+                            node: DiscoveryNode(name: language.name, logoPath: nil, count: language.count),
+                            style: .text,
+                            baseColor: .teal,
+                            badgeValue: "\(Int(language.score * 100))%"
+                        ) {}
+                        .frame(width: 170, height: 60)
                     }
                 }
             }

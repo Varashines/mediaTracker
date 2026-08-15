@@ -8,6 +8,8 @@ struct DiscoveryCard: View {
     let node: DiscoveryNode
     let style: DiscoveryCardStyle
     var baseColor: Color = .gray
+    /// Optional override for the hover badge text (defaults to the node count).
+    var badgeValue: String? = nil
     let action: () -> Void
 
     @State private var isHovered = false
@@ -125,7 +127,7 @@ struct DiscoveryCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if isHovered {
-                Text("\(node.count)")
+                Text(badgeValue ?? "\(node.count)")
                     .font(AppTheme.Font.small.monospacedDigit())
                     .contentTransition(.numericText())
                     .foregroundStyle(accent.opacity(0.8))
@@ -150,7 +152,7 @@ struct DiscoveryCard: View {
 
             if isHovered {
                 Spacer(minLength: 4)
-                Text("\(node.count)")
+                Text(badgeValue ?? "\(node.count)")
                     .font(AppTheme.Font.label.monospacedDigit())
                     .contentTransition(.numericText())
                     .foregroundStyle(accent)
