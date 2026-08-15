@@ -6,7 +6,7 @@ on:
       version:
         description: 'App version string for the built bundle (e.g. 8.1.1)'
         required: false
-        default: '8.1.1'
+        default: '9.0.0'
 
 permissions:
   contents: read
@@ -103,7 +103,8 @@ jobs:
       - name: Create Styled DMG
         run: |
           ARCH="${{ matrix.arch }}"
-          DMG_NAME="MediaTracker-${ARCH}"
+          VERSION="${{ inputs.version }}"
+          DMG_NAME="MediaTracker-${VERSION}-${ARCH}"
 
           create-dmg \
             --volname "MediaTracker Installation" \
@@ -119,6 +120,6 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MediaTracker-${{ matrix.arch }}
-          path: MediaTracker-${{ matrix.arch }}.dmg
+          name: MediaTracker-${{ inputs.version }}-${{ matrix.arch }}
+          path: MediaTracker-${{ inputs.version }}-${{ matrix.arch }}.dmg
           retention-days: 5

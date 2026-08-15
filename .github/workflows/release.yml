@@ -104,10 +104,13 @@ jobs:
       # ✅ 4. Package Styled Installation Window Disk Image
       # Layout parameters place the App Icon on the left and Applications link on the right
       - name: Create Styled DMG
+        id: create_dmg
         run: |
           ARCH="${{ matrix.arch }}"
-          DMG_NAME="MediaTracker-${ARCH}"
-          
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG_NAME="MediaTracker-${VERSION}-${ARCH}"
+          echo "dmg_file=${DMG_NAME}.dmg" >> "$GITHUB_OUTPUT"
+
           create-dmg \
             --volname "MediaTracker Installation" \
             --window-pos 200 120 \
@@ -123,7 +126,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MediaTracker-${{ matrix.arch }}
-          path: MediaTracker-${{ matrix.arch }}.dmg
+          path: ${{ steps.create_dmg.outputs.dmg_file }}
           retention-days: 5
 
   release:
