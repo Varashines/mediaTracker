@@ -221,13 +221,13 @@ final class YearInReviewTests: XCTestCase {
         let context = container.mainContext
 
         let show = makeItem(id: "tv_70", title: "Month Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
-        show.tasteValue = "Loved"
+        show.tasteValue = TasteValue.love.rawValue
         context.insert(show)
         context.insert(makeEpisode(showID: 70, watchedAt: date(2026, 8, 10), runtime: 50, episodeNumber: 1))
         context.insert(makeEpisode(showID: 70, watchedAt: date(2026, 8, 11), runtime: 50, episodeNumber: 2))
 
         let movie = makeItem(id: "movie_71", title: "Month Movie", type: .movie, releaseDate: date(2026, 2, 1), state: "Completed")
-        movie.tasteValue = "Liked"
+        movie.tasteValue = TasteValue.like.rawValue
         movie.lastStateChangeDate = date(2026, 8, 15)
         movie.cachedRuntime = 100
         context.insert(movie)

@@ -85,9 +85,9 @@ struct YearInReview: Sendable {
 
     private func tasteRank(_ taste: String) -> Int {
         switch taste {
-        case "Loved": return 0
-        case "Liked": return 1
-        case "Disliked": return 3
+        case "Love", "Loved": return 0
+        case "Like", "Liked": return 1
+        case "Dislike", "Disliked": return 3
         default: return 2
         }
     }
