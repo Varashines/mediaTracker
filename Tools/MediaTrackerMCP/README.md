@@ -48,13 +48,32 @@ Add to `~/.config/opencode/opencode.jsonc`:
 
 | Tool | Description |
 |---|---|
-| `search_titles` | Search + filter (state/taste/mood/genre/network/language/type/upcoming) + sort (interaction, added, updated, release, nextAiring, title, loved) |
+| `search_titles` | Search + filter (state/taste/mood/genre/network/language/type/upcoming, watched_from/watched_to on `lastStateChangeDate`) + sort (interaction, added, updated, release, nextAiring, title, loved) |
 | `get_title_detail` | Full record for one title (genres, cast, providers, episode progress, collections) |
 | `library_stats` | Totals by type/state/taste/mood, completion rate, watch time |
 | `genre_dna` | Genres by affinity (`rank_by="affinity"`, top genre) or count (`rank_by="count"`, most-watched) |
 | `network_studio_analysis` | Networks/studios by affinity or count, studio-alias grouped |
 | `cast_rankings` | Cast by affinity/count, or directors/creators via `rank_by` |
 | `watch_history` | Recently interacted titles (filterable by language/taste) |
+| `monthly_watch_activity` | Movies (by `lastStateChangeDate`) and TV series (by per-episode `ZWATCHEDDATE`) watched per month of a year, local timezone |
+
+Every item now includes `lastStateChangeDate` (when its state was last changed,
+e.g. marked Completed/watched) alongside `dateAdded`, `lastInteraction`, and
+`lastUpdated`. `search_titles` can filter on it with `watched_from` / `watched_to`
+(half-open month interval, evaluated in the machine's local timezone to match the
+app's `Calendar.current` grouping — important near month boundaries, e.g. a
+timestamp `2026-04-30T18:30:00Z` is `2026-05-01` in IST). So
+`watched_from="2026-05-01"` + `watched_to="2026-06-01"` returns titles whose state
+changed (i.e. were watched) in May 2026.
+
+For TV series, "when watched" is per-episode: `monthly_watch_activity(year)` counts
+a show toward a month when >=1 of its episodes has a `ZWATCHEDDATE` that month
+(evaluated in local time), alongside raw watched-episode totals and movies
+completed that month.
+
+> Core Data `Z_ENT` ids are **not hardcoded** for `ZTVEPISODE` — Core Data renumbers
+> entities between model builds (seen at both 13 and 14). Episode queries skip the
+> `Z_ENT` filter because that table only holds episode rows.
 | `collections` | Manual + smart collections with counts |
 | `upcoming_releases` | Upcoming titles sorted by date |
 | `library_snapshot` | Compact whole-library JSON for context injection |

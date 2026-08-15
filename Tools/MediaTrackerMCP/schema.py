@@ -19,6 +19,31 @@ DEFAULT_STORE_PATH = os.path.expanduser("~/Library/Application Support/default.s
 COCOA_EPOCH_OFFSET = 978307200.0
 
 
+def local_month_key(value: Optional[float]) -> Optional[str]:
+    """Core Data timestamp -> local-timezone 'YYYY-MM' key.
+
+    Uses system local time (the app's Calendar.current), not UTC, so month
+    boundaries match what the app shows.
+    """
+    if value is None:
+        return None
+    import datetime
+    return datetime.datetime.fromtimestamp(value + COCOA_EPOCH_OFFSET).strftime("%Y-%m")
+
+
+def local_date(iso_utc: Optional[str]) -> Optional[str]:
+    """Convert a UTC ISO-8601 string to a local-timezone 'YYYY-MM-DD' string.
+
+    The app groups watch history by the user's local calendar (Calendar.current),
+    so month boundaries must be computed in local time, not UTC.
+    """
+    if not iso_utc:
+        return None
+    import datetime
+    dt = datetime.datetime.fromisoformat(iso_utc.replace("Z", "+00:00"))
+    return dt.astimezone().strftime("%Y-%m-%d")
+
+
 class StoreError(Exception):
     """Raised when the store cannot be opened or queried."""
 

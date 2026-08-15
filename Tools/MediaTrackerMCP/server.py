@@ -11,12 +11,17 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastmcp import FastMCP
-from schema import open_store, to_date, decode_plist_array, decode_json_list, StoreError
+from schema import (
+    open_store, to_date, local_date, local_month_key,
+    decode_plist_array, decode_json_list, StoreError,
+)
 mcp = FastMCP("media-tracker")
 
 # Core Data Z_ENT values (entity -> int). MediaItem is 6.
+# NOTE: do not hardcode TVEpisode's Z_ENT — Core Data renumbers entities between
+# model builds (episodes have been seen at both 13 and 14). Episode queries
+# deliberately skip the Z_ENT filter since ZTVEPISODE only holds episode rows.
 MEDIA_ITEM_ENT = 6
-TV_EPISODE_ENT = 13
 MEDIA_COLLECTION_ENT = 5
 
 VALID_STATES = {"Wishlist", "Active", "Completed", "On Hold", "Dropped", "Rewatching"}
@@ -25,7 +30,7 @@ VALID_MOODS = {"Cozy", "Intense", "Trippy", "Epic", "Sad", "Chill"}
 VALID_TYPES = {"Movie", "TV Show"}
 VALID_SORTS = {
     "interaction", "added", "updated", "release",
-    "nextAiring", "title", "loved",
+    "nextAiring", "title", "loved", "watched",
 }
 
 
@@ -144,6 +149,7 @@ def _row_to_item(row) -> dict:
         "nextAiringDate": to_date(row["ZCACHEDNEXTAIRINGDATE"]),
         "dateAdded": to_date(row["ZDATEADDED"]),
         "lastInteraction": to_date(row["ZLASTINTERACTIONDATE"]),
+        "lastStateChangeDate": to_date(row["ZLASTSTATECHANGEDATE"]),
         "lastUpdated": to_date(row["ZLASTUPDATED"]),
     }
 
@@ -160,6 +166,7 @@ def _sort_key(item: dict, sort_by: str):
         "release": "ZRELEASEDATE",
         "nextAiring": "ZCACHEDNEXTAIRINGDATE",
         "title": "ZTITLE",
+        "watched": "ZLASTSTATECHANGEDATE",
     }.get(sort_by)
     if sort_by == "loved":
         return -1  # handled separately
@@ -179,6 +186,8 @@ def search_titles(
     language: str = "",
     type: str = "",
     is_upcoming: bool = False,
+    watched_from: str = "",
+    watched_to: str = "",
     sort_by: str = "interaction",
     order: str = "desc",
     limit: int = 50,
@@ -187,7 +196,12 @@ def search_titles(
 
     Filters: query (title contains), state, taste, mood, genre, network,
     language (code like 'en'/'hi'/'te'), type ('Movie'/'TV Show'), is_upcoming.
-    Sort by: interaction, added, updated, release, nextAiring, title, loved.
+    Date filters on lastStateChangeDate (half-open month interval, evaluated in
+    the machine's local timezone to match the app's Calendar.current grouping):
+    watched_from (inclusive, e.g. '2026-05-01') and watched_to (exclusive,
+    e.g. '2026-06-01'). E.g. watched in May 2026 = watched_from='2026-05-01'
+    watched_to='2026-06-01'.
+    Sort by: interaction, added, updated, release, nextAiring, title, loved, watched.
     order: 'asc' or 'desc'.
     """
     if sort_by not in VALID_SORTS:
@@ -229,6 +243,10 @@ def search_titles(
         items = [i for i in items if genre.lower() in {g.lower() for g in i["genres"]}]
     if network:
         items = [i for i in items if network.lower() in (i["network"] or "").lower()]
+    if watched_from:
+        items = [i for i in items if (d := local_date(i["lastStateChangeDate"])) and d >= watched_from]
+    if watched_to:
+        items = [i for i in items if (d := local_date(i["lastStateChangeDate"])) and d < watched_to]
 
     if sort_by == "loved":
         items = [i for i in items if i["taste"] == "Love"]
@@ -240,6 +258,7 @@ def search_titles(
             "interaction": "lastInteraction", "added": "dateAdded",
             "updated": "lastUpdated", "release": "releaseDate",
             "nextAiring": "nextAiringDate", "title": "title",
+            "watched": "lastStateChangeDate",
         }.get(sort_by, "lastInteraction")
         items.sort(key=lambda i: i[field] or "", reverse=(order == "desc"))
 
@@ -262,14 +281,17 @@ def get_title_detail(id: str) -> dict:
     item["castDetail"] = decode_json_list(row["ZSTOREDCAST"])
 
     # Watch progress: count watched/total episodes.
+    # Note: no Z_ENT filter here — ZTVEPISODE only contains TVEpisode rows, and
+    # hardcoding an entity id (e.g. 13) breaks when Core Data renumbers Z_ENT.
     if item["type"] == "TV Show":
+        show_pk = int(id.split("_")[-1]) if "_" in id else 0
         ep_count = conn.execute(
-            "SELECT COUNT(*) FROM ZTVEPISODE WHERE Z_ENT = ? AND ZSHOWID = ?",
-            (TV_EPISODE_ENT, int(id.split("_")[-1]) if "_" in id else 0),
+            "SELECT COUNT(*) FROM ZTVEPISODE WHERE ZSHOWID = ?",
+            (show_pk,),
         ).fetchone()[0]
         watched = conn.execute(
-            "SELECT COUNT(*) FROM ZTVEPISODE WHERE Z_ENT = ? AND ZSHOWID = ? AND ZISWATCHED = 1",
-            (TV_EPISODE_ENT, int(id.split("_")[-1]) if "_" in id else 0),
+            "SELECT COUNT(*) FROM ZTVEPISODE WHERE ZSHOWID = ? AND ZISWATCHED = 1",
+            (show_pk,),
         ).fetchone()[0]
         item["episodeTotal"] = ep_count
         item["episodeWatched"] = watched
@@ -592,6 +614,56 @@ def watch_history(limit: int = 20, language: str = "", taste: str = "") -> dict:
     if taste:
         items = [i for i in items if i["taste"] == taste]
     return {"count": len(items), "items": items[:limit]}
+
+
+@mcp.tool()
+def monthly_watch_activity(year: int = 2026) -> dict:
+    """Movies and TV series watched per month in a given year.
+
+    Movies are counted by lastStateChangeDate (the date they were marked
+    Completed). TV series are counted by the dates their episodes were actually
+    watched (ZTVEPISODE.ZWATCHEDDATE): a show counts toward a month when >=1
+    of its episodes was watched that month, and episodes tallies raw watched
+    episodes. All months are evaluated in the machine's local timezone to match
+    the app's Calendar.current grouping.
+    """
+    conn = _conn()
+    months: dict[str, dict] = {}
+
+    movie_rows = conn.execute(
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZTYPEVALUE = 'Movie' AND ZSTATEVALUE = 'Completed'",
+        (MEDIA_ITEM_ENT,),
+    ).fetchall()
+    for r in movie_rows:
+        k = local_month_key(r["ZLASTSTATECHANGEDATE"])
+        if k and k.startswith(f"{year}-"):
+            months.setdefault(k, {"movies": 0, "shows": 0, "episodes": 0})["movies"] += 1
+
+    # Distinct shows with >=1 episode watched per month + raw episode counts.
+    # No Z_ENT filter: ZTVEPISODE only contains TVEpisode rows (hardcoding the
+    # id breaks when Core Data renumbers Z_ENT).
+    show_ids: dict[str, set] = {}
+    ep_rows = conn.execute(
+        "SELECT * FROM ZTVEPISODE WHERE ZISWATCHED = 1 AND ZWATCHEDDATE IS NOT NULL",
+    ).fetchall()
+    for e in ep_rows:
+        k = local_month_key(e["ZWATCHEDDATE"])
+        if k and k.startswith(f"{year}-"):
+            month_stats = months.setdefault(k, {"movies": 0, "shows": 0, "episodes": 0})
+            month_stats["episodes"] += 1
+            show_ids.setdefault(k, set()).add(e["ZSHOWID"])
+
+    for k, ids in show_ids.items():
+        months[k]["shows"] = len(ids)
+
+    return {
+        "year": year,
+        "timezone": "local",
+        "months": [
+            {"month": k, **months[k]}
+            for k in sorted(months)
+        ],
+    }
 
 
 @mcp.tool()
