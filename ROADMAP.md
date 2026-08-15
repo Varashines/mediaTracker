@@ -1,79 +1,57 @@
-# MediaTracker — GitHub Enhancement Roadmap
+# MediaTracker — Roadmap
 
-Phase-gated plan for getting more out of GitHub on this repo. Each phase is
-self-contained and shippable in one sitting.
+What's done, what's next. GitHub plumbing is largely complete; the focus now is
+product features.
 
----
+## Done
 
-## Phase 1 — CI gates (biggest win, do first)
+### CI & process
+- [x] `ci.yml` — `swift build` + `swift test` on push/PR (`.build` cached).
+      Build is the hard gate. Test step stays `continue-on-error`: the known
+      SwiftData in-memory teardown race crashes full-suite runs (all assertions
+      pass; Swift issue, not ours — not actionable right now).
+- [x] **Branch protection on `main`** — requires `build-and-test`, linear history.
+- [x] **CodeQL** (weekly + PRs) + **secret scanning** (public repo, default on).
+- [x] PR template, `CONTRIBUTING.md`, labels (`enhancement`, `bug`, `perf`,
+      `concurrency`, `tech-debt`), milestones (`8.1.1`, `8.2.0`, `9.0.0`).
+- [x] Auto-merge — **not enabled**: repo setting `enablePullRequestAutoMerge`
+      is off; we merge manually after CI passes. (Optional to flip on.)
 
-Currently nothing verifies code before merge. Goal: main is protected and every
-PR is "green or blocked".
+### Release
+- [x] `release.yml` (v-tags → both-arch DMGs + GitHub release, auto notes) and
+      `build-only.yml` (manual DMG artifacts).
+- [x] ~~Notarization~~ **Dropped** — free Personal Team rejected (HTTP 403);
+      requires paid membership. DMGs stay ad-hoc signed.
 
-- [x] **Add `ci.yml`** — `swift build` + `swift test` on every `push`/`pull_request`
-      with `.build` caching. Build is the hard gate; the test step is
-      `continue-on-error` because of the known SwiftData teardown race (all
-      assertions pass; see `AGENTS.md`).
-- [ ] **Branch protection on `main`** — not applied yet (repo setting). See
-      `gh api` commands below.
-- [ ] **Auto-merge** for PRs that pass checks (`gh pr merge --auto`).
+### Tech debt (audit)
+- [x] `#8` locks standardized on `OSAllocatedUnfairLock`; `#6` single
+      `modelContainer`; `#1` 2000-item scan cap.
+- [x] `#7` API keys — **reverted to `UserDefaults`** (the Keychain read failed in
+      dev builds); `KeychainStore` is now a one-time migrate-back helper.
 
-### Branch protection (run once)
+### Features shipped
+- [x] **Year in Review** sidebar view: month heatmap, day/month overview,
+      series-first stats, discovery-style taste cards (genres affinity, networks
+      with logos, ranked actors, languages).
+- [x] **MediaTracker MCP server** (`Tools/MediaTrackerMCP`) — read-only library
+      search + insights over the SwiftData store.
 
-```bash
-gh api -X PUT repos/Varashines/mediaTracker/branches/main/protection \
-  -f required_status_checks='[{"context":"build-and-test"}]' \
-  -f enforce_admins=false \
-  -f required_pull_request_reviews=null \
-  -f restrictions=null \
-  -f required_linear_history=true
-```
+## Next — v9 "Arc"
 
-## Phase 2 — Release polish
+- [ ] **Weekly digest notification** — see `PLAN-WeeklyDigest.md`.
+- [ ] **v9.0.0 release** — tag `v9.0.0`, codename **"Arc"** in About screen,
+      auto release notes from the PRs since `v8.1.1`.
+- [ ] (Optional) **Wrapped share card** — exportable Year-in-Review image.
 
-- [x] ~~Notarization~~ **Dropped** — Apple's notary service rejects free Personal
-      Teams (HTTP 403); requires a paid Developer Program membership. DMGs stay
-      ad-hoc signed; users right-click → Open. Revisit only if you join the
-      program.
-- [x] **Milestones** — `8.1.1`, `8.2.0`, `9.0.0` created. Tag PRs to a milestone so
-      the release has a scope; `release.yml` already uses
-      `generate_release_notes: true`.
-- [ ] **Version bump consistency** — `release.yml` derives the version from the
-      tag (`${GITHUB_REF_NAME#v}`); make milestone names match tags.
+## Explicitly NOT doing (for now)
 
-## Phase 3 — Security & repo hygiene
+- **iCloud / CloudKit sync** — too big, no.
+- **Widgets** — no.
+- **Streak stat** — no.
+- **Swift test hard gate** — blocked by the SwiftData teardown crash; can't fix
+  without upstream changes.
 
-- [x] **CodeQL workflow** — `.github/workflows/codeql.yml` added (weekly + PRs).
-      Repo is public so Advanced Security is free; just **enable** code scanning
-      in Settings → Code security → Code scanning.
-- [x] **Secret scanning** — enabled by default (public repo); verify in
-      Settings → Code security & analysis.
-- [x] **PR template + `CONTRIBUTING.md`** — added `.github/pull_request_template.md`
-      and `CONTRIBUTING.md`.
-- [x] **Labels** — `enhancement`, `bug`, `perf`, `concurrency`, `tech-debt`
-      created.
-- [x] **Audit follow-ups (tech debt):**
-      - `#7` API keys moved from `UserDefaults` to the **Keychain**
-        (`KeychainStore`, migrated at launch).
-      - `#8` Lock primitives standardized on `OSAllocatedUnfairLock`
-        (`BadgeEngine`, `DateUtils`).
-      - `#6` Collapsed the duplicate `modelContainer` storage in `DataService`
-        (single `@MainActor` static).
-      - `#1` Capped the in-memory filter scan at 2000 items (matches
-        `ARCHITECTURE.md`).
+## Deferred / optional
 
-## Phase 4 — Community / scale (optional)
-
-- [ ] **Discussions** — if you want a place for feature requests/feedback.
-- [ ] **Homebrew cask** — alternative distribution once there's an audience.
-- [ ] **Developer ID cert** — if you ever pay for the program, swap ad-hoc
-      signing for a Developer ID certificate and get clean Gatekeeper launches.
-- [ ] **GitHub Pages docs** — only if there's content worth documenting.
-
----
-
-## Deferred / not planned
-
-- Audit `#9` (thermal abort drops in-flight tasks) — correct as-is; add a
-  clarifying comment if touched.
+- Discussions, Homebrew cask, GitHub Pages docs, Developer ID cert (paid).
 - Dependabot — nothing to watch (zero external packages).

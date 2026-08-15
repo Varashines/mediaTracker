@@ -206,6 +206,82 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(baseID)-day1", "\(baseID)-day2"])
     }
 
+    // MARK: - Weekly Digest
+
+    private static let weeklyDigestID = "weekly-digest"
+
+    /// Schedules the next weekly digest (one-shot so the counts are computed
+    /// fresh at schedule time; re-scheduled on launch and when the user taps it).
+    func scheduleWeeklyDigest(weekday: Int, hour: Int, minute: Int) async {
+        guard isProperlyBundled else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.weeklyDigestID])
+
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+        guard let container = modelContainer else { return }
+
+        let service = WeeklyDigestService(modelContainer: container)
+        let digest = await service.digest()
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your Week in Review"
+        content.body = digestBody(digest)
+        content.sound = .default
+        content.userInfo = ["ITEM_TYPE": "weekly_digest"]
+
+        let calendar = Calendar.current
+        let todayWeekday = calendar.component(.weekday, from: Date())
+        var daysAhead = weekday - todayWeekday
+        if daysAhead <= 0 { daysAhead += 7 }
+        guard let next = calendar.date(byAdding: .day, value: daysAhead, to: Date()) else { return }
+
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: next)
+        components.hour = hour
+        components.minute = minute
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: Self.weeklyDigestID, content: content, trigger: trigger)
+
+        do {
+            try await center.add(request)
+            AppLogger.info("✅ Scheduled weekly digest: \(digest.shows) shows, \(digest.movies) movies", logger: AppLogger.notifications)
+        } catch {
+            AppErrorState.shared.surfaceError("Failed to schedule weekly digest: \(error.localizedDescription)")
+        }
+    }
+
+    func cancelWeeklyDigest() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.weeklyDigestID])
+    }
+
+    /// Re-schedules the weekly digest from Settings (or cancels if disabled).
+    /// Also refreshes the counts on app launch.
+    func rescheduleWeeklyDigestIfNeeded() async {
+        guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue) else {
+            cancelWeeklyDigest()
+            return
+        }
+        let weekday = UserDefaults.standard.integer(forKey: UserDefaultsKeys.weeklyDigestWeekday.rawValue)
+        let storedTime = UserDefaults.standard.double(forKey: UserDefaultsKeys.weeklyDigestTime.rawValue)
+        let totalSeconds = storedTime > 0 ? storedTime : (19 * 3600)
+        await scheduleWeeklyDigest(
+            weekday: weekday == 0 ? 1 : weekday,
+            hour: Int(totalSeconds) / 3600,
+            minute: (Int(totalSeconds) % 3600) / 60
+        )
+    }
+
+    private func digestBody(_ digest: WeeklyDigest) -> String {
+        var parts = [
+            "\(digest.shows) show\(digest.shows == 1 ? "" : "s")",
+            "\(digest.movies) movie\(digest.movies == 1 ? "" : "s")"
+        ]
+        if !digest.topShows.isEmpty {
+            parts.append("including \(digest.topShows.joined(separator: ", "))")
+        }
+        return "You watched \(parts.joined(separator: " · ")) this week."
+    }
+
     func getPendingNotifications() async -> [UNNotificationRequest] {
         await UNUserNotificationCenter.current().pendingNotificationRequests()
     }
@@ -276,13 +352,19 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                 completionHandler()
                 return
             }
-            
+
             let season = userInfo["SEASON_NUMBER"] as? Int
             let episode = userInfo["EPISODE_NUMBER"] as? Int
-            
+
             Task {
                 let actionService = BackgroundActionService(modelContainer: container)
                 try? await actionService.markAsWatched(itemID: itemID, type: itemType, season: season, episode: episode)
+                completionHandler()
+            }
+        } else if userInfo["ITEM_TYPE"] as? String == "weekly_digest" {
+            // Refresh next week's counts when the digest is opened.
+            Task {
+                await self.rescheduleWeeklyDigestIfNeeded()
                 completionHandler()
             }
         } else {

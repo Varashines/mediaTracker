@@ -11,6 +11,9 @@ struct AboutSection: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    /// Codename for this release line (v9 = "Arc").
+    private var codename: String { "Arc" }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             SettingsCard {
@@ -24,7 +27,7 @@ struct AboutSection: View {
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
                             Text("MediaTracker")
                                 .font(AppTheme.Font.titleMedium)
-                            Text("Version \(appVersion) (\(buildNumber))")
+                            Text("Version \(appVersion) (\(buildNumber)) — \"\(codename)\"")
                                 .font(AppTheme.Font.label)
                                 .foregroundStyle(.secondary)
                         }
