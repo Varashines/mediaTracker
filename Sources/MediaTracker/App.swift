@@ -180,6 +180,7 @@ struct MediaTrackerApp: App {
         URLCache.shared = cache
 
         Task { await NotificationManager.shared.requestPermission() }
+        Task { await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded() }
     }
 
     @Environment(\.scenePhase) private var scenePhase

@@ -9,6 +9,9 @@ struct ServicesSection: View {
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
     @AppStorage("notifications_time") private var notificationTime: Double = 9 * 3600
+    @AppStorage(UserDefaultsKeys.weeklyDigestEnabled.rawValue) private var weeklyDigestEnabled = false
+    @AppStorage(UserDefaultsKeys.weeklyDigestWeekday.rawValue) private var weeklyDigestWeekday = 1
+    @AppStorage(UserDefaultsKeys.weeklyDigestTime.rawValue) private var weeklyDigestTime: Double = 19 * 3600
 
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
@@ -67,6 +70,39 @@ struct ServicesSection: View {
                             ), displayedComponents: .hourAndMinute)
                             .labelsHidden()
                             .controlSize(.small)
+                        }
+
+                        SettingsToggleRow(title: "Weekly Digest", subtitle: "Your shows & movies, every week", showDivider: weeklyDigestEnabled, isOn: $weeklyDigestEnabled)
+                            .onChange(of: weeklyDigestEnabled) { _, _ in
+                                Task { await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded() }
+                            }
+
+                        if weeklyDigestEnabled {
+                            SettingsLabeledRow(title: "Digest Day", subtitle: nil, showDivider: true) {
+                                Picker("", selection: $weeklyDigestWeekday) {
+                                    ForEach(1...7, id: \.self) { weekday in
+                                        Text(Self.weekdayName(weekday)).tag(weekday)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                                .frame(width: 120)
+                            }
+                            .onChange(of: weeklyDigestWeekday) { _, _ in
+                                Task { await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded() }
+                            }
+
+                            SettingsLabeledRow(title: "Digest Time", subtitle: nil, showDivider: true) {
+                                DatePicker("", selection: Binding(
+                                    get: { Date(timeIntervalSince1970: weeklyDigestTime) },
+                                    set: { weeklyDigestTime = $0.timeIntervalSince1970.truncatingRemainder(dividingBy: TimeInterval.secondsInDay) }
+                                ), displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                                .controlSize(.small)
+                            }
+                            .onChange(of: weeklyDigestTime) { _, _ in
+                                Task { await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded() }
+                            }
                         }
 
                         SettingsRow(title: "Reschedule", subtitle: "Refresh notification queue", showDivider: false) {
@@ -175,6 +211,11 @@ struct ServicesSection: View {
             .padding(.horizontal, AppTheme.Spacing.medium)
             .padding(.vertical, AppTheme.Spacing.small)
         }
+    }
+
+    private static func weekdayName(_ weekday: Int) -> String {
+        let names = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        return weekday >= 1 && weekday <= 7 ? names[weekday] : "Sunday"
     }
 
     private func channelChip(_ title: String, isOn: Binding<Bool>) -> some View {

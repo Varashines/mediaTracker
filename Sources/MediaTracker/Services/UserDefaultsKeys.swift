@@ -27,6 +27,9 @@ enum UserDefaultsKeys: String {
     case notificationsMovies = "notifications_movies"
     case notificationsTV = "notifications_tv"
     case notificationsTime = "notifications_time"
+    case weeklyDigestEnabled = "weekly_digest_enabled"
+    case weeklyDigestWeekday = "weekly_digest_weekday"
+    case weeklyDigestTime = "weekly_digest_time"
     
     // Discovery
     case hiddenStudios = "hidden_studios"
