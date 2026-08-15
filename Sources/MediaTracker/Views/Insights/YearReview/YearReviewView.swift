@@ -36,7 +36,7 @@ struct YearReviewView: View {
                 ContentUnavailableView(
                     "No Watch History",
                     systemImage: "calendar",
-                    description: Text("No viewing data recorded for \(Calendar.current.component(.year, from: Date())).")
+                    description: Text("No viewing data recorded for \(String(Calendar.current.component(.year, from: Date()))).")
                 )
             }
         }
@@ -130,7 +130,7 @@ private struct YearHeroSection: View {
         HStack(alignment: .top, spacing: 0) {
             // Left: year + descriptor
             VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                Text("\(review.year)")
+                Text(String(review.year))
                     .font(.system(size: 72, weight: .heavy, design: .rounded))
                     .foregroundStyle(AppTheme.Colors.accent)
                     .lineLimit(1)
@@ -218,19 +218,38 @@ private struct YearCalendarSection: View {
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 12, weight: .bold))
-                    .padding(6)
-                    .background(Color.primary.opacity(0.06), in: Circle())
-                    .contentShape(Circle())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
 
             Spacer()
 
-            Text(monthLabel(selectedMonth))
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            let isDaySelected = selectedDay != nil
+
+            Button {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    selectedDay = nil
+                }
+            } label: {
+                Text(monthLabel(selectedMonth))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(isDaySelected ? AppTheme.Colors.accent : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule().fill(isDaySelected
+                            ? AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.18 : 0.12)
+                            : Color.primary.opacity(0.06))
+                    }
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -239,17 +258,21 @@ private struct YearCalendarSection: View {
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .padding(6)
-                    .background(Color.primary.opacity(0.06), in: Circle())
-                    .contentShape(Circle())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(selectedMonth >= calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!))
         }
     }
 
     private func changeMonth(by value: Int) {
         withAnimation(AppTheme.Animation.springSnappy) {
             if let newMonth = calendar.date(byAdding: .month, value: value, to: selectedMonth) {
+                guard newMonth <= Date() else { return }
                 selectedMonth = newMonth
                 if let day = selectedDay, !calendar.isDate(day, equalTo: newMonth, toGranularity: .month) {
                     selectedDay = nil
@@ -259,7 +282,7 @@ private struct YearCalendarSection: View {
     }
 
     private func monthLabel(_ month: Date) -> String {
-        "\(month.formatted(.dateTime.month(.wide))), \(calendar.component(.year, from: month))"
+        "\(month.formatted(.dateTime.month(.wide))), \(String(calendar.component(.year, from: month)))"
     }
 
     private var dayGrid: some View {
@@ -490,7 +513,7 @@ private struct MonthDetailPanel: View {
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .kerning(1.2)
                         .foregroundStyle(AppTheme.Colors.accent)
-                    Text("\(month.formatted(.dateTime.month(.wide))), \(Calendar.current.component(.year, from: month))")
+                    Text("\(month.formatted(.dateTime.month(.wide))), \(String(Calendar.current.component(.year, from: month)))")
                         .font(.system(size: 32, weight: .heavy, design: .rounded))
                         .foregroundStyle(.primary)
                 }
@@ -871,7 +894,7 @@ private struct YearTasteSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            Text("YOUR \(review.year) TASTE")
+            Text("YOUR \(String(review.year)) TASTE")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .kerning(1.2)
                 .foregroundStyle(AppTheme.Colors.accent)
