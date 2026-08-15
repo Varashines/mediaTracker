@@ -53,12 +53,15 @@ final class YearInReviewTests: XCTestCase {
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
-        XCTAssertEqual(review.releasedMovies.map(\.title), ["2026 Flick"])
-        XCTAssertEqual(review.unknownReleaseCount, 1)
+        let allTitles = review.titlesByDay.values.flatMap { $0 }.map(\.title)
+        XCTAssertTrue(allTitles.contains("2026 Flick"))
+        XCTAssertTrue(allTitles.contains("2025 Flick")) // completed this year
+        XCTAssertFalse(allTitles.contains("Unwatched"))
+        XCTAssertTrue(allTitles.contains("No Date"))    // release date irrelevant
     }
 
     @MainActor
-    func testTVShowsReleased2026AppearWhenAnyEpisodeWatched() async {
+    func testTVShowsWatched2026AppearInTitlesByDay() async {
         let container = makeContainer()
         let context = container.mainContext
 
@@ -69,7 +72,8 @@ final class YearInReviewTests: XCTestCase {
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
-        XCTAssertEqual(review.releasedTVShows.map(\.title), ["2026 Show"])
+        let titles = review.titlesByDay[Calendar.current.startOfDay(for: date(2026, 3, 10))] ?? []
+        XCTAssertEqual(titles.map(\.title), ["2026 Show"])
     }
 
     @MainActor
@@ -150,7 +154,7 @@ final class YearInReviewTests: XCTestCase {
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
-        XCTAssertEqual(review.releasedMovies.count, 6)
+        XCTAssertEqual(review.totalMovies, 6)
         XCTAssertEqual(review.topGenres.map(\.name), ["Sci-Fi"])
         XCTAssertFalse(review.topGenres.contains { $0.name == "Romance" })
         XCTAssertEqual(review.topNetworks.map(\.name), ["Netflix"])
