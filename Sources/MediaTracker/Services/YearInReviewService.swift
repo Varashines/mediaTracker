@@ -56,6 +56,7 @@ struct YearInReview: Sendable {
     let titlesByDay: [Date: [YearWatchedTitle]]
     let topGenres: [(name: String, score: Double, count: Int)]
     let topNetworks: [(name: String, count: Int, logoPath: String?)]
+    let topLanguages: [(name: String, score: Double, count: Int)]
     let topActors: [ScoredPerson]
     let totalMinutes: Int
     let totalEpisodes: Int
@@ -124,6 +125,7 @@ struct YearInReview: Sendable {
             titlesByDay: [:],
             topGenres: [],
             topNetworks: [],
+            topLanguages: [],
             topActors: [],
             totalMinutes: 0,
             totalEpisodes: 0,
@@ -145,7 +147,7 @@ actor YearInReviewService {
     /// badge/cast blobs for every library item on each visit.
     nonisolated(unsafe) private static let reviewItemProperties: [PartialKeyPath<MediaItem>] = [
         \.id, \.title, \.posterURL, \.customPosterURL, \.typeValue, \.tasteValue,
-        \.cachedGenres, \.cachedNetwork, \.cachedNetworkLogoPath, \.cachedSeasonCount, \.storedCast
+        \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.cachedSeasonCount, \.storedCast
     ]
 
     func compute(year: Int) async -> YearInReview {
@@ -191,7 +193,7 @@ actor YearInReviewService {
         var movieDescriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
         )
-        movieDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedRuntime, \.lastStateChangeDate, \.tasteValue, \.posterURL, \.customPosterURL, \.cachedGenres, \.cachedNetwork, \.cachedNetworkLogoPath, \.storedCast]
+        movieDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedRuntime, \.lastStateChangeDate, \.tasteValue, \.posterURL, \.customPosterURL, \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.storedCast]
         let completedMovies = (try? modelContext.fetch(movieDescriptor)) ?? []
 
         var titlesByDay: [Date: [YearWatchedTitle]] = [:]
@@ -248,13 +250,14 @@ actor YearInReviewService {
         var genreTaste: [String: CategoryStats] = [:]
         var networkCounts: [String: Int] = [:]
         var networkLogos: [String: String] = [:]
+        var languageTaste: [String: CategoryStats] = [:]
         var actorTaste: [String: CategoryStats] = [:]
         let watchedTVItems = itemByShowID.filter { watchedShowIDs.contains($0.key) }.values
         for item in watchedTVItems {
-            accumulateTaste(item, into: &genreTaste, &networkCounts, &networkLogos, &actorTaste, aliasMap: aliasMap)
+            accumulateTaste(item, into: &genreTaste, &networkCounts, &networkLogos, &languageTaste, &actorTaste, aliasMap: aliasMap)
         }
         for movie in completedMovies {
-            accumulateTaste(movie, into: &genreTaste, &networkCounts, &networkLogos, &actorTaste, aliasMap: aliasMap)
+            accumulateTaste(movie, into: &genreTaste, &networkCounts, &networkLogos, &languageTaste, &actorTaste, aliasMap: aliasMap)
         }
 
         let topGenres = genreTaste.compactMap { name, val -> (String, Double, Int)? in
@@ -273,6 +276,12 @@ actor YearInReviewService {
             $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
         }.prefix(8).map { ($0.0, $0.1, networkLogos[$0.0]) }
 
+        let topLanguages = languageTaste.compactMap { code, val -> (String, Double, Int)? in
+            let score = val.affinity(cutoff: 1)
+            guard score > 0 else { return nil }
+            return (LanguageUtils.languageName(for: code), score, val.total)
+        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1, $0.2) }
+
         let busiestDay = activity.max { $0.value.minutes < $1.value.minutes }.map { ($0.key, $0.value.minutes) }
 
         let result = YearInReview(
@@ -281,6 +290,7 @@ actor YearInReviewService {
             titlesByDay: titlesByDay,
             topGenres: topGenres,
             topNetworks: topNetworks,
+            topLanguages: topLanguages,
             topActors: Array(topActors),
             totalMinutes: activity.values.reduce(0) { $0 + $1.minutes },
             totalEpisodes: totalEpisodes,
@@ -298,11 +308,15 @@ actor YearInReviewService {
         into genreTaste: inout [String: CategoryStats],
         _ networkCounts: inout [String: Int],
         _ networkLogos: inout [String: String],
+        _ languageTaste: inout [String: CategoryStats],
         _ actorTaste: inout [String: CategoryStats],
         aliasMap: [String: String]
     ) {
         let titleWeight = TasteMath.titleWeight(for: item)
         TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
+        if let language = item.cachedLanguage, !language.isEmpty {
+            TasteMath.updateTaste(&languageTaste, language, item.tasteValue, weight: titleWeight)
+        }
         TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
         if let rawNetwork = item.cachedNetwork {
             let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []

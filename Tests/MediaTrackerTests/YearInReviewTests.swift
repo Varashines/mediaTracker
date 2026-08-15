@@ -138,6 +138,7 @@ final class YearInReviewTests: XCTestCase {
             movie.tasteValue = "Love"
             movie.cachedGenres = ["Sci-Fi"]
             movie.cachedNetwork = "Netflix"
+            movie.cachedLanguage = "ko"
             movie.storedCast = [
                 SimpleCastMember(id: "a\(i)", name: "Actor A", characterName: "Role", profileURL: nil, order: 0),
                 SimpleCastMember(id: "b\(i)", name: "Actor B", characterName: "Role", profileURL: nil, order: 1)
@@ -158,6 +159,7 @@ final class YearInReviewTests: XCTestCase {
         XCTAssertEqual(review.topGenres.map(\.name), ["Sci-Fi"])
         XCTAssertFalse(review.topGenres.contains { $0.name == "Romance" })
         XCTAssertEqual(review.topNetworks.map(\.name), ["Netflix"])
+        XCTAssertEqual(review.topLanguages.map(\.name), ["Korean"])
         XCTAssertEqual(review.topActors.map(\.name), ["Actor A", "Actor B"])
     }
 
