@@ -42,7 +42,12 @@ struct CategoryRouterView: View {
             ? .identity
             : .opacity
 
-        if viewModel.filter.selectedCategory == .discover {
+        if sidebarSelection == .yearReview {
+            YearReviewView(modelContainer: modelContainer) { id in
+                viewModel.navigationPath.append(id)
+            }
+            .transition(slideTransition)
+        } else if viewModel.filter.selectedCategory == .discover {
             DiscoveryHubView(namespace: posterNamespace, viewModel: viewModel) { filter in
                 viewModel.navigationPath.append(filter)
             }
@@ -53,11 +58,6 @@ struct CategoryRouterView: View {
         } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
                 .transition(slideTransition)
-        } else if sidebarSelection == .yearReview {
-            YearReviewView(modelContainer: modelContainer) { id in
-                viewModel.navigationPath.append(id)
-            }
-            .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .smartHub && viewModel.collection.selectedCollectionID == nil {
             SmartCollectionsHubView(selection: $sidebarSelection, refreshID: refreshID)
                 .transition(slideTransition)
