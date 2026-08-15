@@ -102,7 +102,6 @@ final class YearInReviewTests: XCTestCase {
         XCTAssertEqual(review.totalEpisodes, 3)
         XCTAssertEqual(review.totalMovies, 1)
         XCTAssertEqual(review.totalDaysWatched, 2)
-        XCTAssertEqual(review.longestStreak, 1)
         XCTAssertEqual(review.busiestDay?.minutes, 210)
     }
 
@@ -237,7 +236,7 @@ final class YearInReviewTests: XCTestCase {
         let augStats = review.monthStats(for: date(2026, 8, 1))
 
         XCTAssertEqual(augStats.movies, 1)
-        XCTAssertEqual(augStats.episodes, 2)
+        XCTAssertEqual(augStats.series, 1)
         XCTAssertEqual(augStats.minutes, 200)
 
         let augTitles = review.monthTitles(for: date(2026, 8, 1))

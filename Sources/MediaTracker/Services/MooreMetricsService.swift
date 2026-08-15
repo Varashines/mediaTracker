@@ -79,7 +79,7 @@ class MooreMetricsService {
     private var characteristicsCache: [String: [CharacteristicInfo]] = [:]
 
     private var apiKey: String {
-        KeychainStore.read(UserDefaultsKeys.mmAPIKey.rawValue) ?? ""
+        UserDefaults.standard.string(forKey: UserDefaultsKeys.mmAPIKey.rawValue) ?? ""
     }
 
     var isConfigured: Bool {

@@ -56,7 +56,7 @@ struct HallOfFameView: View {
 
 /// Person rank card: giant outlined rank typography overlapping a Top Cast-style
 /// rectangular card (image left + name/score right).
-private struct PersonRankCard: View {
+struct PersonRankCard: View {
     enum Style {
         case cast
         case director

@@ -32,31 +32,36 @@ struct YearInReview: Sendable {
     let titlesByDay: [Date: [YearWatchedTitle]]
     let releasedMovies: [MediaThumbnailMetadata]
     let releasedTVShows: [MediaThumbnailMetadata]
-    let topGenres: [(name: String, score: Double)]
-    let topNetworks: [(name: String, count: Int)]
+    let topGenres: [(name: String, score: Double, count: Int)]
+    let topNetworks: [(name: String, count: Int, logoPath: String?)]
     let topActors: [ScoredPerson]
     let totalMinutes: Int
     let totalEpisodes: Int
     let totalMovies: Int
+    let totalSeries: Int
     let totalDaysWatched: Int
-    let longestStreak: Int
     let busiestDay: (day: Date, minutes: Int)?
     /// Items whose release date is unknown (excluded from the 2026 sections).
     let unknownReleaseCount: Int
 
-    func monthStats(for month: Date) -> (movies: Int, episodes: Int, minutes: Int) {
+    func monthStats(for month: Date) -> (movies: Int, series: Int, minutes: Int) {
         let calendar = Calendar.current
         var movies = 0
-        var episodes = 0
+        var series = 0
         var minutes = 0
+        var seenSeries = Set<PersistentIdentifier>()
         for (day, act) in activityByDay {
             if calendar.isDate(day, equalTo: month, toGranularity: .month) {
                 movies += act.movies
-                episodes += act.episodes
                 minutes += act.minutes
             }
         }
-        return (movies, episodes, minutes)
+        for title in monthTitles(for: month) {
+            if title.type == .tvShow, seenSeries.insert(title.id).inserted {
+                series += 1
+            }
+        }
+        return (movies, series, minutes)
     }
 
     func monthTitles(for month: Date) -> [YearWatchedTitle] {
@@ -105,8 +110,8 @@ struct YearInReview: Sendable {
             totalMinutes: 0,
             totalEpisodes: 0,
             totalMovies: 0,
+            totalSeries: 0,
             totalDaysWatched: 0,
-            longestStreak: 0,
             busiestDay: nil,
             unknownReleaseCount: 0
         )
@@ -123,6 +128,7 @@ actor YearInReviewService {
         _ item: MediaItem,
         into genreTaste: inout [String: CategoryStats],
         _ networkCounts: inout [String: Int],
+        _ networkLogos: inout [String: String],
         _ actorTaste: inout [String: CategoryStats],
         aliasMap: [String: String]
     ) {
@@ -130,9 +136,13 @@ actor YearInReviewService {
         TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
         TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
         if let rawNetwork = item.cachedNetwork {
-            for network in rawNetwork.commaSeparatedValues {
+            let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
+            for (index, network) in rawNetwork.commaSeparatedValues.enumerated() {
                 let groupedName = aliasMap[network.lowercased()] ?? network
                 networkCounts[groupedName, default: 0] += 1
+                if networkLogos[groupedName] == nil, index < logoPaths.count, !logoPaths[index].isEmpty {
+                    networkLogos[groupedName] = logoPaths[index]
+                }
             }
         }
     }
@@ -174,7 +184,7 @@ actor YearInReviewService {
         var movieDescriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
         )
-        movieDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedRuntime, \.lastStateChangeDate, \.tasteValue, \.posterURL, \.customPosterURL, \.cachedGenres, \.cachedNetwork, \.storedCast]
+        movieDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedRuntime, \.lastStateChangeDate, \.tasteValue, \.posterURL, \.customPosterURL, \.cachedGenres, \.cachedNetwork, \.cachedNetworkLogoPath, \.storedCast]
         let completedMovies = (try? modelContext.fetch(movieDescriptor)) ?? []
 
         var titlesByDay: [Date: [YearWatchedTitle]] = [:]
@@ -258,13 +268,14 @@ actor YearInReviewService {
         // watched episodes in the year). No affinity cutoff — single titles count.
         var genreTaste: [String: CategoryStats] = [:]
         var networkCounts: [String: Int] = [:]
+        var networkLogos: [String: String] = [:]
         var actorTaste: [String: CategoryStats] = [:]
         let watchedTVItems = itemByShowID.filter { watchedShowIDs.contains($0.key) }.values
         for item in watchedTVItems {
-            accumulateTaste(item, into: &genreTaste, &networkCounts, &actorTaste, aliasMap: aliasMap)
+            accumulateTaste(item, into: &genreTaste, &networkCounts, &networkLogos, &actorTaste, aliasMap: aliasMap)
         }
         for movie in completedMovies {
-            accumulateTaste(movie, into: &genreTaste, &networkCounts, &actorTaste, aliasMap: aliasMap)
+            accumulateTaste(movie, into: &genreTaste, &networkCounts, &networkLogos, &actorTaste, aliasMap: aliasMap)
         }
 
         releasedMovies.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
@@ -274,7 +285,7 @@ actor YearInReviewService {
             let score = val.affinity(cutoff: 1)
             guard score > 0 else { return nil }
             return (name, score, val.total)
-        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1) }
+        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1, $0.2) }
 
         let topActors = actorTaste.compactMap { name, val -> ScoredPerson? in
             let score = val.affinity(cutoff: 1)
@@ -284,24 +295,7 @@ actor YearInReviewService {
 
         let topNetworks = networkCounts.sorted {
             $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
-        }.prefix(8).map { ($0.0, $0.1) }
-
-        // 4. Streaks & totals derived from per-day activity.
-        let sortedDays = activity.keys.sorted()
-        var longestStreak = 0
-        var currentStreak = 0
-        var previousDay: Date?
-        for day in sortedDays {
-            if let previous = previousDay,
-               let next = calendar.date(byAdding: .day, value: 1, to: previous),
-               calendar.isDate(day, inSameDayAs: next) {
-                currentStreak += 1
-            } else {
-                currentStreak = 1
-            }
-            longestStreak = max(longestStreak, currentStreak)
-            previousDay = day
-        }
+        }.prefix(8).map { ($0.0, $0.1, networkLogos[$0.0]) }
 
         let busiestDay = activity.max { $0.value.minutes < $1.value.minutes }.map { ($0.key, $0.value.minutes) }
 
@@ -317,8 +311,8 @@ actor YearInReviewService {
             totalMinutes: activity.values.reduce(0) { $0 + $1.minutes },
             totalEpisodes: totalEpisodes,
             totalMovies: totalMovies,
+            totalSeries: watchedTVItems.count,
             totalDaysWatched: activity.count,
-            longestStreak: longestStreak,
             busiestDay: busiestDay,
             unknownReleaseCount: unknownReleaseCount
         )

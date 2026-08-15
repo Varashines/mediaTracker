@@ -2,9 +2,9 @@ import SwiftUI
 import UserNotifications
 
 struct ServicesSection: View {
-    @State private var tmdbApiKey: String
-    @State private var omdbApiKey: String
-    @State private var mmApiKey: String
+    @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
+    @AppStorage("omdb_api_key") private var omdbApiKey = ""
+    @AppStorage(UserDefaultsKeys.mmAPIKey.rawValue) private var mmApiKey = ""
     @AppStorage("notifications_enabled") private var notificationsEnabled = true
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
@@ -16,12 +16,6 @@ struct ServicesSection: View {
     @State private var tmdbValidation: KeyValidationState = .idle
     @State private var omdbValidation: KeyValidationState = .idle
     @Environment(\.colorScheme) var scheme
-
-    init() {
-        _tmdbApiKey = State(initialValue: KeychainStore.read(UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "")
-        _omdbApiKey = State(initialValue: KeychainStore.read(UserDefaultsKeys.omdbAPIKey.rawValue) ?? "")
-        _mmApiKey = State(initialValue: KeychainStore.read(UserDefaultsKeys.mmAPIKey.rawValue) ?? "")
-    }
 
     enum KeyValidationState: Equatable {
         case idle
@@ -37,19 +31,10 @@ struct ServicesSection: View {
                     apiKeyRow("TMDB", subtitle: "Movie & TV metadata", binding: $tmdbApiKey, showKey: $showTMDBKey, link: "https://www.themoviedb.org/settings/api", validation: $tmdbValidation) {
                         await APIClient.shared.validateTMDBKey(key: tmdbApiKey)
                     }
-                    .onChange(of: tmdbApiKey) { _, newValue in
-                        persist(newValue, for: .tmdbAPIKey)
-                    }
                     apiKeyRow("OMDb", subtitle: "Rotten Tomatoes scores", binding: $omdbApiKey, showKey: $showOMDBKey, link: "https://www.omdbapi.com/apikey.aspx", validation: $omdbValidation) {
                         await APIClient.shared.validateOMDBKey(key: omdbApiKey)
                     }
-                    .onChange(of: omdbApiKey) { _, newValue in
-                        persist(newValue, for: .omdbAPIKey)
-                    }
                     apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: $mmApiKey, showKey: $showMMKey, link: "https://www.mooremetrics.com", validation: nil)
-                    .onChange(of: mmApiKey) { _, newValue in
-                        persist(newValue, for: .mmAPIKey)
-                    }
                 }
             }
 
@@ -92,14 +77,6 @@ struct ServicesSection: View {
                     }
                 }
             }
-        }
-    }
-
-    private func persist(_ value: String, for key: UserDefaultsKeys) {
-        if value.isEmpty {
-            KeychainStore.delete(key.rawValue)
-        } else {
-            KeychainStore.write(value, forKey: key.rawValue)
         }
     }
 
