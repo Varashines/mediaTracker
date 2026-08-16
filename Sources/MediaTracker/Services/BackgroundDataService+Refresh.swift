@@ -299,6 +299,10 @@ extension BackgroundDataService {
                     let episodeCount: Int
                     let airDate: String?
                     let episodes: [TVEpisodeResult]
+                    /// TMDB per-episode runtimes keyed by episode number. TVMaze is
+                    /// the episode-list authority, but runtime comes only from TMDB
+                    /// (nil when TMDB has no runtime for an episode).
+                    let tmdbRuntimes: [Int: Int]
                     let seasonCast: [SeasonAggregateCastResult]
                     /// True when episodes came from TVMaze (authoritative). When true,
                     /// stale episodes beyond the TVMaze source are pruned on save.
@@ -340,7 +344,7 @@ extension BackgroundDataService {
                             // Always fetch per-season aggregate credits (new data; existing seasons lack it).
                             let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
                             if skipEpisodeFetch {
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], seasonCast: credits, sourcedFromTVMaze: false)
+                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], tmdbRuntimes: [:], seasonCast: credits, sourcedFromTVMaze: false)
                             }
 
                             // Prefer TVMaze episodes (authoritative). Fall back to TMDB when
@@ -357,7 +361,18 @@ extension BackgroundDataService {
                                     return nil
                                 }
                             }
-                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, seasonCast: credits, sourcedFromTVMaze: usesTVMaze)
+
+                            // Runtime comes from TMDB only (matched by episode number);
+                            // nil when TMDB has no runtime for an episode. Fetch TMDB's
+                            // season when TVMaze supplied the list.
+                            let tmdbRuntimes: [Int: Int]
+                            if usesTVMaze {
+                                let tmdbEps = (try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)) ?? []
+                                tmdbRuntimes = Dictionary(tmdbEps.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
+                            } else {
+                                tmdbRuntimes = Dictionary(episodes.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
+                            }
+                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, tmdbRuntimes: tmdbRuntimes, seasonCast: credits, sourcedFromTVMaze: usesTVMaze)
                         }
                     }
                     var results: [FetchedSeasonData] = []
@@ -399,8 +414,9 @@ extension BackgroundDataService {
                         let epOverview = ep.overview ?? ""
 
                         let matchingMaze = mazeDict["\(sNum)_\(ep.episodeNumber)"]
+                        let runtime = seasonData.tmdbRuntimes[ep.episodeNumber]
 
-                        let episode = episodeByID[epUniqueID] ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: ep.runtime, showID: tmdbID)
+                        let episode = episodeByID[epUniqueID] ?? TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: matchingMaze?.airstamp, runtime: runtime, showID: tmdbID)
                         episode.showID = tmdbID
 
                         if episode.modelContext == nil {
@@ -415,7 +431,7 @@ extension BackgroundDataService {
                             episode.overview = epOverview
                             episode.airDate = ep.airDate
                             episode.airstamp = matchingMaze?.airstamp
-                            episode.runtime = ep.runtime
+                            episode.runtime = runtime
                             episode.updateAirDateValue()
                         }
                     }
