@@ -266,6 +266,7 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
     case year = "Year"
     case category = "Category"
     case watchProvider = "Watch Provider"
+    case dayOfWeek = "Day of Week"
 
     var id: String { self.rawValue }
 
@@ -278,7 +279,15 @@ enum GroupBy: String, CaseIterable, Identifiable, Sendable {
         case .year: return "calendar.badge.clock"
         case .category: return "folder"
         case .watchProvider: return "tv.and.mediabox"
+        case .dayOfWeek: return "calendar"
         }
+    }
+
+    /// Group options the user can choose from in the toolbar picker.
+    /// `.dayOfWeek` is automatic for the "On This Week" smart category and
+    /// is excluded so it never appears as a manual choice.
+    static var pickerOptions: [GroupBy] {
+        allCases.filter { $0 != .dayOfWeek }
     }
 }
 

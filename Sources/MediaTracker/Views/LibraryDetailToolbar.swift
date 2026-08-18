@@ -277,7 +277,7 @@ private struct GroupPickerPopover: View {
             .padding(.horizontal, 14)
 
             VStack(spacing: 2) {
-                ForEach(GroupBy.allCases, id: \.self) { group in
+                ForEach(GroupBy.pickerOptions, id: \.self) { group in
                     PickerOptionRow(
                         icon: group.icon,
                         label: group.rawValue,

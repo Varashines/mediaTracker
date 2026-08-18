@@ -45,16 +45,15 @@ struct FilteredLibraryGridView: View {
     private var groupedByWeekday: [(String, [MediaThumbnailMetadata])] {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "EEEE"
         let grouped = Dictionary(grouping: items) { item -> String in
             guard let date = item.releaseDate else { return "Unknown" }
             return formatter.string(from: date)
         }
+        let calendar = Calendar.current
         return grouped.sorted { lhs, rhs in
-            let lhsDay = dayFormatter.date(from: lhs.key) ?? Date.distantPast
-            let rhsDay = dayFormatter.date(from: rhs.key) ?? Date.distantPast
-            return lhsDay < rhsDay
+            let lhsDate = formatter.date(from: lhs.key) ?? Date.distantPast
+            let rhsDate = formatter.date(from: rhs.key) ?? Date.distantPast
+            return calendar.compare(lhsDate, to: rhsDate, toGranularity: .day) == .orderedAscending
         }.map { ($0.key, $0.value) }
     }
 
@@ -121,7 +120,9 @@ struct FilteredLibraryGridView: View {
                             ScopedInsightsHeader(stats: stats, filterName: filter.name, filterType: filter.type)
                         }
                         if filter.type == .onThisWeek {
-                            ForEach(groupedByWeekday, id: \.0) { dayName, dayItems in
+                            ForEach(Array(groupedByWeekday.enumerated()), id: \.element.0) { groupIdx, group in
+                                let dayName = group.0
+                                let dayItems = group.1
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text(dayName)
                                         .font(AppTheme.Font.heading)
@@ -136,6 +137,13 @@ struct FilteredLibraryGridView: View {
                                                 .equatable()
                                             }
                                             .buttonStyle(.interactive)
+                                            .onAppear {
+                                                let isLastItemInDay = idx == dayItems.count - 1
+                                                let isLastGroup = groupIdx == groupedByWeekday.count - 1
+                                                if isLastItemInDay && isLastGroup {
+                                                    loadMoreItems()
+                                                }
+                                            }
                                         }
                                     }
                                     .padding(.horizontal, AppTheme.Spacing.pageMargin)

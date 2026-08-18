@@ -27,7 +27,8 @@ class FilterState {
     }
 
     var currentGroupBy: GroupBy {
-        categoryGroupBys[selectedCategory] ?? .none
+        if selectedCategory == .onThisWeek { return .dayOfWeek }
+        return categoryGroupBys[selectedCategory] ?? .none
     }
 
     func resetFilters() {

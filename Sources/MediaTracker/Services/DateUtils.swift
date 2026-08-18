@@ -144,9 +144,20 @@ struct DateUtils {
     }
 
     static func sameWeek(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
-        let aComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: a)
-        let bComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: b)
-        return aComps.yearForWeekOfYear == bComps.yearForWeekOfYear && aComps.weekOfYear == bComps.weekOfYear
+        let aYear = calendar.component(.year, from: a)
+        let bYear = calendar.component(.year, from: b)
+        guard aYear != bYear else { return false }
+
+        let aMD = calendar.dateComponents([.month, .day], from: a)
+        guard let aMonth = aMD.month, let aDay = aMD.day else { return false }
+
+        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: b))!
+        for offset in 0..<7 {
+            guard let dayDate = calendar.date(byAdding: .day, value: offset, to: weekStart) else { continue }
+            let dayMD = calendar.dateComponents([.month, .day], from: dayDate)
+            if aMonth == dayMD.month && aDay == dayMD.day { return true }
+        }
+        return false
     }
 
     static func weekdayName(for date: Date, calendar: Calendar = .current) -> String {
@@ -154,5 +165,58 @@ struct DateUtils {
         formatter.calendar = calendar
         formatter.dateFormat = "EEEE"
         return formatter.string(from: date)
+    }
+
+    private static let weekdayDisplayFormatterLock = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
+
+    private static func getWeekdayDisplayFormatter() -> DateFormatter {
+        weekdayDisplayFormatterLock.withLock { formatters in
+            let key = "display"
+            if let formatter = formatters[key] { return formatter.copy() as! DateFormatter }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "EEEE, MMM d"
+            formatter.timeZone = TimeZone.current
+            formatters[key] = formatter
+            return formatter.copy() as! DateFormatter
+        }
+    }
+
+    private static func getWeekdayParseFormatter() -> DateFormatter {
+        weekdayDisplayFormatterLock.withLock { formatters in
+            let key = "parse"
+            if let formatter = formatters[key] { return formatter.copy() as! DateFormatter }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "EEEE, MMM d"
+            formatter.timeZone = TimeZone.current
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatters[key] = formatter
+            return formatter.copy() as! DateFormatter
+        }
+    }
+
+    /// Groups a title by the day of the current week whose month+day matches
+    /// `date`'s month+day. So a title released on Aug 17, 2018 appears under
+    /// "Monday, Aug 17" when the current week's Aug 17 falls on a Monday.
+    static func weekdayDisplayString(for date: Date) -> String {
+        let calendar = Calendar.current
+        let today = Date()
+        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        let targetMD = calendar.dateComponents([.month, .day], from: date)
+        let formatter = getWeekdayDisplayFormatter()
+
+        for offset in 0..<7 {
+            guard let dayDate = calendar.date(byAdding: .day, value: offset, to: weekStart) else { continue }
+            let dayMD = calendar.dateComponents([.month, .day], from: dayDate)
+            if dayMD.month == targetMD.month && dayMD.day == targetMD.day {
+                return formatter.string(from: dayDate)
+            }
+        }
+        return "Unknown"
+    }
+
+    static func weekdayDisplayDate(for key: String) -> Date {
+        getWeekdayParseFormatter().date(from: key) ?? .distantPast
     }
 }
