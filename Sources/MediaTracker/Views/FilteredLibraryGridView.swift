@@ -248,12 +248,13 @@ struct FilteredLibraryGridView: View {
             badge = filter.name
             sortOrder = .recentInteraction
         case .provider: provider = filter.name
+        case .onThisDay: sortOrder = .newestRelease
         }
 
         Task {
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: .all, searchText: "", sortOrder: sortOrder,
+                    category: filter.type == .onThisDay ? .onThisDay : .all, searchText: "", sortOrder: sortOrder,
                     network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: offset
                 )
@@ -345,15 +346,16 @@ struct FilteredLibraryGridView: View {
             case .studio, .network: network = filter.sourceNames ?? [filter.name]
             case .genre: genre = filter.name
             case .language: language = filter.name
-            case .badge: 
+            case .badge:
                 badge = filter.name
                 sortOrder = .recentInteraction
             case .provider: provider = filter.name
+            case .onThisDay: sortOrder = .newestRelease
             }
-            
+
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: .all, searchText: "", sortOrder: sortOrder,
+                    category: filter.type == .onThisDay ? .onThisDay : .all, searchText: "", sortOrder: sortOrder,
                     network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: 0
                 )
@@ -384,15 +386,16 @@ struct FilteredLibraryGridView: View {
         case .language: language = filter.name
         case .badge: badge = filter.name
         case .provider: provider = filter.name
+        case .onThisDay: break
         }
-        
+
         updateTask?.cancel()
         updateTask = Task {
             do {
                 let filterActor = getFilterActor()
                 let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
                     for: id,
-                    category: .all,
+                    category: filter.type == .onThisDay ? .onThisDay : .all,
                     searchText: "",
                     network: network,
                     language: language,
@@ -417,6 +420,8 @@ struct FilteredLibraryGridView: View {
                             switch filter.type {
                             case .badge:
                                 items.sort { ($0.lastInteractionDate ?? Date.distantPast) > ($1.lastInteractionDate ?? Date.distantPast) }
+                            case .onThisDay:
+                                items.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
                             default:
                                 items.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
                             }

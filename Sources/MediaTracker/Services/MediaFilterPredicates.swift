@@ -102,6 +102,10 @@ enum MediaFilterPredicates {
             if hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel != nil && $0.stateValue == state } }
             return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel != nil }
 
+        case .onThisDay:
+            if hasSearch { return #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil && $0.searchableText.localizedStandardContains(search) } }
+            return #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil }
+
         default:
             if hasSearch && hasState { return #Predicate { $0.isSoftDeleted == false && $0.stateValue == state && $0.searchableText.localizedStandardContains(search) && (badgeVal == nil || $0.storedSmartBadgeLabel == badgeVal) && (langVal == nil || $0.cachedLanguage == langVal) } }
             if hasSearch { return #Predicate { $0.isSoftDeleted == false && $0.searchableText.localizedStandardContains(search) && (badgeVal == nil || $0.storedSmartBadgeLabel == badgeVal) && (langVal == nil || $0.cachedLanguage == langVal) } }

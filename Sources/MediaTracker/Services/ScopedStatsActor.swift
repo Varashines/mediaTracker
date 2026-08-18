@@ -60,6 +60,8 @@ actor ScopedStatsActor {
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == name }
         case .provider:
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false }
+        case .onThisDay:
+            descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil }
         }
 
         guard var items = try? modelContext.fetch(descriptor) else {
@@ -72,6 +74,14 @@ actor ScopedStatsActor {
 
         if filter.type == .genre {
             items = items.filter { $0.cachedGenres.contains(name) }
+        }
+
+        if filter.type == .onThisDay {
+            let now = Date()
+            items = items.filter { item in
+                guard let d = item.releaseDate else { return false }
+                return DateUtils.sameMonthDay(d, now)
+            }
         }
 
         guard !items.isEmpty else {

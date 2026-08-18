@@ -25,6 +25,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
     case catchUp = "Catch Up"
     case releaseRadar = "Release Radar"
     case smartUpcoming = "Smart Upcoming"
+    case onThisDay = "On This Day"
 
     var id: String { self.rawValue }
 
@@ -49,6 +50,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .catchUp: return "Catch Up"
         case .releaseRadar: return "Release Radar"
         case .smartUpcoming: return "Premiere Radar"
+        case .onThisDay: return "On This Day"
         }
     }
 
@@ -73,12 +75,13 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .catchUp: return "arrow.uturn.right.circle"
         case .releaseRadar: return "sparkles"
         case .smartUpcoming: return "calendar.badge.clock"
+        case .onThisDay: return "calendar.badge.clock"
         }
     }
 
     var isSmartCategory: Bool {
         switch self {
-        case .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites, .archive:
+        case .releaseRadar, .smartUpcoming, .catchUp, .loved, .binge, .quickBites, .archive, .onThisDay:
             return true
         default:
             return false
@@ -104,6 +107,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .binge: return Color(hex: "F97316") ?? .orange
         case .quickBites: return Color(hex: "A855F7") ?? .purple
         case .catchUp: return Color(hex: "3B82F6") ?? .blue
+        case .onThisDay: return Color(hex: "F59E0B") ?? .orange
         }
     }
 }
@@ -208,6 +212,7 @@ enum FilterType: String, Codable, Hashable, Sendable {
     case language = "Language"
     case badge = "Badge"
     case provider = "Provider"
+    case onThisDay = "On This Day"
 }
 
 enum TasteValue: String, Codable, CaseIterable, Sendable {
