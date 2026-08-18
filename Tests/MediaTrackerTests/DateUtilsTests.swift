@@ -2,6 +2,26 @@ import XCTest
 @testable import MediaTracker
 
 final class DateUtilsTests: XCTestCase {
+    func testSameMonthDay() {
+        let date = DateUtils.parseDate("2026-08-18")!
+        let sameDayDifferentYear = DateUtils.parseDate("1999-08-18")!
+        let differentDay = DateUtils.parseDate("2026-08-19")!
+        let differentMonth = DateUtils.parseDate("2026-09-18")!
+
+        XCTAssertTrue(DateUtils.sameMonthDay(date, date))
+        XCTAssertTrue(DateUtils.sameMonthDay(date, sameDayDifferentYear))
+        XCTAssertFalse(DateUtils.sameMonthDay(date, differentDay))
+        XCTAssertFalse(DateUtils.sameMonthDay(date, differentMonth))
+    }
+
+    func testSameMonthDayLeapDay() {
+        let feb28 = DateUtils.parseDate("2026-02-28")!
+        let feb29Leap = DateUtils.parseDate("2024-02-29")!
+
+        XCTAssertTrue(DateUtils.sameMonthDay(feb29Leap, feb29Leap))
+        XCTAssertFalse(DateUtils.sameMonthDay(feb28, feb29Leap))
+    }
+
     func testParseDate() {
         let date = DateUtils.parseDate("2026-04-20")
         XCTAssertNotNil(date)

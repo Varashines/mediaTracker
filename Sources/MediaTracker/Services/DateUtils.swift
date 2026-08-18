@@ -136,4 +136,10 @@ struct DateUtils {
         let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
         return formatter.date(from: "\(dateStr) 20:00")
     }
+
+    static func sameMonthDay(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
+        let aComps = calendar.dateComponents([.month, .day], from: a)
+        let bComps = calendar.dateComponents([.month, .day], from: b)
+        return aComps.month == bComps.month && aComps.day == bComps.day
+    }
 }

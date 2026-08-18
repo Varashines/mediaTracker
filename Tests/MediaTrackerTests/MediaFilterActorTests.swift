@@ -213,4 +213,52 @@ final class MediaFilterActorTests: XCTestCase {
         XCTAssertEqual(meta.smartBadgeLabel, "NEW")
         XCTAssertEqual(meta.genres, ["Action"])
     }
+
+    @MainActor
+    func testOnThisDayFiltering() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let calendar = Calendar.current
+        let today = Date()
+        let recentYear = calendar.date(byAdding: .year, value: -1, to: today)! // same month/day, previous year
+        let classicYear = calendar.date(byAdding: .year, value: -25, to: today)! // same month/day, 25 years ago
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+
+        // Same month/day, recent year
+        let recent = MediaItem(id: "1", title: "Recent Premier", overview: "", type: .movie)
+        recent.releaseDate = recentYear
+        context.insert(recent)
+
+        // Same month/day, older year
+        let classic = MediaItem(id: "2", title: "Classic Premier", overview: "", type: .tvShow)
+        classic.releaseDate = classicYear
+        context.insert(classic)
+
+        // Different month/day — must be excluded
+        let wrongDay = MediaItem(id: "3", title: "Other Day", overview: "", type: .movie)
+        wrongDay.releaseDate = tomorrow
+        context.insert(wrongDay)
+
+        // Nil releaseDate — must be excluded
+        let noDate = MediaItem(id: "4", title: "No Date", overview: "", type: .movie)
+        context.insert(noDate)
+
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .onThisDay,
+            searchText: "",
+            sortOrder: .newestRelease,
+            network: nil,
+            language: nil
+        )
+
+        let titles = result.displayed.map(\.title)
+        XCTAssertEqual(titles, ["Recent Premier", "Classic Premier"])
+        XCTAssertEqual(result.totalCount, 2)
+    }
 }
