@@ -222,6 +222,7 @@ struct SmartCollectionsHubView: View {
         case .binge: return "Shows with multiple unwatched episodes available."
         case .quickBites: return "Short media under 90 minutes for quick viewing."
         case .archive: return "On hold or dropped items you've shelved."
+        case .onThisWeek: return "Titles that premiered this week, grouped by day."
         default: return ""
         }
     }

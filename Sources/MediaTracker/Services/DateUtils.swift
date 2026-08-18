@@ -142,4 +142,17 @@ struct DateUtils {
         let bComps = calendar.dateComponents([.month, .day], from: b)
         return aComps.month == bComps.month && aComps.day == bComps.day
     }
+
+    static func sameWeek(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
+        let aComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: a)
+        let bComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: b)
+        return aComps.yearForWeekOfYear == bComps.yearForWeekOfYear && aComps.weekOfYear == bComps.weekOfYear
+    }
+
+    static func weekdayName(for date: Date, calendar: Calendar = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.dateFormat = "EEEE"
+        return formatter.string(from: date)
+    }
 }

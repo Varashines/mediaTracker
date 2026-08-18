@@ -102,7 +102,7 @@ enum MediaFilterPredicates {
             if hasState { return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel != nil && $0.stateValue == state } }
             return #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel != nil }
 
-        case .onThisDay:
+        case .onThisWeek:
             if hasSearch { return #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil && $0.searchableText.localizedStandardContains(search) } }
             return #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil }
 

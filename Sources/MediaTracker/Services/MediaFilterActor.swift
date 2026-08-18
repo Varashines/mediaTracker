@@ -75,7 +75,7 @@ actor MediaFilterActor {
                                    provider != nil ||
                                    category == .releaseRadar ||
                                    category == .quickBites ||
-                                   category == .onThisDay ||
+                                   category == .onThisWeek ||
                                    !smartRules.isEmpty ||
                                    !processedSearch.isEmpty
 
@@ -192,8 +192,8 @@ actor MediaFilterActor {
                 guard airDate <= now else { return false }
             }
 
-            if category == .onThisDay {
-                guard let releaseDate = item.releaseDate, DateUtils.sameMonthDay(releaseDate, now, calendar: calendar) else { return false }
+            if category == .onThisWeek {
+                guard let releaseDate = item.releaseDate, DateUtils.sameWeek(releaseDate, now, calendar: calendar) else { return false }
             }
 
             if let b = badge {
@@ -479,8 +479,8 @@ actor MediaFilterActor {
             if fetchedItem.storedSmartBadgeLabel != "BEHIND" { return nil }
         case .smartUpcoming:
             if fetchedItem.storedSmartBadgeLabel != "PREMIERE" { return nil }
-        case .onThisDay:
-            guard let releaseDate = fetchedItem.releaseDate, DateUtils.sameMonthDay(releaseDate, Date()) else { return nil }
+        case .onThisWeek:
+            guard let releaseDate = fetchedItem.releaseDate, DateUtils.sameWeek(releaseDate, Date()) else { return nil }
         default:
             break
         }
@@ -528,7 +528,7 @@ actor MediaFilterActor {
             }
             return 0
         }
-        if category == .onThisDay {
+        if category == .onThisWeek {
             var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
             desc.propertiesToFetch = [\.releaseDate]
             desc.fetchLimit = 2000
@@ -536,7 +536,7 @@ actor MediaFilterActor {
             let now = Date()
             return items.filter { item in
                 guard let d = item.releaseDate else { return false }
-                return DateUtils.sameMonthDay(d, now)
+                return DateUtils.sameWeek(d, now)
             }.count
         }
         return try modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))

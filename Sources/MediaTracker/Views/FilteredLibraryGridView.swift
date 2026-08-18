@@ -42,6 +42,22 @@ struct FilteredLibraryGridView: View {
         !cachedLikedTitles.isEmpty
     }
 
+    private var groupedByWeekday: [(String, [MediaThumbnailMetadata])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEEE"
+        let grouped = Dictionary(grouping: items) { item -> String in
+            guard let date = item.releaseDate else { return "Unknown" }
+            return formatter.string(from: date)
+        }
+        return grouped.sorted { lhs, rhs in
+            let lhsDay = dayFormatter.date(from: lhs.key) ?? Date.distantPast
+            let rhsDay = dayFormatter.date(from: rhs.key) ?? Date.distantPast
+            return lhsDay < rhsDay
+        }.map { ($0.key, $0.value) }
+    }
+
     var body: some View {
         Group {
             if isLoading {
@@ -104,29 +120,53 @@ struct FilteredLibraryGridView: View {
                         if let stats = scopedStats, !items.isEmpty {
                             ScopedInsightsHeader(stats: stats, filterName: filter.name, filterType: filter.type)
                         }
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
-                                NavigationLink(value: metadata.id) {
-                                    MediaThumbnailView(
-                                        metadata: metadata, mode: .grid, namespace: namespace,
-                                        staggerIndex: idx, isFastScrolling: isFastScrolling)
-                                    .equatable()
+                        if filter.type == .onThisWeek {
+                            ForEach(groupedByWeekday, id: \.0) { dayName, dayItems in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(dayName)
+                                        .font(AppTheme.Font.heading)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                                        ForEach(Array(dayItems.enumerated()), id: \.element.id) { idx, metadata in
+                                            NavigationLink(value: metadata.id) {
+                                                MediaThumbnailView(
+                                                    metadata: metadata, mode: .grid, namespace: namespace,
+                                                    staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                                .equatable()
+                                            }
+                                            .buttonStyle(.interactive)
+                                        }
+                                    }
+                                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                                 }
-                                .buttonStyle(.interactive)
-                                .onAppear {
-                                    if idx == items.count - 1 {
-                                        loadMoreItems()
+                            }
+                        } else {
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                                ForEach(Array(items.enumerated()), id: \.element.id) { idx, metadata in
+                                    NavigationLink(value: metadata.id) {
+                                        MediaThumbnailView(
+                                            metadata: metadata, mode: .grid, namespace: namespace,
+                                            staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                        .equatable()
+                                    }
+                                    .buttonStyle(.interactive)
+                                    .onAppear {
+                                        if idx == items.count - 1 {
+                                            loadMoreItems()
+                                        }
                                     }
                                 }
+                                if isLoadingMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 20)
+                                }
                             }
-                            if isLoadingMore {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 20)
-                            }
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                     }
-                    .padding(AppTheme.Spacing.pageMargin)
+                    .padding(.top, AppTheme.Spacing.pageMargin)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
@@ -248,13 +288,13 @@ struct FilteredLibraryGridView: View {
             badge = filter.name
             sortOrder = .recentInteraction
         case .provider: provider = filter.name
-        case .onThisDay: sortOrder = .newestRelease
+        case .onThisWeek: sortOrder = .newestRelease
         }
 
         Task {
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: filter.type == .onThisDay ? .onThisDay : .all, searchText: "", sortOrder: sortOrder,
+                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: sortOrder,
                     network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: offset
                 )
@@ -350,12 +390,12 @@ struct FilteredLibraryGridView: View {
                 badge = filter.name
                 sortOrder = .recentInteraction
             case .provider: provider = filter.name
-            case .onThisDay: sortOrder = .newestRelease
+            case .onThisWeek: sortOrder = .newestRelease
             }
 
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: filter.type == .onThisDay ? .onThisDay : .all, searchText: "", sortOrder: sortOrder,
+                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: sortOrder,
                     network: network, language: language, genre: genre, badge: badge, provider: provider,
                     limit: pageSize, offset: 0
                 )
@@ -386,7 +426,7 @@ struct FilteredLibraryGridView: View {
         case .language: language = filter.name
         case .badge: badge = filter.name
         case .provider: provider = filter.name
-        case .onThisDay: break
+        case .onThisWeek: break
         }
 
         updateTask?.cancel()
@@ -395,7 +435,7 @@ struct FilteredLibraryGridView: View {
                 let filterActor = getFilterActor()
                 let updatedMetadata = try await filterActor.fetchMetadataIfMatches(
                     for: id,
-                    category: filter.type == .onThisDay ? .onThisDay : .all,
+                    category: filter.type == .onThisWeek ? .onThisWeek : .all,
                     searchText: "",
                     network: network,
                     language: language,
@@ -420,7 +460,7 @@ struct FilteredLibraryGridView: View {
                             switch filter.type {
                             case .badge:
                                 items.sort { ($0.lastInteractionDate ?? Date.distantPast) > ($1.lastInteractionDate ?? Date.distantPast) }
-                            case .onThisDay:
+                            case .onThisWeek:
                                 items.sort { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
                             default:
                                 items.sort { $0.title.localizedCompare($1.title) == .orderedAscending }

@@ -215,7 +215,7 @@ final class MediaFilterActorTests: XCTestCase {
     }
 
     @MainActor
-    func testOnThisDayFiltering() async throws {
+    func testOnThisWeekFiltering() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
@@ -224,24 +224,26 @@ final class MediaFilterActorTests: XCTestCase {
 
         let calendar = Calendar.current
         let today = Date()
-        let recentYear = calendar.date(byAdding: .year, value: -1, to: today)! // same month/day, previous year
-        let classicYear = calendar.date(byAdding: .year, value: -25, to: today)! // same month/day, 25 years ago
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        
+        // Start of current week (Monday)
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        let midWeek = calendar.date(byAdding: .day, value: 3, to: startOfWeek)! // Thursday
+        let lastWeek = calendar.date(byAdding: .day, value: -7, to: startOfWeek)! // Previous week
+        
+        // Within current week - Monday
+        let monday = MediaItem(id: "1", title: "Monday Premiere", overview: "", type: .movie)
+        monday.releaseDate = startOfWeek
+        context.insert(monday)
 
-        // Same month/day, recent year
-        let recent = MediaItem(id: "1", title: "Recent Premier", overview: "", type: .movie)
-        recent.releaseDate = recentYear
-        context.insert(recent)
+        // Within current week - Thursday
+        let thursday = MediaItem(id: "2", title: "Thursday Release", overview: "", type: .tvShow)
+        thursday.releaseDate = midWeek
+        context.insert(thursday)
 
-        // Same month/day, older year
-        let classic = MediaItem(id: "2", title: "Classic Premier", overview: "", type: .tvShow)
-        classic.releaseDate = classicYear
-        context.insert(classic)
-
-        // Different month/day — must be excluded
-        let wrongDay = MediaItem(id: "3", title: "Other Day", overview: "", type: .movie)
-        wrongDay.releaseDate = tomorrow
-        context.insert(wrongDay)
+        // Previous week — must be excluded
+        let lastWeekItem = MediaItem(id: "3", title: "Last Week", overview: "", type: .movie)
+        lastWeekItem.releaseDate = lastWeek
+        context.insert(lastWeekItem)
 
         // Nil releaseDate — must be excluded
         let noDate = MediaItem(id: "4", title: "No Date", overview: "", type: .movie)
@@ -250,7 +252,7 @@ final class MediaFilterActorTests: XCTestCase {
         try context.save()
 
         let result = try await actor.filterAndSort(
-            category: .onThisDay,
+            category: .onThisWeek,
             searchText: "",
             sortOrder: .newestRelease,
             network: nil,
@@ -258,7 +260,7 @@ final class MediaFilterActorTests: XCTestCase {
         )
 
         let titles = result.displayed.map(\.title)
-        XCTAssertEqual(titles, ["Recent Premier", "Classic Premier"])
+        XCTAssertEqual(titles, ["Thursday Release", "Monday Premiere"])
         XCTAssertEqual(result.totalCount, 2)
     }
 }
