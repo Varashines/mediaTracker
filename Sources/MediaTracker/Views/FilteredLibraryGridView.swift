@@ -118,6 +118,7 @@ struct FilteredLibraryGridView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         if let stats = scopedStats, !items.isEmpty {
                             ScopedInsightsHeader(stats: stats, filterName: filter.name, filterType: filter.type)
+                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                         if filter.type == .onThisWeek {
                             ForEach(Array(groupedByWeekday.enumerated()), id: \.element.0) { groupIdx, group in
