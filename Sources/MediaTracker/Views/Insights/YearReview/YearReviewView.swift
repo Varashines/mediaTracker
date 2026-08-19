@@ -1218,7 +1218,7 @@ private struct YearTasteSection: View {
                             baseColor: .indigo,
                             badgeValue: "\(Int(genre.score * 100))%"
                         ) {}
-                        .frame(width: 170, height: 60)
+                        .frame(width: 200, height: 60)
                     }
                 }
             }
@@ -1230,7 +1230,7 @@ private struct YearTasteSection: View {
                             node: DiscoveryNode(name: network.name, logoPath: network.logoPath, count: network.count),
                             style: .logo
                         ) {}
-                        .frame(width: 170, height: 90)
+                        .frame(width: 200, height: 90)
                     }
                 }
             }
@@ -1244,7 +1244,7 @@ private struct YearTasteSection: View {
                             baseColor: .teal,
                             badgeValue: "\(Int(language.score * 100))%"
                         ) {}
-                        .frame(width: 170, height: 60)
+                        .frame(width: 200, height: 60)
                     }
                 }
             }
@@ -1280,7 +1280,7 @@ private struct YearTasteSection: View {
                     content()
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.vertical, 8)
+                .padding(.vertical, AppTheme.Spacing.small)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
