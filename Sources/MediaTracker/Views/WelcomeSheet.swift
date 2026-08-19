@@ -81,7 +81,7 @@ struct WelcomeSheet: View {
                     hasSeenWelcome = true
                     dismiss()
                 } label: {
-                    Text("I already have a key — open Services")
+                    Text("I already have a key — I’ll add it later")
                         .font(AppTheme.Font.bodyMedium)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
@@ -97,7 +97,7 @@ struct WelcomeSheet: View {
                 .onHover { hovering in
                     withAnimation(AppTheme.Animation.springSnappy) { isSecondaryHovered = hovering }
                 }
-                .accessibilityLabel("I already have a key, open Services in Settings")
+                .accessibilityLabel("I already have a key, I will add it later in Settings")
 
                 Button {
                     hasSeenWelcome = true
