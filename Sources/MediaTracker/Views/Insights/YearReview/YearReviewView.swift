@@ -24,6 +24,7 @@ struct YearReviewView: View {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         _selectedMonth = State(initialValue: cal.date(from: cal.dateComponents([.year, .month], from: today)) ?? today)
+        _selectedDay = State(initialValue: today)
     }
 
     var body: some View {
@@ -51,17 +52,12 @@ struct YearReviewView: View {
     private func mainContent(_ review: YearInReview) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // ── Hero ──────────────────────────────────────────────
-                YearHeroSection(review: review, colorScheme: colorScheme)
+                ViewThatFits(in: .horizontal) {
+                    wideHeroLayout(review)
+                        .frame(minWidth: 1_120)
 
-                YearActivityOverview(
-                    review: review,
-                    selectedMonth: $selectedMonth,
-                    selectedDay: $selectedDay,
-                    colorScheme: colorScheme
-                )
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.bottom, AppTheme.Spacing.large)
+                    compactHeroLayout(review)
+                }
 
                 Divider()
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -104,6 +100,56 @@ struct YearReviewView: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private func wideHeroLayout(_ review: YearInReview) -> some View {
+        HStack(spacing: AppTheme.Spacing.xLarge) {
+            YearMonthRail(
+                months: Array(months(for: review).prefix(6)),
+                review: review,
+                selectedMonth: $selectedMonth,
+                selectedDay: $selectedDay,
+                colorScheme: colorScheme
+            )
+            .frame(width: 290)
+
+            YearHeroSection(review: review, colorScheme: colorScheme)
+                .frame(maxWidth: .infinity)
+
+            YearMonthRail(
+                months: Array(months(for: review).suffix(6)),
+                review: review,
+                selectedMonth: $selectedMonth,
+                selectedDay: $selectedDay,
+                colorScheme: colorScheme
+            )
+            .frame(width: 290)
+        }
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+        .padding(.vertical, AppTheme.Spacing.xLarge)
+    }
+
+    private func compactHeroLayout(_ review: YearInReview) -> some View {
+        VStack(spacing: 0) {
+            YearHeroSection(review: review, colorScheme: colorScheme)
+
+            YearActivityOverview(
+                review: review,
+                selectedMonth: $selectedMonth,
+                selectedDay: $selectedDay,
+                colorScheme: colorScheme
+            )
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .padding(.bottom, AppTheme.Spacing.large)
+        }
+    }
+
+    private func months(for review: YearInReview) -> [Date] {
+        let calendar = Calendar.current
+        guard let firstMonth = calendar.date(from: DateComponents(year: review.year, month: 1, day: 1)) else {
+            return []
+        }
+        return (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: firstMonth) }
     }
 
     // MARK: - Load
@@ -213,6 +259,43 @@ private struct YearHeroSection: View {
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.micro)
             .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
+    }
+}
+
+// MARK: - Wide Month Rails
+
+private struct YearMonthRail: View {
+    let months: [Date]
+    let review: YearInReview
+    @Binding var selectedMonth: Date
+    @Binding var selectedDay: Date?
+    let colorScheme: ColorScheme
+
+    private var calendar: Calendar { .current }
+    private var currentMonth: Date {
+        calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+    }
+
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: AppTheme.Spacing.small), GridItem(.flexible(), spacing: AppTheme.Spacing.small)],
+            spacing: AppTheme.Spacing.small
+        ) {
+            ForEach(months, id: \.self) { month in
+                MonthActivityCard(
+                    month: month,
+                    review: review,
+                    isSelected: calendar.isDate(selectedMonth, equalTo: month, toGranularity: .month),
+                    isAvailable: month <= currentMonth,
+                    colorScheme: colorScheme
+                ) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        selectedMonth = month
+                        selectedDay = nil
+                    }
+                }
+            }
+        }
     }
 }
 
