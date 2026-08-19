@@ -213,6 +213,8 @@ struct SearchView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .help("\(title) (\(shortcut))")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder

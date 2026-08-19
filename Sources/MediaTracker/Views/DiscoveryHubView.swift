@@ -18,7 +18,7 @@ struct DiscoveryHubView: View {
     
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 60) {
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                 if hasDataLoaded {
                     let hasAnyContent = !viewModel.discovery.cachedBadges.isEmpty ||
                         !viewModel.discovery.cachedNetworks.isEmpty ||
@@ -249,6 +249,7 @@ private struct NetworkTabPill: View {
         .buttonStyle(.plain)
         .contentShape(Capsule())
         .onHover { isHovered = $0 }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

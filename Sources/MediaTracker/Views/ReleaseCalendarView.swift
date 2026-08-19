@@ -137,6 +137,8 @@ struct ReleaseCalendarView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .help("Previous month")
+            .accessibilityLabel("Previous month")
             
             Spacer()
             
@@ -203,6 +205,8 @@ struct ReleaseCalendarView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .help("Next month")
+            .accessibilityLabel("Next month")
         }
     }
     

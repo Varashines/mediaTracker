@@ -9,6 +9,7 @@ struct TVTrackingView: View {
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
     var onSeasonCompleted: (() -> Void)? = nil
     @Binding var selectedSeasonNumber: Int?
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var previousSeasonComplete = false
     @State private var sortedSeasons: [TVSeason] = []
@@ -79,7 +80,23 @@ struct TVTrackingView: View {
 
                 // Focused Episode Grid
                 if allSeasonsWatched && !showCompletedEpisodes {
-                    EmptyView()
+                    VStack(spacing: AppTheme.Spacing.small) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(AppTheme.Font.title2)
+                            .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                        Text("All episodes watched")
+                            .font(AppTheme.Font.bodyBold)
+                        Button("Show Episodes") {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                showCompletedEpisodes = true
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.large)
+                    .background(AppTheme.Colors.surfaceGhost(for: colorScheme), in: RoundedRectangle(cornerRadius: AppTheme.Radius.card))
                 } else if let selectedNumber = selectedSeasonNumber,
                     let selectedSeason = tvDetails.seasons.first(where: {
                         $0.seasonNumber == selectedNumber

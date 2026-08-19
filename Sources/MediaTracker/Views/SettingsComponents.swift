@@ -53,6 +53,12 @@ struct SettingsRow<Trailing: View>: View {
                 isHovered = hovered
             }
         }
+        .overlay(alignment: .bottom) {
+            if showDivider {
+                Divider()
+                    .padding(.leading, AppTheme.Spacing.medium)
+            }
+        }
     }
 }
 
@@ -123,6 +129,12 @@ struct SettingsLabeledRow<Trailing: View>: View {
         .onHover { hovered in
             withAnimation(AppTheme.Animation.easeInOut) {
                 isHovered = hovered
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showDivider {
+                Divider()
+                    .padding(.leading, AppTheme.Spacing.medium)
             }
         }
     }

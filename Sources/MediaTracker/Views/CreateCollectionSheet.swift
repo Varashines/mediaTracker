@@ -13,6 +13,7 @@ struct CreateCollectionSheet: View {
     @State private var iconSearchText = ""
     @State private var isSmart = false
     @State private var smartRules: [SmartRule] = []
+    @FocusState private var isNameFocused: Bool
     
     let suggestedIcons = [
         // Media & Apps
@@ -55,27 +56,30 @@ struct CreateCollectionSheet: View {
     }
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: AppTheme.Spacing.large) {
             Text(editingCollection == nil ? "New Collection" : "Edit Collection")
                 .font(AppTheme.Font.title2)
             
-            VStack(alignment: .leading, spacing: 20) {
-                // Name Input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("NAME")
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(.secondary)
-                        .kerning(1.2)
-                    TextField("Collection Name", text: $name)
-                        .textFieldStyle(.plain)
-                        .font(AppTheme.Font.body)
-                        .padding()
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(AppTheme.Radius.medium)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+                    // Name Input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("NAME")
+                            .font(AppTheme.Font.caption2)
+                            .foregroundStyle(.secondary)
+                            .kerning(1.2)
+                        TextField("Collection Name", text: $name)
+                            .textFieldStyle(.plain)
+                            .font(AppTheme.Font.body)
+                            .padding()
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(AppTheme.Radius.medium)
+                            .focused($isNameFocused)
+                            .onSubmit(saveCollection)
+                    }
                 
-                // Smart Playlist Toggle
-                if editingCollection == nil ? initialIsSmart : isSmart {
+                    // Smart Playlist Toggle
+                    if editingCollection == nil ? initialIsSmart : isSmart {
                     Toggle(isOn: $isSmart.animation(AppTheme.Animation.springSnappy)) {
                         HStack(spacing: 12) {
                             ZStack {
@@ -100,28 +104,29 @@ struct CreateCollectionSheet: View {
                     .background(Color.primary.opacity(0.03))
                     .cornerRadius(AppTheme.Radius.medium)
                     .disabled(editingCollection != nil)
-                }
-                
-                if isSmart {
-                    smartRulesSection
-                }
-                
-                // Icon Picker
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        TextField("Search symbols...", text: $iconSearchText)
-                            .textFieldStyle(.plain)
-                            .font(AppTheme.Font.caption)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.primary.opacity(0.05))
-                            .cornerRadius(AppTheme.Radius.small)
-                            .frame(width: 180)
-                        
-                        Spacer()
                     }
+                
+                    if isSmart {
+                        smartRulesSection
+                    }
+                
+                    // Icon Picker
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            TextField("Search symbols...", text: $iconSearchText)
+                                .textFieldStyle(.plain)
+                                .font(AppTheme.Font.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.primary.opacity(0.05))
+                                .cornerRadius(AppTheme.Radius.small)
+                                .frame(width: 180)
+                        
+                            Spacer()
+                        }
                     
-                    IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
+                        IconPickerGridView(selectedIcon: $icon, filteredIcons: filteredIcons)
+                    }
                 }
             }
             
@@ -137,40 +142,23 @@ struct CreateCollectionSheet: View {
                     .cornerRadius(AppTheme.Radius.medium)
                 
                 Button(editingCollection == nil ? "Create" : "Save") {
-                    if let editing = editingCollection {
-                        editing.name = name
-                        editing.systemImage = icon
-                        // Bug fix: only set rules if smart, otherwise clear the data
-                        // to prevent manual collections from silently converting to smart
-                        if isSmart {
-                            editing.smartRules = smartRules
-                        } else {
-                            editing.smartRulesData = nil
-                        }
-                    } else {
-                        let newCollection = MediaCollection(name: name, systemImage: icon, isSmart: isSmart)
-                        if isSmart { newCollection.smartRules = smartRules }
-                        modelContext.insert(newCollection)
-                    }
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        MediaStateService.shared.postMediaStateChanged()
-                    }
+                    saveCollection()
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
-                .disabled(name.isEmpty)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .font(AppTheme.Font.bodyBold)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
                 .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(AppTheme.Colors.accent))
                 .foregroundStyle(.white)
                 .cornerRadius(AppTheme.Radius.medium)
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.top, 10)
         }
         .padding(32)
-        .frame(width: 500)
+        .frame(minWidth: 500, idealWidth: 540, minHeight: 560, idealHeight: 680)
         .onAppear {
             if let editing = editingCollection {
                 name = editing.name
@@ -180,6 +168,30 @@ struct CreateCollectionSheet: View {
             } else {
                 isSmart = initialIsSmart
             }
+            isNameFocused = true
+        }
+    }
+
+    private func saveCollection() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        if let editing = editingCollection {
+            editing.name = trimmedName
+            editing.systemImage = icon
+            if isSmart {
+                editing.smartRules = smartRules
+            } else {
+                editing.smartRulesData = nil
+            }
+        } else {
+            let newCollection = MediaCollection(name: trimmedName, systemImage: icon, isSmart: isSmart)
+            if isSmart { newCollection.smartRules = smartRules }
+            modelContext.insert(newCollection)
+        }
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            MediaStateService.shared.postMediaStateChanged()
         }
     }
     

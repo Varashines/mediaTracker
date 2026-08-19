@@ -77,12 +77,15 @@ struct SmartCollectionsHubView: View {
                         initialIsSmart = true
                         showingCreateSheet = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(Color.secondary.gradient)
-                            .font(AppTheme.Font.titleMedium)
+                        Label("New Smart Playlist", systemImage: "plus")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, AppTheme.Spacing.small)
+                            .padding(.vertical, AppTheme.Spacing.micro)
+                            .background(AppTheme.Colors.accent.opacity(0.08), in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Circle())
+                    .contentShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
@@ -119,12 +122,15 @@ struct SmartCollectionsHubView: View {
                         initialIsSmart = false
                         showingCreateSheet = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(Color.secondary.gradient)
-                            .font(AppTheme.Font.titleMedium)
+                        Label("New Collection", systemImage: "plus")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, AppTheme.Spacing.small)
+                            .padding(.vertical, AppTheme.Spacing.micro)
+                            .background(AppTheme.Colors.accent.opacity(0.08), in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Circle())
+                    .contentShape(Capsule())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)

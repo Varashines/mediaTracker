@@ -76,7 +76,7 @@ struct SettingsView: View {
             ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
             : AnyShapeStyle(.ultraThinMaterial))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 620, maxWidth: 680, minHeight: 640)
+        .frame(minWidth: 680, idealWidth: 720, minHeight: 640)
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
@@ -132,7 +132,6 @@ struct SettingsView: View {
                 Text(tab.label)
                     .font(AppTheme.Font.bodyBold)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary : .secondary))
             .padding(.horizontal, 10)

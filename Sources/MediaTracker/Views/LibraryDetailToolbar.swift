@@ -243,16 +243,21 @@ private struct SortPickerPopover: View {
 
             VStack(spacing: 2) {
                 ForEach(SortOrder.allCases, id: \.self) { order in
-                    PickerOptionRow(
-                        icon: order.icon,
-                        label: order.rawValue,
-                        isSelected: order == current,
-                        isHovered: hoveredOption == order
-                    )
-                    .onTapGesture { onSelect(order) }
+                    Button {
+                        onSelect(order)
+                    } label: {
+                        PickerOptionRow(
+                            icon: order.icon,
+                            label: order.rawValue,
+                            isSelected: order == current,
+                            isHovered: hoveredOption == order
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .onHover { hovering in
                         hoveredOption = hovering ? order : nil
                     }
+                    .accessibilityAddTraits(order == current ? .isSelected : [])
                 }
             }
             .padding(.horizontal, 10)
@@ -283,16 +288,21 @@ private struct GroupPickerPopover: View {
 
             VStack(spacing: 2) {
                 ForEach(GroupBy.pickerOptions, id: \.self) { group in
-                    PickerOptionRow(
-                        icon: group.icon,
-                        label: group.rawValue,
-                        isSelected: group == current,
-                        isHovered: hoveredOption == group
-                    )
-                    .onTapGesture { onSelect(group) }
+                    Button {
+                        onSelect(group)
+                    } label: {
+                        PickerOptionRow(
+                            icon: group.icon,
+                            label: group.rawValue,
+                            isSelected: group == current,
+                            isHovered: hoveredOption == group
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .onHover { hovering in
                         hoveredOption = hovering ? group : nil
                     }
+                    .accessibilityAddTraits(group == current ? .isSelected : [])
                 }
             }
             .padding(.horizontal, 10)
