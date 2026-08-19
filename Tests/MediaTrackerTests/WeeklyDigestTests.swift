@@ -3,18 +3,28 @@ import SwiftData
 @testable import MediaTracker
 
 final class WeeklyDigestTests: XCTestCase {
-    private func makeContainer() -> ModelContainer {
+    private func makeContainer() throws -> (container: ModelContainer, directory: URL) {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,
             SeasonCastMember.self, TVEpisode.self, CastMember.self,
             MediaCollection.self, StudioAliasEntity.self
         ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaTracker-WeeklyDigest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let config = ModelConfiguration(url: directory.appendingPathComponent("digest.sqlite"))
+        do {
+            return (try ModelContainer(for: schema, configurations: [config]), directory)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
     @MainActor
@@ -36,8 +46,10 @@ final class WeeklyDigestTests: XCTestCase {
     }
 
     @MainActor
-    func testCountsShowsAndMoviesInWindow() async {
-        let container = makeContainer()
+    func testCountsShowsAndMoviesInWindow() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         context.insert(makeItem(id: "tv_1", title: "Show A", type: .tvShow, state: "Active"))
@@ -49,7 +61,7 @@ final class WeeklyDigestTests: XCTestCase {
         let movie = makeItem(id: "movie_3", title: "Movie A", type: .movie, state: "Completed")
         movie.lastStateChangeDate = date(2026, 8, 12)
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let digest = await WeeklyDigestService(modelContainer: container).digest(endingAt: date(2026, 8, 12))
 
@@ -59,8 +71,10 @@ final class WeeklyDigestTests: XCTestCase {
     }
 
     @MainActor
-    func testExcludesOutsideWindowAndSpecials() async {
-        let container = makeContainer()
+    func testExcludesOutsideWindowAndSpecials() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         context.insert(makeItem(id: "tv_1", title: "Old Show", type: .tvShow, state: "Active"))
@@ -76,7 +90,7 @@ final class WeeklyDigestTests: XCTestCase {
         let movie = makeItem(id: "movie_3", title: "Old Movie", type: .movie, state: "Completed")
         movie.lastStateChangeDate = date(2026, 8, 1)
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let digest = await WeeklyDigestService(modelContainer: container).digest(endingAt: date(2026, 8, 12))
 
@@ -86,10 +100,12 @@ final class WeeklyDigestTests: XCTestCase {
     }
 
     @MainActor
-    func testEmptyWeek() async {
-        let container = makeContainer()
+    func testEmptyWeek() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
-        try? context.save()
+        try context.save()
 
         let digest = await WeeklyDigestService(modelContainer: container).digest(endingAt: date(2026, 8, 12))
 
