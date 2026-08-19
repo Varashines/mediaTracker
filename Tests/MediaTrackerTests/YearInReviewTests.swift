@@ -61,7 +61,7 @@ final class YearInReviewTests: XCTestCase {
         context.insert(old)
         context.insert(unwatched)
         context.insert(noDate)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -82,7 +82,7 @@ final class YearInReviewTests: XCTestCase {
         let show = makeItem(id: "tv_100", title: "2026 Show", type: .tvShow, releaseDate: date(2026, 3, 1), state: "Active")
         context.insert(show)
         context.insert(makeEpisode(showID: 100, watchedAt: date(2026, 3, 10), runtime: 45))
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -105,7 +105,7 @@ final class YearInReviewTests: XCTestCase {
         movie.cachedRuntime = 120
         movie.lastStateChangeDate = date(2026, 3, 3)
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -137,7 +137,7 @@ final class YearInReviewTests: XCTestCase {
         let movie = makeItem(id: "movie_10", title: "Jan Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
         movie.lastStateChangeDate = date(2026, 1, 1)
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -171,7 +171,7 @@ final class YearInReviewTests: XCTestCase {
         romance.cachedGenres = ["Romance"]
         romance.lastStateChangeDate = date(2025, 6, 1)
         context.insert(romance)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -203,7 +203,7 @@ final class YearInReviewTests: XCTestCase {
         context.insert(s1)
         context.insert(s2)
         context.insert(special)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -231,7 +231,7 @@ final class YearInReviewTests: XCTestCase {
         movie.lastStateChangeDate = date(2026, 3, 10)
         movie.cachedRuntime = 120
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
 
@@ -262,7 +262,7 @@ final class YearInReviewTests: XCTestCase {
         movie.lastStateChangeDate = date(2026, 8, 15)
         movie.cachedRuntime = 100
         context.insert(movie)
-        try? context.save()
+        try context.save()
 
         let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
         let augStats = review.monthStats(for: date(2026, 8, 1))
