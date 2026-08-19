@@ -207,9 +207,9 @@ struct ReleaseCalendarView: View {
                     }
                     refreshData(for: currentDisplayMonth)
                 } label: {
-                    Image(systemName: "calendar")
+                    Label("Today", systemImage: "calendar")
                         .font(AppTheme.Font.caption)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, AppTheme.Spacing.small)
                         .padding(.vertical, 6)
                         .background(Color.primary.opacity(0.06))
                         .clipShape(Capsule())

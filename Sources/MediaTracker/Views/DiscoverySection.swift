@@ -6,6 +6,8 @@ struct DiscoverySection<HeaderAccessory: View>: View {
     let nodes: [DiscoveryNode]
     let style: DiscoveryCardStyle
     let isFastScrolling: Bool
+    var subtitle: String? = nil
+    var isFeatured = false
     var limit: Int? = nil
     @ViewBuilder var headerAccessory: () -> HeaderAccessory
     let onSelected: (DiscoveryNode) -> Void
@@ -29,7 +31,7 @@ struct DiscoverySection<HeaderAccessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             HStack(spacing: 0) {
-                SectionHeader(title: title, icon: icon, iconColor: sectionColor)
+                SectionHeader(title: title, icon: icon, iconColor: sectionColor, subtitle: subtitle)
                 
                 headerAccessory()
                     .padding(.leading, AppTheme.Spacing.small)
@@ -58,18 +60,32 @@ struct DiscoverySection<HeaderAccessory: View>: View {
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
+        .padding(.vertical, isFeatured ? AppTheme.Spacing.medium : 0)
+        .background {
+            if isFeatured {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                    .fill(sectionColor.opacity(0.07))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .stroke(sectionColor.opacity(0.16), lineWidth: 0.5)
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.large)
+            }
+        }
     }
 }
 
 // MARK: - No-Accessory Convenience
 
 extension DiscoverySection where HeaderAccessory == EmptyView {
-    init(title: String, icon: String, nodes: [DiscoveryNode], style: DiscoveryCardStyle, isFastScrolling: Bool, limit: Int? = nil, onSelected: @escaping (DiscoveryNode) -> Void) {
+    init(title: String, icon: String, nodes: [DiscoveryNode], style: DiscoveryCardStyle, isFastScrolling: Bool, subtitle: String? = nil, isFeatured: Bool = false, limit: Int? = nil, onSelected: @escaping (DiscoveryNode) -> Void) {
         self.title = title
         self.icon = icon
         self.nodes = nodes
         self.style = style
         self.isFastScrolling = isFastScrolling
+        self.subtitle = subtitle
+        self.isFeatured = isFeatured
         self.limit = limit
         self.headerAccessory = { EmptyView() }
         self.onSelected = onSelected
