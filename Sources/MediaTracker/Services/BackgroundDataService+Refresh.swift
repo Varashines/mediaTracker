@@ -3,8 +3,9 @@ import SwiftData
 import AppKit
 
 /// Reconciles one season's TMDB and TVMaze episode data.
-/// TMDB remains authoritative for metadata and runtime when an episode exists
-/// in both sources. TVMaze only supplies missing runtimes and valid extra rows.
+/// The union preserves announced episodes that a provider has not listed yet.
+/// TVMaze improves generic titles and current air metadata; TMDB remains the
+/// runtime authority whenever it has a per-episode value.
 enum RuntimeFallback {
     static func reconcile(
         tmdbEpisodes: [TVEpisodeResult],
@@ -24,16 +25,22 @@ enum RuntimeFallback {
         let tmdbNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
 
         var reconciled = tmdbEpisodes.map { episode in
-            guard episode.runtime == nil,
-                  let mazeRuntime = mazeByNumber[episode.episodeNumber]?.runtime else {
+            guard let mazeEpisode = mazeByNumber[episode.episodeNumber] else {
                 return episode
             }
+
+            let mazeName = mazeEpisode.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let shouldUseMazeName = isPlaceholderTitle(episode.name, episodeNumber: episode.episodeNumber)
+                && !isPlaceholderTitle(mazeName, episodeNumber: episode.episodeNumber)
+
             return TVEpisodeResult(
                 episodeNumber: episode.episodeNumber,
-                name: episode.name,
-                overview: episode.overview,
-                airDate: episode.airDate,
-                runtime: mazeRuntime
+                name: shouldUseMazeName ? mazeName : episode.name,
+                overview: nonEmpty(episode.overview) ?? nonEmpty(mazeEpisode.summary)?
+                    .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                airDate: nonEmpty(mazeEpisode.airdate) ?? episode.airDate,
+                runtime: episode.runtime ?? mazeEpisode.runtime
             )
         }
 
@@ -52,6 +59,20 @@ enum RuntimeFallback {
             }
         reconciled.append(contentsOf: extras)
         return reconciled.sorted { $0.episodeNumber < $1.episodeNumber }
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private static func isPlaceholderTitle(_ title: String?, episodeNumber: Int) -> Bool {
+        guard let normalized = nonEmpty(title)?.lowercased() else { return true }
+        return normalized == "episode \(episodeNumber)"
+            || normalized == "ep \(episodeNumber)"
     }
 
     static func runtimeMap(
@@ -264,17 +285,6 @@ extension BackgroundDataService {
                 return dict
             }()
 
-            // TVMaze is the authoritative source for per-season episode counts
-            // (TMDB can misreport, e.g. for certain shows). Fall back to TMDB's
-            // count when TVMaze data isn't available.
-            let mazeSeasonCounts: [Int: Int] = {
-                var counts: [Int: Int] = [:]
-                for ep in mazeEpisodes {
-                    if let s = ep.season { counts[s, default: 0] += 1 }
-                }
-                return counts
-            }()
-
             // Pre-compute TVMaze episodes grouped by season (Sendable, so it can
             // be captured safely by the concurrent task group).
             let mazeEpisodesBySeason: [Int: [TVEpisodeResult]] = {
@@ -390,9 +400,9 @@ extension BackgroundDataService {
                     /// (nil when TMDB has no runtime for an episode).
                     let tmdbRuntimes: [Int: Int]
                     let seasonCast: [SeasonAggregateCastResult]
-                    /// True when episodes came from TVMaze (authoritative). When true,
-                    /// stale episodes beyond the TVMaze source are pruned on save.
-                    let sourcedFromTVMaze: Bool
+                    /// True when both episode sources were fetched successfully, so
+                    /// an unwatched row absent from their reconciled union is stale.
+                    let shouldPruneStaleEpisodes: Bool
                 }
 
                 var fetchedSeasons: [FetchedSeasonData] = []
@@ -402,46 +412,36 @@ extension BackgroundDataService {
                 fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
-                        // Prefer TVMaze's per-season episode count; fall back to TMDB.
-                        let episodeCount = mazeSeasonCounts[sNum] ?? seasonData.episode_count
-                        if episodeCount == 0 { continue }
-
-                        var shouldForceSeason = force
-                        var skipEpisodeFetch = false
-                        if !force {
-                            let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                            let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                            if let existing = try? modelContext.fetch(sDescriptor).first {
-                                if existing.episodes.count >= episodeCount {
-                                    // Season already has episodes — skip the episode API fetch, but make sure
-                                    // it's attached to this show's TVShowDetails (import restores can
-                                    // leave seasons orphaned with tvShowDetails == nil).
-                                    if existing.tvShowDetails?.persistentModelID != tvDetails.persistentModelID {
-                                        existing.tvShowDetails = tvDetails
-                                    }
-                                    skipEpisodeFetch = true
-                                } else {
-                                    shouldForceSeason = true
-                                }
-                            }
-                        }
 
                         group.addTask {
                             // Always fetch per-season aggregate credits (new data; existing seasons lack it).
                             let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
-                            if skipEpisodeFetch {
-                                return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: [], tmdbRuntimes: [:], seasonCast: credits, sourcedFromTVMaze: false)
-                            }
 
-                            // Prefer TVMaze episodes (authoritative). Fall back to TMDB when
-                            // TVMaze has no episodes for this season.
+                            // Preserve announced TMDB episodes while enriching matching,
+                            // already-published rows with TVMaze data. TVMaze can lag
+                            // behind the announced season total for currently airing shows.
                             let usesTVMaze = !(mazeEpisodesBySeason[sNum]?.isEmpty ?? true)
                             let episodes: [TVEpisodeResult]
+                            let tmdbEpisodes: [TVEpisodeResult]
+                            let fetchedTMDBEpisodes: Bool
                             if let mazeSeasonEps = mazeEpisodesBySeason[sNum], !mazeSeasonEps.isEmpty {
-                                episodes = mazeSeasonEps
+                                do {
+                                    tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
+                                    fetchedTMDBEpisodes = true
+                                } catch {
+                                    AppLogger.warning("⚠️ Failed to fetch TMDB season \(sNum) for show \(tmdbID); preserving existing rows.", logger: AppLogger.background)
+                                    tmdbEpisodes = []
+                                    fetchedTMDBEpisodes = false
+                                }
+                                episodes = RuntimeFallback.reconcile(
+                                    tmdbEpisodes: tmdbEpisodes,
+                                    tvmazeSeason: mazeRawBySeason[sNum] ?? []
+                                )
                             } else {
                                 do {
-                                    episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)
+                                    tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
+                                    fetchedTMDBEpisodes = true
+                                    episodes = tmdbEpisodes
                                 } catch {
                                     AppLogger.warning("⚠️ Failed to fetch season \(sNum) for show \(tmdbID): \(error)", logger: AppLogger.background)
                                     return nil
@@ -452,17 +452,20 @@ extension BackgroundDataService {
                             // episode numbers without allowing a series-wide mismatch to
                             // overwrite otherwise valid season data.
                             let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
-                            let tmdbRuntimes: [Int: Int]
-                            if usesTVMaze {
-                                let tmdbEps = (try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)) ?? []
-                                tmdbRuntimes = RuntimeFallback.runtimeMap(
-                                    tmdbEpisodes: tmdbEps,
-                                    tvmazeSeason: tvmazeRawForSeason
-                                )
-                            } else {
-                                tmdbRuntimes = Dictionary(episodes.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
-                            }
-                            return FetchedSeasonData(seasonNumber: sNum, name: seasonData.name, episodeCount: episodeCount, airDate: seasonData.air_date, episodes: episodes, tmdbRuntimes: tmdbRuntimes, seasonCast: credits, sourcedFromTVMaze: usesTVMaze)
+                            let tmdbRuntimes = RuntimeFallback.runtimeMap(
+                                tmdbEpisodes: tmdbEpisodes,
+                                tvmazeSeason: tvmazeRawForSeason
+                            )
+                            return FetchedSeasonData(
+                                seasonNumber: sNum,
+                                name: seasonData.name,
+                                episodeCount: episodes.count,
+                                airDate: seasonData.air_date,
+                                episodes: episodes,
+                                tmdbRuntimes: tmdbRuntimes,
+                                seasonCast: credits,
+                                shouldPruneStaleEpisodes: usesTVMaze && fetchedTMDBEpisodes
+                            )
                         }
                     }
                     var results: [FetchedSeasonData] = []
@@ -526,11 +529,10 @@ extension BackgroundDataService {
                         }
                     }
 
-                    // When TVMaze is authoritative, prune stored episodes that no
-                    // longer exist in the TVMaze source (e.g. planned-but-unaired
-                    // episodes of a currently-airing show). Only unwatched surplus
-                    // episodes are affected in practice.
-                    if seasonData.sourcedFromTVMaze {
+                    // Delete only episodes absent from both successfully fetched
+                    // sources. This avoids removing TMDB-announced future episodes
+                    // merely because TVMaze has not published them yet.
+                    if seasonData.shouldPruneStaleEpisodes {
                         let validIDs = Set(seasonData.episodes.map { "\(tmdbID)_\(sNum)_\($0.episodeNumber)" })
                         let prefix = "\(tmdbID)_\(sNum)_"
                         for (uid, ep) in episodeByID where uid.hasPrefix(prefix) && !validIDs.contains(uid) {

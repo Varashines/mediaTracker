@@ -51,6 +51,39 @@ final class RuntimeFallbackTests: XCTestCase {
         XCTAssertEqual(result[0].name, "TMDB")
     }
 
+    func testTVMazeReplacesGenericTMDBTitleButPreservesTMDBRuntime() {
+        let tmdb = [TVEpisodeResult(
+            episodeNumber: 2, name: "Episode 2", overview: nil,
+            airDate: "2026-01-01", runtime: 64
+        )]
+
+        let result = RuntimeFallback.reconcile(
+            tmdbEpisodes: tmdb,
+            tvmazeSeason: [mazeEpisode(number: 2, runtime: 60, name: "New Moon")]
+        )
+
+        XCTAssertEqual(result[0].name, "New Moon")
+        XCTAssertEqual(result[0].runtime, 64)
+    }
+
+    func testIncompleteTVMazeListRetainsTMDBAnnouncedEpisodes() {
+        let tmdb = (1...10).map {
+            TVEpisodeResult(
+                episodeNumber: $0, name: "Episode \($0)", overview: nil,
+                airDate: "2026-01-\(String(format: "%02d", $0))", runtime: nil
+            )
+        }
+        let maze: [TVMazeEpisode] = (1...8).map { (number: Int) -> TVMazeEpisode in
+            mazeEpisode(number: number, runtime: 60, name: "Published \(number)")
+        }
+
+        let result = RuntimeFallback.reconcile(tmdbEpisodes: tmdb, tvmazeSeason: maze)
+
+        XCTAssertEqual(result.map(\.episodeNumber), Array(1...10))
+        XCTAssertEqual(result[7].name, "Published 8")
+        XCTAssertEqual(result[8].name, "Episode 9")
+    }
+
     func testValidTVMazeExtraEpisodeIsAppended() {
         let tmdb = [TVEpisodeResult(
             episodeNumber: 1, name: "One", overview: nil,

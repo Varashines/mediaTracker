@@ -419,9 +419,11 @@ class DetailViewModel {
         
         do {
                 // Fetch both sources in parallel. TMDB remains authoritative for
-                // metadata and existing runtimes; TVMaze fills missing runtimes
-                // and contributes valid episode rows absent from TMDB.
+                // per-episode runtimes when present; TVMaze improves generic
+                // published-episode metadata. Their union preserves announced
+                // episodes that TVMaze has not listed yet.
                 var episodes: [TVEpisodeResult] = []
+                var canPruneStaleEpisodes = false
                 do {
                     async let tmdbTask = APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                     async let tvmazeSeasonTask: [TVMazeEpisode] = {
@@ -430,12 +432,23 @@ class DetailViewModel {
                             .filter { $0.season == seasonNumber }
                             .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
                     }()
-                    let tmdbEpisodes = (try? await tmdbTask) ?? []
+                    let tmdbEpisodes = try? await tmdbTask
                     let tvmazeSeason = await tvmazeSeasonTask
-                    episodes = RuntimeFallback.reconcile(
-                        tmdbEpisodes: tmdbEpisodes,
-                        tvmazeSeason: tvmazeSeason
-                    )
+                    if let tmdbEpisodes {
+                        episodes = RuntimeFallback.reconcile(
+                            tmdbEpisodes: tmdbEpisodes,
+                            tvmazeSeason: tvmazeSeason
+                        )
+                        canPruneStaleEpisodes = !tvmazeSeason.isEmpty
+                    } else {
+                        guard !tvmazeSeason.isEmpty else {
+                            throw URLError(.badServerResponse)
+                        }
+                        episodes = RuntimeFallback.reconcile(
+                            tmdbEpisodes: [],
+                            tvmazeSeason: tvmazeSeason
+                        )
+                    }
                 } catch {
                     episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                 }
@@ -476,19 +489,25 @@ class DetailViewModel {
                         } else if episode.season?.persistentModelID != currentSeason.persistentModelID {
                             episode.season = currentSeason
                         }
+                        episode.name = ep.name ?? "Episode \(ep.episodeNumber)"
+                        episode.overview = ep.overview ?? ""
+                        episode.airDate = ep.airDate
+                        episode.runtime = ep.runtime
+                        episode.updateAirDateValue()
 
                         if needsFullLoad {
                             episode.markWatched(markAsWatched)
                         }
                     }
 
+                    // The reconciled union is the only source of truth for both
+                    // the displayed season count and stored episode rows.
+                    currentSeason.episodeCount = episodes.count
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
                     self.item.syncCachedProperties(dirty: [.progress, .badge])
-                    // Authoritative count from the source we just fetched (TVMaze-first).
-                    // Always corrected, even when episodes were already loaded.
-                    currentSeason.episodeCount = episodes.count
-                    if needsFullLoad {
-                        // Prune stored episodes this season no longer in the source.
+                    if needsFullLoad && canPruneStaleEpisodes {
+                        // Prune only rows absent from both successfully fetched
+                        // sources, never rows merely missing from TVMaze.
                         let validIDs = Set(episodes.map { "\(tmdbID)_\(seasonNum)_\($0.episodeNumber)" })
                         let prefix = "\(tmdbID)_\(seasonNum)_"
                         for (uid, ep) in existingMap where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
