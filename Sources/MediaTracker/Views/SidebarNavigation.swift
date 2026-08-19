@@ -71,7 +71,12 @@ struct SidebarNavigation: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .background(.ultraThinMaterial)
+        .background(AppTheme.Colors.cardFill(for: scheme))
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(AppTheme.Colors.strokeDefault(for: scheme))
+                .frame(width: 1)
+        }
     }
 
     private func sectionHeader(_ text: String) -> some View {
