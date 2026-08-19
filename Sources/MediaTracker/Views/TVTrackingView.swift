@@ -217,6 +217,12 @@ private struct SeasonTab: View {
             HStack(spacing: 8) {
                 Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
 
+                if isSelected, season.totalEpisodesCount > 0 {
+                    Text("\(season.watchedEpisodesCount)/\(season.totalEpisodesCount)")
+                        .font(AppTheme.Font.caption2.monospacedDigit())
+                        .foregroundStyle(accent)
+                }
+
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
                         .font(AppTheme.Font.caption2)
