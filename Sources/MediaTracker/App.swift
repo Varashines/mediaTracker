@@ -210,7 +210,10 @@ struct MediaTrackerApp: App {
         Settings {
             settingsContent
         }
-        .defaultSize(width: 600, height: 680)
+        .defaultSize(
+            width: AppTheme.Layout.settingsIdealWidth,
+            height: AppTheme.Layout.settingsIdealHeight
+        )
 
 
     }

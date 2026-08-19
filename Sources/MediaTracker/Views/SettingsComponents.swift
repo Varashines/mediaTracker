@@ -13,6 +13,66 @@ struct SettingsCard<Content: View>: View {
     }
 }
 
+// MARK: - Segmented Pill Control
+
+struct SegmentedPillControl<Option: Hashable, Label: View>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    @ViewBuilder let label: (Option, Bool) -> Label
+
+    @Environment(\.colorScheme) private var scheme
+    @Namespace private var selectionNamespace
+    @State private var hoveredOption: Option?
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.micro) {
+            ForEach(options, id: \.self) { option in
+                let isSelected = selection == option
+                let isHovered = hoveredOption == option
+
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        selection = option
+                    }
+                } label: {
+                    label(option, isSelected)
+                        .foregroundStyle(
+                            isSelected
+                                ? AppTheme.Colors.accent
+                                : (isHovered ? Color.primary : Color.secondary)
+                        )
+                        .padding(.horizontal, AppTheme.Spacing.compact)
+                        .padding(.vertical, AppTheme.Spacing.mini)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(AppTheme.Colors.accent.opacity(0.18))
+                                    .matchedGeometryEffect(id: "segmented_selection", in: selectionNamespace)
+                            } else if isHovered {
+                                Capsule()
+                                    .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(AppTheme.Animation.microInteraction) {
+                        hoveredOption = hovering ? option : nil
+                    }
+                }
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(AppTheme.Spacing.micro)
+        .background(AppTheme.Colors.cardFill(for: scheme), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+        }
+    }
+}
+
 // MARK: - SettingsRow
 
 struct SettingsRow<Trailing: View>: View {
