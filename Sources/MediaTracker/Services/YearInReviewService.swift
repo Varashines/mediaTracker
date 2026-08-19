@@ -165,9 +165,12 @@ actor YearInReviewService {
         // 1. TV episodes watched within the year (drives per-day activity + TV "watched" ids).
         //    Season 0 (specials) are excluded, matching the app's progress logic.
         let episodeDescriptor = FetchDescriptor<TVEpisode>(
-            predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 && $0.watchedDate != nil && $0.watchedDate! >= start && $0.watchedDate! < end }
+            predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 }
         )
-        let watchedEpisodes = (try? modelContext.fetch(episodeDescriptor)) ?? []
+        let watchedEpisodes = ((try? modelContext.fetch(episodeDescriptor)) ?? []).filter { episode in
+            guard let watchedDate = episode.watchedDate else { return false }
+            return watchedDate >= start && watchedDate < end
+        }
 
         var activity: [Date: YearDayActivity] = [:]
         var watchedShowIDs = Set<Int>()
@@ -189,9 +192,12 @@ actor YearInReviewService {
 
         // 2. Movies completed within the year.
         let movieDescriptor = FetchDescriptor<MediaItem>(
-            predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
+            predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" }
         )
-        let completedMovies = (try? modelContext.fetch(movieDescriptor)) ?? []
+        let completedMovies = ((try? modelContext.fetch(movieDescriptor)) ?? []).filter { movie in
+            guard let completedDate = movie.lastStateChangeDate else { return false }
+            return completedDate >= start && completedDate < end
+        }
 
         var titlesByDay: [Date: [YearWatchedTitle]] = [:]
         var totalMovies = 0
