@@ -2,6 +2,31 @@ import Foundation
 import SwiftData
 import AppKit
 
+/// Runtime fallback helper: when TMDB episode count exactly mismatches TVmaze
+/// (season or series), use TVmaze per-episode runtimes. On equal count TMDB wins.
+enum RuntimeFallback {
+    /// Returns `episodeNumber -> runtime` map when fallback applies, else nil.
+    /// `seriesMismatch` = total series count != TVmaze total (OR per-season check).
+    static func map(tmdbCount: Int, tvmazeSeason: [TVMazeEpisode], seriesMismatch: Bool) -> [Int: Int]? {
+        guard !tvmazeSeason.isEmpty else { return nil }
+        let seasonMismatch = tvmazeSeason.count != tmdbCount
+        guard seriesMismatch || seasonMismatch else { return nil }
+        var m: [Int: Int] = [:]
+        m.reserveCapacity(tvmazeSeason.count)
+        for ep in tvmazeSeason {
+            guard let n = ep.number, let r = ep.runtime else { continue }
+            m[n] = r
+        }
+        return m.isEmpty ? nil : m
+    }
+    /// TVMaze-season sorted as TVEpisodeResult for count comparison reuse
+    static func tvmazeAsResults(_ mazeSeason: [TVMazeEpisode]) -> [TVEpisodeResult] {
+        mazeSeason.sorted { ($0.number ?? 0) < ($1.number ?? 0) }.map {
+            TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
+        }
+    }
+}
+
 extension BackgroundDataService {
     func refreshMovie(id: String, tmdbID: Int, force: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
@@ -221,6 +246,15 @@ extension BackgroundDataService {
                 return bySeason
             }()
 
+            // Runtime fallback support: raw TVmaze grouped + series mismatch flag
+            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
+                var d: [Int: [TVMazeEpisode]] = [:]
+                for ep in mazeEpisodes { if let s = ep.season { d[s, default: []].append(ep) } }
+                for (k, v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
+                return d
+            }()
+            let seriesMismatch = !mazeEpisodes.isEmpty && (details.numberOfEpisodes ?? 0) > 0 && mazeEpisodes.count != (details.numberOfEpisodes ?? 0)
+
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
             // Short-circuit: quick check before expensive sort-and-zip
@@ -364,11 +398,15 @@ extension BackgroundDataService {
                                 }
                             }
 
-                            // Runtime comes from TMDB only (matched by episode number);
-                            // nil when TMDB has no runtime for an episode. Fetch TMDB's
-                            // season when TVMaze supplied the list.
+                            // Runtime: TMDB by default; when exact episode count mismatches
+                            // (season or series) fallback to TVmaze runtimes.
+                            let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
+                            let seasonMismatch = !tvmazeRawForSeason.isEmpty && tvmazeRawForSeason.count != seasonData.episode_count
+                            let shouldFallback = seasonMismatch || seriesMismatch
                             let tmdbRuntimes: [Int: Int]
-                            if usesTVMaze {
+                            if shouldFallback, let fallback = RuntimeFallback.map(tmdbCount: seasonData.episode_count, tvmazeSeason: tvmazeRawForSeason, seriesMismatch: seriesMismatch) {
+                                tmdbRuntimes = fallback
+                            } else if usesTVMaze {
                                 let tmdbEps = (try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)) ?? []
                                 tmdbRuntimes = Dictionary(tmdbEps.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
                             } else {

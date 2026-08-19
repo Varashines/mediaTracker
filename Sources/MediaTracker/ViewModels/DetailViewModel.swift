@@ -418,27 +418,52 @@ class DetailViewModel {
         let tvMazeID = tv.tvMazeID
         
         do {
-            // APIClient already coalesces inFlightSeasonDetails / TVMaze fetches — no extra coordinator needed
-                // Source episodes from TVMaze (authoritative), falling back to TMDB.
-                let episodes: [TVEpisodeResult]
-                if let mazeID = tvMazeID, mazeID > 0 {
-                    let mazeSeason = ((try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeID, force: force)) ?? [])
-                        .filter { $0.season == seasonNumber }
-                        .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
-                    if !mazeSeason.isEmpty {
-                        episodes = mazeSeason.map {
-                            TVEpisodeResult(
-                                episodeNumber: $0.number ?? 0,
-                                name: $0.name,
-                                overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines),
-                                airDate: $0.airdate,
-                                runtime: $0.runtime
-                            )
-                        }
+                // Best refresh path: TMDB runtimes by default; when exact episode count mismatches
+                // (season or series), fallback to TVmaze runtimes. Parallel fetch both, then pick.
+                var episodes: [TVEpisodeResult] = []
+                do {
+                    async let tmdbTask = APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                    async let tvmazeSeasonTask: [TVMazeEpisode] = {
+                        guard let mazeID = tvMazeID, mazeID > 0 else { return [] }
+                        return ((try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeID, force: force)) ?? [])
+                            .filter { $0.season == seasonNumber }
+                            .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+                    }()
+                    let tmdbEpisodes = (try? await tmdbTask) ?? []
+                    let tvmazeSeason = await tvmazeSeasonTask
+                    if tvmazeSeason.isEmpty {
+                        episodes = tmdbEpisodes
+                    } else if tvmazeSeason.count == tmdbEpisodes.count {
+                        // Exact match → TMDB leads (keep TMDB runtimes)
+                        episodes = tmdbEpisodes
                     } else {
-                        episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                        // Mismatch → fallback to TVmaze runtimes (and TVmaze list, which is authoritative for count)
+                        if tmdbEpisodes.isEmpty {
+                            episodes = tvmazeSeason.map {
+                                TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
+                            }
+                        } else if let fallback = RuntimeFallback.map(tmdbCount: tmdbEpisodes.count, tvmazeSeason: tvmazeSeason, seriesMismatch: false) {
+                            // Keep TMDB list but swap runtimes where TVmaze has them
+                            episodes = tmdbEpisodes.map { ep in
+                                let r = fallback[ep.episodeNumber] ?? ep.runtime
+                                return TVEpisodeResult(episodeNumber: ep.episodeNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: r)
+                            }
+                            // If TVmaze has extra episodes beyond TMDB, append them (authoritative count)
+                            if tvmazeSeason.count > tmdbEpisodes.count {
+                                let tmdbNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
+                                let extra = tvmazeSeason.filter { !tmdbNumbers.contains($0.number ?? -1) }.map {
+                                    TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
+                                }
+                                episodes = episodes + extra
+                            }
+                        } else {
+                            episodes = tvmazeSeason.map {
+                                TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
+                            }
+                        }
                     }
-                } else {
+                    if episodes.isEmpty && !tmdbEpisodes.isEmpty { episodes = tmdbEpisodes }
+                } catch {
                     episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                 }
                 

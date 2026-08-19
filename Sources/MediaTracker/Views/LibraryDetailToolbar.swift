@@ -13,6 +13,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @State private var showSortPicker = false
     @State private var showGroupPicker = false
     @State private var refreshRotation: Double = 0
+    @Environment(\.colorScheme) private var colorScheme
 
     private var isSmartCollection: Bool {
         guard let cid = viewModel.collection.selectedCollectionID else { return false }
@@ -84,10 +85,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(isCustomSort ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                        .fill(isCustomSort ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
                 )
             }
             .buttonStyle(.borderless)
+            .contentShape(Capsule())
             .tint(.primary)
             .help(viewModel.filter.currentSortOrder.rawValue)
             .accessibilityLabel("Sort library")
@@ -130,10 +132,11 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(isCustomGroup ? AppTheme.Colors.accent.opacity(0.12) : Color.primary.opacity(0.04))
+                        .fill(isCustomGroup ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
                 )
             }
             .buttonStyle(.borderless)
+            .contentShape(Capsule())
             .tint(.primary)
             .help(isCustomGroup ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
             .accessibilityLabel("Group library")
@@ -208,12 +211,14 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 .padding(5)
                 .background(
                     Circle()
-                        .fill(Color.primary.opacity(0.04))
+                        .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                 )
         }
         .buttonStyle(.borderless)
+        .contentShape(Circle())
         .tint(.primary)
         .help("Sync Library")
+        .accessibilityLabel("Sync Library")
     }
 }
 
@@ -304,6 +309,7 @@ private struct PickerOptionRow: View {
     let label: String
     let isSelected: Bool
     let isHovered: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 10) {
@@ -323,11 +329,11 @@ private struct PickerOptionRow: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.primary.opacity(0.06) : .clear)
+                .fill(isHovered ? AppTheme.Colors.surfaceSubtle(for: colorScheme) : .clear)
         )
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.primary.opacity(0.04) : .clear)
+                .fill(isSelected ? AppTheme.Colors.surfaceGhost(for: colorScheme) : .clear)
         )
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())

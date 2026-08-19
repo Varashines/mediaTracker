@@ -875,6 +875,17 @@ actor BackgroundDataService {
                 return (uid, ep)
             })
             
+            // Best path: single TVmaze fetch for runtime fallback on exact count mismatch
+            let mazeId = tv.tvMazeID
+            let mazeAll: [TVMazeEpisode] = (mazeId != nil && mazeId! > 0) ? (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeId!, force: false)) ?? [] : []
+            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
+                var d: [Int: [TVMazeEpisode]] = [:]
+                for ep in mazeAll { if let s = ep.season { d[s, default: []].append(ep) } }
+                for (k,v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
+                return d
+            }()
+            let seriesMismatch = !mazeAll.isEmpty && (tv.numberOfEpisodes ?? 0) > 0 && mazeAll.count != (tv.numberOfEpisodes ?? 0)
+
             // Concurrent Fetching: Pre-fetch all missing season details in parallel to avoid sequential network bottleneck
             var results: [Int: [TVEpisodeResult]] = [:]
             await withTaskGroup(of: (Int, Result<[TVEpisodeResult], Error>).self) { group in
@@ -915,30 +926,48 @@ actor BackgroundDataService {
                 // If season has no episodes, or is missing some, fetch and populate
                 if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
                     if let tmdbEpisodes = results[sNum] {
+                        let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
+                        let seasonMismatch = !tvmazeRawForSeason.isEmpty && tvmazeRawForSeason.count != tmdbEpisodes.count
+                        let shouldFallback = seasonMismatch || seriesMismatch
+                        let fallback: [Int: Int]? = shouldFallback ? RuntimeFallback.map(tmdbCount: tmdbEpisodes.count, tvmazeSeason: tvmazeRawForSeason, seriesMismatch: seriesMismatch) : nil
                         for ep in tmdbEpisodes {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
                             let epName = ep.name ?? "Episode \(ep.episodeNumber)"
                             let epOverview = ep.overview ?? ""
-                            
+                            let runtime = fallback?[ep.episodeNumber] ?? ep.runtime
                             let episode: TVEpisode
                             if let existing = episodeMap[epUniqueID] {
                                 episode = existing
                                 episode.name = epName
                                 episode.overview = epOverview
                                 episode.airDate = ep.airDate
-                                episode.runtime = ep.runtime
+                                episode.runtime = runtime
                                 episode.updateAirDateValue()
                             } else {
-                                episode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime, showID: tmdbID)
+                                episode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: nil, runtime: runtime, showID: tmdbID)
                                 episode.showID = tmdbID
                                 modelContext.insert(episode)
                                 episodeMap[epUniqueID] = episode
                             }
-                            
+                             
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
                             episode.markWatched(true)
+                        }
+                        if tvmazeRawForSeason.count > tmdbEpisodes.count {
+                            let existingNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
+                            for mazeEp in tvmazeRawForSeason where !existingNumbers.contains(mazeEp.number ?? -1) {
+                                let n = mazeEp.number ?? 0
+                                let uid = "\(tmdbID)_\(sNum)_\(n)"
+                                if episodeMap[uid] != nil { continue }
+                                let ep = TVEpisode(episodeNumber: n, seasonNumber: sNum, name: mazeEp.name ?? "Episode \(n)", overview: mazeEp.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) ?? "", airDate: mazeEp.airdate, airstamp: mazeEp.airstamp, runtime: mazeEp.runtime, showID: tmdbID)
+                                ep.showID = tmdbID
+                                ep.season = season
+                                modelContext.insert(ep)
+                                episodeMap[uid] = ep
+                                ep.markWatched(true)
+                            }
                         }
                     }
                 } else {

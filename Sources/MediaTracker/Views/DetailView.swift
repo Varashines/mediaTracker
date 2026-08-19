@@ -280,8 +280,8 @@ struct DetailView: View {
         }
         .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
         .toolbar { detailToolbar }
-        .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-        .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+        .toolbarMaterial(isSleeping: sleepManager.isAsleep)
+        .toolbarRole(.editor)
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
@@ -553,11 +553,11 @@ struct DetailView: View {
                     .frame(width: 28, height: 28)
                     .background(
                         Circle()
-                            .fill(isHoveringRefresh ? Color.primary.opacity(0.08) : .clear)
+                            .fill(isHoveringRefresh ? AppTheme.Colors.surfaceMuted(for: colorScheme) : .clear)
                     )
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
                 .disabled(viewModel.isRefreshing)
                 .keyboardShortcut("r", modifiers: [.command])
                 .help("Refresh metadata")
@@ -575,11 +575,11 @@ struct DetailView: View {
                         .frame(width: 28, height: 28)
                         .background(
                             Circle()
-                                .fill(isHoveringShare ? Color.primary.opacity(0.08) : .clear)
+                                .fill(isHoveringShare ? AppTheme.Colors.surfaceMuted(for: colorScheme) : .clear)
                         )
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
                 .keyboardShortcut("s", modifiers: .command)
                 .help("Share collectible card (⌘S)")
                 .accessibilityLabel("Share collectible card")
@@ -607,7 +607,7 @@ struct DetailView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
                 .keyboardShortcut(.delete, modifiers: [.command])
                 .sensoryFeedback(.error, trigger: showDeleteConfirmation)
                 .help("Delete from library")

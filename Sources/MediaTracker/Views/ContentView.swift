@@ -275,8 +275,7 @@ struct LibraryDetailView: View {
                     onRefresh: refreshAction
                 )
             }
-            .toolbar(sleepManager.isAsleep ? .hidden : .visible, for: .windowToolbar)
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            .toolbarMaterial(isSleeping: sleepManager.isAsleep)
             .background {
                 Group {
                     Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
