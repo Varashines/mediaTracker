@@ -50,53 +50,56 @@ struct YearReviewView: View {
     // MARK: - Main Content
 
     private func mainContent(_ review: YearInReview) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ViewThatFits(in: .horizontal) {
-                    wideHeroLayout(review)
-                        .frame(minWidth: 1_120)
+        GeometryReader { geometry in
+            let usesWideHeroLayout = geometry.size.width >= 1_120
 
-                    compactHeroLayout(review)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if usesWideHeroLayout {
+                        wideHeroLayout(review)
+                    } else {
+                        compactHeroLayout(review)
+                    }
 
-                Divider()
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.vertical, AppTheme.Spacing.large)
-
-                // ── Two-pane: calendar left, overview right ───────────
-                HStack(alignment: .center, spacing: 0) {
-                    YearCalendarSection(
-                        review: review,
-                        selectedMonth: $selectedMonth,
-                        selectedDay: $selectedDay,
-                        colorScheme: colorScheme,
-                        ns: ns
-                    )
-                    .frame(width: 360)
-
-                    Divider()
-
-                    YearContextPanel(
-                        review: review,
-                        selectedMonth: selectedMonth,
-                        selectedDay: selectedDay,
-                        colorScheme: colorScheme,
-                        ns: ns,
-                        onSelectTitle: onSelectTitle
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-
-                // ── Year-wide taste section ───────────────────────────
-                if !review.topGenres.isEmpty || !review.topNetworks.isEmpty || !review.topActors.isEmpty {
                     Divider()
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         .padding(.vertical, AppTheme.Spacing.large)
 
-                    YearTasteSection(review: review, colorScheme: colorScheme)
-                }
+                    // ── Two-pane: calendar left, overview right ───────────
+                    HStack(alignment: .center, spacing: 0) {
+                        YearCalendarSection(
+                            review: review,
+                            selectedMonth: $selectedMonth,
+                            selectedDay: $selectedDay,
+                            colorScheme: colorScheme,
+                            ns: ns
+                        )
+                        .frame(width: 360)
 
-                Spacer().frame(height: AppTheme.Spacing.section)
+                        Divider()
+
+                        YearContextPanel(
+                            review: review,
+                            selectedMonth: selectedMonth,
+                            selectedDay: selectedDay,
+                            colorScheme: colorScheme,
+                            ns: ns,
+                            onSelectTitle: onSelectTitle
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+
+                    // ── Year-wide taste section ───────────────────────────
+                    if !review.topGenres.isEmpty || !review.topNetworks.isEmpty || !review.topActors.isEmpty {
+                        Divider()
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                            .padding(.vertical, AppTheme.Spacing.large)
+
+                        YearTasteSection(review: review, colorScheme: colorScheme)
+                    }
+
+                    Spacer().frame(height: AppTheme.Spacing.section)
+                }
             }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -310,39 +313,21 @@ private struct YearActivityOverview: View {
     private var calendar: Calendar { .current }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("YOUR VIEWING RHYTHM")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .kerning(1.2)
-                        .foregroundStyle(AppTheme.Colors.accent)
-                    Text("Select a month to explore its watch history")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("\(review.totalDaysWatched) days")
-                    .font(AppTheme.Font.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 92, maximum: 120), spacing: AppTheme.Spacing.small)],
-                spacing: AppTheme.Spacing.small
-            ) {
-                ForEach(months, id: \.self) { month in
-                    MonthActivityCard(
-                        month: month,
-                        review: review,
-                        isSelected: calendar.isDate(selectedMonth, equalTo: month, toGranularity: .month),
-                        isAvailable: month <= currentMonth,
-                        colorScheme: colorScheme
-                    ) {
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            selectedMonth = month
-                            selectedDay = nil
-                        }
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 92, maximum: 120), spacing: AppTheme.Spacing.small)],
+            spacing: AppTheme.Spacing.small
+        ) {
+            ForEach(months, id: \.self) { month in
+                MonthActivityCard(
+                    month: month,
+                    review: review,
+                    isSelected: calendar.isDate(selectedMonth, equalTo: month, toGranularity: .month),
+                    isAvailable: month <= currentMonth,
+                    colorScheme: colorScheme
+                ) {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        selectedMonth = month
+                        selectedDay = nil
                     }
                 }
             }
