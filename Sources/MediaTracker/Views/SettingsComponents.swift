@@ -43,7 +43,7 @@ struct SettingsRow<Trailing: View>: View {
         .background {
             if isHovered {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
                     .allowsHitTesting(false)
                     .padding(.horizontal, AppTheme.Spacing.tiny)
             }
@@ -121,7 +121,7 @@ struct SettingsLabeledRow<Trailing: View>: View {
         .background {
             if isHovered {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
                     .allowsHitTesting(false)
                     .padding(.horizontal, AppTheme.Spacing.tiny)
             }

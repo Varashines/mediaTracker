@@ -75,8 +75,13 @@ struct SettingsView: View {
         .background(AppThemeCoordinator.isReducingVisualEffects
             ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
             : AnyShapeStyle(.ultraThinMaterial))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 620, idealWidth: 660, minHeight: 640)
+        .frame(
+            minWidth: 560,
+            idealWidth: 600,
+            maxWidth: 640,
+            minHeight: 640,
+            idealHeight: 680
+        )
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
