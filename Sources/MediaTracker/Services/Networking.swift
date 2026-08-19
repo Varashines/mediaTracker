@@ -491,6 +491,8 @@ actor APIClient {
             networkLogoPath: d.networks?.first?.logo_path,
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
+            numberOfSeasons: d.number_of_seasons,
+            numberOfEpisodes: d.number_of_episodes,
             firstAirDate: d.first_air_date,
             nextEpisodeDate: d.next_episode_to_air?.air_date,
             nextEpisodeNumber: d.next_episode_to_air?.episode_number,
@@ -1030,7 +1032,8 @@ actor APIClient {
             } catch APIError.rateLimited {
                 attempts += 1
                 if attempts >= maxAttempts { throw APIError.rateLimited }
-                let delay = pow(2.0, Double(attempts))
+                let base = pow(2.0, Double(attempts))
+                let delay = base * Double.random(in: 0.75...1.25)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 try Task.checkCancellation()
             } catch {
@@ -1045,7 +1048,8 @@ actor APIClient {
                 if shouldRetry {
                     attempts += 1
                     if attempts >= maxAttempts { throw error }
-                    let delay = pow(2.0, Double(attempts))
+                    let base = pow(2.0, Double(attempts))
+                    let delay = base * Double.random(in: 0.75...1.25)
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
                 }

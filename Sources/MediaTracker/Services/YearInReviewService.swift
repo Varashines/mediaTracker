@@ -10,14 +10,20 @@ final class YearReviewCache {
     static let shared = YearReviewCache()
     private init() {}
 
-    private var cache: [ObjectIdentifier: (container: ModelContainer, review: YearInReview)] = [:]
+    private struct CacheKey: Hashable {
+        let containerID: ObjectIdentifier
+        let year: Int
+    }
+
+    private var cache: [CacheKey: (container: ModelContainer, review: YearInReview)] = [:]
 
     func review(containerID: ObjectIdentifier, year: Int) -> YearInReview? {
-        cache[containerID]?.review
+        cache[CacheKey(containerID: containerID, year: year)]?.review
     }
 
     func setReview(_ review: YearInReview, containerID: ObjectIdentifier, year: Int, container: ModelContainer) {
-        cache[containerID] = (container, review)
+        let key = CacheKey(containerID: containerID, year: year)
+        cache[key] = (container, review)
     }
 
     func invalidate() {

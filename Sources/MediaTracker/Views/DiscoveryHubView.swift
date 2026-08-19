@@ -18,7 +18,7 @@ struct DiscoveryHubView: View {
     
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 60) {
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                 if hasDataLoaded {
                     let hasAnyContent = !viewModel.discovery.cachedBadges.isEmpty ||
                         !viewModel.discovery.cachedNetworks.isEmpty ||
@@ -29,7 +29,16 @@ struct DiscoveryHubView: View {
 
                     if hasAnyContent {
                         if !viewModel.discovery.cachedBadges.isEmpty {
-                            DiscoverySection(title: "Recent Activity", icon: "sparkles", nodes: viewModel.discovery.cachedBadges, style: .text, isFastScrolling: isFastScrolling, limit: 6) { node in
+                            DiscoverySection(
+                                title: "Recent Activity",
+                                icon: "sparkles",
+                                nodes: viewModel.discovery.cachedBadges,
+                                style: .text,
+                                isFastScrolling: isFastScrolling,
+                                subtitle: "Your library, lately",
+                                isFeatured: true,
+                                limit: 6
+                            ) { node in
                                 onFilterSelected(DiscoveryFilter(type: .badge, name: node.name))
                             }
                         }
@@ -37,7 +46,7 @@ struct DiscoveryHubView: View {
                         if !viewModel.discovery.cachedNetworks.isEmpty || !viewModel.discovery.cachedStudios.isEmpty {
                             let currentNodes = networkTab == .networks ? viewModel.discovery.cachedNetworks : viewModel.discovery.cachedStudios
                             let sectionTitle = networkTab == .networks ? "Networks" : "Studios"
-                            DiscoverySection(title: sectionTitle, icon: "tv", nodes: currentNodes, style: .logo, isFastScrolling: isFastScrolling, limit: 12, headerAccessory: {
+                            DiscoverySection(title: sectionTitle, icon: "tv", nodes: currentNodes, style: .logo, isFastScrolling: isFastScrolling, subtitle: "\(currentNodes.count) in your library", limit: 12, headerAccessory: {
                                 HStack(spacing: 6) {
                                     NetworkTabPill("Networks", isSelected: networkTab == .networks) { networkTab = .networks }
                                     NetworkTabPill("Studios", isSelected: networkTab == .studios) { networkTab = .studios }
@@ -47,18 +56,18 @@ struct DiscoveryHubView: View {
                             }
                         }
 
-                        DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text, isFastScrolling: isFastScrolling, limit: 12) { node in
+                        DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedGenres.count) represented", limit: 12) { node in
                             onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                         }
 
                         if !viewModel.discovery.cachedLanguages.isEmpty {
-                            DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text, isFastScrolling: isFastScrolling, limit: 6) { node in
+                            DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedLanguages.count) represented", limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                             }
                         }
 
                         if !viewModel.discovery.cachedProviders.isEmpty {
-                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, limit: 6) { node in
+                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedProviders.count) available", limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .provider, name: node.name))
                             }
                         }
@@ -113,9 +122,7 @@ struct DiscoveryHubView: View {
         .accessibilityLabel("Discovery Hub")
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
-        .background {
-            ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-        }
+        .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
         .onAppear { refreshData(force: false) }
         .refreshable { 
             refreshData(force: true) 
@@ -251,6 +258,7 @@ private struct NetworkTabPill: View {
         .buttonStyle(.plain)
         .contentShape(Capsule())
         .onHover { isHovered = $0 }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

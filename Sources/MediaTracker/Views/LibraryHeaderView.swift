@@ -7,28 +7,52 @@ struct LibraryHeaderView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
-            // Network filter badge
             if let networks = selectedNetworks, let first = networks.first {
                 let title = networks.count == 1 ? first : "Merged Studios"
 
-                HStack(spacing: AppTheme.Spacing.tiny) {
-                    Text("Filtered by:")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
+                HStack {
+                    Label {
+                        Text(title)
+                    } icon: {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    }
+                    .font(AppTheme.Font.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.accent)
+                    .padding(.leading, AppTheme.Spacing.tiny)
 
-                    Text(title)
-                        .font(AppTheme.Font.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-
-                    Button { withAnimation(AppTheme.Animation.springSnappy) { onNetworkSelected([]) } } label: {
+                    Button {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            onNetworkSelected([])
+                        }
+                    } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(AppTheme.Icon.medium)
                             .foregroundStyle(.secondary)
-                            .contentShape(Rectangle())
+                            .padding(AppTheme.Spacing.micro)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .help("Clear \(title) filter")
+                    .accessibilityLabel("Clear \(title) filter")
+                }
+                .padding(.vertical, AppTheme.Spacing.micro)
+                .padding(.trailing, AppTheme.Spacing.micro)
+                .background(
+                    AppTheme.Colors.accent.opacity(0.12),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule()
+                        .stroke(AppTheme.Colors.accent.opacity(0.22), lineWidth: 0.5)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Active filter: \(title)")
+                .padding(.top, AppTheme.Spacing.micro)
 
-                    Spacer()
+                if networks.count > 1 {
+                    Text("\(networks.count) studios combined")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

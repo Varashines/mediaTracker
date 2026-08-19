@@ -35,10 +35,37 @@ jobs:
       - name: Build
         run: swift build
 
-      - name: Test
-        # NOTE: A general SwiftData in-memory-container teardown race
-        # (ModelContext.save() after its ModelContainer is deallocated) can crash
-        # a full-suite run even though all assertions pass. The build remains the
-        # hard gate; the test step reports failures without blocking merges.
+      - name: Test stable suites
+        run: |
+          suites=(
+            BadgeEngineTests
+            BingeLogicTests
+            DateUtilsTests
+            DetailViewModelTests
+            EpisodeRangeTests
+            FilterAndSortTests
+            ImportSeasonTasteTests
+            MarkWatchedTests
+            ModelTests
+            NetworkingTests
+            ProgressCalculationTests
+            RuntimeFallbackTests
+            SeasonTasteTests
+            StateTransitionTests
+            SyncCachedPropertiesTests
+            UtilityTests
+            WatchProvidersTests
+            WeeklyDigestTests
+            YearInReviewTests
+          )
+          for suite in "${suites[@]}"; do
+            swift test --filter "$suite"
+          done
+
+      - name: Test full suite (SwiftData teardown diagnostic)
+        # NOTE: SwiftData in-memory teardown race can still crash full-suite post-assertions
+        # even with SaveCoordinator.cancelAll() swizzle (Tests/Support/TestTeardown.swift).
+        # Stable suites above are the hard gate; keep this diagnostic visible until
+        # the framework-level container teardown race is fully eliminated.
         continue-on-error: true
         run: swift test

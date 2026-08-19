@@ -10,7 +10,7 @@ struct ScopedInsightsHeader: View {
     @State private var logoMap: [String: String] = [:]
     @State private var themeColorMap: [String: String] = [:]
 
-    private let columns = [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: AppTheme.Spacing.large)]
+    private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)]
 
     private var hasAnySection: Bool {
         if stats.topActors.count > 1 { return true }
@@ -41,7 +41,7 @@ struct ScopedInsightsHeader: View {
                     languageSection
                 }
             }
-            .padding(AppTheme.Spacing.large)
+            .padding(AppTheme.Spacing.xLarge)
             .background(AppTheme.Colors.cardFill(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
             .overlay(

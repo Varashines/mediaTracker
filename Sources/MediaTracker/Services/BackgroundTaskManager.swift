@@ -21,7 +21,13 @@ class BackgroundTaskManager {
     private var container: ModelContainer?
     
     private var isDripSyncing = false
-    
+
+    private var isThermalThrottled: Bool {
+        ProcessInfo.processInfo.thermalState == .serious
+            || ProcessInfo.processInfo.thermalState == .critical
+            || ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+     
     private init() {}
     
     func handleIdleStateChange(isIdle: Bool) {
@@ -37,6 +43,7 @@ class BackgroundTaskManager {
 
     private func performDripSync() async {
         guard let container = container, !isImportActive else { isDripSyncing = false; return }
+        guard !isThermalThrottled else { isDripSyncing = false; return }
         defer { isDripSyncing = false }
 
         let context = ModelContext(container)
@@ -121,6 +128,7 @@ class BackgroundTaskManager {
     func purgeSoftDeleted(retentionSeconds: TimeInterval = .secondsInDay) async {
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
+        guard !isThermalThrottled else { return }
 
         let cutoff = Date().addingTimeInterval(-retentionSeconds)
         do {
@@ -403,6 +411,7 @@ class BackgroundTaskManager {
     func refreshStaleBadges() async {
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
+        guard !isThermalThrottled else { return }
         let context = ModelContext(container)
         let now = Date()
         let twoDaysAgo = now.addingTimeInterval(-TimeInterval.days2)        

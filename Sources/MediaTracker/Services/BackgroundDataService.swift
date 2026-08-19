@@ -81,7 +81,11 @@ actor BackgroundDataService {
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id, \.typeValue]
         let existingItems = (try? context.fetch(descriptor)) ?? []
-        let existingMap = Dictionary(uniqueKeysWithValues: existingItems.map { ("\($0.id)_\($0.type?.rawValue ?? "")", $0) })
+        let existingMap = Dictionary(
+            uniqueKeysWithValues: existingItems.map {
+                (MediaItemData.importKey(id: $0.id, typeRawValue: $0.type?.rawValue ?? ""), $0)
+            }
+        )
         
         var importedCount = 0
         var mergedCount = 0
@@ -105,10 +109,10 @@ actor BackgroundDataService {
                 return (importedCount, mergedCount, skippedCount)
             }
             
-            let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
-            let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
-            let uniqueID = "\(typePrefix)_\(tmdbIDPart)"
-            let key = "\(uniqueID)_\(itemData.type)"
+            let mediaType = MediaItemData.canonicalMediaType(for: itemData.type, id: itemData.id)
+            let uniqueID = MediaItemData.canonicalID(itemData.id, type: mediaType)
+            let tmdbIDPart = uniqueID.split(separator: "_").last ?? uniqueID[...]
+            let key = MediaItemData.importKey(id: uniqueID, typeRawValue: mediaType.rawValue)
             let watchedDates = itemData.watchedEpisodeDates ?? [:]
 
             if let existing = existingMap[key] {
@@ -138,7 +142,9 @@ actor BackgroundDataService {
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 }
-                itemData.applySeasonTasteOverrides(to: existing, in: context, mergeOnlyIfEmpty: strategy == .merge)
+                if strategy != .skip {
+                    itemData.applySeasonTasteOverrides(to: existing, in: context, mergeOnlyIfEmpty: strategy == .merge)
+                }
             } else {
                 let item = MediaItem(
                     id: uniqueID,
@@ -146,7 +152,7 @@ actor BackgroundDataService {
                     overview: "",
                     posterURL: nil,
                     releaseDate: nil,
-                    type: MediaType(rawValue: itemData.type) ?? .movie
+                    type: mediaType
                 )
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
                 item.dateAdded = itemData.dateAdded
@@ -788,19 +794,16 @@ actor BackgroundDataService {
 
         do {
             let itemType = item.type
-            let coordKey = force ? "sync_force_\(tmdbID)" : "sync_\(tmdbID)"
-            let success = try await SyncCoordinator.shared.perform(key: coordKey) {
-                let success: Bool
-                if itemType == .movie {
-                    success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
-                } else if itemType == .tvShow {
-                    success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
-                } else {
-                    success = false
-                }
-                return success
+            // Deduplication handled by APIClient in-flight coalescing (inFlightMovieDetails/TVDetails)
+            // — no need for SyncCoordinator which would capture self (non-Sendable) into a @Sendable closure.
+            let success: Bool
+            if itemType == .movie {
+                success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
+            } else if itemType == .tvShow {
+                success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
+            } else {
+                success = false
             }
-            
             if !success { return false }
             
             // Phase 5: Notification Scheduling (skip in tests)
@@ -874,6 +877,17 @@ actor BackgroundDataService {
                 return (uid, ep)
             })
             
+            // Fetch TVMaze once so each season can fill missing TMDB runtimes and
+            // add valid episode rows that TMDB has not returned yet.
+            let mazeId = tv.tvMazeID
+            let mazeAll: [TVMazeEpisode] = (mazeId != nil && mazeId! > 0) ? (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeId!, force: false)) ?? [] : []
+            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
+                var d: [Int: [TVMazeEpisode]] = [:]
+                for ep in mazeAll { if let s = ep.season, s > 0 { d[s, default: []].append(ep) } }
+                for (k,v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
+                return d
+            }()
+
             // Concurrent Fetching: Pre-fetch all missing season details in parallel to avoid sequential network bottleneck
             var results: [Int: [TVEpisodeResult]] = [:]
             await withTaskGroup(of: (Int, Result<[TVEpisodeResult], Error>).self) { group in
@@ -914,30 +928,54 @@ actor BackgroundDataService {
                 // If season has no episodes, or is missing some, fetch and populate
                 if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
                     if let tmdbEpisodes = results[sNum] {
+                        let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
+                        let runtimeMap = RuntimeFallback.runtimeMap(
+                            tmdbEpisodes: tmdbEpisodes,
+                            tvmazeSeason: tvmazeRawForSeason
+                        )
                         for ep in tmdbEpisodes {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(ep.episodeNumber)"
                             let epName = ep.name ?? "Episode \(ep.episodeNumber)"
                             let epOverview = ep.overview ?? ""
-                            
+                            let runtime = runtimeMap[ep.episodeNumber] ?? ep.runtime
                             let episode: TVEpisode
                             if let existing = episodeMap[epUniqueID] {
                                 episode = existing
                                 episode.name = epName
                                 episode.overview = epOverview
                                 episode.airDate = ep.airDate
-                                episode.runtime = ep.runtime
+                                episode.runtime = runtime
                                 episode.updateAirDateValue()
                             } else {
-                                episode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: nil, runtime: ep.runtime, showID: tmdbID)
+                                episode = TVEpisode(episodeNumber: ep.episodeNumber, seasonNumber: sNum, name: epName, overview: epOverview, airDate: ep.airDate, airstamp: nil, runtime: runtime, showID: tmdbID)
                                 episode.showID = tmdbID
                                 modelContext.insert(episode)
                                 episodeMap[epUniqueID] = episode
                             }
-                            
+                             
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
                             episode.markWatched(true)
+                        }
+                        let existingNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
+                        let extras = RuntimeFallback.validExtras(
+                            tmdbEpisodeNumbers: existingNumbers,
+                            tvmazeSeason: tvmazeRawForSeason
+                        )
+                        if !extras.isEmpty {
+                            for mazeEp in extras {
+                                guard let n = mazeEp.number else { continue }
+                                let uid = "\(tmdbID)_\(sNum)_\(n)"
+                                if episodeMap[uid] != nil { continue }
+                                let ep = TVEpisode(episodeNumber: n, seasonNumber: sNum, name: mazeEp.name ?? "Episode \(n)", overview: mazeEp.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) ?? "", airDate: mazeEp.airdate, airstamp: mazeEp.airstamp, runtime: mazeEp.runtime, showID: tmdbID)
+                                ep.showID = tmdbID
+                                ep.season = season
+                                modelContext.insert(ep)
+                                episodeMap[uid] = ep
+                                ep.markWatched(true)
+                            }
+                            season.episodeCount = max(season.episodeCount, season.episodes.count)
                         }
                     }
                 } else {

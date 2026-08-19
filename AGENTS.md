@@ -1,6 +1,6 @@
 # MediaTracker
 
-Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 14+, Swift 6.0 strict concurrency.
+Native macOS media tracking app (SwiftUI + SwiftData). Targets macOS 15+, Swift 6.0 strict concurrency.
 
 ## Build & Test
 

@@ -28,6 +28,22 @@ struct AppTheme {
         static let card: CGFloat = 24
     }
 
+    /// Semantic dimensions for the app's major window and content layouts.
+    struct Layout {
+        static let settingsMinimumWidth: CGFloat = 560
+        static let settingsIdealWidth: CGFloat = 600
+        static let settingsMaximumWidth: CGFloat = 640
+        static let settingsIdealHeight: CGFloat = 680
+
+        static func pageMargin(for availableWidth: CGFloat) -> CGFloat {
+            switch availableWidth {
+            case ..<1_000: return Spacing.large
+            case 1_000..<1_500: return Spacing.pageMargin
+            default: return Spacing.section * 1.5
+            }
+        }
+    }
+
     struct Kerning {
         static let tight: CGFloat = 0.8
         static let normal: CGFloat = 1.0

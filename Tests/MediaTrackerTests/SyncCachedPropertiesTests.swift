@@ -145,4 +145,68 @@ final class SyncCachedPropertiesTests: XCTestCase {
         item.syncCachedProperties(now: Date())
         XCTAssertFalse(item.storedIsUpcoming)
     }
+
+    @MainActor
+    func testCachedSeasonCountUsesNumberOfSeasonsFromTMDB() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
+        let context = container.mainContext
+
+        let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tv = TVShowDetails(tmdbID: 203857)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(tv)
+
+        // Only 3 seasons attached to the relationship, but TMDB says 4.
+        tv.numberOfSeasons = 4
+        for n in 1...3 {
+            let season = TVSeason(seasonNumber: n, name: "S\(n)", episodeCount: 8)
+            season.tvShowDetails = tv
+            season.showID = 203857
+            tv.seasons.append(season)
+            context.insert(season)
+        }
+        try context.save()
+
+        item.syncCachedProperties(now: Date())
+
+        XCTAssertEqual(item.cachedSeasonCount, 4, "cachedSeasonCount should use numberOfSeasons even when a season is missing from the relationship")
+    }
+
+    @MainActor
+    func testCachedSeasonCountReattachesOrphanedSeasons() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
+        let context = container.mainContext
+
+        let item = MediaItem(id: "1", title: "Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tv = TVShowDetails(tmdbID: 203857)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(tv)
+
+        // numberOfSeasons is nil (legacy data), so the fallback is tv.seasons.count.
+        // An orphaned season (tvShowDetails == nil) shares showID and must be reattached.
+        tv.numberOfSeasons = nil
+        for n in 1...3 {
+            let season = TVSeason(seasonNumber: n, name: "S\(n)", episodeCount: 8)
+            season.tvShowDetails = tv
+            season.showID = 203857
+            tv.seasons.append(season)
+            context.insert(season)
+        }
+        // Orphaned season 4: exists with showID but no tvShowDetails.
+        let orphanSeason = TVSeason(seasonNumber: 4, name: "S4", episodeCount: 1)
+        orphanSeason.showID = 203857
+        context.insert(orphanSeason)
+        try context.save()
+
+        item.syncCachedProperties(now: Date())
+
+        XCTAssertEqual(item.cachedSeasonCount, 4, "cachedSeasonCount should reattach the orphaned season and count 4")
+        XCTAssertNotNil(orphanSeason.tvShowDetails, "Orphaned season should be reattached to the TVShowDetails relationship")
+    }
 }

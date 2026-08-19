@@ -172,15 +172,11 @@ struct MediaTrackerApp: App {
         NotificationManager.shared.setModelContainer(sharedModelContainer)
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
-        BackgroundTaskManager.shared.start(container: sharedModelContainer)
 
         let cacheSizeMemory = 10 * 1024 * 1024
         let cacheSizeDisk = 500 * 1024 * 1024
         let cache = URLCache(memoryCapacity: cacheSizeMemory, diskCapacity: cacheSizeDisk, directory: nil)
         URLCache.shared = cache
-
-        Task { await NotificationManager.shared.requestPermission() }
-        Task { await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded() }
     }
 
     @Environment(\.scenePhase) private var scenePhase
@@ -188,6 +184,7 @@ struct MediaTrackerApp: App {
     @State private var lockService = AppLockService.shared
     @State private var systemColorScheme: ColorScheme = .light
     @State private var appearanceObserver: AnyCancellable?
+    @State private var hasStartedDeferredServices = false
 
     var body: some Scene {
         WindowGroup {
@@ -210,6 +207,10 @@ struct MediaTrackerApp: App {
         Settings {
             settingsContent
         }
+        .defaultSize(
+            width: AppTheme.Layout.settingsIdealWidth,
+            height: AppTheme.Layout.settingsIdealHeight
+        )
 
 
     }
@@ -230,12 +231,14 @@ struct MediaTrackerApp: App {
         }
         .preferredColorScheme(mappedScheme)
         .tint(AppTheme.Colors.accent)
+        .sensoryFeedback(HapticTrigger.shared.feedback, trigger: HapticTrigger.shared.token)
         .appErrorToast(state: errorState)
         .onAppear {
             updateSystemColorScheme()
             observeSystemAppearance()
             applyTheme(themePreference)
             lockService.lock()
+            startDeferredServices()
         }
         .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
         .onChange(of: scenePhase) { _, newValue in
@@ -272,6 +275,22 @@ struct MediaTrackerApp: App {
         case 1: return .light
         case 2: return .dark
         default: return systemColorScheme
+        }
+    }
+
+    private func startDeferredServices() {
+        guard !hasStartedDeferredServices else { return }
+        hasStartedDeferredServices = true
+
+        Task { @MainActor in
+            // Let the initial scene render before kicking off migrations, backups,
+            // notification scheduling, and the platform permission prompt.
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+
+            BackgroundTaskManager.shared.start(container: sharedModelContainer)
+            await NotificationManager.shared.requestPermission()
+            await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded()
         }
     }
 

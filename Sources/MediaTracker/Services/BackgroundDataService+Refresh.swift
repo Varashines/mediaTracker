@@ -2,6 +2,82 @@ import Foundation
 import SwiftData
 import AppKit
 
+/// Reconciles one season's TMDB and TVMaze episode data.
+/// TMDB remains authoritative for metadata and runtime when an episode exists
+/// in both sources. TVMaze only supplies missing runtimes and valid extra rows.
+enum RuntimeFallback {
+    static func reconcile(
+        tmdbEpisodes: [TVEpisodeResult],
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [TVEpisodeResult] {
+        guard !tvmazeSeason.isEmpty else { return tmdbEpisodes }
+
+        let validMazeEpisodes = tvmazeSeason
+            .filter { ($0.season ?? 0) > 0 && ($0.number ?? 0) > 0 }
+            .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+        guard !validMazeEpisodes.isEmpty else { return tmdbEpisodes }
+
+        let mazeByNumber = Dictionary(
+            validMazeEpisodes.map { ($0.number!, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let tmdbNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
+
+        var reconciled = tmdbEpisodes.map { episode in
+            guard episode.runtime == nil,
+                  let mazeRuntime = mazeByNumber[episode.episodeNumber]?.runtime else {
+                return episode
+            }
+            return TVEpisodeResult(
+                episodeNumber: episode.episodeNumber,
+                name: episode.name,
+                overview: episode.overview,
+                airDate: episode.airDate,
+                runtime: mazeRuntime
+            )
+        }
+
+        let extras = validMazeEpisodes
+            .filter { !tmdbNumbers.contains($0.number!) }
+            .map {
+                TVEpisodeResult(
+                    episodeNumber: $0.number!,
+                    name: $0.name,
+                    overview: $0.summary?
+                        .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                    airDate: $0.airdate,
+                    runtime: $0.runtime
+                )
+            }
+        reconciled.append(contentsOf: extras)
+        return reconciled.sorted { $0.episodeNumber < $1.episodeNumber }
+    }
+
+    static func runtimeMap(
+        tmdbEpisodes: [TVEpisodeResult],
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [Int: Int] {
+        Dictionary(
+            reconcile(tmdbEpisodes: tmdbEpisodes, tvmazeSeason: tvmazeSeason)
+                .compactMap { episode in
+                    episode.runtime.map { (episode.episodeNumber, $0) }
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    static func validExtras(
+        tmdbEpisodeNumbers: Set<Int>,
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [TVMazeEpisode] {
+        tvmazeSeason.filter {
+            guard ($0.season ?? 0) > 0, let number = $0.number, number > 0 else { return false }
+            return !tmdbEpisodeNumbers.contains(number)
+        }
+    }
+}
+
 extension BackgroundDataService {
     func refreshMovie(id: String, tmdbID: Int, force: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
@@ -221,6 +297,14 @@ extension BackgroundDataService {
                 return bySeason
             }()
 
+            // Raw TVMaze episodes grouped by season for season-level reconciliation.
+            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
+                var d: [Int: [TVMazeEpisode]] = [:]
+                for ep in mazeEpisodes { if let s = ep.season, s > 0 { d[s, default: []].append(ep) } }
+                for (k, v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
+                return d
+            }()
+
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
             // Short-circuit: quick check before expensive sort-and-zip
@@ -255,6 +339,8 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
+            tvDetails.numberOfSeasons = details.numberOfSeasons
+            tvDetails.numberOfEpisodes = details.numberOfEpisodes
             tvDetails.network = details.network
             tvDetails.networkLogoPath = details.networkLogoPath
 
@@ -362,13 +448,17 @@ extension BackgroundDataService {
                                 }
                             }
 
-                            // Runtime comes from TMDB only (matched by episode number);
-                            // nil when TMDB has no runtime for an episode. Fetch TMDB's
-                            // season when TVMaze supplied the list.
+                            // TMDB leads; TVMaze fills missing runtimes for matching
+                            // episode numbers without allowing a series-wide mismatch to
+                            // overwrite otherwise valid season data.
+                            let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
                             let tmdbRuntimes: [Int: Int]
                             if usesTVMaze {
                                 let tmdbEps = (try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)) ?? []
-                                tmdbRuntimes = Dictionary(tmdbEps.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
+                                tmdbRuntimes = RuntimeFallback.runtimeMap(
+                                    tmdbEpisodes: tmdbEps,
+                                    tvmazeSeason: tvmazeRawForSeason
+                                )
                             } else {
                                 tmdbRuntimes = Dictionary(episodes.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
                             }

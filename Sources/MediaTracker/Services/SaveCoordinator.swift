@@ -43,4 +43,11 @@ class SaveCoordinator {
             AppErrorState.shared.surfaceError("Failed to save changes: \(error.localizedDescription)")
         }
     }
+
+    /// Cancels all pending debounced saves. Call from XCTest tearDown to avoid
+    /// `ModelContext.save() after deallocation` races in full-suite runs.
+    func cancelAll() {
+        for (_, task) in saveTasks { task.cancel() }
+        saveTasks.removeAll()
+    }
 }

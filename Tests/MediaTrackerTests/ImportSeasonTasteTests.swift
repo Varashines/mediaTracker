@@ -109,4 +109,52 @@ final class ImportSeasonTasteTests: XCTestCase {
         XCTAssertEqual(map[1], "Like", "Merge must not clobber an existing override")
         XCTAssertEqual(map[2], "Love", "Missing season should be created with the override")
     }
+
+    func testImportKeyNormalizesLegacyTypeSpellings() {
+        XCTAssertEqual(
+            MediaItemData.importKey(id: "movie_42", typeRawValue: "movie"),
+            "movie_42_Movie"
+        )
+        XCTAssertEqual(
+            MediaItemData.importKey(id: "42", typeRawValue: "Movie"),
+            "movie_42_Movie"
+        )
+        XCTAssertEqual(
+            MediaItemData.importKey(id: "tv_42", typeRawValue: "tv"),
+            "tv_42_TV Show"
+        )
+        XCTAssertEqual(
+            MediaItemData.importKey(id: "42", typeRawValue: "series"),
+            "tv_42_TV Show"
+        )
+    }
+
+    func testSkipImportRecognizesLowercaseLegacyMovieType() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        context.insert(MediaItem(id: "movie_404", title: "Existing", overview: "", type: .movie))
+        try context.save()
+
+        let data = MediaItemData(
+            id: "404", title: "Legacy", type: "movie", state: "Wishlist",
+            dateAdded: Date(), taste: nil, watchedEpisodeIDs: nil,
+            lastInteractionDate: nil, watchedEpisodeDates: nil,
+            seasonTasteOverrides: nil, posterURL: nil, overview: nil,
+            backdropURL: nil, releaseDate: nil, lastUpdated: nil,
+            titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
+            cachedEpisodeRuntime: nil, cachedWatchedEpisodeCount: nil,
+            remainingEpisodesCount: nil, cachedLanguage: nil,
+            cachedNetwork: nil, cachedNetworkLogoPath: nil, mood: nil
+        )
+        let service = BackgroundDataService(modelContainer: container)
+
+        let result = await service.importLibraryData(
+            backup: LibraryBackup(items: [data], collections: nil),
+            strategy: .skip
+        )
+
+        XCTAssertEqual(result.imported, 0)
+        XCTAssertEqual(result.skipped, 1)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<MediaItem>()).count, 1)
+    }
 }

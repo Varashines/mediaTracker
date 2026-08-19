@@ -371,6 +371,17 @@ extension View {
             self
         }
     }
+
+    /// Unified windowToolbar material — single source for `ContentView` + `DetailView`.
+    /// Animates visibility with sleep transition (0.6s) to avoid snap.
+    @ViewBuilder
+    func toolbarMaterial(isSleeping: Bool) -> some View {
+        self
+            .toolbar(isSleeping ? .hidden : .visible, for: .windowToolbar)
+            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+            .animation(.easeInOut(duration: 0.6), value: isSleeping)
+    }
     
     @ViewBuilder
     func colorInvert(_ active: Bool) -> some View {

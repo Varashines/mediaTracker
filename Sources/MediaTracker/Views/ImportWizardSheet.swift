@@ -26,6 +26,18 @@ struct ImportWizardSheet: View {
     @State private var errorMessage: String?
     @State private var showFileImporter: Bool = false
 
+    private var stepProgress: (current: Int, total: Int) {
+        let current: Int
+        switch currentStep {
+        case .selectFile: current = 1
+        case .preview: current = 2
+        case .strategy: current = 3
+        case .progress: current = 4
+        case .summary: current = 5
+        }
+        return (current, 5)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -46,6 +58,9 @@ struct ImportWizardSheet: View {
                     Text("Restore items and collections from a MediaTracker backup")
                         .font(AppTheme.Font.label)
                         .foregroundStyle(.secondary)
+                    Text("Step \(stepProgress.current) of \(stepProgress.total)")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.tertiary)
                 }
 
                 Spacer()
@@ -145,7 +160,7 @@ struct ImportWizardSheet: View {
             }
             .padding(AppTheme.Spacing.large)
         }
-        .frame(width: 520, height: 480)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 480, idealHeight: 540)
         .background(AppTheme.Colors.background(for: colorScheme))
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json]) { result in
             switch result {

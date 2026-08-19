@@ -150,21 +150,23 @@ struct SearchView: View {
             HStack {
                 Spacer()
 
-                HStack(spacing: 4) {
-                    filterPill(title: "All", icon: nil, type: .all, shortcut: "⌘⌥1")
-                    filterPill(title: "Movies", icon: "film.fill", type: .movie, shortcut: "⌘⌥2")
-                    filterPill(title: "TV Shows", icon: "tv.fill", type: .tvShow, shortcut: "⌘⌥3")
-                    filterPill(title: "Cast & Crew", icon: "person.2.fill", type: .castCrew, shortcut: "⌘⌥4")
+                SegmentedPillControl(
+                    options: SearchType.allCases,
+                    selection: Binding(
+                        get: { selectedType },
+                        set: { viewModel.filter.searchTypeFilter = $0 }
+                    )
+                ) { type, isSelected in
+                    HStack(spacing: AppTheme.Spacing.micro) {
+                        if let icon = searchTypeIcon(type) {
+                            Image(systemName: icon)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+
+                        Text(searchTypeTitle(type))
+                            .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
+                    }
                 }
-                .padding(4)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.Colors.cardFill(for: colorScheme))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
-                )
 
                 Spacer()
             }
@@ -175,44 +177,22 @@ struct SearchView: View {
         }
     }
 
-    private func filterPill(title: String, icon: String?, type: SearchType, shortcut: String) -> some View {
-        let isSelected = selectedType == type
-        let accent = AppTheme.Colors.accent
-        let contrast = accent.readableForeground
-        return Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                viewModel.filter.searchTypeFilter = type
-            }
-        } label: {
-            HStack(spacing: 5) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .semibold))
-                }
-
-                Text(title)
-                    .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
-
-                Text(shortcut)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(isSelected ? contrast.opacity(0.9) : Color.secondary.opacity(0.75))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule()
-                            .fill(isSelected ? Color.white.opacity(0.22) : Color.primary.opacity(0.06))
-                    )
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(isSelected ? contrast : .secondary)
-            .background(
-                Capsule()
-                    .fill(isSelected ? accent : Color.primary.opacity(0.04))
-            )
-            .contentShape(Capsule())
+    private func searchTypeTitle(_ type: SearchType) -> String {
+        switch type {
+        case .all: return "All"
+        case .movie: return "Movies"
+        case .tvShow: return "TV Shows"
+        case .castCrew: return "Cast & Crew"
         }
-        .buttonStyle(.plain)
+    }
+
+    private func searchTypeIcon(_ type: SearchType) -> String? {
+        switch type {
+        case .all: return nil
+        case .movie: return "film.fill"
+        case .tvShow: return "tv.fill"
+        case .castCrew: return "person.2.fill"
+        }
     }
 
     @ViewBuilder

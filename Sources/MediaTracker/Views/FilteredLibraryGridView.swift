@@ -25,6 +25,8 @@ struct FilteredLibraryGridView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var updateTask: Task<Void, Never>? = nil
+    @State private var loadMoreTask: Task<Void, Never>? = nil
+    @State private var scopedStatsTask: Task<Void, Never>? = nil
     @State private var recsTask: Task<Void, Never>? = nil
     @State private var scrollTask: Task<Void, Never>? = nil
     @State private var cachedLikedTitles: [String] = []
@@ -118,6 +120,7 @@ struct FilteredLibraryGridView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         if let stats = scopedStats, !items.isEmpty {
                             ScopedInsightsHeader(stats: stats, filterName: filter.name, filterType: filter.type)
+                                .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                         if filter.type == .onThisWeek {
                             ForEach(Array(groupedByWeekday.enumerated()), id: \.element.0) { groupIdx, group in
@@ -178,9 +181,7 @@ struct FilteredLibraryGridView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .background {
-                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
+                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)
@@ -199,10 +200,18 @@ struct FilteredLibraryGridView: View {
             let itemID = MediaStateService.shared.lastChangedItemID
             if let itemID = itemID {
                 updateSingleItem(id: itemID)
+                fetchScopedStats()
             } else {
                 scopedStats = nil
                 fetchItems()
+                fetchScopedStats()
             }
+        }
+        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
+            guard let itemID = MediaStateService.shared.lastChangedItemID else { return }
+            ScopedStatsActor.invalidateCache()
+            updateSingleItem(id: itemID)
+            fetchScopedStats()
         }
         .task {
             fetchItems()
@@ -211,17 +220,17 @@ struct FilteredLibraryGridView: View {
             }
         }
         .task {
-            let actor = ScopedStatsActor(modelContainer: modelContext.container)
-            let stats = await actor.fetchScopedStats(filter: filter)
-            if stats.totalItems > 0 {
-                await MainActor.run { scopedStats = stats }
-            }
+            fetchScopedStats()
         }
         .onDisappear {
             fetchTask?.cancel()
             fetchTask = nil
             updateTask?.cancel()
             updateTask = nil
+            loadMoreTask?.cancel()
+            loadMoreTask = nil
+            scopedStatsTask?.cancel()
+            scopedStatsTask = nil
             recsTask?.cancel()
             recsTask = nil
         }
@@ -299,7 +308,8 @@ struct FilteredLibraryGridView: View {
         case .onThisWeek: sortOrder = .newestRelease
         }
 
-        Task {
+        loadMoreTask?.cancel()
+        loadMoreTask = Task {
             do {
                 let result = try await filterActor.filterAndSort(
                     category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: sortOrder,
@@ -313,17 +323,29 @@ struct FilteredLibraryGridView: View {
                     recomputeRecommendationData()
                 }
 
-                // Prefetch images for newly loaded items so they're ready when the user scrolls to them
-                let posterURLs = result.displayed.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
-                if !posterURLs.isEmpty {
-                    ImageCache.shared.prewarmImages(urls: posterURLs, targetSize: .thumbSmall)
-                }
+                // Keep the next viewport warm without creating network work for an entire page.
+                ImageCache.shared.prewarmImages(
+                    result.displayed,
+                    limit: 12,
+                    targetSize: .thumbSmall,
+                    priority: .low
+                )
             } catch {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error loading more filtered items: \(error)")
                 }
                 await MainActor.run { isLoadingMore = false }
             }
+        }
+    }
+
+    private func fetchScopedStats() {
+        scopedStatsTask?.cancel()
+        scopedStatsTask = Task {
+            let actor = ScopedStatsActor(modelContainer: modelContext.container)
+            let stats = await actor.fetchScopedStats(filter: filter)
+            guard !Task.isCancelled, stats.totalItems > 0 else { return }
+            await MainActor.run { scopedStats = stats }
         }
     }
 

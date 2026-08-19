@@ -68,24 +68,21 @@ struct SmartCollectionsHubView: View {
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                
+
+                HStack {
+                    sectionHeaderMini("Your Collections")
+                    Spacer()
+                    collectionCreationMenu
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.top, AppTheme.Spacing.small)
+
                 // 2. CUSTOM SMART PLAYLISTS
                 HStack {
                     sectionHeaderMini("Smart Playlists")
-                    Spacer()
-                    Button {
-                        initialIsSmart = true
-                        showingCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(Color.secondary.gradient)
-                            .font(AppTheme.Font.titleMedium)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.top, 20)
+                .padding(.top, AppTheme.Spacing.small)
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 25)], spacing: 25) {
                     if customSmartCollections.isEmpty {
@@ -114,17 +111,6 @@ struct SmartCollectionsHubView: View {
                 // 3. MANUAL COLLECTIONS
                 HStack {
                     sectionHeaderMini("Manual Collections")
-                    Spacer()
-                    Button {
-                        initialIsSmart = false
-                        showingCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(Color.secondary.gradient)
-                            .font(AppTheme.Font.titleMedium)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 .padding(.top, 20)
@@ -191,6 +177,34 @@ struct SmartCollectionsHubView: View {
             .font(AppTheme.Font.caption)
             .foregroundStyle(.secondary)
             .kerning(1.2)
+    }
+
+    private var collectionCreationMenu: some View {
+        Menu {
+            Button {
+                initialIsSmart = true
+                showingCreateSheet = true
+            } label: {
+                Label("Smart Playlist", systemImage: "sparkles")
+            }
+
+            Button {
+                initialIsSmart = false
+                showingCreateSheet = true
+            } label: {
+                Label("Manual Collection", systemImage: "folder.badge.plus")
+            }
+        } label: {
+            Label("New Collection", systemImage: "plus")
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(AppTheme.Colors.accent)
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.micro)
+                .background(AppTheme.Colors.accent.opacity(0.10), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+        .accessibilityLabel("Create collection")
     }
 
     private func emptyStatePlaceholder(title: String, subtitle: String, color: Color, action: @escaping () -> Void) -> some View {

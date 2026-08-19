@@ -75,6 +75,29 @@ struct MediaItemData: Codable, Sendable {
 }
 
 extension MediaItemData {
+    static func canonicalMediaType(for rawValue: String, id: String) -> MediaType {
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalized == "tv" || normalized == "tv show" || normalized == "tvshow"
+            || normalized == "series" || id.lowercased().hasPrefix("tv_") {
+            return .tvShow
+        }
+        return .movie
+    }
+
+    static func canonicalID(_ id: String, type: MediaType) -> String {
+        let trimmedID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tmdbID = trimmedID.split(separator: "_").last.map(String.init) ?? trimmedID
+        let prefix = type == .movie ? "movie" : "tv"
+        return "\(prefix)_\(tmdbID)"
+    }
+
+    static func importKey(id: String, typeRawValue: String) -> String {
+        let type = canonicalMediaType(for: typeRawValue, id: id)
+        return "\(canonicalID(id, type: type))_\(type.rawValue)"
+    }
+
     init(item: MediaItem, watchedIDs: [String]?, watchedDates: [String: Date]?) {
         var seasonTaste: [Int: String]? = nil
         if item.type == .tvShow, let tv = item.tvShowDetails {

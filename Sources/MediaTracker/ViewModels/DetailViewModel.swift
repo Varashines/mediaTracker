@@ -416,30 +416,27 @@ class DetailViewModel {
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
         let tvMazeID = tv.tvMazeID
-        let syncKey = "fetch_episodes_\(tmdbID)_\(seasonNumber)"
         
         do {
-            try await SyncCoordinator.shared.perform(key: syncKey) {
-                // Source episodes from TVMaze (authoritative), falling back to TMDB.
-                let episodes: [TVEpisodeResult]
-                if let mazeID = tvMazeID, mazeID > 0 {
-                    let mazeSeason = ((try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeID, force: force)) ?? [])
-                        .filter { $0.season == seasonNumber }
-                        .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
-                    if !mazeSeason.isEmpty {
-                        episodes = mazeSeason.map {
-                            TVEpisodeResult(
-                                episodeNumber: $0.number ?? 0,
-                                name: $0.name,
-                                overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines),
-                                airDate: $0.airdate,
-                                runtime: $0.runtime
-                            )
-                        }
-                    } else {
-                        episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
-                    }
-                } else {
+                // Fetch both sources in parallel. TMDB remains authoritative for
+                // metadata and existing runtimes; TVMaze fills missing runtimes
+                // and contributes valid episode rows absent from TMDB.
+                var episodes: [TVEpisodeResult] = []
+                do {
+                    async let tmdbTask = APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                    async let tvmazeSeasonTask: [TVMazeEpisode] = {
+                        guard let mazeID = tvMazeID, mazeID > 0 else { return [] }
+                        return ((try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeID, force: force)) ?? [])
+                            .filter { $0.season == seasonNumber }
+                            .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+                    }()
+                    let tmdbEpisodes = (try? await tmdbTask) ?? []
+                    let tvmazeSeason = await tvmazeSeasonTask
+                    episodes = RuntimeFallback.reconcile(
+                        tmdbEpisodes: tmdbEpisodes,
+                        tvmazeSeason: tvmazeSeason
+                    )
+                } catch {
                     episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                 }
                 
@@ -499,7 +496,6 @@ class DetailViewModel {
                         }
                     }
                 }
-            }
         } catch {
             await MainActor.run {
                 AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")

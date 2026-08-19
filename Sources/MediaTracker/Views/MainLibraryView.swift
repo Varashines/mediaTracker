@@ -84,9 +84,7 @@ struct MainLibraryView: View {
             }
             .scrollBounceBehavior(selectedCategory == .home ? .always : .basedOnSize)
             .scrollIndicators(.hidden)
-            .background {
-                ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-            }
+            .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
         }
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
             if isAsleep {

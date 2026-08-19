@@ -42,8 +42,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var scheme
     @State private var selectedTab: SettingsTab = .general
-    @State private var hoveredTab: SettingsTab? = nil
-    @Namespace private var tabNamespace
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,8 +73,13 @@ struct SettingsView: View {
         .background(AppThemeCoordinator.isReducingVisualEffects
             ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
             : AnyShapeStyle(.ultraThinMaterial))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 620, maxWidth: 680, minHeight: 640)
+        .frame(
+            minWidth: AppTheme.Layout.settingsMinimumWidth,
+            idealWidth: AppTheme.Layout.settingsIdealWidth,
+            maxWidth: AppTheme.Layout.settingsMaximumWidth,
+            minHeight: 640,
+            idealHeight: AppTheme.Layout.settingsIdealHeight
+        )
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
@@ -95,68 +98,19 @@ struct SettingsView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: 4) {
-            ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
-                tabButton(tab: tab)
-            }
-        }
-        .padding(4)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.cardFill(for: scheme))
-        )
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
-        )
-        .padding(.horizontal, AppTheme.Spacing.smallMedium)
-    }
-
-    private func tabButton(tab: SettingsTab) -> some View {
-        let isSelected = selectedTab == tab
-        let isHovered = hoveredTab == tab
-
-        return Button {
-            if AppThemeCoordinator.isReducingVisualEffects {
-                selectedTab = tab
-            } else {
-                withAnimation(AppTheme.Animation.springSnappy) {
-                    selectedTab = tab
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
+        SegmentedPillControl(
+            options: SettingsTab.allCases,
+            selection: $selectedTab
+        ) { tab, isSelected in
+            HStack(spacing: AppTheme.Spacing.micro) {
                 Image(systemName: isSelected ? tab.fillIcon : tab.icon)
                     .font(.system(size: 11, weight: .bold))
-                
+
                 Text(tab.label)
                     .font(AppTheme.Font.bodyBold)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .foregroundStyle(isSelected ? AppTheme.Colors.accent : (isHovered ? Color.primary : .secondary))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Group {
-                    if isSelected {
-                        Capsule()
-                            .fill(AppTheme.Colors.accent.opacity(0.18))
-                            .matchedGeometryEffect(id: "settings_tab", in: tabNamespace)
-                    } else if isHovered {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.04))
-                    }
-                }
-            )
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.microInteraction) {
-                hoveredTab = hovering ? tab : nil
             }
         }
-        .accessibilityLabel(tab.label)
+        .padding(.horizontal, AppTheme.Spacing.smallMedium)
     }
 }

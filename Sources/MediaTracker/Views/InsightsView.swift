@@ -40,10 +40,13 @@ struct InsightsView: View {
             } else if let stats = stats {
                 ScrollView {
                     LazyVStack(spacing: AppTheme.Spacing.xLarge) {
+                        insightsIntroduction
+                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                            .padding(.top, AppTheme.Spacing.xLarge)
+
                         // ── Cinema DNA card ───────────────────────────────
                         SpectrumView(items: stats.barcodeData)
                             .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                            .padding(.top, AppTheme.Spacing.xLarge)
 
                         // ── Overview ─────────────────────────────────────
                         InsightsSectionCard(title: "Overview", secondLine: "At a Glance") {
@@ -78,9 +81,7 @@ struct InsightsView: View {
                 .coordinateSpace(name: insightsScrollName)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .background {
-                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
+                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 .onPreferenceChange(ScrollOffsetKey.self) { offsets in
                     let newOffset = offsets[insightsScrollName] ?? 0
                     backgroundTintTask?.cancel()
@@ -225,6 +226,20 @@ struct InsightsView: View {
         }
         .animation(AppTheme.Animation.springSnappy, value: showPassportPreview)
         .animation(AppTheme.Animation.springSnappy, value: showCustomShareMenu)
+    }
+
+    private var insightsIntroduction: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+            Text("YOUR LIBRARY, DISTILLED")
+                .font(AppTheme.Font.caption)
+                .kerning(AppTheme.Kerning.wide)
+                .foregroundStyle(AppTheme.Colors.accent)
+
+            Text("The patterns behind what you watch and what you love.")
+                .font(AppTheme.Font.bodyMedium)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func refreshData() {
