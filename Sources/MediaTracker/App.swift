@@ -230,6 +230,7 @@ struct MediaTrackerApp: App {
         }
         .preferredColorScheme(mappedScheme)
         .tint(AppTheme.Colors.accent)
+        .sensoryFeedback(HapticTrigger.shared.feedback, trigger: HapticTrigger.shared.token)
         .appErrorToast(state: errorState)
         .onAppear {
             updateSystemColorScheme()

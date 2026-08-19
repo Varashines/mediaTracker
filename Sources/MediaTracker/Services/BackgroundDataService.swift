@@ -108,7 +108,9 @@ actor BackgroundDataService {
             let typePrefix = itemData.type.lowercased().contains("movie") ? "movie" : "tv"
             let tmdbIDPart = itemData.id.split(separator: "_").last ?? itemData.id[...]
             let uniqueID = "\(typePrefix)_\(tmdbIDPart)"
-            let key = "\(uniqueID)_\(itemData.type)"
+            // Normalize type via MediaType rawValue to avoid "movie" vs "Movie" mismatch
+            let normalizedType = MediaType(rawValue: itemData.type)?.rawValue ?? itemData.type
+            let key = "\(uniqueID)_\(normalizedType)"
             let watchedDates = itemData.watchedEpisodeDates ?? [:]
 
             if let existing = existingMap[key] {
@@ -138,7 +140,9 @@ actor BackgroundDataService {
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 }
-                itemData.applySeasonTasteOverrides(to: existing, in: context, mergeOnlyIfEmpty: strategy == .merge)
+                if strategy != .skip {
+                    itemData.applySeasonTasteOverrides(to: existing, in: context, mergeOnlyIfEmpty: strategy == .merge)
+                }
             } else {
                 let item = MediaItem(
                     id: uniqueID,
@@ -788,19 +792,16 @@ actor BackgroundDataService {
 
         do {
             let itemType = item.type
-            let coordKey = force ? "sync_force_\(tmdbID)" : "sync_\(tmdbID)"
-            let success = try await SyncCoordinator.shared.perform(key: coordKey) {
-                let success: Bool
-                if itemType == .movie {
-                    success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
-                } else if itemType == .tvShow {
-                    success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
-                } else {
-                    success = false
-                }
-                return success
+            // Deduplication handled by APIClient in-flight coalescing (inFlightMovieDetails/TVDetails)
+            // — no need for SyncCoordinator which would capture self (non-Sendable) into a @Sendable closure.
+            let success: Bool
+            if itemType == .movie {
+                success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)
+            } else if itemType == .tvShow {
+                success = await self.refreshTVShow(id: id, tmdbID: tmdbID, metadataOnly: metadataOnly, force: force)
+            } else {
+                success = false
             }
-            
             if !success { return false }
             
             // Phase 5: Notification Scheduling (skip in tests)

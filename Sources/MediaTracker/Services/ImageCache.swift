@@ -52,8 +52,18 @@ class ImageCache: NSObject, NSCacheDelegate {
     private override init() {
         super.init()
         memoryCache.delegate = self
-        memoryCache.countLimit = 250
-        memoryCache.totalCostLimit = 128 * 1024 * 1024 // 128MB
+        // Adaptive sizing by RAM — matches ARCHITECTURE.md spec
+        let ram = ProcessInfo.processInfo.physicalMemory
+        if ram >= 16 * 1024 * 1024 * 1024 {
+            memoryCache.countLimit = 1500
+            memoryCache.totalCostLimit = 256 * 1024 * 1024
+        } else if ram >= 8 * 1024 * 1024 * 1024 {
+            memoryCache.countLimit = 800
+            memoryCache.totalCostLimit = 128 * 1024 * 1024
+        } else {
+            memoryCache.countLimit = 400
+            memoryCache.totalCostLimit = 64 * 1024 * 1024
+        }
 
         // Clear memory cache on memory pressure to free up system resources
         let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
@@ -181,16 +191,19 @@ class ImageCache: NSObject, NSCacheDelegate {
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
         
+        // Capture session + lock strongly so decrement always runs even if self deallocates
+        let capturedSession = self.imageSession
+        let loadsLock = self.currentLoads
         let task = Task<ImageContainer?, Never> { [weak self] in
             defer {
-                self?.currentLoads.withLock { $0 -= 1 }
+                loadsLock.withLock { $0 -= 1 }
             }
             guard let self = self else { return nil }
             guard let url = URL(string: key) else { return nil }
             
             do {
                 let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15.0)
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await capturedSession.data(for: request)
                 
                 if Task.isCancelled { return nil }
                 

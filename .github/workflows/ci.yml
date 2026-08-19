@@ -36,9 +36,8 @@ jobs:
         run: swift build
 
       - name: Test
-        # NOTE: A general SwiftData in-memory-container teardown race
-        # (ModelContext.save() after its ModelContainer is deallocated) can crash
-        # a full-suite run even though all assertions pass. The build remains the
-        # hard gate; the test step reports failures without blocking merges.
+        # NOTE: SwiftData in-memory teardown race can still crash full-suite post-assertions
+        # even with SaveCoordinator.cancelAll() swizzle (Tests/Support/TestTeardown.swift).
+        # Keep soft gate until race is fully eliminated (tracked in AUDIT.md C-004).
         continue-on-error: true
         run: swift test

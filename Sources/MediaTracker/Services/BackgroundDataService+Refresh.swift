@@ -255,6 +255,8 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
+            tvDetails.numberOfSeasons = details.numberOfSeasons
+            tvDetails.numberOfEpisodes = details.numberOfEpisodes
             tvDetails.network = details.network
             tvDetails.networkLogoPath = details.networkLogoPath
 

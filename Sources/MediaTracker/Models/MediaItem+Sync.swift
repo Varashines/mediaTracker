@@ -110,6 +110,19 @@ extension MediaItem {
     func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false) {
         guard let tv = tvShowDetails else { return }
         
+        // Reattach any orphaned seasons (same showID, but tvShowDetails == nil) so
+        // the relationship count reflects all seasons. A season can be left detached
+        // when it was created in a different ModelContext during a refresh/heal.
+        if let context = modelContext {
+            let showID = tv.tmdbID
+            let orphanDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == showID && $0.tvShowDetails == nil })
+            if let orphans = try? context.fetch(orphanDesc), !orphans.isEmpty {
+                for season in orphans {
+                    season.tvShowDetails = tv
+                }
+            }
+        }
+
         self.cachedGenres = GenreMapper.standardize(tv.genres)
         self.cachedCreators = tv.creators
         self.cachedLanguage = tv.originalLanguage
@@ -154,21 +167,15 @@ extension MediaItem {
                 let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
                 if autoMark && tv.watchedEpisodesCount < tv.totalEpisodesCount {
                     let liveSeasons = tv.seasons.liveModels
-                    var newlyMarked = 0
                     for season in liveSeasons {
                         let liveEps = season.episodes.liveModels
-                        var seasonMarked = 0
                         for ep in liveEps where !ep.isWatched {
                             ep.markWatched(true)
-                            newlyMarked += 1
-                            seasonMarked += 1
                         }
-                        season.watchedEpisodesCount += seasonMarked
                     }
-                    // Update denormalized counts directly — avoids a full traversal re-scan
-                    tv.watchedEpisodesCount += newlyMarked
-                    let newRemaining = max(0, (progressResult.remainingCount) - newlyMarked)
-                    self.remainingEpisodesCount = newRemaining
+                    // markWatched already increments season.watchedEpisodesCount, tv.watchedEpisodesCount,
+                    // tv.remainingEpisodesCount (if aired) and item.cachedRuntime — no manual fixup needed
+                    self.remainingEpisodesCount = tv.remainingEpisodesCount
                     self.cachedWatchedEpisodeCount = tv.watchedEpisodesCount
 
                     if progressResult.totalCount > 0 {

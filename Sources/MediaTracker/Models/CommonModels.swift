@@ -96,6 +96,8 @@ struct TVDetailsResult {
     let networkLogoPath: String?
     let originalLanguage: String?
     let seasons: [TMDBSeasonBrief]
+    let numberOfSeasons: Int?
+    let numberOfEpisodes: Int?
     let firstAirDate: String?
     let nextEpisodeDate: String?
     let nextEpisodeNumber: Int?

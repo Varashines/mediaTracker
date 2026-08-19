@@ -78,9 +78,7 @@ struct InsightsView: View {
                 .coordinateSpace(name: insightsScrollName)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .background {
-                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
+                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 .onPreferenceChange(ScrollOffsetKey.self) { offsets in
                     let newOffset = offsets[insightsScrollName] ?? 0
                     backgroundTintTask?.cancel()

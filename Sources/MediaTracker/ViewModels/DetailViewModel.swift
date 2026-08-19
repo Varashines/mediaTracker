@@ -416,10 +416,9 @@ class DetailViewModel {
         let tmdbID = tv.tmdbID
         let seasonNumber = season.seasonNumber
         let tvMazeID = tv.tvMazeID
-        let syncKey = "fetch_episodes_\(tmdbID)_\(seasonNumber)"
         
         do {
-            try await SyncCoordinator.shared.perform(key: syncKey) {
+            // APIClient already coalesces inFlightSeasonDetails / TVMaze fetches — no extra coordinator needed
                 // Source episodes from TVMaze (authoritative), falling back to TMDB.
                 let episodes: [TVEpisodeResult]
                 if let mazeID = tvMazeID, mazeID > 0 {
@@ -499,7 +498,6 @@ class DetailViewModel {
                         }
                     }
                 }
-            }
         } catch {
             await MainActor.run {
                 AppErrorState.shared.surfaceError("Failed to fetch episodes: \(error.localizedDescription)")

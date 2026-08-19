@@ -531,48 +531,44 @@ actor DiscoverySyncService {
         let missing = networks.filter { $0.themeColorHex == nil }
         if missing.isEmpty { return }
 
-        await withTaskGroup(of: (PersistentIdentifier, String?).self) { group in
-            for network in missing {
-                let id: PersistentIdentifier = network.persistentModelID
-                let name: String = network.name
-                let logoPath: String? = network.logoPath
-
-                group.addTask {
-                    // 1. Try Local Theme Manager Cache
-                    let cachedHex: String? = await MainActor.run { 
-                        NetworkThemeManager.shared.color(for: name)?.toHex() 
-                    }
-                    if let hex = cachedHex {
-                        return (id, hex)
-                    }
-
-                    // 2. Fetch Logo and Extract Color
-                    guard let path = logoPath,
-                          let urlString = APIClient.tmdbImageURL(path: path, size: "w300"),
-                          let url = URL(string: urlString) else {
-                        return (id, nil)
-                    }
-
-                    do {
-                        let (data, _) = try await ImageCache.shared.imageSession.data(from: url)
-                        let extractedColor = await ColorExtractor.dominantColor(from: data)
-                        let hexString = extractedColor.toHex()
-                        
-                        // Update cache for future use
-                        await MainActor.run { 
-                            NetworkThemeManager.shared.save(color: extractedColor, for: name) 
+        // Bounded concurrency (max 4) to avoid 30 simultaneous Vision + network spikes
+        let maxConcurrent = 4
+        var index = 0
+        var pending: [(PersistentIdentifier, String?)] = []
+        while index < missing.count {
+            let batch = missing[index..<min(index + maxConcurrent, missing.count)]
+            index += maxConcurrent
+            let batchResults: [(PersistentIdentifier, String?)] = await withTaskGroup(of: (PersistentIdentifier, String?).self) { group in
+                for network in batch {
+                    let id: PersistentIdentifier = network.persistentModelID
+                    let name: String = network.name
+                    let logoPath: String? = network.logoPath
+                    group.addTask {
+                        let cachedHex: String? = await MainActor.run {
+                            NetworkThemeManager.shared.color(for: name)?.toHex()
                         }
-                        return (id, hexString)
-                    } catch {
-                        return (id, nil)
+                        if let hex = cachedHex { return (id, hex) }
+                        guard let path = logoPath,
+                              let urlString = APIClient.tmdbImageURL(path: path, size: "w300"),
+                              let url = URL(string: urlString) else { return (id, nil) }
+                        do {
+                            let (data, _) = try await ImageCache.shared.imageSession.data(from: url)
+                            let extractedColor = await ColorExtractor.dominantColor(from: data)
+                            let hexString = extractedColor.toHex()
+                            await MainActor.run { NetworkThemeManager.shared.save(color: extractedColor, for: name) }
+                            return (id, hexString)
+                        } catch { return (id, nil) }
                     }
                 }
+                var results: [(PersistentIdentifier, String?)] = []
+                for await r in group { results.append(r) }
+                return results
             }
-
-            for await (id, hex) in group {
-                if let hexValue = hex, let network = modelContext.model(for: id) as? NetworkEntity {
-                    network.themeColorHex = hexValue
-                }
+            pending.append(contentsOf: batchResults)
+        }
+        for (id, hex) in pending {
+            if let hexValue = hex, let network = modelContext.model(for: id) as? NetworkEntity {
+                network.themeColorHex = hexValue
             }
         }
 

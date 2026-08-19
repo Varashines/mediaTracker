@@ -113,9 +113,7 @@ struct DiscoveryHubView: View {
         .accessibilityLabel("Discovery Hub")
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
-        .background {
-            ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-        }
+        .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
         .onAppear { refreshData(force: false) }
         .refreshable { 
             refreshData(force: true) 

@@ -178,9 +178,7 @@ struct FilteredLibraryGridView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .background {
-                    ScrollVelocityTracker(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                }
+                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)

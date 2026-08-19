@@ -27,7 +27,7 @@ struct BadgeEngine {
     }
 
     private static let recentlyWatchedCutoff: TimeInterval = -TimeInterval.days2
-    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...TimeInterval.greatestFiniteMagnitude
+    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...1209600 // -3d ... +14d (was ∞ future)
     private static let newBadgeWindow: ClosedRange<TimeInterval> = -1209600...0
     private static let soonBadgeWindow: ClosedRange<TimeInterval> = 0...TimeInterval.days2
     private static let premiereDaysWindow: ClosedRange<Double> = -Double.greatestFiniteMagnitude...3
@@ -134,7 +134,8 @@ struct BadgeEngine {
                         nextAirDate = ep.airDateAsDate
                         foundNext = true
                         airedOnSameDayCount = 1
-                    } else if ep.airDateAsDate == nextAirDate {
+                    } else if let epDate = ep.airDateAsDate, let next = nextAirDate,
+                              Calendar.current.isDate(epDate, inSameDayAs: next) {
                         airedOnSameDayCount += 1
                     }
                 } else if let lastWatched = ep.lastWatchedDate, lastWatched >= cutoff {
@@ -170,7 +171,8 @@ struct BadgeEngine {
                         nextAirDate = ep.airDateAsDate
                         foundNext = true
                         airedOnSameDayCount = 1
-                    } else if ep.airDateAsDate == nextAirDate {
+                    } else if let epDate = ep.airDateAsDate, let next = nextAirDate,
+                              Calendar.current.isDate(epDate, inSameDayAs: next) {
                         airedOnSameDayCount += 1
                     }
                 } else if let lastWatched = ep.lastWatchedDate, lastWatched >= cutoff {

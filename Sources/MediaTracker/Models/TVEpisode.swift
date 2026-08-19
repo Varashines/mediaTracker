@@ -90,6 +90,7 @@ final class TVEpisode {
         isUpdatingAirDateValue = true
         defer { isUpdatingAirDateValue = false }
         
+        let oldValue = airDateValue
         if let parsed = DateUtils.parseEpisodeDate(
             airDate,
             time: nil,
@@ -102,6 +103,9 @@ final class TVEpisode {
         }
         _airDateAsDateComputed = false
         _cachedAirDateAsDate = nil
+        if oldValue != airDateValue, let pid = season?.tvShowDetails?.item?.persistentModelID {
+            BadgeEngine.invalidateScan(for: pid)
+        }
     }
     
     init(episodeNumber: Int, seasonNumber: Int, name: String, overview: String, airDate: String? = nil, airstamp: String? = nil, runtime: Int? = nil, isWatched: Bool = false, showID: Int? = nil) {
