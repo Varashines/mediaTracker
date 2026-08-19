@@ -1218,7 +1218,8 @@ private struct YearTasteSection: View {
                             baseColor: .indigo,
                             badgeValue: "\(Int(genre.score * 100))%"
                         ) {}
-                        .frame(width: 180, height: 60)
+                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
+                        .frame(height: 60)
                     }
                 }
             }
@@ -1230,7 +1231,8 @@ private struct YearTasteSection: View {
                             node: DiscoveryNode(name: network.name, logoPath: network.logoPath, count: network.count),
                             style: .logo
                         ) {}
-                        .frame(width: 180, height: 90)
+                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
+                        .frame(height: 90)
                     }
                 }
             }
@@ -1244,7 +1246,8 @@ private struct YearTasteSection: View {
                             baseColor: .teal,
                             badgeValue: "\(Int(language.score * 100))%"
                         ) {}
-                        .frame(width: 180, height: 60)
+                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
+                        .frame(height: 60)
                     }
                 }
             }
