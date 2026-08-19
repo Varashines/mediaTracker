@@ -33,7 +33,12 @@ actor WeeklyDigestService {
         var episodeDescriptor = FetchDescriptor<TVEpisode>(
             predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 && $0.watchedDate != nil && $0.watchedDate! >= start && $0.watchedDate! < end }
         )
-        episodeDescriptor.propertiesToFetch = [\.watchedDate, \.showID]
+        // Include every predicate field in the partial fetch. SwiftData on the
+        // GitHub runner can otherwise evaluate predicates against unfetched
+        // defaults and incorrectly return an empty result set.
+        episodeDescriptor.propertiesToFetch = [
+            \.isWatched, \.seasonNumber, \.watchedDate, \.showID
+        ]
         let watchedEpisodes = (try? modelContext.fetch(episodeDescriptor)) ?? []
 
         var episodeCounts: [Int: Int] = [:]
@@ -48,7 +53,10 @@ actor WeeklyDigestService {
         var movieDescriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
         )
-        movieDescriptor.propertiesToFetch = [\.id, \.lastStateChangeDate]
+        // Keep the predicate fields available across SwiftData runtime versions.
+        movieDescriptor.propertiesToFetch = [
+            \.id, \.typeValue, \.stateValue, \.lastStateChangeDate
+        ]
         let movies = (try? modelContext.fetch(movieDescriptor))?.count ?? 0
 
         // 3. Top shows by episode count (resolve titles).
