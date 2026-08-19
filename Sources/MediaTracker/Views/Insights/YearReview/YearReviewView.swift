@@ -183,7 +183,9 @@ private struct YearHeroSection: View {
     private var hoursWatched: Int { review.totalMinutes / 60 }
     private var busiestDayDescription: String {
         guard let busiestDay = review.busiestDay else { return "Build your watch history" }
-        return "\(busiestDay.day.formatted(.dateTime.month(.abbreviated).day())) · \(formatTime(busiestDay.minutes))"
+        let hours = busiestDay.minutes / 60
+        let duration = hours > 0 ? "\(hours)h" : "\(busiestDay.minutes)m"
+        return "\(busiestDay.day.formatted(.dateTime.month(.abbreviated).day())) · \(duration)"
     }
 
     var body: some View {
@@ -219,15 +221,15 @@ private struct YearHeroSection: View {
             HStack(spacing: AppTheme.Spacing.small) {
                 insightPill(
                     icon: "calendar",
-                    text: "\(review.totalDaysWatched) active days"
+                    text: "\(review.totalDaysWatched) days"
                 )
                 insightPill(
                     icon: "rectangle.stack.fill",
-                    text: "\(review.totalEpisodes) episodes"
+                    text: "\(review.totalEpisodes.formatted()) eps"
                 )
                 insightPill(
                     icon: "flame.fill",
-                    text: "Busiest · \(busiestDayDescription)"
+                    text: busiestDayDescription
                 )
             }
         }
@@ -259,6 +261,8 @@ private struct YearHeroSection: View {
         Label(text, systemImage: icon)
             .font(AppTheme.Font.caption.weight(.semibold))
             .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.micro)
             .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
@@ -427,6 +431,19 @@ private struct YearCalendarSection: View {
     private let cellSpacing: CGFloat = 6
 
     private var calendar: Calendar { .current }
+    private var firstReviewMonth: Date {
+        calendar.date(from: DateComponents(year: review.year, month: 1, day: 1)) ?? selectedMonth
+    }
+    private var lastReviewMonth: Date {
+        guard let lastMonth = calendar.date(byAdding: .month, value: 11, to: firstReviewMonth) else {
+            return firstReviewMonth
+        }
+        let currentYear = calendar.component(.year, from: Date())
+        guard review.year == currentYear else { return lastMonth }
+        return calendar.date(
+            from: calendar.dateComponents([.year, .month], from: Date())
+        ) ?? lastMonth
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
@@ -489,7 +506,8 @@ private struct YearCalendarSection: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("Previous month")
+            .disabled(selectedMonth <= firstReviewMonth)
+            .help(selectedMonth <= firstReviewMonth ? "Start of \(review.year) review" : "Previous month")
             .accessibilityLabel("Previous month")
 
             Spacer()
@@ -533,8 +551,8 @@ private struct YearCalendarSection: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(selectedMonth >= calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!))
-            .help("Next month")
+            .disabled(selectedMonth >= lastReviewMonth)
+            .help(selectedMonth >= lastReviewMonth ? "Latest available month" : "Next month")
             .accessibilityLabel("Next month")
         }
     }
@@ -542,7 +560,7 @@ private struct YearCalendarSection: View {
     private func changeMonth(by value: Int) {
         withAnimation(AppTheme.Animation.springSnappy) {
             if let newMonth = calendar.date(byAdding: .month, value: value, to: selectedMonth) {
-                guard newMonth <= Date() else { return }
+                guard newMonth >= firstReviewMonth, newMonth <= lastReviewMonth else { return }
                 selectedMonth = newMonth
                 if let day = selectedDay, !calendar.isDate(day, equalTo: newMonth, toGranularity: .month) {
                     selectedDay = nil
