@@ -35,9 +35,37 @@ jobs:
       - name: Build
         run: swift build
 
-      - name: Test
+      - name: Test stable suites
+        run: |
+          suites=(
+            BadgeEngineTests
+            BingeLogicTests
+            DateUtilsTests
+            DetailViewModelTests
+            EpisodeRangeTests
+            FilterAndSortTests
+            ImportSeasonTasteTests
+            MarkWatchedTests
+            ModelTests
+            NetworkingTests
+            ProgressCalculationTests
+            RuntimeFallbackTests
+            SeasonTasteTests
+            StateTransitionTests
+            SyncCachedPropertiesTests
+            UtilityTests
+            WatchProvidersTests
+            WeeklyDigestTests
+            YearInReviewTests
+          )
+          for suite in "${suites[@]}"; do
+            swift test --filter "$suite"
+          done
+
+      - name: Test full suite (SwiftData teardown diagnostic)
         # NOTE: SwiftData in-memory teardown race can still crash full-suite post-assertions
         # even with SaveCoordinator.cancelAll() swizzle (Tests/Support/TestTeardown.swift).
-        # Keep soft gate until race is fully eliminated (tracked in AUDIT.md C-004).
+        # Stable suites above are the hard gate; keep this diagnostic visible until
+        # the framework-level container teardown race is fully eliminated.
         continue-on-error: true
         run: swift test

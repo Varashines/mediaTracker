@@ -2,27 +2,78 @@ import Foundation
 import SwiftData
 import AppKit
 
-/// Runtime fallback helper: when TMDB episode count exactly mismatches TVmaze
-/// (season or series), use TVmaze per-episode runtimes. On equal count TMDB wins.
+/// Reconciles one season's TMDB and TVMaze episode data.
+/// TMDB remains authoritative for metadata and runtime when an episode exists
+/// in both sources. TVMaze only supplies missing runtimes and valid extra rows.
 enum RuntimeFallback {
-    /// Returns `episodeNumber -> runtime` map when fallback applies, else nil.
-    /// `seriesMismatch` = total series count != TVmaze total (OR per-season check).
-    static func map(tmdbCount: Int, tvmazeSeason: [TVMazeEpisode], seriesMismatch: Bool) -> [Int: Int]? {
-        guard !tvmazeSeason.isEmpty else { return nil }
-        let seasonMismatch = tvmazeSeason.count != tmdbCount
-        guard seriesMismatch || seasonMismatch else { return nil }
-        var m: [Int: Int] = [:]
-        m.reserveCapacity(tvmazeSeason.count)
-        for ep in tvmazeSeason {
-            guard let n = ep.number, let r = ep.runtime else { continue }
-            m[n] = r
+    static func reconcile(
+        tmdbEpisodes: [TVEpisodeResult],
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [TVEpisodeResult] {
+        guard !tvmazeSeason.isEmpty else { return tmdbEpisodes }
+
+        let validMazeEpisodes = tvmazeSeason
+            .filter { ($0.season ?? 0) > 0 && ($0.number ?? 0) > 0 }
+            .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+        guard !validMazeEpisodes.isEmpty else { return tmdbEpisodes }
+
+        let mazeByNumber = Dictionary(
+            validMazeEpisodes.map { ($0.number!, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let tmdbNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
+
+        var reconciled = tmdbEpisodes.map { episode in
+            guard episode.runtime == nil,
+                  let mazeRuntime = mazeByNumber[episode.episodeNumber]?.runtime else {
+                return episode
+            }
+            return TVEpisodeResult(
+                episodeNumber: episode.episodeNumber,
+                name: episode.name,
+                overview: episode.overview,
+                airDate: episode.airDate,
+                runtime: mazeRuntime
+            )
         }
-        return m.isEmpty ? nil : m
+
+        let extras = validMazeEpisodes
+            .filter { !tmdbNumbers.contains($0.number!) }
+            .map {
+                TVEpisodeResult(
+                    episodeNumber: $0.number!,
+                    name: $0.name,
+                    overview: $0.summary?
+                        .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                    airDate: $0.airdate,
+                    runtime: $0.runtime
+                )
+            }
+        reconciled.append(contentsOf: extras)
+        return reconciled.sorted { $0.episodeNumber < $1.episodeNumber }
     }
-    /// TVMaze-season sorted as TVEpisodeResult for count comparison reuse
-    static func tvmazeAsResults(_ mazeSeason: [TVMazeEpisode]) -> [TVEpisodeResult] {
-        mazeSeason.sorted { ($0.number ?? 0) < ($1.number ?? 0) }.map {
-            TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
+
+    static func runtimeMap(
+        tmdbEpisodes: [TVEpisodeResult],
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [Int: Int] {
+        Dictionary(
+            reconcile(tmdbEpisodes: tmdbEpisodes, tvmazeSeason: tvmazeSeason)
+                .compactMap { episode in
+                    episode.runtime.map { (episode.episodeNumber, $0) }
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    static func validExtras(
+        tmdbEpisodeNumbers: Set<Int>,
+        tvmazeSeason: [TVMazeEpisode]
+    ) -> [TVMazeEpisode] {
+        tvmazeSeason.filter {
+            guard ($0.season ?? 0) > 0, let number = $0.number, number > 0 else { return false }
+            return !tmdbEpisodeNumbers.contains(number)
         }
     }
 }
@@ -246,14 +297,13 @@ extension BackgroundDataService {
                 return bySeason
             }()
 
-            // Runtime fallback support: raw TVmaze grouped + series mismatch flag
+            // Raw TVMaze episodes grouped by season for season-level reconciliation.
             let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
                 var d: [Int: [TVMazeEpisode]] = [:]
-                for ep in mazeEpisodes { if let s = ep.season { d[s, default: []].append(ep) } }
+                for ep in mazeEpisodes { if let s = ep.season, s > 0 { d[s, default: []].append(ep) } }
                 for (k, v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
                 return d
             }()
-            let seriesMismatch = !mazeEpisodes.isEmpty && (details.numberOfEpisodes ?? 0) > 0 && mazeEpisodes.count != (details.numberOfEpisodes ?? 0)
 
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
@@ -398,17 +448,17 @@ extension BackgroundDataService {
                                 }
                             }
 
-                            // Runtime: TMDB by default; when exact episode count mismatches
-                            // (season or series) fallback to TVmaze runtimes.
+                            // TMDB leads; TVMaze fills missing runtimes for matching
+                            // episode numbers without allowing a series-wide mismatch to
+                            // overwrite otherwise valid season data.
                             let tvmazeRawForSeason = mazeRawBySeason[sNum] ?? []
-                            let seasonMismatch = !tvmazeRawForSeason.isEmpty && tvmazeRawForSeason.count != seasonData.episode_count
-                            let shouldFallback = seasonMismatch || seriesMismatch
                             let tmdbRuntimes: [Int: Int]
-                            if shouldFallback, let fallback = RuntimeFallback.map(tmdbCount: seasonData.episode_count, tvmazeSeason: tvmazeRawForSeason, seriesMismatch: seriesMismatch) {
-                                tmdbRuntimes = fallback
-                            } else if usesTVMaze {
+                            if usesTVMaze {
                                 let tmdbEps = (try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: shouldForceSeason)) ?? []
-                                tmdbRuntimes = Dictionary(tmdbEps.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
+                                tmdbRuntimes = RuntimeFallback.runtimeMap(
+                                    tmdbEpisodes: tmdbEps,
+                                    tvmazeSeason: tvmazeRawForSeason
+                                )
                             } else {
                                 tmdbRuntimes = Dictionary(episodes.compactMap { e in e.runtime.map { (e.episodeNumber, $0) } }, uniquingKeysWith: { $1 })
                             }

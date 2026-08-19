@@ -418,8 +418,9 @@ class DetailViewModel {
         let tvMazeID = tv.tvMazeID
         
         do {
-                // Best refresh path: TMDB runtimes by default; when exact episode count mismatches
-                // (season or series), fallback to TVmaze runtimes. Parallel fetch both, then pick.
+                // Fetch both sources in parallel. TMDB remains authoritative for
+                // metadata and existing runtimes; TVMaze fills missing runtimes
+                // and contributes valid episode rows absent from TMDB.
                 var episodes: [TVEpisodeResult] = []
                 do {
                     async let tmdbTask = APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
@@ -431,38 +432,10 @@ class DetailViewModel {
                     }()
                     let tmdbEpisodes = (try? await tmdbTask) ?? []
                     let tvmazeSeason = await tvmazeSeasonTask
-                    if tvmazeSeason.isEmpty {
-                        episodes = tmdbEpisodes
-                    } else if tvmazeSeason.count == tmdbEpisodes.count {
-                        // Exact match → TMDB leads (keep TMDB runtimes)
-                        episodes = tmdbEpisodes
-                    } else {
-                        // Mismatch → fallback to TVmaze runtimes (and TVmaze list, which is authoritative for count)
-                        if tmdbEpisodes.isEmpty {
-                            episodes = tvmazeSeason.map {
-                                TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
-                            }
-                        } else if let fallback = RuntimeFallback.map(tmdbCount: tmdbEpisodes.count, tvmazeSeason: tvmazeSeason, seriesMismatch: false) {
-                            // Keep TMDB list but swap runtimes where TVmaze has them
-                            episodes = tmdbEpisodes.map { ep in
-                                let r = fallback[ep.episodeNumber] ?? ep.runtime
-                                return TVEpisodeResult(episodeNumber: ep.episodeNumber, name: ep.name, overview: ep.overview, airDate: ep.airDate, runtime: r)
-                            }
-                            // If TVmaze has extra episodes beyond TMDB, append them (authoritative count)
-                            if tvmazeSeason.count > tmdbEpisodes.count {
-                                let tmdbNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
-                                let extra = tvmazeSeason.filter { !tmdbNumbers.contains($0.number ?? -1) }.map {
-                                    TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
-                                }
-                                episodes = episodes + extra
-                            }
-                        } else {
-                            episodes = tvmazeSeason.map {
-                                TVEpisodeResult(episodeNumber: $0.number ?? 0, name: $0.name, overview: $0.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), airDate: $0.airdate, runtime: $0.runtime)
-                            }
-                        }
-                    }
-                    if episodes.isEmpty && !tmdbEpisodes.isEmpty { episodes = tmdbEpisodes }
+                    episodes = RuntimeFallback.reconcile(
+                        tmdbEpisodes: tmdbEpisodes,
+                        tvmazeSeason: tvmazeSeason
+                    )
                 } catch {
                     episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                 }
