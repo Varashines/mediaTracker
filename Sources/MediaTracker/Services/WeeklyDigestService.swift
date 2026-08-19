@@ -31,7 +31,7 @@ actor WeeklyDigestService {
 
         // 1. TV episodes watched in the window, grouped by show.
         var episodeDescriptor = FetchDescriptor<TVEpisode>(
-            predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 && $0.watchedDate != nil && $0.watchedDate! >= start && $0.watchedDate! < end }
+            predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 }
         )
         // Include every predicate field in the partial fetch. SwiftData on the
         // GitHub runner can otherwise evaluate predicates against unfetched
@@ -39,7 +39,10 @@ actor WeeklyDigestService {
         episodeDescriptor.propertiesToFetch = [
             \.isWatched, \.seasonNumber, \.watchedDate, \.showID
         ]
-        let watchedEpisodes = (try? modelContext.fetch(episodeDescriptor)) ?? []
+        let watchedEpisodes = ((try? modelContext.fetch(episodeDescriptor)) ?? []).filter {
+            guard let watchedDate = $0.watchedDate else { return false }
+            return watchedDate >= start && watchedDate < end
+        }
 
         var episodeCounts: [Int: Int] = [:]
         for episode in watchedEpisodes {
@@ -51,13 +54,16 @@ actor WeeklyDigestService {
 
         // 2. Movies completed in the window.
         var movieDescriptor = FetchDescriptor<MediaItem>(
-            predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
+            predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" }
         )
         // Keep the predicate fields available across SwiftData runtime versions.
         movieDescriptor.propertiesToFetch = [
             \.id, \.typeValue, \.stateValue, \.lastStateChangeDate
         ]
-        let movies = (try? modelContext.fetch(movieDescriptor))?.count ?? 0
+        let movies = ((try? modelContext.fetch(movieDescriptor)) ?? []).count { item in
+            guard let stateChangeDate = item.lastStateChangeDate else { return false }
+            return stateChangeDate >= start && stateChangeDate < end
+        }
 
         // 3. Top shows by episode count (resolve titles).
         let topShowIDs = episodeCounts.sorted { $0.value > $1.value }.prefix(3).map(\.key)
