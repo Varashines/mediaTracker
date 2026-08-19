@@ -92,12 +92,6 @@ struct ReleaseCalendarView: View {
                             if let data = calendarData {
                                 weekFocusRow(data: data)
 
-                                if let selectedDate {
-                                    selectedDateSummary(selectedDate)
-                                }
-
-                                releaseFilterBar
-
                                 Divider().padding(.vertical, AppTheme.Spacing.small)
 
                                 if let date = selectedDate, let dayInfo = data.days[date] {
@@ -300,34 +294,6 @@ struct ReleaseCalendarView: View {
         }
     }
 
-    private func selectedDateSummary(_ date: Date) -> some View {
-        HStack(spacing: AppTheme.Spacing.small) {
-            Image(systemName: "calendar.circle.fill")
-                .foregroundStyle(AppTheme.Colors.accent)
-            Text("Viewing \(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))")
-                .font(AppTheme.Font.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-            Spacer()
-            Button("Month") {
-                withAnimation(AppTheme.Animation.springSnappy) {
-                    selectedDate = nil
-                }
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .help("Show the full month")
-        }
-        .padding(AppTheme.Spacing.small)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.14 : 0.08))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.5)
-        }
-    }
-    
     private func refreshData(for month: Date) {
         let calendar = Calendar.current
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
@@ -504,16 +470,21 @@ struct ReleaseCalendarView: View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let isCurrentMonth = calendar.isDate(currentDisplayMonth, equalTo: today, toGranularity: .month)
-        let anchor = selectedDate ?? (isCurrentMonth ? today : currentDisplayMonth)
+        let anchor = isCurrentMonth ? today : currentDisplayMonth
         let focusDates = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: anchor) }
         
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            Text(isCurrentMonth && selectedDate == nil
-                 ? "NEXT 7 DAYS"
-                 : "WEEK OF \(anchor.formatted(.dateTime.month(.abbreviated).day()))")
-                .font(AppTheme.Font.caption2)
-                .kerning(AppTheme.Kerning.wide)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(isCurrentMonth
+                     ? "NEXT 7 DAYS"
+                     : "WEEK OF \(anchor.formatted(.dateTime.month(.abbreviated).day()))")
+                    .font(AppTheme.Font.caption2)
+                    .kerning(AppTheme.Kerning.wide)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+                releaseFilterBar
+            }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppTheme.Spacing.small) {
@@ -547,7 +518,7 @@ struct ReleaseCalendarView: View {
                                     Color.clear.frame(width: 16, height: 16)
                                 }
                             }
-                            .frame(width: 50, height: 80)
+                            .frame(width: 54, height: 84)
                             .background {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
@@ -564,6 +535,7 @@ struct ReleaseCalendarView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .padding(.horizontal, 1)
                     }
                 }
             }
