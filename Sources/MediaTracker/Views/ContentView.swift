@@ -394,6 +394,12 @@ struct LibraryDetailView: View {
             NavigationRouter.shared.pendingSpotlightItemID = nil
             navigateToSpotlightItem(id)
         }
+        .onDisappear {
+            updateTask?.cancel()
+            updateTask = nil
+            loadMoreTask?.cancel()
+            loadMoreTask = nil
+        }
         .task(priority: .background) {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -509,17 +515,21 @@ struct LibraryDetailView: View {
                     offset: nextOffset
                 )
 
+                guard !Task.isCancelled else { return }
+
                 await MainActor.run {
                     viewModel.display.displayedItems.append(contentsOf: result.displayed)
                     viewModel.pagination.isLoadingMore = false
                     viewModel.pagination.currentOffset = nextOffset
                 }
 
-                // Prefetch images for newly loaded items so they're ready when the user scrolls to them
-                let posterURLs = result.displayed.compactMap { $0.posterURL }.compactMap { URL(string: $0) }
-                if !posterURLs.isEmpty {
-                    ImageCache.shared.prewarmImages(urls: posterURLs, targetSize: .thumbSmall)
-                }
+                // Keep the next viewport warm without creating network work for an entire page.
+                ImageCache.shared.prewarmImages(
+                    result.displayed,
+                    limit: 12,
+                    targetSize: .thumbSmall,
+                    priority: .low
+                )
             } catch {
                 guard !Task.isCancelled else {
                     await MainActor.run { viewModel.pagination.isLoadingMore = false }

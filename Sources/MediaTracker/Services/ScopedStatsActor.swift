@@ -35,6 +35,7 @@ actor ScopedStatsActor {
     func fetchScopedStats(filter: DiscoveryFilter) async -> ScopedLibraryStats {
         let cacheKey = "\(filter.type.rawValue):\(filter.name)"
         if let cached = await ScopedStatsCache.shared.stats(forKey: cacheKey) { return cached }
+        guard !Task.isCancelled else { return .empty }
 
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [
@@ -67,6 +68,7 @@ actor ScopedStatsActor {
         guard var items = try? modelContext.fetch(descriptor) else {
             return ScopedLibraryStats.empty
         }
+        guard !Task.isCancelled else { return .empty }
 
         // Build source→target alias map so network/studio counting matches hub grouping.
         let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []
@@ -101,6 +103,7 @@ actor ScopedStatsActor {
         var totalRuntime = 0
 
         for item in items {
+            guard !Task.isCancelled else { return .empty }
             if let nSet = networkNames, let rawNets = item.cachedNetwork {
                 let itemNets = rawNets.commaSeparatedValues.map { $0.lowercased() }
                 guard itemNets.contains(where: { nSet.contains($0) }) else { continue }
@@ -181,10 +184,34 @@ actor ScopedStatsActor {
 class ScopedStatsCache {
     static let shared = ScopedStatsCache()
     private var cache: [String: ScopedLibraryStats] = [:]
+    private var accessOrder: [String] = []
+    private let capacity = 24
 
-    func stats(forKey key: String) -> ScopedLibraryStats? { cache[key] }
-    func setStats(_ stats: ScopedLibraryStats, forKey key: String) { cache[key] = stats }
-    func invalidateAll() { cache.removeAll() }
+    func stats(forKey key: String) -> ScopedLibraryStats? {
+        guard let stats = cache[key] else { return nil }
+        touch(key)
+        return stats
+    }
+
+    func setStats(_ stats: ScopedLibraryStats, forKey key: String) {
+        cache[key] = stats
+        touch(key)
+
+        while accessOrder.count > capacity {
+            let oldestKey = accessOrder.removeFirst()
+            cache.removeValue(forKey: oldestKey)
+        }
+    }
+
+    func invalidateAll() {
+        cache.removeAll()
+        accessOrder.removeAll()
+    }
+
+    private func touch(_ key: String) {
+        accessOrder.removeAll { $0 == key }
+        accessOrder.append(key)
+    }
 }
 
 extension ScopedStatsActor {
