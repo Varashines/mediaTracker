@@ -3,18 +3,28 @@ import SwiftData
 @testable import MediaTracker
 
 final class YearInReviewTests: XCTestCase {
-    private func makeContainer() -> ModelContainer {
+    private func makeContainer() throws -> (container: ModelContainer, directory: URL) {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,
             SeasonCastMember.self, TVEpisode.self, CastMember.self,
             MediaCollection.self, StudioAliasEntity.self
         ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaTracker-YearReview-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let config = ModelConfiguration(url: directory.appendingPathComponent("review.sqlite"))
+        do {
+            return (try ModelContainer(for: schema, configurations: [config]), directory)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
     @MainActor
@@ -37,8 +47,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testReleased2026AndWatchedOnly() async {
-        let container = makeContainer()
+    func testReleased2026AndWatchedOnly() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         let in2026 = makeItem(id: "movie_1", title: "2026 Flick", type: .movie, releaseDate: date(2026, 1, 15), state: "Completed")
@@ -61,8 +73,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testTVShowsWatched2026AppearInTitlesByDay() async {
-        let container = makeContainer()
+    func testTVShowsWatched2026AppearInTitlesByDay() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         let show = makeItem(id: "tv_100", title: "2026 Show", type: .tvShow, releaseDate: date(2026, 3, 1), state: "Active")
@@ -77,8 +91,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testHeatmapAggregationPerDay() async {
-        let container = makeContainer()
+    func testHeatmapAggregationPerDay() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         context.insert(makeEpisode(showID: 5, watchedAt: date(2026, 3, 3), runtime: 45))
@@ -110,8 +126,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testYearScopingExcludesOutsideWindow() async {
-        let container = makeContainer()
+    func testYearScopingExcludesOutsideWindow() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         context.insert(makeEpisode(showID: 7, watchedAt: date(2025, 12, 31), runtime: 45))
@@ -128,8 +146,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testTasteOverWatchedIn2026WithoutCutoffs() async {
-        let container = makeContainer()
+    func testTasteOverWatchedIn2026WithoutCutoffs() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         // Six loved, completed, Sci-Fi movies watched in 2026 → taste scores without cutoff floors.
@@ -164,8 +184,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testSeasonZeroSpecialsExcluded() async {
-        let container = makeContainer()
+    func testSeasonZeroSpecialsExcluded() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         let show = makeItem(id: "tv_50", title: "Specials Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Completed")
@@ -194,8 +216,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testTitlesByDayIncludesMoviesAndShows() async {
-        let container = makeContainer()
+    func testTitlesByDayIncludesMoviesAndShows() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         let show = makeItem(id: "tv_60", title: "Day Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Completed")
@@ -221,8 +245,10 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testMonthStatsAndMonthTitles() async {
-        let container = makeContainer()
+    func testMonthStatsAndMonthTitles() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = container.mainContext
 
         let show = makeItem(id: "tv_70", title: "Month Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
