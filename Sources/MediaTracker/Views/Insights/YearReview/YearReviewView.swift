@@ -54,6 +54,15 @@ struct YearReviewView: View {
                 // ── Hero ──────────────────────────────────────────────
                 YearHeroSection(review: review, colorScheme: colorScheme)
 
+                YearActivityOverview(
+                    review: review,
+                    selectedMonth: $selectedMonth,
+                    selectedDay: $selectedDay,
+                    colorScheme: colorScheme
+                )
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.bottom, AppTheme.Spacing.large)
+
                 Divider()
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, AppTheme.Spacing.large)
@@ -123,6 +132,10 @@ private struct YearHeroSection: View {
     let colorScheme: ColorScheme
 
     private var hoursWatched: Int { review.totalMinutes / 60 }
+    private var busiestDayDescription: String {
+        guard let busiestDay = review.busiestDay else { return "Build your watch history" }
+        return "\(busiestDay.day.formatted(.dateTime.month(.abbreviated).day())) · \(formatTime(busiestDay.minutes))"
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -136,6 +149,10 @@ private struct YearHeroSection: View {
                 Text("Year in Review")
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary.opacity(0.85))
+
+                Text("\(review.totalDaysWatched) active days · \(review.totalEpisodes) episodes watched")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -161,6 +178,22 @@ private struct YearHeroSection: View {
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.top, AppTheme.Spacing.xLarge)
+        .padding(.bottom, AppTheme.Spacing.medium)
+
+        HStack(spacing: AppTheme.Spacing.small) {
+            Image(systemName: "flame.fill")
+                .foregroundStyle(AppTheme.Colors.accent)
+            Text("Busiest day")
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(.secondary)
+            Text(busiestDayDescription)
+                .font(AppTheme.Font.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, AppTheme.Spacing.small)
+        .padding(.vertical, AppTheme.Spacing.micro)
+        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.bottom, AppTheme.Spacing.large)
     }
 
@@ -183,6 +216,135 @@ private struct YearHeroSection: View {
     }
 }
 
+// MARK: - Year Activity Overview
+
+private struct YearActivityOverview: View {
+    let review: YearInReview
+    @Binding var selectedMonth: Date
+    @Binding var selectedDay: Date?
+    let colorScheme: ColorScheme
+
+    private var calendar: Calendar { .current }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("YOUR VIEWING RHYTHM")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .kerning(1.2)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                    Text("Select a month to explore its watch history")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(review.totalDaysWatched) days")
+                    .font(AppTheme.Font.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 92, maximum: 120), spacing: AppTheme.Spacing.small)],
+                spacing: AppTheme.Spacing.small
+            ) {
+                ForEach(months, id: \.self) { month in
+                    MonthActivityCard(
+                        month: month,
+                        review: review,
+                        isSelected: calendar.isDate(selectedMonth, equalTo: month, toGranularity: .month),
+                        isAvailable: month <= currentMonth,
+                        colorScheme: colorScheme
+                    ) {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            selectedMonth = month
+                            selectedDay = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var months: [Date] {
+        guard let firstMonth = calendar.date(from: DateComponents(year: review.year, month: 1, day: 1)) else {
+            return []
+        }
+        return (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: firstMonth) }
+    }
+
+    private var currentMonth: Date {
+        calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+    }
+}
+
+private struct MonthActivityCard: View {
+    let month: Date
+    let review: YearInReview
+    let isSelected: Bool
+    let isAvailable: Bool
+    let colorScheme: ColorScheme
+    let action: () -> Void
+
+    private let calendar = Calendar.current
+    private let columns = Array(repeating: GridItem(.fixed(5), spacing: 2), count: 7)
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(month.formatted(.dateTime.month(.abbreviated)))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                    Spacer(minLength: 0)
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                }
+
+                LazyVGrid(columns: columns, spacing: 2) {
+                    ForEach(days, id: \.self) { date in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(
+                                ReviewDayCell.fillColor(
+                                    minutes: review.activityByDay[calendar.startOfDay(for: date)]?.minutes ?? 0,
+                                    colorScheme: colorScheme,
+                                    accent: AppTheme.Colors.accent
+                                )
+                            )
+                            .frame(width: 5, height: 5)
+                    }
+                }
+            }
+            .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
+            .opacity(isAvailable ? 1 : 0.4)
+            .padding(AppTheme.Spacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                    .fill(isSelected ? AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.18 : 0.10) : AppTheme.Colors.surfaceSubtle(for: colorScheme))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                    .stroke(isSelected ? AppTheme.Colors.accent : AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: isSelected ? 1.5 : 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isAvailable)
+        .accessibilityLabel("\(month.formatted(.dateTime.month(.wide))) activity")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var days: [Date] {
+        guard
+            let range = calendar.range(of: .day, in: .month, for: month),
+            let first = calendar.date(from: calendar.dateComponents([.year, .month], from: month))
+        else { return [] }
+        return range.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: first) }
+    }
+}
+
 // MARK: - Calendar Section
 
 private struct YearCalendarSection: View {
@@ -201,11 +363,47 @@ private struct YearCalendarSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
             monthNav
+            if let selectedDay {
+                selectedDaySummary(selectedDay)
+            }
             dayGrid
             legend
         }
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.vertical, AppTheme.Spacing.large)
+    }
+
+    private func selectedDaySummary(_ day: Date) -> some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            Image(systemName: "calendar.circle.fill")
+                .foregroundStyle(AppTheme.Colors.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Selected day")
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(.secondary)
+                Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                    .font(AppTheme.Font.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+            Spacer()
+            Button("Clear") {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    selectedDay = nil
+                }
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+        .padding(AppTheme.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.14 : 0.08))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.5)
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // Month navigation — arrows to shuffle across months
@@ -223,6 +421,8 @@ private struct YearCalendarSection: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .help("Previous month")
+            .accessibilityLabel("Previous month")
 
             Spacer()
 
@@ -248,6 +448,8 @@ private struct YearCalendarSection: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .help("Show \(monthLabel(selectedMonth)) overview")
+            .accessibilityLabel("Show month overview")
 
             Spacer()
 
@@ -264,6 +466,8 @@ private struct YearCalendarSection: View {
             }
             .buttonStyle(.plain)
             .disabled(selectedMonth >= calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!))
+            .help("Next month")
+            .accessibilityLabel("Next month")
         }
     }
 
@@ -387,12 +591,16 @@ private struct ReviewDayCell: View {
         Button(action: onTap) {
             ZStack {
                 RoundedRectangle(cornerRadius: cellSize * 0.16, style: .continuous)
-                    .fill(Self.fillColor(minutes: minutes, colorScheme: colorScheme, accent: accent))
-                    .scaleEffect(isHovered || isSelected ? 1.15 : 1.0)
+                    .fill(
+                        isSelected
+                            ? accent.opacity(colorScheme == .dark ? 0.9 : 0.82)
+                            : Self.fillColor(minutes: minutes, colorScheme: colorScheme, accent: accent)
+                    )
+                    .scaleEffect(isHovered || isSelected ? 1.12 : 1.0)
 
                 Text("\(Calendar.current.component(.day, from: date))")
                     .font(.system(size: cellSize * 0.3, weight: .medium))
-                    .foregroundStyle(minutes > 0 ? Color.white.opacity(0.92) : Color.primary.opacity(0.5))
+                    .foregroundStyle(isSelected || minutes > 0 ? Color.white.opacity(0.95) : Color.primary.opacity(0.5))
                     .offset(y: isToday ? -cellSize * 0.11 : 0)
 
                 if isToday {
@@ -404,8 +612,16 @@ private struct ReviewDayCell: View {
 
                 if isSelected {
                     RoundedRectangle(cornerRadius: cellSize * 0.16, style: .continuous)
-                        .stroke(accent, lineWidth: 1.8)
-                        .padding(-1)
+                        .stroke(colorScheme == .dark ? Color.white.opacity(0.85) : Color.white, lineWidth: 1.5)
+                        .padding(2)
+
+                    Image(systemName: "checkmark")
+                        .font(.system(size: cellSize * 0.22, weight: .black))
+                        .foregroundStyle(.white)
+                        .frame(width: cellSize * 0.38, height: cellSize * 0.38)
+                        .background(accent, in: Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 1))
+                        .offset(x: cellSize * 0.30, y: -cellSize * 0.30)
                 }
             }
             .frame(width: cellSize, height: cellSize)
@@ -419,6 +635,8 @@ private struct ReviewDayCell: View {
         .animation(AppTheme.Animation.springSnappy, value: isSelected)
         .onHover { onHover($0) }
         .help(tooltip)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var tooltip: String {
@@ -429,6 +647,13 @@ private struct ReviewDayCell: View {
         let h = minutes / 60, m = minutes % 60
         let time = h > 0 ? "\(h)h \(m)m" : "\(m)m"
         return "\(base) · \(time)"
+    }
+
+    private var accessibilityDescription: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        let activity = minutes > 0 ? ", \(tooltip.components(separatedBy: " · ").last ?? "") watched" : ", no watch activity"
+        return "\(formatter.string(from: date))\(activity)"
     }
 
     static func fillColor(minutes: Int, colorScheme: ColorScheme, accent: Color) -> Color {
