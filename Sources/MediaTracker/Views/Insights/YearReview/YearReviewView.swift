@@ -138,27 +138,17 @@ private struct YearHeroSection: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Left: year + descriptor
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                Text(String(review.year))
-                    .font(.system(size: 72, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.Colors.accent)
-                    .lineLimit(1)
+        VStack(spacing: AppTheme.Spacing.medium) {
+            Text(String(review.year))
+                .font(.system(size: 72, weight: .heavy, design: .rounded))
+                .foregroundStyle(AppTheme.Colors.accent)
+                .lineLimit(1)
 
-                Text("Year in Review")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary.opacity(0.85))
+            Text("Year in Review")
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.85))
 
-                Text("\(review.totalDaysWatched) active days · \(review.totalEpisodes) episodes watched")
-                    .font(AppTheme.Font.body)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            // Right: stat tiles
-            HStack(alignment: .top, spacing: AppTheme.Spacing.medium) {
+            HStack(spacing: AppTheme.Spacing.medium) {
                 heroStat(
                     value: "\(review.totalSeries)",
                     label: "Series",
@@ -175,30 +165,31 @@ private struct YearHeroSection: View {
                     icon: "clock.fill"
                 )
             }
+            .padding(.top, AppTheme.Spacing.tiny)
+
+            HStack(spacing: AppTheme.Spacing.small) {
+                insightPill(
+                    icon: "calendar",
+                    text: "\(review.totalDaysWatched) active days"
+                )
+                insightPill(
+                    icon: "rectangle.stack.fill",
+                    text: "\(review.totalEpisodes) episodes"
+                )
+                insightPill(
+                    icon: "flame.fill",
+                    text: "Busiest · \(busiestDayDescription)"
+                )
+            }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.top, AppTheme.Spacing.xLarge)
-        .padding(.bottom, AppTheme.Spacing.medium)
-
-        HStack(spacing: AppTheme.Spacing.small) {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(AppTheme.Colors.accent)
-            Text("Busiest day")
-                .font(AppTheme.Font.caption)
-                .foregroundStyle(.secondary)
-            Text(busiestDayDescription)
-                .font(AppTheme.Font.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-        }
-        .padding(.horizontal, AppTheme.Spacing.small)
-        .padding(.vertical, AppTheme.Spacing.micro)
-        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
-        .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .padding(.bottom, AppTheme.Spacing.large)
     }
 
     private func heroStat(value: String, label: String, icon: String) -> some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .bold))
@@ -212,7 +203,16 @@ private struct YearHeroSection: View {
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
                 .foregroundStyle(.primary)
         }
-        .frame(minWidth: 70, alignment: .trailing)
+        .frame(minWidth: 90)
+    }
+
+    private func insightPill(icon: String, text: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(AppTheme.Font.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.micro)
+            .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
     }
 }
 
@@ -1067,17 +1067,17 @@ private struct PosterTile: View {
                 RoundedRectangle(cornerRadius: 3.5, style: .continuous)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
             )
-            .scaleEffect(isHovered ? 1.25 : 1.0)
+            .scaleEffect(isHovered ? 1.06 : 1.0)
             .shadow(
-                color: isHovered ? .black.opacity(0.25) : .clear,
-                radius: 6, y: 3
+                color: isHovered ? .black.opacity(0.16) : .clear,
+                radius: 3, y: 1
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
-        .help(title.title)
+        .accessibilityLabel(title.title)
     }
 
     private var fallbackIcon: some View {

@@ -2,6 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct ReleaseCalendarView: View {
+    private enum ReleaseFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case movies = "Movies"
+        case shows = "TV Shows"
+
+        var id: Self { self }
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
 
@@ -17,6 +25,7 @@ struct ReleaseCalendarView: View {
     }()
     @State private var isLoading = true
     @State private var fetchTask: Task<Void, Never>? = nil
+    @State private var releaseFilter: ReleaseFilter = .all
     
     var body: some View {
         Group {
@@ -83,21 +92,29 @@ struct ReleaseCalendarView: View {
                             if let data = calendarData {
                                 weekFocusRow(data: data)
 
+                                if let selectedDate {
+                                    selectedDateSummary(selectedDate)
+                                }
+
+                                releaseFilterBar
+
                                 Divider().padding(.vertical, AppTheme.Spacing.small)
 
                                 if let date = selectedDate, let dayInfo = data.days[date] {
-                                    headerSection(date: date, count: dayInfo.items.count)
-                                    if dayInfo.items.isEmpty {
+                                    let items = filtered(dayInfo.items)
+                                    headerSection(date: date, count: items.count)
+                                    if items.isEmpty {
                                         emptyDayView(date: date)
                                     } else {
-                                        releasesList(items: dayInfo.items)
+                                        releasesList(items: items)
                                     }
                                 } else {
-                                    headerSection(date: currentDisplayMonth, count: data.allItems.count, isAllMonth: true)
-                                    if data.allItems.isEmpty {
+                                    let items = filtered(data.allItems)
+                                    headerSection(date: currentDisplayMonth, count: items.count, isAllMonth: true)
+                                    if items.isEmpty {
                                         emptyDayView(date: currentDisplayMonth, isAllMonth: true)
                                     } else {
-                                        allMonthReleasesList(data: data)
+                                        allMonthReleasesList(items: items)
                                     }
                                 }
                             }
@@ -120,6 +137,21 @@ struct ReleaseCalendarView: View {
         .onDisappear {
             fetchTask?.cancel()
             fetchTask = nil
+        }
+        .background {
+            Group {
+                Button("") { changeMonth(by: -1) }
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                Button("") { changeMonth(by: 1) }
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                Button("") {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        selectedDate = nil
+                    }
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+            }
+            .opacity(0)
         }
     }
     
@@ -220,6 +252,79 @@ struct ReleaseCalendarView: View {
                 selectedDate = nil
             }
             refreshData(for: newMonth)
+        }
+    }
+
+    private func filtered(_ items: [CalendarReleaseItem]) -> [CalendarReleaseItem] {
+        switch releaseFilter {
+        case .all:
+            items
+        case .movies:
+            items.filter { $0.metadata.type == .movie }
+        case .shows:
+            items.filter { $0.metadata.type == .tvShow }
+        }
+    }
+
+    private var releaseFilterBar: some View {
+        HStack(spacing: AppTheme.Spacing.micro) {
+            ForEach(ReleaseFilter.allCases) { filter in
+                let isSelected = releaseFilter == filter
+                Button {
+                    withAnimation(AppTheme.Animation.springSnappy) {
+                        releaseFilter = filter
+                    }
+                } label: {
+                    Text(filter.rawValue)
+                        .font(AppTheme.Font.caption.weight(isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? AppTheme.Colors.accent : .secondary)
+                        .padding(.horizontal, AppTheme.Spacing.small)
+                        .padding(.vertical, AppTheme.Spacing.micro)
+                        .background(
+                            isSelected
+                                ? AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.18 : 0.12)
+                                : AppTheme.Colors.surfaceGhost(for: colorScheme),
+                            in: Capsule()
+                        )
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(AppTheme.Colors.surfaceSubtle(for: colorScheme), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+        }
+    }
+
+    private func selectedDateSummary(_ date: Date) -> some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            Image(systemName: "calendar.circle.fill")
+                .foregroundStyle(AppTheme.Colors.accent)
+            Text("Viewing \(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))")
+                .font(AppTheme.Font.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+            Spacer()
+            Button("Month") {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    selectedDate = nil
+                }
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Show the full month")
+        }
+        .padding(AppTheme.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.14 : 0.08))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.5)
         }
     }
     
@@ -373,14 +478,14 @@ struct ReleaseCalendarView: View {
             }
             
             HStack(spacing: 4) {
-                Text("Less").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
+                Text("Fewer releases").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
                 let legendColors = Self.legendColors(for: colorScheme)
                 ForEach(0..<5) { i in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(legendColors[i])
                         .frame(width: 10, height: 10)
                 }
-                Text("More").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
+                Text("More releases").font(AppTheme.Font.caption2).foregroundStyle(.secondary)
             }
             .padding(.top, 10)
         }
@@ -398,21 +503,25 @@ struct ReleaseCalendarView: View {
     private func weekFocusRow(data: CalendarResult) -> some View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let next7Days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        let isCurrentMonth = calendar.isDate(currentDisplayMonth, equalTo: today, toGranularity: .month)
+        let anchor = selectedDate ?? (isCurrentMonth ? today : currentDisplayMonth)
+        let focusDates = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: anchor) }
         
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            Text("NEXT 7 DAYS")
+            Text(isCurrentMonth && selectedDate == nil
+                 ? "NEXT 7 DAYS"
+                 : "WEEK OF \(anchor.formatted(.dateTime.month(.abbreviated).day()))")
                 .font(AppTheme.Font.caption2)
                 .kerning(AppTheme.Kerning.wide)
                 .foregroundStyle(.secondary)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppTheme.Spacing.small) {
-                    ForEach(next7Days, id: \.self) { date in
+                    ForEach(focusDates, id: \.self) { date in
                         let dayInfo = data.days[date]
                         let isSelected = selectedDate.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
                         let accent = AppTheme.Colors.accent
-                        let itemCount = dayInfo?.items.count ?? 0
+                        let itemCount = filtered(dayInfo?.items ?? []).count
 
                         Button {
                             withAnimation(AppTheme.Animation.springSnappy) { selectedDate = date }
@@ -547,8 +656,8 @@ struct ReleaseCalendarView: View {
     }
     
     @ViewBuilder
-    private func allMonthReleasesList(data: CalendarResult) -> some View {
-        let groupedByDay = Dictionary(grouping: data.allItems) { 
+    private func allMonthReleasesList(items: [CalendarReleaseItem]) -> some View {
+        let groupedByDay = Dictionary(grouping: items) {
             Calendar.current.startOfDay(for: $0.date)
         }
         let sortedDays = groupedByDay.keys.sorted()
