@@ -149,13 +149,6 @@ actor YearInReviewService {
         YearInReviewService(modelContainer: modelContainer)
     }
 
-    /// Only the fields the review actually reads — avoids dragging searchable/
-    /// badge/cast blobs for every library item on each visit.
-    nonisolated(unsafe) private static let reviewItemProperties: [PartialKeyPath<MediaItem>] = [
-        \.id, \.title, \.posterURL, \.customPosterURL, \.typeValue, \.tasteValue,
-        \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.cachedSeasonCount, \.storedCast
-    ]
-
     func compute(year: Int) async -> YearInReview {
         // Fast path: return the in-memory snapshot if one exists for this store.
         let containerID = ObjectIdentifier(modelContext.container)
@@ -171,10 +164,9 @@ actor YearInReviewService {
 
         // 1. TV episodes watched within the year (drives per-day activity + TV "watched" ids).
         //    Season 0 (specials) are excluded, matching the app's progress logic.
-        var episodeDescriptor = FetchDescriptor<TVEpisode>(
+        let episodeDescriptor = FetchDescriptor<TVEpisode>(
             predicate: #Predicate { $0.isWatched && $0.seasonNumber > 0 && $0.watchedDate != nil && $0.watchedDate! >= start && $0.watchedDate! < end }
         )
-        episodeDescriptor.propertiesToFetch = [\.watchedDate, \.runtime, \.showID, \.seasonNumber]
         let watchedEpisodes = (try? modelContext.fetch(episodeDescriptor)) ?? []
 
         var activity: [Date: YearDayActivity] = [:]
@@ -196,10 +188,9 @@ actor YearInReviewService {
         }
 
         // 2. Movies completed within the year.
-        var movieDescriptor = FetchDescriptor<MediaItem>(
+        let movieDescriptor = FetchDescriptor<MediaItem>(
             predicate: #Predicate { $0.typeValue == "Movie" && $0.stateValue == "Completed" && $0.lastStateChangeDate != nil && $0.lastStateChangeDate! >= start && $0.lastStateChangeDate! < end }
         )
-        movieDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedRuntime, \.lastStateChangeDate, \.tasteValue, \.posterURL, \.customPosterURL, \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.storedCast]
         let completedMovies = (try? modelContext.fetch(movieDescriptor)) ?? []
 
         var titlesByDay: [Date: [YearWatchedTitle]] = [:]
@@ -222,10 +213,10 @@ actor YearInReviewService {
             ))
         }
 
-        // 3. TV show metadata for titlesByDay + taste (narrow fetch — only the
-        //    fields the review reads; no searchable/badge blobs).
+        // 3. TV show metadata for titlesByDay + taste. Use full model fetches
+        // here because partial SwiftData fetches are not reliable across the
+        // supported macOS/Xcode runtimes for custom array-backed properties.
         var itemDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.isSoftDeleted == false })
-        itemDescriptor.propertiesToFetch = Self.reviewItemProperties
         itemDescriptor.fetchLimit = 2000
         let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
 
