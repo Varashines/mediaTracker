@@ -31,8 +31,12 @@ struct SegmentedPillControl<Option: Hashable, Label: View>: View {
                 let isHovered = hoveredOption == option
 
                 Button {
-                    withAnimation(AppTheme.Animation.springSnappy) {
+                    if AppThemeCoordinator.isReducingVisualEffects {
                         selection = option
+                    } else {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            selection = option
+                        }
                     }
                 } label: {
                     label(option, isSelected)
