@@ -10,8 +10,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     let modelContext: ModelContext
     let onRefresh: () -> Void
 
-    @State private var showSortPicker = false
-    @State private var showGroupPicker = false
+    @State private var showViewOptions = false
     @State private var refreshRotation: Double = 0
     @Environment(\.colorScheme) private var colorScheme
 
@@ -44,8 +43,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             if !isSearchActive {
                 HStack(spacing: AppTheme.Spacing.tiny) {
-                    sortMenu
-                    groupMenu
+                    viewOptionsButton
                     refreshButton
                 }
             }
@@ -60,21 +58,18 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     }
 
     @ViewBuilder
-    private var sortMenu: some View {
+    private var viewOptionsButton: some View {
         if isLibraryCategory {
-            let isCustomSort = viewModel.filter.currentSortOrder != .recentlyAdded
+            let hasCustomView = viewModel.filter.currentSortOrder != .recentlyAdded
+                || viewModel.filter.currentGroupBy != .none
+
             Button {
-                showSortPicker.toggle()
+                showViewOptions.toggle()
             } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: viewModel.filter.currentSortOrder.icon)
-                        .font(AppTheme.Icon.medium)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
+                Image(systemName: "slider.horizontal.3")
+                    .font(AppTheme.Icon.medium)
                 .overlay(alignment: .topTrailing) {
-                    if isCustomSort {
+                    if hasCustomView {
                         Circle()
                             .fill(AppTheme.Colors.accent)
                             .frame(width: 6, height: 6)
@@ -85,70 +80,28 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(isCustomSort ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
+                        .fill(hasCustomView ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
                 )
             }
             .buttonStyle(.borderless)
             .contentShape(Capsule())
             .tint(.primary)
-            .help(viewModel.filter.currentSortOrder.rawValue)
-            .accessibilityLabel("Sort library")
-            .accessibilityValue(viewModel.filter.currentSortOrder.rawValue)
-            .popover(isPresented: $showSortPicker) {
-                SortPickerPopover(
-                    current: viewModel.filter.currentSortOrder
-                ) { newOrder in
+            .help("View options")
+            .accessibilityLabel("Library view options")
+            .accessibilityValue("Sorted by \(viewModel.filter.currentSortOrder.rawValue), grouped by \(viewModel.filter.currentGroupBy.rawValue)")
+            .popover(isPresented: $showViewOptions) {
+                ViewOptionsPopover(
+                    sortOrder: viewModel.filter.currentSortOrder,
+                    groupBy: viewModel.filter.currentGroupBy,
+                    onSelectSort: { newOrder in
                     viewModel.filter.categorySortOrders[viewModel.filter.selectedCategory] = newOrder
                     viewModel.filterSubject.send()
-                    showSortPicker = false
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var groupMenu: some View {
-        if isLibraryCategory {
-            let isCustomGroup = viewModel.filter.currentGroupBy != .none
-            Button {
-                showGroupPicker.toggle()
-            } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: viewModel.filter.currentGroupBy.icon)
-                        .font(AppTheme.Icon.medium)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if isCustomGroup {
-                        Circle()
-                            .fill(AppTheme.Colors.accent)
-                            .frame(width: 6, height: 6)
-                            .offset(x: 6, y: -4)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(isCustomGroup ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
-                )
-            }
-            .buttonStyle(.borderless)
-            .contentShape(Capsule())
-            .tint(.primary)
-            .help(isCustomGroup ? "Group: \(viewModel.filter.currentGroupBy.rawValue)" : "Group")
-            .accessibilityLabel("Group library")
-            .accessibilityValue(viewModel.filter.currentGroupBy.rawValue)
-            .popover(isPresented: $showGroupPicker) {
-                GroupPickerPopover(
-                    current: viewModel.filter.currentGroupBy
-                ) { newGroup in
+                    },
+                    onSelectGroup: { newGroup in
                     viewModel.filter.categoryGroupBys[viewModel.filter.selectedCategory] = newGroup
                     viewModel.filterSubject.send()
-                    showGroupPicker = false
-                }
+                    }
+                )
             }
         }
     }
@@ -222,93 +175,91 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     }
 }
 
-// MARK: - Sort Picker Popover
+// MARK: - View Options Popover
 
-private struct SortPickerPopover: View {
-    let current: SortOrder
-    let onSelect: (SortOrder) -> Void
-    @State private var hoveredOption: SortOrder? = nil
+private struct ViewOptionsPopover: View {
+    let sortOrder: SortOrder
+    let groupBy: GroupBy
+    let onSelectSort: (SortOrder) -> Void
+    let onSelectGroup: (GroupBy) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 10))
-                Text("Sort By")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .padding(.top, 16)
-            .padding(.bottom, 10)
-            .padding(.horizontal, 14)
-
-            VStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            optionSection(title: "Sort by", icon: "arrow.up.arrow.down") {
                 ForEach(SortOrder.allCases, id: \.self) { order in
-                    Button {
-                        onSelect(order)
-                    } label: {
-                        PickerOptionRow(
-                            icon: order.icon,
-                            label: order.rawValue,
-                            isSelected: order == current,
-                            isHovered: hoveredOption == order
-                        )
+                    optionButton(
+                        icon: order.icon,
+                        label: order.rawValue,
+                        isSelected: order == sortOrder
+                    ) {
+                        onSelectSort(order)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        hoveredOption = hovering ? order : nil
-                    }
-                    .accessibilityAddTraits(order == current ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 12)
-        }
-        .frame(width: 210)
-    }
-}
 
-// MARK: - Group Picker Popover
+            Divider()
 
-private struct GroupPickerPopover: View {
-    let current: GroupBy
-    let onSelect: (GroupBy) -> Void
-    @State private var hoveredOption: GroupBy? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 10))
-                Text("Group By")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .padding(.top, 16)
-            .padding(.bottom, 10)
-            .padding(.horizontal, 14)
-
-            VStack(spacing: 2) {
+            optionSection(title: "Group by", icon: "square.grid.2x2") {
                 ForEach(GroupBy.pickerOptions, id: \.self) { group in
-                    Button {
-                        onSelect(group)
-                    } label: {
-                        PickerOptionRow(
-                            icon: group.icon,
-                            label: group.rawValue,
-                            isSelected: group == current,
-                            isHovered: hoveredOption == group
-                        )
+                    optionButton(
+                        icon: group.icon,
+                        label: group.rawValue,
+                        isSelected: group == groupBy
+                    ) {
+                        onSelectGroup(group)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        hoveredOption = hovering ? group : nil
-                    }
-                    .accessibilityAddTraits(group == current ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 12)
         }
-        .frame(width: 220)
+        .padding(AppTheme.Spacing.small)
+        .frame(width: 230)
+    }
+
+    private func optionSection<Content: View>(
+        title: String,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+            Label(title, systemImage: icon)
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppTheme.Spacing.micro)
+
+            content()
+        }
+    }
+
+    private func optionButton(
+        icon: String,
+        label: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Spacing.small) {
+                Image(systemName: icon)
+                    .font(AppTheme.Icon.medium)
+                    .frame(width: 18)
+                Text(label)
+                    .font(AppTheme.Font.body)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.mini)
+            .background(
+                isSelected ? AppTheme.Colors.accent.opacity(0.10) : .clear,
+                in: RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
