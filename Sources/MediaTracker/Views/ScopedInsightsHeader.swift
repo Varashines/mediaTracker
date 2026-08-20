@@ -11,6 +11,7 @@ struct ScopedInsightsHeader: View {
     @State private var themeColorMap: [String: String] = [:]
 
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)]
+    private let metadataItemLimit = 5
 
     private var hasAnySection: Bool {
         if stats.topActors.count > 1 { return true }
@@ -61,7 +62,7 @@ struct ScopedInsightsHeader: View {
             headerLabel("Top Cast")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: AppTheme.Spacing.medium) {
-                    ForEach(stats.topActors.prefix(6)) { actor in
+                    ForEach(stats.topActors.prefix(metadataItemLimit)) { actor in
                         CastMemberCard(
                             member: SimpleCastMember(
                                 id: actor.name,
@@ -87,7 +88,7 @@ struct ScopedInsightsHeader: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             headerLabel("Top Genres")
             LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topGenres.prefix(6), id: \.name) { genre in
+                ForEach(stats.topGenres.prefix(metadataItemLimit), id: \.name) { genre in
                     let node = DiscoveryNode(
                         name: genre.name,
                         logoPath: nil,
@@ -106,7 +107,7 @@ struct ScopedInsightsHeader: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             headerLabel("Top Networks")
             LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topNetworks.prefix(6), id: \.name) { net in
+                ForEach(stats.topNetworks.prefix(metadataItemLimit), id: \.name) { net in
                     let node = DiscoveryNode(
                         name: net.name,
                         logoPath: logoMap[net.name],
@@ -125,7 +126,7 @@ struct ScopedInsightsHeader: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             headerLabel("Top Providers")
             LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topProviders.prefix(6), id: \.name) { prov in
+                ForEach(stats.topProviders.prefix(metadataItemLimit), id: \.name) { prov in
                     let node = DiscoveryNode(
                         name: prov.name,
                         logoPath: logoMap[prov.name],
@@ -144,7 +145,7 @@ struct ScopedInsightsHeader: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             headerLabel("Top Languages")
             LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topLanguages.prefix(6), id: \.name) { lang in
+                ForEach(stats.topLanguages.prefix(metadataItemLimit), id: \.name) { lang in
                     let displayName = LanguageUtils.languageName(for: lang.name)
                     let node = DiscoveryNode(
                         name: displayName,
