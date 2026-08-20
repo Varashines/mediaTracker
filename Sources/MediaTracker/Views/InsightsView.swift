@@ -6,6 +6,7 @@ private let insightsScrollName = "insightsScroll"
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.sleepManager) private var sleepManager
 
     @State private var stats: LibraryStats?
     @State private var isLoading = true
@@ -110,6 +111,7 @@ struct InsightsView: View {
         .saturation(showPassportPreview ? 0.3 : 1)
         .blur(radius: showPassportPreview ? 5 : 0)
         .animation(AppTheme.Animation.springSnappy, value: showPassportPreview)
+        .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .onAppear(perform: refreshData)
         .onChange(of: refreshID) { _, _ in refreshData() }
         .onDisappear {

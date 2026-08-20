@@ -372,14 +372,14 @@ extension View {
         }
     }
 
-    /// Unified windowToolbar material — single source for `ContentView` + `DetailView`.
-    /// Animates visibility with sleep transition (0.6s) to avoid snap.
+    /// Unified window toolbar chrome. Uses the native macOS appearance while
+    /// active, then hides the toolbar for the app's distraction-free sleep mode.
+    /// Animates visibility with the sleep transition to avoid a snap.
     @ViewBuilder
     func toolbarMaterial(isSleeping: Bool) -> some View {
         self
             .toolbar(isSleeping ? .hidden : .visible, for: .windowToolbar)
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
-            .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+            .toolbarBackgroundVisibility(.automatic, for: .windowToolbar)
             .animation(.easeInOut(duration: 0.6), value: isSleeping)
     }
     

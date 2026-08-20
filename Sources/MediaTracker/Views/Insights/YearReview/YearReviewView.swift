@@ -8,6 +8,7 @@ struct YearReviewView: View {
     var onSelectTitle: ((PersistentIdentifier) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sleepManager) private var sleepManager
     @Namespace private var ns
 
     @State private var review: YearInReview?
@@ -43,6 +44,7 @@ struct YearReviewView: View {
         }
         .background(AppTheme.Colors.background(for: colorScheme))
         .navigationTitle("Year in Review")
+        .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .onAppear(perform: load)
         .onDisappear { loadTask?.cancel(); loadTask = nil }
     }

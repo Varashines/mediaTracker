@@ -12,6 +12,7 @@ struct ReleaseCalendarView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.sleepManager) private var sleepManager
 
     @Namespace private var calendarNamespace
     var viewModel: MediaViewModel
@@ -122,6 +123,7 @@ struct ReleaseCalendarView: View {
                 }
             }
         }
+        .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .onAppear {
             refreshData(for: currentDisplayMonth)
         }

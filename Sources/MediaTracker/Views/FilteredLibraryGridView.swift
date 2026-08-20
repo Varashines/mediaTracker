@@ -195,6 +195,7 @@ struct FilteredLibraryGridView: View {
                 ? ""
                 : (filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
         )
+        .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
             ScopedStatsActor.invalidateCache()
             let itemID = MediaStateService.shared.lastChangedItemID
