@@ -8,8 +8,9 @@ struct StreamingServiceRule: Codable {
     let dayOffset: Int
     
     static let defaults: [StreamingServiceRule] = [
-        // Apple TV+: Drops at Midnight ET, usually listed as US date but available in India next morning.
-        StreamingServiceRule(patterns: ["apple"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Apple TV Originals are commonly available at 9 PM ET on the evening
+        // before their official listed release date.
+        StreamingServiceRule(patterns: ["apple"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: -1),
         // Disney+ Flagships (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
         StreamingServiceRule(patterns: ["star wars", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // Disney+ Standard: Drops at Midnight PT / 3:00 AM ET.
@@ -20,8 +21,8 @@ struct StreamingServiceRule: Codable {
         StreamingServiceRule(patterns: ["amazon", "prime", "mgm"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Hulu / Peacock / Paramount+: Mostly Midnight ET.
         StreamingServiceRule(patterns: ["hulu", "peacock", "paramount"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
-        // Max (Streaming): Midnight PT.
-        StreamingServiceRule(patterns: ["max"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
+        // HBO Max / Max Originals: 9 PM ET on their listed release date.
+        StreamingServiceRule(patterns: ["max"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // HBO (Linear Network): Usually 9 PM ET for flagship releases.
         StreamingServiceRule(patterns: ["hbo"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0)
     ]

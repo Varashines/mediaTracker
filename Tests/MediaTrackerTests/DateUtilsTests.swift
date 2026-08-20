@@ -43,9 +43,37 @@ final class DateUtilsTests: XCTestCase {
         let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
         XCTAssertEqual(comps.year, 2026)
         XCTAssertEqual(comps.month, 4)
-        XCTAssertEqual(comps.day, 20)
-        XCTAssertEqual(comps.hour, 0)
+        XCTAssertEqual(comps.day, 19)
+        XCTAssertEqual(comps.hour, 21)
         XCTAssertEqual(comps.minute, 0)
+    }
+
+    func testParseEpisodeDateAppleTVIsAvailableOnListedDateInIST() {
+        let date = DateUtils.parseEpisodeDate("2026-04-20", serviceName: "Apple TV+")
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 4)
+        XCTAssertEqual(components.day, 20)
+        XCTAssertEqual(components.hour, 6)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    func testParseEpisodeDateHBOMaxIsAvailableTheFollowingDayInIST() {
+        let date = DateUtils.parseEpisodeDate("2026-04-20", serviceName: "HBO Max")
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 4)
+        XCTAssertEqual(components.day, 21)
+        XCTAssertEqual(components.hour, 6)
+        XCTAssertEqual(components.minute, 30)
     }
 
     func testParseEpisodeDateDisneyPlus() {
@@ -154,7 +182,8 @@ final class DateUtilsTests: XCTestCase {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tzET
         let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
-        XCTAssertEqual(comps.hour, 0, "Apple TV+ should resolve to midnight ET via show.network fallback")
+        XCTAssertEqual(comps.day, 19, "Apple TV+ should resolve on the prior ET calendar day")
+        XCTAssertEqual(comps.hour, 21, "Apple TV+ should resolve to 9 PM ET via show.network fallback")
         XCTAssertEqual(comps.minute, 0)
     }
 
