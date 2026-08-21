@@ -44,7 +44,12 @@ struct FilteredLibraryGridView: View {
         !cachedLikedTitles.isEmpty
     }
 
-    private var groupedByWeekday: [(Date?, [MediaThumbnailMetadata])] {
+    /// Day-grouped sections, recomputed only when `items` actually changes
+    /// (fetch / load-more / single-item update) instead of on every body
+    /// evaluation — Dictionary(grouping:) over the full list was the hot spot.
+    @State private var weekdayGroups: [(Date?, [MediaThumbnailMetadata])] = []
+
+    private static func groupByWeekday(_ items: [MediaThumbnailMetadata]) -> [(Date?, [MediaThumbnailMetadata])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: items) { item in
             item.releaseDate.map(calendar.startOfDay(for:))
@@ -61,6 +66,10 @@ struct FilteredLibraryGridView: View {
                 return false
             }
         }
+    }
+
+    private func refreshWeekdayGroups() {
+        weekdayGroups = Self.groupByWeekday(items)
     }
 
     var body: some View {
@@ -127,7 +136,7 @@ struct FilteredLibraryGridView: View {
                                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                         if filter.type == .onThisWeek {
-                            ForEach(Array(groupedByWeekday.enumerated()), id: \.element.0) { groupIdx, group in
+                            ForEach(Array(weekdayGroups.enumerated()), id: \.element.0) { groupIdx, group in
                                 let day = group.0
                                 let dayItems = group.1
                                 VStack(alignment: .leading, spacing: 12) {
@@ -145,8 +154,8 @@ struct FilteredLibraryGridView: View {
                                             }
                                             .buttonStyle(.interactive)
                                             .onAppear {
-                                                let isLastItemInDay = idx == dayItems.count - 1
-                                                let isLastGroup = groupIdx == groupedByWeekday.count - 1
+                                let isLastItemInDay = idx == dayItems.count - 1
+                                let isLastGroup = groupIdx == weekdayGroups.count - 1
                                                 if isLastItemInDay && isLastGroup {
                                                     loadMoreItems()
                                                 }
@@ -325,6 +334,7 @@ struct FilteredLibraryGridView: View {
                 if Task.isCancelled { return }
                 await MainActor.run {
                     items.append(contentsOf: result.displayed)
+                    refreshWeekdayGroups()
                     isLoadingMore = false
                     recomputeRecommendationData()
                 }
@@ -439,6 +449,7 @@ struct FilteredLibraryGridView: View {
                 if Task.isCancelled { return }
                 await MainActor.run {
                     self.items = result.displayed
+                    self.refreshWeekdayGroups()
                     self.totalCount = result.totalCount
                     self.isLoading = false
                 }
@@ -492,7 +503,7 @@ struct FilteredLibraryGridView: View {
                             }
                         } else if let updated = updatedMetadata {
                             items.append(updated)
-                            
+
                             // Re-sort the items list
                             switch filter.type {
                             case .badge:
@@ -503,6 +514,7 @@ struct FilteredLibraryGridView: View {
                                 items.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
                             }
                         }
+                        refreshWeekdayGroups()
                     }
                 }
             } catch {
