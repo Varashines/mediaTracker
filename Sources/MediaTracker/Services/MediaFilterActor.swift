@@ -4,6 +4,10 @@ import os
 
 @ModelActor
 actor MediaFilterActor {
+    /// Instruments signposter for search refinement profiling —
+    /// visible in Instruments' os_signpost track (subsystem com.mediaTracker).
+    static let searchSignposter = OSSignposter(subsystem: "com.mediaTracker", category: "searchRefinement")
+
     func filterAndSort(
         category: NavigationCategory,
         searchText: String,
@@ -302,10 +306,16 @@ actor MediaFilterActor {
 
         let scorer = SearchScorer(tokens: tokens)
 
+        // Signposted for Instruments profiling (2C): measure payload construction
+        // vs scoring before adding any caching layer over searchPayload.
+        let signposter = Self.searchSignposter
+        let payloadState = signposter.beginInterval("searchPayloadBuild")
         // Precompute the lowercased search payload once per item and reuse it for
         // both the AND and OR passes (avoids re-lowercasing every field per token).
         let payloads: [(MediaItem, SearchPayload)] = nonSearchFiltered.map { ($0, $0.searchPayload) }
+        signposter.endInterval("searchPayloadBuild", payloadState)
 
+        let scoringState = signposter.beginInterval("searchScoring")
         // Try AND mode first
         var scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
             let evaluation = scorer.evaluate(payload: payload)
@@ -321,6 +331,7 @@ actor MediaFilterActor {
                 return (item, evaluation.score)
             }
         }
+        signposter.endInterval("searchScoring", scoringState)
 
         // Sort by score descending
         scored.sort { $0.1 > $1.1 }
