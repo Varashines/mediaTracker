@@ -49,9 +49,16 @@ struct BadgeEngine {
         static let empty = EpisodeScan(nextEpisodeNumber: 0, nextSeasonEpisodeCount: 0, nextAirDate: nil, airedOnSameDayCount: 0, recentlyWatchedCount: 0)
     }
 
+    private struct CachedEpisodeScan: Sendable {
+        let scan: EpisodeScan
+        let expiresAt: Date
+    }
+
     /// Cache episode scans per show to avoid re-iterating all seasons/episodes on every badge call.
-    /// Cleared on episode state changes (see MediaItem.syncCachedProperties).
-    private static let episodeScanCache = OSAllocatedUnfairLock<[PersistentIdentifier: EpisodeScan]>(uncheckedState: [:])
+    /// A short expiry keeps time-sensitive engagement signals, such as HOOKED,
+    /// accurate even if no episode state changes occur.
+    private static let episodeScanCacheLifetime = TimeInterval.secondsInHour / 2
+    private static let episodeScanCache = OSAllocatedUnfairLock<[PersistentIdentifier: CachedEpisodeScan]>(uncheckedState: [:])
 
     nonisolated static func invalidateScan(for showID: PersistentIdentifier) {
         _ = episodeScanCache.withLock { $0.removeValue(forKey: showID) }
@@ -61,12 +68,24 @@ struct BadgeEngine {
         episodeScanCache.withLock { $0.removeAll() }
     }
 
-    nonisolated private static func readScanCache(_ showID: PersistentIdentifier) -> EpisodeScan? {
-        episodeScanCache.withLock { $0[showID] }
+    nonisolated private static func readScanCache(_ showID: PersistentIdentifier, now: Date) -> EpisodeScan? {
+        episodeScanCache.withLock { cache in
+            guard let cached = cache[showID] else { return nil }
+            guard cached.expiresAt > now else {
+                cache.removeValue(forKey: showID)
+                return nil
+            }
+            return cached.scan
+        }
     }
 
-    nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan) {
-        episodeScanCache.withLock { $0[showID] = scan }
+    nonisolated private static func writeScanCache(_ showID: PersistentIdentifier, scan: EpisodeScan, now: Date) {
+        episodeScanCache.withLock {
+            $0[showID] = CachedEpisodeScan(
+                scan: scan,
+                expiresAt: now.addingTimeInterval(episodeScanCacheLifetime)
+            )
+        }
     }
 
     static func calculateBadge(for item: MediaItem, now: Date = Date()) -> BadgeResult? {
@@ -75,11 +94,11 @@ struct BadgeEngine {
         let scan: EpisodeScan
         if item.type == .tvShow {
             let pid = item.persistentModelID
-            if let cached = readScanCache(pid) {
+            if let cached = readScanCache(pid, now: now) {
                 scan = cached
             } else {
                 scan = scanEpisodes(for: item, now: now)
-                writeScanCache(pid, scan: scan)
+                writeScanCache(pid, scan: scan, now: now)
             }
         } else {
             scan = .empty
@@ -291,6 +310,25 @@ private final class BadgeDeltaStore: @unchecked Sendable {
     }
 }
 
+private actor BadgeDeltaFlushCoordinator {
+    static let shared = BadgeDeltaFlushCoordinator()
+
+    private var pendingFlush: Task<Void, Never>?
+
+    func schedule(container: ModelContainer) {
+        pendingFlush?.cancel()
+        pendingFlush = Task {
+            do {
+                try await Task.sleep(nanoseconds: 350_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await BadgeEngine.flushBadgeChanges(container: container)
+        }
+    }
+}
+
 extension BadgeEngine {
     private static let badgeDeltaStore = BadgeDeltaStore()
 
@@ -298,6 +336,14 @@ extension BadgeEngine {
     /// Thread-safe — can be called from any context without awaiting.
     nonisolated static func enqueueBadgeChange(old: String?, new: String?) {
         badgeDeltaStore.enqueue(old: old, new: new)
+    }
+
+    /// Debounces aggregate badge-count updates for individual interactions.
+    /// Bulk paths still flush directly after their transaction completes.
+    static func scheduleBadgeDeltaFlush(container: ModelContainer) {
+        Task {
+            await BadgeDeltaFlushCoordinator.shared.schedule(container: container)
+        }
     }
 
     /// Flush all accumulated badge deltas to the database in a single transaction.

@@ -47,7 +47,7 @@ struct SmartCollectionsHubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sectionGap) {
                 // 1. SYSTEM SMART COLLECTIONS
-                sectionHeaderMini("System Intelligence")
+                sectionHeaderMini("Smart Collections")
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.top, AppTheme.Spacing.section)
 
@@ -229,14 +229,14 @@ struct SmartCollectionsHubView: View {
 
     private func description(for category: NavigationCategory) -> String {
         switch category {
-        case .releaseRadar: return "Recently released episodes and movies from your library."
-        case .smartUpcoming: return "Highly anticipated upcoming premieres and release dates."
-        case .catchUp: return "Shows with backlogs and new episodes airing this week."
+        case .releaseRadar: return "New releases, premieres, finales, and full-season drops available now."
+        case .smartUpcoming: return "Upcoming premieres and newly released debuts in your library."
+        case .catchUp: return "Liked shows with episodes to catch up on before the next release."
         case .loved: return "Your absolute favorites, marked with a heart."
-        case .binge: return "Shows with multiple unwatched episodes available."
-        case .quickBites: return "Short media under 90 minutes for quick viewing."
+        case .binge: return "Shows ready for your next binge, including full-season drops."
+        case .quickBites: return "Movies under 90 minutes and shows with episodes under 25 minutes."
         case .archive: return "On hold or dropped items you've shelved."
-        case .onThisWeek: return "Titles that premiered this week, grouped by day."
+        case .onThisWeek: return "Movies and new series premieres released in the current week."
         default: return ""
         }
     }

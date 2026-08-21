@@ -40,7 +40,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .completed: return "Completed"
         case .archive: return "Shelved"
         case .disliked: return "Disliked"
-        case .binge: return "Binge"
+        case .binge: return "Binge Ready"
         case .discover: return "Discovery Hub"
         case .insights: return "Snapshot"
         case .movie: return "Movies"
@@ -50,7 +50,7 @@ enum NavigationCategory: String, CaseIterable, Identifiable, Sendable {
         case .catchUp: return "Catch Up"
         case .releaseRadar: return "Release Radar"
         case .smartUpcoming: return "Premiere Radar"
-        case .onThisWeek: return "On This Week"
+        case .onThisWeek: return "Released This Week"
         }
     }
 

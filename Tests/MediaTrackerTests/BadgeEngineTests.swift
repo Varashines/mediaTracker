@@ -431,6 +431,12 @@ final class BadgeEngineTests: XCTestCase {
         let result = BadgeEngine.calculateBadge(for: item, now: testNow)
         XCTAssertEqual(result?.label, .hooked)
         XCTAssertTrue(result!.isSparkle)
+
+        // The cached scan must expire so a time-only transition can clear HOOKED
+        // even when no episode or metadata mutation occurs.
+        let afterRecencyWindow = testNow.addingTimeInterval(TimeInterval.days3)
+        let expiredResult = BadgeEngine.calculateBadge(for: item, now: afterRecencyWindow)
+        XCTAssertNotEqual(expiredResult?.label, .hooked)
     }
 
     @MainActor

@@ -225,12 +225,12 @@ class BackgroundTaskManager {
 
                     processed += 1
                     if processed % batchSize == 0 {
-                        try? context.save()
-                        try? await Task.sleep(nanoseconds: interBatchSleepNs)
+                        try context.save()
+                        try await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }
 
-                try? context.save()
+                try context.save()
                 UserDefaults.standard.set(6, forKey: extractionVersionKey)
                 AppLogger.info("🎨 Poster color migration v6 complete: \(processed) items", logger: AppLogger.background)
             }
@@ -289,12 +289,12 @@ class BackgroundTaskManager {
 
                     processed += 1
                     if processed % batchSize == 0 {
-                        try? context.save()
-                        try? await Task.sleep(nanoseconds: interBatchSleepNs)
+                        try context.save()
+                        try await Task.sleep(nanoseconds: interBatchSleepNs)
                     }
                 }
 
-                try? context.save()
+                try context.save()
                 UserDefaults.standard.set(7, forKey: extractionVersionKey)
                 AppLogger.info("🎨 Poster color migration v7 complete: \(processed) items", logger: AppLogger.background)
             }
@@ -441,6 +441,13 @@ class BackgroundTaskManager {
             ((item.cachedNextAiringDate ?? distantFuture < twoDaysAgo) ||
              (item.releaseDate ?? distantFuture < twoDaysAgo))
         }
+
+        // Target 4: badges whose meaning can lapse without a model mutation.
+        // Recalculate these periodically so their time windows remain accurate.
+        let finaleBadge = #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "FINALE" }
+        let bingeDropBadge = #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "BINGE DROP" }
+        let hookedBadge = #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "HOOKED" }
+        let behindBadge = #Predicate<MediaItem> { $0.storedSmartBadgeLabel == "BEHIND" }
         
         do {
             var d1 = FetchDescriptor<MediaItem>(predicate: p1)
@@ -452,13 +459,30 @@ class BackgroundTaskManager {
             var d3 = FetchDescriptor<MediaItem>(predicate: p3)
             d3.propertiesToFetch = [\.id, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
             let stale3 = try context.fetch(d3)
-            
-            let allStale = stale1 + stale2 + stale3
+            var finaleDescriptor = FetchDescriptor<MediaItem>(predicate: finaleBadge)
+            finaleDescriptor.propertiesToFetch = [\.id, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
+            let staleFinales = try context.fetch(finaleDescriptor)
+            var bingeDropDescriptor = FetchDescriptor<MediaItem>(predicate: bingeDropBadge)
+            bingeDropDescriptor.propertiesToFetch = [\.id, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
+            let staleBingeDrops = try context.fetch(bingeDropDescriptor)
+            var hookedDescriptor = FetchDescriptor<MediaItem>(predicate: hookedBadge)
+            hookedDescriptor.propertiesToFetch = [\.id, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
+            let staleHooked = try context.fetch(hookedDescriptor)
+            var behindDescriptor = FetchDescriptor<MediaItem>(predicate: behindBadge)
+            behindDescriptor.propertiesToFetch = [\.id, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
+            let staleBehind = try context.fetch(behindDescriptor)
+
+            let allStale = Dictionary(
+                (stale1 + stale2 + stale3 + staleFinales + staleBingeDrops + staleHooked + staleBehind)
+                    .map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            ).map(\.value)
             
             if !allStale.isEmpty {
                 AppLogger.info("♻️ Stale Badge Healer: Recalculating badges for \(allStale.count) transition titles...", logger: AppLogger.background)
                 for item in allStale {
                     try Task.checkCancellation()
+                    BadgeEngine.invalidateScan(for: item.persistentModelID)
                     item.syncCachedProperties(now: now, dirty: [.badge])
                 }
                 await BadgeEngine.flushBadgeChanges(container: container)
@@ -525,7 +549,12 @@ class BackgroundTaskManager {
                 }
                 
                 if migratedCount > 0 {
-                    try? context.save()
+                    do {
+                        try context.save()
+                    } catch {
+                        AppLogger.error("📦 Watch Provider migration v2 save failed: \(error.localizedDescription)", logger: AppLogger.background)
+                        return
+                    }
                     AppLogger.info("📦 Watch Provider migration v2 completed: migrated \(migratedCount) items", logger: AppLogger.background)
                     let sync = DiscoverySyncService(modelContainer: container)
                     await sync.syncLibrary(force: true)
@@ -582,12 +611,12 @@ class BackgroundTaskManager {
                 
                 processed += 1
                 if processed % batchSize == 0 {
-                    try? context.save()
+                    try context.save()
                     AppLogger.info("📦 Watch Provider migration v3 progress: \(processed)/\(allNeedsBackfill.count) (\(migratedCount) migrated)", logger: AppLogger.background)
                 }
             }
             
-            try? context.save()
+            try context.save()
             AppLogger.info("📦 Watch Provider migration v3 completed: \(migratedCount)/\(allNeedsBackfill.count) items migrated", logger: AppLogger.background)
             
             if migratedCount > 0 {
@@ -597,6 +626,8 @@ class BackgroundTaskManager {
             }
             
             UserDefaults.standard.set(3, forKey: migrationVersionKey)
+        } catch {
+            AppLogger.error("📦 Watch Provider migration v3 failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 
@@ -651,7 +682,12 @@ class BackgroundTaskManager {
         }
 
         if updated > 0 {
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                AppLogger.error("🏷️ Network kind migration save failed: \(error.localizedDescription)", logger: AppLogger.background)
+                return
+            }
             AppLogger.info("🏷️ Network kind migration: updated \(updated) entities", logger: AppLogger.background)
             let sync = DiscoverySyncService(modelContainer: container)
             await sync.syncLibrary(force: true)
@@ -721,7 +757,12 @@ class BackgroundTaskManager {
             if updated > 0 { AppLogger.info("📅 Watch-dates migration: restored \(updated) episodes", logger: AppLogger.background) }
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            AppLogger.error("📅 Watch-dates migration save failed: \(error.localizedDescription)", logger: AppLogger.background)
+            return
+        }
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
         UserDefaults.standard.set(true, forKey: flag)
     }

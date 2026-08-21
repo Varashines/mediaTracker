@@ -39,6 +39,9 @@ extension MediaItem {
 
             if oldLabel != storedSmartBadgeLabel {
                 BadgeEngine.enqueueBadgeChange(old: oldLabel, new: storedSmartBadgeLabel)
+                if let context = modelContext {
+                    BadgeEngine.scheduleBadgeDeltaFlush(container: context.container)
+                }
             }
         }
 
