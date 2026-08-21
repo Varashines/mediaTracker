@@ -27,7 +27,8 @@ struct BadgeEngine {
     }
 
     private static let recentlyWatchedCutoff: TimeInterval = -TimeInterval.days2
-    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -259200...1209600 // -3d ... +14d (was ∞ future)
+    /// Movies, like TV season premieres, stay on the premiere radar until release.
+    private static let moviePremiereWindow: ClosedRange<TimeInterval> = -TimeInterval.days3...Double.greatestFiniteMagnitude
     private static let newBadgeWindow: ClosedRange<TimeInterval> = -1209600...0
     private static let soonBadgeWindow: ClosedRange<TimeInterval> = 0...TimeInterval.days2
     private static let premiereDaysWindow: ClosedRange<Double> = -Double.greatestFiniteMagnitude...3

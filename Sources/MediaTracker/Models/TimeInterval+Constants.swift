@@ -5,6 +5,7 @@ extension TimeInterval {
     static let secondsInHour: TimeInterval = 3600
     static let secondsInDay: TimeInterval = 86400
     static let days2: TimeInterval = 2 * 86400
+    static let days3: TimeInterval = 3 * 86400
     static let days7: TimeInterval = 7 * 86400
     static let days14: TimeInterval = 14 * 86400
     static let days30: TimeInterval = 30 * 86400

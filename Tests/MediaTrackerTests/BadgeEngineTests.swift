@@ -375,6 +375,17 @@ final class BadgeEngineTests: XCTestCase {
         XCTAssertEqual(result?.label, .premiere)
     }
 
+    @MainActor
+    func testMoviePremiereRemainsForFarFutureRelease() throws {
+        let item = MediaItem(id: "m6", title: "Far Future Premiere", overview: "", type: .movie)
+        let farFutureDate = testNow.addingTimeInterval(TimeInterval.days90)
+        item.releaseDate = farFutureDate
+        item.cachedNextAiringDate = farFutureDate
+
+        let result = BadgeEngine.calculateBadge(for: item, now: testNow)
+        XCTAssertEqual(result?.label, .premiere)
+    }
+
     // MARK: - Level 3: Behavioral HOOKED
 
     @MainActor
