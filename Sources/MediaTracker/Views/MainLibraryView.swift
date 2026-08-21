@@ -106,28 +106,58 @@ struct MainLibraryView: View {
     }
 }
 
-/// Lightweight placeholder while the home category's first fetch is in flight —
-/// keeps the loading window from flashing section headers with no content.
+/// Placeholder while the home category's first fetch is in flight. Mirrors the
+/// real HomeViewSections layout — toggle-pill row, then "Continue Watching" and
+/// "Coming Soon" sections (SectionHeader capsule + 200x300 hero cards) — so the
+/// skeleton-to-content transition doesn't jump.
 private struct HomeSkeletonSections: View {
+    private let heroCardSize = CGSize(width: 200, height: 300)
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-            ForEach(0..<2, id: \.self) { _ in
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            // Section toggle pills
+            HStack(spacing: AppTheme.Spacing.tiny) {
+                ForEach(0..<5, id: \.self) { _ in
                     Capsule()
                         .fill(Color.secondary.opacity(0.08))
-                        .frame(width: 180, height: 24)
+                        .frame(width: 110, height: 26)
                         .shimmering()
-                    HStack(spacing: AppTheme.Spacing.grid) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                                .frame(width: 160, height: 240)
-                                .shimmering()
-                        }
-                    }
                 }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .padding(.top, AppTheme.Spacing.medium)
+
+            skeletonSection(headerWidth: 210)
+            skeletonSection(headerWidth: 150)
         }
-        .padding(AppTheme.Spacing.pageMargin)
+    }
+
+    private func skeletonSection(headerWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            HStack(spacing: AppTheme.Spacing.small) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.secondary.opacity(0.08))
+                    .frame(width: 20, height: 18)
+                Capsule()
+                    .fill(Color.secondary.opacity(0.08))
+                    .frame(width: headerWidth, height: 22)
+            }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Spacing.grid) {
+                    ForEach(0..<5, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                            .fill(Color.secondary.opacity(0.08))
+                            .frame(width: heroCardSize.width, height: heroCardSize.height)
+                            .shimmering()
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            }
+            .scrollClipDisabled()
+        }
+        .padding(.vertical, AppTheme.Spacing.small)
     }
 }
