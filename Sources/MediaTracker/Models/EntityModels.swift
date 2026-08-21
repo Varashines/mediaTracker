@@ -93,3 +93,33 @@ final class PersonImageEntity {
         self.profileURL = profileURL
     }
 }
+
+enum MediaFacetKind: String, CaseIterable, Sendable {
+    case genre
+    case provider
+    case network
+}
+
+/// Exact, normalized facet membership used to narrow library filters in SQLite.
+/// It intentionally has no relationship to MediaItem so existing test schemas
+/// remain valid while the main schema can evolve independently.
+@Model
+final class MediaFacetIndex {
+    #Index<MediaFacetIndex>([
+        \.kind,
+        \.key,
+        \.mediaItemID
+    ])
+
+    @Attribute(.unique) var id: String
+    var mediaItemID: String
+    var kind: String
+    var key: String
+
+    init(mediaItemID: String, kind: MediaFacetKind, key: String) {
+        self.mediaItemID = mediaItemID
+        self.kind = kind.rawValue
+        self.key = key
+        self.id = "\(mediaItemID)|\(kind.rawValue)|\(key)"
+    }
+}

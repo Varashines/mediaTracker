@@ -11,7 +11,7 @@ final class PersistenceTests: XCTestCase {
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
             BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self
+            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         XCTAssertNoThrow(try ModelContainer(for: schema, configurations: [config]),

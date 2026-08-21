@@ -17,7 +17,7 @@ struct MediaTrackerApp: App {
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
             BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self
+            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self
         ])
 
         let modelConfiguration: ModelConfiguration
@@ -296,6 +296,14 @@ struct MediaTrackerApp: App {
             guard !Task.isCancelled else { return }
 
             BackgroundTaskManager.shared.start(container: sharedModelContainer)
+            Task.detached(priority: .utility) {
+                let facetIndex = FacetIndexActor.shared(modelContainer: sharedModelContainer)
+                do {
+                    _ = try await facetIndex.rebuildIfNeeded()
+                } catch {
+                    AppLogger.error("Facet index rebuild failed: \(error)", logger: AppLogger.data)
+                }
+            }
             await NotificationManager.shared.requestPermission()
             await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded()
         }
