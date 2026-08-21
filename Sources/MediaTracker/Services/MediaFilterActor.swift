@@ -591,39 +591,7 @@ actor MediaFilterActor {
             }
         }
         
-        switch category {
-        case .upcoming:
-            if !fetchedItem.storedIsUpcoming { return nil }
-        case .inProgress:
-            if fetchedItem.stateValue != "Active" { return nil }
-        case .watchlist:
-            if fetchedItem.stateValue != "Wishlist" { return nil }
-        case .loved:
-            if fetchedItem.tasteValue != TasteValue.love.rawValue { return nil }
-        case .completed:
-            if fetchedItem.stateValue != "Completed" { return nil }
-        case .archive:
-            if fetchedItem.stateValue != "On Hold" && fetchedItem.stateValue != "Dropped" { return nil }
-        case .disliked:
-            if fetchedItem.tasteValue != TasteValue.dislike.rawValue { return nil }
-        case .binge:
-            if fetchedItem.storedSmartBadgeLabel != "BINGE DROP" && fetchedItem.storedSmartBadgeLabel != "BINGE" { return nil }
-        case .movie:
-            if fetchedItem.typeValue != "Movie" { return nil }
-        case .tvShow:
-            if fetchedItem.typeValue != "TV Show" { return nil }
-        case .quickBites:
-            let hasRuntime = (fetchedItem.cachedRuntime ?? 0) > 0 || (fetchedItem.cachedEpisodeRuntime ?? 0) > 0
-            if !hasRuntime { return nil }
-        case .catchUp:
-            if fetchedItem.storedSmartBadgeLabel != "BEHIND" { return nil }
-        case .smartUpcoming:
-            if fetchedItem.storedSmartBadgeLabel != "PREMIERE" { return nil }
-        case .onThisWeek:
-            guard let releaseDate = fetchedItem.releaseDate, DateUtils.sameWeek(releaseDate, Date()) else { return nil }
-        default:
-            break
-        }
+        guard MediaCategoryMatcher.matches(fetchedItem, category: category) else { return nil }
         
         let refined = try refineResults(
             [fetchedItem],
@@ -655,7 +623,7 @@ actor MediaFilterActor {
                 if collection.isSmart && !collection.smartRules.isEmpty {
                     // Smart rules require Swift-level evaluation — fetch minimal data and count
                     var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
-                    desc.propertiesToFetch = [\.persistentModelID]
+                    desc.propertiesToFetch = [\.id]
                     desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
                     let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules)
@@ -674,10 +642,7 @@ actor MediaFilterActor {
             desc.fetchLimit = LibraryScanLimits.metadataScanCap
             let items = (try? modelContext.fetch(desc)) ?? []
             let now = Date()
-            return items.filter { item in
-                guard let d = item.releaseDate else { return false }
-                return DateUtils.sameWeek(d, now)
-            }.count
+            return items.filter { MediaCategoryMatcher.matches($0, category: .onThisWeek, now: now) }.count
         }
         return try modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))
     }
