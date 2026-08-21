@@ -249,15 +249,23 @@ struct LibraryDetailView: View {
                     searchText: $viewModel.filter.searchText,
                     onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
-            .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
-                if let itemID = MediaStateService.shared.lastChangedItemID {
-                    updateSingleItemInContentView(id: itemID)
-                }
-            }
-            .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-                LibraryStatsActor.clearCache()
-                guard hasInitiallyLoaded else { return }
-                viewModel.filterSubject.send()
+            .background {
+                // Observation isolation: reading the invalidation counters here
+                // (in a leaf child) instead of in onChange expressions on the root
+                // keeps every MediaStateService tick from re-evaluating the whole
+                // LibraryDetailView tree. The closures capture exactly what the
+                // old handlers did — viewModel display updates still re-render
+                // the grid, which is the intended second invalidation.
+                MediaChangeObserver(
+                    onSingleItemUpdate: { itemID in
+                        updateSingleItemInContentView(id: itemID)
+                    },
+                    onFullRefresh: {
+                        LibraryStatsActor.clearCache()
+                        guard hasInitiallyLoaded else { return }
+                        viewModel.filterSubject.send()
+                    }
+                )
             }
             .task(id: viewModel.filter.searchText) {
                 guard hasInitiallyLoaded else { return }
@@ -683,6 +691,28 @@ struct LibraryDetailView: View {
                 AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
             }
         }
+    }
+}
+
+/// Leaf observer for MediaStateService invalidation counters. Reads the
+/// counters only in its own body so ticks re-evaluate this view — not the
+/// whole LibraryDetailView tree. Must not take observed objects as stored
+/// properties; communication is via closures only.
+private struct MediaChangeObserver: View {
+    let onSingleItemUpdate: (PersistentIdentifier) -> Void
+    let onFullRefresh: () -> Void
+
+    var body: some View {
+        EmptyView()
+            .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
+                if let itemID = MediaStateService.shared.lastChangedItemID {
+                    onSingleItemUpdate(itemID)
+                }
+            }
+            .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+                LibraryStatsActor.clearCache()
+                onFullRefresh()
+            }
     }
 }
 
