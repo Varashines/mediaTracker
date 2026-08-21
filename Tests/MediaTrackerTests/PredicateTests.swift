@@ -221,6 +221,7 @@ final class PredicateTests: XCTestCase {
         try insertItems([binge, drop, normal], into: container)
         let result = try container.mainContext.fetch(FetchDescriptor<MediaItem>(predicate: predicate))
 
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.id, "1")
     }
 }
