@@ -115,6 +115,9 @@ class SearchViewModel {
         if text.isEmpty {
             cancelAllSearchOperations()
         } else {
+            // Show the skeleton during the debounce window too — otherwise the view
+            // briefly falls through to the no-results branch before performSearch runs.
+            isSearching = true
             searchSubject.send((text, selectedType))
         }
     }
