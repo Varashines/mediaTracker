@@ -79,8 +79,19 @@ enum ColorExtractor {
         // Generate saliency map using Vision attention-based saliency
         let saliencyData = await generateSaliencyData(from: cgImage)
 
-        var pixels: [(r: Int, g: Int, b: Int)] = []
+        struct WeightedPixel {
+            let r: Int
+            let g: Int
+            let b: Int
+            let weight: Int
+        }
+
+        var pixels: [WeightedPixel] = []
         pixels.reserveCapacity(width * height)
+        var totalWeight = 0
+        var weightedRed = 0
+        var weightedGreen = 0
+        var weightedBlue = 0
 
         let salWidth = saliencyData?.width ?? 0
         let salHeight = saliencyData?.height ?? 0
@@ -110,21 +121,22 @@ enum ColorExtractor {
 
                 // Weight floor of 0.1 ensures non-salient pixels still contribute
                 let copies = max(1, Int(max(weight, 0.1) * 10))
-                let pixel = (Int(r), Int(g), Int(b))
-                for _ in 0..<copies {
-                    pixels.append(pixel)
-                }
+                pixels.append(WeightedPixel(r: Int(r), g: Int(g), b: Int(b), weight: copies))
+                totalWeight += copies
+                weightedRed += Int(r) * copies
+                weightedGreen += Int(g) * copies
+                weightedBlue += Int(b) * copies
             }
         }
 
-        guard !pixels.isEmpty else {
+        guard !pixels.isEmpty, totalWeight > 0 else {
             return DominantPair(primary: defaultGray, secondary: secondaryGray)
         }
 
         // Check if image is essentially grayscale
-        let avgR = pixels.map(\.r).reduce(0, +) / pixels.count
-        let avgG = pixels.map(\.g).reduce(0, +) / pixels.count
-        let avgB = pixels.map(\.b).reduce(0, +) / pixels.count
+        let avgR = weightedRed / totalWeight
+        let avgG = weightedGreen / totalWeight
+        let avgB = weightedBlue / totalWeight
         let range = max(avgR, avgG, avgB) - min(avgR, avgG, avgB)
         if range < 25 {
             let gray = Double(avgR) / 255.0
@@ -136,20 +148,34 @@ enum ColorExtractor {
 
         // Median cut: split RGB space into boxes at the median of the widest channel
         struct Box {
-            var pixels: [(r: Int, g: Int, b: Int)]
-            var count: Int { pixels.count }
+            var pixels: [WeightedPixel]
+            var weight: Int {
+                pixels.reduce(0) { $0 + $1.weight }
+            }
         }
 
-        func splitBox(_ box: Box) -> (Box, Box) {
-            let rMin = box.pixels.map(\.r).min()!
-            let rMax = box.pixels.map(\.r).max()!
-            let gMin = box.pixels.map(\.g).min()!
-            let gMax = box.pixels.map(\.g).max()!
-            let bMin = box.pixels.map(\.b).min()!
-            let bMax = box.pixels.map(\.b).max()!
-            let rRange = rMax - rMin
-            let gRange = gMax - gMin
-            let bRange = bMax - bMin
+        func splitBox(_ box: Box) -> (Box, Box)? {
+            guard box.weight > 1 else { return nil }
+
+            var minRed = 255
+            var maxRed = 0
+            var minGreen = 255
+            var maxGreen = 0
+            var minBlue = 255
+            var maxBlue = 0
+
+            for pixel in box.pixels {
+                minRed = min(minRed, pixel.r)
+                maxRed = max(maxRed, pixel.r)
+                minGreen = min(minGreen, pixel.g)
+                maxGreen = max(maxGreen, pixel.g)
+                minBlue = min(minBlue, pixel.b)
+                maxBlue = max(maxBlue, pixel.b)
+            }
+
+            let rRange = maxRed - minRed
+            let gRange = maxGreen - minGreen
+            let bRange = maxBlue - minBlue
 
             let channel: Int // 0=R, 1=G, 2=B
             if rRange >= gRange && rRange >= bRange {
@@ -160,7 +186,6 @@ enum ColorExtractor {
                 channel = 2
             }
 
-            let mid = box.count / 2
             let sortedPixels = box.pixels.sorted { a, b in
                 switch channel {
                 case 0: return a.r < b.r
@@ -168,23 +193,49 @@ enum ColorExtractor {
                 default: return a.b < b.b
                 }
             }
-            let left = Box(pixels: Array(sortedPixels[0..<mid]))
-            let right = Box(pixels: Array(sortedPixels[mid...]))
-            return (left, right)
+
+            var remainingLeftWeight = box.weight / 2
+            var leftPixels: [WeightedPixel] = []
+            var rightPixels: [WeightedPixel] = []
+            leftPixels.reserveCapacity(sortedPixels.count)
+            rightPixels.reserveCapacity(sortedPixels.count)
+
+            for pixel in sortedPixels {
+                let leftWeight = min(pixel.weight, remainingLeftWeight)
+                if leftWeight > 0 {
+                    leftPixels.append(
+                        WeightedPixel(r: pixel.r, g: pixel.g, b: pixel.b, weight: leftWeight)
+                    )
+                    remainingLeftWeight -= leftWeight
+                }
+
+                let rightWeight = pixel.weight - leftWeight
+                if rightWeight > 0 {
+                    rightPixels.append(
+                        WeightedPixel(r: pixel.r, g: pixel.g, b: pixel.b, weight: rightWeight)
+                    )
+                }
+            }
+
+            guard !leftPixels.isEmpty, !rightPixels.isEmpty else { return nil }
+            return (Box(pixels: leftPixels), Box(pixels: rightPixels))
         }
 
         var boxes = [Box(pixels: pixels)]
         for _ in 0..<8 {
-            guard let idx = boxes.enumerated().max(by: { $0.element.count < $1.element.count })?.offset else { break }
+            guard let idx = boxes.enumerated().max(by: { $0.element.weight < $1.element.weight })?.offset else { break }
             let largest = boxes.remove(at: idx)
-            let (left, right) = splitBox(largest)
+            guard let (left, right) = splitBox(largest) else {
+                boxes.append(largest)
+                break
+            }
             boxes.append(left)
             boxes.append(right)
         }
 
         // Compute centroid and saturation for each box
         struct BoxResult {
-            let count: Int
+            let weight: Int
             let r: Double
             let g: Double
             let b: Double
@@ -192,17 +243,25 @@ enum ColorExtractor {
         }
 
         let results: [BoxResult] = boxes.map { box in
-            let rSum = box.pixels.map(\.r).reduce(0, +)
-            let gSum = box.pixels.map(\.g).reduce(0, +)
-            let bSum = box.pixels.map(\.b).reduce(0, +)
-            let cnt = box.count
-            let cr = Double(rSum) / Double(cnt)
-            let cg = Double(gSum) / Double(cnt)
-            let cb = Double(bSum) / Double(cnt)
+            var redSum = 0
+            var greenSum = 0
+            var blueSum = 0
+            var boxWeight = 0
+
+            for pixel in box.pixels {
+                redSum += pixel.r * pixel.weight
+                greenSum += pixel.g * pixel.weight
+                blueSum += pixel.b * pixel.weight
+                boxWeight += pixel.weight
+            }
+
+            let cr = Double(redSum) / Double(boxWeight)
+            let cg = Double(greenSum) / Double(boxWeight)
+            let cb = Double(blueSum) / Double(boxWeight)
             let maxC = max(cr, cg, cb)
             let minC = min(cr, cg, cb)
             let sat = maxC > 0 ? (maxC - minC) / maxC : 0
-            return BoxResult(count: cnt, r: cr, g: cg, b: cb, saturation: sat)
+            return BoxResult(weight: boxWeight, r: cr, g: cg, b: cb, saturation: sat)
         }
 
         // Filter: keep clusters with meaningful saturation and lightness
@@ -213,7 +272,7 @@ enum ColorExtractor {
 
         // If all were filtered out (desaturated image), use the largest box overall
         let candidates = filtered.isEmpty ? results : filtered
-        let sorted = candidates.sorted { $0.count > $1.count }
+        let sorted = candidates.sorted { $0.weight > $1.weight }
 
         guard let primaryResult = sorted.first else {
             let gray = Double(avgR) / 255.0
