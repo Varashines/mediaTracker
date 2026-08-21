@@ -239,6 +239,10 @@ extension MediaItem {
         if let network = cachedNetwork {
             text += " \(network)"
         }
+
+        if !cachedWatchProviders.isEmpty {
+            text += " \(cachedWatchProviders.joined(separator: " "))"
+        }
         
         if let lang = cachedLanguage {
             text += " \(lang) \(LanguageUtils.languageName(for: lang).lowercased())"

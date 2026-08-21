@@ -303,6 +303,13 @@ struct MediaTrackerApp: App {
                 } catch {
                     AppLogger.error("Facet index rebuild failed: \(error)", logger: AppLogger.data)
                 }
+
+                let searchTextBackfill = SearchTextBackfillActor.shared(modelContainer: sharedModelContainer)
+                do {
+                    _ = try await searchTextBackfill.rebuildIfNeeded()
+                } catch {
+                    AppLogger.error("Search text backfill failed: \(error)", logger: AppLogger.data)
+                }
             }
             await NotificationManager.shared.requestPermission()
             await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded()

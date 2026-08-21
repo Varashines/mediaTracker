@@ -27,7 +27,7 @@ struct BulkCollectionManagerView: View {
         if searchText.isEmpty {
             return allItems
         } else {
-            let tokens = searchText.split(separator: " ").map(String.init)
+            let tokens = SearchScorer.tokenize(searchText)
             let scorer = SearchScorer(tokens: tokens)
             let members = collectionMemberIDs
             
@@ -35,7 +35,7 @@ struct BulkCollectionManagerView: View {
             var scored = allItems.compactMap { item -> (BulkItem, Int)? in
                 guard !members.contains(item.id) else { return nil }
                 let evaluation = scorer.evaluate(payload: item.searchPayload)
-                guard evaluation.matchesAll else { return nil }
+                guard evaluation.isEligibleForAllTokens else { return nil }
                 return (item, evaluation.score)
             }
             
@@ -44,7 +44,7 @@ struct BulkCollectionManagerView: View {
                 scored = allItems.compactMap { item -> (BulkItem, Int)? in
                     guard !members.contains(item.id) else { return nil }
                     let evaluation = scorer.evaluate(payload: item.searchPayload)
-                    guard evaluation.matchesAny else { return nil }
+                    guard evaluation.isEligibleForAnyToken else { return nil }
                     return (item, evaluation.score)
                 }
             }

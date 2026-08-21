@@ -190,7 +190,7 @@ class SearchViewModel {
     func performSearch(text: String, selectedType: SearchType) async {
         guard !SleepManager.shared.isAsleep else { return }
         
-        lastSearchTokens = text.split(separator: " ").map(String.init)
+        lastSearchTokens = SearchScorer.tokenize(text)
         isSearching = true
         isOfflineResultsOnly = false
         

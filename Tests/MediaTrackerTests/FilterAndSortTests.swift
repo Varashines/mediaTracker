@@ -96,6 +96,48 @@ final class FilterAndSortTests: XCTestCase {
     }
 
     @MainActor
+    func testSearchTextFindsExactGenre() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let matching = MediaItem(id: "genre_1", title: "Genre Match", overview: "", type: .movie)
+        matching.cachedGenres = ["Action"]
+        matching.updateSearchableText()
+        context.insert(matching)
+        let notMatching = MediaItem(id: "genre_2", title: "Other", overview: "", type: .movie)
+        notMatching.cachedGenres = ["Drama"]
+        notMatching.updateSearchableText()
+        context.insert(notMatching)
+        try context.save()
+
+        let result = try await actor.filterAndSort(category: .all, searchText: "ACTION", sortOrder: .alphabetical, network: nil, language: nil)
+
+        XCTAssertEqual(result.displayed.map(\.title), ["Genre Match"])
+    }
+
+    @MainActor
+    func testSearchTextFindsExactProvider() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let matching = MediaItem(id: "provider_1", title: "Provider Match", overview: "", type: .movie)
+        matching.cachedWatchProviders = ["Netflix"]
+        matching.updateSearchableText()
+        context.insert(matching)
+        let notMatching = MediaItem(id: "provider_2", title: "Other", overview: "", type: .movie)
+        notMatching.cachedWatchProviders = ["Prime Video"]
+        notMatching.updateSearchableText()
+        context.insert(notMatching)
+        try context.save()
+
+        let result = try await actor.filterAndSort(category: .all, searchText: "Netflix", sortOrder: .alphabetical, network: nil, language: nil)
+
+        XCTAssertEqual(result.displayed.map(\.title), ["Provider Match"])
+    }
+
+    @MainActor
     func testFilterByCompletedState() async throws {
         let container = makeContainer()
         let context = container.mainContext
