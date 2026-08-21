@@ -646,18 +646,10 @@ actor BackgroundDataService {
     }
 
     private func repairOrphanedEntities() async throws {
-        var allSeasons: [TVSeason] = []
-        var offset = 0
         let batchSize = 500
-        while true {
-            var sDesc = FetchDescriptor<TVSeason>()
-            sDesc.fetchLimit = batchSize
-            sDesc.fetchOffset = offset
-            let batch = try modelContext.fetch(sDesc)
-            allSeasons.append(contentsOf: batch)
-            if batch.count < batchSize { break }
-            offset += batchSize
-        }
+        // TVShowDetails map is retained in full — required to detect duplicates
+        // and as the parent lookup for season repair. Seasons and episodes are
+        // processed in batches without accumulating arrays.
         let tvDetailsDesc = FetchDescriptor<TVShowDetails>()
         let allTVDetails = try modelContext.fetch(tvDetailsDesc)
 
@@ -735,36 +727,46 @@ actor BackgroundDataService {
             }
         }
 
-        for season in allSeasons {
-            if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
-                season.tvShowDetails = parent
+        // Season pass: batched fetch, repair orphan links per batch, and build the
+        // (showID, seasonNumber) → TVSeason lookup needed by the episode pass.
+        // No seasons are inserted or deleted here, so offset pagination is stable.
+        var seasonMap: [Int: [Int: TVSeason]] = [:]
+        var seasonOffset = 0
+        while true {
+            var sDesc = FetchDescriptor<TVSeason>()
+            sDesc.fetchLimit = batchSize
+            sDesc.fetchOffset = seasonOffset
+            let batch = try modelContext.fetch(sDesc)
+            for season in batch {
+                if season.tvShowDetails == nil, let showID = season.showID, let parent = tvMap[showID] {
+                    season.tvShowDetails = parent
+                }
+                guard let showID = season.showID else { continue }
+                seasonMap[showID, default: [:]][season.seasonNumber] = season
             }
+            if batch.count < batchSize { break }
+            seasonOffset += batchSize
         }
+        try modelContext.save()
 
-        var allEpisodes: [TVEpisode] = []
+        // Episode pass: batched fetch, repair per batch, save per batch —
+        // never materializes the full episode table.
         var epOffset = 0
         while true {
             var eDesc = FetchDescriptor<TVEpisode>()
             eDesc.fetchLimit = batchSize
             eDesc.fetchOffset = epOffset
             let batch = try modelContext.fetch(eDesc)
-            allEpisodes.append(contentsOf: batch)
+            for episode in batch {
+                if episode.season == nil, let showID = episode.showID, let parentSeason = seasonMap[showID]?[episode.seasonNumber] {
+                    episode.season = parentSeason
+                }
+            }
             if batch.count < batchSize { break }
+            try modelContext.save()
             epOffset += batchSize
         }
-
-        var seasonMap: [Int: [Int: TVSeason]] = [:]
-        for season in allSeasons {
-            guard let showID = season.showID else { continue }
-            if seasonMap[showID] == nil { seasonMap[showID] = [:] }
-            seasonMap[showID]?[season.seasonNumber] = season
-        }
-
-        for episode in allEpisodes {
-            if episode.season == nil, let showID = episode.showID, let parentSeason = seasonMap[showID]?[episode.seasonNumber] {
-                episode.season = parentSeason
-            }
-        }
+        try modelContext.save()
     }
     
     private func purgeStaleSearchCache() async {
