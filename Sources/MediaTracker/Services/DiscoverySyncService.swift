@@ -32,7 +32,7 @@ actor DiscoverySyncService {
                 for rule in rules {
                     modelContext.insert(StudioAliasEntity(target: rule.target, sources: Array(rule.sources), preferredLogoSource: rule.preferredLogoSource))
                 }
-                do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+                do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
                 return rules
             }
         }
@@ -289,7 +289,7 @@ actor DiscoverySyncService {
             modelContext.delete(entity)
         }
 
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
 
         // Record sync timestamp for rate-limiting
         if !force {
@@ -375,7 +375,7 @@ actor DiscoverySyncService {
             }
         }
         
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
         
         // Ensure colors are updated for the new network
         await extractMissingColors()
@@ -487,7 +487,7 @@ actor DiscoverySyncService {
             }
         }
         
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 
     func onBadgeChanged(oldBadge: String?, newBadge: String?) async {
@@ -506,7 +506,7 @@ actor DiscoverySyncService {
                 modelContext.insert(BadgeEntity(label: new, count: 1))
             }
         }
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 
     /// Apply accumulated badge deltas in a single transaction.
@@ -521,7 +521,7 @@ actor DiscoverySyncService {
                 modelContext.insert(BadgeEntity(label: label, count: delta))
             }
         }
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 
     private func extractMissingColors() async {
@@ -557,7 +557,10 @@ actor DiscoverySyncService {
                             let hexString = extractedColor.toHex()
                             await MainActor.run { NetworkThemeManager.shared.save(color: extractedColor, for: name) }
                             return (id, hexString)
-                        } catch { return (id, nil) }
+                        } catch {
+                            AppLogger.warning("Network color fetch failed for '\(name)': \(error)", logger: AppLogger.sync)
+                            return (id, nil)
+                        }
                     }
                 }
                 var results: [(PersistentIdentifier, String?)] = []
@@ -572,6 +575,6 @@ actor DiscoverySyncService {
             }
         }
 
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: (error)", logger: AppLogger.sync) }
+        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 }

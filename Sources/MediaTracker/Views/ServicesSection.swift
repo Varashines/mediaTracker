@@ -198,14 +198,18 @@ struct ServicesSection: View {
                         .accessibilityLabel("Test \(name) API key")
                     }
 
-                    Link(destination: URL(string: link)!) {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(AppTheme.Font.label)
-                            .foregroundStyle(.secondary)
+                    if let linkURL = URL(string: link) {
+                        Link(destination: linkURL) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(AppTheme.Font.label)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .help("Get a \(name) API key")
+                    } else {
+                        let _ = AppLogger.debug("Malformed API key link for \(name): \(link)")
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
-                    .help("Get a \(name) API key")
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.medium)

@@ -110,16 +110,17 @@ actor MediaFilterActor {
 
         try Task.checkCancellation()
         var results: [MediaItem] = []
+        var hitScanCap = false
         do {
             if !needsSwiftRefinement && groupBy == .none {
                 results = try modelContext.fetch(descriptor)
             } else {
                 // Swift-level refinement requires materializing candidates in memory.
-                // Cap the scan (matches the documented 2000-item ceiling in ARCHITECTURE.md)
+                // Cap the scan (LibraryScanLimits, documented ceiling in ARCHITECTURE.md)
                 // so network/genre/year filters or smart collections can't load the whole
                 // library per keystroke; totalCount is derived from what was scanned.
-                let scanCap = 2000
-                let batchSize = 500
+                let scanCap = LibraryScanLimits.refinementCandidateCap
+                let batchSize = LibraryScanLimits.refinementBatchSize
                 var fetchOffset = 0
                 while results.count < scanCap {
                     try Task.checkCancellation()
@@ -131,6 +132,9 @@ actor MediaFilterActor {
                     fetchOffset += batch.count
                     if batch.count < batchSize { break }
                 }
+                // Only a scan that exhausted the cap (loop exited via condition,
+                // not via short batch) truncates the candidate set.
+                hitScanCap = results.count >= scanCap
             }
         } catch {
             AppLogger.warning("Fetch failed: \(error)", logger: AppLogger.data)
@@ -195,8 +199,15 @@ actor MediaFilterActor {
             grouped: finalGroupedItems,
             pickOfTheDay: [],
             recommendations: [],
-            totalCount: totalCount
+            totalCount: totalCount,
+            hitScanCap: hitScanCap
         )
+        if hitScanCap {
+            AppLogger.warning(
+                "Refinement scan hit candidate cap (\(LibraryScanLimits.refinementCandidateCap)) for category=\(category.rawValue) — results and totalCount are truncated",
+                logger: AppLogger.performance
+            )
+        }
 #if DEBUG
         let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1_000)
         AppLogger.debug(
@@ -535,7 +546,7 @@ actor MediaFilterActor {
             sortBy: [SortDescriptor(\.releaseDate, order: .reverse)]
         )
         descriptor.propertiesToFetch = [\.releaseDate]
-        descriptor.fetchLimit = 2000
+        descriptor.fetchLimit = LibraryScanLimits.metadataScanCap
         let items = (try? modelContext.fetch(descriptor)) ?? []
         let years = Set(items.compactMap { $0.releaseDate.flatMap { Calendar.current.component(.year, from: $0) } })
         return years.sorted(by: >).map(String.init)
@@ -634,7 +645,7 @@ actor MediaFilterActor {
                     // Smart rules require Swift-level evaluation — fetch minimal data and count
                     var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
                     desc.propertiesToFetch = [\.persistentModelID]
-                    desc.fetchLimit = 2000
+                    desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
                     let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules)
                     return refined.count
@@ -649,7 +660,7 @@ actor MediaFilterActor {
         if category == .onThisWeek {
             var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
             desc.propertiesToFetch = [\.releaseDate]
-            desc.fetchLimit = 2000
+            desc.fetchLimit = LibraryScanLimits.metadataScanCap
             let items = (try? modelContext.fetch(desc)) ?? []
             let now = Date()
             return items.filter { item in
