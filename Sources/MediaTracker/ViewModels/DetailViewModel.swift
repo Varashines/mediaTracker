@@ -372,8 +372,8 @@ class DetailViewModel {
             if let container = item.modelContext?.container {
                 let rawID = item.id
                 Task.detached(priority: .userInitiated) {
-                    let svc = BackgroundDataService(modelContainer: container)
-                    await svc.markAllEpisodesAsWatched(itemID: rawID)
+                    let svc = EpisodeProgressService.shared(modelContainer: container)
+                    await svc.markAllEpisodesWatched(itemID: rawID)
                 }
             }
         }

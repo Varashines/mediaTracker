@@ -139,8 +139,8 @@ final class MediaItem: Identifiable {
                         if let container = modelContext?.container {
                             let rawID = id
                             Task.detached(priority: .userInitiated) {
-                                let backgroundService = BackgroundDataService(modelContainer: container)
-                                await backgroundService.markAllEpisodesAsWatched(itemID: rawID)
+                                let progressService = EpisodeProgressService.shared(modelContainer: container)
+                                await progressService.markAllEpisodesWatched(itemID: rawID)
                             }
                         }
                     }
