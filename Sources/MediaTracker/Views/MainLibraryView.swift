@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MainLibraryView: View {
     let items: [MediaThumbnailMetadata]
+    var isLoading: Bool = false
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let recentlyAdded: [MediaThumbnailMetadata]
     let homeContinueWatching: [MediaThumbnailMetadata]
@@ -45,26 +46,33 @@ struct MainLibraryView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
-                        HomeViewSections(
-                            homeContinueWatching: homeContinueWatching,
-                            featuredCarouselItems: featuredCarouselItems,
-                            groupedItems: groupedItems,
-                            recommendations: recommendations,
-                            pickOfTheDay: pickOfTheDay,
-                            trendingMovies: viewModel.trendingMovies,
-                            trendingShows: viewModel.trendingShows,
-                            namespace: namespace,
-                            isFastScrolling: isFastScrolling,
-                            onSelectHero: onSelectHero,
-                            onCategorySelected: onCategorySelected,
-                            onTrendingAdd: onTrendingAdd
-                        )
-                        .transition(.opacity)
+                        if isLoading && homeContinueWatching.isEmpty
+                            && featuredCarouselItems.isEmpty && groupedItems.isEmpty {
+                            HomeSkeletonSections()
+                                .transition(.opacity)
+                        } else {
+                            HomeViewSections(
+                                homeContinueWatching: homeContinueWatching,
+                                featuredCarouselItems: featuredCarouselItems,
+                                groupedItems: groupedItems,
+                                recommendations: recommendations,
+                                pickOfTheDay: pickOfTheDay,
+                                trendingMovies: viewModel.trendingMovies,
+                                trendingShows: viewModel.trendingShows,
+                                namespace: namespace,
+                                isFastScrolling: isFastScrolling,
+                                onSelectHero: onSelectHero,
+                                onCategorySelected: onCategorySelected,
+                                onTrendingAdd: onTrendingAdd
+                            )
+                            .transition(.opacity)
+                        }
                     }
 
                     if selectedCategory != .home {
                         LibraryGridSection(
                             items: items,
+                            isLoading: isLoading,
                             groupedItems: groupedItems,
                             recentlyAdded: recentlyAdded,
                             featuredCarouselItems: featuredCarouselItems,
@@ -95,5 +103,31 @@ struct MainLibraryView: View {
         .onAppear {
             viewModel.fetchTrendingIfNeeded()
         }
+    }
+}
+
+/// Lightweight placeholder while the home category's first fetch is in flight —
+/// keeps the loading window from flashing section headers with no content.
+private struct HomeSkeletonSections: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+            ForEach(0..<2, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.08))
+                        .frame(width: 180, height: 24)
+                        .shimmering()
+                    HStack(spacing: AppTheme.Spacing.grid) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(Color.secondary.opacity(0.08))
+                                .frame(width: 160, height: 240)
+                                .shimmering()
+                        }
+                    }
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.pageMargin)
     }
 }

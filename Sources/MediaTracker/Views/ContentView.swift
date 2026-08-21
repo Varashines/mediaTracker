@@ -451,6 +451,7 @@ struct LibraryDetailView: View {
                     viewModel.display.displayedItems = []
                     viewModel.pagination.currentOffset = 0
                     viewModel.pagination.isLoadingMore = false
+                    viewModel.pagination.isInitialLoad = true
                 }
             }
 
@@ -477,11 +478,15 @@ struct LibraryDetailView: View {
 
                 await MainActor.run {
                     viewModel.pagination.totalItemCount = result.totalCount
+                    viewModel.pagination.isInitialLoad = false
                     viewModel.display.applyFilterResult(result)
                 }
             } catch is CancellationError {
+                // The replacement update task owns isInitialLoad now — resetting
+                // here could clear the skeleton the new task just raised.
             } catch {
                 AppLogger.debug("Error filtering items: \(error)")
+                await MainActor.run { viewModel.pagination.isInitialLoad = false }
             }
         }
     }

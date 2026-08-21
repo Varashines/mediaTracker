@@ -3,6 +3,7 @@ import SwiftData
 
 struct LibraryGridSection: View {
     let items: [MediaThumbnailMetadata]
+    var isLoading: Bool = false
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recentlyAdded: [MediaThumbnailMetadata]
     let featuredCarouselItems: [MediaThumbnailMetadata]
@@ -23,9 +24,27 @@ struct LibraryGridSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if items.isEmpty && groupedItems.isEmpty {
-                LibraryEmptyStateView(category: selectedCategory) {
-                    withAnimation(AppTheme.Animation.springSnappy) {
-                        viewModel.filter.selectedCategory = .discover
+                if isLoading {
+                    // First fetch in flight — skeleton instead of flashing the
+                    // empty state on populated libraries during category switches.
+                    ScrollView {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+                            ForEach(0..<12, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.08))
+                                    .frame(width: 160, height: 240)
+                                    .shimmering()
+                            }
+                        }
+                        .padding(AppTheme.Spacing.pageMargin)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.hidden)
+                } else {
+                    LibraryEmptyStateView(category: selectedCategory) {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            viewModel.filter.selectedCategory = .discover
+                        }
                     }
                 }
             } else {

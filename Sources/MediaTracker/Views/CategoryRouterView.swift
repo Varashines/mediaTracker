@@ -64,6 +64,7 @@ struct CategoryRouterView: View {
         } else {
             MainLibraryView(
                 items: viewModel.display.displayedItems,
+                isLoading: viewModel.pagination.isInitialLoad,
                 featuredCarouselItems: viewModel.display.featuredUpcomingItems,
                 recentlyAdded: viewModel.display.recentlyAddedItems,
                 homeContinueWatching: viewModel.display.homeContinueWatchingItems,
