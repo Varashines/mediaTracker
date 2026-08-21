@@ -157,4 +157,52 @@ final class ImportSeasonTasteTests: XCTestCase {
         XCTAssertEqual(result.skipped, 1)
         XCTAssertEqual(try context.fetch(FetchDescriptor<MediaItem>()).count, 1)
     }
+
+    func testImportRestoresEpisodeProgressViaBatchedLookups() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        // Season payload prefetch fails (network error) — import must fall back to
+        // creating watched episodes from backup IDs via the batched lookup path.
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+        await APIClient.shared.configureForTesting(session: session)
+        defer {
+            MockURLProtocol.requestHandler = nil
+            Task { await APIClient.shared.configureForTesting(session: URLSession(configuration: .ephemeral)) }
+        }
+
+        let watched = Date()
+        let data = MediaItemData(
+            id: "tv_777", title: "Batched Show", type: "tv", state: "Active",
+            dateAdded: Date(), taste: nil,
+            watchedEpisodeIDs: ["777_1_1", "777_1_2"],
+            lastInteractionDate: nil,
+            watchedEpisodeDates: ["777_1_1": watched, "777_1_2": watched],
+            seasonTasteOverrides: nil, posterURL: nil, overview: nil,
+            backdropURL: nil, releaseDate: nil, lastUpdated: nil,
+            titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
+            cachedEpisodeRuntime: nil, cachedWatchedEpisodeCount: nil,
+            remainingEpisodesCount: nil, cachedLanguage: nil,
+            cachedNetwork: nil, cachedNetworkLogoPath: nil, mood: nil
+        )
+        let service = BackgroundDataService(modelContainer: container)
+
+        let result = await service.importLibraryData(
+            backup: LibraryBackup(items: [data], collections: nil),
+            strategy: .skip
+        )
+
+        XCTAssertEqual(result.imported, 1)
+        let episodes = try context.fetch(FetchDescriptor<TVEpisode>())
+        XCTAssertEqual(episodes.count, 2, "Fallback should create one TVEpisode per watched ID")
+        XCTAssertTrue(episodes.allSatisfy { $0.isWatched })
+        let seasons = try context.fetch(FetchDescriptor<TVSeason>())
+        XCTAssertEqual(seasons.count, 1)
+        XCTAssertEqual(seasons.first?.seasonNumber, 1)
+    }
 }

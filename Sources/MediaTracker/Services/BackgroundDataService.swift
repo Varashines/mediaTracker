@@ -86,7 +86,71 @@ actor BackgroundDataService {
                 (MediaItemData.importKey(id: $0.id, typeRawValue: $0.type?.rawValue ?? ""), $0)
             }
         )
-        
+
+        // Pre-scan: collect unique (tmdbID, seasonNumber) work for episode-progress restore
+        // so seasons/episodes can be fetched in bulk and season payloads resolved via a
+        // bounded network-only task group instead of per-item awaits inside the loop.
+        var seasonWork = Set<String>()
+        var seasonWorkPairs: [(tmdbID: Int, seasonNumber: Int)] = []
+        for itemData in backup.items {
+            let mediaType = MediaItemData.canonicalMediaType(for: itemData.type, id: itemData.id)
+            guard mediaType == .tvShow,
+                  let watchedIDs = itemData.watchedEpisodeIDs, !watchedIDs.isEmpty else { continue }
+            let uniqueID = MediaItemData.canonicalID(itemData.id, type: mediaType)
+            let tmdbIDPart = uniqueID.split(separator: "_").last ?? uniqueID[...]
+            guard let tmdbID = Int(tmdbIDPart) else { continue }
+            for epID in watchedIDs {
+                let parts = epID.split(separator: "_")
+                if parts.count == 3, let sNum = Int(parts[1]), seasonWork.insert("\(tmdbID)_\(sNum)").inserted {
+                    seasonWorkPairs.append((tmdbID, sNum))
+                }
+            }
+        }
+
+        // Batched lookups replace per-season/per-episode FetchDescriptor calls (N+1).
+        // Entries inserted during this import are also recorded here so later items
+        // in the same backup resolve against them.
+        let seasonFetch = FetchDescriptor<TVSeason>()
+        var existingSeasonsByUniqueID: [String: TVSeason] = Dictionary(
+            uniqueKeysWithValues: ((try? context.fetch(seasonFetch)) ?? []).compactMap { season in
+                season.uniqueID.map { ($0, season) }
+            }
+        )
+        let episodeFetch = FetchDescriptor<TVEpisode>()
+        var existingEpisodesByUniqueID: [String: TVEpisode] = Dictionary(
+            uniqueKeysWithValues: ((try? context.fetch(episodeFetch)) ?? []).compactMap { episode in
+                episode.uniqueID.map { ($0, episode) }
+            }
+        )
+
+        // Resolve missing TMDB season payloads network-only (no model mutation in the group),
+        // bounded to 6 concurrent requests; applied serially in the import loop below.
+        var seasonPayloads: [String: [TVEpisodeResult]] = [:]
+        if !seasonWorkPairs.isEmpty {
+            let maxConcurrent = 6
+            var index = 0
+            while index < seasonWorkPairs.count {
+                let batch = seasonWorkPairs[index..<min(index + maxConcurrent, seasonWorkPairs.count)]
+                index += maxConcurrent
+                await withTaskGroup(of: (String, [TVEpisodeResult]?).self) { group in
+                    for pair in batch {
+                        group.addTask {
+                            do {
+                                let details = try await APIClient.shared.fetchSeasonDetails(tmdbID: pair.tmdbID, seasonNumber: pair.seasonNumber)
+                                return ("\(pair.tmdbID)_\(pair.seasonNumber)", details)
+                            } catch {
+                                AppLogger.warning("Season prefetch failed for tmdbID=\(pair.tmdbID) season=\(pair.seasonNumber): \(error)", logger: AppLogger.sync)
+                                return ("\(pair.tmdbID)_\(pair.seasonNumber)", nil)
+                            }
+                        }
+                    }
+                    for await (key, payload) in group {
+                        if let payload { seasonPayloads[key] = payload }
+                    }
+                }
+            }
+        }
+
         var importedCount = 0
         var mergedCount = 0
         var skippedCount = 0
@@ -179,20 +243,20 @@ actor BackgroundDataService {
 
                     for (sNum, watchedNumbers) in seasonEpisodes {
                         let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                        let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })
-                        let season = (try? context.fetch(sDescriptor).first) ?? TVSeason(seasonNumber: sNum, name: "Season \(sNum)", episodeCount: 0, airDate: nil)
-                        if season.modelContext == nil {
-                            season.uniqueID = seasonUniqueID
-                            season.showID = tmdbID
-                            season.tvShowDetails = nil
-                            context.insert(season)
-                        }
+                        let season = existingSeasonsByUniqueID[seasonUniqueID] ?? {
+                            let newSeason = TVSeason(seasonNumber: sNum, name: "Season \(sNum)", episodeCount: 0, airDate: nil)
+                            newSeason.uniqueID = seasonUniqueID
+                            newSeason.showID = tmdbID
+                            newSeason.tvShowDetails = nil
+                            context.insert(newSeason)
+                            existingSeasonsByUniqueID[seasonUniqueID] = newSeason
+                            return newSeason
+                        }()
 
-                        guard let seasonData = try? await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum) else {
+                        guard let seasonData = seasonPayloads[seasonUniqueID] else {
                             for eNum in watchedNumbers {
                                 let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
-                                let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                                if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
+                                if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
                                     existing.markWatched(true)
                                     if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d }
                                     continue
@@ -207,6 +271,7 @@ actor BackgroundDataService {
                                 episode.lastWatchedDate = watchedDates[epUniqueID]
                                 episode.season = season
                                 context.insert(episode)
+                                existingEpisodesByUniqueID[epUniqueID] = episode
                             }
                             continue
                         }
@@ -215,8 +280,7 @@ actor BackgroundDataService {
 
                         for epData in seasonData {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(epData.episodeNumber)"
-                            let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epUniqueID })
-                            if let existing = try? context.fetch(eDescriptor).first, existing.modelContext != nil {
+                            if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
                                 existing.name = epData.name ?? "Episode \(epData.episodeNumber)"
                                 existing.overview = epData.overview ?? ""
                                 if let runtime = epData.runtime { existing.runtime = runtime }
@@ -245,14 +309,17 @@ actor BackgroundDataService {
                             }
                             episode.season = season
                             context.insert(episode)
+                            existingEpisodesByUniqueID[epUniqueID] = episode
                         }
                     }
                 }
             }
             
             processedCount += 1
-            if processedCount % 2 == 0 || processedCount == totalCount {
-                try? context.save()
+            if processedCount % 25 == 0 || processedCount == totalCount {
+                do { try context.save() } catch {
+                    AppLogger.warning("Import intermediate save failed: \(error)", logger: AppLogger.sync)
+                }
                 onProgress?(ImportProgress(
                     processedCount: processedCount,
                     totalCount: totalCount,
@@ -266,7 +333,9 @@ actor BackgroundDataService {
             }
         }
         
-        try? context.save()
+        do { try context.save() } catch {
+            AppLogger.warning("Import final save failed: \(error)", logger: AppLogger.sync)
+        }
         onProgress?(ImportProgress(
             processedCount: totalCount,
             totalCount: totalCount,
