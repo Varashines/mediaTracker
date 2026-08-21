@@ -489,4 +489,61 @@ final class MediaFilterActorTests: XCTestCase {
         XCTAssertEqual(result.grouped[1].0, tuesdayKey, "Tuesday should be second")
         XCTAssertEqual(result.grouped[2].0, thursdayKey, "Thursday should be last")
     }
+
+    @MainActor
+    func testHitScanCapFalseWhenLibraryUnderCap() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        for i in 0..<50 {
+            let item = MediaItem(id: "under\(i)", title: "Show \(i)", overview: "", type: .tvShow)
+            item.stateValue = "Active"
+            context.insert(item)
+            item.syncCachedProperties()
+        }
+        try context.save()
+
+        // searchText forces Swift-level refinement (the capped scan path)
+        let result = try await actor.filterAndSort(
+            category: .all,
+            searchText: "show",
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil
+        )
+        XCTAssertFalse(result.hitScanCap, "Library under the candidate cap must not report hitScanCap")
+        XCTAssertEqual(result.totalCount, 50)
+    }
+
+    @MainActor
+    func testHitScanCapTrueWhenCandidateScanReachesCap() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let cap = LibraryScanLimits.refinementCandidateCap
+        for i in 0..<(cap + 60) {
+            let item = MediaItem(id: "over\(i)", title: "Show \(i)", overview: "", type: .tvShow)
+            item.stateValue = "Active"
+            context.insert(item)
+            item.syncCachedProperties()
+            if i % 250 == 0 { try context.save() }
+        }
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .all,
+            searchText: "show",
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil
+        )
+        XCTAssertTrue(result.hitScanCap, "Candidate scan reaching the cap must report hitScanCap")
+        XCTAssertEqual(result.totalCount, cap, "Refined total is derived from the capped scan")
+    }
 }

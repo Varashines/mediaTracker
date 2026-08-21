@@ -42,7 +42,7 @@ struct YearDayActivity: Sendable, Equatable {
 
 /// A single title watched on a given day (movie completion or TV show with
 /// watched episodes that day).
-struct YearWatchedTitle: Sendable, Identifiable {
+struct YearWatchedTitle: Sendable, Identifiable, Hashable, Equatable {
     let id: PersistentIdentifier
     let title: String
     let posterURL: String?
@@ -112,6 +112,33 @@ struct YearInReview: Sendable {
             let r1 = tasteRank($1.tasteValue)
             if r0 != r1 { return r0 < r1 }
             return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    func allWatchedTitles() -> [YearWatchedTitle] {
+        var seen = Set<PersistentIdentifier>()
+        var result: [YearWatchedTitle] = []
+        let sortedDays = titlesByDay.keys.sorted(by: >)
+
+        for day in sortedDays {
+            for title in titlesByDay[day] ?? [] {
+                if seen.insert(title.id).inserted {
+                    result.append(title)
+                }
+            }
+        }
+
+        return result.sorted {
+            let r0 = tasteRank($0.tasteValue)
+            let r1 = tasteRank($1.tasteValue)
+            if r0 != r1 { return r0 < r1 }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    func favoriteCandidates() -> [YearWatchedTitle] {
+        allWatchedTitles().filter {
+            $0.tasteValue == "Love" || $0.tasteValue == "Loved" || $0.tasteValue == "Like" || $0.tasteValue == "Liked"
         }
     }
 
@@ -223,7 +250,7 @@ actor YearInReviewService {
         // here because partial SwiftData fetches are not reliable across the
         // supported macOS/Xcode runtimes for custom array-backed properties.
         var itemDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.isSoftDeleted == false })
-        itemDescriptor.fetchLimit = 2000
+        itemDescriptor.fetchLimit = LibraryScanLimits.statsScanCap
         let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
 
         let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []

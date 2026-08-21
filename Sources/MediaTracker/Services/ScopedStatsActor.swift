@@ -85,7 +85,7 @@ actor ScopedStatsActor {
             \.cachedGenres, \.cachedLanguage, \.cachedNetwork,
             \.cachedWatchProviders, \.cachedRuntime, \.storedCast, \.cachedSeasonCount
         ]
-        descriptor.fetchLimit = 2000
+        descriptor.fetchLimit = LibraryScanLimits.statsScanCap
 
         let name = filter.name
         switch filter.type {

@@ -149,4 +149,9 @@ struct PaginatedResult: Sendable {
     let pickOfTheDay: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]
     let totalCount: Int
+    /// True when the Swift-level refinement scan reached its candidate cap,
+    /// meaning displayed results and totalCount are derived from a truncated
+    /// candidate set. Set only when the scan loop actually hit the cap —
+    /// not merely when a refined result count equals it.
+    var hitScanCap: Bool = false
 }
