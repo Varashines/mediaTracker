@@ -1186,16 +1186,15 @@ private struct PosterTile: View {
                     .frame(width: width, height: h)
 
                 if let urlStr = title.posterURL, let url = URL(string: urlStr) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                                .frame(width: width, height: h)
-                                .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
-                        default:
-                            fallbackIcon
-                        }
+                    CachedImage(
+                        url: url,
+                        targetSize: CGSize(width: width, height: h),
+                        accessibilityLabel: title.title
+                    ) {
+                        fallbackIcon
                     }
+                    .frame(width: width, height: h)
+                    .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
                 } else {
                     fallbackIcon
                 }
