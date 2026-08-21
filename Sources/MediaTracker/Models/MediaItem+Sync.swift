@@ -17,6 +17,9 @@ extension MediaItem {
             } else if type == .tvShow {
                 syncTVProperties(now: now, currentState: currentState, skipNetwork: skipNetwork, forceRecalculate: fullSync || dirty.contains(.progress))
             }
+            if let context = modelContext {
+                FacetIndexMaintenance.synchronize(item: self, in: context)
+            }
         }
 
         if dirty.contains(.badge) || fullSync {

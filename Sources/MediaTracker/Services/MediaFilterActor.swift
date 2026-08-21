@@ -65,7 +65,28 @@ actor MediaFilterActor {
             )
         }
 
-        var descriptor = FetchDescriptor<MediaItem>(predicate: basePredicate)
+        let indexedFacetIDs = indexedFacetItemIDs(
+            network: network,
+            genre: genre,
+            provider: provider
+        )
+        let canUseIndexedFacetFetch = indexedFacetIDs != nil
+            && collectionID == nil
+            && smartRules.isEmpty
+            && processedSearch.isEmpty
+            && (category == .all || category == .movie || category == .tvShow)
+
+        var descriptor: FetchDescriptor<MediaItem>
+        if canUseIndexedFacetFetch, let indexedFacetIDs {
+            let itemIDs = Array(indexedFacetIDs)
+            descriptor = FetchDescriptor(
+                predicate: #Predicate {
+                    $0.isSoftDeleted == false && itemIDs.contains($0.id)
+                }
+            )
+        } else {
+            descriptor = FetchDescriptor(predicate: basePredicate)
+        }
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder, badge: badge)
 
@@ -119,7 +140,20 @@ actor MediaFilterActor {
         // 2. Swift-Level Refinement — all filters handled in Swift (cachedGenres is transformable,
         // not safe in #Predicate). buildFilteredPredicate only applies category + search.
         let candidateCount = results.count
-        results = try refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, provider: provider, searchText: processedSearch, category: category, smartRules: smartRules)
+        results = try refineResults(
+            results,
+            network: network,
+            language: language,
+            genre: genre,
+            year: year,
+            state: state,
+            badge: badge,
+            provider: provider,
+            searchText: processedSearch,
+            category: category,
+            smartRules: smartRules,
+            appliesCategoryFilter: canUseIndexedFacetFetch
+        )
 
         let totalCount = (needsSwiftRefinement || groupBy != .none) ?
                          results.count :
@@ -172,7 +206,7 @@ actor MediaFilterActor {
         return paginatedResult
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) throws -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = [], appliesCategoryFilter: Bool = false) throws -> [MediaItem] {
         try Task.checkCancellation()
         let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
         let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
@@ -181,6 +215,10 @@ actor MediaFilterActor {
         let calendar = Calendar.current
 
         func passesNonSearchFilters(_ item: MediaItem) -> Bool {
+            if appliesCategoryFilter && !matchesIndexedFacetCategory(item, category: category) {
+                return false
+            }
+
             if !smartRules.isEmpty {
                 guard applySmartRule(item, rules: smartRules) else { return false }
             }
@@ -280,6 +318,79 @@ actor MediaFilterActor {
         // Sort by score descending
         scored.sort { $0.1 > $1.1 }
         return scored.map(\.0)
+    }
+
+    private func indexedFacetItemIDs(
+        network: [String]?,
+        genre: String?,
+        provider: String?
+    ) -> Set<String>? {
+        var filters: [(kind: MediaFacetKind, keys: [String])] = []
+
+        if let network, !network.isEmpty {
+            filters.append((.network, normalizedFacetKeys(network)))
+        }
+        if let genre, !genre.isEmpty {
+            filters.append((.genre, normalizedFacetKeys([genre])))
+        }
+        if let provider, !provider.isEmpty {
+            filters.append((.provider, normalizedFacetKeys([provider])))
+        }
+        guard !filters.isEmpty else { return nil }
+
+        var matchingIDs: Set<String>?
+        for filter in filters {
+            guard !filter.keys.isEmpty else { return [] }
+            let kind = filter.kind.rawValue
+            let keys = filter.keys
+            let descriptor = FetchDescriptor<MediaFacetIndex>(
+                predicate: #Predicate { $0.kind == kind && keys.contains($0.key) }
+            )
+            guard let entries = try? modelContext.fetch(descriptor) else {
+                // Some lightweight test containers intentionally omit the index model.
+                // Fall back to the established in-memory filtering path in that case.
+                return nil
+            }
+
+            if entries.isEmpty {
+                let indexCount = (try? modelContext.fetchCount(FetchDescriptor<MediaFacetIndex>())) ?? 0
+                // An empty index means its one-time backfill has not completed yet.
+                // Preserve correct results by using the established filtering path.
+                guard indexCount > 0 else { return nil }
+            }
+
+            let ids = Set(entries.map(\.mediaItemID))
+            matchingIDs = matchingIDs.map { $0.intersection(ids) } ?? ids
+        }
+
+        return matchingIDs
+    }
+
+    private func normalizedFacetKeys(_ values: [String]) -> [String] {
+        Array(
+            Set(values.compactMap { value in
+                let key = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return key.isEmpty ? nil : key
+            })
+        )
+    }
+
+    private func matchesIndexedFacetCategory(
+        _ item: MediaItem,
+        category: NavigationCategory?
+    ) -> Bool {
+        guard item.isSoftDeleted == false else { return false }
+
+        switch category {
+        case .movie:
+            return item.typeValue == MediaType.movie.rawValue
+        case .tvShow:
+            return item.typeValue == MediaType.tvShow.rawValue
+        case .all:
+            return true
+        default:
+            return false
+        }
     }
 
     private func applySmartRule(_ item: MediaItem, rules: [SmartRule]) -> Bool {

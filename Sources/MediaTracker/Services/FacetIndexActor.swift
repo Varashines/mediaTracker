@@ -1,6 +1,64 @@
 import Foundation
 import SwiftData
 
+private struct FacetIndexEntry: Hashable, Sendable {
+    let mediaItemID: String
+    let kind: MediaFacetKind
+    let key: String
+
+    var id: String {
+        "\(mediaItemID)|\(kind.rawValue)|\(key)"
+    }
+
+    static func entries(for item: MediaItem) -> Set<FacetIndexEntry> {
+        let genreKeys = normalizedKeys(item.cachedGenres)
+        let providerKeys = normalizedKeys(item.cachedWatchProviders)
+        let networkKeys = normalizedKeys(item.cachedNetwork?.commaSeparatedValues ?? [])
+
+        return Set(
+            genreKeys.map { FacetIndexEntry(mediaItemID: item.id, kind: .genre, key: $0) }
+                + providerKeys.map { FacetIndexEntry(mediaItemID: item.id, kind: .provider, key: $0) }
+                + networkKeys.map { FacetIndexEntry(mediaItemID: item.id, kind: .network, key: $0) }
+        )
+    }
+
+    private static func normalizedKeys(_ values: [String]) -> Set<String> {
+        Set(values.compactMap { value in
+            let key = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return key.isEmpty ? nil : key
+        })
+    }
+}
+
+enum FacetIndexMaintenance {
+    static func synchronize(item: MediaItem, in context: ModelContext) {
+        let itemID = item.id
+        let descriptor = FetchDescriptor<MediaFacetIndex>(
+            predicate: #Predicate { $0.mediaItemID == itemID }
+        )
+        guard let existingEntries = try? context.fetch(descriptor) else {
+            return
+        }
+
+        let expectedEntries = FacetIndexEntry.entries(for: item)
+        let expectedIDs = Set(expectedEntries.map(\.id))
+        let existingIDs = Set(existingEntries.map(\.id))
+
+        for entry in existingEntries where !expectedIDs.contains(entry.id) {
+            context.delete(entry)
+        }
+        for entry in expectedEntries where !existingIDs.contains(entry.id) {
+            context.insert(
+                MediaFacetIndex(
+                    mediaItemID: entry.mediaItemID,
+                    kind: entry.kind,
+                    key: entry.key
+                )
+            )
+        }
+    }
+}
+
 struct FacetIndexRebuildResult: Sendable, Equatable {
     let indexedItems: Int
     let insertedEntries: Int
@@ -42,19 +100,25 @@ actor FacetIndexActor {
         let items = try modelContext.fetch(itemDescriptor)
 
         let existingEntries = try modelContext.fetch(FetchDescriptor<MediaFacetIndex>())
-        let expectedEntries = Set(items.flatMap(Self.entries(for:)))
+        let expectedEntries = Set(items.flatMap { FacetIndexEntry.entries(for: $0) })
+        let expectedIDs = Set(expectedEntries.map(\.id))
         let existingIDs = Set(existingEntries.map(\.id))
 
         var removedEntries = 0
-        for entry in existingEntries where !expectedEntries.contains(entry.id) {
+        for entry in existingEntries where !expectedIDs.contains(entry.id) {
             modelContext.delete(entry)
             removedEntries += 1
         }
 
         var insertedEntries = 0
-        for entryID in expectedEntries where !existingIDs.contains(entryID) {
-            guard let entry = Self.entry(from: entryID) else { continue }
-            modelContext.insert(entry)
+        for entry in expectedEntries where !existingIDs.contains(entry.id) {
+            modelContext.insert(
+                MediaFacetIndex(
+                    mediaItemID: entry.mediaItemID,
+                    kind: entry.kind,
+                    key: entry.key
+                )
+            )
             insertedEntries += 1
         }
 
@@ -72,40 +136,6 @@ actor FacetIndexActor {
             insertedEntries: insertedEntries,
             removedEntries: removedEntries,
             unchanged: false
-        )
-    }
-
-    private static func entries(for item: MediaItem) -> [String] {
-        let genreKeys = normalizedKeys(item.cachedGenres)
-        let providerKeys = normalizedKeys(item.cachedWatchProviders)
-        let networkKeys = normalizedKeys(item.cachedNetwork?.commaSeparatedValues ?? [])
-
-        return genreKeys.map { entryID(mediaItemID: item.id, kind: .genre, key: $0) }
-            + providerKeys.map { entryID(mediaItemID: item.id, kind: .provider, key: $0) }
-            + networkKeys.map { entryID(mediaItemID: item.id, kind: .network, key: $0) }
-    }
-
-    private static func normalizedKeys(_ values: [String]) -> Set<String> {
-        Set(values.compactMap { value in
-            let key = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return key.isEmpty ? nil : key
-        })
-    }
-
-    private static func entryID(mediaItemID: String, kind: MediaFacetKind, key: String) -> String {
-        "\(mediaItemID)|\(kind.rawValue)|\(key)"
-    }
-
-    private static func entry(from id: String) -> MediaFacetIndex? {
-        let components = id.split(separator: "|", maxSplits: 2).map(String.init)
-        guard components.count == 3,
-              let kind = MediaFacetKind(rawValue: components[1]) else {
-            return nil
-        }
-        return MediaFacetIndex(
-            mediaItemID: components[0],
-            kind: kind,
-            key: components[2]
         )
     }
 }

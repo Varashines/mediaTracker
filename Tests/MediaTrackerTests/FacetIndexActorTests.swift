@@ -62,4 +62,70 @@ final class FacetIndexActorTests: XCTestCase {
         let entries = try context.fetch(FetchDescriptor<MediaFacetIndex>())
         XCTAssertEqual(entries.map(\.id), ["show_1|genre|comedy"])
     }
+
+    func testBackfilledIndexNarrowsCombinedFacetFilter() async throws {
+        let schema = Schema([MediaItem.self, MediaFacetIndex.self])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+
+        let matching = MediaItem(id: "matching", title: "Match", overview: "", type: .movie)
+        matching.cachedGenres = ["Action"]
+        matching.cachedWatchProviders = ["Netflix"]
+
+        let genreOnly = MediaItem(id: "genre_only", title: "Genre Only", overview: "", type: .movie)
+        genreOnly.cachedGenres = ["Action"]
+        genreOnly.cachedWatchProviders = ["Prime Video"]
+
+        let providerOnly = MediaItem(id: "provider_only", title: "Provider Only", overview: "", type: .movie)
+        providerOnly.cachedGenres = ["Drama"]
+        providerOnly.cachedWatchProviders = ["Netflix"]
+
+        context.insert(matching)
+        context.insert(genreOnly)
+        context.insert(providerOnly)
+        try context.save()
+
+        let facetIndex = FacetIndexActor.shared(modelContainer: container)
+        _ = try await facetIndex.rebuild()
+
+        let filter = MediaFilterActor(modelContainer: container)
+        let result = try await filter.filterAndSort(
+            category: .all,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil,
+            genre: "Action",
+            provider: "Netflix"
+        )
+
+        XCTAssertEqual(result.totalCount, 1)
+        XCTAssertEqual(result.displayed.map(\.title), ["Match"])
+    }
+
+    @MainActor
+    func testMetadataSyncUpdatesFacetEntriesInSameContext() throws {
+        let schema = Schema([MediaItem.self, MediaFacetIndex.self])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+        let item = MediaItem(id: "sync_1", title: "Sync Test", overview: "", type: .movie)
+        item.cachedGenres = ["Action"]
+        context.insert(item)
+
+        item.syncCachedProperties(dirty: .metadata)
+        try context.save()
+
+        item.cachedGenres = ["Drama"]
+        item.syncCachedProperties(dirty: .metadata)
+        try context.save()
+
+        let entries = try context.fetch(FetchDescriptor<MediaFacetIndex>())
+        XCTAssertEqual(entries.map(\.id), ["sync_1|genre|drama"])
+    }
 }
