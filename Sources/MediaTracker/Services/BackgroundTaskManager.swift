@@ -8,6 +8,20 @@ import AppKit
 
 import Observation
 
+@ModelActor
+private actor DripSyncSelectionActor {
+    func staleActiveItemIDs(before staleThreshold: Date, limit: Int) throws -> [String] {
+        let predicate = #Predicate<MediaItem> { item in
+            item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
+        }
+
+        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
+        descriptor.propertiesToFetch = [\.id]
+        descriptor.fetchLimit = limit
+        return try modelContext.fetch(descriptor).map(\.id)
+    }
+}
+
 /// Coordinates background synchronization and database healing tasks while the app is idle or closed.
 @MainActor
 @Observable
@@ -46,24 +60,16 @@ class BackgroundTaskManager {
         guard !isThermalThrottled else { isDripSyncing = false; return }
         defer { isDripSyncing = false }
 
-        let context = ModelContext(container)
         let now = Date()
         let staleThreshold = now.addingTimeInterval(-.days30)
-
-        // Prioritize "Active" items that are stale
-        let predicate = #Predicate<MediaItem> { item in
-            item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
-        }
-        
-        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
-        descriptor.propertiesToFetch = [\.id]
-        descriptor.fetchLimit = 3 // Drip a small amount to keep it silent
         
         do {
-            let staleItems = try context.fetch(descriptor)
-            if !staleItems.isEmpty {
-                AppLogger.info("💧 Drip Sync: Refreshing \(staleItems.count) stale active items...", logger: AppLogger.background)
-                let itemIDs = staleItems.map { $0.id }
+            // Keep database selection off the UI actor. The subsequent service owns
+            // its own background context for the heavier metadata work.
+            let selector = DripSyncSelectionActor(modelContainer: container)
+            let itemIDs = try await selector.staleActiveItemIDs(before: staleThreshold, limit: 3)
+            if !itemIDs.isEmpty {
+                AppLogger.info("💧 Drip Sync: Refreshing \(itemIDs.count) stale active items...", logger: AppLogger.background)
                 
                 // Use BackgroundDataService for the heavy lifting
                 let backgroundService = BackgroundDataService(modelContainer: container)

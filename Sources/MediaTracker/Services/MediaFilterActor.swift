@@ -20,7 +20,9 @@ actor MediaFilterActor {
         limit: Int = 40,
         offset: Int = 0
     ) async throws -> PaginatedResult {
-
+#if DEBUG
+        let startedAt = Date()
+#endif
         let now = Date()
         let processedSearch = searchText.lowercased().trimmingCharacters(in: .whitespaces)
         let searchToken = processedSearch.split(separator: " ").first.map(String.init) ?? ""
@@ -116,6 +118,7 @@ actor MediaFilterActor {
         try Task.checkCancellation()
         // 2. Swift-Level Refinement — all filters handled in Swift (cachedGenres is transformable,
         // not safe in #Predicate). buildFilteredPredicate only applies category + search.
+        let candidateCount = results.count
         results = try refineResults(results, network: network, language: language, genre: genre, year: year, state: state, badge: badge, provider: provider, searchText: processedSearch, category: category, smartRules: smartRules)
 
         let totalCount = (needsSwiftRefinement || groupBy != .none) ?
@@ -149,7 +152,7 @@ actor MediaFilterActor {
             recentAddedItems = []
         }
 
-        return PaginatedResult(
+        let paginatedResult = PaginatedResult(
             displayed: results.map { toMetadata($0) },
             featuredUpcoming: featuredUpcoming,
             recentlyAdded: recentAddedItems,
@@ -159,6 +162,14 @@ actor MediaFilterActor {
             recommendations: [],
             totalCount: totalCount
         )
+#if DEBUG
+        let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        AppLogger.debug(
+            "Filter query category=\(category.rawValue) refined=\(needsSwiftRefinement) candidates=\(candidateCount) displayed=\(paginatedResult.displayed.count) total=\(totalCount) duration=\(elapsedMilliseconds)ms",
+            logger: AppLogger.performance
+        )
+#endif
+        return paginatedResult
     }
 
     private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = []) throws -> [MediaItem] {

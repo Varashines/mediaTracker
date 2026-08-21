@@ -13,6 +13,7 @@ struct CachedImage<Placeholder: View>: View {
     
     @State private var image: CGImage?
     @State private var isLoading = false
+    @State private var deferredLoadTask: Task<Void, Never>?
  
     init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
         self.url = url
@@ -42,16 +43,18 @@ struct CachedImage<Placeholder: View>: View {
         }
         .animation(AppTheme.Animation.easeInOut, value: image)
         .onDisappear {
-            if let url = url {
-                ImageCache.shared.cancel(forKey: url.absoluteString, targetSize: targetSize)
-            }
+            // The cache coalesces requests by URL and target size. Cancelling its
+            // shared task here could abort a load another visible cell is awaiting.
+            deferredLoadTask?.cancel()
+            deferredLoadTask = nil
         }
         .task(id: url) {
             await attemptLoad()
         }
         .onChange(of: isFastScrolling) { _, newValue in
+            deferredLoadTask?.cancel()
             if !newValue && image == nil {
-                Task { @MainActor in
+                deferredLoadTask = Task { @MainActor in
                     guard !Task.isCancelled else { return }
                     let delay = UInt64.random(in: 0...20_000_000)
                     try? await Task.sleep(nanoseconds: delay)
@@ -61,10 +64,12 @@ struct CachedImage<Placeholder: View>: View {
             }
         }
         .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
+            deferredLoadTask?.cancel()
+            deferredLoadTask = nil
             if isAsleep {
                 self.image = nil
             } else {
-                Task { @MainActor in
+                deferredLoadTask = Task { @MainActor in
                     guard !Task.isCancelled else { return }
                     await self.attemptLoad()
                 }

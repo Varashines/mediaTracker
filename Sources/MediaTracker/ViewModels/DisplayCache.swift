@@ -55,9 +55,15 @@ class DisplayCache {
         cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .normal)
     }
 
-    func trimCalendarCache(keepMonths: Int = 6) {
-        let cutoff = Calendar.current.date(byAdding: .month, value: -keepMonths, to: Date()) ?? Date()
-        calendarCache = calendarCache.filter { $0.key >= cutoff }
+    /// Keeps a bounded calendar window around the currently displayed month.
+    /// Adjacent-month preloading remains instant while repeated navigation cannot
+    /// retain an unbounded number of historical or future months.
+    func trimCalendarCache(around month: Date, keepMonthsEachDirection: Int = 6) {
+        let calendar = Calendar.current
+        let normalizedMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let lowerBound = calendar.date(byAdding: .month, value: -keepMonthsEachDirection, to: normalizedMonth) ?? normalizedMonth
+        let upperBound = calendar.date(byAdding: .month, value: keepMonthsEachDirection, to: normalizedMonth) ?? normalizedMonth
+        calendarCache = calendarCache.filter { $0.key >= lowerBound && $0.key <= upperBound }
     }
 
     /// Applies a single-item update to every list this cache owns that may reference

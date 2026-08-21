@@ -44,8 +44,8 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
-    private let maxConcurrentLoads = 6
-    private let currentLoads = OSAllocatedUnfairLock<Int>(uncheckedState: 0)
+    private var prewarmTasks: [UUID: Task<Void, Never>] = [:]
+    private var lowPriorityPrewarmIDs: Set<UUID> = []
     
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
@@ -75,6 +75,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     }
     
     func clearMemoryCache() {
+        cancelPrewarming()
         memoryCache.removeAllObjects()
     }
     
@@ -110,6 +111,26 @@ class ImageCache: NSObject, NSCacheDelegate {
             self.memoryCache.removeObject(forKey: cacheKey as NSString)
         }
     }
+
+    /// Stops work that exists only to warm future viewports. Active visible-image
+    /// requests are kept separate in `activeTasks` and are not cancelled here.
+    func cancelPrewarming() {
+        for task in prewarmTasks.values {
+            task.cancel()
+        }
+        prewarmTasks.removeAll()
+        lowPriorityPrewarmIDs.removeAll()
+    }
+
+    /// A new grid viewport supersedes previous low-priority warming work.
+    /// Normal-priority carousel warming remains available to the current screen.
+    private func cancelLowPriorityPrewarming() {
+        for id in lowPriorityPrewarmIDs {
+            prewarmTasks[id]?.cancel()
+            prewarmTasks.removeValue(forKey: id)
+        }
+        lowPriorityPrewarmIDs.removeAll()
+    }
     
     func checkMemoryCache(forKey key: String, targetSize: CGSize?) -> ImageContainer? {
         let cacheKey = generateCacheKey(key: key, size: targetSize)
@@ -126,42 +147,41 @@ class ImageCache: NSObject, NSCacheDelegate {
         return key
     }
     
-    func cancel(forKey key: String, targetSize: CGSize? = nil) {
-        let cacheKey = generateCacheKey(key: key, size: targetSize)
-        activeTasks[cacheKey]?.cancel()
-        activeTasks[cacheKey] = nil
-    }
-    
     func prewarmImages(urls: [URL], targetSize: CGSize? = nil, priority: ImagePriority = .normal) {
         guard !urls.isEmpty else { return }
-        let maxConcurrent = priority == .critical ? 8 : 4
-        var index = 0
-        var inFlight = 0
 
-        func loadNext() {
-            while index < urls.count, inFlight < maxConcurrent {
-                let url = urls[index]
-                index += 1
+        if priority == .low {
+            cancelLowPriorityPrewarming()
+        }
+
+        let id = UUID()
+        let taskPriority: TaskPriority = priority == .low ? .utility : .userInitiated
+        let task = Task(priority: taskPriority) { [weak self] in
+            guard let self else { return }
+            // Let the caller register this session before a warm-cache pass can
+            // finish synchronously and attempt cleanup.
+            await Task.yield()
+            for url in urls {
+                guard !Task.isCancelled else { break }
                 let key = url.absoluteString
-                let cacheKey = generateCacheKey(key: key, size: targetSize)
-                // Skip if already cached or actively loading
-                if checkMemoryCache(forKey: key, targetSize: targetSize) != nil || activeTasks[cacheKey] != nil {
+                let cacheKey = self.generateCacheKey(key: key, size: targetSize)
+                guard self.checkMemoryCache(forKey: key, targetSize: targetSize) == nil,
+                      self.activeTasks[cacheKey] == nil else {
                     continue
                 }
-                inFlight += 1
-                let task = Task.detached(priority: priority == .low ? .utility : .userInitiated) { [weak self] in
-                    _ = await self?.get(forKey: key, targetSize: targetSize, priority: priority)
-                }
-                Task {
-                    _ = await task.value
-                    await MainActor.run {
-                        inFlight -= 1
-                        loadNext()
-                    }
-                }
+                _ = await self.get(forKey: key, targetSize: targetSize, priority: priority)
             }
+            self.finishPrewarming(id: id)
         }
-        loadNext()
+        prewarmTasks[id] = task
+        if priority == .low {
+            lowPriorityPrewarmIDs.insert(id)
+        }
+    }
+
+    private func finishPrewarming(id: UUID) {
+        prewarmTasks.removeValue(forKey: id)
+        lowPriorityPrewarmIDs.remove(id)
     }
     
     func prewarmImages(_ metadata: [MediaThumbnailMetadata], limit: Int = 10, targetSize: CGSize? = nil, priority: ImagePriority = .normal) {
@@ -180,54 +200,41 @@ class ImageCache: NSObject, NSCacheDelegate {
             return await active.value
         }
         
-        // Throttle concurrent loads to prevent bursts on cold start
-        while true {
-            let acquired = currentLoads.withLock { current -> Bool in
-                guard current < maxConcurrentLoads else { return false }
-                current += 1
-                return true
-            }
-            if acquired { break }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        
-        // Capture session + lock strongly so decrement always runs even if self deallocates
+        // Share the continuation-based I/O limiter with other cache maintenance
+        // instead of repeatedly polling while a cold-start burst is in progress.
         let capturedSession = self.imageSession
-        let loadsLock = self.currentLoads
         let task = Task<ImageContainer?, Never> { [weak self] in
-            defer {
-                loadsLock.withLock { $0 -= 1 }
-            }
             guard let self = self else { return nil }
             guard let url = URL(string: key) else { return nil }
             
             do {
-                let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15.0)
-                let (data, response) = try await capturedSession.data(for: request)
-                
-                if Task.isCancelled { return nil }
-                
-                // Decode off the main actor to avoid blocking UI
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-                let finalCGImage: CGImage? = await Task.detached(priority: .utility) { [scale] in
-                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
-                        return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
-                    } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
-                        if let target = targetSize {
-                            let maxDimension = max(target.width, target.height) * scale
-                            let options: [CFString: Any] = [
-                                kCGImageSourceShouldCache: false,
-                                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                                kCGImageSourceCreateThumbnailWithTransform: true,
-                                kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
-                            ]
-                            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-                        } else {
-                            return CGImageSourceCreateImageAtIndex(source, 0, nil)
+                let finalCGImage: CGImage? = try await FileIOActor.shared.run {
+                    let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15.0)
+                    let (data, response) = try await capturedSession.data(for: request)
+                    guard !Task.isCancelled else { return nil }
+
+                    // Decode off the main actor to avoid blocking UI.
+                    return await Task.detached(priority: .utility) { [scale] in
+                        if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
+                            return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
+                        } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
+                            if let target = targetSize {
+                                let maxDimension = max(target.width, target.height) * scale
+                                let options: [CFString: Any] = [
+                                    kCGImageSourceShouldCache: false,
+                                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                    kCGImageSourceCreateThumbnailWithTransform: true,
+                                    kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
+                                ]
+                                return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                            } else {
+                                return CGImageSourceCreateImageAtIndex(source, 0, nil)
+                            }
                         }
-                    }
-                    return nil
-                }.value
+                        return nil
+                    }.value
+                }
                 
                 if let cgImage = finalCGImage {
                     let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: cacheKey)

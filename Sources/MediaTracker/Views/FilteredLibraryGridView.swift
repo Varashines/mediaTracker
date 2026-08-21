@@ -44,19 +44,23 @@ struct FilteredLibraryGridView: View {
         !cachedLikedTitles.isEmpty
     }
 
-    private var groupedByWeekday: [(String, [MediaThumbnailMetadata])] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d"
-        let grouped = Dictionary(grouping: items) { item -> String in
-            guard let date = item.releaseDate else { return "Unknown" }
-            return formatter.string(from: date)
-        }
+    private var groupedByWeekday: [(Date?, [MediaThumbnailMetadata])] {
         let calendar = Calendar.current
+        let grouped = Dictionary(grouping: items) { item in
+            item.releaseDate.map(calendar.startOfDay(for:))
+        }
         return grouped.sorted { lhs, rhs in
-            let lhsDate = formatter.date(from: lhs.key) ?? Date.distantPast
-            let rhsDate = formatter.date(from: rhs.key) ?? Date.distantPast
-            return calendar.compare(lhsDate, to: rhsDate, toGranularity: .day) == .orderedAscending
-        }.map { ($0.key, $0.value) }
+            switch (lhs.key, rhs.key) {
+            case let (left?, right?):
+                return left < right
+            case (nil, _?):
+                return false
+            case (_?, nil):
+                return true
+            case (nil, nil):
+                return false
+            }
+        }
     }
 
     var body: some View {
@@ -124,10 +128,10 @@ struct FilteredLibraryGridView: View {
                         }
                         if filter.type == .onThisWeek {
                             ForEach(Array(groupedByWeekday.enumerated()), id: \.element.0) { groupIdx, group in
-                                let dayName = group.0
+                                let day = group.0
                                 let dayItems = group.1
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text(dayName)
+                                    Text(day?.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) ?? "Unknown")
                                         .font(AppTheme.Font.heading)
                                         .foregroundStyle(.secondary)
                                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -234,6 +238,7 @@ struct FilteredLibraryGridView: View {
             scopedStatsTask = nil
             recsTask?.cancel()
             recsTask = nil
+            ImageCache.shared.cancelPrewarming()
         }
         .task {
             recomputeRecommendationData()
@@ -344,7 +349,8 @@ struct FilteredLibraryGridView: View {
         scopedStatsTask?.cancel()
         scopedStatsTask = Task {
             let actor = ScopedStatsActor(modelContainer: modelContext.container)
-            let stats = await actor.fetchScopedStats(filter: filter)
+            let sections = ScopedStatsSections.visibleSections(for: filter.type)
+            let stats = await actor.fetchScopedStats(filter: filter, sections: sections)
             guard !Task.isCancelled, stats.totalItems > 0 else { return }
             await MainActor.run { scopedStats = stats }
         }

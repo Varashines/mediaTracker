@@ -89,5 +89,6 @@ class MediaViewModel {
     func purgeSleepCache() {
         display.purgeAll()
         discovery.purgeAll()
+        ImageCache.shared.cancelPrewarming()
     }
 }

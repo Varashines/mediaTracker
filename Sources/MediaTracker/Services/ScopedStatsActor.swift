@@ -1,6 +1,32 @@
 import Foundation
 import SwiftData
 
+struct ScopedStatsSections: OptionSet, Sendable, Hashable {
+    let rawValue: UInt8
+
+    static let actors = ScopedStatsSections(rawValue: 1 << 0)
+    static let genres = ScopedStatsSections(rawValue: 1 << 1)
+    static let networks = ScopedStatsSections(rawValue: 1 << 2)
+    static let providers = ScopedStatsSections(rawValue: 1 << 3)
+    static let languages = ScopedStatsSections(rawValue: 1 << 4)
+    static let all: ScopedStatsSections = [.actors, .genres, .networks, .providers, .languages]
+
+    static func visibleSections(for filterType: FilterType) -> ScopedStatsSections {
+        switch filterType {
+        case .genre:
+            return [.actors, .networks, .providers, .languages]
+        case .network, .studio:
+            return [.actors, .genres, .providers, .languages]
+        case .provider:
+            return [.actors, .genres, .networks, .languages]
+        case .language:
+            return [.actors, .genres, .networks, .providers]
+        case .badge, .onThisWeek:
+            return .all
+        }
+    }
+}
+
 struct ScopedLibraryStats: Sendable {
     let totalItems: Int
     let totalRuntime: Int
@@ -32,9 +58,24 @@ actor ScopedStatsActor {
         ScopedStatsActor(modelContainer: modelContainer)
     }
 
-    func fetchScopedStats(filter: DiscoveryFilter) async -> ScopedLibraryStats {
-        let cacheKey = "\(filter.type.rawValue):\(filter.name)"
-        if let cached = await ScopedStatsCache.shared.stats(forKey: cacheKey) { return cached }
+    func fetchScopedStats(
+        filter: DiscoveryFilter,
+        sections: ScopedStatsSections = .all
+    ) async -> ScopedLibraryStats {
+#if DEBUG
+        let startedAt = Date()
+#endif
+        let sourceKey = filter.sourceNames?.sorted().joined(separator: "|") ?? ""
+        let cacheKey = "\(filter.type.rawValue):\(filter.name):\(sourceKey):\(sections.rawValue)"
+        if let cached = await ScopedStatsCache.shared.stats(forKey: cacheKey) {
+#if DEBUG
+            AppLogger.debug(
+                "Scoped stats cache hit type=\(filter.type.rawValue) sections=\(sections.rawValue) duration=\(Int(Date().timeIntervalSince(startedAt) * 1_000))ms",
+                logger: AppLogger.performance
+            )
+#endif
+            return cached
+        }
         guard !Task.isCancelled else { return .empty }
 
         var descriptor = FetchDescriptor<MediaItem>()
@@ -70,10 +111,6 @@ actor ScopedStatsActor {
         }
         guard !Task.isCancelled else { return .empty }
 
-        // Build source→target alias map so network/studio counting matches hub grouping.
-        let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []
-        let aliasMap = DiscoverySyncService.buildSourceToTargetMap(from: aliasEntities)
-
         if filter.type == .genre {
             items = items.filter { $0.cachedGenres.contains(name) }
         }
@@ -95,6 +132,37 @@ actor ScopedStatsActor {
             : nil
         let providerName = filter.type == .provider ? filter.name : nil
 
+        // Apply every scope-specific refinement before calculating totals or
+        // metadata. Previously network/provider scopes counted their broad SQL
+        // candidate set in `totalItems`, while their cards used a narrower set.
+        let matchedItems = items.filter { item in
+            if let networkNames, let rawNetworks = item.cachedNetwork {
+                let itemNetworks = rawNetworks.commaSeparatedValues.map { $0.lowercased() }
+                guard itemNetworks.contains(where: networkNames.contains) else { return false }
+            } else if networkNames != nil {
+                return false
+            }
+
+            if let providerName {
+                guard item.cachedWatchProviders.contains(providerName) else { return false }
+            }
+            return true
+        }
+
+        guard !matchedItems.isEmpty else {
+            return ScopedLibraryStats.empty
+        }
+
+        // Build source→target aliases only when the visible header needs
+        // network aggregation.
+        let aliasMap: [String: String]
+        if sections.contains(.networks) {
+            let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []
+            aliasMap = DiscoverySyncService.buildSourceToTargetMap(from: aliasEntities)
+        } else {
+            aliasMap = [:]
+        }
+
         var actorTaste: [String: CategoryStats] = [:]
         var genreTaste: [String: CategoryStats] = [:]
         var networkCounts: [String: Int] = [:]
@@ -102,28 +170,24 @@ actor ScopedStatsActor {
         var languageCounts: [String: Int] = [:]
         var totalRuntime = 0
 
-        for item in items {
+        for item in matchedItems {
             guard !Task.isCancelled else { return .empty }
-            if let nSet = networkNames, let rawNets = item.cachedNetwork {
-                let itemNets = rawNets.commaSeparatedValues.map { $0.lowercased() }
-                guard itemNets.contains(where: { nSet.contains($0) }) else { continue }
-            }
-            if let pName = providerName {
-                guard item.cachedWatchProviders.contains(pName) else { continue }
-            }
-
             totalRuntime += item.cachedRuntime ?? 0
 
             let titleWeight = TasteMath.titleWeight(for: item)
 
             // Actors — pick top 5 cast per title for cross-title affinity
-            TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
+            if sections.contains(.actors) {
+                TasteMath.accumulateTopBilledCast(&actorTaste, cast: item.displayCast, taste: item.tasteValue, limit: 5, weight: titleWeight)
+            }
 
             // Genres
-            TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
+            if sections.contains(.genres) {
+                TasteMath.accumulateGenres(&genreTaste, genres: item.cachedGenres, taste: item.tasteValue, weight: titleWeight)
+            }
 
             // Networks — grouped by alias target
-            if let rawNetwork = item.cachedNetwork {
+            if sections.contains(.networks), let rawNetwork = item.cachedNetwork {
                 for n in rawNetwork.commaSeparatedValues {
                     let groupedName = aliasMap[n.lowercased()] ?? n
                     networkCounts[groupedName, default: 0] += 1
@@ -131,42 +195,44 @@ actor ScopedStatsActor {
             }
 
             // Providers — raw count
-            for p in item.cachedWatchProviders where !p.isEmpty {
-                providerCounts[p, default: 0] += 1
+            if sections.contains(.providers) {
+                for p in item.cachedWatchProviders where !p.isEmpty {
+                    providerCounts[p, default: 0] += 1
+                }
             }
 
             // Languages — raw count
-            if let lang = item.cachedLanguage, !lang.isEmpty {
+            if sections.contains(.languages), let lang = item.cachedLanguage, !lang.isEmpty {
                 languageCounts[lang, default: 0] += 1
             }
         }
 
         // Affinity-based: actors (cutoff 3), genres (cutoff 5)
-        let topActors: [ScoredPerson] = actorTaste.compactMap { actorName, val in
+        let topActors: [ScoredPerson] = sections.contains(.actors) ? actorTaste.compactMap { actorName, val in
             let score = val.affinity(cutoff: 3)
             guard score > 0 else { return nil }
             return ScoredPerson(id: actorName, name: actorName, score: score, count: val.total, profileURL: val.profileURL)
-        }.sorted { TasteMath.compareByAffinityCountName(($0.score, $0.count, $0.name), ($1.score, $1.count, $1.name)) }.prefix(6).map { $0 }
+        }.sorted { TasteMath.compareByAffinityCountName(($0.score, $0.count, $0.name), ($1.score, $1.count, $1.name)) }.prefix(6).map { $0 } : []
 
-        let topGenres: [(name: String, score: Double)] = genreTaste.compactMap { genreName, val -> (String, Double, Int)? in
+        let topGenres: [(name: String, score: Double)] = sections.contains(.genres) ? genreTaste.compactMap { genreName, val -> (String, Double, Int)? in
             let score = val.affinity(cutoff: 5)
             guard score > 0 else { return nil }
             return (genreName, score, val.total)
-        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1) }
+        }.sorted { TasteMath.compareByAffinityCountName(($0.1, $0.2, $0.0), ($1.1, $1.2, $1.0)) }.prefix(8).map { ($0.0, $0.1) } : []
 
         // Count-based: networks, providers, languages (alpha tie-break on equal counts)
-        let topNetworks = networkCounts.sorted {
+        let topNetworks = sections.contains(.networks) ? networkCounts.sorted {
             $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
-        }.prefix(8).map { ($0.0, $0.1) }
-        let topProviders = providerCounts.sorted {
+        }.prefix(8).map { ($0.0, $0.1) } : []
+        let topProviders = sections.contains(.providers) ? providerCounts.sorted {
             $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
-        }.prefix(8).map { ($0.0, $0.1) }
-        let topLanguages = languageCounts.sorted {
+        }.prefix(8).map { ($0.0, $0.1) } : []
+        let topLanguages = sections.contains(.languages) ? languageCounts.sorted {
             $0.1 == $1.1 ? $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending : $0.1 > $1.1
-        }.prefix(8).map { ($0.0, $0.1) }
+        }.prefix(8).map { ($0.0, $0.1) } : []
 
         let result = ScopedLibraryStats(
-            totalItems: items.count,
+            totalItems: matchedItems.count,
             totalRuntime: totalRuntime,
             topActors: topActors,
             topGenres: topGenres,
@@ -176,6 +242,12 @@ actor ScopedStatsActor {
         )
 
         await ScopedStatsCache.shared.setStats(result, forKey: cacheKey)
+#if DEBUG
+        AppLogger.debug(
+            "Scoped stats type=\(filter.type.rawValue) candidates=\(items.count) matched=\(matchedItems.count) sections=\(sections.rawValue) duration=\(Int(Date().timeIntervalSince(startedAt) * 1_000))ms",
+            logger: AppLogger.performance
+        )
+#endif
         return result
     }
 }

@@ -338,6 +338,7 @@ struct ReleaseCalendarView: View {
                 
                 await MainActor.run {
                     viewModel.display.calendarCache[startOfMonth] = result
+                    viewModel.display.trimCalendarCache(around: startOfMonth)
                     // RELIABILITY: Only update if the user hasn't moved to another month during fetch
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.calendarData = result
@@ -382,7 +383,7 @@ struct ReleaseCalendarView: View {
                 }
             }
         }
-        viewModel.display.trimCalendarCache()
+        viewModel.display.trimCalendarCache(around: month)
     }
     
     // MARK: - Graph Components

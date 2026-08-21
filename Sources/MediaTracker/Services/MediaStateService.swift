@@ -21,8 +21,8 @@ final class MediaStateService {
     // Any view — update single item in-place
     private(set) var lastChangedItemID: PersistentIdentifier?
 
-    // Debounce taste cache invalidation — avoid full library re-scan on rapid state changes
-    private var tasteCacheDebounceTask: Task<Void, Never>?
+    // Debounce derived-cache invalidation — avoid full library re-scans on rapid state changes.
+    private var derivedCacheDebounceTask: Task<Void, Never>?
 
     // Debounce full-refresh broadcasts so rapid state changes (e.g. toggling
     // many episodes) trigger a single library reload instead of one per change.
@@ -35,7 +35,7 @@ final class MediaStateService {
         } else {
             scheduleDebouncedFullRefresh()
         }
-        debouncedTasteClear()
+        debouncedDerivedCacheInvalidation()
     }
 
     func postItemRefreshed(id: String, persistentID: PersistentIdentifier? = nil) {
@@ -47,12 +47,12 @@ final class MediaStateService {
             scheduleDebouncedFullRefresh()
             refreshedItemID = id
         }
-        debouncedTasteClear()
+        debouncedDerivedCacheInvalidation()
     }
 
     func postBulkRefreshed() {
         scheduleDebouncedFullRefresh()
-        debouncedTasteClear()
+        debouncedDerivedCacheInvalidation()
     }
 
     /// Requests a forced re-sync of the Discovery hub (clear + refresh) from any view.
@@ -73,14 +73,17 @@ final class MediaStateService {
         }
     }
 
-    /// Debounce taste cache clear — coalesce rapid state changes into a single invalidation
-    private func debouncedTasteClear() {
-        tasteCacheDebounceTask?.cancel()
-        tasteCacheDebounceTask = Task { @MainActor in
+    /// Coalesce derived-cache invalidation so rapid state changes clear each
+    /// affected aggregate once rather than triggering repeated library scans.
+    private func debouncedDerivedCacheInvalidation() {
+        derivedCacheDebounceTask?.cancel()
+        derivedCacheDebounceTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
             guard !Task.isCancelled else { return }
             TasteActor.clearCache()
             YearReviewCache.shared.invalidate()
+            LibraryStatsActor.clearCache()
+            ScopedStatsActor.invalidateCache()
         }
     }
 }
