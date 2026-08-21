@@ -20,12 +20,13 @@ struct MediaTrackerApp: App {
             MediaCollection.self, ProviderEntity.self
         ])
 
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true,
-            groupContainer: .none
-        )
+        let modelConfiguration: ModelConfiguration
+        do {
+            modelConfiguration = try DevelopmentStore.makeConfiguration(schema: schema)
+        } catch {
+            fatalError("CRITICAL: Failed to configure the MediaTracker store: \(error)")
+        }
+        let isDevelopmentStore = DevelopmentStore.isActive
 
         // Check for backup files from a previous corruption recovery.
         // On the first launch after adding a backup, try to restore the oldest backup.
@@ -80,6 +81,12 @@ struct MediaTrackerApp: App {
             )
         } catch {
             let firstError = error
+            if isDevelopmentStore {
+                fatalError(
+                    "CRITICAL: MediaTracker Dev could not open or migrate its store. " +
+                    "The Dev store was preserved for inspection. Error: \(firstError)"
+                )
+            }
             AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(firstError)")
 
             let storeURL = modelConfiguration.url

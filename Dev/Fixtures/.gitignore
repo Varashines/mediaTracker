@@ -1,0 +1,3 @@
+# Production-derived store snapshots must never be committed.
+*
+!.gitignore
