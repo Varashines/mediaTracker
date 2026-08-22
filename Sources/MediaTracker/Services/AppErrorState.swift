@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import AppKit
 
 @MainActor
 @Observable
@@ -10,7 +11,11 @@ class AppErrorState {
     var isImporting = false
     var storeRecoveredFromMigrationFailure = false
     private var dismissTask: Task<Void, Never>?
-    
+    /// Toasts raised while one is visible; shown in order when the current
+    /// toast dismisses. Capped — oldest pending is dropped beyond 3.
+    private var pendingToasts: [Toast] = []
+    private static let pendingCap = 3
+
     private init() {}
     
     struct Toast: Identifiable, Equatable {
@@ -65,21 +70,62 @@ class AppErrorState {
             return
         }
         let toast = Toast(message: message, style: style, duration: duration, undoAction: undoAction)
+
+        if currentToast != nil {
+            pendingToasts.append(toast)
+            if pendingToasts.count > Self.pendingCap {
+                pendingToasts.removeFirst(pendingToasts.count - Self.pendingCap)
+            }
+            return
+        }
+        presentNow(toast)
+    }
+
+    private func presentNow(_ toast: Toast) {
         dismissTask?.cancel()
 
         withAnimation(AppTheme.Animation.springGentle) {
             currentToast = toast
         }
+        announceForVoiceOver(toast)
 
         let toastID = toast.id
         dismissTask = Task {
-            try? await Task.sleep(for: .seconds(duration))
+            try? await Task.sleep(for: .seconds(toast.duration))
             guard !Task.isCancelled, self.currentToast?.id == toastID else { return }
+            self.advanceToNextToast()
+        }
+    }
 
-            withAnimation(AppTheme.Animation.springGentle) {
-                self.currentToast = nil
+    /// Dismiss the visible toast and show the next queued one, if any.
+    private func advanceToNextToast() {
+        withAnimation(AppTheme.Animation.springGentle) {
+            currentToast = nil
+        }
+        if !pendingToasts.isEmpty {
+            let next = pendingToasts.removeFirst()
+            // Slight beat between toasts so consecutive animations read as two.
+            dismissTask = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                self.presentNow(next)
             }
         }
+    }
+
+    private func announceForVoiceOver(_ toast: Toast) {
+        // No-op when VoiceOver isn't running; announced when it is.
+        // NSApp is nil in non-app processes (unit tests) — guard before touching it.
+        // "AXAnnouncement" is the HIServices announcement-text key — Swift's
+        // NotificationUserInfoKey has no static case for it on macOS.
+        guard NSApp != nil else { return }
+        let element = NSApp.keyWindow?.contentView ?? NSApp.mainWindow?.contentView
+        guard let element else { return }
+        NSAccessibility.post(
+            element: element,
+            notification: .announcementRequested,
+            userInfo: [NSAccessibility.NotificationUserInfoKey(rawValue: "AXAnnouncement"): toast.message]
+        )
     }
     
     func surfaceError(_ message: String) {
@@ -88,9 +134,7 @@ class AppErrorState {
 
     func dismissCurrentToast() {
         dismissTask?.cancel()
-        withAnimation(AppTheme.Animation.springGentle) {
-            currentToast = nil
-        }
+        advanceToNextToast()
     }
     
     func handleError(_ error: Error, message: String? = nil) {
@@ -155,5 +199,13 @@ struct ToastView: View {
             Capsule()
                 .stroke(toast.style.color.opacity(0.2), lineWidth: 0.5)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        var parts = [toast.message]
+        if toast.undoAction != nil { parts.append("Undo available") }
+        return parts.joined(separator: ", ")
     }
 }
