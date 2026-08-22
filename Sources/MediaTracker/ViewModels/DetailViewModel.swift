@@ -45,7 +45,14 @@ class DetailViewModel {
             return item.requiresMaintenanceRefresh
         }
         
-        // Default 24h for movies
+        // Completed movies older than 90 days only need 30-day maintenance refresh
+        if item.type == .movie && item.state == .completed {
+            if let rel = item.releaseDate, Date().timeIntervalSince(rel) > 90 * .secondsInDay {
+                return item.requiresMaintenanceRefresh
+            }
+        }
+        
+        // Default 24h for active/wishlist movies
         return Date().timeIntervalSince(lastUpdated) > TimeInterval.secondsInDay
     }
     

@@ -15,12 +15,22 @@ struct ImportWizardSheet: View {
         case summary
     }
 
+    enum ImportPhase {
+        case localRestore
+        case metadataEnrichment
+    }
+
     @State private var currentStep: WizardStep = .selectFile
+    @State private var currentPhase: ImportPhase = .localRestore
     @State private var backupData: LibraryBackup?
     @State private var existingMatchCount: Int = 0
     @State private var newItemsCount: Int = 0
     @State private var selectedStrategy: ImportConflictStrategy = .merge
     @State private var progressInfo: ImportProgress?
+    @State private var enrichmentProcessed: Int = 0
+    @State private var enrichmentTotal: Int = 0
+    @State private var enrichmentCurrentTitle: String = ""
+    @State private var sleepAssertionID: UUID?
     @State private var importTask: Task<Void, Never>?
     @State private var isAnalyzing: Bool = false
     @State private var errorMessage: String?
@@ -160,7 +170,7 @@ struct ImportWizardSheet: View {
             }
             .padding(AppTheme.Spacing.large)
         }
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 480, idealHeight: 540)
+        .frame(minWidth: 540, idealWidth: 580, minHeight: 500, idealHeight: 560)
         .background(AppTheme.Colors.background(for: colorScheme))
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json]) { result in
             switch result {
@@ -353,39 +363,100 @@ struct ImportWizardSheet: View {
         }
     }
 
-    // Step 4: Progress
+    // Step 4: Two-Phase Progress Dashboard
     private var progressView: some View {
         VStack(spacing: AppTheme.Spacing.large) {
             Spacer()
 
-            if let info = progressInfo {
-                VStack(spacing: AppTheme.Spacing.medium) {
-                    ProgressView(value: Double(info.processedCount), total: Double(max(1, info.totalCount)))
-                        .tint(AppTheme.Colors.accent)
-                        .controlSize(.large)
-
+            VStack(spacing: AppTheme.Spacing.medium) {
+                // Phase 1 Card: Local Database Restore
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                     HStack {
-                        Text("Processing \(info.processedCount) of \(info.totalCount) items...")
-                            .font(AppTheme.Font.bodyMedium)
+                        Image(systemName: currentPhase == .metadataEnrichment ? "checkmark.circle.fill" : "cylinder.split.1x2.fill")
+                            .foregroundStyle(currentPhase == .metadataEnrichment ? Color.semanticGreen(for: colorScheme) : AppTheme.Colors.accent)
+                        Text("Phase 1: Restoring Database & Watch History")
+                            .font(AppTheme.Font.bodyBold)
                             .foregroundStyle(.primary)
                         Spacer()
-                        Text("\(Int((Double(info.processedCount) / Double(max(1, info.totalCount))) * 100))%")
-                            .font(AppTheme.Font.bodyBold)
-                            .foregroundStyle(AppTheme.Colors.accent)
+                        if currentPhase == .metadataEnrichment {
+                            Text("Complete")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(Color.semanticGreen(for: colorScheme))
+                        }
                     }
 
-                    if !info.currentTitle.isEmpty {
-                        Text("Currently importing: \"\(info.currentTitle)\"")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    if let info = progressInfo {
+                        ProgressView(value: Double(info.processedCount), total: Double(max(1, info.totalCount)))
+                            .tint(currentPhase == .metadataEnrichment ? Color.semanticGreen(for: colorScheme) : AppTheme.Colors.accent)
+
+                        HStack {
+                            Text("Restored \(info.processedCount) of \(info.totalCount) items")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int((Double(info.processedCount) / Double(max(1, info.totalCount))) * 100))%")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        ProgressView().controlSize(.small)
                     }
                 }
                 .padding(AppTheme.Spacing.large)
                 .background(AppTheme.Colors.cardFill(for: colorScheme))
                 .cornerRadius(AppTheme.Radius.medium)
-            } else {
-                ProgressView("Preparing import...")
+
+                // Phase 2 Card: TMDB/TVMaze Metadata Enrichment
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+                    HStack {
+                        Image(systemName: currentPhase == .metadataEnrichment ? "sparkles" : "clock")
+                            .foregroundStyle(currentPhase == .metadataEnrichment ? AppTheme.Colors.accent : .secondary)
+                        Text("Phase 2: Enriching Metadata, Cast, Episodes & Providers")
+                            .font(AppTheme.Font.bodyBold)
+                            .foregroundStyle(currentPhase == .metadataEnrichment ? .primary : .secondary)
+                        Spacer()
+                        if currentPhase == .localRestore {
+                            Text("Pending...")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if currentPhase == .metadataEnrichment {
+                        ProgressView(value: Double(enrichmentProcessed), total: Double(max(1, enrichmentTotal)))
+                            .tint(AppTheme.Colors.accent)
+
+                        HStack {
+                            Text("Enriched \(enrichmentProcessed) of \(enrichmentTotal) items")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int((Double(enrichmentProcessed) / Double(max(1, enrichmentTotal))) * 100))%")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if !enrichmentCurrentTitle.isEmpty {
+                            Text("Currently enriching: \"\(enrichmentCurrentTitle)\"")
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(AppTheme.Spacing.large)
+                .background(AppTheme.Colors.cardFill(for: colorScheme))
+                .cornerRadius(AppTheme.Radius.medium)
+
+                // Sleep notification badge
+                HStack(spacing: AppTheme.Spacing.small) {
+                    Image(systemName: "sun.max.fill")
+                        .foregroundStyle(Color.semanticGold(for: colorScheme))
+                    Text("Sleep mode is temporarily paused to ensure uninterrupted import.")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, AppTheme.Spacing.small)
             }
 
             Spacer()
@@ -401,7 +472,7 @@ struct ImportWizardSheet: View {
                 .font(.system(size: 50))
                 .foregroundStyle(Color.semanticGreen(for: colorScheme))
 
-            Text("Import Completed Successfully!")
+            Text("Import & Enrichment Completed Successfully!")
                 .font(AppTheme.Font.bodyBold)
                 .foregroundStyle(.primary)
 
@@ -502,13 +573,18 @@ struct ImportWizardSheet: View {
         }
     }
 
-    // Start Import Task
+    // Start Import Task (Two-Phase Gated Workflow)
     private func startImportProcess() {
         guard let backup = backupData else { return }
 
         withAnimation(AppTheme.Animation.springSnappy) {
             currentStep = .progress
+            currentPhase = .localRestore
         }
+
+        // 1. Temporarily prevent system and in-app sleep
+        let sleepID = SleepManager.shared.beginPreventingSleep(reason: "Library Import & Enrichment")
+        self.sleepAssertionID = sleepID
 
         BackgroundTaskManager.shared.isImportActive = true
         BackgroundTaskManager.shared.activeTaskDescription = "Importing \(backup.items.count) library items..."
@@ -519,7 +595,12 @@ struct ImportWizardSheet: View {
         importTask = Task.detached(priority: .userInitiated) {
             let importService = BackgroundDataService(modelContainer: container)
 
-            _ = await importService.importLibraryData(backup: backup, strategy: strategy) { progress in
+            // Phase 1: Local Database Restore (100% offline & fast)
+            let (_, _, _, idsToBackfill) = await importService.importLibraryData(
+                backup: backup,
+                strategy: strategy,
+                triggerPostImportBackfill: false
+            ) { progress in
                 Task { @MainActor in
                     self.progressInfo = progress
                 }
@@ -527,13 +608,46 @@ struct ImportWizardSheet: View {
 
             await importService.importCollections(backup: backup)
 
+            guard !Task.isCancelled else {
+                await MainActor.run {
+                    if let sleepID = self.sleepAssertionID {
+                        SleepManager.shared.endPreventingSleep(id: sleepID)
+                        self.sleepAssertionID = nil
+                    }
+                }
+                return
+            }
+
+            // Phase 2: Metadata Enrichment (TMDB/TVMaze genres, cast, episodes, providers)
             await MainActor.run {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    self.currentPhase = .metadataEnrichment
+                    self.enrichmentTotal = idsToBackfill.count
+                    self.enrichmentProcessed = 0
+                }
+                BackgroundTaskManager.shared.activeTaskDescription = "Enriching metadata for \(idsToBackfill.count) items..."
+            }
+
+            if !idsToBackfill.isEmpty {
+                await BackgroundTaskManager.shared.backfillMissingLibraryMetadata(priorityIDs: idsToBackfill) { processed, total, currentTitle in
+                    Task { @MainActor in
+                        self.enrichmentProcessed = processed
+                        self.enrichmentTotal = total
+                        self.enrichmentCurrentTitle = currentTitle
+                    }
+                }
+                await BackgroundTaskManager.shared.refreshMissingAirDates(cap: 50)
+                await BackgroundTaskManager.shared.refreshStalePremiereBadges()
+            }
+
+            await MainActor.run {
+                if let sleepID = self.sleepAssertionID {
+                    SleepManager.shared.endPreventingSleep(id: sleepID)
+                    self.sleepAssertionID = nil
+                }
                 BackgroundTaskManager.shared.isImportActive = false
                 BackgroundTaskManager.shared.activeTaskDescription = nil
                 MediaStateService.shared.postMediaStateChanged()
-                
-                let context = ModelContext(container)
-                DataService.shared.runMaintenance(modelContext: context, silent: true)
 
                 withAnimation(AppTheme.Animation.springSnappy) {
                     self.currentStep = .summary
@@ -544,6 +658,10 @@ struct ImportWizardSheet: View {
 
     private func cancelImport() {
         importTask?.cancel()
+        if let sleepID = sleepAssertionID {
+            SleepManager.shared.endPreventingSleep(id: sleepID)
+            sleepAssertionID = nil
+        }
         BackgroundTaskManager.shared.isImportActive = false
         BackgroundTaskManager.shared.activeTaskDescription = nil
         dismiss()

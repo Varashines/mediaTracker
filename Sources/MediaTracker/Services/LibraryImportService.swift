@@ -37,8 +37,9 @@ extension BackgroundDataService {
     func importLibraryData(
         backup: LibraryBackup,
         strategy: ImportConflictStrategy = .skip,
+        triggerPostImportBackfill: Bool = true,
         onProgress: (@Sendable (ImportProgress) -> Void)? = nil
-    ) async -> (imported: Int, merged: Int, skipped: Int) {
+    ) async -> (imported: Int, merged: Int, skipped: Int, itemsNeedingBackfill: [String]) {
         let context = modelContext
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id, \.typeValue]
@@ -49,29 +50,7 @@ extension BackgroundDataService {
             }
         )
 
-        // Pre-scan: collect unique (tmdbID, seasonNumber) work for episode-progress restore
-        // so seasons/episodes can be fetched in bulk and season payloads resolved via a
-        // bounded network-only task group instead of per-item awaits inside the loop.
-        var seasonWork = Set<String>()
-        var seasonWorkPairs: [(tmdbID: Int, seasonNumber: Int)] = []
-        for itemData in backup.items {
-            let mediaType = MediaItemData.canonicalMediaType(for: itemData.type, id: itemData.id)
-            guard mediaType == .tvShow,
-                  let watchedIDs = itemData.watchedEpisodeIDs, !watchedIDs.isEmpty else { continue }
-            let uniqueID = MediaItemData.canonicalID(itemData.id, type: mediaType)
-            let tmdbIDPart = uniqueID.split(separator: "_").last ?? uniqueID[...]
-            guard let tmdbID = Int(tmdbIDPart) else { continue }
-            for epID in watchedIDs {
-                let parts = epID.split(separator: "_")
-                if parts.count == 3, let sNum = Int(parts[1]), seasonWork.insert("\(tmdbID)_\(sNum)").inserted {
-                    seasonWorkPairs.append((tmdbID, sNum))
-                }
-            }
-        }
-
         // Batched lookups replace per-season/per-episode FetchDescriptor calls (N+1).
-        // Entries inserted during this import are also recorded here so later items
-        // in the same backup resolve against them.
         let seasonFetch = FetchDescriptor<TVSeason>()
         var existingSeasonsByUniqueID: [String: TVSeason] = Dictionary(
             uniqueKeysWithValues: ((try? context.fetch(seasonFetch)) ?? []).compactMap { season in
@@ -85,38 +64,11 @@ extension BackgroundDataService {
             }
         )
 
-        // Resolve missing TMDB season payloads network-only (no model mutation in the group),
-        // bounded to 6 concurrent requests; applied serially in the import loop below.
-        var seasonPayloads: [String: [TVEpisodeResult]] = [:]
-        if !seasonWorkPairs.isEmpty {
-            let maxConcurrent = 6
-            var index = 0
-            while index < seasonWorkPairs.count {
-                let batch = seasonWorkPairs[index..<min(index + maxConcurrent, seasonWorkPairs.count)]
-                index += maxConcurrent
-                await withTaskGroup(of: (String, [TVEpisodeResult]?).self) { group in
-                    for pair in batch {
-                        group.addTask {
-                            do {
-                                let details = try await APIClient.shared.fetchSeasonDetails(tmdbID: pair.tmdbID, seasonNumber: pair.seasonNumber)
-                                return ("\(pair.tmdbID)_\(pair.seasonNumber)", details)
-                            } catch {
-                                AppLogger.warning("Season prefetch failed for tmdbID=\(pair.tmdbID) season=\(pair.seasonNumber): \(error)", logger: AppLogger.sync)
-                                return ("\(pair.tmdbID)_\(pair.seasonNumber)", nil)
-                            }
-                        }
-                    }
-                    for await (key, payload) in group {
-                        if let payload { seasonPayloads[key] = payload }
-                    }
-                }
-            }
-        }
-
         var importedCount = 0
         var mergedCount = 0
         var skippedCount = 0
         var processedCount = 0
+        var itemsNeedingBackfill: [String] = []
         
         let totalCount = backup.items.count
         
@@ -132,7 +84,7 @@ extension BackgroundDataService {
                     isCancelled: true,
                     isFinished: false
                 ))
-                return (importedCount, mergedCount, skippedCount)
+                return (importedCount, mergedCount, skippedCount, itemsNeedingBackfill)
             }
             
             let mediaType = MediaItemData.canonicalMediaType(for: itemData.type, id: itemData.id)
@@ -142,6 +94,8 @@ extension BackgroundDataService {
             let watchedDates = itemData.watchedEpisodeDates ?? [:]
 
             if let existing = existingMap[key] {
+                let hasDetails = (existing.type == .movie && existing.movieDetails != nil)
+                    || (existing.type == .tvShow && existing.tvShowDetails != nil && !existing.cachedGenres.isEmpty)
                 switch strategy {
                 case .skip:
                     skippedCount += 1
@@ -159,7 +113,8 @@ extension BackgroundDataService {
                     if let backupStateDate = itemData.lastStateChangeDate {
                         existing.lastStateChangeDate = backupStateDate
                     }
-                    itemData.applyMetadata(to: existing)
+                    itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
+                    if !hasDetails { itemsNeedingBackfill.append(existing.id) }
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 case .overwrite:
@@ -170,7 +125,8 @@ extension BackgroundDataService {
                     existing.dateAdded = itemData.dateAdded
                     existing.tasteValue = itemData.taste ?? TasteValue.none.rawValue
                     existing.lastInteractionDate = itemData.lastInteractionDate ?? existing.lastInteractionDate
-                    itemData.applyMetadata(to: existing)
+                    itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
+                    if !hasDetails { itemsNeedingBackfill.append(existing.id) }
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 }
@@ -193,7 +149,8 @@ extension BackgroundDataService {
                 item.dateAdded = itemData.dateAdded
                 item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
                 item.lastInteractionDate = itemData.lastInteractionDate
-                itemData.applyMetadata(to: item)
+                itemData.applyMetadata(to: item, preserveLastUpdated: false)
+                itemsNeedingBackfill.append(uniqueID)
                 item.syncCachedProperties(dirty: .all)
                 context.insert(item)
                 importedCount += 1
@@ -224,62 +181,22 @@ extension BackgroundDataService {
                             return newSeason
                         }()
 
-                        guard let seasonData = seasonPayloads[seasonUniqueID] else {
-                            for eNum in watchedNumbers {
-                                let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
-                                if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
-                                    existing.markWatched(true)
-                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
-                                    continue
-                                }
-                                let episode = TVEpisode(
-                                    episodeNumber: eNum, seasonNumber: sNum,
-                                    name: "Episode \(eNum)", overview: "",
-                                    airDate: nil, runtime: nil,
-                                    isWatched: true, showID: tmdbID
-                                )
-                                episode.uniqueID = epUniqueID
-                                episode.lastWatchedDate = watchedDates[epUniqueID]
-                                episode.watchedDate = watchedDates[epUniqueID]
-                                episode.season = season
-                                context.insert(episode)
-                                existingEpisodesByUniqueID[epUniqueID] = episode
-                            }
-                            continue
-                        }
-
-                        season.episodeCount = seasonData.count
-
-                        for epData in seasonData {
-                            let epUniqueID = "\(tmdbID)_\(sNum)_\(epData.episodeNumber)"
+                        for eNum in watchedNumbers {
+                            let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
                             if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
-                                existing.name = epData.name ?? "Episode \(epData.episodeNumber)"
-                                existing.overview = epData.overview ?? ""
-                                if let runtime = epData.runtime { existing.runtime = runtime }
-                                if let airDate = epData.airDate { existing.airDate = airDate }
-                                existing.season = season
-                                if watchedNumbers.contains(epData.episodeNumber) {
-                                    existing.markWatched(true)
-                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
-                                }
+                                existing.markWatched(true)
+                                if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
                                 continue
                             }
-
                             let episode = TVEpisode(
-                                episodeNumber: epData.episodeNumber,
-                                seasonNumber: sNum,
-                                name: epData.name ?? "Episode \(epData.episodeNumber)",
-                                overview: epData.overview ?? "",
-                                airDate: epData.airDate,
-                                runtime: epData.runtime,
-                                isWatched: watchedNumbers.contains(epData.episodeNumber),
-                                showID: tmdbID
+                                episodeNumber: eNum, seasonNumber: sNum,
+                                name: "Episode \(eNum)", overview: "",
+                                airDate: nil, runtime: nil,
+                                isWatched: true, showID: tmdbID
                             )
                             episode.uniqueID = epUniqueID
-                            if watchedNumbers.contains(epData.episodeNumber) {
-                                episode.lastWatchedDate = watchedDates[epUniqueID]
-                                episode.watchedDate = watchedDates[epUniqueID]
-                            }
+                            episode.lastWatchedDate = watchedDates[epUniqueID]
+                            episode.watchedDate = watchedDates[epUniqueID]
                             episode.season = season
                             context.insert(episode)
                             existingEpisodesByUniqueID[epUniqueID] = episode
@@ -309,11 +226,14 @@ extension BackgroundDataService {
         do { try context.save() } catch {
             AppLogger.warning("Import final save failed: \(error)", logger: AppLogger.sync)
         }
-        // Quick post-import backfill for main cast/directors and episode data (TMDB + TVMaze) — not 6-day drip
-        if importedCount > 0 || mergedCount > 0 {
+
+        // Post-import comprehensive backfill for genres, cast/directors, episode data and air dates
+        if triggerPostImportBackfill && (importedCount > 0 || mergedCount > 0) {
+            let idsToBackfill = itemsNeedingBackfill
             Task.detached(priority: .background) {
-                await BackgroundTaskManager.shared.refreshMissingMainCastQuick(cap: 100)
-                await BackgroundTaskManager.shared.refreshMissingEpisodesQuick(cap: 50)
+                await BackgroundTaskManager.shared.backfillMissingLibraryMetadata(priorityIDs: idsToBackfill)
+                await BackgroundTaskManager.shared.refreshMissingAirDates(cap: 50)
+                await BackgroundTaskManager.shared.refreshStalePremiereBadges()
             }
         }
         onProgress?(ImportProgress(
@@ -326,7 +246,7 @@ extension BackgroundDataService {
             isCancelled: false,
             isFinished: true
         ))
-        return (importedCount, mergedCount, skippedCount)
+        return (importedCount, mergedCount, skippedCount, itemsNeedingBackfill)
     }
 
     func importCollections(backup: LibraryBackup) async {

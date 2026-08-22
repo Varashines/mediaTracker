@@ -49,6 +49,12 @@ extension BackgroundDataService {
             }
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
+                if item.type == .tvShow && (item.tvShowDetails == nil || item.cachedGenres.isEmpty) {
+                    _ = await self.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+                } else if item.type == .movie && (item.movieDetails == nil || item.cachedGenres.isEmpty) {
+                    _ = await self.refreshMovie(id: item.id, tmdbID: tmdbID, force: false)
+                }
+
                 if let tv = item.tvShowDetails {
                     // 0. Reattach any orphaned seasons (tvShowDetails == nil) to this show,
                     // so imported/restored shows don't end up with empty season lists.

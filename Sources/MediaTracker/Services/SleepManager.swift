@@ -13,10 +13,38 @@ class SleepManager {
     private var sleepWorkItem: DispatchWorkItem?
     private let sleepThreshold: TimeInterval = 120 // 2 minutes
     private let idleThreshold: TimeInterval = 60 // 1 minute for silent syncs
+    private var activeSleepAssertions: [UUID: (reason: String, activity: NSObjectProtocol?)] = [:]
+
+    var isSleepBlocked: Bool { !activeSleepAssertions.isEmpty }
     
     private init() {
         setupInteractionMonitor()
         scheduleIdleCheck()
+    }
+
+    /// Prevents both macOS system/display sleep and the in-app sleep mode for long-running operations like library imports.
+    func beginPreventingSleep(reason: String) -> UUID {
+        let id = UUID()
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled, .suddenTerminationDisabled],
+            reason: reason
+        )
+        activeSleepAssertions[id] = (reason: reason, activity: activity)
+        if isAsleep {
+            resetTimer()
+        }
+        AppLogger.info("🛡️ Sleep prevented: '\(reason)' (active assertions: \(activeSleepAssertions.count))", logger: AppLogger.background)
+        return id
+    }
+
+    /// Releases a sleep prevention assertion.
+    func endPreventingSleep(id: UUID) {
+        guard let entry = activeSleepAssertions.removeValue(forKey: id) else { return }
+        if let activity = entry.activity {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+        resetTimer()
+        AppLogger.info("🛡️ Sleep assertion released: '\(entry.reason)' (active assertions: \(activeSleepAssertions.count))", logger: AppLogger.background)
     }
     
     private func scheduleIdleCheck() {
@@ -53,7 +81,7 @@ class SleepManager {
 
         // 2. Handle "Sleep" (Untouched for 120s, locks UI)
         let preventSleep = UserDefaults.standard.bool(forKey: UserDefaultsKeys.preventSleepMode.rawValue)
-        guard !isAsleep && !preventSleep else { return }
+        guard !isAsleep && !preventSleep && !isSleepBlocked else { return }
         
         if timeSinceInteraction >= sleepThreshold {
             enterSleepMode()
@@ -78,11 +106,12 @@ class SleepManager {
     }
     
     func forceSleep() {
+        guard !isSleepBlocked else { return }
         enterSleepMode()
     }
     
     private func enterSleepMode() {
-        guard !isAsleep else { return }
+        guard !isAsleep && !isSleepBlocked else { return }
         withAnimation(.easeIn(duration: 0.6)) {
             isAsleep = true
         }

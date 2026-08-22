@@ -1,13 +1,46 @@
 import SwiftUI
 
-// MARK: - Card (grouped section)
+// MARK: - Cute Group (replaces GlassCard for Settings)
 
+/// Soft grouped section — cute & polished, no hover wash.
+/// Used by all Settings sections after the sidebar redesign.
+struct SettingsGroup<Content: View>: View {
+    var header: String? = nil
+    var color: Color = .clear
+    @ViewBuilder var content: () -> Content
+    @Environment(\.colorScheme) var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+            if let header {
+                Text(header)
+                    .font(AppTheme.Font.settingsSectionHeader)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, AppTheme.Spacing.mini)
+            }
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(AppTheme.Colors.cardFill(for: scheme), in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                    .stroke(
+                        color == .clear ? AppTheme.Colors.strokeDefault(for: scheme) : color.opacity(scheme == .dark ? 0.22 : 0.14),
+                        lineWidth: 0.6
+                    )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+        }
+    }
+}
+
+// Backwards-compat: old SettingsCard now just wraps SettingsGroup with ultraThinMaterial removed.
 struct SettingsCard<Content: View>: View {
     var color: Color = .clear
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        GlassCard(color: color) {
+        SettingsGroup(header: nil, color: color) {
             content()
         }
     }
@@ -77,15 +110,13 @@ struct SegmentedPillControl<Option: Hashable, Label: View>: View {
     }
 }
 
-// MARK: - SettingsRow
+// MARK: - SettingsRow (flat — no hover wash, divider only)
 
 struct SettingsRow<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
     var showDivider: Bool = true
     @ViewBuilder var trailing: () -> Trailing
-    @Environment(\.colorScheme) var scheme
-    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .center) {
@@ -104,19 +135,7 @@ struct SettingsRow<Trailing: View>: View {
         }
         .padding(.horizontal, AppTheme.Spacing.medium)
         .padding(.vertical, AppTheme.Spacing.small)
-        .background {
-            if isHovered {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
-                    .allowsHitTesting(false)
-                    .padding(.horizontal, AppTheme.Spacing.tiny)
-            }
-        }
-        .onHover { hovered in
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isHovered = hovered
-            }
-        }
+        .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             if showDivider {
                 Divider()
@@ -156,8 +175,6 @@ struct SettingsLabeledRow<Trailing: View>: View {
     var subtitle: String? = nil
     var showDivider: Bool = true
     @ViewBuilder var trailing: () -> Trailing
-    @Environment(\.colorScheme) private var scheme
-    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
@@ -182,19 +199,7 @@ struct SettingsLabeledRow<Trailing: View>: View {
         }
         .padding(.horizontal, AppTheme.Spacing.medium)
         .padding(.vertical, AppTheme.Spacing.small)
-        .background {
-            if isHovered {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                    .fill(AppTheme.Colors.surfaceSubtle(for: scheme))
-                    .allowsHitTesting(false)
-                    .padding(.horizontal, AppTheme.Spacing.tiny)
-            }
-        }
-        .onHover { hovered in
-            withAnimation(AppTheme.Animation.easeInOut) {
-                isHovered = hovered
-            }
-        }
+        .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             if showDivider {
                 Divider()

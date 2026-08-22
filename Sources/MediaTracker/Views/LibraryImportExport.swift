@@ -143,12 +143,12 @@ extension MediaItemData {
     }
 
     /// Applies the scalar metadata carried in this backup onto a MediaItem (restore path).
-    func applyMetadata(to item: MediaItem) {
+    func applyMetadata(to item: MediaItem, preserveLastUpdated: Bool = false) {
         if let posterURL, !posterURL.isEmpty { item.posterURL = posterURL }
         if let overview, !overview.isEmpty { item.overview = overview }
         if let backdropURL, !backdropURL.isEmpty { item.backdropURL = backdropURL }
         if let releaseDate { item.releaseDate = releaseDate }
-        if let lastUpdated { item.lastUpdated = lastUpdated }
+        if preserveLastUpdated, let lastUpdated { item.lastUpdated = lastUpdated }
         if let titleLogoURL, !titleLogoURL.isEmpty { item.titleLogoURL = titleLogoURL }
         if let themeColorHex, !themeColorHex.isEmpty { item.themeColorHex = themeColorHex }
         if let cachedRuntime { item.cachedRuntime = cachedRuntime }

@@ -10,15 +10,27 @@ import Observation
 
 @ModelActor
 private actor DripSyncSelectionActor {
-    func staleActiveItemIDs(before staleThreshold: Date, limit: Int) throws -> [String] {
-        let predicate = #Predicate<MediaItem> { item in
-            item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
+    func staleOrIncompleteItemIDs(before staleThreshold: Date, limit: Int) throws -> [String] {
+        // Priority 1: Incomplete items missing lastUpdated (across all states)
+        let incompletePredicate = #Predicate<MediaItem> { item in
+            !item.isSoftDeleted && item.lastUpdated == nil
+        }
+        var incompleteDesc = FetchDescriptor<MediaItem>(predicate: incompletePredicate)
+        incompleteDesc.propertiesToFetch = [\.id]
+        incompleteDesc.fetchLimit = limit
+        let incomplete = try modelContext.fetch(incompleteDesc).map(\.id)
+        if !incomplete.isEmpty {
+            return incomplete
         }
 
-        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
-        descriptor.propertiesToFetch = [\.id]
-        descriptor.fetchLimit = limit
-        return try modelContext.fetch(descriptor).map(\.id)
+        // Priority 2: Stale active items
+        let stalePredicate = #Predicate<MediaItem> { item in
+            !item.isSoftDeleted && item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
+        }
+        var staleDesc = FetchDescriptor<MediaItem>(predicate: stalePredicate)
+        staleDesc.propertiesToFetch = [\.id]
+        staleDesc.fetchLimit = limit
+        return try modelContext.fetch(staleDesc).map(\.id)
     }
 }
 
@@ -67,9 +79,9 @@ class BackgroundTaskManager {
             // Keep database selection off the UI actor. The subsequent service owns
             // its own background context for the heavier metadata work.
             let selector = DripSyncSelectionActor(modelContainer: container)
-            let itemIDs = try await selector.staleActiveItemIDs(before: staleThreshold, limit: 3)
+            let itemIDs = try await selector.staleOrIncompleteItemIDs(before: staleThreshold, limit: 5)
             if !itemIDs.isEmpty {
-                AppLogger.info("💧 Drip Sync: Refreshing \(itemIDs.count) stale active items...", logger: AppLogger.background)
+                AppLogger.info("💧 Drip Sync: Refreshing \(itemIDs.count) stale/incomplete items...", logger: AppLogger.background)
                 
                 // Use BackgroundDataService for the heavy lifting
                 let backgroundService = BackgroundDataService(modelContainer: container)
@@ -99,11 +111,10 @@ class BackgroundTaskManager {
         if !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) {
             Task.detached(priority: .background) {
                 await self.refreshStaleBadges()
-                await self.runPosterColorMigrationV6IfNeeded()
-                await self.runPosterColorMigrationV7IfNeeded()
-                await self.runWatchProviderMigrationIfNeeded()
-                await self.runNetworkKindMigrationIfNeeded()
-                await self.migrateWatchDatesFromLegacyStoreIfNeeded()
+                await DatabaseMigrations.runAllIfNeeded(container: container)
+                await self.backfillMissingLibraryMetadata()
+                await self.refreshMissingAirDates(cap: 50)
+                await self.refreshStalePremiereBadges()
             }
         }
 
@@ -176,132 +187,6 @@ class BackgroundTaskManager {
             AppLogger.error("🗑️ Soft-delete purge failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
-
-    /// One-shot migration: re-extract dominant poster colors using the median-cut + Vision saliency algorithm (v6).
-    /// Runs in the background, chunked, gated by `BackgroundOperationGate` to avoid overlap with
-    /// other heavy work. Safe to call repeatedly — it bails immediately if the version flag is already set.
-    func runPosterColorMigrationV6IfNeeded() async {
-        let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        guard currentVersion < 6 else { return }
-        guard let container = container else { return }
-
-        let extractionVersionKey = "colorExtractionVersion"
-        let batchSize = 50
-        let interBatchSleepNs: UInt64 = 250_000_000
-
-        do {
-            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV6", container: container) {
-                let context = ModelContext(container)
-
-                var descriptor = FetchDescriptor<MediaItem>(
-                    sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
-                )
-                descriptor.propertiesToFetch = [\.id, \.posterURL, \.themeColorHex, \.themeColorSourceURL, \.lastInteractionDate]
-                let allItems = (try? context.fetch(descriptor)) ?? []
-
-                var processed = 0
-                let total = allItems.count
-                AppLogger.info("🎨 Poster color migration v6 starting: \(total) items", logger: AppLogger.background)
-
-                for item in allItems {
-                    try Task.checkCancellation()
-                    guard !item.isDeleted else { continue }
-                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
-
-                    // Use image cache first — avoid re-downloading from network
-                    var cgImage: CGImage?
-                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
-                        cgImage = cached.image
-                    } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
-                              let image = NSImage(data: data) {
-                        cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-                    }
-
-                    if let cgImage {
-                        let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                        item.themeColorHex = pair.primary.toHex()
-                        item.themeColorSourceURL = poster
-                    }
-
-                    processed += 1
-                    if processed % batchSize == 0 {
-                        try context.save()
-                        try await Task.sleep(nanoseconds: interBatchSleepNs)
-                    }
-                }
-
-                try context.save()
-                UserDefaults.standard.set(6, forKey: extractionVersionKey)
-                AppLogger.info("🎨 Poster color migration v6 complete: \(processed) items", logger: AppLogger.background)
-            }
-        } catch {
-            AppLogger.error("🎨 Poster color migration v6 failed: \(error.localizedDescription)", logger: AppLogger.background)
-        }
-    }
-
-    /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
-    func runPosterColorMigrationV7IfNeeded() async {
-        let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        guard currentVersion < 7 else { return }
-        guard let container = container else { return }
-
-        let extractionVersionKey = "colorExtractionVersion"
-        let batchSize = 50
-        let interBatchSleepNs: UInt64 = 250_000_000
-
-        do {
-            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV7", container: container) {
-                let context = ModelContext(container)
-
-                var descriptor = FetchDescriptor<MediaItem>(
-                    sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
-                )
-                descriptor.propertiesToFetch = [
-                    \.id, \.posterURL, \.themeColorHex, \.themeColorSourceURL,
-                    \.themeSecondaryColorHex, \.themeMutedColorHex, \.lastInteractionDate
-                ]
-                let allItems = (try? context.fetch(descriptor)) ?? []
-
-                var processed = 0
-                let total = allItems.count
-                AppLogger.info("🎨 Poster color migration v7 starting: \(total) items", logger: AppLogger.background)
-
-                for item in allItems {
-                    try Task.checkCancellation()
-                    guard !item.isDeleted else { continue }
-                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
-
-                    var cgImage: CGImage?
-                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
-                        cgImage = cached.image
-                    } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
-                              let image = NSImage(data: data) {
-                        cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-                    }
-
-                    if let cgImage {
-                        let palette = await ColorExtractor.extractThemePalette(from: cgImage)
-                        item.themeColorHex = palette.primary.toHex()
-                        item.themeSecondaryColorHex = palette.secondary.toHex()
-                        item.themeMutedColorHex = palette.muted.toHex()
-                        item.themeColorSourceURL = poster
-                    }
-
-                    processed += 1
-                    if processed % batchSize == 0 {
-                        try context.save()
-                        try await Task.sleep(nanoseconds: interBatchSleepNs)
-                    }
-                }
-
-                try context.save()
-                UserDefaults.standard.set(7, forKey: extractionVersionKey)
-                AppLogger.info("🎨 Poster color migration v7 complete: \(processed) items", logger: AppLogger.background)
-            }
-        } catch {
-            AppLogger.error("🎨 Poster color migration v7 failed: \(error.localizedDescription)", logger: AppLogger.background)
-        }
-    }
     
     private func performBackgroundSync() async {
         guard let container = container else { return }
@@ -317,13 +202,12 @@ class BackgroundTaskManager {
         // Opportunistic: backfill per-season aggregate cast for shows that
         // predate the feature (bounded to a few seasons per run).
         await refreshMissingSeasonCast()
-        await refreshMissingMainCastQuick(cap: 15)
-        await refreshMissingEpisodesQuick(cap: 15)
+        await backfillMissingLibraryMetadata()
+        await refreshStalePremiereBadges()
+        await refreshMissingAirDates(cap: 15)
 
-        // Opportunistic: if v4 poster color migration hasn't run yet, kick it off.
-        if UserDefaults.standard.integer(forKey: "colorExtractionVersion") < 4 {
-            await runPosterColorMigrationV6IfNeeded()
-        }
+        // Opportunistic: run migrations if needed.
+        await DatabaseMigrations.runAllIfNeeded(container: container)
 
         // Secondary Background Tasks
         Task.detached(priority: .background) {
@@ -416,56 +300,156 @@ class BackgroundTaskManager {
         AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons", logger: AppLogger.background)
     }
 
-    /// Quick post-import backfill for main cast (`ZSTOREDCAST`) and movie directors — runs once after import, not throttled to 6h.
-    /// Uses the same 250ms sleep as season cast but with a larger cap so a 600-item import finishes in ~2-3 min, not 6 days.
-    func refreshMissingMainCastQuick(cap: Int = 100) async {
+    /// Comprehensive post-import and background backfill:
+    /// Refreshes all items missing genres, cast, or child details (TMDB/TVMaze) in concurrent batches.
+    func backfillMissingLibraryMetadata(
+        priorityIDs: [String] = [],
+        onProgress: (@Sendable (Int, Int, String) -> Void)? = nil
+    ) async {
         guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep || SleepManager.shared.isSleepBlocked else { return }
+        guard !isThermalThrottled else { return }
+
         let context = ModelContext(container)
-        var descriptor = FetchDescriptor<MediaItem>()
-        descriptor.fetchLimit = cap
-        // Fetch candidates where storedCast is empty — do in-memory filter for SwiftData array count
-        let allItems = (try? context.fetch(descriptor)) ?? []
-        let candidates = allItems.filter { $0.storedCast.isEmpty && !$0.isSoftDeleted }.prefix(cap)
-        guard !candidates.isEmpty else { return }
-        AppLogger.info("🎬 Quick cast backfill: \(candidates.count) items missing main cast", logger: AppLogger.background)
-        for item in candidates {
-            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { continue }
-            let service = BackgroundDataService(modelContainer: container)
-            if item.type == .movie {
-                _ = await service.refreshMovie(id: item.id, tmdbID: tmdbID, force: false)
-            } else if item.type == .tvShow {
-                _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+        var targetIDs = Set(priorityIDs)
+        var titleMap: [String: String] = [:]
+
+        // Find all items in the library that are missing metadata
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { !$0.isSoftDeleted })
+        descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedGenres, \.lastUpdated]
+        descriptor.fetchLimit = 500
+        var offset = 0
+        var hasMore = true
+
+        while hasMore {
+            descriptor.fetchOffset = offset
+            let batch = (try? context.fetch(descriptor)) ?? []
+            hasMore = batch.count == 500
+
+            for item in batch {
+                titleMap[item.id] = item.title
+                let isMissing = item.lastUpdated == nil
+                    || item.cachedGenres.isEmpty
+                    || item.storedCast.isEmpty
+                    || (item.typeValue == "TV Show" && (item.tvShowDetails == nil || (item.tvShowDetails?.seasons.isEmpty ?? true)))
+                    || (item.typeValue == "Movie" && item.movieDetails == nil)
+                if isMissing {
+                    targetIDs.insert(item.id)
+                }
             }
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            offset += 500
         }
-        AppLogger.info("🎬 Quick cast backfill complete for \(candidates.count) items", logger: AppLogger.background)
+
+        guard !targetIDs.isEmpty else {
+            AppLogger.info("✅ Backfill check: All library items have complete metadata.", logger: AppLogger.background)
+            onProgress?(0, 0, "")
+            return
+        }
+
+        let allIDs = Array(targetIDs)
+        AppLogger.info("🎬 Backfilling metadata for \(allIDs.count) items...", logger: AppLogger.background)
+
+        let backgroundService = BackgroundDataService(modelContainer: container)
+        let batchSize = 20
+        var processed = 0
+
+        while processed < allIDs.count {
+            if isThermalThrottled || (SleepManager.shared.isAsleep && !SleepManager.shared.isSleepBlocked) {
+                AppLogger.warning("🌡️ Thermal throttle or sleep during library backfill. Pausing after \(processed)/\(allIDs.count) items.", logger: AppLogger.background)
+                break
+            }
+
+            let chunk = Array(allIDs[processed..<min(processed + batchSize, allIDs.count)])
+            let currentTitle = titleMap[chunk.first ?? ""] ?? ""
+            onProgress?(processed, allIDs.count, currentTitle)
+
+            await backgroundService.refreshMetadata(for: chunk, metadataOnly: false, force: false)
+            processed += chunk.count
+            onProgress?(processed, allIDs.count, currentTitle)
+
+            // Update UI progressively
+            await MainActor.run {
+                MediaStateService.shared.postMediaStateChanged()
+            }
+
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Rebuild hub counts after backfill
+        let sync = DiscoverySyncService(modelContainer: container)
+        try? await BackgroundOperationGate.shared.performSync(container: container) {
+            await sync.syncLibrary(force: true)
+        }
+
+        await MainActor.run {
+            MediaStateService.shared.postMediaStateChanged()
+        }
+        AppLogger.info("✅ Backfill complete for \(processed)/\(allIDs.count) items.", logger: AppLogger.background)
+        onProgress?(allIDs.count, allIDs.count, "")
+    }
+
+
+    /// Eager local-only heal for PREMIERE — Wishlist/Active/Upcoming whose S01E01 airDate has entered [-inf…+3d] should flip without opening Detail.
+    func refreshStalePremiereBadges() async {
+        guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else { return }
+        guard !isThermalThrottled else { return }
+        let context = ModelContext(container)
+        let now = Date()
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ($0.stateValue == "Wishlist" || $0.stateValue == "Active") && $0.isSoftDeleted == false })
+        descriptor.propertiesToFetch = [\.id, \.stateValue, \.storedIsUpcoming, \.storedSmartBadgeLabel, \.cachedNextAiringDate, \.releaseDate]
+        let candidates = (try? context.fetch(descriptor)) ?? []
+        var toRecalc: [MediaItem] = []
+        for item in candidates {
+            if item.storedSmartBadgeLabel == "PREMIERE" { continue }
+            // Use cachedNextAiringDate (first unwatched airDate or tv.nextEpisodeDate) if present, else fallback to releaseDate
+            // For Upcoming, cachedNextAiringDate is the premiere date itself
+            let nextAir = item.cachedNextAiringDate ?? item.releaseDate
+            guard let air = nextAir else { continue }
+            let daysSinceAir = now.timeIntervalSince(air) / 86400
+            // premiereDaysWindow = -inf ... 3  (any future until 3 days post-air)
+            if daysSinceAir <= 3 {
+                BadgeEngine.invalidateScan(for: item.persistentModelID)
+                toRecalc.append(item)
+            }
+        }
+        guard !toRecalc.isEmpty else { return }
+        AppLogger.info("🎬 Premiere heal: recalculating \(toRecalc.count) → PREMIERE candidates", logger: AppLogger.background)
+        for item in toRecalc {
+            item.syncCachedProperties(dirty: [.badge])
+        }
+        await BadgeEngine.flushBadgeChanges(container: container)
+        try? context.save()
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
 
-    /// Quick post-import backfill for episode data (TMDB + TVMaze) — ensures every imported TV show gets full season/episode rows, not just watched stubs.
-    func refreshMissingEpisodesQuick(cap: Int = 50) async {
+    /// Backfill missing airDateValue for tracked episodes (where ZAIRDATEVALUE IS NULL) — ensures PREMIERE window has data.
+    func refreshMissingAirDates(cap: Int = 25) async {
         guard let container = container else { return }
+        guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
+        // Find TV shows with seasons/episodes missing airDateValue
         var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "TV Show" && $0.isSoftDeleted == false })
         descriptor.fetchLimit = cap * 2
         let allTV = (try? context.fetch(descriptor)) ?? []
-        // Filter to shows where episode data is clearly missing: no seasons or seasons with 0 episodes but TMDB reports more
-        let candidates = allTV.filter { item in
-            guard let tv = item.tvShowDetails else { return true }
+        var candidates: [MediaItem] = []
+        for item in allTV {
+            guard let tv = item.tvShowDetails else { continue }
             let seasons = tv.seasons.liveModels
-            if seasons.isEmpty { return true }
-            // If any season has 0 episodes but TMDB says it should have some, or total episodes mismatch
-            return seasons.contains { $0.episodeCount == 0 } || tv.numberOfEpisodes == nil
-        }.prefix(cap)
+            let hasMissingAirDate = seasons.flatMap { $0.episodes.liveModels }.contains { $0.airDateValue == nil }
+            if hasMissingAirDate {
+                candidates.append(item)
+                if candidates.count >= cap { break }
+            }
+        }
         guard !candidates.isEmpty else { return }
-        AppLogger.info("📺 Quick episode backfill: \(candidates.count) TV shows missing episode data", logger: AppLogger.background)
+        AppLogger.info("📅 Air-date heal: \(candidates.count) shows with missing episode air dates", logger: AppLogger.background)
         for item in candidates {
             guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { continue }
             let service = BackgroundDataService(modelContainer: container)
             _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
             try? await Task.sleep(nanoseconds: 400_000_000)
         }
-        AppLogger.info("📺 Quick episode backfill complete for \(candidates.count) shows", logger: AppLogger.background)
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
 
@@ -561,296 +545,6 @@ class BackgroundTaskManager {
         }
     }
 
-    /// One-shot migration: loads watch providers from local cache files on disk into the new SwiftData attributes
-    /// on MediaItem. This enables the Discovery Hub Streaming Providers section to work instantly without requiring
-    /// manual forced refreshes of the whole library.
-    func runWatchProviderMigrationIfNeeded() async {
-        let migrationVersionKey = "watchProviderMigrationVersion"
-        let currentVersion = UserDefaults.standard.integer(forKey: migrationVersionKey)
-        guard currentVersion < 3 else { return }
-        guard let container = container else { return }
-
-        // --- v2 migration (legacy) ---
-        if currentVersion < 2 {
-            let context = ModelContext(container)
-            var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders]
-            
-            let allItems = (try? context.fetch(descriptor)) ?? []
-            
-            if allItems.isEmpty {
-                UserDefaults.standard.set(2, forKey: migrationVersionKey)
-            } else {
-                AppLogger.info("📦 Watch Provider migration v2 starting for \(allItems.count) items...", logger: AppLogger.background)
-                
-                var migratedCount = 0
-                for item in allItems {
-                    guard !Task.isCancelled else { return }
-                    
-                    if !item.cachedWatchProviders.isEmpty {
-                        continue
-                    }
-                    
-                    guard let tmdbIDString = item.id.split(separator: "_").last,
-                          let tmdbID = Int(tmdbIDString) else { continue }
-                    
-                    let type = item.type ?? .movie
-                    
-                    let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
-                    if !providers.isEmpty {
-                        item.cachedWatchProviders = providers.map { $0.name }
-                        migratedCount += 1
-                    }
-                }
-                
-                if migratedCount > 0 {
-                    do {
-                        try context.save()
-                    } catch {
-                        AppLogger.error("📦 Watch Provider migration v2 save failed: \(error.localizedDescription)", logger: AppLogger.background)
-                        return
-                    }
-                    AppLogger.info("📦 Watch Provider migration v2 completed: migrated \(migratedCount) items", logger: AppLogger.background)
-                    let sync = DiscoverySyncService(modelContainer: container)
-                    await sync.syncLibrary(force: true)
-                    await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
-                }
-                UserDefaults.standard.set(2, forKey: migrationVersionKey)
-            }
-        }
-
-        // --- v3 migration: backfill items still missing providers (batched) ---
-        do {
-            let context = ModelContext(container)
-            var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.id, \.typeValue, \.cachedWatchProviders]
-            descriptor.fetchLimit = 500
-            
-            var allNeedsBackfill: [MediaItem] = []
-            var offset = 0
-            var hasMore = true
-            
-            while hasMore {
-                descriptor.fetchOffset = offset
-                let batch = (try? context.fetch(descriptor)) ?? []
-                hasMore = batch.count == 500
-                allNeedsBackfill.append(contentsOf: batch.filter { $0.cachedWatchProviders.isEmpty })
-                offset += 500
-            }
-            
-            guard !allNeedsBackfill.isEmpty else {
-                AppLogger.info("📦 Watch Provider migration v3: all items already have providers", logger: AppLogger.background)
-                UserDefaults.standard.set(3, forKey: migrationVersionKey)
-                return
-            }
-            
-            AppLogger.info("📦 Watch Provider migration v3 starting: \(allNeedsBackfill.count) items need backfill...", logger: AppLogger.background)
-            
-            let batchSize = 50
-            var migratedCount = 0
-            var processed = 0
-            
-            for item in allNeedsBackfill {
-                guard !Task.isCancelled else { return }
-                
-                guard let tmdbIDString = item.id.split(separator: "_").last,
-                      let tmdbID = Int(tmdbIDString) else { continue }
-                
-                let type = item.type ?? .movie
-                
-                let providers = await APIClient.shared.fetchWatchProviders(tmdbID: tmdbID, type: type)
-                if !providers.isEmpty {
-                    item.cachedWatchProviders = providers.map { $0.name }
-                    migratedCount += 1
-                }
-                
-                processed += 1
-                if processed % batchSize == 0 {
-                    try context.save()
-                    AppLogger.info("📦 Watch Provider migration v3 progress: \(processed)/\(allNeedsBackfill.count) (\(migratedCount) migrated)", logger: AppLogger.background)
-                }
-            }
-            
-            try context.save()
-            AppLogger.info("📦 Watch Provider migration v3 completed: \(migratedCount)/\(allNeedsBackfill.count) items migrated", logger: AppLogger.background)
-            
-            if migratedCount > 0 {
-                let sync = DiscoverySyncService(modelContainer: container)
-                await sync.syncLibrary(force: true)
-                await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
-            }
-            
-            UserDefaults.standard.set(3, forKey: migrationVersionKey)
-        } catch {
-            AppLogger.error("📦 Watch Provider migration v3 failed: \(error.localizedDescription)", logger: AppLogger.background)
-        }
-    }
-
-    /// One-shot migration: backfill NetworkEntity.kind based on item types
-    func runNetworkKindMigrationIfNeeded() async {
-        let migrationVersionKey = "networkKindMigrationVersion"
-        let currentVersion = UserDefaults.standard.integer(forKey: migrationVersionKey)
-        guard currentVersion < 1 else { return }
-        guard let container = container else { return }
-
-        let context = ModelContext(container)
-
-        // 1. Count networks by kind from items (batched)
-        var networkKindCounts: [String: (network: Int, studio: Int)] = [:]
-        var itemDesc = FetchDescriptor<MediaItem>()
-        itemDesc.propertiesToFetch = [\.cachedNetwork, \.typeValue]
-        itemDesc.fetchLimit = 500
-        var itemOffset = 0
-        var hasMoreItems = true
-        
-        while hasMoreItems {
-            itemDesc.fetchOffset = itemOffset
-            let batch = (try? context.fetch(itemDesc)) ?? []
-            hasMoreItems = batch.count == 500
-            
-            for item in batch {
-                guard let rawName = item.cachedNetwork else { continue }
-                let names = rawName.commaSeparatedValues
-                let isMovie = item.typeValue == "Movie"
-                for name in names where !name.isEmpty {
-                    var counts = networkKindCounts[name] ?? (network: 0, studio: 0)
-                    if isMovie { counts.studio += 1 } else { counts.network += 1 }
-                    networkKindCounts[name] = counts
-                }
-            }
-            itemOffset += 500
-        }
-
-        // 2. Update NetworkEntity.kind
-        var entityDesc = FetchDescriptor<NetworkEntity>()
-        entityDesc.propertiesToFetch = [\.name, \.kind]
-        let entities = (try? context.fetch(entityDesc)) ?? []
-        var updated = 0
-        for entity in entities {
-            if let counts = networkKindCounts[entity.name] {
-                let newKind = counts.studio > counts.network ? "studio" : "network"
-                if entity.kind != newKind {
-                    entity.kind = newKind
-                    updated += 1
-                }
-            }
-        }
-
-        if updated > 0 {
-            do {
-                try context.save()
-            } catch {
-                AppLogger.error("🏷️ Network kind migration save failed: \(error.localizedDescription)", logger: AppLogger.background)
-                return
-            }
-            AppLogger.info("🏷️ Network kind migration: updated \(updated) entities", logger: AppLogger.background)
-            let sync = DiscoverySyncService(modelContainer: container)
-            await sync.syncLibrary(force: true)
-            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
-        }
-
-        UserDefaults.standard.set(1, forKey: migrationVersionKey)
-    }
-
-    // MARK: - Watch-Dates Recovery Migration
-
-    /// One-shot migration: pulls the real `lastInteractionDate` / episode
-    /// `lastWatchedDate` values out of the legacy store (saved aside before the
-    /// rewatch-schema cleanup) and patches the current store, so "Recently
-    /// Watched" reflects true watch times after a restore.
-    func migrateWatchDatesFromLegacyStoreIfNeeded() async {
-        let flag = "watchDatesMigrationV1"
-        guard !UserDefaults.standard.bool(forKey: flag) else { return }
-        guard let container else { return }
-
-        let legacyPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/default_store_backup_rewatch/default.store")
-
-        guard FileManager.default.fileExists(atPath: legacyPath.path) else {
-            UserDefaults.standard.set(true, forKey: flag)
-            return
-        }
-
-        // Read the legacy store off the main actor (read-only).
-        let path = legacyPath.path
-        let (itemDates, episodeDates) = await Task.detached(priority: .utility) {
-            (Self.readLastInteractionDates(from: path), Self.readEpisodeWatchDates(from: path))
-        }.value
-
-        guard !itemDates.isEmpty || !episodeDates.isEmpty else {
-            UserDefaults.standard.set(true, forKey: flag)
-            return
-        }
-
-        let context = ModelContext(container)
-        if !itemDates.isEmpty {
-            var itemDesc = FetchDescriptor<MediaItem>()
-            itemDesc.propertiesToFetch = [\.id]
-            let items = (try? context.fetch(itemDesc)) ?? []
-            var updated = 0
-            for item in items {
-                // Overwrite the flattened import-time date with the real legacy date.
-                if let date = itemDates[item.id] {
-                    item.lastInteractionDate = date
-                    updated += 1
-                }
-            }
-            if updated > 0 { AppLogger.info("📅 Watch-dates migration: restored \(updated) items", logger: AppLogger.background) }
-        }
-
-        if !episodeDates.isEmpty {
-            var epDesc = FetchDescriptor<TVEpisode>()
-            epDesc.propertiesToFetch = [\.uniqueID, \.isWatched, \.lastWatchedDate, \.watchedDate]
-            let episodes = (try? context.fetch(epDesc)) ?? []
-            var updated = 0
-            for ep in episodes where ep.isWatched {
-                if let uid = ep.uniqueID, let date = episodeDates[uid] {
-                    ep.lastWatchedDate = date
-                    ep.watchedDate = date
-                    updated += 1
-                }
-            }
-            if updated > 0 { AppLogger.info("📅 Watch-dates migration: restored \(updated) episodes", logger: AppLogger.background) }
-        }
-
-        do {
-            try context.save()
-        } catch {
-            AppLogger.error("📅 Watch-dates migration save failed: \(error.localizedDescription)", logger: AppLogger.background)
-            return
-        }
-        await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
-        UserDefaults.standard.set(true, forKey: flag)
-    }
-
-    private nonisolated static func readLastInteractionDates(from path: String) -> [String: Date] {
-        readDates(path: path, query: "SELECT ZID, ZLASTINTERACTIONDATE FROM ZMEDIAITEM WHERE ZLASTINTERACTIONDATE IS NOT NULL")
-    }
-
-    private nonisolated static func readEpisodeWatchDates(from path: String) -> [String: Date] {
-        readDates(path: path, query: "SELECT ZUNIQUEID, ZLASTWATCHEDDATE FROM ZTVEPISODE WHERE ZLASTWATCHEDDATE IS NOT NULL")
-    }
-
-    private nonisolated static func readDates(path: String, query: String) -> [String: Date] {
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return [:] }
-        defer { sqlite3_close(db) }
-
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else { return [:] }
-        defer { sqlite3_finalize(stmt) }
-
-        var result: [String: Date] = [:]
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            guard let idC = sqlite3_column_text(stmt, 0) else { continue }
-            let id = String(cString: idC)
-            let ts = sqlite3_column_double(stmt, 1)
-            if ts > 0 {
-                result[id] = Date(timeIntervalSinceReferenceDate: ts)
-            }
-        }
-        return result
-    }
 
     // MARK: - Automated JSON Backup
     private var lastBackupKey: String { "com.vara.mediatracker.lastAutoBackup" }

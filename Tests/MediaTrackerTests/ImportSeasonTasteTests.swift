@@ -206,4 +206,95 @@ final class ImportSeasonTasteTests: XCTestCase {
         XCTAssertEqual(seasons.count, 1)
         XCTAssertEqual(seasons.first?.seasonNumber, 1)
     }
+
+    func testImportLeavesLastUpdatedNilForIncompleteItems() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        let pastDate = Date().addingTimeInterval(-1000)
+        let data = MediaItemData(
+            id: "movie_888", title: "Incomplete Movie", type: "movie", state: "Wishlist",
+            dateAdded: Date(), taste: nil, watchedEpisodeIDs: nil,
+            lastInteractionDate: nil, lastStateChangeDate: nil, watchedEpisodeDates: nil,
+            seasonTasteOverrides: nil, posterURL: nil, overview: nil,
+            backdropURL: nil, releaseDate: nil, lastUpdated: pastDate,
+            titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
+            cachedEpisodeRuntime: nil, cachedWatchedEpisodeCount: nil,
+            remainingEpisodesCount: nil, cachedLanguage: nil,
+            cachedNetwork: nil, cachedNetworkLogoPath: nil, mood: nil
+        )
+        let service = BackgroundDataService(modelContainer: container)
+
+        let result = await service.importLibraryData(
+            backup: LibraryBackup(items: [data], collections: nil),
+            strategy: .skip
+        )
+
+        XCTAssertEqual(result.imported, 1)
+        let itemDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == "movie_888" })
+        let importedItem = try context.fetch(itemDesc).first
+        XCTAssertNotNil(importedItem)
+        XCTAssertNil(importedItem?.lastUpdated, "Imported item without child details must leave lastUpdated nil to trigger background backfill")
+    }
+
+    func testMergePreservesLastUpdatedOnlyIfDetailsPresent() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        // Case 1: Existing item has full details
+        let show = makeShowItem(id: "tv_999", tmdbID: 999, context: context)
+        show.cachedGenres = ["Drama"]
+        let originalUpdateDate = Date().addingTimeInterval(-500)
+        show.lastUpdated = originalUpdateDate
+        try context.save()
+
+        let data = MediaItemData(
+            id: "tv_999", title: "Show 999", type: "tv", state: "Active",
+            dateAdded: Date(), taste: "Love", watchedEpisodeIDs: nil,
+            lastInteractionDate: nil, lastStateChangeDate: nil, watchedEpisodeDates: nil,
+            seasonTasteOverrides: nil, posterURL: nil, overview: nil,
+            backdropURL: nil, releaseDate: nil, lastUpdated: Date(),
+            titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
+            cachedEpisodeRuntime: nil, cachedWatchedEpisodeCount: nil,
+            remainingEpisodesCount: nil, cachedLanguage: nil,
+            cachedNetwork: nil, cachedNetworkLogoPath: nil, mood: nil
+        )
+        let service = BackgroundDataService(modelContainer: container)
+
+        _ = await service.importLibraryData(
+            backup: LibraryBackup(items: [data], collections: nil),
+            strategy: .merge
+        )
+
+        let itemDesc = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == "tv_999" })
+        let mergedItem = try context.fetch(itemDesc).first
+        XCTAssertNotNil(mergedItem?.lastUpdated, "Merged item with existing full details should preserve lastUpdated")
+    }
+
+    func testReconcileSplitEpisodeWatchDates() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        let pastDate = Date(timeIntervalSince1970: 1600000000) // Historical date
+        let recentDate = Date() // Marked recently
+
+        let ep1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Finale (1)", overview: "", airDate: nil, runtime: 22, isWatched: true, showID: 100)
+        ep1.lastWatchedDate = pastDate
+        ep1.watchedDate = pastDate
+        context.insert(ep1)
+
+        let ep2 = TVEpisode(episodeNumber: 2, seasonNumber: 1, name: "Finale (2)", overview: "", airDate: nil, runtime: 22, isWatched: true, showID: 100)
+        ep2.lastWatchedDate = recentDate
+        ep2.watchedDate = recentDate
+        context.insert(ep2)
+
+        try context.save()
+
+        UserDefaults.standard.removeObject(forKey: "hasReconciledSplitEpisodeWatchDates_v1")
+        await DatabaseMigrations.reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
+
+        let desc = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == 100 && $0.episodeNumber == 2 })
+        let updatedEp2 = try context.fetch(desc).first
+        XCTAssertEqual(updatedEp2?.lastWatchedDate, pastDate, "Split part 2 must inherit watch timestamp of part 1")
+    }
 }

@@ -1,5 +1,8 @@
 import SwiftData
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 enum SettingsTab: Int, CaseIterable {
     case general, services, discovery, data, shortcuts, about
@@ -42,15 +45,14 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var scheme
     @State private var selectedTab: SettingsTab = .general
+    @Namespace private var selectionNS
 
     var body: some View {
         VStack(spacing: 0) {
-            tabBar
+            topBar
                 .padding(.top, AppTheme.Spacing.large)
                 .padding(.bottom, AppTheme.Spacing.medium)
-
             Divider()
-
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     switch selectedTab {
@@ -84,8 +86,6 @@ struct SettingsView: View {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
         .onAppear {
-            // Deep-link support: welcome sheet (and future callers) can request
-            // a specific tab via this transient UserDefaults key.
             if let raw = UserDefaults.standard.string(forKey: "settings_open_tab"),
                let tab = SettingsTab(rawValue: Int(raw) ?? 0) {
                 selectedTab = tab
@@ -102,35 +102,76 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Tab Bar
+    // MARK: - Cute Top Bar (polished, no sidebar)
 
-    private var tabBar: some View {
-        // At the 560pt window minimum the six pills overflow a fixed HStack —
-        // fall back to a horizontally scrolling bar instead of truncating labels.
+    private var topBar: some View {
         ViewThatFits(in: .horizontal) {
-            tabBarPills
+            topBarPills
                 .frame(maxWidth: .infinity)
-
             ScrollView(.horizontal, showsIndicators: false) {
-                tabBarPills
+                topBarPills
             }
         }
         .padding(.horizontal, AppTheme.Spacing.smallMedium)
     }
 
-    private var tabBarPills: some View {
-        SegmentedPillControl(
-            options: SettingsTab.allCases,
-            selection: $selectedTab
-        ) { tab, isSelected in
-            HStack(spacing: AppTheme.Spacing.micro) {
-                Image(systemName: isSelected ? tab.fillIcon : tab.icon)
-                    .font(AppTheme.Font.caption2)
-
-                Text(tab.label)
-                    .font(AppTheme.Font.bodyBold)
-                    .lineLimit(1)
+    private var topBarPills: some View {
+        HStack(spacing: AppTheme.Spacing.micro) {
+            ForEach(SettingsTab.allCases, id: \.self) { tab in
+                let isSelected = selectedTab == tab
+                Button {
+                    if AppThemeCoordinator.isReducingVisualEffects {
+                        selectedTab = tab
+                    } else {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            selectedTab = tab
+                        }
+                    }
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.micro) {
+                        ZStack {
+                            Circle()
+                                .fill(tint(for: tab).opacity(isSelected ? 0.18 : 0.10))
+                            Image(systemName: isSelected ? tab.fillIcon : tab.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(tint(for: tab))
+                        }
+                        .frame(width: 22, height: 22)
+                        Text(tab.label)
+                            .font(AppTheme.Font.bodyBold)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .padding(.horizontal, AppTheme.Spacing.compact)
+                    .padding(.vertical, AppTheme.Spacing.mini)
+                    .background {
+                        if isSelected {
+                            Capsule()
+                                .fill(tint(for: tab).opacity(0.14))
+                                .matchedGeometryEffect(id: "settingsSelection", in: selectionNS)
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
+        }
+        .padding(AppTheme.Spacing.micro)
+        .background(AppTheme.Colors.cardFill(for: scheme), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+        }
+    }
+
+    private func tint(for tab: SettingsTab) -> Color {
+        switch tab {
+        case .general: return AppTheme.Colors.accent
+        case .services: return Color.fromOKLCH(l: 0.65, c: 0.18, h: 145)
+        case .discovery: return Color.fromOKLCH(l: 0.60, c: 0.15, h: 265)
+        case .data: return Color.fromOKLCH(l: 0.65, c: 0.16, h: 35)
+        case .shortcuts: return Color.fromOKLCH(l: 0.60, c: 0.12, h: 285)
+        case .about: return Color.secondary
         }
     }
 }

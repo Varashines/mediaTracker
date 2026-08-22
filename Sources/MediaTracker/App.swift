@@ -255,6 +255,7 @@ struct MediaTrackerApp: App {
             } else if newValue == .active {
                 Task {
                     await BackgroundTaskManager.shared.refreshStaleBadges()
+                    await BackgroundTaskManager.shared.refreshStalePremiereBadges()
                 }
             }
         }

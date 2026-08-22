@@ -122,3 +122,21 @@ final class SaveCoordinatorTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 }
+
+@MainActor
+final class SleepManagerTests: XCTestCase {
+    func testSleepAssertionLifecycle() {
+        let sleepManager = SleepManager.shared
+        XCTAssertFalse(sleepManager.isSleepBlocked)
+
+        let assertion = sleepManager.beginPreventingSleep(reason: "Unit Test Import")
+        XCTAssertTrue(sleepManager.isSleepBlocked)
+        XCTAssertFalse(sleepManager.isAsleep)
+
+        sleepManager.forceSleep()
+        XCTAssertFalse(sleepManager.isAsleep, "forceSleep must be ignored while sleep assertions are active")
+
+        sleepManager.endPreventingSleep(id: assertion)
+        XCTAssertFalse(sleepManager.isSleepBlocked)
+    }
+}
