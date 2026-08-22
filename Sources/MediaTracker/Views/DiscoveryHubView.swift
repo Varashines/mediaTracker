@@ -9,6 +9,7 @@ struct DiscoveryHubView: View {
     
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
     @State private var hasDataLoaded = false
+    @State private var isResyncing = false
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
     @State private var refreshTask: Task<Void, Never>?
@@ -19,6 +20,17 @@ struct DiscoveryHubView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                if isResyncing {
+                    // Compact inline indicator for background re-syncs over live content
+                    HStack(spacing: AppTheme.Spacing.small) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Refreshing…")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
                 if hasDataLoaded {
                     let hasAnyContent = !viewModel.discovery.cachedBadges.isEmpty ||
                         !viewModel.discovery.cachedNetworks.isEmpty ||
@@ -121,17 +133,19 @@ struct DiscoveryHubView: View {
             refreshData(force: true) 
         }
         .onChange(of: viewModel.filter.discoveryRefreshTrigger) {
-            hasDataLoaded = false
+            // Keep rendered content during re-syncs — only genuine first loads
+            // show the skeleton. Dropping hasDataLoaded here caused a jarring
+            // full-screen skeleton flash over already-loaded content.
             refreshData(force: false)
         }
         .onChange(of: MediaStateService.shared.discoveryResyncCount) { _, _ in
-            hasDataLoaded = false
+            isResyncing = true
             refreshData(force: true)
         }
         .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
             if !isAsleep {
-                hasDataLoaded = false
                 if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discoveryAutoSync.rawValue) {
+                    isResyncing = true
                     refreshData(force: false)
                 }
             }
@@ -195,6 +209,7 @@ struct DiscoveryHubView: View {
                     self.viewModel.discovery.cachedBadges = hubData.badges
                     self.viewModel.discovery.cachedProviders = hubData.providers
                     self.hasDataLoaded = true
+                    self.isResyncing = false
                 }
             }
             prewarmLogos(networks: hubData.networks + hubData.studios)
