@@ -271,6 +271,7 @@ private struct SeasonSection: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedRangeStart: Int = 1
     @State private var showTastePopover = false
+    @State private var showResetConfirmation = false
 
     @State private var cachedSortedEpisodes: [TVEpisode] = []
     @State private var cachedEpisodeRanges: [ClosedRange<Int>] = []
@@ -474,7 +475,11 @@ private struct SeasonSection: View {
                 Spacer()
 
                 Button {
-                    toggleSeasonWatchedStatus()
+                    if isAllWatched {
+                        showResetConfirmation = true
+                    } else {
+                        toggleSeasonWatchedStatus()
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(
@@ -567,6 +572,13 @@ private struct SeasonSection: View {
             updateCachedData()
             selectedRangeStart = 1
         }
+        .confirmationDialog("Reset Season Progress?", isPresented: $showResetConfirmation) {
+            Button("Reset \(season.totalEpisodesCount) Episodes", role: .destructive) {
+                toggleSeasonWatchedStatus()
+            }
+        } message: {
+            Text("All episodes in this season will be marked unwatched. This doesn't affect your ratings or taste profile.")
+        }
     }
 
     private func toggleSeasonWatchedStatus() {
@@ -579,6 +591,14 @@ private struct SeasonSection: View {
             }
             onWatchedToggle()
         }
+
+        FeedbackManager.shared.trigger(targetStatus ? .markWatched : .stateChange)
+        AppErrorState.shared.showToast(
+            targetStatus
+                ? "Marked \(liveEpisodes.count) episodes watched"
+                : "Reset \(liveEpisodes.count) episodes",
+            style: targetStatus ? .success : .info
+        )
 
         Task { @MainActor in
             season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)

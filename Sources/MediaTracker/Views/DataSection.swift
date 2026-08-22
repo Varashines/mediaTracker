@@ -99,13 +99,20 @@ struct DataSection: View {
             SettingsCard(color: .orange) {
                 VStack(spacing: 0) {
                     SettingsRow(title: "Database Repair", subtitle: "Fix relationships and remove duplicates", showDivider: true) {
-                        SettingsButton(title: "Repair") {
-                            DataService.shared.runMaintenance(modelContext: modelContext)
+                        if DataService.shared.isRunningMaintenance {
+                            ProgressView()
+                                .controlSize(.small)
+                                .help("Repair in progress…")
+                        } else {
+                            SettingsButton(title: "Repair") {
+                                DataService.shared.runMaintenance(modelContext: modelContext)
+                            }
                         }
                     }
                     SettingsRow(title: "Image Cache", subtitle: "Clear downloaded poster images", showDivider: false) {
                         SettingsButton(title: "Purge") {
                             ImageCache.shared.clearFullCache()
+                            AppErrorState.shared.showToast("Image cache cleared.", style: .success)
                         }
                     }
                 }
@@ -131,6 +138,8 @@ struct DataSection: View {
             Button("Delete All Library Data", role: .destructive) {
                 DataService.shared.clearDatabase(modelContext: modelContext)
             }
+        } message: {
+            Text("Permanently deletes every item, collection, and cached image. This cannot be undone — export a backup first if you might want your data later.")
         }
         .fileExporter(isPresented: $showExportDialog, document: exportData.map { JSONFileDocument(data: $0) }, contentType: .json, defaultFilename: "MediaTracker_Backup") { result in
             if case .failure(let error) = result {
