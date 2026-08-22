@@ -90,43 +90,21 @@ struct FilteredLibraryGridView: View {
                 .scrollIndicators(.hidden)
             } else if items.isEmpty && !isLoading {
                 if !searchText.isEmpty {
-                    VStack(spacing: AppTheme.Spacing.large) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
-                        Text("No results for \"\(searchText)\"")
-                            .font(AppTheme.Font.subtitle)
-                        Text("Try a different search term or clear the search to see all \(filter.name) titles.")
-                            .font(AppTheme.Font.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                        Button("Clear Search") {
-                            searchText = ""
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.Colors.accent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(AppTheme.Spacing.xLarge)
+                    LibraryEmptyStateView(
+                        title: "No results for \"\(searchText)\"",
+                        icon: "magnifyingglass",
+                        description: "Try a different search term or clear the search to see all \(filter.name) titles.",
+                        actionLabel: "Clear Search",
+                        action: { searchText = "" }
+                    )
                 } else {
-                    VStack(spacing: AppTheme.Spacing.large) {
-                        Image(systemName: "square.grid.3x3")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
-                        Text("No \(filter.name) titles")
-                            .font(AppTheme.Font.subtitle)
-                        Text("There are no titles matching this \(filter.type.rawValue.lowercased()) in your library yet.")
-                            .font(AppTheme.Font.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                        Button("Browse Discovery") {
-                            dismiss()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.Colors.accent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(AppTheme.Spacing.xLarge)
+                    LibraryEmptyStateView(
+                        title: "No \(filter.name) titles",
+                        icon: "square.grid.3x3",
+                        description: "There are no titles matching this \(filter.type.rawValue.lowercased()) in your library yet.",
+                        actionLabel: "Browse Discovery",
+                        action: { dismiss() }
+                    )
                 }
             } else {
                 ScrollView {

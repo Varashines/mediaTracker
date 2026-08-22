@@ -72,19 +72,12 @@ struct DiscoveryHubView: View {
                             }
                         }
                     } else {
-                        VStack(spacing: 16) {
-                            Image(systemName: "sparkles")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary.opacity(0.3))
-                            Text("No discovery data yet")
-                                .font(.headline)
-                            Text("Add some titles to your library to see discovery insights here.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 80)
+                        LibraryEmptyStateView(
+                            title: "No discovery data yet",
+                            icon: "sparkles",
+                            description: "Add some titles to your library to see discovery insights here."
+                        )
+                        .padding(.vertical, 40)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {

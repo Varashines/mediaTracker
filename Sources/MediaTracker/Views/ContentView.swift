@@ -319,16 +319,14 @@ struct LibraryDetailView: View {
                let collection = collections.first(where: { $0.id == collectionID }) {
                 BulkCollectionManagerView(collection: collection)
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text("Collection not found")
-                        .font(.headline)
-                    Button("Close") { showingBulkManager = false }
-                        .buttonStyle(.borderedProminent)
-                }
-                .frame(width: 300, height: 200)
+                LibraryEmptyStateView(
+                    title: "Collection not found",
+                    icon: "exclamationmark.triangle",
+                    description: "This collection may have been deleted.",
+                    actionLabel: "Close",
+                    action: { showingBulkManager = false }
+                )
+                .frame(width: 320, height: 280)
             }
         }
         .sheet(isPresented: $showWelcome) {
