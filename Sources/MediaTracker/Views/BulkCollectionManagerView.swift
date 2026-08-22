@@ -171,20 +171,33 @@ struct BulkCollectionManagerView: View {
         for id in removedIDs {
             collection.completedItemIDs.removeAll { $0 == id }
         }
-        
+
         collection.items.removeAll { item in
             !selectedItemIDs.contains(item.id)
         }
-        
+
         let idsToAdd = selectedItemIDs.filter { id in
             !collection.items.contains(where: { $0.id == id })
         }
-        
+
         if !idsToAdd.isEmpty {
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { idsToAdd.contains($0.id) })
             if let itemsToAdd = try? modelContext.fetch(descriptor) {
                 collection.items.append(contentsOf: itemsToAdd)
             }
+        }
+
+        // Summary feedback — Save previously closed silently.
+        let addedCount = idsToAdd.count
+        let removedCount = removedIDs.count
+        if addedCount > 0 || removedCount > 0 {
+            var summary: [String] = []
+            if addedCount > 0 { summary.append("+\(addedCount)") }
+            if removedCount > 0 { summary.append("−\(removedCount)") }
+            AppErrorState.shared.showToast(
+                "\(collection.name) updated (\(summary.joined(separator: ", ")))",
+                style: .success
+            )
         }
         
         SaveCoordinator.shared.forceSave(modelContext)

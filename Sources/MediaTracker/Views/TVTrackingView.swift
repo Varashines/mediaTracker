@@ -398,25 +398,32 @@ private struct SeasonSection: View {
             HStack(alignment: .center, spacing: AppTheme.Spacing.tiny) {
                 // Season title doubles as the hover-popover taste control
                 // (hidden for Season 0 / single-season shows).
-                HStack(spacing: AppTheme.Spacing.mini) {
-                    if let icon = effectiveTasteIcon {
-                        Image(systemName: icon)
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(.white)
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(seasonTasteColor))
+                // Click to rate — hover-open triggered accidentally just by
+                // crossing the season title with the pointer.
+                Button {
+                    guard canRateSeason else { return }
+                    showTastePopover.toggle()
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.mini) {
+                        if let icon = effectiveTasteIcon {
+                            Image(systemName: icon)
+                                .font(AppTheme.Font.caption)
+                                .foregroundStyle(.white)
+                                .frame(width: 16, height: 16)
+                                .background(Circle().fill(seasonTasteColor))
+                        }
+                        Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
+                            .font(AppTheme.Font.title3)
+                            .foregroundStyle(seasonTasteColor)
                     }
-                    Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
-                        .font(AppTheme.Font.title3)
-                        .foregroundStyle(seasonTasteColor)
+                    .contentShape(Rectangle())
                 }
-                .onHover { hovering in
-                    if hovering && canRateSeason { showTastePopover = true }
-                }
+                .buttonStyle(.plain)
                 .popover(isPresented: $showTastePopover, arrowEdge: .bottom) {
                     seasonTastePopover
                 }
                 .help(canRateSeason ? "Rate this season" : "")
+                .disabled(!canRateSeason)
 
                 if let date = season.airDate, let parsed = DateUtils.parseDate(date) {
                     Text(parsed.formatted(.dateTime.year()))
@@ -568,9 +575,10 @@ private struct SeasonSection: View {
         }
         .onChange(of: season.seasonNumber) { _, _ in
             // Reuse this view instance across seasons (no .id recreate), so refresh
-            // the cached episodes and reset the range selection when the season changes.
+            // the cached episodes and the range selection when the season changes —
+            // centering on the first unwatched episode, not always episode 1.
             updateCachedData()
-            selectedRangeStart = 1
+            selectedRangeStart = defaultRangeStart()
         }
         .confirmationDialog("Reset Season Progress?", isPresented: $showResetConfirmation) {
             Button("Reset \(season.totalEpisodesCount) Episodes", role: .destructive) {

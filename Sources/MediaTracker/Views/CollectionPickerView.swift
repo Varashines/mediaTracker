@@ -120,16 +120,25 @@ struct CollectionToggleRow: View {
     }
     
     private func toggle() {
+        let wasInCollection = isInCollection
         if isInCollection {
             collection.completedItemIDs.removeAll { $0 == item.id }
             item.collections.removeAll(where: { $0.id == collection.id })
         } else {
             item.collections.append(collection)
         }
-        
+
         if let context = item.modelContext {
             SaveCoordinator.shared.forceSave(context)
         }
         MediaStateService.shared.postMediaStateChanged()
+
+        // Match add-to-library feedback — the checkmark flip was silent before.
+        FeedbackManager.shared.trigger(.click)
+        AppErrorState.shared.showToast(
+            wasInCollection ? "Removed from \(collection.name)" : "Added to \(collection.name)",
+            style: wasInCollection ? .info : .success,
+            duration: 2.0
+        )
     }
 }
