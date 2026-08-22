@@ -189,6 +189,38 @@ final class SmartRulesTests: XCTestCase {
         XCTAssertEqual(SmartRule.Comparison.after.rawValue, "after")
         XCTAssertEqual(SmartRule.Comparison.before.rawValue, "before")
     }
+
+    func testSmartRuleSetCodableRoundTripBothModes() throws {
+        let all = SmartRuleSet(matchAny: false, rules: [.genre("Action"), .releaseYear(2000, .after)])
+        let any = SmartRuleSet(matchAny: true, rules: [.network("HBO"), .badge("NEW")])
+
+        let encoder = JSONEncoder()
+        let allDecoded = try JSONDecoder().decode(SmartRuleSet.self, from: encoder.encode(all))
+        let anyDecoded = try JSONDecoder().decode(SmartRuleSet.self, from: encoder.encode(any))
+
+        XCTAssertEqual(allDecoded, all)
+        XCTAssertEqual(anyDecoded, any)
+        XCTAssertFalse(allDecoded.matchAny)
+        XCTAssertTrue(anyDecoded.matchAny)
+    }
+
+    func testSmartRuleSetDecodesLegacyRuleArray() throws {
+        // Pre-wrapper format: a bare [SmartRule] array. Must decode as All-mode.
+        let legacy = [SmartRule.genre("Sci-Fi"), .mediaType(.tvShow)]
+        let legacyData = try JSONEncoder().encode(legacy)
+
+        // SmartRuleSet's synthesized container expects keyed fields, so direct
+        // decode of an array fails — this is the MediaCollection fallback path.
+        XCTAssertNil(try? JSONDecoder().decode(SmartRuleSet.self, from: legacyData))
+    }
+
+    func testSmartRuleSetSummary() {
+        XCTAssertEqual(SmartRuleSet().summary, "Everything in your library")
+        XCTAssertTrue(SmartRuleSet(matchAny: false, rules: [.genre("Action")]).summary.hasPrefix("All:"))
+        XCTAssertTrue(SmartRuleSet(matchAny: true, rules: [.network("HBO")]).summary.hasPrefix("Any of:"))
+        let many = SmartRuleSet(rules: Array(repeating: SmartRule.genre("G"), count: 5))
+        XCTAssertTrue(many.summary.contains("…+2 more"))
+    }
 }
 
 final class MediaCollectionTests: XCTestCase {
@@ -235,6 +267,58 @@ final class MediaCollectionTests: XCTestCase {
 
         XCTAssertEqual(collection.smartRules.count, 2)
         XCTAssertEqual(collection.smartRules[0], .genre("Action"))
+    }
+
+    @MainActor
+    func testSmartRuleSetRoundTripPreservesMatchMode() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, MediaCollection.self, configurations: config)
+        let context = container.mainContext
+
+        let collection = MediaCollection(name: "Any Mode", systemImage: "sparkles", isSmart: true)
+        collection.smartRuleSet = SmartRuleSet(matchAny: true, rules: [.genre("Sci-Fi"), .network("HBO")])
+        context.insert(collection)
+        try context.save()
+
+        XCTAssertTrue(collection.isSmart)
+        XCTAssertTrue(collection.smartMatchAny)
+        XCTAssertEqual(collection.smartRules, [.genre("Sci-Fi"), .network("HBO")])
+
+        // smartRules setter must not clobber the match mode
+        collection.smartRules = [.badge("NEW")]
+        XCTAssertTrue(collection.smartMatchAny)
+        XCTAssertEqual(collection.smartRules, [.badge("NEW")])
+    }
+
+    @MainActor
+    func testLegacyRuleBlobDecodesAsAllMode() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, MediaCollection.self, configurations: config)
+        let context = container.mainContext
+
+        // Write the pre-wrapper storage format directly
+        let collection = MediaCollection(name: "Legacy", systemImage: "sparkles", isSmart: true)
+        collection.smartRulesData = try JSONEncoder().encode([SmartRule.genre("Drama")])
+        context.insert(collection)
+        try context.save()
+
+        XCTAssertFalse(collection.smartMatchAny, "Legacy blobs decode as All mode")
+        XCTAssertEqual(collection.smartRules, [.genre("Drama")])
+    }
+
+    @MainActor
+    func testEmptySmartDataIsNotEmptyRulesWithoutWarning() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: MediaItem.self, MediaCollection.self, configurations: config)
+        let context = container.mainContext
+
+        let collection = MediaCollection(name: "Empty Blob", systemImage: "sparkles", isSmart: true)
+        context.insert(collection)
+        try context.save()
+
+        XCTAssertTrue(collection.isSmart)
+        XCTAssertTrue(collection.smartRules.isEmpty)
+        XCTAssertFalse(collection.smartMatchAny)
     }
 }
 

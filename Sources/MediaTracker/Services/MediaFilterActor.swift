@@ -41,12 +41,15 @@ actor MediaFilterActor {
 
         // 1. Handle collection override first
         var smartRules: [SmartRule] = []
+        var smartMatchAny = false
         var basePredicate: Predicate<MediaItem>
 
         if let cid = collectionID {
             let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
             if let collection = try? modelContext.fetch(colDescriptor).first, collection.isSmart {
-                smartRules = collection.smartRules
+                let ruleSet = collection.smartRuleSet
+                smartRules = ruleSet.rules
+                smartMatchAny = ruleSet.matchAny
                 basePredicate = MediaFilterPredicates.buildFilteredPredicate(
                     category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
                 )
@@ -161,6 +164,7 @@ actor MediaFilterActor {
             searchText: processedSearch,
             category: category,
             smartRules: smartRules,
+            smartMatchAny: smartMatchAny,
             appliesCategoryFilter: canUseIndexedFacetFetch
         )
 
@@ -222,7 +226,7 @@ actor MediaFilterActor {
         return paginatedResult
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = [], appliesCategoryFilter: Bool = false) throws -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = [], smartMatchAny: Bool = false, appliesCategoryFilter: Bool = false) throws -> [MediaItem] {
         try Task.checkCancellation()
         let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
         let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
@@ -236,7 +240,7 @@ actor MediaFilterActor {
             }
 
             if !smartRules.isEmpty {
-                guard applySmartRule(item, rules: smartRules) else { return false }
+                guard applySmartRule(item, rules: smartRules, matchAny: smartMatchAny) else { return false }
             }
 
             if category == .quickBites {
@@ -411,8 +415,8 @@ actor MediaFilterActor {
         }
     }
 
-    private func applySmartRule(_ item: MediaItem, rules: [SmartRule]) -> Bool {
-        rules.allSatisfy { rule in
+    private func applySmartRule(_ item: MediaItem, rules: [SmartRule], matchAny: Bool = false) -> Bool {
+        let satisfies: (SmartRule) -> Bool = { rule in
             switch rule {
             case .genre(let g):
                 return item.cachedGenres.contains(g)
@@ -443,10 +447,13 @@ actor MediaFilterActor {
                 return item.cachedLanguage?.lowercased() == language.lowercased()
             }
         }
+        // Empty rule sets match everything (legacy semantics) in both modes.
+        if rules.isEmpty { return true }
+        return matchAny ? rules.contains(where: satisfies) : rules.allSatisfy(satisfies)
     }
 
-    private func applySmartRules(_ items: [MediaItem], rules: [SmartRule]) -> [MediaItem] {
-        items.filter { applySmartRule($0, rules: rules) }
+    private func applySmartRules(_ items: [MediaItem], rules: [SmartRule], matchAny: Bool = false) -> [MediaItem] {
+        items.filter { applySmartRule($0, rules: rules, matchAny: matchAny) }
     }
 
     private func fetchRecentlyAdded(category: NavigationCategory) -> [MediaThumbnailMetadata] {
@@ -582,7 +589,7 @@ actor MediaFilterActor {
             let collectionDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == collectionID })
             if let collection = try? modelContext.fetch(collectionDescriptor).first {
                 if collection.isSmart {
-                    if !applySmartRules([fetchedItem], rules: collection.smartRules).contains(where: { $0.id == fetchedItem.id }) {
+                    if !applySmartRules([fetchedItem], rules: collection.smartRules, matchAny: collection.smartMatchAny).contains(where: { $0.id == fetchedItem.id }) {
                         return nil
                     }
                 } else if !collection.items.contains(where: { $0.id == fetchedItem.id }) {
@@ -613,6 +620,24 @@ actor MediaFilterActor {
     func toMetadata(_ item: MediaItem) -> MediaThumbnailMetadata {
         MediaThumbnailMetadata(item: item)
     }
+
+    /// Live match-count preview for unsaved rule sets in the collection editor.
+    /// Same evaluation path as countItems' smart branch, minus the saved collection.
+    func countPreview(matching ruleSet: SmartRuleSet) throws -> Int {
+        let basePredicate = MediaFilterPredicates.buildFilteredPredicate(
+            category: .all, searchToken: "", stateValue: nil, badge: nil, language: nil
+        )
+        var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
+        desc.propertiesToFetch = [\.id]
+        desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
+        let items = try modelContext.fetch(desc)
+        return try refineResults(
+            items, network: nil, language: nil, genre: nil, year: nil, state: nil,
+            badge: nil, provider: nil, searchText: "",
+            smartRules: ruleSet.rules, smartMatchAny: ruleSet.matchAny
+        ).count
+    }
+
     func countItems(category: NavigationCategory, collectionID: UUID? = nil) async throws -> Int {
         let basePredicate = MediaFilterPredicates.buildFilteredPredicate(
             category: category, searchToken: "", stateValue: nil, badge: nil, language: nil
@@ -626,7 +651,7 @@ actor MediaFilterActor {
                     desc.propertiesToFetch = [\.id]
                     desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
-                    let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules)
+                    let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules, smartMatchAny: collection.smartMatchAny)
                     return refined.count
                 }
                 let itemIDs = collection.items.compactMap { $0.id }

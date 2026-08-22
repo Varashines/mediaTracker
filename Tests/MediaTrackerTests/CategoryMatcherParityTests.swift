@@ -71,19 +71,35 @@ final class CategoryMatcherParityTests: XCTestCase {
         insert("oldShow") { $0.typeValue = "TV Show"; $0.releaseDate = Date(timeIntervalSinceNow: -10 * 365 * 86400) }
         try context.save()
 
-        let collection = MediaCollection(name: "Old Media", systemImage: "clock", isSmart: true)
-        collection.smartRules = [.releaseYear(2016, .before)]
+        try await assertSmartRuleParity(matchAny: false)
+        try await assertSmartRuleParity(matchAny: true)
+    }
+
+    private func assertSmartRuleParity(matchAny: Bool) async throws {
+        let collection = MediaCollection(name: "Parity \(matchAny)", systemImage: "clock", isSmart: true)
+        // "10 years ago" resolves to calendar year 2016 — before(2017) matches the old items.
+        collection.smartRuleSet = SmartRuleSet(matchAny: matchAny, rules: [.releaseYear(2017, .before), .mediaType(.tvShow)])
         context.insert(collection)
         try context.save()
 
         let count = try await actor.countItems(category: .all, collectionID: collection.id)
         let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, collectionID: collection.id)
-        XCTAssertEqual(count, result.totalCount, "Smart-rule evaluation must be identical for counting and display")
+        XCTAssertEqual(count, result.totalCount, "Smart-rule evaluation must be identical for counting and display (matchAny=\(matchAny))")
+
+        if matchAny {
+            // old (<2017) OR TV show → oldMovie + oldShow
+            XCTAssertEqual(count, 2)
+            XCTAssertEqual(Set(result.displayed.map(\.itemID)), ["oldMovie", "oldShow"])
+        } else {
+            // old AND TV show → only oldShow
+            XCTAssertEqual(count, 1)
+            XCTAssertEqual(result.displayed.first?.itemID, "oldShow")
+        }
 
         // Single-item incremental path must agree too
         for item in try context.fetch(FetchDescriptor<MediaItem>()) {
             let metadata = try await actor.fetchMetadataIfMatches(for: item.persistentModelID, category: .all, searchText: "", collectionID: collection.id)
-            XCTAssertEqual(metadata != nil, result.displayed.contains(where: { $0.itemID == item.id }), "Incremental match drift for \(item.id)")
+            XCTAssertEqual(metadata != nil, result.displayed.contains(where: { $0.itemID == item.id }), "Incremental match drift for \(item.id) (matchAny=\(matchAny))")
         }
     }
 }
