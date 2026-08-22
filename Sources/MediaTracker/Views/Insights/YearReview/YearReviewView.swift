@@ -752,10 +752,21 @@ private struct ReviewDayCell: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var tooltip: String {
+    // Cached formatters — one per cell per render was measurable allocation churn
+    // across the 35-42 day cells evaluated together in body.
+    @MainActor private static let tooltipFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEE, MMM d"
-        let base = f.string(from: date)
+        return f
+    }()
+    @MainActor private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .full
+        return f
+    }()
+
+    private var tooltip: String {
+        let base = Self.tooltipFormatter.string(from: date)
         guard minutes > 0 else { return base }
         let h = minutes / 60, m = minutes % 60
         let time = h > 0 ? "\(h)h \(m)m" : "\(m)m"
@@ -763,10 +774,14 @@ private struct ReviewDayCell: View {
     }
 
     private var accessibilityDescription: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        let activity = minutes > 0 ? ", \(tooltip.components(separatedBy: " · ").last ?? "") watched" : ", no watch activity"
-        return "\(formatter.string(from: date))\(activity)"
+        let timePhrase: String
+        if minutes > 0 {
+            let h = minutes / 60, m = minutes % 60
+            timePhrase = ", \(h > 0 ? "\(h)h \(m)m" : "\(m)m") watched"
+        } else {
+            timePhrase = ", no watch activity"
+        }
+        return "\(Self.fullDateFormatter.string(from: date))\(timePhrase)"
     }
 
     static func fillColor(minutes: Int, colorScheme: ColorScheme, accent: Color) -> Color {

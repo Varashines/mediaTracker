@@ -62,7 +62,12 @@ struct WatchedThisWeek: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+        // Computed once per body eval — the .all case concatenates and sorts
+        // live model arrays, and this was previously evaluated in both the
+        // emptiness check below and the ForEach.
+        let items = filteredItems
+
+        return VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionHeader(
                 title: "Watched This Week",
                 icon: "clock.fill",
@@ -101,7 +106,7 @@ struct WatchedThisWeek: View {
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, AppTheme.Spacing.small)
-                } else if filteredItems.isEmpty {
+                } else if items.isEmpty {
                 HStack(spacing: AppTheme.Spacing.small) {
                     Image(systemName: filter.icon)
                         .font(AppTheme.Font.title3)
@@ -116,7 +121,7 @@ struct WatchedThisWeek: View {
                 .transition(.mediaRowArrival)
             } else {
                 ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
-                    ForEach(filteredItems, id: \.persistentModelID) { item in
+                    ForEach(items, id: \.persistentModelID) { item in
                         NavigationLink(value: item) {
                             MediaThumbnailView(
                                 item: item,

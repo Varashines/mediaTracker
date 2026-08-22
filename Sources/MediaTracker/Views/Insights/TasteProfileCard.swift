@@ -8,7 +8,19 @@ struct TasteProfileCard: View {
     let stats: LibraryStats
     @Environment(\.modelContext) private var modelContext
 
+    // Bounded: only networks actually used by library items, capped — the
+    // unbounded variant fetched every row and invalidated the card on any change.
     @Query private var networkEntities: [NetworkEntity]
+
+    init(stats: LibraryStats) {
+        self.stats = stats
+        var descriptor = FetchDescriptor<NetworkEntity>(
+            predicate: #Predicate { $0.count > 0 },
+            sortBy: [SortDescriptor(\.count, order: .reverse)]
+        )
+        descriptor.fetchLimit = 50
+        _networkEntities = Query(descriptor)
+    }
 
     private var topNetworkName: String { stats.topRatedNetworks.first?.name ?? "—" }
     private var topStudioName:  String { stats.topRatedStudios.first?.name  ?? "—" }

@@ -22,10 +22,12 @@ struct InsightsView: View {
     @State private var showPassportPreview = false
     var refreshID: Int = 0
 
+    // @AppStorage gives proper observation without a UserDefaults read per body eval.
+    @AppStorage("background_intensity") private var backgroundIntensity = 1.0
+
     private var backgroundTint: Color {
         let progress = max(0, min(1, -scrollOffsetDebounced / 600))
-        let intensity = UserDefaults.standard.double(forKey: "background_intensity")
-        let scaled = progress * max(0.02, intensity * 0.04)
+        let scaled = progress * max(0.02, backgroundIntensity * 0.04)
         let isDark = colorScheme == .dark
         return AppTheme.Colors.accent.opacity(isDark ? scaled : scaled * 0.5)
     }

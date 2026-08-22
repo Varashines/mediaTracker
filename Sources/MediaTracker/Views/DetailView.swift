@@ -31,6 +31,9 @@ struct DetailView: View {
     @State private var titleCopiedTask: Task<Void, Never>?
     @State private var castScope: CastScope = .series
     @State private var selectedSeasonNumber: Int?
+    /// Sorted per-season cast, recomputed only when the season selection or
+    /// cast data changes — sorting liveModels on every body eval was wasted work.
+    @State private var cachedSeasonCast: [SeasonCastMember]?
     @State private var isLoadingSeasonCast = false
 
 
@@ -46,7 +49,7 @@ struct DetailView: View {
 
     /// The selected season's cast, sorted by per-season episode count.
     /// nil when there's no TV season selected or no season-cast data loaded yet.
-    private var seasonScopeCast: [SeasonCastMember]? {
+    private func computeSeasonScopeCast() -> [SeasonCastMember]? {
         guard viewModel.item.type == .tvShow,
               let tv = viewModel.item.tvShowDetails,
               let snum = selectedSeasonNumber,
@@ -58,13 +61,17 @@ struct DetailView: View {
         }
     }
 
+    private func refreshSeasonCastCache() {
+        cachedSeasonCast = computeSeasonScopeCast()
+    }
+
     @ViewBuilder
     private var castBody: some View {
         if viewModel.item.type != .tvShow || castScope == .series || !showCastScopeToggle {
             CastSectionView(cast: viewModel.item.displayCast, themeColor: effectiveThemeColor) { actorName in
                 onSearchActor?(actorName)
             }
-        } else if let seasonCast = seasonScopeCast {
+        } else if let seasonCast = cachedSeasonCast {
             SeasonCastSection(cast: seasonCast, themeColor: effectiveThemeColor) { actorName in
                 onSearchActor?(actorName)
             }
@@ -124,7 +131,10 @@ struct DetailView: View {
         Task {
             let service = BackgroundDataService(modelContainer: container)
             await service.refreshSeasonCast(tmdbID: tmdbID, seasonNumber: snum)
-            await MainActor.run { isLoadingSeasonCast = false }
+            await MainActor.run {
+                isLoadingSeasonCast = false
+                refreshSeasonCastCache()
+            }
         }
     }
 
@@ -286,6 +296,7 @@ struct DetailView: View {
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
+            refreshSeasonCastCache()
             staggerTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
@@ -453,7 +464,7 @@ struct DetailView: View {
             }
 
             // 2. TOP CAST (Modular Card)
-            let showCastSection = !viewModel.item.displayCast.isEmpty || seasonScopeCast != nil
+            let showCastSection = !viewModel.item.displayCast.isEmpty || cachedSeasonCast != nil
             if showCast, showCastSection {
                 ModularSection(title: (castScope == .season && showCastScopeToggle) ? "Top Cast · Season \(selectedSeasonNumber ?? 0)" : "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -471,6 +482,7 @@ struct DetailView: View {
                 }
                 .onChange(of: castScope) { _, newScope in
                     if newScope == .season { ensureSeasonCastLoaded() }
+                    refreshSeasonCastCache()
                 }
                 .onChange(of: selectedSeasonNumber) { _, _ in
                     if castScope == .season && !showCastScopeToggle {
@@ -478,6 +490,7 @@ struct DetailView: View {
                     } else if castScope == .season {
                         ensureSeasonCastLoaded()
                     }
+                    refreshSeasonCastCache()
                 }
             }
 

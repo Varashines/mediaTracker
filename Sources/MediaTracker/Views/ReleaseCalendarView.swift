@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct ReleaseCalendarView: View {
+    /// Stable week IDs for ForEach — one formatter instead of one per week per render.
+    @MainActor private static let weekIDFormatter = ISO8601DateFormatter()
+
     private enum ReleaseFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case movies = "Movies"
@@ -445,7 +448,7 @@ struct ReleaseCalendarView: View {
         
         let weekData: [(id: String, days: [CalendarDayInfo?])] = weeks.map { week in
             let firstDay = week.compactMap { $0 }.first?.date ?? Date()
-            let id = ISO8601DateFormatter().string(from: firstDay)
+            let id = Self.weekIDFormatter.string(from: firstDay)
             return (id, week)
         }
         
