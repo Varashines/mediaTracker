@@ -59,6 +59,11 @@ class AppErrorState {
     }
     
     func showToast(_ message: String, style: ToastStyle = .info, duration: Double = 3.5, undoAction: (@MainActor () -> Void)? = nil) {
+        // Suppress duplicate spam: if the identical message is already visible,
+        // don't restart or stack it (paginated fetch failures etc.).
+        if let current = currentToast, current.message == message, current.style == style {
+            return
+        }
         let toast = Toast(message: message, style: style, duration: duration, undoAction: undoAction)
         dismissTask?.cancel()
 

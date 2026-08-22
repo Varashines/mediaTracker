@@ -494,7 +494,10 @@ struct LibraryDetailView: View {
                 // here could clear the skeleton the new task just raised.
             } catch {
                 AppLogger.debug("Error filtering items: \(error)")
-                await MainActor.run { viewModel.pagination.isInitialLoad = false }
+                await MainActor.run {
+                    viewModel.pagination.isInitialLoad = false
+                    AppErrorState.shared.surfaceError("Couldn't load your library — try refreshing")
+                }
             }
         }
     }
@@ -549,7 +552,10 @@ struct LibraryDetailView: View {
                     return
                 }
                 AppLogger.debug("Error loading more: \(error)")
-                await MainActor.run { viewModel.pagination.isLoadingMore = false }
+                await MainActor.run {
+                    viewModel.pagination.isLoadingMore = false
+                    AppErrorState.shared.surfaceError("Couldn't load more titles")
+                }
             }
         }
     }

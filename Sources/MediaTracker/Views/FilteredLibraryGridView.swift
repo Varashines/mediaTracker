@@ -349,6 +349,9 @@ struct FilteredLibraryGridView: View {
             } catch {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error loading more filtered items: \(error)")
+                    await MainActor.run {
+                        AppErrorState.shared.surfaceError("Couldn't load more titles")
+                    }
                 }
                 await MainActor.run { isLoadingMore = false }
             }
@@ -456,6 +459,10 @@ struct FilteredLibraryGridView: View {
             } catch {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error fetching filtered items: \(error)")
+                    await MainActor.run {
+                        isLoading = false
+                        AppErrorState.shared.surfaceError("Couldn't load this collection — try refreshing")
+                    }
                 }
             }
         }
