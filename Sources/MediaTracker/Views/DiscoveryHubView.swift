@@ -93,7 +93,7 @@ struct DiscoveryHubView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-                        // Skeleton for sections
+                        // Skeleton for sections — one shimmer per section, not per card
                         ForEach(0..<3, id: \.self) { _ in
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                                 HStack(spacing: 6) {
@@ -110,11 +110,11 @@ struct DiscoveryHubView: View {
                                             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                                                 .fill(Color.secondary.opacity(0.08))
                                                 .frame(width: 100, height: 60)
-                                                .shimmering()
                                         }
                                     }
                                 }
                             }
+                            .shimmering()
                         }
                     }
                     .padding(.vertical, 30)

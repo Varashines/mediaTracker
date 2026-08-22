@@ -115,18 +115,18 @@ private struct HomeSkeletonSections: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            // Section toggle pills
+            // Section toggle pills — one shimmer for the whole row
             HStack(spacing: AppTheme.Spacing.tiny) {
                 ForEach(0..<5, id: \.self) { _ in
                     Capsule()
                         .fill(Color.secondary.opacity(0.08))
                         .frame(width: 110, height: 26)
-                        .shimmering()
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.top, AppTheme.Spacing.medium)
+            .shimmering()
 
             skeletonSection(headerWidth: 210)
             skeletonSection(headerWidth: 150)
@@ -151,7 +151,6 @@ private struct HomeSkeletonSections: View {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                             .fill(Color.secondary.opacity(0.08))
                             .frame(width: heroCardSize.width, height: heroCardSize.height)
-                            .shimmering()
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -159,5 +158,6 @@ private struct HomeSkeletonSections: View {
             .scrollClipDisabled()
         }
         .padding(.vertical, AppTheme.Spacing.small)
+        .shimmering()
     }
 }

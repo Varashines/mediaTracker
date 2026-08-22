@@ -217,6 +217,7 @@ struct SearchView: View {
                 if searchText.isEmpty {
                     recentSearchesLandingSection
                 } else if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
+                    // Container-level shimmer — one animation for all five rows.
                     VStack(spacing: AppTheme.Spacing.medium) {
                         ForEach(0..<5, id: \.self) { _ in
                             HStack(spacing: AppTheme.Spacing.medium) {
@@ -234,10 +235,10 @@ struct SearchView: View {
                                 Spacer()
                             }
                             .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                            .shimmering()
                         }
                     }
                     .padding(.vertical, AppTheme.Spacing.compact)
+                    .shimmering()
                 } else {
                     localResultsSection
                     webResultsSection

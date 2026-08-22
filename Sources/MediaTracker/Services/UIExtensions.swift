@@ -233,35 +233,38 @@ extension Color {
 
 // MARK: - Shimmering Effect
 extension View {
+    /// No AnyView wrapper — type opacity preserved for view diffing; the
+    /// reduced-motion check lives inside the modifier.
     func shimmering() -> some View {
-        if AppThemeCoordinator.isReducingVisualEffects {
-            return AnyView(self)
-        }
-        return AnyView(modifier(ShimmeringModifier()))
+        modifier(ShimmeringModifier())
     }
 }
 
 struct ShimmeringModifier: ViewModifier {
     @State private var phase: CGFloat = 0
-    
+
     func body(content: Content) -> some View {
-        content
-            .overlay {
-                LinearGradient(
-                    colors: [.clear, .white.opacity(0.22), .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: 600)
-                .offset(x: -600 + (600 * 2.5 * phase))
-                .rotationEffect(.degrees(15))
-            }
-            .mask(content)
-            .onAppear {
-                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                    phase = 1
+        if AppThemeCoordinator.isReducingVisualEffects {
+            content
+        } else {
+            content
+                .overlay {
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.22), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 600)
+                    .offset(x: -600 + (600 * 2.5 * phase))
+                    .rotationEffect(.degrees(15))
                 }
-            }
+                .mask(content)
+                .onAppear {
+                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                        phase = 1
+                    }
+                }
+        }
     }
 }
 

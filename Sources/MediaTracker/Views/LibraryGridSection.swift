@@ -33,10 +33,10 @@ struct LibraryGridSection: View {
                                 RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                                     .fill(Color.secondary.opacity(0.08))
                                     .frame(width: 160, height: 240)
-                                    .shimmering()
                             }
                         }
                         .padding(AppTheme.Spacing.pageMargin)
+                        .shimmering()
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .scrollIndicators(.hidden)
