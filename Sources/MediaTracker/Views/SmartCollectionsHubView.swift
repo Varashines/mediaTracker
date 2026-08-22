@@ -96,7 +96,7 @@ struct SmartCollectionsHubView: View {
                                 collection: collection,
                                 title: collection.name,
                                 icon: collection.systemImage,
-                                description: "Dynamic playlist based on smart rules.",
+                                description: collection.smartRuleSet.summary,
                                  count: countsLoaded ? customSmartCounts[collection.id] : nil,
                                 accentColor: AppTheme.Colors.accent
                             ) {
