@@ -18,6 +18,7 @@ struct DetailView: View {
     @State private var showSeasons = false
     @State private var showCast = false
     @State private var showRecommendations = false
+    @State private var staggerTask: Task<Void, Never>?
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
@@ -285,16 +286,18 @@ struct DetailView: View {
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
-            Task { @MainActor in
+            staggerTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 100_000_000)
-                showSeasons = true
+                withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
                 try? await Task.sleep(nanoseconds: 50_000_000)
-                showCast = true
+                withAnimation(AppTheme.Animation.springGentle) { showCast = true }
                 try? await Task.sleep(nanoseconds: 50_000_000)
-                showRecommendations = true
+                withAnimation(AppTheme.Animation.springGentle) { showRecommendations = true }
             }
         }
         .onDisappear {
+            staggerTask?.cancel()
+            staggerTask = nil
             viewModel.cancelTasks()
         }
         .userActivity("com.vara.MediaTracker.viewItem") { activity in
@@ -534,6 +537,8 @@ struct DetailView: View {
             }
         }
         .animation(AppTheme.Animation.springGentle, value: showSeasons)
+        .animation(AppTheme.Animation.springGentle, value: showCast)
+        .animation(AppTheme.Animation.springGentle, value: showRecommendations)
     }
 
     @ToolbarContentBuilder
