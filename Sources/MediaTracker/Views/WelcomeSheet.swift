@@ -3,6 +3,7 @@ import SwiftUI
 struct WelcomeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openSettings) private var openSettings
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     var onImportBackup: (() -> Void)? = nil
     @State private var showIcon = false
@@ -79,9 +80,13 @@ struct WelcomeSheet: View {
 
                 Button {
                     hasSeenWelcome = true
+                    // Deep-link to Services so pasting the key is one step, not
+                    // "know ⌘, and find the tab yourself".
+                    UserDefaults.standard.set(SettingsTab.services.rawValue, forKey: "settings_open_tab")
+                    openSettings()
                     dismiss()
                 } label: {
-                    Text("I already have a key — I’ll add it later")
+                    Text("I already have a key — open Settings to add it")
                         .font(AppTheme.Font.bodyMedium)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)

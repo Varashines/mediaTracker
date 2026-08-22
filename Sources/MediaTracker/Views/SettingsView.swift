@@ -84,6 +84,13 @@ struct SettingsView: View {
             $0.animation(AppTheme.Animation.springSnappy, value: selectedTab)
         }
         .onAppear {
+            // Deep-link support: welcome sheet (and future callers) can request
+            // a specific tab via this transient UserDefaults key.
+            if let raw = UserDefaults.standard.string(forKey: "settings_open_tab"),
+               let tab = SettingsTab(rawValue: Int(raw) ?? 0) {
+                selectedTab = tab
+                UserDefaults.standard.removeObject(forKey: "settings_open_tab")
+            }
             Task {
                 guard let aliases = UserDefaults.standard.string(forKey: "studio_aliases"),
                     !aliases.isEmpty
@@ -98,19 +105,32 @@ struct SettingsView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
+        // At the 560pt window minimum the six pills overflow a fixed HStack —
+        // fall back to a horizontally scrolling bar instead of truncating labels.
+        ViewThatFits(in: .horizontal) {
+            tabBarPills
+                .frame(maxWidth: .infinity)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                tabBarPills
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.smallMedium)
+    }
+
+    private var tabBarPills: some View {
         SegmentedPillControl(
             options: SettingsTab.allCases,
             selection: $selectedTab
         ) { tab, isSelected in
             HStack(spacing: AppTheme.Spacing.micro) {
                 Image(systemName: isSelected ? tab.fillIcon : tab.icon)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(AppTheme.Font.caption2)
 
                 Text(tab.label)
                     .font(AppTheme.Font.bodyBold)
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.smallMedium)
     }
 }

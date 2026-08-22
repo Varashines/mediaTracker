@@ -152,9 +152,16 @@ struct GeneralSection: View {
 
                     SettingsToggleRow(title: "Skip Launch Background Tasks", subtitle: "Disable automatic metadata repair on startup", showDivider: true, isOn: $skipStartupTasks)
 
-                    SettingsRow(title: "Reset Settings to Defaults", subtitle: "Restore all preferences to their default values", showDivider: false) {
+                    SettingsRow(title: "Reset Settings to Defaults", subtitle: "Restore all preferences to their default values", showDivider: true) {
                         SettingsButton(title: "Reset", color: .orange) {
                             showResetConfirmation = true
+                        }
+                    }
+
+                    SettingsRow(title: "Replay Welcome Setup", subtitle: "Show the first-run guide with TMDB key setup", showDivider: false) {
+                        SettingsButton(title: "Show") {
+                            UserDefaults.standard.set(false, forKey: "has_seen_welcome")
+                            AppErrorState.shared.showToast("Welcome setup will show on next launch", style: .info)
                         }
                     }
                 }

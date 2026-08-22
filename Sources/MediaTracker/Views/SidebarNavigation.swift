@@ -8,8 +8,11 @@ struct SidebarNavigation: View {
         [MediaCollection]
     @AppStorage("pinned_system_categories") private var pinnedSystemCategories: String = "Release Radar"
     @State private var hoveredItem: SidebarItem? = nil
+    @State private var renameTarget: MediaCollection?
+    @State private var renameText: String = ""
     @Namespace private var sidebarNamespace
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         List {
@@ -49,14 +52,35 @@ struct SidebarNavigation: View {
                 sidebarRow(
                     title: category.title,
                     icon: category.icon,
-                    item: .category(category))
+                    item: .category(category)) {
+                    Button("Unpin from Sidebar") {
+                        unpinSystemCategory(category)
+                    }
+                }
             }
 
             ForEach(pinnedCollections) { collection in
                 sidebarRow(
                     title: collection.name, icon: collection.systemImage,
                     item: .collection(
-                        collection.id, name: collection.name, icon: collection.systemImage))
+                        collection.id, name: collection.name, icon: collection.systemImage)) {
+                    Button("Open") {
+                        withAnimation(AppTheme.Animation.springSnappy) {
+                            selection = .collection(
+                                collection.id, name: collection.name, icon: collection.systemImage)
+                        }
+                    }
+                    Button("Rename…") {
+                        renameText = collection.name
+                        renameTarget = collection
+                    }
+                    Button("Unpin from Sidebar") {
+                        collection.isPinned = false
+                        if collection.modelContext != nil {
+                            SaveCoordinator.shared.requestSave(modelContext)
+                        }
+                    }
+                }
             }
 
             sectionHeader("ANALYTICS")
@@ -77,6 +101,29 @@ struct SidebarNavigation: View {
                 .fill(AppTheme.Colors.strokeDefault(for: scheme))
                 .frame(width: 1)
         }
+        .alert("Rename Collection", isPresented: Binding(
+            get: { renameTarget != nil },
+            set: { if !$0 { renameTarget = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty, let target = renameTarget, target.modelContext != nil {
+                    target.name = trimmed
+                    SaveCoordinator.shared.requestSave(modelContext)
+                }
+                renameTarget = nil
+            }
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+        }
+    }
+
+    private func unpinSystemCategory(_ category: NavigationCategory) {
+        var pins = pinnedSystemCategories.split(separator: ",")
+            .map(String.init)
+            .filter { $0 != category.rawValue }
+        if pins.isEmpty { pins = [] }
+        pinnedSystemCategories = pins.joined(separator: ",")
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -92,7 +139,7 @@ struct SidebarNavigation: View {
             .listSectionSeparator(.hidden)
     }
 
-    private func sidebarRow(title: String, icon: String, item: SidebarItem) -> some View {
+    private func sidebarRow(title: String, icon: String, item: SidebarItem, @ViewBuilder contextMenuItems: () -> some View = { EmptyView() }) -> some View {
         let isSelected = selection == item
         let isHovered = hoveredItem == item
 
@@ -146,6 +193,7 @@ struct SidebarNavigation: View {
         }
         .buttonStyle(.plain)
         .animation(AppTheme.Animation.springSnappy, value: isSelected)
+        .contextMenu(menuItems: contextMenuItems)
         .onHover { hovering in
             withAnimation(AppTheme.Animation.microInteraction) {
                 hoveredItem = hovering ? item : nil
