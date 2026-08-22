@@ -402,6 +402,13 @@ struct LibraryDetailView: View {
             NavigationRouter.shared.pendingSpotlightItemID = nil
             navigateToSpotlightItem(id)
         }
+        .onChange(of: NavigationRouter.shared.pendingCategory) { _, newCategory in
+            guard let category = newCategory else { return }
+            NavigationRouter.shared.pendingCategory = nil
+            withAnimation(AppTheme.Animation.springSnappy) {
+                sidebarSelection = .category(category)
+            }
+        }
         .onDisappear {
             updateTask?.cancel()
             updateTask = nil

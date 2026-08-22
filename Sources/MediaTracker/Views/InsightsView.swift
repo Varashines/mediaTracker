@@ -38,6 +38,15 @@ struct InsightsView: View {
 
             if isLoading {
                 InsightsSkeletonView()
+            } else if let stats = stats, stats.totalMovies + stats.totalTVShows == 0 {
+                // Empty library — a zeroed dashboard would read as broken data.
+                LibraryEmptyStateView(
+                    title: "No stats yet",
+                    icon: "chart.bar.xaxis",
+                    description: "Track a few movies or shows and your taste insights will appear here.",
+                    actionLabel: "Explore Discovery",
+                    action: { NavigationRouter.shared.pendingCategory = .discover }
+                )
             } else if let stats = stats {
                 ScrollView {
                     LazyVStack(spacing: AppTheme.Spacing.xLarge) {
