@@ -49,6 +49,9 @@ struct MediaItemData: Codable, Sendable {
     let watchedEpisodeIDs: [String]?
     /// Most recent interaction (watch/taste/state change) — preserved across restores.
     let lastInteractionDate: Date?
+    /// When the item's state last changed (e.g. Completed date for movies).
+    /// Preserved so imports don't stamp every Completed movie to today.
+    var lastStateChangeDate: Date?
     /// Maps watched-episode uniqueID → its last watched date, so restores keep
     /// the real "recently watched" ordering instead of resetting to import time.
     let watchedEpisodeDates: [String: Date]?
@@ -118,6 +121,7 @@ extension MediaItemData {
             taste: item.tasteValue,
             watchedEpisodeIDs: watchedIDs,
             lastInteractionDate: item.lastInteractionDate,
+            lastStateChangeDate: item.lastStateChangeDate,
             watchedEpisodeDates: watchedDates,
             seasonTasteOverrides: seasonTaste,
             posterURL: item.posterURL,

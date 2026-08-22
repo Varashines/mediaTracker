@@ -131,9 +131,43 @@ extension BackgroundDataService {
                         .flatMap({ $0.episodes.liveModels })
                         .compactMap({ $0.lastWatchedDate })
                         .max(),
-                       latestWatch > (item.lastInteractionDate ?? .distantPast) {
+                        latestWatch > (item.lastInteractionDate ?? .distantPast) {
                         item.lastInteractionDate = latestWatch
                     }
+                } else if let movieDetails = item.movieDetails {
+                    // Backfill movie directors if missing
+                    if movieDetails.creators.isEmpty {
+                        if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: false) {
+                            let dirs = details.directors.map { $0.name }
+                            if !dirs.isEmpty { movieDetails.creators = dirs }
+                        }
+                    }
+                }
+
+                // 6. Backfill main cast (ZSTOREDCAST) if empty — quick, bounded
+                if item.storedCast.isEmpty && item.displayCast.isEmpty {
+                    if item.type == .movie {
+                        if let details = try? await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: false) {
+                            let cast = details.cast.prefix(10).map { c in
+                                CastMember(name: c.name, characterName: c.character, profileURL: c.profilePath.flatMap { APIClient.tmdbImageURL(path: $0, size: "w185") }, order: c.order, mediaID: item.id)
+                            }
+                            for member in cast {
+                                member.movieDetails = item.movieDetails
+                                modelContext.insert(member)
+                            }
+                        }
+                    } else if item.type == .tvShow {
+                        if let details = try? await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: false) {
+                            let cast = details.cast.prefix(10).map { c in
+                                CastMember(name: c.name, characterName: c.character, profileURL: c.profilePath.flatMap { APIClient.tmdbImageURL(path: $0, size: "w185") }, order: c.order, mediaID: item.id)
+                            }
+                            for member in cast {
+                                member.tvShowDetails = item.tvShowDetails
+                                modelContext.insert(member)
+                            }
+                        }
+                    }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
                 }
             }
             

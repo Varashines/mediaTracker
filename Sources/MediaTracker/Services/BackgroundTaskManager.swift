@@ -317,6 +317,8 @@ class BackgroundTaskManager {
         // Opportunistic: backfill per-season aggregate cast for shows that
         // predate the feature (bounded to a few seasons per run).
         await refreshMissingSeasonCast()
+        await refreshMissingMainCastQuick(cap: 15)
+        await refreshMissingEpisodesQuick(cap: 15)
 
         // Opportunistic: if v4 poster color migration hasn't run yet, kick it off.
         if UserDefaults.standard.integer(forKey: "colorExtractionVersion") < 4 {
@@ -412,6 +414,59 @@ class BackgroundTaskManager {
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
         AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons", logger: AppLogger.background)
+    }
+
+    /// Quick post-import backfill for main cast (`ZSTOREDCAST`) and movie directors — runs once after import, not throttled to 6h.
+    /// Uses the same 250ms sleep as season cast but with a larger cap so a 600-item import finishes in ~2-3 min, not 6 days.
+    func refreshMissingMainCastQuick(cap: Int = 100) async {
+        guard let container = container else { return }
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.fetchLimit = cap
+        // Fetch candidates where storedCast is empty — do in-memory filter for SwiftData array count
+        let allItems = (try? context.fetch(descriptor)) ?? []
+        let candidates = allItems.filter { $0.storedCast.isEmpty && !$0.isSoftDeleted }.prefix(cap)
+        guard !candidates.isEmpty else { return }
+        AppLogger.info("🎬 Quick cast backfill: \(candidates.count) items missing main cast", logger: AppLogger.background)
+        for item in candidates {
+            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { continue }
+            let service = BackgroundDataService(modelContainer: container)
+            if item.type == .movie {
+                _ = await service.refreshMovie(id: item.id, tmdbID: tmdbID, force: false)
+            } else if item.type == .tvShow {
+                _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        AppLogger.info("🎬 Quick cast backfill complete for \(candidates.count) items", logger: AppLogger.background)
+        await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+    }
+
+    /// Quick post-import backfill for episode data (TMDB + TVMaze) — ensures every imported TV show gets full season/episode rows, not just watched stubs.
+    func refreshMissingEpisodesQuick(cap: Int = 50) async {
+        guard let container = container else { return }
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "TV Show" && $0.isSoftDeleted == false })
+        descriptor.fetchLimit = cap * 2
+        let allTV = (try? context.fetch(descriptor)) ?? []
+        // Filter to shows where episode data is clearly missing: no seasons or seasons with 0 episodes but TMDB reports more
+        let candidates = allTV.filter { item in
+            guard let tv = item.tvShowDetails else { return true }
+            let seasons = tv.seasons.liveModels
+            if seasons.isEmpty { return true }
+            // If any season has 0 episodes but TMDB says it should have some, or total episodes mismatch
+            return seasons.contains { $0.episodeCount == 0 } || tv.numberOfEpisodes == nil
+        }.prefix(cap)
+        guard !candidates.isEmpty else { return }
+        AppLogger.info("📺 Quick episode backfill: \(candidates.count) TV shows missing episode data", logger: AppLogger.background)
+        for item in candidates {
+            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { continue }
+            let service = BackgroundDataService(modelContainer: container)
+            _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+            try? await Task.sleep(nanoseconds: 400_000_000)
+        }
+        AppLogger.info("📺 Quick episode backfill complete for \(candidates.count) shows", logger: AppLogger.background)
+        await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
 
     func refreshStaleBadges() async {
@@ -745,12 +800,13 @@ class BackgroundTaskManager {
 
         if !episodeDates.isEmpty {
             var epDesc = FetchDescriptor<TVEpisode>()
-            epDesc.propertiesToFetch = [\.uniqueID, \.isWatched, \.lastWatchedDate]
+            epDesc.propertiesToFetch = [\.uniqueID, \.isWatched, \.lastWatchedDate, \.watchedDate]
             let episodes = (try? context.fetch(epDesc)) ?? []
             var updated = 0
             for ep in episodes where ep.isWatched {
                 if let uid = ep.uniqueID, let date = episodeDates[uid] {
                     ep.lastWatchedDate = date
+                    ep.watchedDate = date
                     updated += 1
                 }
             }

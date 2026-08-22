@@ -117,7 +117,7 @@ struct DateUtils {
         }
         
         // 3. Real ISO airstamp: Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
-        //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT for Thai shows).
+        //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT).
         if let airstamp = airstamp,
            (service == "youtube" || !airstamp.contains("T12:00:00+00:00")),
            let date = parseISO(airstamp) {

@@ -156,11 +156,17 @@ extension BackgroundDataService {
                        backupDate > (existing.lastInteractionDate ?? .distantPast) {
                         existing.lastInteractionDate = backupDate
                     }
+                    if let backupStateDate = itemData.lastStateChangeDate {
+                        existing.lastStateChangeDate = backupStateDate
+                    }
                     itemData.applyMetadata(to: existing)
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 case .overwrite:
                     existing.state = MediaState(rawValue: itemData.state) ?? .wishlist
+                    if let backupStateDate = itemData.lastStateChangeDate {
+                        existing.lastStateChangeDate = backupStateDate
+                    }
                     existing.dateAdded = itemData.dateAdded
                     existing.tasteValue = itemData.taste ?? TasteValue.none.rawValue
                     existing.lastInteractionDate = itemData.lastInteractionDate ?? existing.lastInteractionDate
@@ -181,6 +187,9 @@ extension BackgroundDataService {
                     type: mediaType
                 )
                 item.state = MediaState(rawValue: itemData.state) ?? .wishlist
+                if let backupStateDate = itemData.lastStateChangeDate {
+                    item.lastStateChangeDate = backupStateDate
+                }
                 item.dateAdded = itemData.dateAdded
                 item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
                 item.lastInteractionDate = itemData.lastInteractionDate
@@ -220,7 +229,7 @@ extension BackgroundDataService {
                                 let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
                                 if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
                                     existing.markWatched(true)
-                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d }
+                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
                                     continue
                                 }
                                 let episode = TVEpisode(
@@ -231,6 +240,7 @@ extension BackgroundDataService {
                                 )
                                 episode.uniqueID = epUniqueID
                                 episode.lastWatchedDate = watchedDates[epUniqueID]
+                                episode.watchedDate = watchedDates[epUniqueID]
                                 episode.season = season
                                 context.insert(episode)
                                 existingEpisodesByUniqueID[epUniqueID] = episode
@@ -250,7 +260,7 @@ extension BackgroundDataService {
                                 existing.season = season
                                 if watchedNumbers.contains(epData.episodeNumber) {
                                     existing.markWatched(true)
-                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d }
+                                    if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
                                 }
                                 continue
                             }
@@ -268,6 +278,7 @@ extension BackgroundDataService {
                             episode.uniqueID = epUniqueID
                             if watchedNumbers.contains(epData.episodeNumber) {
                                 episode.lastWatchedDate = watchedDates[epUniqueID]
+                                episode.watchedDate = watchedDates[epUniqueID]
                             }
                             episode.season = season
                             context.insert(episode)
@@ -297,6 +308,13 @@ extension BackgroundDataService {
         
         do { try context.save() } catch {
             AppLogger.warning("Import final save failed: \(error)", logger: AppLogger.sync)
+        }
+        // Quick post-import backfill for main cast/directors and episode data (TMDB + TVMaze) — not 6-day drip
+        if importedCount > 0 || mergedCount > 0 {
+            Task.detached(priority: .background) {
+                await BackgroundTaskManager.shared.refreshMissingMainCastQuick(cap: 100)
+                await BackgroundTaskManager.shared.refreshMissingEpisodesQuick(cap: 50)
+            }
         }
         onProgress?(ImportProgress(
             processedCount: totalCount,

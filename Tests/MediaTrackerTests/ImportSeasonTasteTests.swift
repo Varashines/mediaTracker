@@ -59,7 +59,7 @@ final class ImportSeasonTasteTests: XCTestCase {
         let data = MediaItemData(
             id: "tv_202", title: "Show", type: "TV Show", state: "Active",
             dateAdded: Date(), taste: "Love", watchedEpisodeIDs: nil,
-            lastInteractionDate: nil, watchedEpisodeDates: nil,
+            lastInteractionDate: nil, lastStateChangeDate: nil, watchedEpisodeDates: nil,
             seasonTasteOverrides: [1: "Love", 3: "Dislike"],
             posterURL: nil, overview: nil, backdropURL: nil, releaseDate: nil,
             lastUpdated: nil, titleLogoURL: nil, themeColorHex: nil,
@@ -91,7 +91,7 @@ final class ImportSeasonTasteTests: XCTestCase {
         let data = MediaItemData(
             id: "tv_303", title: "Show", type: "TV Show", state: "Active",
             dateAdded: Date(), taste: "Love", watchedEpisodeIDs: nil,
-            lastInteractionDate: nil, watchedEpisodeDates: nil,
+            lastInteractionDate: nil, lastStateChangeDate: nil, watchedEpisodeDates: nil,
             seasonTasteOverrides: [1: "Dislike", 2: "Love"],
             posterURL: nil, overview: nil, backdropURL: nil, releaseDate: nil,
             lastUpdated: nil, titleLogoURL: nil, themeColorHex: nil,
@@ -138,7 +138,7 @@ final class ImportSeasonTasteTests: XCTestCase {
         let data = MediaItemData(
             id: "404", title: "Legacy", type: "movie", state: "Wishlist",
             dateAdded: Date(), taste: nil, watchedEpisodeIDs: nil,
-            lastInteractionDate: nil, watchedEpisodeDates: nil,
+            lastInteractionDate: nil, lastStateChangeDate: nil, watchedEpisodeDates: nil,
             seasonTasteOverrides: nil, posterURL: nil, overview: nil,
             backdropURL: nil, releaseDate: nil, lastUpdated: nil,
             titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
@@ -182,6 +182,7 @@ final class ImportSeasonTasteTests: XCTestCase {
             dateAdded: Date(), taste: nil,
             watchedEpisodeIDs: ["777_1_1", "777_1_2"],
             lastInteractionDate: nil,
+            lastStateChangeDate: nil,
             watchedEpisodeDates: ["777_1_1": watched, "777_1_2": watched],
             seasonTasteOverrides: nil, posterURL: nil, overview: nil,
             backdropURL: nil, releaseDate: nil, lastUpdated: nil,
