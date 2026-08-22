@@ -1,31 +1,60 @@
 import SwiftUI
+import AppKit
 import SwiftData
 
+/// A recap preview with an optional visual editor for its loved-title poster wall.
 struct YearReviewSharePopup: View {
     let review: YearInReview
     let onDismiss: () -> Void
 
+    private let previewScale: CGFloat = 0.58
+
     @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedFavoriteIDs: Set<PersistentIdentifier> = []
-    @State private var customShareImage: NSImage? = nil
-    @State private var showCustomShareMenu = false
+    @State private var selectedTitleIDs: [PersistentIdentifier] = []
+    @State private var posterImages: [PersistentIdentifier: CGImage] = [:]
+    @State private var isPreparing = true
+    @State private var showsPicker = false
+    @State private var sharedImage: NSImage?
+    @State private var showsShareMenu = false
 
-    private var availableFavorites: [YearWatchedTitle] {
-        let favorites = review.favoriteCandidates()
-        return favorites.isEmpty ? review.allWatchedTitles() : favorites
+    private var lovedTitles: [YearWatchedTitle] {
+        review.lovedCandidates()
     }
 
-    private var selectedFavorites: [YearWatchedTitle] {
-        let available = availableFavorites
-        return available.filter { selectedFavoriteIDs.contains($0.id) }
+    private var selectedTitles: [YearWatchedTitle] {
+        selectedTitleIDs.compactMap { selectedID in
+            lovedTitles.first { $0.id == selectedID }
+        }
     }
 
-    private var shareThemePrimary: Color {
-        Color(red: 0.55, green: 0.35, blue: 0.95)
+    private var posterPickLimit: Int {
+        min(8, lovedTitles.count)
     }
 
-    private var shareThemeSecondary: Color {
-        Color(red: 0.15, green: 0.75, blue: 0.95)
+    private var totalPickLimit: Int {
+        min(10, lovedTitles.count)
+    }
+
+    private var automaticTitleIDs: [PersistentIdentifier] {
+        lovedTitles.prefix(totalPickLimit).map(\.id)
+    }
+
+    private var posterPickCount: Int {
+        min(selectedTitleIDs.count, posterPickLimit)
+    }
+
+    private var textPickCount: Int {
+        max(0, selectedTitleIDs.count - posterPickLimit)
+    }
+
+    private var pickerInstruction: String {
+        "\(posterPickCount) of \(posterPickLimit) poster picks · \(textPickCount) of \(max(0, totalPickLimit - posterPickLimit)) text picks"
+    }
+
+    private var cardHighlights: [YearReviewShareHighlight] {
+        selectedTitles.map {
+            YearReviewShareHighlight(id: $0.id, title: $0.title, posterImage: posterImages[$0.id])
+        }
     }
 
     var body: some View {
@@ -33,276 +62,260 @@ struct YearReviewSharePopup: View {
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture { onDismiss() }
-                .transition(.opacity)
+                .onTapGesture(perform: onDismiss)
 
-            sideBySideLayout
+            previewPanel
 
-            if showCustomShareMenu, let img = customShareImage {
-                ZStack {
-                    Color.black.opacity(0.45)
-                        .ignoresSafeArea()
-                        .onTapGesture { showCustomShareMenu = false }
+            if showsShareMenu, let sharedImage {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { showsShareMenu = false }
 
-                    CustomShareMenuView(
-                        image: img,
-                        title: "\(review.year)_Year_In_Review",
-                        onDismiss: {
-                            showCustomShareMenu = false
-                            onDismiss()
-                        },
-                        themeColor: shareThemePrimary,
-                        secondaryColor: shareThemeSecondary,
-                        mutedColor: Color(red: 0.95, green: 0.35, blue: 0.55)
-                    )
-                }
-                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                CustomShareMenuView(
+                    image: sharedImage,
+                    title: "\(review.year) Year in Review",
+                    onDismiss: {
+                        showsShareMenu = false
+                        onDismiss()
+                    }
+                )
             }
         }
-        .animation(AppTheme.Animation.springSnappy, value: showCustomShareMenu)
+        .task(id: review.year) {
+            selectedTitleIDs = automaticTitleIDs
+            await loadSelectedPosters()
+        }
+        .animation(AppTheme.Animation.springGentle, value: showsPicker)
+        .animation(AppTheme.Animation.springGentle, value: showsShareMenu)
     }
 
-    private var sideBySideLayout: some View {
-        VStack(spacing: 16) {
-            headerRow
+    private var previewPanel: some View {
+        VStack(spacing: AppTheme.Spacing.medium) {
+            header
 
-            HStack(alignment: .top, spacing: 20) {
-                // Left Column: Live Scaled Card Preview + Action Button
-                VStack(spacing: 14) {
-                    YearReviewShareCardView(review: review, selectedFavorites: selectedFavorites)
-                        .environment(\.colorScheme, .dark)
-                        .scaleEffect(0.62)
+            if showsPicker {
+                HStack(alignment: .top, spacing: AppTheme.Spacing.large) {
+                    cardPreview
+
+                    titlePicker
                         .frame(
-                            width: YearReviewShareCardView.cardSize.width * 0.62,
-                            height: YearReviewShareCardView.cardSize.height * 0.62
+                            width: 420,
+                            height: YearReviewShareCardView.cardSize.height * previewScale,
+                            alignment: .topLeading
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
-
-                    shareButton {
-                        let card = YearReviewShareCardView(review: review, selectedFavorites: selectedFavorites)
-                        if let image = card.renderToImage() {
-                            customShareImage = image
-                            withAnimation(AppTheme.Animation.springSnappy) { showCustomShareMenu = true }
+                        .background {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(AppTheme.Colors.surface(for: colorScheme))
                         }
-                    }
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
-                .frame(width: 290)
+            } else {
+                cardPreview
+            }
 
-                // Right Column: Favorites Selection List
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("FAVORITE PICKS OF \(String(review.year))")
-                                .font(.system(size: 10, weight: .black, design: .monospaced))
-                                .kerning(1.5)
-                                .foregroundStyle(shareThemePrimary)
-
-                            Text(
-                                selectedFavoriteIDs.isEmpty
-                                    ? "Select up to 3 favorites to highlight on your card"
-                                    : "\(selectedFavoriteIDs.count)/3 selected"
-                            )
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        if !selectedFavoriteIDs.isEmpty {
-                            Button("Clear") {
-                                selectedFavoriteIDs.removeAll()
-                            }
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(shareThemeSecondary)
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if availableFavorites.isEmpty {
-                        VStack(spacing: 8) {
-                            Spacer()
-                            Image(systemName: "film")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.secondary)
-                            Text("No watched titles to select")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: 380)
-                    } else {
-                        ScrollView(.vertical, showsIndicators: true) {
-                            VStack(spacing: 8) {
-                                ForEach(availableFavorites) { item in
-                                    let isSelected = selectedFavoriteIDs.contains(item.id)
-                                    favoriteRow(item: item, isSelected: isSelected) {
-                                        if isSelected {
-                                            selectedFavoriteIDs.remove(item.id)
-                                        } else if selectedFavoriteIDs.count < 3 {
-                                            selectedFavoriteIDs.insert(item.id)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 2)
-                            .padding(.trailing, 4)
-                        }
-                        .frame(width: 320, height: 400)
-                    }
+            HStack(spacing: AppTheme.Spacing.small) {
+                Button {
+                    showsPicker.toggle()
+                } label: {
+                    Label(showsPicker ? "Done Editing" : "Edit Picks", systemImage: "square.grid.2x2")
+                        .font(AppTheme.Font.bodyBold)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, AppTheme.Spacing.small)
+                        .padding(.vertical, AppTheme.Spacing.compact)
+                        .background(.primary.opacity(0.07), in: Capsule())
                 }
+                .buttonStyle(.plain)
+                .contentShape(Capsule())
+
+                Button(action: exportCard) {
+                    Label(
+                        isPreparing ? "Preparing…" : "Share Recap",
+                        systemImage: isPreparing ? "arrow.triangle.2.circlepath" : "square.and.arrow.up"
+                    )
+                    .font(AppTheme.Font.bodyBold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, AppTheme.Spacing.medium)
+                    .padding(.vertical, AppTheme.Spacing.compact)
+                    .background(AppTheme.Colors.accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .contentShape(Capsule())
+                .disabled(isPreparing || selectedTitleIDs.count < totalPickLimit)
             }
         }
-        .padding(22)
-        .background(modalBackground)
+        .padding(AppTheme.Spacing.large)
+        .frame(width: showsPicker ? 830 : 430)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .fill(AppTheme.Colors.background(for: colorScheme))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                        .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.08 : 0.04))
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.5), radius: 30, y: 15)
+        }
     }
 
-    private func favoriteRow(item: YearWatchedTitle, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                // Poster
-                if let posterURL = item.posterURL.flatMap(URL.init) {
-                    CachedImage(url: posterURL, targetSize: .thumbSmall) { _ in } placeholder: {
-                        Rectangle().fill(Color.primary.opacity(0.08))
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 30, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                } else {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(width: 30, height: 44)
-                        Image(systemName: item.type == .tvShow ? "tv" : "film")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                // Title & Subtitle
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 6) {
-                        Text(item.type == .tvShow ? "TV Series" : "Movie")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
-
-                        if item.tasteValue == "Love" || item.tasteValue == "Loved" {
-                            Text("❤️ Loved")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.55))
-                        } else if item.tasteValue == "Like" || item.tasteValue == "Liked" {
-                            Text("👍 Liked")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color(red: 0.3, green: 0.8, blue: 0.4))
-                        }
-                    }
-                }
-
-                Spacer(minLength: 4)
-
-                // Selection Indicator
-                ZStack {
-                    Circle()
-                        .stroke(isSelected ? shareThemePrimary : Color.secondary.opacity(0.4), lineWidth: 1.5)
-                        .frame(width: 18, height: 18)
-
-                    if isSelected {
-                        Circle()
-                            .fill(shareThemePrimary)
-                            .frame(width: 12, height: 12)
-                    }
-                }
-            }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? shareThemePrimary.opacity(0.12) : AppTheme.Colors.surface(for: colorScheme))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(isSelected ? shareThemePrimary.opacity(0.5) : AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 1)
-                    )
+    private var cardPreview: some View {
+        YearReviewShareCardView(review: review, highlights: cardHighlights)
+            .scaleEffect(previewScale)
+            .frame(
+                width: YearReviewShareCardView.cardSize.width * previewScale,
+                height: YearReviewShareCardView.cardSize.height * previewScale
             )
+            .shadow(color: .black.opacity(0.55), radius: AppTheme.Spacing.large, y: AppTheme.Spacing.small)
+    }
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+                Text("SHARE YOUR RECAP")
+                    .font(AppTheme.Font.caption)
+                    .kerning(AppTheme.Kerning.wide)
+                    .foregroundStyle(AppTheme.Colors.accent)
+                Text("\(review.year) Year in Media")
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 19))
+                    .foregroundStyle(.secondary, .primary.opacity(0.1))
+            }
+            .buttonStyle(.plain)
+            .contentShape(Circle())
+            .help("Close")
+        }
+    }
+
+    @MainActor
+    private func loadSelectedPosters() async {
+        isPreparing = true
+        for title in selectedTitles {
+            guard posterImages[title.id] == nil,
+                  let posterURL = title.posterURL else {
+                continue
+            }
+            if let image = await ImageCache.shared.get(
+                forKey: posterURL,
+                targetSize: AppTheme.Thumbnail.small,
+                priority: .critical
+            )?.image {
+                posterImages[title.id] = image
+            }
+        }
+        isPreparing = false
+    }
+
+    private var titlePicker: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
+            HStack {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+                    Text("TOP \(totalPickLimit) PICKS")
+                        .font(AppTheme.Font.caption)
+                        .kerning(AppTheme.Kerning.wide)
+                        .foregroundStyle(.secondary)
+
+                    Text(pickerInstruction)
+                        .font(AppTheme.Font.label)
+                        .foregroundStyle(.secondary)
+
+                    Text("Click a ranked title to remove it.")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Restore Auto") {
+                    selectedTitleIDs = automaticTitleIDs
+                }
+                .buttonStyle(.plain)
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(AppTheme.Colors.accent)
+                .contentShape(Rectangle())
+            }
+
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.tiny), count: 3),
+                    spacing: AppTheme.Spacing.small
+                ) {
+                    ForEach(lovedTitles) { title in
+                        lovedTitlePickerCell(title)
+                    }
+                }
+                .padding(AppTheme.Spacing.micro)
+            }
+        }
+        .padding(AppTheme.Spacing.small)
+    }
+
+    private func lovedTitlePickerCell(_ title: YearWatchedTitle) -> some View {
+        let rank = selectedTitleIDs.firstIndex(of: title.id).map { $0 + 1 }
+        return Button {
+            toggle(title)
+        } label: {
+            VStack(spacing: AppTheme.Spacing.mini) {
+                CachedImage(
+                    url: title.posterURL.flatMap(URL.init(string:)),
+                    targetSize: AppTheme.Thumbnail.small,
+                    priority: .normal
+                ) {
+                    Color.primary.opacity(0.08)
+                }
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .stroke(rank == nil ? AppTheme.Colors.strokeDefault(for: colorScheme) : AppTheme.Colors.accent, lineWidth: rank == nil ? 1 : 3)
+                    if let rank {
+                        Text("#\(rank)")
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, AppTheme.Spacing.mini)
+                            .padding(.vertical, AppTheme.Spacing.micro)
+                            .background(AppTheme.Colors.accent, in: Capsule())
+                            .padding(AppTheme.Spacing.micro)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                }
+
+                Text(title.title)
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(rank == nil ? .secondary : .primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
     }
 
-    private var headerRow: some View {
-        HStack {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [shareThemePrimary, shareThemeSecondary],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 18, height: 18)
-
-                Text("\(String(review.year)) WRAPPED CARD")
-                    .font(.system(size: 12, weight: .black, design: .monospaced))
-                    .kerning(1.8)
-                    .foregroundStyle(shareThemePrimary)
-            }
-
-            Spacer()
-
-            Button {
-                onDismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.secondary, .quaternary)
-            }
-            .buttonStyle(.plain)
-            .contentShape(Circle())
+    private func toggle(_ title: YearWatchedTitle) {
+        if let index = selectedTitleIDs.firstIndex(of: title.id) {
+            selectedTitleIDs.remove(at: index)
+        } else {
+            guard selectedTitleIDs.count < totalPickLimit else { return }
+            selectedTitleIDs.append(title.id)
+        }
+        Task { @MainActor in
+            await loadSelectedPosters()
         }
     }
 
-    private func shareButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("Export Wrapped Card")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                LinearGradient(
-                    colors: [shareThemePrimary, shareThemeSecondary],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .clipShape(Capsule())
-            .shadow(color: shareThemePrimary.opacity(0.4), radius: 8, y: 4)
-        }
-        .buttonStyle(.plain)
-        .contentShape(Capsule())
-    }
-
-    private var modalBackground: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(AppTheme.Colors.background(for: colorScheme))
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [shareThemePrimary.opacity(0.4), shareThemeSecondary.opacity(0.2), AppTheme.Colors.strokeDefault(for: colorScheme)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        }
-        .shadow(color: .black.opacity(0.4), radius: 30, y: 15)
+    @MainActor
+    private func exportCard() {
+        let card = YearReviewShareCardView(review: review, highlights: cardHighlights)
+        guard let image = card.renderToImage() else { return }
+        sharedImage = image
+        showsShareMenu = true
     }
 }

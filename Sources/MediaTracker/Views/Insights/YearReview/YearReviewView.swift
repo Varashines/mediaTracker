@@ -14,7 +14,7 @@ struct YearReviewView: View {
     @State private var review: YearInReview?
     @State private var isLoading = true
     @State private var loadTask: Task<Void, Never>?
-    @State private var showShareCard = false
+    @State private var showsSharePreview = false
 
     // Calendar state
     @State private var selectedMonth: Date          // the month whose grid is showing
@@ -47,30 +47,28 @@ struct YearReviewView: View {
         .navigationTitle("Year in Review")
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .toolbar {
-            if review != nil {
-                ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
+                if let review {
                     Button {
-                        showShareCard = true
+                        showsSharePreview = true
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("Share Wrapped")
-                        }
+                        Label("Share Year", systemImage: "square.and.arrow.up")
                     }
-                    .help("Export Year in Review Share Card")
+                    .keyboardShortcut("s", modifiers: .command)
+                    .help("Share your \(review.year) recap")
+                    .accessibilityLabel("Share your \(review.year) recap")
                 }
             }
         }
         .overlay {
-            if showShareCard, let review {
-                YearReviewSharePopup(
-                    review: review,
-                    onDismiss: { showShareCard = false }
-                )
-                .transition(.opacity)
+            if showsSharePreview, let review {
+                YearReviewSharePopup(review: review) {
+                    showsSharePreview = false
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(AppTheme.Animation.springSnappy, value: showShareCard)
+        .animation(AppTheme.Animation.springGentle, value: showsSharePreview)
         .onAppear(perform: load)
         .onDisappear { loadTask?.cancel(); loadTask = nil }
     }
@@ -144,7 +142,7 @@ struct YearReviewView: View {
             )
             .frame(width: 290)
 
-            YearHeroSection(review: review, colorScheme: colorScheme, onShare: { showShareCard = true })
+            YearHeroSection(review: review, colorScheme: colorScheme)
                 .frame(maxWidth: .infinity)
 
             YearMonthRail(
@@ -162,7 +160,7 @@ struct YearReviewView: View {
 
     private func compactHeroLayout(_ review: YearInReview) -> some View {
         VStack(spacing: 0) {
-            YearHeroSection(review: review, colorScheme: colorScheme, onShare: { showShareCard = true })
+            YearHeroSection(review: review, colorScheme: colorScheme)
 
             YearActivityOverview(
                 review: review,
@@ -207,7 +205,6 @@ struct YearReviewView: View {
 private struct YearHeroSection: View {
     let review: YearInReview
     let colorScheme: ColorScheme
-    var onShare: (() -> Void)? = nil
 
     private var hoursWatched: Int { review.totalMinutes / 60 }
     private var busiestDayDescription: String {
@@ -262,31 +259,6 @@ private struct YearHeroSection: View {
                 )
             }
 
-            if let onShare {
-                Button(action: onShare) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Share \(String(review.year)) Wrapped")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(red: 0.55, green: 0.35, blue: 0.95), Color(red: 0.15, green: 0.75, blue: 0.95)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(Capsule())
-                    .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.95).opacity(0.35), radius: 6, y: 3)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Capsule())
-                .padding(.top, AppTheme.Spacing.tiny)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppTheme.Spacing.pageMargin)

@@ -275,4 +275,93 @@ final class YearInReviewTests: XCTestCase {
         XCTAssertEqual(augTitles.count, 2)
         XCTAssertEqual(augTitles.first?.title, "Month Show") // Loved comes before Liked
     }
+
+    @MainActor
+    func testShareCandidatesDeduplicateTitlesAndPreferRatedWatches() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let show = makeItem(id: "tv_80", title: "Loved Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
+        show.tasteValue = TasteValue.love.rawValue
+        context.insert(show)
+        context.insert(makeEpisode(showID: 80, watchedAt: date(2026, 7, 1), runtime: 45, episodeNumber: 1))
+        context.insert(makeEpisode(showID: 80, watchedAt: date(2026, 7, 2), runtime: 45, episodeNumber: 2))
+
+        let movie = makeItem(id: "movie_81", title: "Unrated Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        movie.lastStateChangeDate = date(2026, 7, 3)
+        context.insert(movie)
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.allWatchedTitles().map(\.title), ["Loved Show", "Unrated Movie"])
+        XCTAssertEqual(review.favoriteCandidates().map(\.title), ["Loved Show"])
+    }
+
+    @MainActor
+    func testShareCandidatesFallBackToAllWatchedTitlesWithoutRatings() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let movie = makeItem(id: "movie_82", title: "Unrated Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        movie.lastStateChangeDate = date(2026, 8, 1)
+        context.insert(movie)
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.favoriteCandidates().map(\.title), ["Unrated Movie"])
+    }
+
+    @MainActor
+    func testShareCandidatesRankEquallyLovedShowsByYearlyEngagement() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let lightlyWatched = makeItem(id: "tv_83", title: "Lightly Watched", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
+        lightlyWatched.tasteValue = TasteValue.love.rawValue
+        context.insert(lightlyWatched)
+        context.insert(makeEpisode(showID: 83, watchedAt: date(2026, 8, 1), runtime: 45, episodeNumber: 1))
+
+        let heavilyWatched = makeItem(id: "tv_84", title: "Heavily Watched", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Active")
+        heavilyWatched.tasteValue = TasteValue.love.rawValue
+        context.insert(heavilyWatched)
+        context.insert(makeEpisode(showID: 84, watchedAt: date(2026, 8, 2), runtime: 45, episodeNumber: 1))
+        context.insert(makeEpisode(showID: 84, watchedAt: date(2026, 8, 3), runtime: 45, episodeNumber: 2))
+        context.insert(makeEpisode(showID: 84, watchedAt: date(2026, 8, 4), runtime: 45, episodeNumber: 3))
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.favoriteCandidates().map(\.title), ["Heavily Watched", "Lightly Watched"])
+    }
+
+    @MainActor
+    func testPosterWallCandidatesIncludeLovedTitlesOnly() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let loved = makeItem(id: "movie_85", title: "Loved Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        loved.tasteValue = TasteValue.love.rawValue
+        loved.lastStateChangeDate = date(2026, 9, 1)
+        context.insert(loved)
+
+        let liked = makeItem(id: "movie_86", title: "Liked Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        liked.tasteValue = TasteValue.like.rawValue
+        liked.lastStateChangeDate = date(2026, 9, 2)
+        context.insert(liked)
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.lovedCandidates().map(\.title), ["Loved Movie"])
+    }
 }

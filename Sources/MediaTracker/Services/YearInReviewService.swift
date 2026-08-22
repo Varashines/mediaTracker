@@ -108,41 +108,70 @@ struct YearInReview: Sendable {
         }
 
         return result.sorted {
-            let r0 = tasteRank($0.tasteValue)
-            let r1 = tasteRank($1.tasteValue)
+            let r0 = Self.tasteRank($0.tasteValue)
+            let r1 = Self.tasteRank($1.tasteValue)
             if r0 != r1 { return r0 < r1 }
             return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         }
     }
 
+    /// A de-duplicated, taste-ranked set of titles watched during this review
+    /// year. This powers the recap card without requiring another SwiftData
+    /// fetch or coupling its title choices to a particular calendar day.
     func allWatchedTitles() -> [YearWatchedTitle] {
-        var seen = Set<PersistentIdentifier>()
-        var result: [YearWatchedTitle] = []
-        let sortedDays = titlesByDay.keys.sorted(by: >)
+        var titlesByID: [PersistentIdentifier: YearWatchedTitle] = [:]
+        for title in titlesByDay.values.flatMap({ $0 }) {
+            guard let existing = titlesByID[title.id] else {
+                titlesByID[title.id] = title
+                continue
+            }
 
-        for day in sortedDays {
-            for title in titlesByDay[day] ?? [] {
-                if seen.insert(title.id).inserted {
-                    result.append(title)
-                }
+            // A series can appear on multiple watched days. Preserve one title
+            // record while combining its yearly episode engagement for recap
+            // ranking. Movies appear at most once and retain their zero count.
+            titlesByID[title.id] = YearWatchedTitle(
+                id: existing.id,
+                title: existing.title,
+                posterURL: existing.posterURL,
+                type: existing.type,
+                tasteValue: existing.tasteValue,
+                episodeCount: existing.episodeCount + title.episodeCount
+            )
+        }
+
+        return titlesByID.values.sorted {
+            let r0 = Self.tasteRank($0.tasteValue)
+            let r1 = Self.tasteRank($1.tasteValue)
+            if r0 != r1 { return r0 < r1 }
+            if $0.episodeCount != $1.episodeCount { return $0.episodeCount > $1.episodeCount }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    /// Liked and loved titles make the most personal default featured picks.
+    /// Fall back to `allWatchedTitles()` when the year has no explicit ratings.
+    func favoriteCandidates() -> [YearWatchedTitle] {
+        let favorites = allWatchedTitles().filter {
+            switch $0.tasteValue {
+            case "Love", "Loved", "Like", "Liked":
+                return true
+            default:
+                return false
             }
         }
-
-        return result.sorted {
-            let r0 = tasteRank($0.tasteValue)
-            let r1 = tasteRank($1.tasteValue)
-            if r0 != r1 { return r0 < r1 }
-            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-        }
+        return favorites.isEmpty ? allWatchedTitles() : favorites
     }
 
-    func favoriteCandidates() -> [YearWatchedTitle] {
+    /// Explicitly loved titles for the Year in Review poster wall. Unlike the
+    /// broader favourite list, this intentionally excludes merely liked titles
+    /// and does not substitute other ratings when no titles are loved.
+    func lovedCandidates() -> [YearWatchedTitle] {
         allWatchedTitles().filter {
-            $0.tasteValue == "Love" || $0.tasteValue == "Loved" || $0.tasteValue == "Like" || $0.tasteValue == "Liked"
+            $0.tasteValue == "Love" || $0.tasteValue == "Loved"
         }
     }
 
-    private func tasteRank(_ taste: String) -> Int {
+    private static func tasteRank(_ taste: String) -> Int {
         switch taste {
         case "Love", "Loved": return 0
         case "Like", "Liked": return 1

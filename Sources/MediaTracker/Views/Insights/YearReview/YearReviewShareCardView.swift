@@ -1,440 +1,213 @@
 import SwiftUI
-import SwiftData
 import AppKit
+import SwiftData
 
-// MARK: - Year Review Share Card
+/// Export-only representation of a featured title. Poster pixels are resolved
+/// before this view is rendered so a synchronous `ImageRenderer` never exports
+/// an asynchronous image placeholder.
+struct YearReviewShareHighlight: Identifiable {
+    let id: PersistentIdentifier
+    let title: String
+    let posterImage: CGImage?
+}
 
+/// A focused, portrait recap designed to remain legible in a message preview.
+/// It deliberately presents one headline, three support stats, ten personal
+/// picks, and one memorable highlight instead of reproducing the dashboard.
 struct YearReviewShareCardView: View {
+    static let cardSize = CGSize(width: 480, height: 820)
+
     let review: YearInReview
-    var selectedFavorites: [YearWatchedTitle] = []
+    let highlights: [YearReviewShareHighlight]
 
-    static let cardSize = CGSize(width: 440, height: 720)
+    private var accent: Color { AppTheme.Colors.accent }
 
-    private var hoursWatched: Double {
-        Double(review.totalMinutes) / 60.0
-    }
-
-    private var formattedHours: String {
-        if hoursWatched >= 100 {
-            return "\(Int(hoursWatched.rounded()))h"
-        } else {
-            return String(format: "%.1fh", hoursWatched)
-        }
-    }
-
-    private var primaryAccent: Color {
-        Color(red: 0.55, green: 0.35, blue: 0.95)
-    }
-
-    private var secondaryAccent: Color {
-        Color(red: 0.15, green: 0.75, blue: 0.95)
-    }
-
-    private var busiestDayString: String? {
-        guard let busiest = review.busiestDay else { return nil }
-        let hours = Double(busiest.minutes) / 60.0
-        let dur = hours >= 1.0 ? String(format: "%.1fh", hours) : "\(busiest.minutes)m"
-        let dateStr = busiest.day.formatted(.dateTime.month(.abbreviated).day())
-        return "\(dateStr) · \(dur)"
+    private var watchTime: String {
+        let hours = review.totalMinutes / 60
+        if hours > 0 { return "\(hours) hours" }
+        return "\(review.totalMinutes) min"
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            headerBar
+        ZStack {
+            Color.black
 
-            heroWatchTimeSection
+            RadialGradient(
+                colors: [accent.opacity(0.28), .clear],
+                center: .top,
+                startRadius: 20,
+                endRadius: 370
+            )
 
-            statPillsRow
-
-            insightsDNASurface
-
-            if !selectedFavorites.isEmpty {
-                favoritesSection
+            VStack(spacing: AppTheme.Spacing.large) {
+                header
+                watchTimeHeadline
+                supportStats
+                favoriteTitles
+                footer
             }
-
-            Spacer(minLength: 0)
-
-            footerBar
+            .padding(.horizontal, AppTheme.Spacing.large)
+            .padding(.vertical, AppTheme.Spacing.xLarge)
         }
-        .padding(.vertical, 22)
-        .padding(.horizontal, 20)
         .frame(width: Self.cardSize.width, height: Self.cardSize.height)
-        .background(backgroundMesh)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            primaryAccent.opacity(0.8),
-                            Color.white.opacity(0.35),
-                            secondaryAccent.opacity(0.6),
-                            Color.white.opacity(0.12)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                .stroke(accent.opacity(0.45), lineWidth: 1)
+        }
         .environment(\.colorScheme, .dark)
     }
 
-    // MARK: - Background Mesh
-
-    private var backgroundMesh: some View {
-        ZStack {
-            Color(white: 0.03)
-
-            RadialGradient(
-                colors: [primaryAccent.opacity(0.55), Color(white: 0.03)],
-                center: .topLeading,
-                startRadius: 10,
-                endRadius: 420
-            )
-
-            RadialGradient(
-                colors: [secondaryAccent.opacity(0.35), Color.clear],
-                center: .topTrailing,
-                startRadius: 20,
-                endRadius: 360
-            )
-
-            RadialGradient(
-                colors: [Color(red: 0.95, green: 0.35, blue: 0.55).opacity(0.22), Color.clear],
-                center: .bottomLeading,
-                startRadius: 30,
-                endRadius: 350
-            )
-        }
-    }
-
-    // MARK: - Header Bar
-
-    private var headerBar: some View {
-        HStack(alignment: .center) {
-            HStack(spacing: 9) {
-                if let appIcon = NSImage(named: "AppIcon") {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .shadow(color: primaryAccent.opacity(0.4), radius: 4, y: 2)
-                } else {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(primaryAccent.opacity(0.3))
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "film.stack.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-
-                Text("MEDIATRACKER")
-                    .font(.system(size: 11, weight: .black, design: .monospaced))
-                    .kerning(1.8)
-                    .foregroundStyle(.white.opacity(0.95))
-            }
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("MEDIATRACKER")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .kerning(AppTheme.Kerning.wide)
+                .foregroundStyle(.white.opacity(0.7))
 
             Spacer()
 
-            Text("\(String(review.year)) WRAPPED")
-                .font(.system(size: 11, weight: .black, design: .monospaced))
-                .kerning(1.5)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(primaryAccent.opacity(0.4))
-                        .overlay(Capsule().stroke(primaryAccent.opacity(0.8), lineWidth: 1))
-                )
+            Text(String(review.year))
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .foregroundStyle(accent)
         }
     }
 
-    // MARK: - Hero Watch Time
-
-    private var heroWatchTimeSection: some View {
-        VStack(spacing: 4) {
-            Text("TOTAL WATCH TIME")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .kerning(1.8)
-                .foregroundStyle(secondaryAccent)
-
-            Text(formattedHours)
-                .font(.system(size: 48, weight: .heavy, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white, Color.white.opacity(0.9)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: primaryAccent.opacity(0.5), radius: 16, y: 4)
-
-            if let busiest = busiestDayString {
-                HStack(spacing: 5) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.2))
-                    Text("Busiest: \(busiest)")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
-            }
-        }
-        .padding(.vertical, 6)
-    }
-
-    // MARK: - Stat Pills Row
-
-    private var statPillsRow: some View {
-        HStack(spacing: 8) {
-            glassStatPill(
-                title: "\(review.totalEpisodes.formatted())",
-                subtitle: "\(review.totalSeries) Series",
-                icon: "tv.fill",
-                accent: primaryAccent
-            )
-
-            glassStatPill(
-                title: "\(review.totalMovies)",
-                subtitle: "Movies",
-                icon: "film.fill",
-                accent: secondaryAccent
-            )
-
-            glassStatPill(
-                title: "\(review.totalDaysWatched)",
-                subtitle: "Active Days",
-                icon: "calendar",
-                accent: Color(red: 0.95, green: 0.45, blue: 0.65)
-            )
-        }
-    }
-
-    private func glassStatPill(title: String, subtitle: String, icon: String, accent: Color) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(accent)
-                Text(title)
-                    .font(.system(size: 16, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-            }
-            Text(subtitle.uppercased())
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+    private var watchTimeHeadline: some View {
+        VStack(spacing: AppTheme.Spacing.micro) {
+            Text("MY YEAR IN MEDIA")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .kerning(AppTheme.Kerning.wide)
                 .foregroundStyle(.white.opacity(0.65))
+
+            Text(watchTime)
+                .font(.system(size: 54, weight: .heavy, design: .rounded))
+                .minimumScaleFactor(0.7)
                 .lineLimit(1)
+                .foregroundStyle(.white)
+
+            Text("watched")
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundStyle(accent)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-        )
+        .padding(.vertical, AppTheme.Spacing.small)
     }
 
-    // MARK: - Insights & DNA Surface
-
-    private var insightsDNASurface: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Top Networks / Studios
-            if !review.topNetworks.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack {
-                        Text("TOP STUDIOS & NETWORKS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .kerning(1.2)
-                            .foregroundStyle(secondaryAccent)
-                        Spacer()
-                    }
-
-                    HStack(spacing: 6) {
-                        ForEach(Array(review.topNetworks.prefix(3)), id: \.name) { net in
-                            HStack(spacing: 4) {
-                                Text(net.name)
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-
-                                Text("\(net.count)")
-                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.08))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.8))
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Top Genres
-            if !review.topGenres.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack {
-                        Text("GENRE DNA")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .kerning(1.2)
-                            .foregroundStyle(primaryAccent.opacity(0.9))
-                        Spacer()
-                    }
-
-                    HStack(spacing: 6) {
-                        ForEach(Array(review.topGenres.prefix(3)), id: \.name) { genre in
-                            Text(genre.name)
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(primaryAccent.opacity(0.2))
-                                        .overlay(Capsule().stroke(primaryAccent.opacity(0.4), lineWidth: 0.8))
-                                )
-                        }
-                    }
-                }
-            }
-
-            // Top Talent
-            if let topActor = review.topActors.first {
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color(red: 1.0, green: 0.8, blue: 0.2))
-                    Text("Top Talent:")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.6))
-                    Text(topActor.name)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    if topActor.count > 1 {
-                        Text("(\(topActor.count) titles)")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-            }
+    private var supportStats: some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            supportStat(value: "\(review.totalSeries)", label: "Series", icon: "tv.fill")
+            supportStat(value: "\(review.totalMovies)", label: "Movies", icon: "film.fill")
+            supportStat(value: review.totalEpisodes.formatted(), label: "Episodes", icon: "rectangle.stack.fill")
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        )
     }
 
-    // MARK: - Selected Favorites Ribbon
+    private func supportStat(value: String, label: String, icon: String) -> some View {
+        VStack(spacing: AppTheme.Spacing.micro) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(accent)
+            Text(value)
+                .font(.system(size: 19, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .kerning(AppTheme.Kerning.tight)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, minHeight: 82)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+    }
 
-    private var favoritesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("FAVORITE PICKS OF \(String(review.year))")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .kerning(1.2)
-                    .foregroundStyle(.white.opacity(0.8))
+    private var favoriteTitles: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+            Text("MY TOP 10")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .kerning(AppTheme.Kerning.wide)
+                .foregroundStyle(.white.opacity(0.65))
 
-                Spacer()
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.small), count: 4),
+                spacing: AppTheme.Spacing.small
+            ) {
+                ForEach(highlights.prefix(8)) { highlight in
+                    poster(for: highlight)
+                }
 
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.55))
+                ForEach(0..<max(0, 8 - highlights.count), id: \.self) { _ in
+                    emptyHighlight
+                }
             }
 
-            HStack(spacing: 8) {
-                ForEach(selectedFavorites.prefix(3)) { item in
-                    favoriteTitleCard(item)
+            if !textHighlights.isEmpty {
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    ForEach(textHighlights) { highlight in
+                        Text(highlight.title)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .padding(.horizontal, AppTheme.Spacing.tiny)
+                            .padding(.vertical, AppTheme.Spacing.mini)
+                            .background(.white.opacity(0.07), in: Capsule())
+                    }
                 }
             }
         }
     }
 
-    private func favoriteTitleCard(_ item: YearWatchedTitle) -> some View {
-        HStack(spacing: 8) {
-            if let posterURL = item.posterURL.flatMap(URL.init) {
-                CachedImage(url: posterURL, targetSize: .thumbSmall) { _ in } placeholder: {
-                    Rectangle().fill(Color.white.opacity(0.1))
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 32, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    private var textHighlights: [YearReviewShareHighlight] {
+        Array(highlights.dropFirst(8).prefix(2))
+    }
+
+    private func poster(for highlight: YearReviewShareHighlight) -> some View {
+        Group {
+            if let image = highlight.posterImage {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
             } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: 32, height: 48)
-                    Image(systemName: item.type == .tvShow ? "tv" : "film")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
+                emptyPoster
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-
-                Text(item.type == .tvShow ? "TV Series" : "Movie")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundStyle(secondaryAccent)
-            }
-
-            Spacer(minLength: 0)
         }
-        .padding(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
+        .frame(maxWidth: .infinity)
+        .aspectRatio(2.0 / 3.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
     }
 
-    // MARK: - Footer Bar
+    private var emptyHighlight: some View {
+        emptyPoster
+            .frame(maxWidth: .infinity)
+            .aspectRatio(2.0 / 3.0, contentMode: .fit)
+    }
 
-    private var footerBar: some View {
+    private var emptyPoster: some View {
+        RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+            .fill(.white.opacity(0.07))
+            .overlay {
+                Image(systemName: "film")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(accent.opacity(0.6))
+            }
+    }
+
+    private var footer: some View {
         HStack {
-            Text("100% OFFLINE & PRIVATE")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.45))
-
+            Text("\(review.totalDaysWatched) ACTIVE DAYS")
             Spacer()
-
             Text("TRACKED WITH MEDIATRACKER")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.45))
         }
+        .font(.system(size: 8, weight: .bold, design: .monospaced))
+        .kerning(AppTheme.Kerning.tight)
+        .foregroundStyle(.white.opacity(0.4))
     }
 
     @MainActor
     func renderToImage() -> NSImage? {
-        renderToNSImage(width: Self.cardSize.width, height: Self.cardSize.height, scale: 3.0)
+        renderToNSImage(width: Self.cardSize.width, height: Self.cardSize.height)
     }
 }
