@@ -13,6 +13,11 @@ struct CreateCollectionSheet: View {
     @State private var iconSearchText = ""
     @State private var isSmart = false
     @State private var smartRules: [SmartRule] = []
+    @State private var matchAny = false
+    @State private var metadata: MediaFilterActor.LibraryMetadata?
+    @State private var previewCount: Int?
+    @State private var previewTask: Task<Void, Never>?
+    @State private var expandedRuleIndex: Int?
     @FocusState private var isNameFocused: Bool
     
     let suggestedIcons = [
@@ -166,11 +171,21 @@ struct CreateCollectionSheet: View {
                 icon = editing.systemImage
                 isSmart = editing.isSmart
                 smartRules = editing.smartRules
+                matchAny = editing.smartMatchAny
             } else {
                 isSmart = initialIsSmart
             }
             isNameFocused = true
         }
+        .task {
+            // Library-sourced values for the add/edit menus (genres, networks,
+            // languages actually present in the user's library).
+            let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
+            metadata = try? await actor.fetchLibraryMetadata()
+        }
+        .onChange(of: smartRules) { _, _ in scheduleCountPreview() }
+        .onChange(of: matchAny) { _, _ in scheduleCountPreview() }
+        .onDisappear { previewTask?.cancel() }
     }
 
     private func saveCollection() {
@@ -181,18 +196,37 @@ struct CreateCollectionSheet: View {
             editing.name = trimmedName
             editing.systemImage = icon
             if isSmart {
-                editing.smartRules = smartRules
+                editing.smartRuleSet = SmartRuleSet(matchAny: matchAny, rules: smartRules)
             } else {
                 editing.smartRulesData = nil
             }
         } else {
             let newCollection = MediaCollection(name: trimmedName, systemImage: icon, isSmart: isSmart)
-            if isSmart { newCollection.smartRules = smartRules }
+            if isSmart { newCollection.smartRuleSet = SmartRuleSet(matchAny: matchAny, rules: smartRules) }
             modelContext.insert(newCollection)
         }
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             MediaStateService.shared.postMediaStateChanged()
+        }
+    }
+
+    /// Live "Matches N titles" — debounced, same evaluation path as saved collections.
+    private func scheduleCountPreview() {
+        previewTask?.cancel()
+        guard isSmart, !smartRules.isEmpty else {
+            previewCount = nil
+            return
+        }
+        let ruleSet = SmartRuleSet(matchAny: matchAny, rules: smartRules)
+        previewCount = nil
+        previewTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
+            let count = (try? await actor.countPreview(matching: ruleSet)) ?? -1
+            guard !Task.isCancelled else { return }
+            previewCount = count
         }
     }
     
@@ -205,9 +239,18 @@ struct CreateCollectionSheet: View {
                     .foregroundStyle(.secondary)
                     .kerning(1.2)
                 Spacer()
-                RuleAddMenu(smartRules: $smartRules)
+                RuleAddMenu(smartRules: $smartRules, metadata: metadata)
             }
-            
+
+            if !smartRules.isEmpty {
+                Picker("Match", selection: $matchAny) {
+                    Text("Match All").tag(false)
+                    Text("Match Any").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 260)
+            }
+
             if smartRules.isEmpty {
                 Text("Includes everything in your library.")
                     .font(AppTheme.Font.label)
@@ -219,24 +262,71 @@ struct CreateCollectionSheet: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(Array(smartRules.enumerated()), id: \.offset) { idx, rule in
-                        HStack {
-                            ruleLabel(for: rule)
-                                .font(AppTheme.Font.label)
-                            Spacer()
-                            Button {
-                                smartRules.remove(at: idx)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                        VStack(spacing: 0) {
+                            HStack {
+                                Label(rule.summaryLabel, systemImage: rule.symbolName)
+                                    .font(AppTheme.Font.label)
+                                Spacer()
+                                Button {
+                                    withAnimation(AppTheme.Animation.springGentle) {
+                                        expandedRuleIndex = expandedRuleIndex == idx ? nil : idx
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.down")
+                                        .font(AppTheme.Font.caption)
+                                        .foregroundStyle(.secondary)
+                                        .rotationEffect(.degrees(expandedRuleIndex == idx ? 180 : 0))
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Circle())
+                                .help("Edit rule")
+                                Button {
+                                    smartRules.remove(at: idx)
+                                    if expandedRuleIndex == idx { expandedRuleIndex = nil }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Circle())
+                                .help("Remove rule")
                             }
-                            .buttonStyle(.plain)
-                            .contentShape(Circle())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(10)
+
+                            if expandedRuleIndex == idx {
+                                RuleEditorRow(rule: binding(for: idx), metadata: metadata)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(Color.primary.opacity(0.03))
+                                    .cornerRadius(10)
+                                    .padding(.top, 6)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(10)
                     }
+
+                    // Live match count — same evaluation as saved collections
+                    HStack(spacing: 6) {
+                        Image(systemName: "number.circle")
+                            .foregroundStyle(.secondary)
+                        if let count = previewCount {
+                            Text(count >= 0 ? "Matches \(count) title\(count == 1 ? "" : "s")" : "Couldn't count matches")
+                                .font(AppTheme.Font.label)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ProgressView()
+                                .controlSize(.mini)
+                            Text("Counting matches…")
+                                .font(AppTheme.Font.label)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .animation(AppTheme.Animation.springGentle, value: previewCount)
                 }
             }
         }
@@ -244,29 +334,157 @@ struct CreateCollectionSheet: View {
         .background(Color.primary.opacity(0.02))
         .cornerRadius(AppTheme.Radius.medium)
     }
+
+    private func binding(for index: Int) -> Binding<SmartRule> {
+        Binding(
+            get: { smartRules[index] },
+            set: { smartRules[index] = $0 }
+        )
+    }
     
-    @ViewBuilder
-    private func ruleLabel(for rule: SmartRule) -> some View {
+}
+
+/// Inline editor for one rule — value menus populated from the user's library
+/// where applicable; fixed options for enums; free-form year entry.
+struct RuleEditorRow: View {
+    @Binding var rule: SmartRule
+    var metadata: MediaFilterActor.LibraryMetadata?
+
+    var body: some View {
         switch rule {
-        case .genre(let g):
-            Label("Genre: \(g)", systemImage: "tag.fill")
+        case .genre(let current):
+            valueMenu(
+                title: "Genre",
+                current: current,
+                options: (metadata?.genres.map(\.name) ?? []).filter { !$0.isEmpty }
+            ) { rule = .genre($0) }
+
+        case .network(let current):
+            valueMenu(
+                title: "Network",
+                current: current,
+                options: metadata?.networks.map(\.name) ?? []
+            ) { rule = .network($0) }
+
+        case .language(let current):
+            languageMenu(current: current)
+
+        case .badge(let current):
+            valueMenu(
+                title: "Badge",
+                current: current,
+                options: ["NEW", "PREMIERE", "FINALE", "RETURNING", "BINGE", "BINGE DROP", "BEHIND"]
+            ) { rule = .badge($0) }
+
         case .releaseYear(let year, let comp):
-            Label("Year \(comp.rawValue) \(year)", systemImage: "calendar")
+            yearEditor(start: Binding(
+                get: { String(year) },
+                set: { text in if let value = Int(text.trimmingCharacters(in: .whitespaces)) { rule = .releaseYear(value, comp) } }
+            ), comparison: Binding(
+                get: { comp },
+                set: { rule = .releaseYear(year, $0) }
+            ))
+
         case .releaseYearRange(let start, let end):
-            Label("Years: \(start) - \(end)", systemImage: "calendar.badge.clock")
-        case .mediaType(let type):
-            Label("Type: \(type.rawValue)", systemImage: type == .movie ? "film" : "tv")
-        case .state(let state):
-            Label("Status: \(state.displayName)", systemImage: state.iconName)
-        case .taste(let taste):
-            Label("Taste: \(taste.rawValue)", systemImage: taste.iconName)
-        case .badge(let b):
-            Label("Badge: \(b)", systemImage: "sparkles")
-        case .network(let n):
-            Label("Network: \(n)", systemImage: "antenna.radiowaves.left.and.right")
-        case .language(let l):
-            Label("Language: \(LanguageUtils.languageName(for: l))", systemImage: "character.bubble.fill")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("FROM / TO YEAR")
+                    .font(AppTheme.Font.caption2)
+                    .foregroundStyle(.secondary)
+                    .kerning(1.0)
+                HStack(spacing: 12) {
+                    yearField(String(start)) { if let v = Int($0) { rule = .releaseYearRange(v, max(v, end)) } }
+                    Text("–").foregroundStyle(.secondary)
+                    yearField(String(end)) { if let v = Int($0) { rule = .releaseYearRange(min(start, v), v) } }
+                }
+            }
+
+        case .mediaType(let current):
+            valueMenu(title: "Type", current: current.rawValue, options: MediaType.allCases.map(\.rawValue)) { raw in
+                if let type = MediaType(rawValue: raw) { rule = .mediaType(type) }
+            }
+
+        case .state(let current):
+            valueMenu(title: "Status", current: current.displayName, options: MediaState.allCases.map(\.displayName)) { display in
+                if let state = MediaState.allCases.first(where: { $0.displayName == display }) { rule = .state(state) }
+            }
+
+        case .taste(let current):
+            valueMenu(title: "Taste", current: current.rawValue, options: TasteValue.allCases.map(\.rawValue)) { raw in
+                if let taste = TasteValue(rawValue: raw) { rule = .taste(taste) }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func valueMenu(title: String, current: String, options: [String], assign: @escaping (String) -> Void) -> some View {
+        HStack {
+            Text(title.uppercased())
+                .font(AppTheme.Font.caption2)
+                .foregroundStyle(.secondary)
+                .kerning(1.0)
+            Spacer()
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button(option) { assign(option) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(current.isEmpty ? "Choose…" : current)
+                        .font(AppTheme.Font.label)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private func languageMenu(current: String) -> some View {
+        let nodes = metadata?.languages ?? []
+        valueMenu(
+            title: "Language",
+            current: LanguageUtils.languageName(for: current),
+            options: nodes.map { LanguageUtils.languageName(for: $0.code ?? $0.name) }
+        ) { chosen in
+            if let node = nodes.first(where: { LanguageUtils.languageName(for: $0.code ?? $0.name) == chosen }) {
+                rule = .language(node.code ?? node.name)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func yearEditor(start: Binding<String>, comparison: Binding<SmartRule.Comparison>) -> some View {
+        HStack(spacing: 12) {
+            yearField(start.wrappedValue) { start.wrappedValue = $0 }
+            Menu {
+                Button("is") { comparison.wrappedValue = .equals }
+                Button("after") { comparison.wrappedValue = .after }
+                Button("before") { comparison.wrappedValue = .before }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(comparison.wrappedValue.rawValue)
+                        .font(AppTheme.Font.label)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
+    private func yearField(_ text: String, commit: @escaping (String) -> Void) -> some View {
+        TextField("Year", text: Binding(
+            get: { text },
+            set: { commit($0) }
+        ))
+        .textFieldStyle(.roundedBorder)
+        .frame(width: 80)
+        .font(AppTheme.Font.label)
     }
 }
 
@@ -302,7 +520,30 @@ struct IconPickerGridView: View {
 
 struct RuleAddMenu: View {
     @Binding var smartRules: [SmartRule]
-    
+    var metadata: MediaFilterActor.LibraryMetadata?
+
+    // Fallbacks when library metadata hasn't loaded (or is empty) —
+    // menus prefer the user's actual library values when available.
+    private static let fallbackGenres = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"]
+    private static let fallbackNetworks = ["Netflix", "Apple TV+", "Disney+", "HBO", "Amazon", "Hulu", "Paramount", "Peacock", "BBC", "CBS", "NBC", "ABC", "FOX"]
+    private static let fallbackLanguages: [(name: String, code: String)] = [("English", "en"), ("Hindi", "hi"), ("Spanish", "es"), ("French", "fr"), ("Japanese", "ja"), ("Korean", "ko"), ("German", "de"), ("Italian", "it"), ("Portuguese", "pt"), ("Chinese", "zh")]
+
+    private var genres: [String] {
+        let libraryGenres = (metadata?.genres ?? []).map(\.name).filter { !$0.isEmpty }
+        return libraryGenres.isEmpty ? Self.fallbackGenres : libraryGenres
+    }
+    private var networks: [String] {
+        let libraryNetworks = (metadata?.networks ?? []).map(\.name).filter { !$0.isEmpty }
+        return libraryNetworks.isEmpty ? Self.fallbackNetworks : libraryNetworks
+    }
+    private var languages: [(name: String, code: String)] {
+        let libraryLanguages = (metadata?.languages ?? []).compactMap { node -> (name: String, code: String)? in
+            guard let code = node.code else { return nil }
+            return (LanguageUtils.languageName(for: code), code)
+        }
+        return libraryLanguages.isEmpty ? Self.fallbackLanguages : libraryLanguages
+    }
+
     var body: some View {
         Menu {
             Menu("Media Type") {
@@ -326,24 +567,9 @@ struct RuleAddMenu: View {
                 Button("80s (1980-1989)") { smartRules.append(.releaseYearRange(1980, 1989)) }
             }
             Menu("Genre") {
-                Button("Action") { smartRules.append(.genre("Action")) }
-                Button("Adventure") { smartRules.append(.genre("Adventure")) }
-                Button("Animation") { smartRules.append(.genre("Animation")) }
-                Button("Comedy") { smartRules.append(.genre("Comedy")) }
-                Button("Crime") { smartRules.append(.genre("Crime")) }
-                Button("Documentary") { smartRules.append(.genre("Documentary")) }
-                Button("Drama") { smartRules.append(.genre("Drama")) }
-                Button("Family") { smartRules.append(.genre("Family")) }
-                Button("Fantasy") { smartRules.append(.genre("Fantasy")) }
-                Button("History") { smartRules.append(.genre("History")) }
-                Button("Horror") { smartRules.append(.genre("Horror")) }
-                Button("Music") { smartRules.append(.genre("Music")) }
-                Button("Mystery") { smartRules.append(.genre("Mystery")) }
-                Button("Romance") { smartRules.append(.genre("Romance")) }
-                Button("Sci-Fi") { smartRules.append(.genre("Science Fiction")) }
-                Button("Thriller") { smartRules.append(.genre("Thriller")) }
-                Button("War") { smartRules.append(.genre("War")) }
-                Button("Western") { smartRules.append(.genre("Western")) }
+                ForEach(genres, id: \.self) { genre in
+                    Button(genre) { smartRules.append(.genre(genre)) }
+                }
             }
             Menu("Badges") {
                 Button("Premiere") { smartRules.append(.badge("PREMIERE")) }
@@ -354,35 +580,14 @@ struct RuleAddMenu: View {
                 Button("Returning") { smartRules.append(.badge("RETURNING")) }
             }
             Menu("Network") {
-                Button("Netflix") { smartRules.append(.network("Netflix")) }
-                Button("Apple TV+") { smartRules.append(.network("Apple TV+")) }
-                Button("Disney+") { smartRules.append(.network("Disney+")) }
-                Button("HBO / Max") { smartRules.append(.network("HBO")) }
-                Button("Amazon Prime") { smartRules.append(.network("Amazon")) }
-                Button("Hulu") { smartRules.append(.network("Hulu")) }
-                Button("Paramount+") { smartRules.append(.network("Paramount")) }
-                Button("Peacock") { smartRules.append(.network("Peacock")) }
-                Button("BBC") { smartRules.append(.network("BBC")) }
-                Button("CBS") { smartRules.append(.network("CBS")) }
-                Button("NBC") { smartRules.append(.network("NBC")) }
-                Button("ABC") { smartRules.append(.network("ABC")) }
-                Button("FOX") { smartRules.append(.network("FOX")) }
+                ForEach(networks, id: \.self) { network in
+                    Button(network) { smartRules.append(.network(network)) }
+                }
             }
             Menu("Language") {
-                Button("English") { smartRules.append(.language("en")) }
-                Button("Hindi") { smartRules.append(.language("hi")) }
-                Button("Spanish") { smartRules.append(.language("es")) }
-                Button("French") { smartRules.append(.language("fr")) }
-                Button("Japanese") { smartRules.append(.language("ja")) }
-                Button("Korean") { smartRules.append(.language("ko")) }
-                Button("Thai") { smartRules.append(.language("th")) }
-                Button("Malayalam") { smartRules.append(.language("ml")) }
-                Button("Tamil") { smartRules.append(.language("ta")) }
-                Button("Telugu") { smartRules.append(.language("te")) }
-                Button("German") { smartRules.append(.language("de")) }
-                Button("Italian") { smartRules.append(.language("it")) }
-                Button("Portuguese") { smartRules.append(.language("pt")) }
-                Button("Chinese") { smartRules.append(.language("zh")) }
+                ForEach(languages, id: \.code) { language in
+                    Button(language.name) { smartRules.append(.language(language.code)) }
+                }
             }
         } label: {
             Label("Add Rule", systemImage: "plus.circle")
