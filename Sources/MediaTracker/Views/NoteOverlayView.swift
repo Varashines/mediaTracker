@@ -69,6 +69,14 @@ struct NoteOverlayView: View {
             }
             Spacer()
         }
+        // This is an overlay, not a sheet — without onExitCommand, Escape fell
+        // through to the global handler (clearing the search field) instead of
+        // closing the notes panel.
+        .onExitCommand {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                viewModel.collection.showingNoteOverlay = false
+            }
+        }
         .task(id: collectionID) {
             let descriptor = FetchDescriptor<MediaCollection>(
                 predicate: #Predicate { $0.id == collectionID }

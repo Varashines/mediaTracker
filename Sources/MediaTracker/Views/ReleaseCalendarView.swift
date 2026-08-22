@@ -163,16 +163,19 @@ struct ReleaseCalendarView: View {
         }
         .background {
             Group {
+                // ⌘[ / ⌘] — macOS back/forward convention. Previously ⌘←/⌘→,
+                // which collided with the global back-navigation shortcut.
                 Button("") { changeMonth(by: -1) }
-                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                    .keyboardShortcut("[", modifiers: .command)
                 Button("") { changeMonth(by: 1) }
-                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                    .keyboardShortcut("]", modifiers: .command)
                 Button("") {
                     withAnimation(AppTheme.Animation.springSnappy) {
                         selectedDate = nil
                     }
                 }
                 .keyboardShortcut(.escape, modifiers: [])
+                .disabled(selectedDate == nil)
             }
             .opacity(0)
         }

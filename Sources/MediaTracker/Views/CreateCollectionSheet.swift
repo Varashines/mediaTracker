@@ -133,6 +133,7 @@ struct CreateCollectionSheet: View {
             // Buttons
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
                     .font(AppTheme.Font.bodyBold)

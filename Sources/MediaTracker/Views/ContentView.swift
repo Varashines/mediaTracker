@@ -304,6 +304,10 @@ struct LibraryDetailView: View {
                         }
                     }.keyboardShortcut(.leftArrow, modifiers: .command)
                     Button("") {
+                        // Only claim Escape while the search overlay is open —
+                        // otherwise it belongs to focused content (calendar
+                        // deselection, overlays with onExitCommand).
+                        guard isSearchActive else { return }
                         if !viewModel.filter.searchText.isEmpty {
                             viewModel.filter.searchText = ""
                         } else {

@@ -14,6 +14,7 @@ struct KeyboardShortcutsSection: View {
                     shortcutRow(key: "6", modifiers: .command, label: "TV Shows", showDivider: true)
                     shortcutRow(key: "7", modifiers: .command, label: "Smart Hub", showDivider: true)
                     shortcutRow(key: "F", modifiers: .command, label: "Search", showDivider: true)
+                    shortcutRow(key: .leftArrow, modifiers: .command, label: "Back / Close Collection", showDivider: true)
                     shortcutRow(key: .escape, modifiers: [], label: "Dismiss / Clear Search", showDivider: false)
                 }
             }
@@ -33,7 +34,16 @@ struct KeyboardShortcutsSection: View {
                 VStack(spacing: 0) {
                     shortcutRow(key: "1", modifiers: [.command, .option], label: "All Types", showDivider: true)
                     shortcutRow(key: "2", modifiers: [.command, .option], label: "Movies Only", showDivider: true)
-                    shortcutRow(key: "3", modifiers: [.command, .option], label: "TV Shows Only", showDivider: false)
+                    shortcutRow(key: "3", modifiers: [.command, .option], label: "TV Shows Only", showDivider: true)
+                    shortcutRow(key: "4", modifiers: [.command, .option], label: "Cast & Crew", showDivider: false)
+                }
+            }
+
+            SettingsCard(color: .teal) {
+                VStack(spacing: 0) {
+                    shortcutRow(key: "[", modifiers: .command, label: "Calendar: Previous Month", showDivider: true)
+                    shortcutRow(key: "]", modifiers: .command, label: "Calendar: Next Month", showDivider: true)
+                    shortcutRow(key: .escape, modifiers: [], label: "Calendar: Deselect Day / Close Overlays", showDivider: false)
                 }
             }
 
