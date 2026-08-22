@@ -27,6 +27,7 @@ struct ReleaseCalendarView: View {
     @State private var isLoading = true
     @State private var fetchTask: Task<Void, Never>? = nil
     @State private var releaseFilter: ReleaseFilter = .all
+    @State private var loadError: String? = nil
     
     var body: some View {
         Group {
@@ -65,6 +66,26 @@ struct ReleaseCalendarView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .shimmering()
+            } else if calendarData == nil, let error = loadError {
+                VStack(spacing: AppTheme.Spacing.large) {
+                    Image(systemName: "calendar.badge.exclamationmark")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Calendar couldn't load")
+                        .font(AppTheme.Font.title)
+                    Text(error)
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Retry") {
+                        loadError = nil
+                        refreshData(for: currentDisplayMonth)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.Colors.accent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(AppTheme.Spacing.xLarge)
             } else {
                 HStack(spacing: 0) {
                     // 1. LEFT PANE: The Contribution Graph
@@ -124,6 +145,9 @@ struct ReleaseCalendarView: View {
             }
         }
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
+        .refreshable {
+            refreshData(for: currentDisplayMonth)
+        }
         .onAppear {
             refreshData(for: currentDisplayMonth)
         }
@@ -326,6 +350,9 @@ struct ReleaseCalendarView: View {
                         if self.isLoading {
                             AppLogger.warning("⚠️ Calendar: Loading took too long. Clearing spinner.", logger: AppLogger.ui)
                             self.isLoading = false
+                            if self.calendarData == nil {
+                                self.loadError = "Loading timed out. Check your connection and try again."
+                            }
                         }
                     }
                 }
@@ -343,6 +370,7 @@ struct ReleaseCalendarView: View {
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
                         self.calendarData = result
                         self.isLoading = false
+                        self.loadError = nil
                     }
                     preloadAdjacentMonths(around: startOfMonth)
                 }
@@ -351,9 +379,12 @@ struct ReleaseCalendarView: View {
                 if !(error is CancellationError) {
                     AppErrorState.shared.surfaceError("Failed to load calendar: \(error.localizedDescription)")
                 }
-                await MainActor.run { 
+                await MainActor.run {
                     if Calendar.current.isDate(currentDisplayMonth, inSameDayAs: startOfMonth) {
-                        self.isLoading = false 
+                        self.isLoading = false
+                        if self.calendarData == nil {
+                            self.loadError = error.localizedDescription
+                        }
                     }
                 }
             }
