@@ -32,7 +32,7 @@ struct PosterView: View {
 
                 CachedImage(url: url, targetSize: .thumbMedium, priority: .normal, themeColor: themeColor) { _ in
                 } placeholder: {
-                        Rectangle().fill(Color.secondary.opacity(0.1)).shimmering()
+                        Rectangle().fill(Color.secondary.opacity(0.1))
                             .overlay {
                                 Image(systemName: item.type == .movie ? "film" : "tv")
                                     .foregroundStyle(AppTheme.Colors.accent)
@@ -208,7 +208,6 @@ private struct PosterThumbnail: View {
             } placeholder: {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.06))
-                    .shimmering()
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)

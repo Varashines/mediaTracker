@@ -5,21 +5,20 @@ import SwiftData
 /// Parity tests between `MediaCategoryMatcher` (in-memory semantics) and
 /// `MediaFilterPredicates.buildFilteredPredicate` (database semantics),
 /// plus smart-rule parity between `countItems` and `filterAndSort`.
-@MainActor
 final class CategoryMatcherParityTests: XCTestCase {
     private var container: ModelContainer!
     private var context: ModelContext!
     private var actor: MediaFilterActor!
 
-    @MainActor
     override func setUpWithError() throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(for: schema, configurations: [config])
-        context = container.mainContext
+        context = ModelContext(container)
         actor = MediaFilterActor(modelContainer: container)
     }
 
+    @MainActor
     private func insert(_ id: String, configure: (MediaItem) -> Void) {
         let item = MediaItem(id: id, title: id, overview: "", type: .tvShow)
         configure(item)
@@ -31,6 +30,7 @@ final class CategoryMatcherParityTests: XCTestCase {
         item.storedIsUpcoming = intendedUpcoming
     }
 
+    @MainActor
     func testInProgressExcludesUpcomingActiveItems() async throws {
         insert("active") { $0.stateValue = "Active"; $0.storedIsUpcoming = false }
         insert("upcomingActive") { $0.stateValue = "Active"; $0.storedIsUpcoming = true }
@@ -43,6 +43,7 @@ final class CategoryMatcherParityTests: XCTestCase {
         XCTAssertEqual(Set(viaPredicate.map(\.id)), ["active"], "Predicate path must agree with matcher")
     }
 
+    @MainActor
     func testMatcherMatchesPredicateForStateCategories() throws {
         insert("wishlist") { $0.stateValue = "Wishlist"; $0.storedIsUpcoming = false }
         insert("wishlistUpcoming") { $0.stateValue = "Wishlist"; $0.storedIsUpcoming = true }
@@ -66,6 +67,7 @@ final class CategoryMatcherParityTests: XCTestCase {
         XCTAssertTrue(all.filter { $0.isSoftDeleted }.allSatisfy { !MediaCategoryMatcher.matches($0, category: .all) })
     }
 
+    @MainActor
     func testSmartRuleParityBetweenCountAndFilter() async throws {
         insert("oldMovie") { $0.typeValue = "Movie"; $0.releaseDate = Date(timeIntervalSinceNow: -10 * 365 * 86400) }
         insert("newMovie") { $0.typeValue = "Movie"; $0.releaseDate = Date() }
@@ -76,6 +78,7 @@ final class CategoryMatcherParityTests: XCTestCase {
         try await assertSmartRuleParity(matchAny: true)
     }
 
+    @MainActor
     private func assertSmartRuleParity(matchAny: Bool) async throws {
         let collection = MediaCollection(name: "Parity \(matchAny)", systemImage: "clock", isSmart: true)
         // "10 years ago" resolves to calendar year 2016 — before(2017) matches the old items.

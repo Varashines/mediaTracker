@@ -167,6 +167,9 @@ class BackgroundTaskManager {
 
                 AppLogger.info("🗑️ Purging \(stale.count) soft-deleted items past undo window...", logger: AppLogger.background)
 
+                let staleIDs = stale.map(\.id)
+                FacetIndexMaintenance.removeEntries(forItemIDs: staleIDs, in: context)
+
                 let syncItems: [(id: String, network: String?, genres: [String], language: String?, badge: String?, providers: [String])] = stale.map {
                     ($0.id, $0.cachedNetwork, $0.cachedGenres, $0.cachedLanguage, $0.storedSmartBadgeLabel, $0.cachedWatchProviders)
                 }

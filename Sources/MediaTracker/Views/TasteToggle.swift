@@ -108,3 +108,31 @@ struct TastePill: View {
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
     }
 }
+
+struct TasteBadgeView: View {
+    let tasteValue: String?
+    var size: CGFloat = 4.5
+    var padding: CGFloat = 2
+
+    var body: some View {
+        switch tasteValue {
+        case "Loved", "Love":
+            badge("heart.fill", color: .pink)
+        case "Liked", "Like":
+            badge("hand.thumbsup.fill", color: .blue)
+        case "Disliked", "Dislike":
+            badge("hand.thumbsdown.fill", color: .gray)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func badge(_ icon: String, color: Color) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(padding)
+            .background(color.opacity(0.9), in: Circle())
+            .padding(padding)
+    }
+}

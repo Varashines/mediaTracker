@@ -57,6 +57,19 @@ enum FacetIndexMaintenance {
             )
         }
     }
+
+    static func removeEntries(forItemIDs itemIDs: [String], in context: ModelContext) {
+        guard !itemIDs.isEmpty else { return }
+        let idSet = Set(itemIDs)
+        let descriptor = FetchDescriptor<MediaFacetIndex>(
+            predicate: #Predicate { idSet.contains($0.mediaItemID) }
+        )
+        if let entries = try? context.fetch(descriptor) {
+            for entry in entries {
+                context.delete(entry)
+            }
+        }
+    }
 }
 
 struct FacetIndexRebuildResult: Sendable, Equatable {
@@ -100,7 +113,7 @@ actor FacetIndexActor {
         let items = try modelContext.fetch(itemDescriptor)
 
         let existingEntries = try modelContext.fetch(FetchDescriptor<MediaFacetIndex>())
-        let expectedEntries = Set(items.flatMap { FacetIndexEntry.entries(for: $0) })
+        let expectedEntries = Set(items.flatMap { FacetIndexEntry.entries(for: $0) } )
         let expectedIDs = Set(expectedEntries.map(\.id))
         let existingIDs = Set(existingEntries.map(\.id))
 

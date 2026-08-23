@@ -879,7 +879,7 @@ private struct MonthDetailPanel: View {
                 monthStatTile(value: "\(stats.series)", label: "Series", icon: "tv.fill")
                 monthStatTile(value: "\(stats.movies)", label: "Movies", icon: "film.fill")
                 monthStatTile(
-                    value: formatTime(stats.minutes),
+                    value: DateUtils.formatWatchTime(stats.minutes),
                     label: "Watch Time",
                     icon: "clock.fill"
                 )
@@ -1040,7 +1040,7 @@ private struct DayDetailPanel: View {
                 Spacer()
                 if activity.minutes > 0 {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(formatTime(activity.minutes))
+                        Text(DateUtils.formatWatchTime(activity.minutes))
                             .font(.system(size: 22, weight: .heavy, design: .rounded))
                             .foregroundStyle(AppTheme.Colors.accent)
                         Text("Watch Time")
@@ -1216,23 +1216,7 @@ private struct PosterTile: View {
 
     @ViewBuilder
     private var tasteBadge: some View {
-        switch title.tasteValue {
-        case "Loved", "Love":
-            badge("heart.fill", color: .pink)
-        case "Liked", "Like":
-            badge("hand.thumbsup.fill", color: .blue)
-        default:
-            EmptyView()
-        }
-    }
-
-    private func badge(_ icon: String, color: Color) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 4.5, weight: .bold))
-            .foregroundStyle(.white)
-            .padding(2)
-            .background(color.opacity(0.9), in: Circle())
-            .padding(2)
+        TasteBadgeView(tasteValue: title.tasteValue)
     }
 }
 
@@ -1383,14 +1367,4 @@ private struct YearReviewSkeleton: View {
         .padding(.vertical, AppTheme.Spacing.xLarge)
         .shimmering()
     }
-}
-
-// MARK: - Shared helpers
-
-private func formatTime(_ minutes: Int) -> String {
-    let h = minutes / 60
-    let m = minutes % 60
-    if h == 0 { return "\(m)m" }
-    if m == 0 { return "\(h)h" }
-    return "\(h)h \(m)m"
 }

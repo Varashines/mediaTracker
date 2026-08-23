@@ -663,7 +663,11 @@ struct ThumbnailPosterLayer: View {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
-                        .overlay { ProgressView().controlSize(.small) }
+                        .overlay {
+                            Image(systemName: type == .movie ? "film" : "tv")
+                                .font(.system(size: mode == .hero ? 36 : 26))
+                                .foregroundStyle(Color.secondary.opacity(0.25))
+                        }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)

@@ -34,7 +34,7 @@ struct HeroStatPills: View {
                     )
                     ClaymorphicHeroCard(
                         emoji: "⏱️",
-                        value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
+                        value: DateUtils.formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
                         label: "Watch Time",
                         detail: "\(stats.totalEpisodesWatched) eps",
                         color: .orange
@@ -69,7 +69,7 @@ struct HeroStatPills: View {
                         )
                         ClaymorphicHeroCard(
                             emoji: "⏱️",
-                            value: formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
+                            value: DateUtils.formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
                             label: "Watch Time",
                             detail: "\(stats.totalEpisodesWatched) eps",
                             color: .orange
@@ -205,11 +205,4 @@ private struct ClaymorphicHeroCard: View {
             }
         }
     }
-}
-
-func formatWatchTimeCompact(minutes: Int) -> String {
-    let days = minutes / 1440
-    let hours = (minutes % 1440) / 60
-    if days > 0 { return "\(days)d \(hours)h" }
-    return "\(hours)h \(minutes % 60)m"
 }

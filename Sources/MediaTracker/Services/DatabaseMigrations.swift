@@ -9,7 +9,6 @@ import AppKit
 enum DatabaseMigrations {
 
     static func runAllIfNeeded(container: ModelContainer) async {
-        await runPosterColorMigrationV6IfNeeded(container: container)
         await runPosterColorMigrationV7IfNeeded(container: container)
         await runWatchProviderMigrationIfNeeded(container: container)
         await runNetworkKindMigrationIfNeeded(container: container)
@@ -17,65 +16,8 @@ enum DatabaseMigrations {
         await reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
     }
 
-    /// One-shot migration: re-extract dominant poster colors using the median-cut + Vision saliency algorithm (v6).
-    static func runPosterColorMigrationV6IfNeeded(container: ModelContainer) async {
-        let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
-        guard currentVersion < 6 else { return }
-
-        let extractionVersionKey = "colorExtractionVersion"
-        let batchSize = 50
-        let interBatchSleepNs: UInt64 = 250_000_000
-
-        do {
-            try await BackgroundOperationGate.shared.performExtract(label: "posterColorMigrationV6", container: container) {
-                let context = ModelContext(container)
-
-                var descriptor = FetchDescriptor<MediaItem>(
-                    sortBy: [SortDescriptor(\.lastInteractionDate, order: .reverse)]
-                )
-                descriptor.propertiesToFetch = [\.id, \.posterURL, \.themeColorHex, \.themeColorSourceURL, \.lastInteractionDate]
-                let allItems = (try? context.fetch(descriptor)) ?? []
-
-                var processed = 0
-                let total = allItems.count
-                AppLogger.info("🎨 Poster color migration v6 starting: \(total) items", logger: AppLogger.background)
-
-                for item in allItems {
-                    try Task.checkCancellation()
-                    guard !item.isDeleted else { continue }
-                    guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
-
-                    var cgImage: CGImage?
-                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
-                        cgImage = cached.image
-                    } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
-                              let image = NSImage(data: data) {
-                        cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-                    }
-
-                    if let cgImage {
-                        let pair = await ColorExtractor.topTwoColors(from: cgImage)
-                        item.themeColorHex = pair.primary.toHex()
-                        item.themeColorSourceURL = poster
-                    }
-
-                    processed += 1
-                    if processed % batchSize == 0 {
-                        try context.save()
-                        try await Task.sleep(nanoseconds: interBatchSleepNs)
-                    }
-                }
-
-                try context.save()
-                UserDefaults.standard.set(6, forKey: extractionVersionKey)
-                AppLogger.info("🎨 Poster color migration v6 complete: \(processed) items", logger: AppLogger.background)
-            }
-        } catch {
-            AppLogger.error("🎨 Poster color migration v6 failed: \(error.localizedDescription)", logger: AppLogger.background)
-        }
-    }
-
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
+    /// Supersedes earlier v6 migrations in a single pass.
     static func runPosterColorMigrationV7IfNeeded(container: ModelContainer) async {
         let currentVersion = UserDefaults.standard.integer(forKey: "colorExtractionVersion")
         guard currentVersion < 7 else { return }
@@ -456,4 +398,3 @@ enum DatabaseMigrations {
         UserDefaults.standard.set(true, forKey: flag)
     }
 }
-

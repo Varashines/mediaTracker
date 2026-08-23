@@ -165,7 +165,7 @@ actor APIClient {
 
     private nonisolated func saveToCache(data: Data, forKey key: String) {
         let fileURL = cacheFolder.appendingPathComponent(key)
-        Task.detached(priority: .background) {
+        Task(priority: .utility) {
             await FileIOActor.shared.run {
                 try? data.write(to: fileURL, options: .atomic)
             }

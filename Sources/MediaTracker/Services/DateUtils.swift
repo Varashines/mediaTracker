@@ -78,6 +78,26 @@ struct DateUtils {
         return "\(minutes)m"
     }
 
+    static func formatWatchTime(_ minutes: Int) -> String {
+        guard minutes > 0 else { return "0m" }
+        let hours = minutes / 60
+        let mins = minutes % 60
+        if hours == 0 {
+            return "\(mins)m"
+        } else if mins == 0 {
+            return "\(hours)h"
+        } else {
+            return "\(hours)h \(mins)m"
+        }
+    }
+
+    static func formatWatchTimeCompact(minutes: Int) -> String {
+        let days = minutes / 1440
+        let hours = (minutes % 1440) / 60
+        if days > 0 { return "\(days)d \(hours)h" }
+        return "\(hours)h \(minutes % 60)m"
+    }
+
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
         let service = (serviceName ?? show?.network ?? "").lowercased()
 
