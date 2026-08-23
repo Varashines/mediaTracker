@@ -676,6 +676,8 @@ private struct EpisodeCube: View {
 
     @State private var showingOverview = false
     @State private var isHovering = false
+    @State private var showingDatePicker = false
+    @State private var customWatchDate: Date = Date()
     private let cachedDateString: String
 
     init(episode: TVEpisode, themeColor: Color, onToggle: @escaping () -> Void) {
@@ -692,23 +694,39 @@ private struct EpisodeCube: View {
         }
     }
 
+    private func toggleWatched() {
+        episode.markWatched(!episode.isWatched)
+        FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
+
+        Task { @MainActor in
+            onToggle()
+            episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            if let context = episode.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            let itemID = episode.season?.tvShowDetails?.item?.persistentModelID
+            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+        }
+    }
+
+    private func saveWatchDate(_ date: Date) {
+        episode.watchedDate = date
+        episode.lastWatchedDate = date
+        Task { @MainActor in
+            if let context = episode.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            let itemID = episode.season?.tvShowDetails?.item?.persistentModelID
+            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+        }
+    }
+
     var body: some View {
         let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         let green = Color.semanticGreen(for: colorScheme)
         ZStack(alignment: .bottomTrailing) {
             Button {
-                episode.markWatched(!episode.isWatched)
-                FeedbackManager.shared.trigger(episode.isWatched ? .markWatched : .unmarkWatched)
-
-                Task { @MainActor in
-                    onToggle()
-                    episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
-                    if let context = episode.modelContext {
-                        SaveCoordinator.shared.requestSave(context)
-                    }
-                    let itemID = episode.season?.tvShowDetails?.item?.persistentModelID
-                    MediaStateService.shared.postMediaStateChanged(itemID: itemID)
-                }
+                toggleWatched()
             } label: {
                 HStack(spacing: 0) {
                     // Left accent bar
@@ -810,6 +828,25 @@ private struct EpisodeCube: View {
             .onHover { hovering in
                 withAnimation(AppTheme.Animation.easeInOut) { isHovering = hovering }
             }
+            .contextMenu {
+                Button {
+                    toggleWatched()
+                } label: {
+                    Label(episode.isWatched ? "Mark Unwatched" : "Mark Watched", systemImage: episode.isWatched ? "circle" : "checkmark.circle")
+                }
+
+                if episode.isWatched {
+                    Button {
+                        customWatchDate = episode.watchedDate ?? episode.lastWatchedDate ?? Date()
+                        showingDatePicker = true
+                    } label: {
+                        Label("Edit Watch Date...", systemImage: "calendar")
+                    }
+                }
+            }
+            .popover(isPresented: $showingDatePicker) {
+                datePickerPopover
+            }
         }
         .animation(AppTheme.Animation.springSnappy, value: episode.isWatched)
         .animation(AppTheme.Animation.springSnappy, value: isHovering)
@@ -820,6 +857,7 @@ private struct EpisodeCube: View {
     @ViewBuilder
     private var popoverContent: some View {
         let green = Color.semanticGreen(for: colorScheme)
+        let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -836,14 +874,34 @@ private struct EpisodeCube: View {
                 Spacer()
 
                 if episode.isWatched {
-                    Text("WATCHED")
-                        .font(AppTheme.Font.tiny)
-                        .foregroundStyle(.secondary)
-                        .kerning(0.6)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2.5)
-                        .background(green.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                    HStack(spacing: 4) {
+                        let watchDate = episode.watchedDate ?? episode.lastWatchedDate
+                        if let watchDate {
+                            Text(watchDate.formatted(date: .abbreviated, time: .omitted))
+                                .font(AppTheme.Font.tiny)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("WATCHED")
+                                .font(AppTheme.Font.tiny)
+                                .foregroundStyle(.secondary)
+                                .kerning(0.6)
+                        }
+
+                        Button {
+                            customWatchDate = episode.watchedDate ?? episode.lastWatchedDate ?? Date()
+                            showingDatePicker.toggle()
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(AppTheme.Font.tiny)
+                                .foregroundStyle(accent)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Change watch date")
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(green.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
 
@@ -875,8 +933,46 @@ private struct EpisodeCube: View {
             }
         }
         .padding(14)
-        .frame(width: 270)
-        .frame(maxHeight: 170)
+        .frame(width: 280)
+        .frame(maxHeight: 180)
+    }
+
+    @ViewBuilder
+    private var datePickerPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Edit Watch Date")
+                .font(AppTheme.Font.bodyBold)
+                .foregroundStyle(.primary)
+
+            DatePicker(
+                "Watch Date",
+                selection: $customWatchDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+
+            HStack {
+                Button("Today") {
+                    customWatchDate = Date()
+                    saveWatchDate(customWatchDate)
+                    showingDatePicker = false
+                }
+                .buttonStyle(.plain)
+                .font(AppTheme.Font.caption2)
+
+                Spacer()
+
+                Button("Save") {
+                    saveWatchDate(customWatchDate)
+                    showingDatePicker = false
+                }
+                .buttonStyle(.borderedProminent)
+                .font(AppTheme.Font.caption2)
+            }
+        }
+        .padding(12)
+        .frame(width: 240)
     }
 }
 

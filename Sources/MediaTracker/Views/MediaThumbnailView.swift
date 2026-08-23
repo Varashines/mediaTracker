@@ -654,7 +654,12 @@ struct ThumbnailPosterLayer: View {
                 let baseColor = themeColorHex.flatMap { Color(hex: $0) }
                 let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
 
-                CachedImage(url: url, targetSize: targetSize, themeColor: baseColor, isFastScrolling: isFastScrolling) {
+                CachedImage(
+                    url: url,
+                    targetSize: targetSize,
+                    themeColor: baseColor,
+                    isFastScrolling: isFastScrolling
+                ) {
                     _ in
                 } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))

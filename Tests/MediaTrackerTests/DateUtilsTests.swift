@@ -76,6 +76,40 @@ final class DateUtilsTests: XCTestCase {
         XCTAssertEqual(components.minute, 30)
     }
 
+    func testParseEpisodeDateHBOSundayShowIsMondayMorningInIST() {
+        // Sunday August 23, 2026 9 PM ET -> Monday August 24, 2026 6:30 AM IST
+        let date = DateUtils.parseEpisodeDate("2026-08-23", serviceName: "HBO")
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 24, "Sunday night HBO show must be Monday in IST")
+        XCTAssertEqual(components.hour, 6)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    func testParseEpisodeDateHBOSundayWithTVMazeAirstampIsMondayMorningInIST() {
+        // TVMaze returns airdate: 2026-08-23, airstamp: 2026-08-24T01:00:00+00:00
+        let date = DateUtils.parseEpisodeDate(
+            "2026-08-23",
+            airstamp: "2026-08-24T01:00:00+00:00",
+            serviceName: "HBO"
+        )
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 24, "TVMaze airstamp must not be double offset into Tuesday")
+        XCTAssertEqual(components.hour, 6)
+        XCTAssertEqual(components.minute, 30)
+    }
+
     func testParseEpisodeDateDisneyPlus() {
         let date = DateUtils.parseEpisodeDate("2026-04-20", serviceName: "Disney+")
         XCTAssertNotNil(date)

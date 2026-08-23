@@ -85,13 +85,6 @@ extension MediaFilterActor {
 
         let pickOfDay = fetchPickOfTheDay(now: now)
 
-        let tasteActor = TasteActor(modelContainer: modelContext.container)
-        let recs = await tasteActor.calculateRecommendations()
-        let recommendations: [MediaThumbnailMetadata] = recs.compactMap { rec in
-            guard let item = modelContext.model(for: rec.id) as? MediaItem else { return nil }
-            return MediaThumbnailMetadata(item: item, recommendationReason: rec.reason)
-        }
-
         return PaginatedResult(
             displayed: [],
             featuredUpcoming: [],
@@ -99,9 +92,18 @@ extension MediaFilterActor {
             homeContinueWatching: homeContinueWatching,
             grouped: [("Coming Soon", comingSoonItems.prefix(40).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,
-            recommendations: recommendations,
+            recommendations: [],
             totalCount: totalCount
         )
+    }
+
+    func fetchRecommendations() async -> [MediaThumbnailMetadata] {
+        let tasteActor = TasteActor(modelContainer: modelContext.container)
+        let recs = await tasteActor.calculateRecommendations()
+        return recs.compactMap { rec in
+            guard let item = modelContext.model(for: rec.id) as? MediaItem else { return nil }
+            return MediaThumbnailMetadata(item: item, recommendationReason: rec.reason)
+        }
     }
 
     private func fetchPickOfTheDay(now: Date) -> [MediaThumbnailMetadata] {

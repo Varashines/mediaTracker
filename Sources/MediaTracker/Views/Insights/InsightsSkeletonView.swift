@@ -13,71 +13,122 @@ struct InsightsSkeletonView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                // Cinema DNA barcode skeleton
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                    RoundedRectangle(cornerRadius: 4)
+            LazyVStack(spacing: AppTheme.Spacing.xLarge) {
+                // 0. Introduction Header
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+                    Capsule()
                         .fill(label)
-                        .frame(width: 120, height: 16)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                        .frame(width: 140, height: 12)
+                    Capsule()
                         .fill(fill)
-                        .frame(height: 64)
+                        .frame(width: 280, height: 16)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.top, AppTheme.Spacing.xLarge)
+
+                // 1. Cinema DNA Card
+                skeletonCard(titleWidth: 100, secondLineWidth: 80) {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                        .fill(fill)
+                        .frame(height: 72)
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-                // Overview — header + 3x2 stat pills
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(label)
-                        .frame(width: 140, height: 16)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.large), count: 3),
-                        spacing: AppTheme.Spacing.large
-                    ) {
-                        ForEach(0..<6, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                // 2. Overview Card (4 Stat Pills)
+                skeletonCard(titleWidth: 90, secondLineWidth: 110) {
+                    HStack(spacing: AppTheme.Spacing.large) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                                 .fill(fill)
-                                .frame(height: 116)
+                                .frame(height: 86)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.vertical, AppTheme.Spacing.medium)
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.top, AppTheme.Spacing.xLarge)
 
-                // Taste DNA — header + donut block
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(label)
-                        .frame(width: 140, height: 16)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                        .fill(fill)
-                        .frame(height: 200)
-                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                }
-
-                // Ranked sections — generic adaptive rows
-                ForEach(0..<2, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(label)
-                            .frame(width: 160, height: 16)
-                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)], spacing: 16) {
-                            ForEach(0..<6, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                // 3. Taste Profile Card (Split left/right)
+                skeletonCard(titleWidth: 120, secondLineWidth: 90) {
+                    HStack(spacing: AppTheme.Spacing.large) {
+                        VStack(spacing: AppTheme.Spacing.small) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                                     .fill(fill)
-                                    .frame(height: 90)
+                                    .frame(height: 38)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        VStack(spacing: AppTheme.Spacing.small) {
+                            Circle()
+                                .fill(fill)
+                                .frame(width: 110, height: 110)
+                            Capsule()
+                                .fill(fill)
+                                .frame(width: 120, height: 14)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.top, AppTheme.Spacing.xLarge)
+
+                // 4. Hall of Fame (Cast)
+                skeletonCard(titleWidth: 110, secondLineWidth: 50) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppTheme.Spacing.large) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                    .fill(fill)
+                                    .frame(width: 180, height: 72)
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.vertical, 8)
                     }
                 }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.top, AppTheme.Spacing.xLarge)
             }
             .padding(.vertical, AppTheme.Spacing.xLarge)
+            .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
         .shimmering()
+    }
+
+    private func skeletonCard<Content: View>(titleWidth: CGFloat, secondLineWidth: CGFloat, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Capsule()
+                    .fill(label)
+                    .frame(width: titleWidth, height: 14)
+                Capsule()
+                    .fill(fill)
+                    .frame(width: secondLineWidth, height: 14)
+            }
+            .padding(.horizontal, AppTheme.Spacing.pageMargin)
+            .padding(.top, AppTheme.Spacing.medium)
+            .padding(.bottom, AppTheme.Spacing.small)
+
+            content()
+                .padding(.bottom, AppTheme.Spacing.medium)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.07 : 0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
     }
 }

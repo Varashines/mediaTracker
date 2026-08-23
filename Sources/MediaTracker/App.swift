@@ -180,7 +180,7 @@ struct MediaTrackerApp: App {
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)
 
-        let cacheSizeMemory = 10 * 1024 * 1024
+        let cacheSizeMemory = 64 * 1024 * 1024
         let cacheSizeDisk = 500 * 1024 * 1024
         let cache = URLCache(memoryCapacity: cacheSizeMemory, diskCapacity: cacheSizeDisk, directory: nil)
         URLCache.shared = cache
@@ -291,9 +291,9 @@ struct MediaTrackerApp: App {
         hasStartedDeferredServices = true
 
         Task { @MainActor in
-            // Let the initial scene render before kicking off migrations, backups,
-            // notification scheduling, and the platform permission prompt.
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            // Let the initial scene render and decode image textures before kicking off migrations,
+            // backups, notification scheduling, and platform permission prompts.
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
 
             BackgroundTaskManager.shared.start(container: sharedModelContainer)

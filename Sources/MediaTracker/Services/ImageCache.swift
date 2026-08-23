@@ -209,32 +209,30 @@ class ImageCache: NSObject, NSCacheDelegate {
             
             do {
                 let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-                let finalCGImage: CGImage? = try await FileIOActor.shared.run {
-                    let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15.0)
-                    let (data, response) = try await capturedSession.data(for: request)
-                    guard !Task.isCancelled else { return nil }
+                let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15.0)
+                let (data, response) = try await capturedSession.data(for: request)
+                guard !Task.isCancelled else { return nil }
 
-                    // Decode off the main actor to avoid blocking UI.
-                    return await Task.detached(priority: .utility) { [scale] in
-                        if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
-                            return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
-                        } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
-                            if let target = targetSize {
-                                let maxDimension = max(target.width, target.height) * scale
-                                let options: [CFString: Any] = [
-                                    kCGImageSourceShouldCache: false,
-                                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                                    kCGImageSourceCreateThumbnailWithTransform: true,
-                                    kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
-                                ]
-                                return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-                            } else {
-                                return CGImageSourceCreateImageAtIndex(source, 0, nil)
-                            }
+                // Decode off the main actor to avoid blocking UI.
+                let finalCGImage: CGImage? = await Task.detached(priority: .utility) { [scale] in
+                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
+                        return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
+                    } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
+                        if let target = targetSize {
+                            let maxDimension = max(target.width, target.height) * scale
+                            let options: [CFString: Any] = [
+                                kCGImageSourceShouldCache: false,
+                                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                kCGImageSourceCreateThumbnailWithTransform: true,
+                                kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
+                            ]
+                            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                        } else {
+                            return CGImageSourceCreateImageAtIndex(source, 0, nil)
                         }
-                        return nil
-                    }.value
-                }
+                    }
+                    return nil
+                }.value
                 
                 if let cgImage = finalCGImage {
                     let wrapper = CachedImageWrapper(image: cgImage, urlString: key, cacheKey: cacheKey)

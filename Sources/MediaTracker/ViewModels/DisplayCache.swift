@@ -37,7 +37,9 @@ class DisplayCache {
         homeContinueWatchingItems = result.homeContinueWatching
         groupedItems = result.grouped
         pickOfTheDay = result.pickOfTheDay
-        recommendations = result.recommendations
+        if !result.recommendations.isEmpty {
+            recommendations = result.recommendations
+        }
         
         // Prewarm thumbnail images as soon as data arrives — before views appear
         prewarmCarouselImages()
@@ -47,12 +49,12 @@ class DisplayCache {
         let cache = ImageCache.shared
         
         // Continue Watching & Featured Upcoming — hero thumbnails at .thumbMedium
-        cache.prewarmImages(homeContinueWatchingItems, limit: 10, targetSize: .thumbMedium, priority: .normal)
-        cache.prewarmImages(featuredUpcomingItems, limit: 10, targetSize: .thumbMedium, priority: .normal)
+        cache.prewarmImages(homeContinueWatchingItems, limit: 12, targetSize: .thumbMedium, priority: .normal)
+        cache.prewarmImages(featuredUpcomingItems, limit: 12, targetSize: .thumbMedium, priority: .normal)
         
         // Pick of the Day & For You — each card loads 2 images (poster + backdrop)
         cache.prewarmImages(pickOfTheDay, limit: 6, targetSize: .thumbSmall, priority: .normal)
-        cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .normal)
+        cache.prewarmImages(recommendations, limit: 8, targetSize: .thumbSmall, priority: .normal)
     }
 
     /// Keeps a bounded calendar window around the currently displayed month.

@@ -70,6 +70,11 @@ class BackgroundTaskManager {
     private func performDripSync() async {
         guard let container = container, !isImportActive else { isDripSyncing = false; return }
         guard !isThermalThrottled else { isDripSyncing = false; return }
+        guard NetworkMonitor.shared.isConnected else {
+            AppLogger.info("💧 Drip Sync skipped — device is offline", logger: AppLogger.background)
+            isDripSyncing = false
+            return
+        }
         defer { isDripSyncing = false }
 
         let now = Date()
@@ -199,12 +204,17 @@ class BackgroundTaskManager {
         await refreshStaleBadges()
         await purgeSoftDeleted()
 
-        // Opportunistic: backfill per-season aggregate cast for shows that
-        // predate the feature (bounded to a few seasons per run).
-        await refreshMissingSeasonCast()
-        await backfillMissingLibraryMetadata()
-        await refreshStalePremiereBadges()
-        await refreshMissingAirDates(cap: 15)
+        let isOnline = NetworkMonitor.shared.isConnected
+        if isOnline {
+            // Opportunistic: backfill per-season aggregate cast for shows that
+            // predate the feature (bounded to a few seasons per run).
+            await refreshMissingSeasonCast()
+            await backfillMissingLibraryMetadata()
+            await refreshStalePremiereBadges()
+            await refreshMissingAirDates(cap: 15)
+        } else {
+            AppLogger.info("🔄 Background network sync skipped — device is offline", logger: AppLogger.background)
+        }
 
         // Opportunistic: run migrations if needed.
         await DatabaseMigrations.runAllIfNeeded(container: container)
@@ -262,13 +272,15 @@ class BackgroundTaskManager {
                 await LibraryImportExportService.shared.automatedBackup(backup: backup)
             }
 
-            // Serialize sync + heal through the gate to prevent overlapping operations
-            try? await BackgroundOperationGate.shared.performBoth(label: "backgroundSync", container: container) {
-                let syncService = DiscoverySyncService(modelContainer: container)
-                await syncService.syncLibrary(force: false)
-            } sync: {
-                let maintenance = BackgroundDataService(modelContainer: container)
-                try await maintenance.performLibraryHeal()
+            if isOnline {
+                // Serialize sync + heal through the gate to prevent overlapping operations
+                try? await BackgroundOperationGate.shared.performBoth(label: "backgroundSync", container: container) {
+                    let syncService = DiscoverySyncService(modelContainer: container)
+                    await syncService.syncLibrary(force: false)
+                } sync: {
+                    let maintenance = BackgroundDataService(modelContainer: container)
+                    try await maintenance.performLibraryHeal()
+                }
             }
         }
     }

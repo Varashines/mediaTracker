@@ -15,7 +15,17 @@ struct CachedImage<Placeholder: View>: View {
     @State private var isLoading = false
     @State private var deferredLoadTask: Task<Void, Never>?
  
-    init(url: URL?, targetSize: CGSize? = nil, priority: ImagePriority = .normal, themeColor: Color? = nil, isFastScrolling: Bool = false, alwaysPreserveAlpha: Bool = false, accessibilityLabel: String? = nil, onImageLoaded: ((CGImage) -> Void)? = nil, @ViewBuilder placeholder: () -> Placeholder) {
+    init(
+        url: URL?,
+        targetSize: CGSize? = nil,
+        priority: ImagePriority = .normal,
+        themeColor: Color? = nil,
+        isFastScrolling: Bool = false,
+        alwaysPreserveAlpha: Bool = false,
+        accessibilityLabel: String? = nil,
+        onImageLoaded: ((CGImage) -> Void)? = nil,
+        @ViewBuilder placeholder: () -> Placeholder
+    ) {
         self.url = url
         self.targetSize = targetSize
         self.priority = priority

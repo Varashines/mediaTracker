@@ -31,6 +31,16 @@ struct ForYouCarousel: View {
                         .buttonStyle(.interactive)
                     }
                 }
+            } else {
+                HStack(spacing: AppTheme.Spacing.small) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Finding recommendations tailored to your taste...")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                .padding(.vertical, AppTheme.Spacing.small)
             }
         }
     }

@@ -79,18 +79,23 @@ struct DateUtils {
     }
 
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
-        var resolvedDateString: String?
-        if let airstamp = airstamp, airstamp.count >= 10 {
-            resolvedDateString = String(airstamp.prefix(10))
-        }
-        if resolvedDateString == nil {
-            resolvedDateString = dateString
-        }
-        
         let service = (serviceName ?? show?.network ?? "").lowercased()
+
+        // 1. Real ISO airstamp: TVMaze provides exact UTC timestamp (e.g. 2026-08-24T01:00:00+00:00).
+        //    Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
+        //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT).
+        if let airstamp = airstamp,
+           (service == "youtube" || !airstamp.contains("T12:00:00+00:00")),
+           let date = parseISO(airstamp) {
+            return date
+        }
+
+        // Use local broadcast dateString (e.g. "2026-08-23" Sunday) for timezone rules,
+        // falling back to airstamp prefix only if dateString is missing.
+        let resolvedDateString = dateString ?? (airstamp.flatMap { $0.count >= 10 ? String($0.prefix(10)) : nil })
         let hasRealAirtime = time?.isEmpty == false || show?.nextEpisodeTime?.isEmpty == false
         
-        // 1. Streaming service rules: Use when rule matches AND TVMaze has no real airtime.
+        // 2. Streaming service rules: Use when rule matches AND TVMaze has no real airtime.
         //    Streaming originals (Apple TV+, Netflix, etc.) have empty airtime and a placeholder
         //    noon-UTC airstamp. The hardcoded rules provide the actual release time.
         if !hasRealAirtime,
@@ -103,8 +108,8 @@ struct DateUtils {
             }
         }
         
-        // 2. Real TVMaze airtime: Network shows have actual airtime (e.g. "21:00" for HBO).
-        //    Use TVMaze date + real airtime + show timezone.
+        // 3. Real TVMaze airtime: Network shows have actual airtime (e.g. "21:00" for HBO).
+        //    Use TVMaze local airdate + real airtime + show timezone.
         if hasRealAirtime, let dateStr = resolvedDateString {
             let tzName = timezone ?? show?.timezone
             let timeToUse = time ?? show?.nextEpisodeTime
@@ -114,14 +119,6 @@ struct DateUtils {
                     return date
                 }
             }
-        }
-        
-        // 3. Real ISO airstamp: Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
-        //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT).
-        if let airstamp = airstamp,
-           (service == "youtube" || !airstamp.contains("T12:00:00+00:00")),
-           let date = parseISO(airstamp) {
-            return date
         }
         
         guard let dateStr = resolvedDateString else { return nil }

@@ -380,7 +380,6 @@ struct LibraryDetailView: View {
                 ImageCache.shared.clearMemoryCache()
                 ImageCache.shared.clearDiskIndex()
                 Task { await APIClient.shared.clearMemoryCaches() }
-                TasteActor.clearCache()
                 BadgeEngine.clearScanCache()
                 LibraryStatsActor.clearCache()
                 URLCache.shared.removeAllCachedResponses()
@@ -462,6 +461,7 @@ struct LibraryDetailView: View {
             if snapshot.category == .discover || snapshot.category == .insights || snapshot.category == .upcoming || (snapshot.category == .smartHub && snapshot.collectionID == nil) { return }
 
             let isSoftUpdate = !viewModel.display.displayedItems.isEmpty
+                || (snapshot.category == .home && (!viewModel.display.homeContinueWatchingItems.isEmpty || !viewModel.display.groupedItems.isEmpty))
 
             if !isSoftUpdate {
                 await MainActor.run {
@@ -497,6 +497,14 @@ struct LibraryDetailView: View {
                     viewModel.pagination.totalItemCount = result.totalCount
                     viewModel.pagination.isInitialLoad = false
                     viewModel.display.applyFilterResult(result)
+                }
+
+                if snapshot.category == .home {
+                    Task {
+                        let recs = await filterActor.fetchRecommendations()
+                        guard !Task.isCancelled else { return }
+                        viewModel.display.recommendations = recs
+                    }
                 }
             } catch is CancellationError {
                 // The replacement update task owns isInitialLoad now — resetting
