@@ -34,8 +34,6 @@ struct ContinueWatchingCarousel: View {
                         .buttonStyle(.interactive)
                     }
                 }
-                .onAppear { prewarm(items: items) }
-                .onChange(of: items) { _, newItems in prewarm(items: newItems) }
             } else {
                 Button {
                     onDiscoverySpotlight?()
@@ -78,9 +76,5 @@ struct ContinueWatchingCarousel: View {
                 .padding(.vertical, AppTheme.Spacing.medium - 1)
             }
         }
-    }
-
-    private func prewarm(items: [MediaThumbnailMetadata]) {
-        ImageCache.shared.prewarmImages(items, targetSize: .thumbMedium, priority: .normal)
     }
 }

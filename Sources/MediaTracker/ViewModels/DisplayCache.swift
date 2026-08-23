@@ -47,14 +47,33 @@ class DisplayCache {
     
     private func prewarmCarouselImages() {
         let cache = ImageCache.shared
-        
-        // Continue Watching & Featured Upcoming — hero thumbnails at .thumbMedium
-        cache.prewarmImages(homeContinueWatchingItems, limit: 12, targetSize: .thumbMedium, priority: .normal)
-        cache.prewarmImages(featuredUpcomingItems, limit: 12, targetSize: .thumbMedium, priority: .normal)
-        
-        // Pick of the Day & For You — each card loads 2 images (poster + backdrop)
-        cache.prewarmImages(pickOfTheDay, limit: 6, targetSize: .thumbSmall, priority: .normal)
-        cache.prewarmImages(recommendations, limit: 8, targetSize: .thumbSmall, priority: .normal)
+
+        // Stagger prewarming to avoid a single burst of 38+ simultaneous downloads.
+        // Visible hero sections load first; below-fold sections follow progressively.
+        Task { @MainActor in
+            // 0ms — Continue Watching (visible at top, highest priority)
+            cache.prewarmImages(homeContinueWatchingItems, limit: 6, targetSize: .thumbMedium, priority: .normal)
+
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            guard !Task.isCancelled else { return }
+            // Featured Upcoming (visible below Continue Watching)
+            cache.prewarmImages(featuredUpcomingItems, limit: 6, targetSize: .thumbMedium, priority: .normal)
+
+            try? await Task.sleep(nanoseconds: 100_000_000) // 200ms total
+            guard !Task.isCancelled else { return }
+            // Pick of the Day (lower priority, loaded on demand when pill tapped)
+            cache.prewarmImages(pickOfTheDay, limit: 4, targetSize: .thumbSmall, priority: .low)
+            // Backdrops are never prewarmed today — warm them too so the pill opens without a cold burst
+            let podBackdrops = pickOfTheDay.prefix(4).compactMap(\.backdropURL).compactMap(URL.init(string:))
+            cache.prewarmImages(urls: podBackdrops, targetSize: .backdropCompact, priority: .low)
+
+            try? await Task.sleep(nanoseconds: 100_000_000) // 300ms total
+            guard !Task.isCancelled else { return }
+            // Recommendations / For You (lower priority)
+            cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .low)
+            let recBackdrops = recommendations.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
+            cache.prewarmImages(urls: recBackdrops, targetSize: .backdropCompact, priority: .low)
+        }
     }
 
     /// Keeps a bounded calendar window around the currently displayed month.

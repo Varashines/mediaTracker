@@ -31,14 +31,8 @@ struct FeaturedUpcomingCarousel: View {
                         .buttonStyle(.interactive)
                     }
                 }
-                .onAppear { prewarm(items: items) }
-                .onChange(of: items) { _, newItems in prewarm(items: newItems) }
             }
         }
         .scrollClipDisabled()
-    }
-
-    private func prewarm(items: [MediaThumbnailMetadata]) {
-        ImageCache.shared.prewarmImages(items, targetSize: .thumbMedium, priority: .normal)
     }
 }

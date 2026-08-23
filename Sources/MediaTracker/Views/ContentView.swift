@@ -503,7 +503,13 @@ struct LibraryDetailView: View {
                     Task {
                         let recs = await filterActor.fetchRecommendations()
                         guard !Task.isCancelled else { return }
-                        viewModel.display.recommendations = recs
+                        await MainActor.run {
+                            viewModel.display.recommendations = recs
+                            // Late async fetch bypasses applyFilterResult's prewarm — warm here so For You pill isn't cold
+                            ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
+                            let backdrops = recs.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
+                            ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)
+                        }
                     }
                 }
             } catch is CancellationError {

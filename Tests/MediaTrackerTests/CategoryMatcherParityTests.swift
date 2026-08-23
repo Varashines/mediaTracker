@@ -11,6 +11,7 @@ final class CategoryMatcherParityTests: XCTestCase {
     private var context: ModelContext!
     private var actor: MediaFilterActor!
 
+    @MainActor
     override func setUpWithError() throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
