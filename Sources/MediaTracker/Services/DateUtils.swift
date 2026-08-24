@@ -19,8 +19,10 @@ struct StreamingServiceRule: Codable {
         StreamingServiceRule(patterns: ["netflix"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Amazon Prime / MGM+: New 2025/2026 standard is Midnight PT.
         StreamingServiceRule(patterns: ["amazon", "prime", "mgm"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
-        // Hulu / Peacock / Paramount+ / FX: Mostly Midnight ET.
-        StreamingServiceRule(patterns: ["hulu", "peacock", "paramount", "fx"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Hulu / Peacock / Paramount+: Mostly Midnight ET on listed date.
+        StreamingServiceRule(patterns: ["hulu", "peacock", "paramount"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // FX / FXX: Broadcasts evening ET / drops next morning on Hulu -> Midnight ET next day.
+        StreamingServiceRule(patterns: ["fx", "fxx"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 1),
         // HBO Max / Max Originals: 9 PM ET on their listed release date.
         StreamingServiceRule(patterns: ["max"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // HBO (Linear Network): Usually 9 PM ET for flagship releases.

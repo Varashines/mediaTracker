@@ -277,6 +277,7 @@ final class DateUtilsTests: XCTestCase {
     }
 
     func testParseEpisodeDateFXWithPlaceholderAirstampIsMidnightETInIST() {
+        // FX broadcast is Thursday night Aug 27 ET -> streaming next morning Friday Aug 28 Midnight ET -> 9:30 AM IST.
         let date = DateUtils.parseEpisodeDate(
             "2026-08-27",
             airstamp: "2026-08-27T16:00:00+00:00",
@@ -289,7 +290,7 @@ final class DateUtilsTests: XCTestCase {
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
         XCTAssertEqual(components.year, 2026)
         XCTAssertEqual(components.month, 8)
-        XCTAssertEqual(components.day, 27)
+        XCTAssertEqual(components.day, 28)
         XCTAssertEqual(components.hour, 9)
         XCTAssertEqual(components.minute, 30)
     }
