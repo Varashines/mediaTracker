@@ -248,17 +248,18 @@ struct ShimmeringModifier: ViewModifier {
             content
         } else {
             content
-                .overlay {
-                    LinearGradient(
-                        colors: [.clear, .white.opacity(0.22), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 600)
-                    .offset(x: -600 + (600 * 2.5 * phase))
-                    .rotationEffect(.degrees(15))
-                }
-                .mask(content)
+                .overlay(
+                    GeometryReader { geo in
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.18), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width)
+                        .offset(x: -geo.size.width + (geo.size.width * 2 * phase))
+                    }
+                )
+                .clipped()
                 .onAppear {
                     withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                         phase = 1
