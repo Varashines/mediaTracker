@@ -256,4 +256,41 @@ final class DateUtilsTests: XCTestCase {
         XCTAssertEqual(comps.hour, 12, "YouTube airstamp noon UTC = 7 PM ICT (Thailand)")
         XCTAssertEqual(comps.minute, 0)
     }
+    func testParseEpisodeDateHuluWithPlaceholderAirstampIsMidnightETInIST() {
+        // TVMaze returns placeholder 16:00:00+00:00 (Noon EDT) for Hulu streaming originals.
+        // Hardcoded streaming rule should override it to Midnight ET -> 9:30 AM IST.
+        let date = DateUtils.parseEpisodeDate(
+            "2026-08-24",
+            airstamp: "2026-08-24T16:00:00+00:00",
+            serviceName: "Hulu"
+        )
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 24)
+        XCTAssertEqual(components.hour, 9)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    func testParseEpisodeDateFXWithPlaceholderAirstampIsMidnightETInIST() {
+        let date = DateUtils.parseEpisodeDate(
+            "2026-08-27",
+            airstamp: "2026-08-27T16:00:00+00:00",
+            serviceName: "FX"
+        )
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 27)
+        XCTAssertEqual(components.hour, 9)
+        XCTAssertEqual(components.minute, 30)
+    }
 }

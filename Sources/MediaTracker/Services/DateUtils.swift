@@ -19,8 +19,8 @@ struct StreamingServiceRule: Codable {
         StreamingServiceRule(patterns: ["netflix"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Amazon Prime / MGM+: New 2025/2026 standard is Midnight PT.
         StreamingServiceRule(patterns: ["amazon", "prime", "mgm"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
-        // Hulu / Peacock / Paramount+: Mostly Midnight ET.
-        StreamingServiceRule(patterns: ["hulu", "peacock", "paramount"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // Hulu / Peacock / Paramount+ / FX: Mostly Midnight ET.
+        StreamingServiceRule(patterns: ["hulu", "peacock", "paramount", "fx"], releaseTime: "00:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // HBO Max / Max Originals: 9 PM ET on their listed release date.
         StreamingServiceRule(patterns: ["max"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // HBO (Linear Network): Usually 9 PM ET for flagship releases.
@@ -101,12 +101,8 @@ struct DateUtils {
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
         let service = (serviceName ?? show?.network ?? "").lowercased()
 
-        // 1. Real ISO airstamp: TVMaze provides exact UTC timestamp (e.g. 2026-08-24T01:00:00+00:00).
-        //    Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
-        //    YouTube: noon-UTC airstamp IS the actual release time (e.g., 7 PM ICT).
-        if let airstamp = airstamp,
-           (service == "youtube" || !airstamp.contains("T12:00:00+00:00")),
-           let date = parseISO(airstamp) {
+        // 1. YouTube: Real ISO airstamp from TVMaze (noon-UTC is the actual release time, e.g. 7 PM ICT).
+        if service == "youtube", let airstamp = airstamp, let date = parseISO(airstamp) {
             return date
         }
 
@@ -115,9 +111,9 @@ struct DateUtils {
         let resolvedDateString = dateString ?? (airstamp.flatMap { $0.count >= 10 ? String($0.prefix(10)) : nil })
         let hasRealAirtime = time?.isEmpty == false || show?.nextEpisodeTime?.isEmpty == false
         
-        // 2. Streaming service rules: Use when rule matches AND TVMaze has no real airtime.
-        //    Streaming originals (Apple TV+, Netflix, etc.) have empty airtime and a placeholder
-        //    noon-UTC airstamp. The hardcoded rules provide the actual release time.
+        // 2. Streaming service rules: Use when rule matches AND TVMaze has no real broadcast airtime.
+        //    Streaming originals (Apple TV+, Hulu, FX, Netflix, etc.) have empty airtime and a placeholder
+        //    noon (12:00 UTC or 16:00 UTC) airstamp. The hardcoded rules provide the actual release time.
         if !hasRealAirtime,
            let rule = StreamingServiceRule.defaults.first(where: { rule in
                rule.patterns.contains(where: { service.contains($0) })
@@ -140,17 +136,25 @@ struct DateUtils {
                 }
             }
         }
+
+        // 4. Real ISO airstamp: TVMaze provides exact UTC timestamp for broadcast shows (e.g. 2026-08-24T01:00:00+00:00).
+        //    Skip TVMaze's noon-UTC placeholder (T12:00:00+00:00).
+        if let airstamp = airstamp,
+           !airstamp.contains("T12:00:00+00:00"),
+           let date = parseISO(airstamp) {
+            return date
+        }
         
         guard let dateStr = resolvedDateString else { return nil }
 
-        // 4. Timezone + time fallback
+        // 5. Timezone + time fallback
         if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
             let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
             let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
             return formatter.date(from: "\(dateStr) \(timeToUse)")
         } 
         
-        // 5. US 8 PM ET fallback
+        // 6. US 8 PM ET fallback
         let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
         return formatter.date(from: "\(dateStr) 20:00")
     }
