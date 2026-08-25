@@ -16,11 +16,19 @@ struct CategoryStats: Sendable {
 
     func affinity(cutoff: Int = 5, belowCutoffValue: Double = 0) -> Double {
         guard ratedTitles >= cutoff else { return belowCutoffValue }
-        // Bayesian-smoothed taste score (prior 0.5, strength 5):
-        // Loved = 1.0, Liked = 0.5, Disliked = 0. Small samples regress toward
-        // the neutral prior so a few perfect ratings don't outrank larger libraries.
-        let sum = Double(loved) + 0.5 * Double(liked)
-        return (sum + 2.5) / (Double(ratedCount) + 5.0)
+        // Bayesian-smoothed taste score with dislike penalty:
+        // Loved = 1.0, Liked = 0.5, Disliked = -0.5. Neutral prior 0.5 with strength 5.0.
+        let sum = Double(loved) + 0.5 * Double(liked) - 0.5 * Double(disliked)
+        return max(0.0, (sum + 2.5) / (Double(ratedCount) + 5.0))
+    }
+
+    /// Volume-weighted passion affinity for creators/directors.
+    func creatorAffinity() -> Double {
+        let netPoints = Double(loved) + 0.5 * Double(liked) - 0.75 * Double(disliked)
+        guard netPoints > 0 else { return 0.0 }
+        let ratio = (netPoints + 2.0) / (Double(ratedCount) + 3.0)
+        let volumeBonus = log(Double(loved) + 2.0) / log(3.5)
+        return ratio * volumeBonus
     }
 }
 

@@ -180,10 +180,26 @@ actor TasteActor {
         return Int(id.dropFirst(3))
     }
 
+    struct ActorStats: Sendable {
+        var loved: Double = 0
+        var liked: Double = 0
+        var disliked: Double = 0
+        var total: Int = 0
+        var leadCount: Int = 0
+
+        func affinity() -> Double {
+            let netPoints = loved + 0.5 * liked - 0.75 * disliked
+            guard netPoints > 0 else { return 0.0 }
+            let ratio = (netPoints + 2.0) / (Double(total) + 3.0)
+            let volumeBonus = log(loved + 2.0) / log(4.0)
+            return ratio * volumeBonus
+        }
+    }
+
     private struct AffinityAccumulators {
         var genreStats: [String: CategoryStats] = [:]
         var networkStats: [String: CategoryStats] = [:]
-        var castScore: [String: Double] = [:]
+        var actorStats: [String: ActorStats] = [:]
         var creatorStats: [String: CategoryStats] = [:]
         var languageStats: [String: CategoryStats] = [:]
     }
@@ -205,7 +221,6 @@ actor TasteActor {
             // Cast affinity: per-season when season-cast data exists, else top-billed fallback.
             if item.type == .tvShow, let tmdbID = Self.tmdbID(from: item.id),
                let members = lookups.castByShow[tmdbID], !members.isEmpty {
-                var points: [String: Double] = [:]
                 for m in members {
                     let isFullyWatched = lookups.watchedByShowSeason[tmdbID]?.contains(m.seasonNumber) == true
                     let effective = TasteMath.effectiveSeasonTasteRaw(
@@ -213,17 +228,25 @@ actor TasteActor {
                         isFullyWatched: isFullyWatched,
                         showTaste: taste
                     )
-                    let w = TasteMath.seasonWeight(effective)
-                    if w != 0 { points[m.name, default: 0] += w }
+                    guard let effective else { continue }
+                    var s = acc.actorStats[m.name, default: ActorStats()]
+                    s.total += 1
+                    if effective == "Love" { s.loved += 1.0 }
+                    else if effective == "Like" { s.liked += 0.6 }
+                    else if effective == "Dislike" { s.disliked += 0.6 }
+                    acc.actorStats[m.name] = s
                 }
-                for (name, p) in points { acc.castScore[name, default: 0] += p }
             } else {
                 let limit = item.type == .movie ? 5 : 10
-                let w = TasteMath.seasonWeight(taste) * Double(titleWeight)
-                if w != 0 {
-                    for actor in item.displayCast.prefix(limit) {
-                        acc.castScore[actor.name, default: 0] += w
-                    }
+                for (idx, actor) in item.displayCast.prefix(limit).enumerated() {
+                    let leadMult = idx == 0 ? 1.0 : 0.6
+                    var s = acc.actorStats[actor.name, default: ActorStats()]
+                    s.total += 1
+                    if idx == 0 { s.leadCount += 1 }
+                    if taste == "Love" { s.loved += leadMult }
+                    else if taste == "Like" { s.liked += leadMult }
+                    else if taste == "Dislike" { s.disliked += leadMult }
+                    acc.actorStats[actor.name] = s
                 }
             }
         }
@@ -236,8 +259,8 @@ actor TasteActor {
         return (
             acc.genreStats.mapValues { $0.affinity(cutoff: 5) },
             acc.networkStats.mapValues { $0.affinity(cutoff: 5) },
-            acc.castScore,
-            acc.creatorStats.mapValues { $0.affinity(cutoff: 3) },
+            acc.actorStats.mapValues { $0.affinity() },
+            acc.creatorStats.mapValues { $0.creatorAffinity() },
             acc.languageStats.mapValues { $0.affinity(cutoff: 5) }
         )
     }
@@ -259,6 +282,7 @@ actor TasteActor {
         let wCast = weight(.tasteWeightCast, default: 15.0)
         let wNetwork = weight(.tasteWeightNetwork, default: 5.0)
         let wLang = weight(.tasteWeightLang, default: 10.0)
+        let weightSum = wGenre + wCreator + wCast + wNetwork + wLang
 
         let profile = await calculateAffinityMaps()
         let genreAffinity = profile.genre
@@ -279,110 +303,92 @@ actor TasteActor {
         let now = Date()
 
         for item in wishlist {
-            var potentialReasons: [(String, Double, Int)] = []  // Label, Affinity, Priority (0=Genre, 1=Creator, 2=Other)
-
-            // Genre matching
-            var genreTotalAffinity: Double = 0
-            for g in item.cachedGenres {
-                if let aff = genreAffinity[g], aff != 0 {
-                    genreTotalAffinity += aff
-                    potentialReasons.append(("Because you like \(g)", aff, 0))
-                }
-            }
-            let genreAverageAffinity =
-                item.cachedGenres.isEmpty
-                ? 0 : (genreTotalAffinity / Double(item.cachedGenres.count))
-
-            // Network matching
-            var networkAff: Double = 0
-            if let rawNetwork = item.cachedNetwork {
-                let networks = rawNetwork.commaSeparatedValues
-                var totalAff: Double = 0
-                var matchedCount = 0
-                for n in networks where !n.isEmpty {
-                    if let aff = networkAffinity[n], aff != 0 {
-                        totalAff += aff
-                        matchedCount += 1
-                        potentialReasons.append(("From \(n)", aff, 2))
-                    }
-                }
-                if matchedCount > 0 {
-                    networkAff = totalAff / Double(matchedCount)
-                }
-            }
-
-            // Language matching
-            var langAff: Double = 0
-            if let l = item.cachedLanguage, let aff = langAffinity[l], aff != 0 {
-                langAff = aff
-                potentialReasons.append(("In \(l)", aff, 3))
-            }
-
-            // Cast matching (Balanced middle-ground model with billing prominence)
-            var castTotalAffinity: Double = 0
-            let limit = item.type == .movie ? 5 : 10
-            let itemCast = item.displayCast.prefix(limit).map { $0.name }
-            for (idx, actor) in itemCast.enumerated() {
-                if let rawAff = castAffinity[actor], rawAff > 0 {
-                    let affVal = min(1.35, sqrt(rawAff / 7.0))
-                    let decay = idx == 0 ? 1.0 : (idx < 3 ? 0.55 : 0.25)
-                    castTotalAffinity += (affVal * decay)
-                    let prominence = idx == 0 ? 1.0 : (idx == 1 ? 0.75 : 0.5)
-                    potentialReasons.append(("Starring \(actor)", affVal * prominence, 2))
-                }
-            }
-
-            // Creator matching
-            var creatorTotalAffinity: Double = 0
-            // Use the denormalized cachedCreators to avoid faulting movieDetails/tvShowDetails relationships
-            for creator in item.cachedCreators {
-                if let aff = creatorAffinity[creator], aff != 0 {
-                    creatorTotalAffinity += aff
-                    potentialReasons.append(
-                        ("\(item.type == .movie ? "Directed by" : "Created by") \(creator)", aff, 1)
-                    )
-                }
-            }
-
-            let totalScore =
-                (genreAverageAffinity * wGenre) + (networkAff * wNetwork)
-                + (castTotalAffinity * wCast) + (creatorTotalAffinity * wCreator)
-                + (langAff * wLang)
-
-            // Phase 4 Optimization: Time-Decay Factor (Symmetric)
-            // Prioritize items airing/releasing soon or recently released.
-            // Items without an assigned date are excluded from "For You".
             guard let targetDate = item.cachedNextAiringDate ?? item.releaseDate else {
                 continue
             }
 
-            let daysDifference = abs(now.timeIntervalSince(targetDate)) / .secondsInDay
-            // Inverse time decay: 1 / (1 + λ * days)
-            // λ = 0.005 ensures ~21% score retention at 2 years (730 days)
-            let timeDecay = 1.0 / (1.0 + 0.005 * daysDifference)
+            // 1. Cast Matching (All-Star Ensemble Power)
+            var castPower: Double = 0
+            var castMatches: [(name: String, aff: Double, idx: Int)] = []
+            let limit = item.type == .movie ? 5 : 10
+            let itemCast = item.displayCast.prefix(limit).map { $0.name }
+            for (idx, actor) in itemCast.enumerated() {
+                if let aff = castAffinity[actor], aff > 0 {
+                    let decay = idx == 0 ? 1.0 : (idx == 1 ? 0.5 : 0.25)
+                    castPower += (aff * decay)
+                    castMatches.append((actor, aff, idx))
+                }
+            }
+            let castFit = min(1.25, castPower)
 
-            let finalScore = totalScore * timeDecay
+            // 2. Director / Creator Matching
+            var dirFit: Double = 0.5
+            var topCreator: String? = nil
+            for creator in item.cachedCreators {
+                if let aff = creatorAffinity[creator], aff > 0 {
+                    if aff > dirFit {
+                        dirFit = aff
+                        topCreator = creator
+                    }
+                }
+            }
+
+            // 3. Genre Matching
+            let gAffs = item.cachedGenres.compactMap { genreAffinity[$0] }
+            let genreFit = gAffs.isEmpty ? 0.5 : (gAffs.reduce(0, +) / Double(item.cachedGenres.count))
+            let topGenre = item.cachedGenres.max(by: { (genreAffinity[$0] ?? 0) < (genreAffinity[$1] ?? 0) })
+
+            // 4. Network / Studio & Language Matching
+            let nList = item.cachedNetwork?.commaSeparatedValues ?? []
+            let nAffs = nList.compactMap { networkAffinity[$0] }
+            let networkFit = nAffs.isEmpty ? 0.5 : (nAffs.max() ?? 0.5)
+            let topNetwork = nList.first
+            let langFit = item.cachedLanguage.flatMap { langAffinity[$0] } ?? 0.5
+
+            // Base Multi-Dimensional Fit
+            let baseFit = ((wCast / weightSum) * castFit)
+                + ((wCreator / weightSum) * dirFit)
+                + ((wGenre / weightSum) * genreFit)
+                + ((wNetwork / weightSum) * networkFit)
+                + ((wLang / weightSum) * langFit)
+
+            // Multiplicative Synergy Multiplier
+            var synergy = 1.0
+            if networkFit > 0.70 && castFit > 0.80 { synergy += 0.15 }
+            if dirFit > 0.65 && castFit > 0.70 { synergy += 0.10 }
+            if dirFit > 0.65 && genreFit > 0.75 { synergy += 0.05 }
+
+            // Asymmetric Availability & Hype Decay
+            let timeDifference = targetDate.timeIntervalSince(now)
+            let days = timeDifference / .secondsInDay
+            let timeDecay: Double = {
+                if days >= 0 {
+                    return 1.0 / (1.0 + 0.0012 * days)
+                } else {
+                    return 1.0 / (1.0 + 0.0015 * abs(days))
+                }
+            }()
+
+            let finalScore = baseFit * synergy * timeDecay * 100.0
 
             if finalScore > 0 {
-                let bestReason: String = {
-                    // Normalize reasons by weights so they match the user's priority
-                    let weightedReasons = potentialReasons.map {
-                        (label, aff, type) -> (String, Double) in
-                        let weight: Double = {
-                            switch type {
-                            case 0: return wGenre
-                            case 1: return wCreator
-                            case 2: return wCast
-                            case 3: return wLang
-                            default: return 1.0
-                            }
-                        }()
-                        return (label, aff * weight)
-                    }
+                var potentialReasons: [(label: String, score: Double)] = []
+                if let leadActor = castMatches.first, leadActor.aff > 0.65 {
+                    let mult = leadActor.idx == 0 ? 1.25 : 0.85
+                    potentialReasons.append(("Starring \(leadActor.name)", leadActor.aff * mult * (wCast / 15.0)))
+                }
+                if let topCreator, dirFit > 0.65 {
+                    let prefix = item.type == .movie ? "Directed by" : "Created by"
+                    potentialReasons.append(("\(prefix) \(topCreator)", dirFit * 1.15 * (wCreator / 20.0)))
+                }
+                if let topNetwork, networkFit > 0.75 {
+                    potentialReasons.append(("From \(topNetwork)", networkFit * 1.10 * (wNetwork / 5.0)))
+                }
+                if let topGenre, let gAff = genreAffinity[topGenre], gAff > 0.75 {
+                    potentialReasons.append(("Because you love \(topGenre)", gAff * 0.95 * (wGenre / 15.0)))
+                }
 
-                    return weightedReasons.max(by: { $0.1 < $1.1 })?.0 ?? "Picked for you"
-                }()
-
+                let bestReason = potentialReasons.max(by: { $0.score < $1.score })?.label ?? "Picked for your taste"
                 recommendations.append((item.persistentModelID, finalScore, bestReason))
             }
         }
