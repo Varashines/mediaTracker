@@ -18,8 +18,8 @@ struct PosterView: View {
             ZStack {
                 RadialGradient(
                     colors: [
-                        themeColor.opacity(colorScheme == .dark ? 0.65 : 0.65),
-                        themeColor.opacity(colorScheme == .dark ? 0.25 : 0.25),
+                        themeColor.opacity(0.65),
+                        themeColor.opacity(0.25),
                         .clear
                     ],
                     center: .center,

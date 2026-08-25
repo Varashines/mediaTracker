@@ -2,45 +2,6 @@ import Foundation
 import SwiftData
 
 extension MediaFilterActor {
-    func sortResults(_ results: inout [MediaItem], category: NavigationCategory, sortOrder: SortOrder) {
-        // Loved always sorts by most recently interacted
-        if category == .loved {
-            results.sort {
-                if $0.lastInteractionDate != $1.lastInteractionDate {
-                    return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-            return
-        }
-
-        switch sortOrder {
-        case .alphabetical:
-            results.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
-        case .newestRelease:
-            results.sort {
-                if $0.releaseDate != $1.releaseDate {
-                    return ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        case .recentlyAdded:
-            results.sort {
-                if $0.dateAdded != $1.dateAdded {
-                    return ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        case .recentInteraction:
-            results.sort {
-                if $0.lastInteractionDate != $1.lastInteractionDate {
-                    return ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
-                }
-                return $0.title < $1.title
-            }
-        }
-    }
-
     func applySortOrder(to descriptor: inout FetchDescriptor<MediaItem>, category: NavigationCategory, sortOrder: SortOrder, badge: String? = nil) {
         // Loved always sorts by most recently interacted
         if category == .loved {

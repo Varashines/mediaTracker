@@ -490,27 +490,8 @@ actor DiscoverySyncService {
         do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 
-    func onBadgeChanged(oldBadge: String?, newBadge: String?) async {
-        if let old = oldBadge, !old.isEmpty {
-            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == old })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        if let new = newBadge, !new.isEmpty {
-            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == new })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(BadgeEntity(label: new, count: 1))
-            }
-        }
-        do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
-    }
-
     /// Apply accumulated badge deltas in a single transaction.
-    /// Replaces N individual `onBadgeChanged` calls during bulk operations.
+    /// Replaces per-badge fetch+increment calls during bulk operations.
     func applyBadgeDeltas(_ deltas: [String: Int]) async {
         for (label, delta) in deltas {
             let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == label })

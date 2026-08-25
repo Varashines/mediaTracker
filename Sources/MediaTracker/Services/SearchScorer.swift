@@ -158,18 +158,6 @@ struct SearchScorer: Sendable {
         return nil
     }
 
-    /// Each token must contribute at least some score (AND-like)
-    func passesAllTokens(item: SearchScorable) -> Bool {
-        guard !tokens.isEmpty else { return true }
-        return evaluate(item: item).matchesAll
-    }
-
-    /// At least one token contributes score (OR-like)
-    func passesAnyToken(item: SearchScorable) -> Bool {
-        guard !tokens.isEmpty else { return true }
-        return evaluate(item: item).matchesAny
-    }
-
     private func trigramSimilarity(_ a: String, _ b: String) -> Double {
         let aTrigrams = trigrams(a.lowercased())
         let bTrigrams = trigrams(b.lowercased())

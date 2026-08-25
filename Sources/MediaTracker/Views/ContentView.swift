@@ -466,7 +466,6 @@ struct LibraryDetailView: View {
             if !isSoftUpdate {
                 await MainActor.run {
                     viewModel.display.displayedItems = []
-                    viewModel.pagination.currentOffset = 0
                     viewModel.pagination.isLoadingMore = false
                     viewModel.pagination.isInitialLoad = true
                 }
@@ -547,7 +546,6 @@ struct LibraryDetailView: View {
                 await MainActor.run {
                     viewModel.display.displayedItems.append(contentsOf: result.displayed)
                     viewModel.pagination.isLoadingMore = false
-                    viewModel.pagination.currentOffset = nextOffset
                 }
 
                 // Keep the next viewport warm without creating network work for an entire page.

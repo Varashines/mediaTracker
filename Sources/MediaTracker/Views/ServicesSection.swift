@@ -231,7 +231,7 @@ struct ServicesSection: View {
             HStack(spacing: AppTheme.Spacing.micro) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
                     .font(AppTheme.Font.label)
-                    .foregroundStyle(isOn.wrappedValue ? .secondary : .secondary)
+                    .foregroundStyle(.secondary)
                 Text(title)
                     .font(AppTheme.Font.label)
                     .foregroundStyle(isOn.wrappedValue ? .primary : .secondary)

@@ -386,15 +386,6 @@ extension View {
             .toolbarBackgroundVisibility(.automatic, for: .windowToolbar)
             .animation(.easeInOut(duration: 0.6), value: isSleeping)
     }
-    
-    @ViewBuilder
-    func colorInvert(_ active: Bool) -> some View {
-        if active {
-            self.colorInvert()
-        } else {
-            self
-        }
-    }
 }
 struct AdaptiveBackgroundModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme

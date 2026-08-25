@@ -82,27 +82,16 @@ class DisplayCache {
     /// `FilteredLibraryGridView.updateSingleItem`. If `updated` is nil the item is
     /// removed from all lists.
     func applyUpdate(_ updated: MediaThumbnailMetadata?, id: PersistentIdentifier, animated: Bool = true) {
-        // Track which lists actually changed to avoid animating 7+ lists for a single-item update
-        var changedLists: [String] = []
-
         let mutate = {
-            let track = { (name: String, list: inout [MediaThumbnailMetadata]) in
-                let before = list.count
-                self.replaceInList(&list, id: id, updated: updated)
-                if list.count != before { changedLists.append(name) }
-            }
-
-            track("displayed", &self.displayedItems)
-            track("recentlyAdded", &self.recentlyAddedItems)
-            track("continueWatching", &self.homeContinueWatchingItems)
-            track("featuredUpcoming", &self.featuredUpcomingItems)
-            track("recommendations", &self.recommendations)
-            track("pickOfTheDay", &self.pickOfTheDay)
+            self.replaceInList(&self.displayedItems, id: id, updated: updated)
+            self.replaceInList(&self.recentlyAddedItems, id: id, updated: updated)
+            self.replaceInList(&self.homeContinueWatchingItems, id: id, updated: updated)
+            self.replaceInList(&self.featuredUpcomingItems, id: id, updated: updated)
+            self.replaceInList(&self.recommendations, id: id, updated: updated)
+            self.replaceInList(&self.pickOfTheDay, id: id, updated: updated)
 
             for i in 0..<self.groupedItems.count {
-                let before = self.groupedItems[i].1.count
                 self.replaceInList(&self.groupedItems[i].1, id: id, updated: updated)
-                if self.groupedItems[i].1.count != before { changedLists.append("grouped_\(i)") }
             }
         }
 

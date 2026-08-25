@@ -189,7 +189,6 @@ actor BackgroundDataService {
         do {
             let itemType = item.type
             // Deduplication handled by APIClient in-flight coalescing (inFlightMovieDetails/TVDetails)
-            // — no need for SyncCoordinator which would capture self (non-Sendable) into a @Sendable closure.
             let success: Bool
             if itemType == .movie {
                 success = await self.refreshMovie(id: id, tmdbID: tmdbID, force: force)

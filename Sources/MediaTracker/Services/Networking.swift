@@ -508,11 +508,6 @@ actor APIClient {
         )
     }
     
-    // Adaptive Asset Scaling: Restore high quality for Retina displays
-    nonisolated var idealThumbnailSize: String {
-        return "w780"
-    }
-
     static func tmdbImageURL(path: String?, size: String = "w780") -> String? {
         guard let path = path else { return nil }
         return "https://image.tmdb.org/t/p/\(size)\(path)"
@@ -648,35 +643,6 @@ actor APIClient {
                 episodeCount: member.total_episode_count,
                 order: member.order
             )
-        }
-    }
-
-    func searchPerson(query: String) async throws -> String? {
-        return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/search/person", queryItems: [
-                URLQueryItem(name: "query", value: query),
-                URLQueryItem(name: "include_adult", value: "false")
-            ])
-            let (data, response) = try await self.session.data(from: url)
-            try self.validateResponse(response)
-            let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
-            return decoded.results.first?.profile_path
-        }
-    }
-
-    /// Searches for a person and returns the best (highest popularity) match.
-    func searchPersonDetails(query: String) async throws -> TMDBPersonSearchEntry? {
-        return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/search/person", queryItems: [
-                URLQueryItem(name: "query", value: query),
-                URLQueryItem(name: "include_adult", value: "false")
-            ])
-            let (data, response) = try await self.session.data(from: url)
-            try self.validateResponse(response)
-            let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
-            return decoded.results
-                .sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
-                .first
         }
     }
 

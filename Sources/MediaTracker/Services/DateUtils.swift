@@ -184,13 +184,6 @@ struct DateUtils {
         return false
     }
 
-    static func weekdayName(for date: Date, calendar: Calendar = .current) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: date)
-    }
-
     private static let weekdayDisplayFormatterLock = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
 
     private static func getWeekdayDisplayFormatter() -> DateFormatter {

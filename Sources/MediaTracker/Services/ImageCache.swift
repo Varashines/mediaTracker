@@ -303,11 +303,4 @@ class ImageCache: NSObject, NSCacheDelegate {
         return nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
     
-    func formattedDiskCacheSize() async -> String {
-        let sizeInBytes = URLCache.shared.currentDiskUsage
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(sizeInBytes))
-    }
 }

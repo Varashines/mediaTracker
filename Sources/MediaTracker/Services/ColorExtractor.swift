@@ -18,19 +18,6 @@ enum ColorExtractor {
     private static let defaultGray = Color(red: 0.3, green: 0.3, blue: 0.3)
     private static let secondaryGray = Color(red: 0.2, green: 0.2, blue: 0.2)
 
-    static func dominantColor(from url: URL) async -> Color {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceShouldCache: false,
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 200
-              ] as CFDictionary) else {
-            return defaultGray
-        }
-        return await dominantColor(from: cgImage)
-    }
-
     static func dominantColor(from data: Data) async -> Color {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [

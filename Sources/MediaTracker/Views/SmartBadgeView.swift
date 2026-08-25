@@ -4,7 +4,6 @@ import SwiftData
 struct SmartBadgeView: View {
     let item: MediaItem?
     let metadata: MediaThumbnailMetadata?
-    let result: MediaSearchResult?
     let hideEpisodeProgress: Bool
     
     @Environment(\.colorScheme) var colorScheme
@@ -25,21 +24,12 @@ struct SmartBadgeView: View {
     init(item: MediaItem, hideEpisodeProgress: Bool = false) {
         self.item = item
         self.metadata = nil
-        self.result = nil
         self.hideEpisodeProgress = hideEpisodeProgress
     }
     
     init(metadata: MediaThumbnailMetadata, hideEpisodeProgress: Bool = false) {
         self.item = nil
         self.metadata = metadata
-        self.result = nil
-        self.hideEpisodeProgress = hideEpisodeProgress
-    }
-
-    init(result: MediaSearchResult, hideEpisodeProgress: Bool = false) {
-        self.item = nil
-        self.metadata = nil
-        self.result = result
         self.hideEpisodeProgress = hideEpisodeProgress
     }
 
@@ -70,8 +60,6 @@ struct SmartBadgeView: View {
                     progress: item.storedProgress
                 )
             }
-        } else if let res = result, res.type == .movie {
-             EmptyView()
         }
     }
 
