@@ -62,16 +62,14 @@ struct TrendingPosterCard: View, Equatable {
             CachedImage(url: url, targetSize: CGSize(width: 160, height: 240), isFastScrolling: isFastScrolling) { _ in
             } placeholder: {
                 Color.secondary.opacity(0.1)
-                    .shimmering()
             }
             .scaledToFill()
         } else {
             ZStack {
                 Color.secondary.opacity(0.1)
-                    .shimmering()
-                    Image(systemName: item.type == .movie ? "film" : "tv")
-                        .foregroundStyle(AppTheme.Colors.accent)
-                        .font(AppTheme.Font.title2)
+                Image(systemName: item.type == .movie ? "film" : "tv")
+                    .foregroundStyle(AppTheme.Colors.accent)
+                    .font(AppTheme.Font.title2)
             }
         }
     }

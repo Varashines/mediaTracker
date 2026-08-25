@@ -87,9 +87,9 @@ struct WatchedThisWeek: View {
                                         .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 1)
                                 }
                                 .frame(width: AppTheme.Thumbnail.small.width, height: AppTheme.Thumbnail.small.height)
-                                .shimmering()
                         }
                     }
+                    .shimmering()
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, AppTheme.Spacing.medium - 1)
                 }

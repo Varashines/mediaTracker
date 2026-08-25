@@ -556,7 +556,6 @@ private struct LogoThumbnail: View {
             } placeholder: {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.06))
-                    .shimmering()
             }
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity)

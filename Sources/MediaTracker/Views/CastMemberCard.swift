@@ -44,7 +44,6 @@ struct CastMemberCard: View {
                 } placeholder: {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
                         .fill(Color.secondary.opacity(0.08))
-                        .shimmering()
                 }
                 .scaledToFill()
             } else {

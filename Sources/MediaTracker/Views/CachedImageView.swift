@@ -97,13 +97,11 @@ struct CachedImage<Placeholder: View>: View {
                         .foregroundStyle(color.opacity(0.3))
                         .font(AppTheme.Font.title2)
                 }
-                .shimmering()
         } else {
             ZStack {
                 Color.secondary.opacity(0.1)
                 placeholder
             }
-            .shimmering()
         }
     }
 

@@ -98,7 +98,6 @@ struct DiscoveryCard: View {
                         CachedImage(url: url, targetSize: CGSize(width: 75, height: 32), priority: .low) { _ in } placeholder: {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.secondary.opacity(0.08))
-                                .shimmering()
                         }
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 75, height: 32)
