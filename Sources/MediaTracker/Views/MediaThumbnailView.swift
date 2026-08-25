@@ -438,6 +438,7 @@ struct MediaThumbnailView: View, Equatable {
             Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
         }
         .clipShape(Capsule())
+        .compositingGroup()
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.shadow(color: Color.black.opacity(0.25), radius: 2, y: 1)
         }
@@ -521,12 +522,12 @@ struct MediaThumbnailView: View, Equatable {
             }
 
             if let item = modelContext.model(for: itemID) as? MediaItem {
-                let collectionsDescriptor = FetchDescriptor<MediaCollection>()
-                if let allCollections = try? modelContext.fetch(collectionsDescriptor) {
-                    let manual = allCollections.filter { $0.smartRulesData == nil }
-                    if !manual.isEmpty {
-                        Menu("Add to Collection") {
-                            ForEach(manual) { collection in
+                let collectionsDescriptor = FetchDescriptor<MediaCollection>(
+                    predicate: #Predicate<MediaCollection> { $0.smartRulesData == nil }
+                )
+                if let manual = try? modelContext.fetch(collectionsDescriptor), !manual.isEmpty {
+                    Menu("Add to Collection") {
+                        ForEach(manual) { collection in
                                 let isIn = item.collections.contains(where: { $0.id == collection.id })
                                 Button {
                                     if isIn {
