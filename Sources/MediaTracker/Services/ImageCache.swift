@@ -10,6 +10,43 @@ struct ImageContainer: @unchecked Sendable {
     let image: CGImage
 }
 
+/// Limits concurrent detached image decoding tasks to prevent thread starvation and memory spikes.
+private final class ImageDecodeLimiter: @unchecked Sendable {
+    static let shared = ImageDecodeLimiter()
+    private let maxConcurrent = 6
+    private let lock = NSLock()
+    private var running = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        let shouldWait: Bool = lock.withLock {
+            if running < maxConcurrent {
+                running += 1
+                return false
+            }
+            return true
+        }
+        if shouldWait {
+            await withCheckedContinuation { continuation in
+                lock.withLock {
+                    waiters.append(continuation)
+                }
+            }
+        }
+    }
+
+    func release() {
+        lock.withLock {
+            if !waiters.isEmpty {
+                let next = waiters.removeFirst()
+                next.resume()
+            } else {
+                running = max(0, running - 1)
+            }
+        }
+    }
+}
+
 final class CachedImageWrapper: NSObject, @unchecked Sendable {
     let image: CGImage
     let urlString: String
@@ -215,7 +252,9 @@ class ImageCache: NSObject, NSCacheDelegate {
 
                 // Decode off the main actor to avoid blocking UI.
                 let finalCGImage: CGImage? = await Task.detached(priority: .utility) { [scale] in
-                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains("svg") ?? false) {
+                    await ImageDecodeLimiter.shared.acquire()
+                    defer { ImageDecodeLimiter.shared.release() }
+                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains(".svg") ?? false) {
                         return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
                     } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
                         if let target = targetSize {
