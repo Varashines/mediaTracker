@@ -262,7 +262,6 @@ struct InsightsView: View {
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             do {
                 let result = try await actor.fetchStats(includeCinephileData: true)
-                try? await Task.sleep(nanoseconds: 350_000_000)
                 if Task.isCancelled { return }
                 await MainActor.run {
                     withAnimation(AppTheme.Animation.easeInOut) {

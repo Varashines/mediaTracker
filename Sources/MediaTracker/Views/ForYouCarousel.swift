@@ -32,15 +32,16 @@ struct ForYouCarousel: View {
                     }
                 }
             } else {
-                HStack(spacing: AppTheme.Spacing.small) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Finding recommendations tailored to your taste...")
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppTheme.Spacing.medium) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                .fill(Color.secondary.opacity(0.12))
+                                .frame(width: 420, height: 200)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.vertical, AppTheme.Spacing.small)
             }
         }
     }
