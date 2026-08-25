@@ -19,17 +19,15 @@ final class SearchViewModelTests: XCTestCase {
         viewModel = nil
     }
 
-    func testIsSearchingSetImmediatelyDuringDebounceWindow() {
+    func testIsSearchingNotSetImmediatelyDuringDebounceWindow() {
         XCTAssertFalse(viewModel.isSearching)
         viewModel.handleSearchTextChange("batman", selectedType: .movie)
-        // Must be true synchronously — before the 150ms debounce fires —
-        // so the skeleton shows instead of a no-results flash.
-        XCTAssertTrue(viewModel.isSearching)
+        // Must stay false synchronously to prevent flickering skeletons on raw keystrokes
+        XCTAssertFalse(viewModel.isSearching)
     }
 
     func testIsSearchingResetOnEmptyText() {
         viewModel.handleSearchTextChange("batman", selectedType: .movie)
-        XCTAssertTrue(viewModel.isSearching)
         viewModel.handleSearchTextChange("", selectedType: .movie)
         XCTAssertFalse(viewModel.isSearching)
         XCTAssertTrue(viewModel.movieResults.isEmpty)
