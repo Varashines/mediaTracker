@@ -71,7 +71,6 @@ struct TVTrackingView: View {
                                 selectedSeasonNumber = season.seasonNumber
                                 onSeasonSelected?(season)
                             }
-                            .equatable()
                         }
                     }
                     .padding(.horizontal, 4)
@@ -193,19 +192,11 @@ struct TVTrackingView: View {
 
 }
 
-private struct SeasonTab: View, Equatable {
+private struct SeasonTab: View {
     let season: TVSeason
     let isSelected: Bool
     let themeColor: Color
     let action: () -> Void
-
-    static func == (lhs: SeasonTab, rhs: SeasonTab) -> Bool {
-        lhs.season.persistentModelID == rhs.season.persistentModelID &&
-        lhs.season.watchedEpisodesCount == rhs.season.watchedEpisodesCount &&
-        lhs.season.totalEpisodesCount == rhs.season.totalEpisodesCount &&
-        lhs.isSelected == rhs.isSelected &&
-        lhs.themeColor == rhs.themeColor
-    }
 
     @Environment(\.colorScheme) var colorScheme
 
@@ -566,7 +557,6 @@ private struct SeasonSection: View {
                         EpisodeCube(episode: ep, themeColor: themeColor) {
                             onWatchedToggle()
                         }
-                        .equatable()
                     }
                 }
             }
@@ -678,19 +668,11 @@ private struct SeasonSection: View {
 
 // MARK: - Episode Cube
 
-private struct EpisodeCube: View, Equatable {
+private struct EpisodeCube: View {
     @Bindable var episode: TVEpisode
     var themeColor: Color
     var onToggle: () -> Void
     @Environment(\.colorScheme) var colorScheme
-
-    static func == (lhs: EpisodeCube, rhs: EpisodeCube) -> Bool {
-        lhs.episode.persistentModelID == rhs.episode.persistentModelID &&
-        lhs.episode.isWatched == rhs.episode.isWatched &&
-        lhs.episode.watchedDate == rhs.episode.watchedDate &&
-        lhs.themeColor == rhs.themeColor &&
-        lhs.cachedDateString == rhs.cachedDateString
-    }
 
     @State private var showingOverview = false
     @State private var isHovering = false
