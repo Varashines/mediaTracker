@@ -115,14 +115,7 @@ struct YearReviewView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
 
-                    // ── Year-wide taste section ───────────────────────────
-                    if !review.topGenres.isEmpty || !review.topNetworks.isEmpty || !review.topActors.isEmpty {
-                        Divider()
-                            .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                            .padding(.vertical, AppTheme.Spacing.large)
 
-                        YearTasteSection(review: review, colorScheme: colorScheme)
-                    }
 
                     Spacer().frame(height: AppTheme.Spacing.section)
                 }
@@ -1217,101 +1210,6 @@ private struct PosterTile: View {
     @ViewBuilder
     private var tasteBadge: some View {
         TasteBadgeView(tasteValue: title.tasteValue)
-    }
-}
-
-// MARK: - Year Taste Section
-
-private struct YearTasteSection: View {
-    let review: YearInReview
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            Text("YOUR \(String(review.year)) TASTE")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .kerning(1.2)
-                .foregroundStyle(AppTheme.Colors.accent)
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-            if !review.topGenres.isEmpty {
-                tasteRow(title: "Top Genres") {
-                    ForEach(review.topGenres.prefix(6), id: \.name) { genre in
-                        DiscoveryCard(
-                            node: DiscoveryNode(name: genre.name, logoPath: nil, count: genre.count),
-                            style: .text,
-                            baseColor: .indigo,
-                            badgeValue: "\(Int(genre.score * 100))%"
-                        ) {}
-                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
-                        .frame(height: 60)
-                    }
-                }
-            }
-
-            if !review.topNetworks.isEmpty {
-                tasteRow(title: "Networks You Binged") {
-                    ForEach(review.topNetworks.prefix(6), id: \.name) { network in
-                        DiscoveryCard(
-                            node: DiscoveryNode(name: network.name, logoPath: network.logoPath, count: network.count),
-                            style: .logo
-                        ) {}
-                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
-                        .frame(height: 90)
-                    }
-                }
-            }
-
-            if !review.topLanguages.isEmpty {
-                tasteRow(title: "Languages You Loved") {
-                    ForEach(review.topLanguages.prefix(6), id: \.name) { language in
-                        DiscoveryCard(
-                            node: DiscoveryNode(name: language.name, logoPath: nil, count: language.count),
-                            style: .text,
-                            baseColor: .teal,
-                            badgeValue: "\(Int(language.score * 100))%"
-                        ) {}
-                        .frame(minWidth: 160, idealWidth: 180, maxWidth: 200)
-                        .frame(height: 60)
-                    }
-                }
-            }
-
-            if !review.topActors.isEmpty {
-                tasteRow(title: "Actors of Your Year") {
-                    ForEach(Array(review.topActors.prefix(6).enumerated()), id: \.element.id) { index, actor in
-                        PersonRankCard(
-                            rank: index + 1,
-                            name: actor.name,
-                            score: actor.score,
-                            profileURL: actor.profileURL,
-                            accentColor: AppTheme.Colors.accent,
-                            style: .cast
-                        )
-                    }
-                }
-            }
-        }
-        .padding(.bottom, AppTheme.Spacing.large)
-    }
-
-    private func tasteRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .kerning(1.0)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Spacing.small) {
-                    content()
-                }
-                .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                .padding(.vertical, AppTheme.Spacing.small)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
     }
 }
 
