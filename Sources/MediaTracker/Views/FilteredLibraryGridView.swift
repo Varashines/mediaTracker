@@ -170,7 +170,7 @@ struct FilteredLibraryGridView: View {
                             .padding(.horizontal, AppTheme.Spacing.pageMargin)
                         }
                     }
-                    .padding(.top, AppTheme.Spacing.pageMargin)
+                    .padding(.vertical, AppTheme.Spacing.pageMargin)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)

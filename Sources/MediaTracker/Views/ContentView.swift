@@ -418,7 +418,7 @@ struct LibraryDetailView: View {
         }
         .task(priority: .background) {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !SleepManager.shared.isAsleep else { return }
             checkAndRepairMissingMetadata()
             checkAndRepairStaleMetadata()
@@ -499,19 +499,7 @@ struct LibraryDetailView: View {
                     viewModel.display.applyFilterResult(result)
                 }
 
-                if snapshot.category == .home {
-                    Task {
-                        let recs = await filterActor.fetchRecommendations()
-                        guard !Task.isCancelled else { return }
-                        await MainActor.run {
-                            viewModel.display.recommendations = recs
-                            // Late async fetch bypasses applyFilterResult's prewarm — warm here so For You pill isn't cold
-                            ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
-                            let backdrops = recs.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
-                            ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)
-                        }
-                    }
-                }
+
             } catch is CancellationError {
                 // The replacement update task owns isInitialLoad now — resetting
                 // here could clear the skeleton the new task just raised.

@@ -86,6 +86,20 @@ class MediaViewModel {
         }
     }
 
+    func fetchRecommendationsIfNeeded(actor: MediaFilterActor) {
+        guard display.recommendations.isEmpty else { return }
+        Task { [weak self] in
+            let recs = await actor.fetchRecommendations()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.display.recommendations = recs
+                ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
+                let backdrops = recs.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
+                ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)
+            }
+        }
+    }
+
     func purgeSleepCache() {
         display.purgeAll()
         discovery.purgeAll()

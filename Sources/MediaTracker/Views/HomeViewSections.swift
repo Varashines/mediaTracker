@@ -14,6 +14,7 @@ struct HomeViewSections: View {
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
+    var onFetchRecommendations: (() -> Void)? = nil
 
     private enum HomeSection {
         case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
@@ -51,6 +52,11 @@ struct HomeViewSections: View {
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
+                .onAppear {
+                    if recommendations.isEmpty {
+                        onFetchRecommendations?()
+                    }
+                }
             }
 
             if visibleSection == .pickOfTheDay {
