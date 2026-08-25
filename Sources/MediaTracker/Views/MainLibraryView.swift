@@ -100,17 +100,6 @@ struct MainLibraryView: View {
         }
         .onAppear {
             viewModel.fetchTrendingIfNeeded()
-            if selectedCategory == .home {
-                let container = modelContext.container
-                Task.detached(priority: .utility) {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    guard !Task.isCancelled else { return }
-                    let actor = MediaFilterActor(modelContainer: container)
-                    await MainActor.run {
-                        viewModel.fetchRecommendationsIfNeeded(actor: actor)
-                    }
-                }
-            }
         }
     }
 }

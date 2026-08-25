@@ -318,15 +318,17 @@ actor TasteActor {
                 potentialReasons.append(("In \(l)", aff, 3))
             }
 
-            // Cast matching (Reduced Weight with Decay)
+            // Cast matching (Balanced middle-ground model with billing prominence)
             var castTotalAffinity: Double = 0
             let limit = item.type == .movie ? 5 : 10
             let itemCast = item.displayCast.prefix(limit).map { $0.name }
             for (idx, actor) in itemCast.enumerated() {
-                if let aff = castAffinity[actor], aff != 0 {
-                    let decay = idx < 1 ? 1.0 : 0.5
-                    castTotalAffinity += (aff * decay)
-                    potentialReasons.append(("Starring \(actor)", aff, 2))
+                if let rawAff = castAffinity[actor], rawAff > 0 {
+                    let affVal = min(1.35, sqrt(rawAff / 7.0))
+                    let decay = idx == 0 ? 1.0 : (idx < 3 ? 0.55 : 0.25)
+                    castTotalAffinity += (affVal * decay)
+                    let prominence = idx == 0 ? 1.0 : (idx == 1 ? 0.75 : 0.5)
+                    potentialReasons.append(("Starring \(actor)", affVal * prominence, 2))
                 }
             }
 
