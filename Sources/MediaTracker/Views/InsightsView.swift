@@ -13,10 +13,8 @@ struct InsightsView: View {
     @State private var isRefreshing = false
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
-    @State private var scrollOffsetDebounced: CGFloat = 0
     @State private var isFastScrolling = false
     @State private var scrollTask: Task<Void, Never>?
-    @State private var backgroundTintTask: Task<Void, Never>?
     @State private var customPassportImage: NSImage? = nil
     @State private var showCustomShareMenu = false
     @State private var showPassportPreview = false
@@ -25,11 +23,15 @@ struct InsightsView: View {
     // @AppStorage gives proper observation without a UserDefaults read per body eval.
     @AppStorage("background_intensity") private var backgroundIntensity = 1.0
 
-    private var backgroundTint: Color {
-        let progress = max(0, min(1, -scrollOffsetDebounced / 600))
-        let scaled = progress * max(0.02, backgroundIntensity * 0.04)
-        let isDark = colorScheme == .dark
-        return AppTheme.Colors.accent.opacity(isDark ? scaled : scaled * 0.5)
+    private var backgroundTint: some View {
+        LinearGradient(
+            colors: [
+                AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.05 * backgroundIntensity : 0.03 * backgroundIntensity),
+                .clear
+            ],
+            startPoint: .top,
+            endPoint: .center
+        )
     }
 
     var body: some View {
@@ -82,27 +84,10 @@ struct InsightsView: View {
                     }
                     .padding(.vertical, AppTheme.Spacing.xLarge)
                     .frame(maxWidth: .infinity)
-                    .background(alignment: .top) {
-                        GeometryReader { geo in
-                            let offset = geo.frame(in: .named(insightsScrollName)).minY
-                            Color.clear
-                                .preference(key: ScrollOffsetKey.self, value: [insightsScrollName: offset])
-                        }
-                    }
                 }
-                .coordinateSpace(name: insightsScrollName)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-                .onPreferenceChange(ScrollOffsetKey.self) { offsets in
-                    let newOffset = offsets[insightsScrollName] ?? 0
-                    backgroundTintTask?.cancel()
-                    backgroundTintTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 50_000_000)
-                        guard !Task.isCancelled else { return }
-                        scrollOffsetDebounced = newOffset
-                    }
-                }
             } else if let error = errorMessage {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
@@ -128,8 +113,6 @@ struct InsightsView: View {
         .onDisappear {
             statsTask?.cancel()
             statsTask = nil
-            backgroundTintTask?.cancel()
-            backgroundTintTask = nil
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -207,6 +207,7 @@ struct DetailView: View {
 
             topChrome
         }
+        .compositingGroup()
     }
 
     /// Layer 4: Narrow top-edge chrome so the poster color "bleeds" into the toolbar area.

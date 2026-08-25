@@ -91,14 +91,7 @@ struct ForYouCompactCard: View, Equatable {
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
                         if useTitleLogos, let logoURL = item?.effectiveLogoURL, let url = URL(string: logoURL) {
-                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { cgImage in
-                                Task.detached(priority: .utility) {
-                                    let dominant = await ColorExtractor.dominantColor(from: cgImage)
-                                    await MainActor.run {
-                                        isLogoLight = dominant.isNearlyWhite
-                                    }
-                                }
-                            } placeholder: {
+                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in } placeholder: {
                                 Text(metadata.title)
                                     .font(AppTheme.Font.title3)
                                     .foregroundStyle(.white)
@@ -106,7 +99,7 @@ struct ForYouCompactCard: View, Equatable {
                             }
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: 260, maxHeight: 52, alignment: .leading)
-                            .colorInvert(colorScheme == .light && isLogoLight)
+                            .shadow(color: Color.black.opacity(0.35), radius: 2, y: 1)
                         } else {
                             Text(metadata.title)
                                 .font(AppTheme.Font.title3)

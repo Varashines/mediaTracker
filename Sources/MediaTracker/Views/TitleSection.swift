@@ -88,14 +88,7 @@ struct TitleSection: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
                     if useTitleLogos, let logoURL = item.effectiveLogoURL, let url = URL(string: logoURL) {
                         ZStack(alignment: .topTrailing) {
-                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { cgImage in
-                                Task.detached(priority: .utility) {
-                                    let dominant = await ColorExtractor.dominantColor(from: cgImage)
-                                    await MainActor.run {
-                                        self.isLogoLight = dominant.isNearlyWhite
-                                    }
-                                }
-                            } placeholder: {
+                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { _ in } placeholder: {
                                 Text(item.title)
                                     .font(AppTheme.Font.largeTitle)
                                     .lineLimit(3)
@@ -103,7 +96,7 @@ struct TitleSection: View {
                             }
                             .aspectRatio(contentMode: .fit)
                             .frame(maxHeight: 110, alignment: .leading)
-                            .colorInvert(colorScheme == .light && isLogoLight)
+                            .shadow(color: Color.black.opacity(0.3), radius: 3, y: 1)
 
                             if logoOptions.count > 1 {
                                 Button {
