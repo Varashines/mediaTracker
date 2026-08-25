@@ -33,13 +33,15 @@ struct ForYouCarousel: View {
                 }
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppTheme.Spacing.medium) {
+                    HStack(spacing: AppTheme.Spacing.large) {
                         ForEach(0..<3, id: \.self) { _ in
                             ForYouCardSkeleton()
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.vertical, AppTheme.Spacing.medium - 1)
                 }
+                .scrollClipDisabled()
             }
         }
     }

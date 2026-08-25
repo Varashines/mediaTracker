@@ -26,7 +26,7 @@ struct HomeViewSections: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             // 0. SECTION TOGGLES
             ViewThatFits(in: .horizontal) {
                 sectionButtons
