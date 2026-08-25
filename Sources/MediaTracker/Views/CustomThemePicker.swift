@@ -80,19 +80,3 @@ struct LightDarkPicker: View {
         )
     }
 }
-
-struct PalettePicker: View {
-    @Binding var customThemePalette: Int
-
-    var body: some View {
-        SegmentPicker(
-            options: [
-                (label: "Standard", icon: "sparkles", id: 0),
-                (label: "Earth Tones", icon: "leaf.fill", id: 1),
-                (label: "Cool Tones", icon: "snowflake", id: 2)
-            ],
-            selectedID: customThemePalette,
-            onSelect: { customThemePalette = $0 }
-        )
-    }
-}

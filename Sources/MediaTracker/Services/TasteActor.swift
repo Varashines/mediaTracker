@@ -1,12 +1,6 @@
 import Foundation
 import SwiftData
 
-struct TasteProfile: Sendable {
-    let topGenres: [String: Double]
-    let topNetworks: [String: Double]
-    let topDirectors: [String: Double]
-}
-
 struct TasteInsights: Sendable {
     let genreAffinities: [(name: String, affinity: Double)]
     let creatorAffinities: [(name: String, affinity: Double, imageURL: String?)]
