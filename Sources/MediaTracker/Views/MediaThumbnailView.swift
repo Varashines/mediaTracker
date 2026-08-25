@@ -528,19 +528,18 @@ struct MediaThumbnailView: View, Equatable {
                 if let manual = try? modelContext.fetch(collectionsDescriptor), !manual.isEmpty {
                     Menu("Add to Collection") {
                         ForEach(manual) { collection in
-                                let isIn = item.collections.contains(where: { $0.id == collection.id })
-                                Button {
-                                    if isIn {
-                                        collection.completedItemIDs.removeAll { $0 == item.id }
-                                        item.collections.removeAll(where: { $0.id == collection.id })
-                                    } else {
-                                        item.collections.append(collection)
-                                    }
-                                    SaveCoordinator.shared.requestSave(modelContext)
-                                } label: {
-                                    Label(collection.name,
-                                          systemImage: isIn ? "checkmark.circle.fill" : "plus.circle")
+                            let isIn = item.collections.contains(where: { $0.id == collection.id })
+                            Button {
+                                if isIn {
+                                    collection.completedItemIDs.removeAll { $0 == item.id }
+                                    item.collections.removeAll(where: { $0.id == collection.id })
+                                } else {
+                                    item.collections.append(collection)
                                 }
+                                SaveCoordinator.shared.requestSave(modelContext)
+                            } label: {
+                                Label(collection.name,
+                                      systemImage: isIn ? "checkmark.circle.fill" : "plus.circle")
                             }
                         }
                     }
