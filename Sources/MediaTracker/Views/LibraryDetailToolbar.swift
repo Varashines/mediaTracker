@@ -108,6 +108,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
 
     @ViewBuilder
     private var collectionNavigationToolbar: some View {
+        let isSmartCollectionState = isSmartCollection
         HStack(spacing: AppTheme.Spacing.micro) {
             Button {
                 withAnimation(AppTheme.Animation.springSnappy) {
@@ -144,8 +145,8 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                     .font(AppTheme.Icon.medium)
             }
             .tint(.primary)
-            .disabled(isSmartCollection)
-            .help(isSmartCollection ? "Cannot manage items in smart collections" : "Manage Items")
+            .disabled(isSmartCollectionState)
+            .help(isSmartCollectionState ? "Cannot manage items in smart collections" : "Manage Items")
         }
     }
 

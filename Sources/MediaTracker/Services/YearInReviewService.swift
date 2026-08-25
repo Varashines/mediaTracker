@@ -79,9 +79,11 @@ struct YearInReview: Sendable {
                 minutes += act.minutes
             }
         }
-        for title in monthTitles(for: month) {
-            if title.type == .tvShow, seenSeries.insert(title.id).inserted {
-                series += 1
+        // Count distinct TV titles directly instead of going through the
+        // sorted/deduped monthTitles pipeline.
+        for day in titlesByDay.keys where calendar.isDate(day, equalTo: month, toGranularity: .month) {
+            for title in titlesByDay[day] ?? [] where title.type == .tvShow {
+                if seenSeries.insert(title.id).inserted { series += 1 }
             }
         }
         return (movies, series, minutes)

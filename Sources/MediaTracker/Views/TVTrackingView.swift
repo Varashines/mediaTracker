@@ -593,12 +593,12 @@ private struct SeasonSection: View {
         let targetStatus = !isAllWatched
         // Defensive: skip deleted/detached episodes during concurrent merges
         let liveEpisodes = season.episodes.liveModels
-        withAnimation(AppTheme.Animation.springSnappy) {
-            for episode in liveEpisodes {
-                episode.markWatched(targetStatus)
-            }
-            onWatchedToggle()
+        // No outer withAnimation: each visible EpisodeCube already animates its own
+        // isWatched change; wrapping the whole bulk mutation would relayout the grid.
+        for episode in liveEpisodes {
+            episode.markWatched(targetStatus)
         }
+        onWatchedToggle()
 
         FeedbackManager.shared.trigger(targetStatus ? .markWatched : .stateChange)
         AppErrorState.shared.showToast(
@@ -815,11 +815,10 @@ private struct EpisodeCube: View {
                         )
                 }
                 .shadow(
-                    color: isHovering ? AppTheme.Shadow.elevated.color : AppTheme.Shadow.card.color,
-                    radius: isHovering
-                        ? AppTheme.Shadow.elevated.radius : AppTheme.Shadow.card.radius,
-                    x: isHovering ? AppTheme.Shadow.elevated.x : AppTheme.Shadow.card.x,
-                    y: isHovering ? AppTheme.Shadow.elevated.y : AppTheme.Shadow.card.y
+                    color: isHovering ? AppTheme.Shadow.elevated.color : .clear,
+                    radius: isHovering ? AppTheme.Shadow.elevated.radius : 0,
+                    x: isHovering ? AppTheme.Shadow.elevated.x : 0,
+                    y: isHovering ? AppTheme.Shadow.elevated.y : 0
                 )
             }
             .buttonStyle(.interactive(feedback: nil))

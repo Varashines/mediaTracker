@@ -224,8 +224,7 @@ struct InsightsView: View {
         .animation(AppTheme.Animation.springSnappy, value: showCustomShareMenu)
     }
 
-    private var insightsIntroduction: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+    private var insightsIntroduction: some View {        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
             Text("YOUR LIBRARY, DISTILLED")
                 .font(AppTheme.Font.caption)
                 .kerning(AppTheme.Kerning.wide)

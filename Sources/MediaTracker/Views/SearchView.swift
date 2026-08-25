@@ -274,7 +274,7 @@ struct SearchView: View {
     /// Centered horizontal row of person cast cards.
     private var personPillsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppTheme.Spacing.medium) {
+            LazyHStack(spacing: AppTheme.Spacing.medium) {
                 ForEach(searchVM.personMatches, id: \.id) { person in
                     personCastCard(person)
                 }

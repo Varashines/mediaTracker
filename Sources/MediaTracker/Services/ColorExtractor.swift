@@ -136,8 +136,13 @@ enum ColorExtractor {
         // Median cut: split RGB space into boxes at the median of the widest channel
         struct Box {
             var pixels: [WeightedPixel]
-            var weight: Int {
-                pixels.reduce(0) { $0 + $1.weight }
+            // Computed once at construction instead of an O(n) reduce per
+            // comparison during the largest-box selection loop.
+            let weight: Int
+
+            init(pixels: [WeightedPixel]) {
+                self.pixels = pixels
+                self.weight = pixels.reduce(0) { $0 + $1.weight }
             }
         }
 

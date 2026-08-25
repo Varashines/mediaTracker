@@ -46,21 +46,23 @@ actor MediaFilterActor {
 
         if let cid = collectionID {
             let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
-            if let collection = try? modelContext.fetch(colDescriptor).first, collection.isSmart {
-                let ruleSet = collection.smartRuleSet
-                smartRules = ruleSet.rules
-                smartMatchAny = ruleSet.matchAny
-                basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                    category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
-                )
-            } else if let collection = try? modelContext.fetch(colDescriptor).first {
-                let itemIDs = collection.items.compactMap { $0.id }
-                if itemIDs.isEmpty {
-                    basePredicate = #Predicate<MediaItem> { _ in false }
-                } else {
-                    basePredicate = MediaFilterPredicates.buildManualCollectionPredicate(
-                        itemIDs: itemIDs, stateValue: stateRaw
+            if let collection = try? modelContext.fetch(colDescriptor).first {
+                if collection.isSmart {
+                    let ruleSet = collection.smartRuleSet
+                    smartRules = ruleSet.rules
+                    smartMatchAny = ruleSet.matchAny
+                    basePredicate = MediaFilterPredicates.buildFilteredPredicate(
+                        category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
                     )
+                } else {
+                    let itemIDs = collection.items.compactMap { $0.id }
+                    if itemIDs.isEmpty {
+                        basePredicate = #Predicate<MediaItem> { _ in false }
+                    } else {
+                        basePredicate = MediaFilterPredicates.buildManualCollectionPredicate(
+                            itemIDs: itemIDs, stateValue: stateRaw
+                        )
+                    }
                 }
             } else {
                 basePredicate = MediaFilterPredicates.buildFilteredPredicate(

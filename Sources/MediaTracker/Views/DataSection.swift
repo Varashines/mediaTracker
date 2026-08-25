@@ -11,15 +11,19 @@ struct DataSection: View {
     @State private var backupCount = 0
     @State private var lastBackupDate: Date?
 
+    private static let backupDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     private var backupSubtitle: String {
         if backupCount == 0 {
             return "No automatic backups yet"
         }
         if let date = lastBackupDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            return "\(backupCount) backups · Last: \(formatter.string(from: date))"
+            return "\(backupCount) backups · Last: \(Self.backupDateFormatter.string(from: date))"
         }
         return "\(backupCount) backups stored"
     }

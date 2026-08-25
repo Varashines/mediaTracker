@@ -182,8 +182,8 @@ class BackgroundTaskManager {
                 }
                 try? context.save()
 
+                let sync = DiscoverySyncService(modelContainer: container)
                 for entry in syncItems {
-                    let sync = DiscoverySyncService(modelContainer: container)
                     await sync.updateItemDeleted(network: entry.network, genres: entry.genres, language: entry.language, badge: entry.badge, providers: entry.providers)
                 }
 
@@ -443,20 +443,24 @@ class BackgroundTaskManager {
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
-        // Find TV shows with seasons/episodes missing airDateValue
+        // Find shows with episodes missing airDateValue via a lightweight episode
+        // query instead of faulting every season/episode relationship graph.
+        var missingAirDates = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
+        missingAirDates.propertiesToFetch = [\.showID]
+        let showIDs = Set(((try? context.fetch(missingAirDates)) ?? []).compactMap { $0.showID })
+        guard !showIDs.isEmpty else { return }
+
         var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "TV Show" && $0.isSoftDeleted == false })
-        descriptor.fetchLimit = cap * 2
+        descriptor.propertiesToFetch = [\.id]
         let allTV = (try? context.fetch(descriptor)) ?? []
         var candidates: [MediaItem] = []
         for item in allTV {
-            guard let tv = item.tvShowDetails else { continue }
-            let seasons = tv.seasons.liveModels
-            let hasMissingAirDate = seasons.flatMap { $0.episodes.liveModels }.contains { $0.airDateValue == nil }
-            if hasMissingAirDate {
-                candidates.append(item)
-                if candidates.count >= cap { break }
-            }
+            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString),
+                  showIDs.contains(tmdbID) else { continue }
+            candidates.append(item)
+            if candidates.count >= cap { break }
         }
+        // Restore full models for the refresh pass
         guard !candidates.isEmpty else { return }
         AppLogger.info("📅 Air-date heal: \(candidates.count) shows with missing episode air dates", logger: AppLogger.background)
         for item in candidates {

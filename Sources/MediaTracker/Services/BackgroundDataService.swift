@@ -142,6 +142,7 @@ actor BackgroundDataService {
                 // Check thermal state mid-batch to prevent overheating during large refreshes
                 if isThermalThrottled {
                     AppLogger.warning("🌡️ Thermal throttle detected mid-batch. Aborting remaining refreshes.", logger: AppLogger.background)
+                    group.cancelAll()
                     break
                 }
 

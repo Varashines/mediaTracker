@@ -28,7 +28,8 @@ extension BackgroundDataService {
         var offset = 0
         var processedCount = 0
         var hasMore = true
-        
+        let autoMarkPreference = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
+
         while hasMore {
             descriptor.fetchOffset = offset
             let items = try modelContext.fetch(descriptor)
@@ -90,7 +91,7 @@ extension BackgroundDataService {
                     }
 
                     // 2. Auto-mark unwatched episodes if Completed
-                    let autoMark = UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue)
+                    let autoMark = autoMarkPreference
                     if autoMark && item.stateValue == "Completed" {
                         let liveEps = liveSeasons.flatMap { $0.episodes.liveModels }
                         for ep in liveEps where !ep.isWatched {
@@ -199,7 +200,7 @@ extension BackgroundDataService {
         // After healing metadata and cached properties, ensure the system notification queue is up to date.
         await NotificationManager.shared.scheduleAllUpcomingNotifications()
         
-        // Full recount to fix any drift from concurrent onBadgeChanged tasks
+        // Full recount to fix any drift from concurrent facet updates
         let sync = DiscoverySyncService(modelContainer: modelContext.container)
         await sync.syncLibrary(force: false)
         

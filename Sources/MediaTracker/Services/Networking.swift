@@ -56,6 +56,20 @@ actor APIClient {
 
     // In-memory watch provider cache (populated during processMovieDetails/processTVDetails)
     private var providerCache: [Int: [WatchProviderResult]] = [:]
+    /// Insertion order for LRU-style eviction so the cache cannot grow unboundedly.
+    private var providerCacheOrder: [Int] = []
+    private let maxProviderCacheSize = 300
+
+    private func cacheProviders(_ providers: [WatchProviderResult], for tmdbID: Int) {
+        if providerCache[tmdbID] == nil {
+            providerCacheOrder.append(tmdbID)
+            if providerCacheOrder.count > maxProviderCacheSize {
+                let evicted = providerCacheOrder.removeFirst()
+                providerCache.removeValue(forKey: evicted)
+            }
+        }
+        cacheProviders(providers, for: tmdbID)
+    }
 
     #if DEBUG
     init(testing session: URLSession) {
@@ -92,6 +106,8 @@ actor APIClient {
     private func clearSearchCache() {
         searchCache.removeAll()
         lastSearchTime.removeAll()
+        providerCache.removeAll()
+        providerCacheOrder.removeAll()
     }
 
     private func evictOldestSearchCacheEntry() {
@@ -307,7 +323,7 @@ actor APIClient {
         } else if let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let details = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
             let result = processMovieDetails(details)
-            if !result.streamingProviders.isEmpty { providerCache[tmdbID] = result.streamingProviders }
+            if !result.streamingProviders.isEmpty { cacheProviders(result.streamingProviders, for: tmdbID) }
             return result
         }
 
@@ -325,7 +341,7 @@ actor APIClient {
                 let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
                 return self.processMovieDetails(details)
             }
-            if !result.streamingProviders.isEmpty { self.providerCache[tmdbID] = result.streamingProviders }
+            if !result.streamingProviders.isEmpty { self.cacheProviders(result.streamingProviders, for: tmdbID) }
             return result
         }
         inFlightMovieDetails[tmdbID] = task
@@ -406,7 +422,7 @@ actor APIClient {
         } else if let cachedData = await getCachedData(forKey: cacheKey, ttl: 7 * .secondsInDay),
            let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
             let result = processTVDetails(d)
-            if !result.streamingProviders.isEmpty { providerCache[tmdbID] = result.streamingProviders }
+            if !result.streamingProviders.isEmpty { cacheProviders(result.streamingProviders, for: tmdbID) }
             return result
         }
 
@@ -425,7 +441,7 @@ actor APIClient {
                 let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
                 return self.processTVDetails(d)
             }
-            if !result.streamingProviders.isEmpty { self.providerCache[tmdbID] = result.streamingProviders }
+            if !result.streamingProviders.isEmpty { self.cacheProviders(result.streamingProviders, for: tmdbID) }
             return result
         }
         inFlightTVDetails[tmdbID] = task
@@ -525,7 +541,7 @@ actor APIClient {
                 if let d = try? decoder.decode(TMDBMovieDetailsResponse.self, from: cachedData) {
                     let providers = extractWatchProviders(from: d.watch_providers)
                     if !providers.isEmpty {
-                        providerCache[tmdbID] = providers
+                        cacheProviders(providers, for: tmdbID)
                         return providers
                     }
                 }
@@ -533,7 +549,7 @@ actor APIClient {
                 if let d = try? decoder.decode(TMDBTVDetailsResponse.self, from: cachedData) {
                     let providers = extractWatchProviders(from: d.watch_providers)
                     if !providers.isEmpty {
-                        providerCache[tmdbID] = providers
+                        cacheProviders(providers, for: tmdbID)
                         return providers
                     }
                 }
@@ -548,7 +564,7 @@ actor APIClient {
             try validateResponse(response)
             let decoded = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
             let providers = extractWatchProviders(from: decoded)
-            providerCache[tmdbID] = providers
+            cacheProviders(providers, for: tmdbID)
             return providers
         } catch {
             AppLogger.warning("Failed to fetch watch providers online for \(type) \(tmdbID): \(error)", logger: AppLogger.background)

@@ -122,12 +122,16 @@ extension BackgroundDataService {
             movieDetails.voteAverage = details.voteAverage
             movieDetails.originalLanguage = details.originalLanguage
             movieDetails.creators = details.directors.map { $0.name }
-            for director in details.directors {
-                if let path = director.profilePath, !path.isEmpty {
-                    let check = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { $0.name == director.name })
-                    if (try? modelContext.fetch(check).first) == nil {
-                        modelContext.insert(PersonImageEntity(name: director.name, profileURL: APIClient.tmdbImageURL(path: path, size: "w185")))
-                    }
+            let directorsWithProfiles = details.directors.compactMap { d -> (name: String, path: String)? in
+                guard let path = d.profilePath, !path.isEmpty else { return nil }
+                return (d.name, path)
+            }
+            if !directorsWithProfiles.isEmpty {
+                let names = directorsWithProfiles.map { $0.name }
+                let existing = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { names.contains($0.name) })
+                let knownNames = Set((try? modelContext.fetch(existing))?.map { $0.name } ?? [])
+                for director in directorsWithProfiles where !knownNames.contains(director.name) {
+                    modelContext.insert(PersonImageEntity(name: director.name, profileURL: APIClient.tmdbImageURL(path: director.path, size: "w185")))
                 }
             }
             // Parallelize OMDB + logos + color extraction
@@ -362,28 +366,46 @@ extension BackgroundDataService {
             tvDetails.genres = Array(mergedGenres)
 
             tvDetails.creators = details.creators.map { $0.name }
-            for creator in details.creators {
-                if let path = creator.profilePath, !path.isEmpty {
-                    let check = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { $0.name == creator.name })
-                    if (try? modelContext.fetch(check).first) == nil {
-                        modelContext.insert(PersonImageEntity(name: creator.name, profileURL: APIClient.tmdbImageURL(path: path, size: "w185")))
-                    }
+            let creatorsWithProfiles = details.creators.compactMap { c -> (name: String, path: String)? in
+                guard let path = c.profilePath, !path.isEmpty else { return nil }
+                return (c.name, path)
+            }
+            if !creatorsWithProfiles.isEmpty {
+                let names = creatorsWithProfiles.map { $0.name }
+                let existing = FetchDescriptor<PersonImageEntity>(predicate: #Predicate { names.contains($0.name) })
+                let knownNames = Set((try? modelContext.fetch(existing))?.map { $0.name } ?? [])
+                for creator in creatorsWithProfiles where !knownNames.contains(creator.name) {
+                    modelContext.insert(PersonImageEntity(name: creator.name, profileURL: APIClient.tmdbImageURL(path: creator.path, size: "w185")))
                 }
             }
 
-            // OMDB fetch (sequential — Sendable issues prevent parallelization with item)
-            if !(item.state == .wishlist && item.tasteValue == TasteValue.none.rawValue),
-               let imdbID = details.imdbID, !imdbID.isEmpty {
-                if let omdb = await APIClient.shared.fetchOMDBData(imdbID: imdbID) {
-                    tvDetails.imdbRating = omdb.imdbRating
-                    tvDetails.contentRating = omdb.contentRating
-                    tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
+            // Parallelize OMDB + logo fetch (same pattern as the movie path)
+            let tvItemState = item.state
+            let tvItemTaste = item.tasteValue
+            let tvItemLogoURL = item.titleLogoURL
+            async let omdbTask: OMDBFullData? = {
+                if !(tvItemState == .wishlist && tvItemTaste == TasteValue.none.rawValue),
+                   let imdbID = details.imdbID, !imdbID.isEmpty {
+                    return await APIClient.shared.fetchOMDBData(imdbID: imdbID)
                 }
+                return nil
+            }()
+
+            async let tvLogoTask: String? = {
+                if tvItemLogoURL == nil {
+                    return try? await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
+                }
+                return nil
+            }()
+
+            if let omdb = await omdbTask {
+                tvDetails.imdbRating = omdb.imdbRating
+                tvDetails.contentRating = omdb.contentRating
+                tvDetails.rottenTomatoesScore = omdb.rottenTomatoesScore
             }
-            
-            // Logo fetch
-            if item.titleLogoURL == nil {
-                item.titleLogoURL = try? await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
+
+            if let logo = await tvLogoTask {
+                item.titleLogoURL = logo
             }
 
             if !metadataOnly {
