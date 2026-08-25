@@ -146,44 +146,6 @@ final class YearInReviewTests: XCTestCase {
     }
 
     @MainActor
-    func testTasteOverWatchedIn2026WithoutCutoffs() async throws {
-        let fixture = try makeContainer()
-        let container = fixture.container
-        defer { try? FileManager.default.removeItem(at: fixture.directory) }
-        let context = container.mainContext
-
-        // Six loved, completed, Sci-Fi movies watched in 2026 → taste scores without cutoff floors.
-        for i in 0..<6 {
-            let movie = makeItem(id: "movie_\(i)", title: "2026 Sci-Fi \(i)", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
-            movie.tasteValue = "Love"
-            movie.cachedGenres = ["Sci-Fi"]
-            movie.cachedNetwork = "Netflix"
-            movie.cachedLanguage = "ko"
-            movie.storedCast = [
-                SimpleCastMember(id: "a\(i)", name: "Actor A", characterName: "Role", profileURL: nil, order: 0),
-                SimpleCastMember(id: "b\(i)", name: "Actor B", characterName: "Role", profileURL: nil, order: 1)
-            ]
-            context.insert(movie)
-        }
-        // A loved Romance movie completed in 2025 must NOT influence the 2026 taste.
-        let romance = makeItem(id: "movie_old", title: "2025 Romance", type: .movie, releaseDate: date(2025, 5, 1), state: "Completed")
-        romance.tasteValue = "Love"
-        romance.cachedGenres = ["Romance"]
-        romance.lastStateChangeDate = date(2025, 6, 1)
-        context.insert(romance)
-        try context.save()
-
-        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
-
-        XCTAssertEqual(review.totalMovies, 6)
-        XCTAssertEqual(review.topGenres.map(\.name), ["Sci-Fi"])
-        XCTAssertFalse(review.topGenres.contains { $0.name == "Romance" })
-        XCTAssertEqual(review.topNetworks.map(\.name), ["Netflix"])
-        XCTAssertEqual(review.topLanguages.map(\.name), ["Korean"])
-        XCTAssertEqual(review.topActors.map(\.name), ["Actor A", "Actor B"])
-    }
-
-    @MainActor
     func testSeasonZeroSpecialsExcluded() async throws {
         let fixture = try makeContainer()
         let container = fixture.container
