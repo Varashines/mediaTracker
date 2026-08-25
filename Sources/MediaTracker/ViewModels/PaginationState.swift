@@ -10,5 +10,5 @@ class PaginationState {
     /// True while the initial fetch for the current category is in flight —
     /// gates the main grid so it shows a skeleton instead of flashing the
     /// empty state on first load / category switches.
-    var isInitialLoad: Bool = false
+    var isInitialLoad: Bool = true
 }
