@@ -75,9 +75,9 @@ final class ProviderCacheEvictionTests: XCTestCase {
             "Mock providers decoded to empty for region \(Locale.current.region?.identifier ?? "nil") — memory cache will never engage"
         )
 
-        // A second identical lookup must now come from memory (1 request total).
+        // A second identical lookup must come from memory (still 1 request).
         _ = await client.fetchWatchProviders(tmdbID: probeID, type: .movie)
-        XCTAssertEqual(Self.currentRequestCount(), 2, "Immediate repeat of a non-empty cached provider must not refetch")
+        XCTAssertEqual(Self.currentRequestCount(), 1, "Immediate repeat of a non-empty cached provider must be served from memory")
 
         // Populate the cache past its 300-entry cap. Every call is a network
         // fetch (nothing else populates the in-memory provider cache).
