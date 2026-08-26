@@ -10,6 +10,17 @@ final class SeasonCastMergeTests: XCTestCase {
     private let tmdbID = 501
     private let seasonNumber = 1
 
+    override func setUp() {
+        super.setUp()
+        // tmdbURL throws without an API key; NetworkingTests uses the same stub.
+        UserDefaults.standard.set("fake_tmdb_key", forKey: "tmdb_api_key")
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: "tmdb_api_key")
+        super.tearDown()
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,

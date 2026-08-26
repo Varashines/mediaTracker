@@ -42,7 +42,7 @@ final class ProviderCacheEvictionTests: XCTestCase {
 
         MockURLProtocol.requestHandler = { request in
             Self.incrementRequestCount()
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Cache-Control": "no-store"])!
             return (response, Self.providersJSON())
         }
         defer { MockURLProtocol.requestHandler = nil }
@@ -77,7 +77,7 @@ final class ProviderCacheEvictionTests: XCTestCase {
 
         MockURLProtocol.requestHandler = { request in
             Self.incrementRequestCount()
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Cache-Control": "no-store"])!
             return (response, Self.providersJSON())
         }
         defer { MockURLProtocol.requestHandler = nil }
