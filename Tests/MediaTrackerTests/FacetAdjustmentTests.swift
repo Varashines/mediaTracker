@@ -19,6 +19,7 @@ final class FacetAdjustmentTests: XCTestCase {
 
     /// Stub the image session so the trailing `extractMissingColors` call inside
     /// `updateItemAdded` never touches the real network.
+    @MainActor
     private func stubImageSession() {
         let sessionConfig = URLSessionConfiguration.ephemeral
         sessionConfig.protocolClasses = [MockURLProtocol.self]
@@ -28,6 +29,7 @@ final class FacetAdjustmentTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func restoreImageSession() {
         MockURLProtocol.requestHandler = nil
         ImageCache.shared.configureForTesting()
