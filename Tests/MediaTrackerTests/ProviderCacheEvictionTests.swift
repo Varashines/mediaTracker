@@ -51,22 +51,22 @@ final class ProviderCacheEvictionTests: XCTestCase {
 
         // Populate the cache past its 300-entry cap. Every call is a network
         // fetch (nothing else populates the in-memory provider cache).
-        for id in 1...305 {
+        for id in 100_001...100_305 {
             _ = await client.fetchWatchProviders(tmdbID: id, type: .movie)
         }
 
         let baseline = Self.currentRequestCount()
 
         // Most-recent entry (305) must still be served from memory.
-        _ = await client.fetchWatchProviders(tmdbID: 305, type: .movie)
+        _ = await client.fetchWatchProviders(tmdbID: 100_305, type: .movie)
         XCTAssertEqual(Self.currentRequestCount(), baseline, "Recently cached provider should be served from memory without a new request")
 
-        // Oldest entry (1) was evicted when the cap was exceeded → refetch.
-        _ = await client.fetchWatchProviders(tmdbID: 1, type: .movie)
+        // Oldest entry (100_001) was evicted when the cap was exceeded → refetch.
+        _ = await client.fetchWatchProviders(tmdbID: 100_001, type: .movie)
         XCTAssertEqual(Self.currentRequestCount(), baseline + 1, "Evicted oldest entry should trigger exactly one fresh request")
 
         // The re-fetched entry is now the most recent → served from memory again.
-        _ = await client.fetchWatchProviders(tmdbID: 1, type: .movie)
+        _ = await client.fetchWatchProviders(tmdbID: 100_001, type: .movie)
         XCTAssertEqual(Self.currentRequestCount(), baseline + 1, "Re-inserted entry should be cached again")
     }
 
@@ -84,11 +84,11 @@ final class ProviderCacheEvictionTests: XCTestCase {
 
         let client = APIClient(testing: mockSession)
 
-        _ = await client.fetchWatchProviders(tmdbID: 42, type: .tvShow)
+        _ = await client.fetchWatchProviders(tmdbID: 200_042, type: .tvShow)
         let afterFirst = Self.currentRequestCount()
 
         for _ in 0..<3 {
-            _ = await client.fetchWatchProviders(tmdbID: 42, type: .tvShow)
+            _ = await client.fetchWatchProviders(tmdbID: 200_042, type: .tvShow)
         }
         XCTAssertEqual(Self.currentRequestCount(), afterFirst, "Repeated lookups within the cap should never hit the network again")
     }
