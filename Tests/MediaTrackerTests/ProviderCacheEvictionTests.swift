@@ -9,6 +9,18 @@ final class ProviderCacheEvictionTests: XCTestCase {
     private nonisolated(unsafe) static var requestCount = 0
     private static let lock = NSLock()
 
+    override func setUp() {
+        super.setUp()
+        // tmdbURL throws before any network request when the key is missing;
+        // NetworkingTests' tearDown removes its stub, so set our own.
+        UserDefaults.standard.set("fake_tmdb_key", forKey: "tmdb_api_key")
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: "tmdb_api_key")
+        super.tearDown()
+    }
+
     private static func incrementRequestCount() {
         lock.lock()
         defer { lock.unlock() }
