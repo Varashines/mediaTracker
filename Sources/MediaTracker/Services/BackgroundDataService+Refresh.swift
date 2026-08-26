@@ -36,9 +36,7 @@ enum RuntimeFallback {
             return TVEpisodeResult(
                 episodeNumber: episode.episodeNumber,
                 name: shouldUseMazeName ? mazeName : episode.name,
-                overview: nonEmpty(episode.overview) ?? nonEmpty(mazeEpisode.summary)?
-                    .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                overview: nonEmpty(episode.overview) ?? mazeEpisode.strippedSummary,
                 airDate: nonEmpty(mazeEpisode.airdate) ?? episode.airDate,
                 runtime: episode.runtime ?? mazeEpisode.runtime
             )
@@ -50,9 +48,7 @@ enum RuntimeFallback {
                 TVEpisodeResult(
                     episodeNumber: $0.number!,
                     name: $0.name,
-                    overview: $0.summary?
-                        .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                    overview: $0.strippedSummary,
                     airDate: $0.airdate,
                     runtime: $0.runtime
                 )
@@ -299,7 +295,7 @@ extension BackgroundDataService {
                         TVEpisodeResult(
                             episodeNumber: n,
                             name: ep.name,
-                            overview: ep.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines),
+                            overview: ep.strippedSummary,
                             airDate: ep.airdate,
                             runtime: ep.runtime
                         )
@@ -312,12 +308,7 @@ extension BackgroundDataService {
             }()
 
             // Raw TVMaze episodes grouped by season for season-level reconciliation.
-            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
-                var d: [Int: [TVMazeEpisode]] = [:]
-                for ep in mazeEpisodes { if let s = ep.season, s > 0 { d[s, default: []].append(ep) } }
-                for (k, v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
-                return d
-            }()
+            let mazeRawBySeason = TVMazeEpisode.rawBySeason(mazeEpisodes)
 
             let newCastResults = details.cast
             let currentCast = tvDetails.cast
@@ -563,32 +554,7 @@ extension BackgroundDataService {
                     }
 
                     // Persist per-season aggregate credits
-                    var existingCastByID: [String: SeasonCastMember] = [:]
-                    for c in season.seasonCast.liveModels {
-                        if let uid = c.uniqueID { existingCastByID[uid] = c }
-                    }
-                    var seenCastIDs = Set<String>()
-                    for cr in seasonData.seasonCast {
-                        let uid = "\(tmdbID)_\(sNum)_\(cr.tmdbPersonID)"
-                        seenCastIDs.insert(uid)
-                        let member = existingCastByID[uid]
-                            ?? SeasonCastMember(seasonNumber: sNum, tmdbPersonID: cr.tmdbPersonID, name: cr.name, characterName: cr.characterName, profileURL: cr.profileURL, episodeCount: cr.episodeCount, order: cr.order, showID: tmdbID)
-                        member.name = cr.name
-                        member.characterName = cr.characterName
-                        member.profileURL = cr.profileURL
-                        member.episodeCount = cr.episodeCount
-                        member.order = cr.order
-                        member.seasonNumber = sNum
-                        if member.modelContext == nil {
-                            member.season = season
-                            modelContext.insert(member)
-                            didWriteSeasonCast = true
-                        } else if member.season?.persistentModelID != season.persistentModelID {
-                            member.season = season
-                        }
-                    }
-                    for (uid, member) in existingCastByID where !seenCastIDs.contains(uid) {
-                        modelContext.delete(member)
+                    if mergeSeasonCast(seasonData.seasonCast, into: season, tmdbID: tmdbID) {
                         didWriteSeasonCast = true
                     }
                 }
@@ -622,33 +588,50 @@ extension BackgroundDataService {
         let seasonUniqueID = "\(tmdbID)_\(seasonNumber)"
         guard let season = (try? modelContext.fetch(FetchDescriptor<TVSeason>(predicate: #Predicate { $0.uniqueID == seasonUniqueID })))?.first else { return }
 
-        var existing: [String: SeasonCastMember] = [:]
+        _ = mergeSeasonCast(cast, into: season, tmdbID: tmdbID)
+
+        try? modelContext.save()
+        await MainActor.run { TasteActor.clearCache() }
+        ScopedStatsActor.invalidateCache()
+    }
+
+    /// Upserts an aggregate-cast list into a season: updates field-by-field,
+    /// inserts missing members, and deletes rows absent from the incoming list.
+    /// Returns true when any row was inserted or deleted.
+    @discardableResult
+    private func mergeSeasonCast(_ cast: [SeasonAggregateCastResult], into season: TVSeason, tmdbID: Int) -> Bool {
+        var didWrite = false
+        let seasonNumber = season.seasonNumber
+
+        var existingByID: [String: SeasonCastMember] = [:]
         for c in season.seasonCast.liveModels {
-            if let uid = c.uniqueID { existing[uid] = c }
+            if let uid = c.uniqueID { existingByID[uid] = c }
         }
-        var seen = Set<String>()
+        var seenIDs = Set<String>()
         for cr in cast {
             let uid = "\(tmdbID)_\(seasonNumber)_\(cr.tmdbPersonID)"
-            seen.insert(uid)
-            let member = existing[uid]
+            seenIDs.insert(uid)
+            let member = existingByID[uid]
                 ?? SeasonCastMember(seasonNumber: seasonNumber, tmdbPersonID: cr.tmdbPersonID, name: cr.name, characterName: cr.characterName, profileURL: cr.profileURL, episodeCount: cr.episodeCount, order: cr.order, showID: tmdbID)
             member.name = cr.name
             member.characterName = cr.characterName
             member.profileURL = cr.profileURL
             member.episodeCount = cr.episodeCount
             member.order = cr.order
+            member.seasonNumber = seasonNumber
             if member.modelContext == nil {
                 member.season = season
                 modelContext.insert(member)
+                didWrite = true
+            } else if member.season?.persistentModelID != season.persistentModelID {
+                member.season = season
             }
         }
-        for (uid, member) in existing where !seen.contains(uid) {
+        for (uid, member) in existingByID where !seenIDs.contains(uid) {
             modelContext.delete(member)
+            didWrite = true
         }
-
-        try? modelContext.save()
-        await MainActor.run { TasteActor.clearCache() }
-        ScopedStatsActor.invalidateCache()
+        return didWrite
     }
 
 

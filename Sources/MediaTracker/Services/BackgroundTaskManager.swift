@@ -223,57 +223,8 @@ class BackgroundTaskManager {
         await DatabaseMigrations.runAllIfNeeded(container: container)
 
         // Secondary Background Tasks
-        Task.detached(priority: .background) {
-            let context = ModelContext(container)
-
-            // Automated Rolling Backup
-            // Map MediaItem (non-Sendable) → LibraryBackup (Sendable) on the background context
-            // BEFORE crossing into the @MainActor LibraryImportExportService boundary.
-            var backupDesc = FetchDescriptor<MediaItem>()
-            backupDesc.propertiesToFetch = [
-                \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue, \.lastInteractionDate,
-                \.posterURL, \.overview, \.backdropURL, \.releaseDate, \.lastUpdated, \.titleLogoURL,
-                \.themeColorHex, \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
-                \.remainingEpisodesCount, \.cachedLanguage, \.cachedNetwork, \.cachedNetworkLogoPath, \.mood
-            ]
-            if let allItems = try? context.fetch(backupDesc) {
-                let exportItems = allItems.map { item -> MediaItemData in
-                    var watchedIDs: [String]? = nil
-                    var watchedDates: [String: Date]? = nil
-                    if item.type == .tvShow, let tv = item.tvShowDetails {
-                        let watchedEps = tv.seasons
-                            .liveModels
-                            .flatMap { $0.episodes.liveModels }
-                            .filter { $0.isWatched }
-                        watchedIDs = watchedEps.map { $0.uniqueID ?? "" }
-                        watchedDates = Dictionary(uniqueKeysWithValues: watchedEps.compactMap { ep in
-                            ep.uniqueID.flatMap { ($0, ep.lastWatchedDate ?? Date()) }
-                        })
-                    }
-                    return MediaItemData(item: item, watchedIDs: watchedIDs, watchedDates: watchedDates)
-                }
-
-                var collectionBackup: [CollectionBackupData]? = nil
-                let collectionsDescriptor = FetchDescriptor<MediaCollection>()
-                if let allCollections = try? context.fetch(collectionsDescriptor) {
-                    collectionBackup = allCollections.map { col in
-                        let itemIDs: [String]? = col.isSmart ? nil : col.items.compactMap { $0.modelContext != nil ? $0.id : nil }
-                        return CollectionBackupData(
-                            id: col.id,
-                            name: col.name,
-                            systemImage: col.systemImage,
-                            notes: col.notes,
-                            isPinned: col.isPinned,
-                            completedItemIDs: col.completedItemIDs,
-                            smartRulesData: col.smartRulesData,
-                            itemIDs: itemIDs
-                        )
-                    }
-                }
-
-                let backup = LibraryBackup(items: exportItems, collections: collectionBackup)
-                await LibraryImportExportService.shared.automatedBackup(backup: backup)
-            }
+        Task.detached(priority: .background) { [weak self] in
+            await self?.performAutomatedBackup(force: false)
 
             if isOnline {
                 // Serialize sync + heal through the gate to prevent overlapping operations
@@ -569,11 +520,22 @@ class BackgroundTaskManager {
     private var lastBackupKey: String { "com.vara.mediatracker.lastAutoBackup" }
 
     private func runAutomatedBackup() async {
-        let lastBackup = UserDefaults.standard.object(forKey: lastBackupKey) as? Date ?? .distantPast
-        guard Date().timeIntervalSince(lastBackup) >= .days7 else { return }
+        await performAutomatedBackup(force: false)
+    }
+
+    /// Single canonical automated-backup routine. When `force` is false the
+    /// 7-day TTL gate applies; both call sites (startup schedule and 6-hour
+    /// background sync) go through here so the export cannot run ungated.
+    private func performAutomatedBackup(force: Bool) async {
+        if !force {
+            let lastBackup = UserDefaults.standard.object(forKey: lastBackupKey) as? Date ?? .distantPast
+            guard Date().timeIntervalSince(lastBackup) >= .days7 else { return }
+        }
 
         guard let container else { return }
         let context = ModelContext(container)
+        // Map MediaItem (non-Sendable) → LibraryBackup (Sendable) on a background
+        // context BEFORE crossing into the @MainActor LibraryImportExportService boundary.
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [
             \.id, \.title, \.typeValue, \.stateValue, \.dateAdded, \.tasteValue, \.lastInteractionDate,

@@ -300,6 +300,33 @@ actor DiscoverySyncService {
         await extractMissingColors()
     }
 
+    /// Shared facet-count adjustment used by the incremental add/remove paths.
+    /// Fetches each matching entity by `descriptor`, applies `delta` to its
+    /// count, optionally mutates/inserts, and deletes entities that reach zero
+    /// on decrement.
+    private func adjustFacets<Entity: PersistentModel>(
+        _ keys: [String],
+        descriptor: (String) -> FetchDescriptor<Entity>,
+        count: ReferenceWritableKeyPath<Entity, Int>,
+        delta: Int,
+        updateExisting: ((Entity) -> Void)? = nil,
+        makeNew: ((String) -> Entity)? = nil
+    ) {
+        for key in keys where !key.isEmpty {
+            let d = descriptor(key)
+            if let existing = try? modelContext.fetch(d).first {
+                existing[keyPath: count] += delta
+                if delta < 0 {
+                    if existing[keyPath: count] <= 0 { modelContext.delete(existing) }
+                } else {
+                    updateExisting?(existing)
+                }
+            } else if delta > 0, let makeNew {
+                modelContext.insert(makeNew(key))
+            }
+        }
+    }
+
     func updateItemAdded(_ itemID: PersistentIdentifier) async {
         guard let item = modelContext.model(for: itemID) as? MediaItem else { return }
         let (sourceToTarget, _) = await getAliasMaps()
@@ -309,74 +336,80 @@ actor DiscoverySyncService {
         if let rawName = item.cachedNetwork {
             let networkNames = rawName.commaSeparatedValues
             let logoPaths = item.cachedNetworkLogoPath?.commaSeparatedValues ?? []
-            
+
             var seenTargets = Set<String>()
             for (index, originalName) in networkNames.enumerated() where !originalName.isEmpty {
                 let itemLogo = index < logoPaths.count && !logoPaths[index].isEmpty ? logoPaths[index] : nil
                 let normalizedName = originalName.lowercased()
                 let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
-                
+
                 guard seenTargets.insert(name).inserted else { continue }
-                
-                let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-                if let existing = try? modelContext.fetch(descriptor).first {
-                    existing.count += 1
-                    existing.kind = itemKind
-                    if !existing.sourceNames.contains(originalName) {
-                        existing.sourceNames.append(originalName)
-                    }
-                } else {
-                    let entity = NetworkEntity(name: name, logoPath: itemLogo, count: 1, sourceNames: [originalName], kind: itemKind)
-                    modelContext.insert(entity)
-                }
+
+                adjustFacets(
+                    [name],
+                    descriptor: { name in FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name }) },
+                    count: \.count,
+                    delta: 1,
+                    updateExisting: { existing in
+                        existing.kind = itemKind
+                        if !existing.sourceNames.contains(originalName) {
+                            existing.sourceNames.append(originalName)
+                        }
+                    },
+                    makeNew: { name in NetworkEntity(name: name, logoPath: itemLogo, count: 1, sourceNames: [originalName], kind: itemKind) }
+                )
             }
         }
-        
-        for genre in GenreMapper.standardize(item.cachedGenres) {
-            let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(GenreEntity(name: genre, count: 1))
-            }
-        }
-        
+
+        adjustFacets(
+            GenreMapper.standardize(item.cachedGenres),
+            descriptor: { genre in FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre }) },
+            count: \.count,
+            delta: 1,
+            makeNew: { genre in GenreEntity(name: genre, count: 1) }
+        )
+
         // Incremental Language update
         if let lang = item.cachedLanguage {
-            let descriptor = FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(LanguageEntity(code: lang, count: 1))
-            }
+            adjustFacets(
+                [lang],
+                descriptor: { lang in FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang }) },
+                count: \.count,
+                delta: 1,
+                makeNew: { lang in LanguageEntity(code: lang, count: 1) }
+            )
         }
 
         // Incremental Badge update
         if let badge = item.storedSmartBadgeLabel, !badge.isEmpty {
-            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == badge })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-            } else {
-                modelContext.insert(BadgeEntity(label: badge, count: 1))
-            }
+            adjustFacets(
+                [badge],
+                descriptor: { badge in FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == badge }) },
+                count: \.count,
+                delta: 1,
+                makeNew: { badge in BadgeEntity(label: badge, count: 1) }
+            )
         }
 
         // Incremental Watch Provider update
-        for (pIdx, name) in item.cachedWatchProviders.enumerated() where !name.isEmpty {
-            let providerID = name.hashValue
-            let providerPaths = item.cachedWatchProviderLogoPaths ?? []
+        let providerPaths = item.cachedWatchProviderLogoPaths ?? []
+        let providerNames = item.cachedWatchProviders.enumerated().filter { !$0.element.isEmpty }.map { ($0.offset, $0.element) }
+        for (pIdx, name) in providerNames {
             let logoPath = pIdx < providerPaths.count && !providerPaths[pIdx].isEmpty ? providerPaths[pIdx] : nil
-            let descriptor = FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count += 1
-                if existing.logoPath == nil, let path = logoPath { existing.logoPath = path }
-            } else {
-                modelContext.insert(ProviderEntity(providerID: providerID, name: name, logoPath: logoPath, count: 1))
-            }
+            adjustFacets(
+                [name],
+                descriptor: { name in FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name }) },
+                count: \.count,
+                delta: 1,
+                updateExisting: { existing in
+                    if existing.logoPath == nil, let path = logoPath { existing.logoPath = path }
+                },
+                makeNew: { name in ProviderEntity(providerID: name.hashValue, name: name, logoPath: logoPath, count: 1) }
+            )
         }
-        
+
         do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
-        
+
         // Ensure colors are updated for the new network
         await extractMissingColors()
     }
@@ -443,50 +476,51 @@ actor DiscoverySyncService {
             for originalName in networks where !originalName.isEmpty {
                 let normalizedName = originalName.lowercased()
                 let name = sourceToTarget[normalizedName].map { $0 } ?? originalName
-                
+
                 guard seenTargets.insert(name).inserted else { continue }
-                
-                let descriptor = FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name })
-                if let existing = try? modelContext.fetch(descriptor).first {
-                    existing.count -= 1
-                    if existing.count <= 0 { modelContext.delete(existing) }
-                }
+
+                adjustFacets(
+                    [name],
+                    descriptor: { name in FetchDescriptor<NetworkEntity>(predicate: #Predicate { $0.name == name }) },
+                    count: \.count,
+                    delta: -1
+                )
             }
         }
-        
-        for genre in GenreMapper.standardize(genres) {
-            let descriptor = FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        
+
+        adjustFacets(
+            GenreMapper.standardize(genres),
+            descriptor: { genre in FetchDescriptor<GenreEntity>(predicate: #Predicate { $0.name == genre }) },
+            count: \.count,
+            delta: -1
+        )
+
         if let lang = language {
-            let descriptor = FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
+            adjustFacets(
+                [lang],
+                descriptor: { lang in FetchDescriptor<LanguageEntity>(predicate: #Predicate { $0.code == lang }) },
+                count: \.count,
+                delta: -1
+            )
         }
 
         if let b = badge, !b.isEmpty {
-            let descriptor = FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == b })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
+            adjustFacets(
+                [b],
+                descriptor: { badge in FetchDescriptor<BadgeEntity>(predicate: #Predicate { $0.label == badge }) },
+                count: \.count,
+                delta: -1
+            )
         }
 
         // Decrement Watch Providers
-        for name in providers where !name.isEmpty {
-            let descriptor = FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name })
-            if let existing = try? modelContext.fetch(descriptor).first {
-                existing.count -= 1
-                if existing.count <= 0 { modelContext.delete(existing) }
-            }
-        }
-        
+        adjustFacets(
+            providers,
+            descriptor: { name in FetchDescriptor<ProviderEntity>(predicate: #Predicate { $0.name == name }) },
+            count: \.count,
+            delta: -1
+        )
+
         do { try modelContext.save() } catch { AppLogger.warning("Sync save failed: \(error)", logger: AppLogger.sync) }
     }
 

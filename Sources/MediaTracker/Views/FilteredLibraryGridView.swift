@@ -279,36 +279,45 @@ struct FilteredLibraryGridView: View {
         }
     }
 
+    private struct FilterQueryParameters {
+        var network: [String]? = nil
+        var language: String? = nil
+        var genre: String? = nil
+        var badge: String? = nil
+        var provider: String? = nil
+        var sortOrder: SortOrder = .alphabetical
+    }
+
+    /// Single source of truth for translating `filter` into filterAndSort parameters.
+    private func queryParameters(includeSortOrder: Bool = true) -> FilterQueryParameters {
+        var params = FilterQueryParameters()
+        switch filter.type {
+        case .studio, .network: params.network = filter.sourceNames ?? [filter.name]
+        case .genre: params.genre = filter.name
+        case .language: params.language = filter.name
+        case .badge:
+            params.badge = filter.name
+            if includeSortOrder { params.sortOrder = .recentInteraction }
+        case .provider: params.provider = filter.name
+        case .onThisWeek:
+            if includeSortOrder { params.sortOrder = .newestRelease }
+        }
+        return params
+    }
+
     private func loadMoreItems() {
         guard !isLoadingMore && items.count < totalCount else { return }
         isLoadingMore = true
         let offset = items.count
         let filterActor = getFilterActor()
-        var network: [String]? = nil
-        var language: String? = nil
-        var genre: String? = nil
-        var badge: String? = nil
-        var sortOrder: SortOrder = .alphabetical
-
-        var provider: String? = nil
-        
-        switch filter.type {
-        case .studio, .network: network = filter.sourceNames ?? [filter.name]
-        case .genre: genre = filter.name
-        case .language: language = filter.name
-        case .badge:
-            badge = filter.name
-            sortOrder = .recentInteraction
-        case .provider: provider = filter.name
-        case .onThisWeek: sortOrder = .newestRelease
-        }
+        let params = queryParameters()
 
         loadMoreTask?.cancel()
         loadMoreTask = Task {
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: sortOrder,
-                    network: network, language: language, genre: genre, badge: badge, provider: provider,
+                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: params.sortOrder,
+                    network: params.network, language: params.language, genre: params.genre, badge: params.badge, provider: params.provider,
                     limit: pageSize, offset: offset
                 )
                 if Task.isCancelled { return }
@@ -405,28 +414,12 @@ struct FilteredLibraryGridView: View {
         fetchTask?.cancel()
         fetchTask = Task {
             let filterActor = getFilterActor()
-            var network: [String]? = nil
-            var language: String? = nil
-            var genre: String? = nil
-            var badge: String? = nil
-            var provider: String? = nil
-            var sortOrder: SortOrder = .alphabetical
-            
-            switch filter.type {
-            case .studio, .network: network = filter.sourceNames ?? [filter.name]
-            case .genre: genre = filter.name
-            case .language: language = filter.name
-            case .badge:
-                badge = filter.name
-                sortOrder = .recentInteraction
-            case .provider: provider = filter.name
-            case .onThisWeek: sortOrder = .newestRelease
-            }
+            let params = queryParameters()
 
             do {
                 let result = try await filterActor.filterAndSort(
-                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: sortOrder,
-                    network: network, language: language, genre: genre, badge: badge, provider: provider,
+                    category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: params.sortOrder,
+                    network: params.network, language: params.language, genre: params.genre, badge: params.badge, provider: params.provider,
                     limit: pageSize, offset: 0
                 )
                 if Task.isCancelled { return }
@@ -449,20 +442,8 @@ struct FilteredLibraryGridView: View {
     }
 
     private func updateSingleItem(id: PersistentIdentifier) {
-        var network: [String]? = nil
-        var language: String? = nil
-        var genre: String? = nil
-        var badge: String? = nil
-        var provider: String? = nil
-        
-        switch filter.type {
-        case .studio, .network: network = filter.sourceNames ?? [filter.name]
-        case .genre: genre = filter.name
-        case .language: language = filter.name
-        case .badge: badge = filter.name
-        case .provider: provider = filter.name
-        case .onThisWeek: break
-        }
+        // Sort order is handled by the local re-sort below, so it is omitted here.
+        let params = queryParameters(includeSortOrder: false)
 
         updateTask?.cancel()
         updateTask = Task {
@@ -472,11 +453,11 @@ struct FilteredLibraryGridView: View {
                     for: id,
                     category: filter.type == .onThisWeek ? .onThisWeek : .all,
                     searchText: "",
-                    network: network,
-                    language: language,
-                    genre: genre,
-                    badge: badge,
-                    provider: provider
+                    network: params.network,
+                    language: params.language,
+                    genre: params.genre,
+                    badge: params.badge,
+                    provider: params.provider
                 )
                 if Task.isCancelled { return }
                 

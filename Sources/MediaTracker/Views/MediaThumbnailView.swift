@@ -394,27 +394,19 @@ struct MediaThumbnailView: View, Equatable {
     private func markNextEpisodeAsWatched(for item: MediaItem) {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
 
-        // Optimize: Find first unwatched season first
+        // Find first unwatched season
         let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-        guard
-            let currentSeason = sortedSeasons.first(where: {
-                $0.watchedEpisodesCount < $0.totalEpisodesCount
-            })
-        else { return }
+        guard let currentSeason = sortedSeasons.first(where: {
+            $0.watchedEpisodesCount < $0.totalEpisodesCount
+        }) else { return }
 
+        // Episodes not synced yet — nothing to mark locally (DetailViewModel's
+        // variant triggers a fetch instead; this context-menu path stays passive).
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
-
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
-            item.lastInteractionDate = Date()
             FeedbackManager.shared.trigger(.markWatched)
-            Task { @MainActor in
-                item.syncCachedProperties(dirty: [.progress, .badge])
-                if let context = item.modelContext {
-                    SaveCoordinator.shared.requestSave(context)
-                }
-                MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
-            }
+            item.commitChange(dirty: [.progress, .badge])
         }
     }
 
@@ -553,9 +545,9 @@ struct MediaThumbnailView: View, Equatable {
                 Button(targetState.displayName) {
                     if let item = modelContext.model(for: itemID) as? MediaItem {
                         withAnimation(AppTheme.Animation.springSnappy) {
+                            // The state setter performs the badge/searchable cache sync itself.
                             item.state = targetState
                             item.lastUpdated = Date()
-                            item.syncCachedProperties(dirty: [.badge, .searchable])
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
                     }

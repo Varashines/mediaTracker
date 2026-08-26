@@ -275,12 +275,7 @@ actor BackgroundDataService {
             // add valid episode rows that TMDB has not returned yet.
             let mazeId = tv.tvMazeID
             let mazeAll: [TVMazeEpisode] = (mazeId != nil && mazeId! > 0) ? (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mazeId!, force: false)) ?? [] : []
-            let mazeRawBySeason: [Int: [TVMazeEpisode]] = {
-                var d: [Int: [TVMazeEpisode]] = [:]
-                for ep in mazeAll { if let s = ep.season, s > 0 { d[s, default: []].append(ep) } }
-                for (k,v) in d { d[k] = v.sorted { ($0.number ?? 0) < ($1.number ?? 0) } }
-                return d
-            }()
+            let mazeRawBySeason = TVMazeEpisode.rawBySeason(mazeAll)
 
             // Concurrent Fetching: Pre-fetch all missing season details in parallel to avoid sequential network bottleneck
             var results: [Int: [TVEpisodeResult]] = [:]
@@ -362,7 +357,7 @@ actor BackgroundDataService {
                                 guard let n = mazeEp.number else { continue }
                                 let uid = "\(tmdbID)_\(sNum)_\(n)"
                                 if episodeMap[uid] != nil { continue }
-                                let ep = TVEpisode(episodeNumber: n, seasonNumber: sNum, name: mazeEp.name ?? "Episode \(n)", overview: mazeEp.summary?.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) ?? "", airDate: mazeEp.airdate, airstamp: mazeEp.airstamp, runtime: mazeEp.runtime, showID: tmdbID)
+                                let ep = TVEpisode(episodeNumber: n, seasonNumber: sNum, name: mazeEp.name ?? "Episode \(n)", overview: mazeEp.strippedSummary ?? "", airDate: mazeEp.airdate, airstamp: mazeEp.airstamp, runtime: mazeEp.runtime, showID: tmdbID)
                                 ep.showID = tmdbID
                                 ep.season = season
                                 modelContext.insert(ep)

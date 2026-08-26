@@ -592,22 +592,6 @@ actor LibraryStatsActor {
     }
 
     private func resolvePersonImage(for name: String, currentURL: String?) async -> String? {
-        if let current = currentURL { return current }
-
-        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
-            predicate: #Predicate { $0.name == name })
-        if let items = try? modelContext.fetch(cacheDescriptor), let cached = items.first {
-            return cached.profileURL
-        }
-
-        // Check local CastMember data before hitting the API
-        let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
-        if let member = try? modelContext.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
-            let url = member.profileURL
-            modelContext.insert(PersonImageEntity(name: name, profileURL: url))
-            return url
-        }
-
-        return nil
+        PersonImageResolver.resolve(for: name, in: modelContext, currentURL: currentURL)
     }
 }

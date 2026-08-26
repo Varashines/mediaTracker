@@ -208,16 +208,16 @@ class SearchViewModel {
         if let cached = await fetchCachedResults(query: text, type: selectedType) {
             self.movieResults = cached.filter { $0.type == .movie }
             self.tvResults = cached.filter { $0.type == .tvShow }
-            
-            // Also need local search results even if cache exists
-            let local = await performLocalSearch(text: text, selectedType: selectedType)
-            self.filteredLocalResults = local
-            
-            // If cache is very fresh (e.g. < 5 mins), skip network and show offline results.
+
+            // If cache is very fresh (e.g. < 5 mins), skip network and show
+            // offline results. Only then run the local search here — otherwise
+            // the parallel phase below performs it, avoiding a duplicate run.
             if let first = aliasSearchTimestamp[text], Date().timeIntervalSince(first) < 300 {
+                let local = await performLocalSearch(text: text, selectedType: selectedType)
+                self.filteredLocalResults = local
                 self.isSearching = false
                 self.isOfflineResultsOnly = true
-                return 
+                return
             }
         }
 
@@ -326,15 +326,22 @@ class SearchViewModel {
     }
 
     private var aliasSearchTimestamp: [String: Date] = [:]
+    /// Cap so the per-query timestamp map cannot grow unboundedly in long sessions.
+    private let maxAliasTimestampEntries = 200
 
     private func fetchCachedResults(query: String, type: SearchType) async -> [MediaSearchResult]? {
         let key = "\(type.rawValue)_\(query)"
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<SearchCacheEntity>(predicate: #Predicate { $0.key == key })
-        
+
         if let cache = try? context.fetch(descriptor).first {
             // Check expiry (24 hours)
             if Date().timeIntervalSince(cache.timestamp) < (24 * 3600) {
+                if aliasSearchTimestamp.count >= maxAliasTimestampEntries {
+                    if let oldest = aliasSearchTimestamp.min(by: { $0.value < $1.value })?.key {
+                        aliasSearchTimestamp.removeValue(forKey: oldest)
+                    }
+                }
                 aliasSearchTimestamp[query] = cache.timestamp
                 return try? JSONDecoder().decode([MediaSearchResult].self, from: cache.resultsData)
             }

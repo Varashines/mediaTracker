@@ -119,13 +119,6 @@ class MooreMetricsService {
             return cached.data
         }
 
-        guard let url = URL(string: "\(baseURL)/recommend") else { return [] }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         let body: [String: Any] = [
             "domain": domain,
             "items": items,
@@ -133,38 +126,13 @@ class MooreMetricsService {
             "include_characteristics": includeCharacteristics
         ]
 
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        } catch {
-            return []
-        }
-
-        do {
-            let (data, _) = try await session.data(for: request)
-            let response = try JSONDecoder().decode(MooreMetricsResponse.self, from: data)
-            let resolvedLabels: [CharacteristicInfo]
-            if let labels {
-                resolvedLabels = labels
-            } else {
-                resolvedLabels = await fetchCharacteristics(for: domain)
-            }
-
-            let results = response.recommendations.map { rec in
-                MooreMetricsRecommendation(
-                    id: rec.id,
-                    name: rec.name,
-                    score: rec.score,
-                    characteristics: rec.characteristics ?? [:],
-                    reason: deriveReason(from: rec.characteristics ?? [:], labels: resolvedLabels)
-                )
-            }
-
-            cache[cacheKey] = (data: results, timestamp: Date())
-            return results
-        } catch {
-            AppLogger.debug("MooreMetrics recommend error: \(error)", logger: AppLogger.network)
-            return []
-        }
+        return await postRecommendations(
+            path: "/recommend",
+            body: body,
+            cacheKey: cacheKey,
+            labels: labels,
+            errorContext: "MooreMetrics recommend error"
+        )
     }
 
     // MARK: - Recommend by Preferences
@@ -184,19 +152,36 @@ class MooreMetricsService {
             return cached.data
         }
 
-        guard let url = URL(string: "\(baseURL)/recommend-by-preferences") else { return [] }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         let body: [String: Any] = [
             "domain": domain,
             "preferences": preferences,
             "limit": limit,
             "include_characteristics": includeCharacteristics
         ]
+
+        return await postRecommendations(
+            path: "/recommend-by-preferences",
+            body: body,
+            cacheKey: cacheKey,
+            labels: labels,
+            errorContext: "MooreMetrics preferences error"
+        )
+    }
+
+    /// Shared POST + decode + label-resolution pipeline for both recommendation endpoints.
+    private func postRecommendations(
+        path: String,
+        body: [String: Any],
+        cacheKey: String,
+        labels: [CharacteristicInfo]?,
+        errorContext: String
+    ) async -> [MooreMetricsRecommendation] {
+        guard let url = URL(string: "\(baseURL)\(path)") else { return [] }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -211,7 +196,7 @@ class MooreMetricsService {
             if let labels {
                 resolvedLabels = labels
             } else {
-                resolvedLabels = await fetchCharacteristics(for: domain)
+                resolvedLabels = await fetchCharacteristics(for: body["domain"] as? String ?? "showdive")
             }
 
             let results = response.recommendations.map { rec in
@@ -227,7 +212,7 @@ class MooreMetricsService {
             cache[cacheKey] = (data: results, timestamp: Date())
             return results
         } catch {
-            AppLogger.debug("MooreMetrics preferences error: \(error)", logger: AppLogger.network)
+            AppLogger.debug("\(errorContext): \(error)", logger: AppLogger.network)
             return []
         }
     }

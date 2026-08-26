@@ -131,49 +131,33 @@ struct BadgeEngine {
         eDescriptor.propertiesToFetch = [\.isWatched, \.seasonNumber, \.episodeNumber, \.airDateValue, \.lastWatchedDate, \.uniqueID]
         guard let allEpisodes = try? context.fetch(eDescriptor), !allEpisodes.isEmpty else { return nil }
 
-        var nextEpisodeNumber = 0
-        var nextSeasonEpisodeCount = 0
-        var nextAirDate: Date? = nil
-        var airedOnSameDayCount = 0
-        var recentlyWatchedCount = 0
-        var foundNext = false
-
         var episodeMap: [Int: [TVEpisode]] = [:]
         for ep in allEpisodes {
             episodeMap[ep.seasonNumber, default: []].append(ep)
         }
 
-        for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
-            guard season.seasonNumber > 0 else { continue }
-            guard let seasonEpisodes = episodeMap[season.seasonNumber] else { continue }
-            for ep in seasonEpisodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
-                if !ep.isWatched {
-                    if !foundNext {
-                        nextEpisodeNumber = ep.episodeNumber
-                        nextSeasonEpisodeCount = season.episodeCount
-                        nextAirDate = ep.airDateAsDate
-                        foundNext = true
-                        airedOnSameDayCount = 1
-                    } else if let epDate = ep.airDateAsDate, let next = nextAirDate,
-                              Calendar.current.isDate(epDate, inSameDayAs: next) {
-                        airedOnSameDayCount += 1
-                    }
-                } else if let lastWatched = ep.lastWatchedDate, lastWatched >= cutoff {
-                    recentlyWatchedCount += 1
-                }
+        let seasonSources: [(episodeCount: Int, episodes: [TVEpisode])] = tv.seasons.liveModels
+            .sorted(by: { $0.seasonNumber < $1.seasonNumber })
+            .compactMap { season in
+                guard season.seasonNumber > 0, let episodes = episodeMap[season.seasonNumber] else { return nil }
+                return (season.episodeCount, episodes)
             }
-        }
 
-        return EpisodeScan(
-            nextEpisodeNumber: nextEpisodeNumber,
-            nextSeasonEpisodeCount: nextSeasonEpisodeCount,
-            nextAirDate: nextAirDate,
-            airedOnSameDayCount: airedOnSameDayCount,
-            recentlyWatchedCount: recentlyWatchedCount
-        )
+        return scanSeasonEpisodeSources(seasonSources, cutoff: cutoff)
     }
 
     private static func relationshipScan(tv: TVShowDetails, now: Date, cutoff: Date) -> EpisodeScan {
+        let seasonSources: [(episodeCount: Int, episodes: [TVEpisode])] = tv.seasons.liveModels
+            .sorted(by: { $0.seasonNumber < $1.seasonNumber })
+            .filter { $0.seasonNumber > 0 }
+            .map { ($0.episodeCount, $0.episodes.liveModels) }
+
+        return scanSeasonEpisodeSources(seasonSources, cutoff: cutoff)
+    }
+
+    /// Shared state machine for both scan strategies: finds the next unwatched
+    /// episode, same-day premiere counts, and recently-watched counts.
+    private static func scanSeasonEpisodeSources(_ seasonSources: [(episodeCount: Int, episodes: [TVEpisode])], cutoff: Date) -> EpisodeScan {
         var nextEpisodeNumber = 0
         var nextSeasonEpisodeCount = 0
         var nextAirDate: Date? = nil
@@ -181,13 +165,12 @@ struct BadgeEngine {
         var recentlyWatchedCount = 0
         var foundNext = false
 
-        for season in tv.seasons.liveModels.sorted(by: { $0.seasonNumber < $1.seasonNumber }) {
-            guard season.seasonNumber > 0 else { continue }
-            for ep in season.episodes.liveModels.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
+        for season in seasonSources {
+            for ep in season.episodes.sorted(by: { $0.episodeNumber < $1.episodeNumber }) {
                 if !ep.isWatched {
                     if !foundNext {
                         nextEpisodeNumber = ep.episodeNumber
-                        nextSeasonEpisodeCount = ep.season?.episodeCount ?? 0
+                        nextSeasonEpisodeCount = season.episodeCount
                         nextAirDate = ep.airDateAsDate
                         foundNext = true
                         airedOnSameDayCount = 1

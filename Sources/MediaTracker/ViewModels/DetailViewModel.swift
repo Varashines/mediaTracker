@@ -165,24 +165,10 @@ class DetailViewModel {
     }
 
     func refreshLocalItem() {
-        if let context = item.modelContext {
-            context.processPendingChanges()
-            let currentID = item.id
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == currentID })
-            if let fresh = try? context.fetch(descriptor).first {
-                self.item.cachedCreators = !fresh.cachedCreators.isEmpty ? fresh.cachedCreators : (fresh.tvShowDetails?.creators ?? [])
-                self.item.cachedGenres = fresh.cachedGenres
-                self.item.cachedNetwork = fresh.cachedNetwork
-                self.item.cachedNetworkLogoPath = fresh.cachedNetworkLogoPath
-                self.item.posterURL = fresh.posterURL ?? self.item.posterURL
-                self.item.backdropURL = fresh.backdropURL ?? self.item.backdropURL
-                self.item.themeColorHex = fresh.themeColorHex ?? self.item.themeColorHex
-                self.item.themeColorSourceURL = fresh.themeColorSourceURL ?? self.item.themeColorSourceURL
-                self.item.titleLogoURL = fresh.titleLogoURL ?? self.item.titleLogoURL
-                if let logoURL = self.item.titleLogoURL, let url = URL(string: logoURL) {
-                    ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 780, height: 185))
-                }
-            }
+        // Note: fetching a "fresh" copy via the same context would return the
+        // same registered instance as self.item, so there is nothing to copy.
+        if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
+            ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 780, height: 185))
         }
         item.syncCachedProperties(dirty: .all)
         // .all already recomputes progress + badge. Only the badge-scan cache needs
@@ -558,12 +544,7 @@ class DetailViewModel {
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
-            item.lastInteractionDate = Date()
-            item.syncCachedProperties(dirty: [.progress, .badge])
-            if let context = item.modelContext {
-                SaveCoordinator.shared.requestSave(context)
-            }
-            MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+            item.commitChange(dirty: [.progress, .badge])
             return next
         }
         return nil
@@ -576,28 +557,24 @@ class DetailViewModel {
         } else {
             item.state = .completed
         }
-        item.lastInteractionDate = Date()
-        item.syncCachedProperties(dirty: [.progress, .badge])
-        if let context = item.modelContext {
-            SaveCoordinator.shared.requestSave(context)
-        }
-        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+        // The state setter already synced [.badge, .searchable]; this covers progress.
+        item.commitChange(dirty: [.progress])
     }
 
     func cycleStatus() {
         guard item.modelContext != nil else { return }
         let allStates = MediaItem.availableStates(for: item.type ?? .movie, progress: item.storedProgress)
         guard !allStates.isEmpty else { return }
-        
+
         let currentIndex = allStates.firstIndex(of: item.state ?? .wishlist) ?? 0
         let nextIndex = (currentIndex + 1) % allStates.count
         let nextState = allStates[nextIndex]
-        
+
         withAnimation(AppTheme.Animation.springSnappy) {
+            // The state setter performs the badge/searchable cache sync itself.
             item.state = nextState
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()
-            item.syncCachedProperties(dirty: [.badge, .searchable])
         }
         if let context = item.modelContext {
             SaveCoordinator.shared.requestSave(context)

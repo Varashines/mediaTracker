@@ -69,20 +69,7 @@ actor TasteActor {
     }
 
     private func resolvePersonImage(for name: String) async -> String? {
-        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
-            predicate: #Predicate { $0.name == name })
-        if let cached = try? modelContext.fetch(cacheDescriptor).first {
-            return cached.profileURL
-        }
-
-        let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
-        if let member = try? modelContext.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
-            let url = member.profileURL
-            modelContext.insert(PersonImageEntity(name: name, profileURL: url))
-            return url
-        }
-
-        return nil
+        PersonImageResolver.resolve(for: name, in: modelContext)
     }
 
     private func calculateAffinityMaps() async -> (
@@ -393,5 +380,28 @@ actor TasteActor {
             Self.lastRecommendationsCache = Date()
         }
         return result
+    }
+}
+
+/// Shared person-image resolution used by TasteActor and LibraryStatsActor:
+/// PersonImageEntity cache first, then a CastMember fallback with cache write-back.
+enum PersonImageResolver {
+    static func resolve(for name: String, in context: ModelContext, currentURL: String? = nil) -> String? {
+        if let current = currentURL { return current }
+
+        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
+            predicate: #Predicate { $0.name == name })
+        if let cached = try? context.fetch(cacheDescriptor).first {
+            return cached.profileURL
+        }
+
+        let castDescriptor = FetchDescriptor<CastMember>(predicate: #Predicate { $0.name == name })
+        if let member = try? context.fetch(castDescriptor).first(where: { $0.profileURL != nil }) {
+            let url = member.profileURL
+            context.insert(PersonImageEntity(name: name, profileURL: url))
+            return url
+        }
+
+        return nil
     }
 }
