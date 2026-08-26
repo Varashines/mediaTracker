@@ -9,8 +9,6 @@ struct SeasonCastSection: View {
     let themeColor: Color
     var onCastSelected: ((String) -> Void)? = nil
     @State private var showAll = false
-    @State private var isShowAllHovered = false
-    @Environment(\.colorScheme) var colorScheme
 
     private var qualifying: [SeasonCastMember] {
         cast.filter { $0.qualifiesForTaste }
@@ -28,30 +26,9 @@ struct SeasonCastSection: View {
                     }
                 }
                 if !showAll && !cameos.isEmpty {
-                    Button {
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            showAll = true
-                        }
-                    } label: {
-                        Text("+\(cameos.count)")
-                            .font(AppTheme.Font.bodyBold)
-                            .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                            .padding(.horizontal, AppTheme.Spacing.small)
-                            .padding(.vertical, AppTheme.Spacing.mini)
-                            .background(
-                                Capsule()
-                                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.10))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(themeColor.opacity(0.2), lineWidth: 0.5)
-                            )
-                            .frame(height: 90)
-                            .scaleEffect(isShowAllHovered ? 1.04 : 1.0)
-                            .animation(AppTheme.Animation.springSnappy, value: isShowAllHovered)
+                    CastRevealPill(hiddenCount: cameos.count, themeColor: themeColor) {
+                        showAll = true
                     }
-                    .buttonStyle(.interactive)
-                    .onHover { isShowAllHovered = $0 }
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.compact)

@@ -82,81 +82,70 @@ struct ScopedInsightsHeader: View {
         }
     }
 
-    // MARK: - Top Genres (Discovery text style)
+    // MARK: - Top Genres / Networks / Providers / Languages (shared grid section)
+
+    private func nodeSection(
+        _ title: String,
+        nodes: [DiscoveryNode],
+        style: DiscoveryCardStyle,
+        baseColor: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+            headerLabel(title)
+            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
+                ForEach(nodes, id: \.name) { node in
+                    DiscoveryCard(node: node, style: style, baseColor: baseColor) {}
+                }
+            }
+        }
+    }
 
     private var genreSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            headerLabel("Top Genres")
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topGenres.prefix(metadataItemLimit), id: \.name) { genre in
-                    let node = DiscoveryNode(
-                        name: genre.name,
-                        logoPath: nil,
-                        count: Int(genre.score * 100),
-                        themeColorHex: nil
-                    )
-                    DiscoveryCard(node: node, style: .text, baseColor: .indigo) {}
-                }
-            }
+        let items = stats.topGenres.prefix(metadataItemLimit).map { genre in
+            DiscoveryNode(
+                name: genre.name,
+                logoPath: nil,
+                count: Int(genre.score * 100),
+                themeColorHex: nil
+            )
         }
+        return nodeSection("Top Genres", nodes: items, style: .text, baseColor: .indigo)
     }
-
-    // MARK: - Top Networks (count-based)
 
     private var networkSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            headerLabel("Top Networks")
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topNetworks.prefix(metadataItemLimit), id: \.name) { net in
-                    let node = DiscoveryNode(
-                        name: net.name,
-                        logoPath: logoMap[net.name],
-                        count: net.count,
-                        themeColorHex: themeColorMap[net.name]
-                    )
-                    DiscoveryCard(node: node, style: .logo, baseColor: .gray) {}
-                }
-            }
+        let items = stats.topNetworks.prefix(metadataItemLimit).map { net in
+            DiscoveryNode(
+                name: net.name,
+                logoPath: logoMap[net.name],
+                count: net.count,
+                themeColorHex: themeColorMap[net.name]
+            )
         }
+        return nodeSection("Top Networks", nodes: items, style: .logo, baseColor: .gray)
     }
-
-    // MARK: - Top Providers (count-based)
 
     private var providerSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            headerLabel("Top Providers")
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topProviders.prefix(metadataItemLimit), id: \.name) { prov in
-                    let node = DiscoveryNode(
-                        name: prov.name,
-                        logoPath: logoMap[prov.name],
-                        count: prov.count,
-                        themeColorHex: nil
-                    )
-                    DiscoveryCard(node: node, style: .logo, baseColor: .gray) {}
-                }
-            }
+        let items = stats.topProviders.prefix(metadataItemLimit).map { prov in
+            DiscoveryNode(
+                name: prov.name,
+                logoPath: logoMap[prov.name],
+                count: prov.count,
+                themeColorHex: nil
+            )
         }
+        return nodeSection("Top Providers", nodes: items, style: .logo, baseColor: .gray)
     }
 
-    // MARK: - Top Languages (Discovery text style)
-
     private var languageSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
-            headerLabel("Top Languages")
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.large) {
-                ForEach(stats.topLanguages.prefix(metadataItemLimit), id: \.name) { lang in
-                    let displayName = LanguageUtils.languageName(for: lang.name)
-                    let node = DiscoveryNode(
-                        name: displayName,
-                        logoPath: nil,
-                        count: lang.count,
-                        themeColorHex: nil
-                    )
-                    DiscoveryCard(node: node, style: .text, baseColor: .teal) {}
-                }
-            }
+        let items = stats.topLanguages.prefix(metadataItemLimit).map { lang in
+            DiscoveryNode(
+                name: LanguageUtils.languageName(for: lang.name),
+                logoPath: nil,
+                count: lang.count,
+                themeColorHex: nil
+            )
         }
+        return nodeSection("Top Languages", nodes: items, style: .text, baseColor: .teal)
     }
 
     private func headerLabel(_ text: String) -> some View {

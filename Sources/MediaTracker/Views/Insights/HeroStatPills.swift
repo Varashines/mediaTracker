@@ -22,75 +22,48 @@ struct HeroStatPills: View {
         let contentHeight = 86 + AppTheme.Spacing.medium * 2
 
         GeometryReader { geo in
+            let heroCards = HStack(spacing: AppTheme.Spacing.large) {
+                ClaymorphicHeroCard(
+                    emoji: "🍿",
+                    value: "\(total)",
+                    label: "Titles",
+                    detail: "\(stats.totalMovies) 🎬 · \(stats.totalTVShows) 📺",
+                    color: .pink
+                )
+                ClaymorphicHeroCard(
+                    emoji: "⏱️",
+                    value: DateUtils.formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
+                    label: "Watch Time",
+                    detail: "\(stats.totalEpisodesWatched) eps",
+                    color: .orange
+                )
+                ClaymorphicHeroCard(
+                    emoji: "🏆",
+                    value: String(format: "%.0f%%", completionRate * 100),
+                    label: "Completion",
+                    detail: "\(completed)/\(total)",
+                    color: .teal
+                )
+                ClaymorphicHeroCard(
+                    emoji: "💖",
+                    value: String(format: "%.0f%%", overallAffinity * 100),
+                    label: "Affinity",
+                    detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
+                    color: .purple
+                )
+            }
+
             if geo.size.width >= totalWidth {
                 // Centered layout when content fits
-                HStack(spacing: AppTheme.Spacing.large) {
-                    ClaymorphicHeroCard(
-                        emoji: "🍿",
-                        value: "\(total)",
-                        label: "Titles",
-                        detail: "\(stats.totalMovies) 🎬 · \(stats.totalTVShows) 📺",
-                        color: .pink
-                    )
-                    ClaymorphicHeroCard(
-                        emoji: "⏱️",
-                        value: DateUtils.formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
-                        label: "Watch Time",
-                        detail: "\(stats.totalEpisodesWatched) eps",
-                        color: .orange
-                    )
-                    ClaymorphicHeroCard(
-                        emoji: "🏆",
-                        value: String(format: "%.0f%%", completionRate * 100),
-                        label: "Completion",
-                        detail: "\(completed)/\(total)",
-                        color: .teal
-                    )
-                    ClaymorphicHeroCard(
-                        emoji: "💖",
-                        value: String(format: "%.0f%%", overallAffinity * 100),
-                        label: "Affinity",
-                        detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
-                        color: .purple
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, AppTheme.Spacing.medium)
+                heroCards
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, AppTheme.Spacing.medium)
             } else {
                 // Scrollable fallback when content overflows
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppTheme.Spacing.large) {
-                        ClaymorphicHeroCard(
-                            emoji: "🍿",
-                            value: "\(total)",
-                            label: "Titles",
-                            detail: "\(stats.totalMovies) 🎬 · \(stats.totalTVShows) 📺",
-                            color: .pink
-                        )
-                        ClaymorphicHeroCard(
-                            emoji: "⏱️",
-                            value: DateUtils.formatWatchTimeCompact(minutes: stats.totalWatchTimeMinutes),
-                            label: "Watch Time",
-                            detail: "\(stats.totalEpisodesWatched) eps",
-                            color: .orange
-                        )
-                        ClaymorphicHeroCard(
-                            emoji: "🏆",
-                            value: String(format: "%.0f%%", completionRate * 100),
-                            label: "Completion",
-                            detail: "\(completed)/\(total)",
-                            color: .teal
-                        )
-                        ClaymorphicHeroCard(
-                            emoji: "💖",
-                            value: String(format: "%.0f%%", overallAffinity * 100),
-                            label: "Affinity",
-                            detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
-                            color: .purple
-                        )
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.vertical, AppTheme.Spacing.medium)
+                    heroCards
+                        .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                        .padding(.vertical, AppTheme.Spacing.medium)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }

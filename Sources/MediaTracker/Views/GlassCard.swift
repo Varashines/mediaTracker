@@ -13,54 +13,17 @@ struct GlassCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Group {
-            if AppThemeCoordinator.isReducingVisualEffects {
-                reducedBody
-            } else {
-                richBody
-            }
-        }
-    }
-    
-    private var reducedBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.cardFill(for: scheme))
-                .allowsHitTesting(false)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(
-                    color != .clear
-                        ? color.opacity(scheme == .dark ? 0.25 : 0.12)
-                        : (isHovered
-                            ? AppTheme.Colors.strokeHover(for: scheme)
-                            : AppTheme.Colors.strokeDefault(for: scheme)),
-                    lineWidth: 0.8
+                // Reduced-effects mode swaps only the material fill for a flat card fill.
+                .fill(
+                    AppThemeCoordinator.isReducingVisualEffects
+                        ? AnyShapeStyle(AppTheme.Colors.cardFill(for: scheme))
+                        : AnyShapeStyle(material)
                 )
-        }
-        .shadow(
-            color: shadowed
-                ? (isHovered
-                    ? AppTheme.Colors.shadowElevated(for: scheme)
-                    : AppTheme.Colors.shadowAmbient(for: scheme))
-                : .clear,
-            radius: isHovered ? AppTheme.Shadow.elevated.radius : AppTheme.Shadow.card.radius,
-            y: isHovered ? AppTheme.Shadow.elevated.y : AppTheme.Shadow.card.y
-        )
-    }
-    
-    private var richBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content()
-        }
-        .background {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(material)
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

@@ -6,32 +6,19 @@ struct FeaturedUpcomingCarousel: View {
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
-    
-    @State private var scrollProgress: Double = 0
-    @State private var horizontalFastScrolling = false
-    private let scrollSpace = "Featured_Scroll"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            SectionHeader(
-                title: "Coming Soon",
-                icon: "sparkles",
-                iconColor: .yellow,
-                scrollProgress: scrollProgress
-            )
-            
-            if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
-                    ForEach(items) { metadata in
-                        Button { onSelect(metadata) } label: {
-                            MediaThumbnailView(metadata: metadata, mode: .hero, isUpcomingSection: true, namespace: namespace, isFastScrolling: isFastScrolling || horizontalFastScrolling)
-                                .equatable()
-                                .compositingGroupIfNeeded()
-                        }
-                        .buttonStyle(.interactive)
-                    }
-                }
-            }
+        HomeCarouselSection(
+            title: "Coming Soon",
+            icon: "sparkles",
+            iconColor: .yellow,
+            scrollSpace: "Featured_Scroll",
+            items: items,
+            onSelect: onSelect
+        ) { metadata, fast in
+            MediaThumbnailView(
+                metadata: metadata, mode: .hero, isUpcomingSection: true,
+                namespace: namespace, isFastScrolling: isFastScrolling || fast)
         }
         .scrollClipDisabled()
     }

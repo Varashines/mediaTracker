@@ -36,19 +36,7 @@ struct GroupedMediaGrid: View {
             }
         }
         .padding(.bottom, 32)
-        .task(id: viewModel.collection.selectedCollectionID) {
-            guard let cid = viewModel.collection.selectedCollectionID else {
-                completedIDs = []
-                return
-            }
-            let descriptor = FetchDescriptor<MediaCollection>(
-                predicate: #Predicate { $0.id == cid },
-                sortBy: [SortDescriptor(\.name)]
-            )
-            if let collection = try? modelContext.fetch(descriptor).first {
-                completedIDs = Set(collection.completedItemIDs)
-            }
-        }
+        .loadCompletedCollectionIDs(for: viewModel.collection.selectedCollectionID, into: $completedIDs)
     }
     
     @ViewBuilder

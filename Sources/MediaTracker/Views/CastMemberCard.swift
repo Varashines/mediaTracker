@@ -5,22 +5,34 @@ struct CastMemberCard: View {
     let member: SimpleCastMember
     let themeColor: Color
     var action: (() -> Void)? = nil
-    @Environment(\.colorScheme) var colorScheme
-
 
     var body: some View {
         Button {
             action?()
         } label: {
-            cardContent
+            CastMemberCardBody(
+                name: member.name,
+                characterName: member.characterName,
+                profileURL: member.profileURL,
+                themeColor: themeColor
+            )
         }
         .buttonStyle(.interactive)
         .hoverScaled(.subtle, themeColor: themeColor)
         .accessibilityLabel("\(member.name)\(member.characterName.isEmpty ? "" : ", \(member.characterName)")")
     }
+}
 
-    @ViewBuilder
-    private var cardContent: some View {
+/// Shared card chrome for cast member cards (profile image + name/character text).
+/// Used by both the top-cast `CastMemberCard` and `SeasonCastMemberCard`.
+struct CastMemberCardBody: View {
+    let name: String
+    let characterName: String
+    let profileURL: String?
+    let themeColor: Color
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
         HStack(spacing: 0) {
             imageSection
             textSection
@@ -32,14 +44,19 @@ struct CastMemberCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: AppTheme.Shadow.card.radius, x: AppTheme.Shadow.card.x, y: AppTheme.Shadow.card.y)
-        .overlay(borderOverlay())
+        .overlay(borderOverlay)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+    }
+
+    private var borderOverlay: some View {
+        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+            .stroke(Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
     }
 
     @ViewBuilder
     private var imageSection: some View {
         Group {
-            if let urlString = member.profileURL, let url = URL(string: urlString) {
+            if let urlString = profileURL, let url = URL(string: urlString) {
                 CachedImage(url: url, targetSize: CGSize(width: 60, height: 90), priority: .low, themeColor: themeColor) { _ in
                 } placeholder: {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
@@ -62,17 +79,17 @@ struct CastMemberCard: View {
 
     @ViewBuilder
     private var textSection: some View {
-        let hasCharacterName = !member.characterName.isEmpty
+        let hasCharacterName = !characterName.isEmpty
 
         VStack(alignment: .leading, spacing: hasCharacterName ? AppTheme.Spacing.micro : 0) {
-            Text(member.name)
+            Text(name)
                 .font(AppTheme.Font.bodyBold)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
 
             if hasCharacterName {
-                Text(member.characterName)
+                Text(characterName)
                     .font(AppTheme.Font.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -84,10 +101,5 @@ struct CastMemberCard: View {
         .padding(.vertical, AppTheme.Spacing.tiny)
         .frame(width: 140, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .center)
-    }
-
-    private func borderOverlay() -> some View {
-        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-            .stroke(Color.primary.opacity(colorScheme == .dark ? 0.15 : 0.10), lineWidth: 0.5)
     }
 }

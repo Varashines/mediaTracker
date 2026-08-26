@@ -6,32 +6,16 @@ struct ForYouCarousel: View {
     let namespace: Namespace.ID
     let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
-    
-    @State private var scrollProgress: Double = 0
-    @State private var horizontalFastScrolling = false
-    private let scrollSpace = "FY_Scroll"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            SectionHeader(
-                title: "For You", 
-                icon: "sparkles", 
-                iconColor: .yellow,
-                scrollProgress: scrollProgress
-            )
-
-            if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
-                    ForEach(items) { metadata in
-                        Button { onSelect(metadata) } label: {
-                            ForYouCompactCard(metadata: metadata, isFastScrolling: isFastScrolling || horizontalFastScrolling)
-                                .equatable()
-                                .compositingGroupIfNeeded()
-                        }
-                        .buttonStyle(.interactive)
-                    }
-                }
-            } else {
+        HomeCarouselSection(
+            title: "For You",
+            icon: "sparkles",
+            iconColor: .yellow,
+            scrollSpace: "FY_Scroll",
+            items: items,
+            onSelect: onSelect,
+            emptyContent: {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.large) {
                         ForEach(0..<3, id: \.self) { _ in
@@ -43,6 +27,8 @@ struct ForYouCarousel: View {
                 }
                 .scrollClipDisabled()
             }
+        ) { metadata, fast in
+            ForYouCompactCard(metadata: metadata, isFastScrolling: isFastScrolling || fast)
         }
     }
 }

@@ -1,13 +1,50 @@
 import SwiftUI
 import SwiftData
 
+/// Shared "+N" reveal pill used by the cast strips. Shows the hidden count and
+/// expands the strip when tapped.
+struct CastRevealPill: View {
+    let hiddenCount: Int
+    let themeColor: Color
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        Button {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                action()
+            }
+        } label: {
+            Text("+\(hiddenCount)")
+                .font(AppTheme.Font.bodyBold)
+                .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.mini)
+                .background(
+                    Capsule()
+                        .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.10))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(themeColor.opacity(0.2), lineWidth: 0.5)
+                )
+                .frame(height: 90)
+                .scaleEffect(isHovered ? 1.04 : 1.0)
+                .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        }
+        .buttonStyle(.interactive)
+        .onHover { isHovered = $0 }
+        .contentShape(Capsule())
+    }
+}
+
 struct CastSectionView: View {
     let cast: [SimpleCastMember]
     let themeColor: Color
     var onCastSelected: ((String) -> Void)? = nil
     @State private var showAll = false
-    @State private var isShowAllHovered = false
-    @Environment(\.colorScheme) var colorScheme
 
     private let initialLimit = 6
 
@@ -21,30 +58,9 @@ struct CastSectionView: View {
                     }
                 }
                 if !visible {
-                    Button {
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            showAll = true
-                        }
-                    } label: {
-                        Text("+\(remainingCount)")
-                            .font(AppTheme.Font.bodyBold)
-                            .foregroundStyle(themeColor.highContrastAccent(colorScheme: colorScheme))
-                            .padding(.horizontal, AppTheme.Spacing.small)
-                            .padding(.vertical, AppTheme.Spacing.mini)
-                            .background(
-                                Capsule()
-                                    .fill(themeColor.opacity(colorScheme == .dark ? 0.15 : 0.10))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(themeColor.opacity(0.2), lineWidth: 0.5)
-                            )
-                            .frame(height: 90)
-                            .scaleEffect(isShowAllHovered ? 1.04 : 1.0)
-                            .animation(AppTheme.Animation.springSnappy, value: isShowAllHovered)
+                    CastRevealPill(hiddenCount: remainingCount, themeColor: themeColor) {
+                        showAll = true
                     }
-                    .buttonStyle(.interactive)
-                    .onHover { isShowAllHovered = $0 }
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.compact)

@@ -403,3 +403,33 @@ extension AnyTransition {
         .opacity
     }
 }
+
+/// Loads the completed-item IDs for a selected manual collection into local
+/// grid state. Shared by MainMediaGrid and GroupedMediaGrid.
+struct CompletedIDsLoader: ViewModifier {
+    let collectionID: UUID?
+    @Binding var completedIDs: Set<String>
+    @Environment(\.modelContext) private var modelContext
+
+    func body(content: Content) -> some View {
+        content.task(id: collectionID) {
+            guard let cid = collectionID else {
+                completedIDs = []
+                return
+            }
+            let descriptor = FetchDescriptor<MediaCollection>(
+                predicate: #Predicate { $0.id == cid },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            if let collection = try? modelContext.fetch(descriptor).first {
+                completedIDs = Set(collection.completedItemIDs)
+            }
+        }
+    }
+}
+
+extension View {
+    func loadCompletedCollectionIDs(for collectionID: UUID?, into completedIDs: Binding<Set<String>>) -> some View {
+        modifier(CompletedIDsLoader(collectionID: collectionID, completedIDs: completedIDs))
+    }
+}

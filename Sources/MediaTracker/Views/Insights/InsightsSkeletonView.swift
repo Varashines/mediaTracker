@@ -121,14 +121,6 @@ struct InsightsSkeletonView: View {
                 .padding(.bottom, AppTheme.Spacing.medium)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.07 : 0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+        .insightsCardSurface()
     }
 }

@@ -30,9 +30,7 @@ struct MainMediaGrid: View {
             }
         }
         .padding(AppTheme.Spacing.pageMargin)
-        .task(id: selectedCollectionID) {
-            await loadCompletedIDs()
-        }
+        .loadCompletedCollectionIDs(for: selectedCollectionID, into: $completedIDs)
     }
 
     @ViewBuilder
@@ -53,20 +51,6 @@ struct MainMediaGrid: View {
             if metadata.id == items.last?.id {
                 onLoadMore()
             }
-        }
-    }
-
-    private func loadCompletedIDs() async {
-        guard let cid = selectedCollectionID else {
-            completedIDs = []
-            return
-        }
-        let descriptor = FetchDescriptor<MediaCollection>(
-            predicate: #Predicate { $0.id == cid },
-            sortBy: [SortDescriptor(\.name)]
-        )
-        if let collection = try? modelContext.fetch(descriptor).first {
-            completedIDs = Set(collection.completedItemIDs)
         }
     }
 
