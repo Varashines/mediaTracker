@@ -46,7 +46,7 @@ final class ProviderCacheEvictionTests: XCTestCase {
         var regions = ["US", "GB", "CA", "AU", "DE", "FR", "IN", "JP", "BR", "ES", "IT", "NL", "KR", "MX", "SE"]
         regions.insert(runnerRegion, at: 0)
         let regionEntries = regions
-            .map { "\($0): \(regionBody)" }
+            .map { "\"\($0)\": \(regionBody)" }
             .joined(separator: ",")
         return "{\"results\": {\(regionEntries)}}".data(using: .utf8)!
     }
