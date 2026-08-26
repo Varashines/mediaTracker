@@ -224,16 +224,16 @@ actor APIClient {
     }
 
     func searchMovies(query: String) async throws -> [MediaSearchResult] {
-        try await searchMedia(prefix: "search_movie", path: "/search/movie", query: query)
+        try await searchMedia(TMDBMovie.self, prefix: "search_movie", path: "/search/movie", query: query)
     }
 
     func searchTVShows(query: String) async throws -> [MediaSearchResult] {
-        try await searchMedia(prefix: "search_tv", path: "/search/tv", query: query)
+        try await searchMedia(TMDBTV.self, prefix: "search_tv", path: "/search/tv", query: query)
     }
 
     /// Shared movie/TV search pipeline: TTL memory cache → in-flight coalescing →
     /// disk cache → TMDB fetch.
-    private func searchMedia<T: Codable & TMDBMedia & Sendable>(prefix: String, path: String, query: String) async throws -> [MediaSearchResult] {
+    private func searchMedia<T: Codable & TMDBMedia & Sendable>(_ type: T.Type, prefix: String, path: String, query: String) async throws -> [MediaSearchResult] {
         let (cleanQuery, year) = parseQueryAndYear(from: query)
         let cacheKey = searchCacheKey(prefix: prefix, query: query)
 

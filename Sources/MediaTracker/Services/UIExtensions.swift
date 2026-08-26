@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SwiftData
 
 /// "1 day" / "5 days" — pluralized day count for stats labels.
 func pluralizedDaysLabel(_ days: Int) -> String {
