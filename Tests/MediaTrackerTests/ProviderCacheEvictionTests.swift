@@ -33,18 +33,22 @@ final class ProviderCacheEvictionTests: XCTestCase {
         return requestCount
     }
 
-    /// Provider payload covering many regions so the runner locale always finds
-    /// a non-empty flatrate list (required for the memory-hit branch to engage).
+    /// Provider payload covering the runner's actual region (plus common
+    /// fallbacks) so `extractWatchProviders` always finds a non-empty flatrate
+    /// list — required for the memory-hit branch to engage.
     private static func providersJSON() -> Data {
         let regionBody = """
         {"link": "https://www.themoviedb.org/watch", "flatrate": [
             {"logo_path": "/netflix.png", "provider_id": 8, "provider_name": "Netflix", "display_priority": 1}
         ]}
         """
-        let regions = ["US", "GB", "CA", "AU", "DE", "FR", "IN", "JP", "BR", "ES", "IT", "NL", "KR", "MX", "SE"]
+        let runnerRegion = Locale.current.region?.identifier ?? "US"
+        var regions = ["US", "GB", "CA", "AU", "DE", "FR", "IN", "JP", "BR", "ES", "IT", "NL", "KR", "MX", "SE"]
+        regions.insert(runnerRegion, at: 0)
+        let regionEntries = regions
             .map { "\($0): \(regionBody)" }
             .joined(separator: ",")
-        return "{\"results\": {\(regions)}}".data(using: .utf8)!
+        return "{\"results\": {\(regionEntries)}}".data(using: .utf8)!
     }
 
     func testProviderCacheEvictsOldestBeyondCap() async throws {
