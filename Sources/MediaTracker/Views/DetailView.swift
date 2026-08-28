@@ -55,10 +55,18 @@ struct DetailView: View {
               let snum = selectedSeasonNumber,
               let season = tv.seasons.first(where: { $0.seasonNumber == snum }),
               !season.seasonCast.isEmpty else { return nil }
-        return season.seasonCast.liveModels.sorted {
-            if $0.episodeCount != $1.episodeCount { return $0.episodeCount > $1.episodeCount }
-            return $0.order < $1.order
-        }
+        // Snapshot sort keys into plain values to avoid accessing SwiftData-backed
+        // properties during the sort comparator — concurrent background writes
+        // (e.g. mergeSeasonCast) can invalidate models mid-sort, triggering an
+        // EXC_BREAKPOINT assertion.
+        let members = season.seasonCast.liveModels
+        let snapshots = members.map { m in (member: m, episodeCount: m.episodeCount, order: m.order) }
+        return snapshots
+            .sorted { a, b in
+                if a.episodeCount != b.episodeCount { return a.episodeCount > b.episodeCount }
+                return a.order < b.order
+            }
+            .map(\.member)
     }
 
     private func refreshSeasonCastCache() {
