@@ -859,9 +859,9 @@ actor APIClient {
     }
 
     // MARK: - TVMaze Integration
-    func lookupTVMazeID(tvdbID: Int) async throws -> Int? {
+    func lookupTVMazeID(tvdbID: Int, force: Bool = false) async throws -> Int? {
         let cacheKey = "tvmaze_tvdb_\(tvdbID)"
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: 30 * .secondsInDay),
+        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: 30 * .secondsInDay),
            let show = try? decoder.decode(TVMazeShowLookupResponse.self, from: cachedData) {
             return show.id
         }
@@ -879,23 +879,42 @@ actor APIClient {
         }
     }
 
-    func lookupTVMazeIDByName(title: String) async throws -> Int? {
+    /// Resolves a TVMaze show ID by exact title match. TVMaze's fuzzy search
+    /// frequently ranks unrelated shows first (e.g. "Kerry Katona: Crazy in
+    /// Love" for "Merry Berry Love"), so only a normalized exact title match is
+    /// accepted; nil means "use TMDB details only".
+    func lookupTVMazeIDByName(title: String, force: Bool = false) async throws -> Int? {
         let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))"
-        if let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
+        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
            let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData),
-           let first = results.first {
-            return first.show.id
+           let exact = Self.exactTVMazeMatch(for: title, in: results) {
+            return exact.show.id
         }
 
         return try await executeWithRetry {
-            guard let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let url = URL(string: "https://api.tvmaze.com/search/shows?q=\(encoded)") else { throw URLError(.badURL) }
+            var components = URLComponents(string: "https://api.tvmaze.com/search/shows")
+            components?.queryItems = [URLQueryItem(name: "q", value: title)]
+            guard let url = components?.url else { throw URLError(.badURL) }
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let results = try self.decoder.decode([TVMazeSearchResult].self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return results.first?.show.id
+            return Self.exactTVMazeMatch(for: title, in: results)?.show.id
         }
+    }
+
+    /// Case/whitespace-insensitive exact title match across ALL results
+    /// (fuzzy ranking may place the correct show anywhere in the list).
+    nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
+        let target = Self.normalizedShowTitle(title)
+        return results.first { Self.normalizedShowTitle($0.show.name) == target }
+    }
+
+    nonisolated private static func normalizedShowTitle(_ title: String) -> String {
+        title.lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     func fetchTVMazeSchedule(tvMazeID: Int) async throws -> (episode: TVMazeEpisode?, timezone: String?, serviceName: String?, airtime: String?, genres: [String]?, showType: String?) {

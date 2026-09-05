@@ -240,18 +240,27 @@ extension BackgroundDataService {
             }
             
             var tvMazeID = tvDetails.tvMazeID
-            // Look up the TVMaze id if unknown, or re-attempt on a forced refresh
-            // (a prior failed lookup stores -1, which would otherwise disable
-            // TVMaze episodes/counts for the life of the item).
-            let needsLookup = tvMazeID == nil || (force && (tvMazeID ?? -1) <= 0)
-            if needsLookup {
+            // Look up the TVMaze id if unknown, or re-attempt on a forced refresh.
+            // A prior failed lookup stores -1 (which would otherwise disable TVMaze
+            // episodes/counts for the life of the item), and forced refreshes always
+            // re-resolve so a stale-but-positive ID (TVMaze renamed/collided entry,
+            // fuzzy name match) can be corrected.
+            if tvMazeID == nil || force {
+                var resolved: Int?
                 if let tvdbID = details.tvdbID {
-                    tvMazeID = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID)
+                    resolved = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID, force: force)
                 }
-                if tvMazeID == nil {
-                    tvMazeID = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title)
+                if resolved == nil {
+                    resolved = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title, force: force)
                 }
-                tvDetails.tvMazeID = tvMazeID ?? -1
+                if let resolved {
+                    tvMazeID = resolved
+                    tvDetails.tvMazeID = resolved
+                } else if tvDetails.tvMazeID == nil {
+                    // Remember the failure for non-forced refreshes; never downgrade
+                    // a previously resolved ID just because re-resolution failed.
+                    tvDetails.tvMazeID = -1
+                }
             }
             
             var mazeEpisodes: [TVMazeEpisode] = []

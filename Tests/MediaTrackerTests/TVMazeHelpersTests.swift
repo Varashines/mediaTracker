@@ -61,4 +61,45 @@ final class TVMazeHelpersTests: XCTestCase {
     func testRawBySeasonHandlesEmptyInput() {
         XCTAssertTrue(TVMazeEpisode.rawBySeason([]).isEmpty)
     }
+
+    // MARK: - exactTVMazeMatch (Merry Berry Love regression: fuzzy search
+    // ranked "Kerry Katona: Crazy in Love" first and the app blindly took it)
+
+    private func makeResults(_ entries: [(id: Int, name: String)]) -> [TVMazeSearchResult] {
+        entries.map { TVMazeSearchResult(score: 0, show: TVMazeSearchShow(id: $0.id, name: $0.name)) }
+    }
+
+    func testExactMatchWinsOverFuzzyFirstResult() {
+        let results = makeResults([
+            (35666, "Kerry Katona: Crazy in Love"),
+            (58858, "Mary Berry - Love to Cook"),
+            (93925, "Merry Berry Love")
+        ])
+        XCTAssertEqual(Self.testMatch(for: "Merry Berry Love", in: results)?.show.id, 93925)
+    }
+
+    func testExactMatchIsCaseAndWhitespaceInsensitive() {
+        let results = makeResults([(1, "THE  DEALER")])
+        XCTAssertEqual(Self.testMatch(for: "the dealer", in: results)?.show.id, 1)
+
+        let ampersand = makeResults([(2, "Juliet & Juliet")])
+        XCTAssertEqual(Self.testMatch(for: "juliet & juliet", in: ampersand)?.show.id, 2)
+    }
+
+    func testNoExactMatchReturnsNil() {
+        let results = makeResults([
+            (35666, "Kerry Katona: Crazy in Love"),
+            (58858, "Mary Berry - Love to Cook")
+        ])
+        XCTAssertNil(Self.testMatch(for: "Merry Berry Love", in: results), "No exact match must resolve nil (use TMDB details only)")
+    }
+
+    func testNoExactMatchEvenWhenSubstringMatches() {
+        let results = makeResults([(1, "Love Me to Hurt Me")])
+        XCTAssertNil(Self.testMatch(for: "Love Me", in: results))
+    }
+
+    private static func testMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
+        APIClient.exactTVMazeMatch(for: title, in: results)
+    }
 }

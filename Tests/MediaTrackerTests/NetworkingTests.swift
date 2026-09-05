@@ -285,4 +285,66 @@ final class NetworkingTests: XCTestCase {
         XCTAssertEqual(episodes.first?.name, "Pilot")
         XCTAssertEqual(episodes.first?.episodeNumber, 1)
     }
+
+    // MARK: - TVMaze name lookup (exact match + URL encoding)
+
+    private static func tvMazeSearchJSON(_ entries: [(id: Int, name: String)]) -> String {
+        let shows = entries.map {
+            #"{"score": 1.0, "show": {"id": \#($0.id), "name": "\#($0.name)"}}"#
+        }
+        return "[\(shows.joined(separator: ","))]"
+    }
+
+    func testTVMazeNameLookupRequiresExactMatch() async throws {
+        // Merry Berry Love regression: fuzzy ranking put "Kerry Katona: Crazy in
+        // Love" first; the lookup must return only an exact title match.
+        let json = Self.tvMazeSearchJSON([
+            (35666, "Kerry Katona: Crazy in Love"),
+            (58858, "Mary Berry - Love to Cook"),
+            (93925, "Merry Berry Love")
+        ])
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertTrue(request.url?.absoluteString.contains("search/shows") == true)
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, json.data(using: .utf8))
+        }
+
+        let client = APIClient(testing: mockSession)
+        let id = try await client.lookupTVMazeIDByName(title: "Merry Berry Love", force: true)
+        XCTAssertEqual(id, 93925, "Exact match must win regardless of fuzzy ranking")
+    }
+
+    func testTVMazeNameLookupReturnsNilWithoutExactMatch() async throws {
+        let json = Self.tvMazeSearchJSON([
+            (35666, "Kerry Katona: Crazy in Love"),
+            (58858, "Mary Berry - Love to Cook")
+        ])
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, json.data(using: .utf8))
+        }
+
+        let client = APIClient(testing: mockSession)
+        let id = try await client.lookupTVMazeIDByName(title: "Merry Berry Love", force: true)
+        XCTAssertNil(id, "No exact match must resolve nil (fall back to TMDB details only)")
+    }
+
+    func testTVMazeNameLookupEncodesAmpersand() async throws {
+        // Juliet & Juliet regression: .urlQueryAllowed left "&" raw, so TVMaze
+        // received q=Juliet (truncated at the ampersand).
+        let json = Self.tvMazeSearchJSON([(90630, "Juliet & Juliet")])
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!
+            XCTAssertTrue(url.absoluteString.contains("%26"), "Ampersand must be percent-encoded, got: \(url.absoluteString)")
+            XCTAssertFalse(url.absoluteString.contains("&Juliet"), "Raw ampersand must not appear inside the query value")
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            XCTAssertEqual(components.queryItems?.first(where: { $0.name == "q" })?.value, "Juliet & Juliet")
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, json.data(using: .utf8))
+        }
+
+        let client = APIClient(testing: mockSession)
+        let id = try await client.lookupTVMazeIDByName(title: "Juliet & Juliet", force: true)
+        XCTAssertEqual(id, 90630)
+    }
 }

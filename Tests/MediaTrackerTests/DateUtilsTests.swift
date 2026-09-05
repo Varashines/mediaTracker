@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import MediaTracker
 
 final class DateUtilsTests: XCTestCase {
@@ -292,6 +293,84 @@ final class DateUtilsTests: XCTestCase {
         XCTAssertEqual(components.month, 8)
         XCTAssertEqual(components.day, 28)
         XCTAssertEqual(components.hour, 9)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    // MARK: - Empty-string airtime guards (Juliet & Juliet regression:
+    // TVMaze schedule time "" defeated the "20:00" default and left every
+    // airDateValue nil, showing empty dates in the UI)
+
+    /// An empty nextEpisodeTime must fall back to the 20:00 default instead of
+    /// producing "date " input that fails the "yyyy-MM-dd HH:mm" formatter.
+    @MainActor
+    func testParseEpisodeDateWithEmptyNextEpisodeTimeFallsBackToDefault() throws {
+        let container = try ModelContainer(
+            for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let show = TVShowDetails(tmdbID: 315142)
+        show.network = "One31"
+        show.timezone = "Asia/Bangkok"
+        show.nextEpisodeTime = ""
+        container.mainContext.insert(show)
+
+        let date = DateUtils.parseEpisodeDate("2026-09-05", timezone: show.timezone, serviceName: show.network, for: show)
+        XCTAssertNotNil(date, "Empty nextEpisodeTime must not defeat the default-time fallback")
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Bangkok")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 9)
+        XCTAssertEqual(components.day, 5)
+        XCTAssertEqual(components.hour, 20)
+        XCTAssertEqual(components.minute, 0)
+    }
+
+    /// An empty explicit `time` behaves like nil (falls through to nextEpisodeTime/default).
+    @MainActor
+    func testParseEpisodeDateWithEmptyExplicitTimeIsIgnored() throws {
+        let container = try ModelContainer(
+            for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let show = TVShowDetails(tmdbID: 315142)
+        show.network = "One31"
+        show.timezone = "Asia/Bangkok"
+        show.nextEpisodeTime = ""
+        container.mainContext.insert(show)
+
+        let date = DateUtils.parseEpisodeDate("2026-09-05", time: "", timezone: show.timezone, serviceName: show.network, for: show)
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Bangkok")!
+        let components = calendar.dateComponents([.hour, .minute], from: date!)
+        XCTAssertEqual(components.hour, 20)
+        XCTAssertEqual(components.minute, 0)
+    }
+
+    /// A real nextEpisodeTime is still honored (step 3) — the empty-string guard
+    /// must not weaken real airtime parsing.
+    @MainActor
+    func testParseEpisodeDateUsesRealNextEpisodeTime() throws {
+        let container = try ModelContainer(
+            for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let show = TVShowDetails(tmdbID: 90630)
+        show.network = "One31"
+        show.timezone = "Asia/Bangkok"
+        show.nextEpisodeTime = "20:30"
+        container.mainContext.insert(show)
+
+        let date = DateUtils.parseEpisodeDate("2026-09-05", timezone: show.timezone, serviceName: show.network, for: show)
+        XCTAssertNotNil(date)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Bangkok")!
+        let components = calendar.dateComponents([.hour, .minute], from: date!)
+        XCTAssertEqual(components.hour, 20)
         XCTAssertEqual(components.minute, 30)
     }
 }

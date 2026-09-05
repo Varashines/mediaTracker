@@ -103,6 +103,12 @@ struct DateUtils {
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
         let service = (serviceName ?? show?.network ?? "").lowercased()
 
+        // Treat empty strings as nil: an empty TVMaze schedule time would
+        // otherwise defeat the "20:00" default fallbacks below (non-nil "" wins
+        // the ?? chain), making every parse fail and leaving airDateValue
+        // permanently nil for shows resolved to a source with no airtime.
+        let resolvedTime = [time, show?.nextEpisodeTime].compactMap { $0 }.first { !$0.isEmpty }
+
         // 1. YouTube: Real ISO airstamp from TVMaze (noon-UTC is the actual release time, e.g. 7 PM ICT).
         if service == "youtube", let airstamp = airstamp, let date = parseISO(airstamp) {
             return date
@@ -110,8 +116,8 @@ struct DateUtils {
 
         // Use local broadcast dateString (e.g. "2026-08-23" Sunday) for timezone rules,
         // falling back to airstamp prefix only if dateString is missing.
-        let resolvedDateString = dateString ?? (airstamp.flatMap { $0.count >= 10 ? String($0.prefix(10)) : nil })
-        let hasRealAirtime = time?.isEmpty == false || show?.nextEpisodeTime?.isEmpty == false
+        let resolvedDateString = dateString.flatMap { $0.isEmpty ? nil : $0 } ?? (airstamp.flatMap { $0.count >= 10 ? String($0.prefix(10)) : nil })
+        let hasRealAirtime = resolvedTime != nil
         
         // 2. Streaming service rules: Use when rule matches AND TVMaze has no real broadcast airtime.
         //    Streaming originals (Apple TV+, Hulu, FX, Netflix, etc.) have empty airtime and a placeholder
@@ -130,8 +136,7 @@ struct DateUtils {
         //    Use TVMaze local airdate + real airtime + show timezone.
         if hasRealAirtime, let dateStr = resolvedDateString {
             let tzName = timezone ?? show?.timezone
-            let timeToUse = time ?? show?.nextEpisodeTime
-            if let tName = tzName, let t = timeToUse, TimeZone(identifier: tName) != nil {
+            if let tName = tzName, let t = resolvedTime, TimeZone(identifier: tName) != nil {
                 let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tName)
                 if let date = formatter.date(from: "\(dateStr) \(t)") {
                     return date
@@ -152,9 +157,9 @@ struct DateUtils {
         // 5. Timezone + time fallback
         if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
             let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
-            let timeToUse = time ?? show?.nextEpisodeTime ?? "20:00"
+            let timeToUse = resolvedTime ?? "20:00"
             return formatter.date(from: "\(dateStr) \(timeToUse)")
-        } 
+        }
         
         // 6. US 8 PM ET fallback
         let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
