@@ -29,6 +29,12 @@ struct ContentView: View {
                             viewModel.filter.selectedCategory = .smartHub
                             viewModel.collection.selectedCollectionID = id
                             viewModel.collection.selectedCollectionName = name
+                            // Resolve smartness once per selection change instead of
+                            // per toolbar render (cached in CollectionState).
+                            viewModel.collection.isSmartCollection =
+                                (try? modelContext.fetch(
+                                    FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == id })
+                                ).first?.isSmart) ?? false
                             viewModel.filter.resetFilters()
                         case .yearReview:
                             break
@@ -279,7 +285,6 @@ struct LibraryDetailView: View {
                     showingBulkManager: $showingBulkManager,
                     isSystemSmartCategory: isSystemSmartCategory,
                     isSearchActive: isSearchActive,
-                    modelContext: modelContext,
                     onRefresh: refreshAction
                 )
             }

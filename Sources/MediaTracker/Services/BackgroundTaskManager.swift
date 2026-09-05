@@ -1,3 +1,4 @@
+import os
 import Foundation
 import SwiftData
 import SQLite3
@@ -38,6 +39,8 @@ private actor DripSyncSelectionActor {
 @MainActor
 @Observable
 class BackgroundTaskManager {
+    /// Signposter for background maintenance passes (category "background").
+    static let backgroundSignposter = OSSignposter(subsystem: "com.mediaTracker", category: "background")
     static let shared = BackgroundTaskManager()
     
     var isImportActive: Bool = false
@@ -244,26 +247,43 @@ class BackgroundTaskManager {
     /// and triggers a badge recalculation so the UI is always accurate.
     /// Backfills per-season aggregate cast for shows that predate the feature.
     /// Bounded to a few seasons per run to avoid hammering the API.
+    /// Scans via the denormalized `seasonCastCount` field so the whole seasons
+    /// table is never materialized and no relationships are faulted during the scan.
     func refreshMissingSeasonCast(cap: Int = 15) async {
+        let signpostState = Self.backgroundSignposter.beginInterval("healSeasonCast")
+        defer { Self.backgroundSignposter.endInterval("healSeasonCast", signpostState) }
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
-        guard let seasons = try? context.fetch(FetchDescriptor<TVSeason>()) else { return }
+        var descriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.seasonNumber > 0 && $0.episodeCount > 0 && $0.seasonCastCount == 0 })
+        descriptor.fetchLimit = cap * 2
+        let seasons = (try? context.fetch(descriptor)) ?? []
+        guard !seasons.isEmpty else { return }
 
-        let candidates = seasons
-            .filter { $0.seasonNumber > 0 && $0.episodeCount > 0 && $0.seasonCast.isEmpty }
-            .prefix(cap)
-        guard !candidates.isEmpty else { return }
-
+        let service = BackgroundDataService(modelContainer: container)
         var fetched = 0
-        for season in candidates {
+        var backfilled = 0
+        for season in seasons where fetched < cap {
             guard let showID = season.showID else { continue }
-            let service = BackgroundDataService(modelContainer: container)
-            await service.refreshSeasonCast(tmdbID: showID, seasonNumber: season.seasonNumber)
+            if !season.seasonCast.isEmpty {
+                // One-time counter backfill for seasons that predate the
+                // denormalized field — no network call needed.
+                season.seasonCastCount = season.seasonCast.liveModels.count
+                backfilled += 1
+                continue
+            }
+            await service.refreshSeasonCast(tmdbID: showID, seasonNumber: season.seasonNumber, save: false)
             fetched += 1
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
-        AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons", logger: AppLogger.background)
+        if fetched > 0 {
+            // One save for the whole batch instead of one per season.
+            await service.saveContext()
+        }
+        if backfilled > 0 {
+            try? context.save()
+        }
+        AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons (\(backfilled) counters backfilled)", logger: AppLogger.background)
     }
 
     /// Comprehensive post-import and background backfill:
@@ -391,6 +411,8 @@ class BackgroundTaskManager {
 
     /// Backfill missing airDateValue for tracked episodes (where ZAIRDATEVALUE IS NULL) — ensures PREMIERE window has data.
     func refreshMissingAirDates(cap: Int = 25) async {
+        let signpostState = Self.backgroundSignposter.beginInterval("healAirDates")
+        defer { Self.backgroundSignposter.endInterval("healAirDates", signpostState) }
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)

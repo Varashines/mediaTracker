@@ -7,6 +7,12 @@ actor MediaFilterActor {
     /// Instruments signposter for search refinement profiling —
     /// visible in Instruments' os_signpost track (subsystem com.mediaTracker).
     static let searchSignposter = OSSignposter(subsystem: "com.mediaTracker", category: "searchRefinement")
+    /// Signposter for the main library filter/sort path (category "library").
+    static let librarySignposter = OSSignposter(subsystem: "com.mediaTracker", category: "library")
+
+    /// Cache for the library ID set: search re-requests it with the current
+    /// MediaStateService version so keystroke bursts reuse one fetch.
+    private var libraryIDCache: (version: Int, ids: Set<String>)?
 
     func filterAndSort(
         category: NavigationCategory,
@@ -24,6 +30,8 @@ actor MediaFilterActor {
         limit: Int = 40,
         offset: Int = 0
     ) async throws -> PaginatedResult {
+        let signpostState = Self.librarySignposter.beginInterval("filterAndSort")
+        defer { Self.librarySignposter.endInterval("filterAndSort", signpostState) }
 #if DEBUG
         let startedAt = Date()
 #endif
@@ -502,11 +510,21 @@ actor MediaFilterActor {
         }
     }
 
-    func allLibraryTMDBIDs() throws -> Set<String> {
+    /// All library TMDB IDs. Pass `version` (a MediaStateService change counter)
+    /// to reuse a cached snapshot across calls with an unchanged library; pass
+    /// nil to always refetch.
+    func allLibraryTMDBIDs(version: Int? = nil) throws -> Set<String> {
+        if let version, let cache = libraryIDCache, cache.version == version {
+            return cache.ids
+        }
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [\.id]
         let items = try modelContext.fetch(descriptor)
-        return Set(items.map { $0.id })
+        let ids = Set(items.map { $0.id })
+        if let version {
+            libraryIDCache = (version, ids)
+        }
+        return ids
     }
 
     struct LibraryMetadata: Sendable {

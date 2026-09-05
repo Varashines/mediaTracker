@@ -194,9 +194,14 @@ class SearchViewModel {
         isSearching = true
         isOfflineResultsOnly = false
         
-        // Fetch latest library TMDB IDs directly from SQLite to guarantee accurate filtering
+        // Fetch latest library TMDB IDs directly from SQLite to guarantee accurate filtering.
+        // Versioned snapshot: unchanged libraries reuse the cached ID set instead of
+        // re-running a full-table fetch on every keystroke burst.
         let filterActor = getFilterActor()
-        if let dbLibraryIDs = try? await filterActor.allLibraryTMDBIDs() {
+        let libraryVersion = MediaStateService.shared.needsFullRefreshCount
+            &+ MediaStateService.shared.needsSingleItemUpdateCount
+            &+ MediaStateService.shared.discoveryResyncCount
+        if let dbLibraryIDs = try? await filterActor.allLibraryTMDBIDs(version: libraryVersion) {
             await MainActor.run {
                 if let display = self.displayCache {
                     display.libraryTMDBIDs = dbLibraryIDs

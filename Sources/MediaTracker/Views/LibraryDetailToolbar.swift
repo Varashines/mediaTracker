@@ -7,18 +7,14 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     @Binding var showingBulkManager: Bool
     let isSystemSmartCategory: Bool
     let isSearchActive: Bool
-    let modelContext: ModelContext
     let onRefresh: () -> Void
 
     @State private var showViewOptions = false
     @State private var refreshRotation: Double = 0
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isSmartCollection: Bool {
-        guard let cid = viewModel.collection.selectedCollectionID else { return false }
-        let descriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
-        return (try? modelContext.fetch(descriptor).first?.isSmart) ?? false
-    }
+    /// Cached on CollectionState at selection time — never fetches per render.
+    private var isSmartCollection: Bool { viewModel.collection.isSmartCollection }
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {

@@ -1,3 +1,4 @@
+import os
 import Foundation
 import SwiftData
 
@@ -100,7 +101,12 @@ actor DiscoverySyncService {
         return rules
     }
 
+    /// Signposter for the discovery sync pass (category "sync").
+    static let syncSignposter = OSSignposter(subsystem: "com.mediaTracker", category: "sync")
+
     func syncLibrary(force: Bool) async {
+        let signpostState = Self.syncSignposter.beginInterval("syncLibrary")
+        defer { Self.syncSignposter.endInterval("syncLibrary", signpostState) }
         let isAsleep = await SleepManager.shared.isAsleep
         guard !isAsleep else { return }
 

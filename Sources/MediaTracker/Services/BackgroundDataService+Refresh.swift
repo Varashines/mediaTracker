@@ -591,7 +591,7 @@ extension BackgroundDataService {
     /// On-demand fetch of a single season's aggregate credits, persisting
     /// SeasonCastMember rows and invalidating taste caches. Used when a user
     /// requests "This season" cast for a show that hasn't been synced yet.
-    func refreshSeasonCast(tmdbID: Int, seasonNumber: Int) async {
+    func refreshSeasonCast(tmdbID: Int, seasonNumber: Int, save: Bool = true) async {
         guard let cast = try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: seasonNumber) else { return }
 
         let seasonUniqueID = "\(tmdbID)_\(seasonNumber)"
@@ -599,7 +599,9 @@ extension BackgroundDataService {
 
         _ = mergeSeasonCast(cast, into: season, tmdbID: tmdbID)
 
-        try? modelContext.save()
+        if save {
+            try? modelContext.save()
+        }
         await MainActor.run { TasteActor.clearCache() }
         ScopedStatsActor.invalidateCache()
     }
@@ -617,6 +619,7 @@ extension BackgroundDataService {
             if let uid = c.uniqueID { existingByID[uid] = c }
         }
         var seenIDs = Set<String>()
+        var insertedCount = 0
         for cr in cast {
             let uid = "\(tmdbID)_\(seasonNumber)_\(cr.tmdbPersonID)"
             seenIDs.insert(uid)
@@ -631,15 +634,20 @@ extension BackgroundDataService {
             if member.modelContext == nil {
                 member.season = season
                 modelContext.insert(member)
+                insertedCount += 1
                 didWrite = true
             } else if member.season?.persistentModelID != season.persistentModelID {
                 member.season = season
             }
         }
+        var deletedCount = 0
         for (uid, member) in existingByID where !seenIDs.contains(uid) {
             modelContext.delete(member)
+            deletedCount += 1
             didWrite = true
         }
+        // Keep the denormalized counter in sync so relationship-free scans stay accurate.
+        season.seasonCastCount = max(0, existingByID.count + insertedCount - deletedCount)
         return didWrite
     }
 

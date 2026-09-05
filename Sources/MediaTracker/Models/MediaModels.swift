@@ -182,6 +182,10 @@ final class TVSeason {
     @Relationship(deleteRule: .cascade, inverse: \TVEpisode.season) var episodes: [TVEpisode] = []
     /// Per-season cast credits (aggregate credits). Cascade-deleted with the season.
     @Relationship(deleteRule: .cascade, inverse: \SeasonCastMember.season) var seasonCast: [SeasonCastMember] = []
+    /// Denormalized count of `seasonCast` rows, maintained by `mergeSeasonCast`.
+    /// Lets background scans (e.g. missing-cast backfill) filter with a plain
+    /// predicate instead of faulting the relationship for every season row.
+    var seasonCastCount: Int = 0
 
     /// Per-season taste override. nil = inherit the show's overall taste.
     /// Stored as a raw string so enums-as-raw-strings convention applies.

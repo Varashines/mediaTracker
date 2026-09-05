@@ -16,6 +16,11 @@ actor BackgroundDataService {
         return false
     }
 
+    /// Single explicit save for batch callers that deferred per-item saves.
+    func saveContext() {
+        try? modelContext.save()
+    }
+
     func createNewMediaItem(uniqueID: String, tmdbID: Int, type: MediaType, title: String, overview: String, posterURL: String?, releaseDateString: String?) async -> (id: PersistentIdentifier?, isExisting: Bool) {
         // 1. Background uniqueness check
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })

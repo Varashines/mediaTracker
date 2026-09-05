@@ -276,6 +276,34 @@ final class FilterAndSortTests: XCTestCase {
         XCTAssertEqual(ids, ["id_1", "id_2", "id_3"])
     }
 
+    /// Version-stamped snapshots: an unchanged version reuses the cached ID set
+    /// (no refetch), a new version sees library changes.
+    @MainActor
+    func testAllLibraryTMDBIDsVersionCache() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+        context.insert(MediaItem(id: "id_1", title: "Item 1", overview: "", type: .movie))
+        try context.save()
+
+        let v1 = try await actor.allLibraryTMDBIDs(version: 1)
+        XCTAssertEqual(v1, ["id_1"])
+
+        // Library changes, but version hasn't — stale snapshot is served from cache.
+        context.insert(MediaItem(id: "id_2", title: "Item 2", overview: "", type: .movie))
+        try context.save()
+        let v1Again = try await actor.allLibraryTMDBIDs(version: 1)
+        XCTAssertEqual(v1Again, ["id_1"], "Same version must reuse the cached snapshot")
+
+        // Bumping the version refetches and sees the new item.
+        let v2 = try await actor.allLibraryTMDBIDs(version: 2)
+        XCTAssertEqual(v2, ["id_1", "id_2"])
+
+        // nil version always refetches.
+        let fresh = try await actor.allLibraryTMDBIDs()
+        XCTAssertEqual(fresh, ["id_1", "id_2"])
+    }
+
     @MainActor
     func testFilterWithNetwork() async throws {
         let container = makeContainer()

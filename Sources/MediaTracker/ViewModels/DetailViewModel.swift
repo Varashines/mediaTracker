@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import SwiftData
 
@@ -21,7 +22,12 @@ class DetailViewModel {
     private var _highContrastAccent: Color = .primary
     private var _luminousAccent: Color = .clear
     
+    /// Signposter for detail-open cost (category "detail").
+    static let detailSignposter = OSSignposter(subsystem: "com.mediaTracker", category: "detail")
+
     init(item: MediaItem) {
+        let signpostState = Self.detailSignposter.beginInterval("detailOpen")
+        defer { Self.detailSignposter.endInterval("detailOpen", signpostState) }
         self.item = item
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
