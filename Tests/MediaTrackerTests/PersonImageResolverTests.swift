@@ -4,7 +4,7 @@ import SwiftData
 
 /// Regression tests for `PersonImageResolver` (shared by TasteActor and
 /// LibraryStatsActor): cache hit, CastMember fallback with write-back, and nil.
-final class PersonImageResolverTests: XCTestCase {
+final class PersonImageResolverTests: MTTestCase {
 
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([PersonImageEntity.self, CastMember.self])

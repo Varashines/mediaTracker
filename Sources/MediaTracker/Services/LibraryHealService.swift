@@ -34,7 +34,23 @@ extension BackgroundDataService {
             descriptor.fetchOffset = offset
             let items = try modelContext.fetch(descriptor)
             hasMore = items.count == 100
-            
+
+            // Pre-fetch all seasons for the batch's shows in one pass — replaces a
+            // per-item `showID == tmdbID` fetch (N+1) in the orphan-reattach step.
+            let batchShowIDs = Set(items.compactMap { item -> Int? in
+                guard let last = item.id.split(separator: "_").last else { return nil }
+                return Int(last)
+            })
+            var seasonsByShowID: [Int: [TVSeason]] = [:]
+            if !batchShowIDs.isEmpty {
+                let batchSeasons = (try? modelContext.fetch(
+                    FetchDescriptor<TVSeason>(predicate: #Predicate { batchShowIDs.contains($0.showID ?? 0) })
+                )) ?? []
+                for season in batchSeasons {
+                    seasonsByShowID[season.showID ?? 0, default: []].append(season)
+                }
+            }
+
             // 2. Deduplicate and Standardize
             for item in items {
             if Task.isCancelled { break }
@@ -59,15 +75,13 @@ extension BackgroundDataService {
                 if let tv = item.tvShowDetails {
                     // 0. Reattach any orphaned seasons (tvShowDetails == nil) to this show,
                     // so imported/restored shows don't end up with empty season lists.
-                    let orphanDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
-                    if let candidates = try? modelContext.fetch(orphanDesc) {
-                        let orphans = candidates.filter { $0.tvShowDetails == nil }
-                        if !orphans.isEmpty {
-                            for season in orphans {
-                                season.tvShowDetails = tv
-                            }
-                            AppLogger.info("🔗 Reattached \(orphans.count) orphaned seasons for \(item.title)", logger: AppLogger.background)
+                    // Seasons come from the batch-level pre-fetch map (no per-item fetch).
+                    let orphans = (seasonsByShowID[tmdbID] ?? []).filter { $0.tvShowDetails == nil }
+                    if !orphans.isEmpty {
+                        for season in orphans {
+                            season.tvShowDetails = tv
                         }
+                        AppLogger.info("🔗 Reattached \(orphans.count) orphaned seasons for \(item.title)", logger: AppLogger.background)
                     }
 
                     // 1. Standardize Seasons and Episodes first

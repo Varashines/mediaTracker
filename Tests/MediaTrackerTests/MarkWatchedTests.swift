@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class MarkWatchedTests: XCTestCase {
+final class MarkWatchedTests: MTTestCase {
     @MainActor
     func testMarkWatchedSetsProperties() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class StateTransitionTests: XCTestCase {
+final class StateTransitionTests: MTTestCase {
     @MainActor
     func testSyncCompletesShowFromActive() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

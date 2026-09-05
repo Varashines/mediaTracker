@@ -561,37 +561,21 @@ actor LibraryStatsActor {
     }
 
     private func resolvePeopleImages(people: [PersonInput]) async throws -> [VisualPersonStat] {
-        var results: [VisualPersonStat] = []
+        try Task.checkCancellation()
 
-        let chunkSize = 5
-        for i in stride(from: 0, to: people.count, by: chunkSize) {
-            try Task.checkCancellation()
-            let end = min(i + chunkSize, people.count)
-            let chunk = people[i..<end]
+        // One batched resolve for the whole set — the chunked task group only
+        // used to parallelize per-person DB fetches, which are now a single pass.
+        let imageMap = PersonImageResolver.resolveAll(for: people.map(\.name), in: modelContext)
 
-            await withTaskGroup(of: VisualPersonStat.self) { group in
-                for input in chunk {
-                    group.addTask {
-                        let image = await self.resolvePersonImage(for: input.name, currentURL: input.stats.profileURL)
-                        return VisualPersonStat(
-                            name: input.name,
-                            profileURL: image,
-                            score: input.precomputedScore,
-                            count: input.stats.total
-                        )
-                    }
-                }
-
-                for await stat in group {
-                    results.append(stat)
-                }
-            }
+        var results: [VisualPersonStat] = people.map { input in
+            VisualPersonStat(
+                name: input.name,
+                profileURL: input.stats.profileURL ?? imageMap[input.name],
+                score: input.precomputedScore,
+                count: input.stats.total
+            )
         }
 
         return results.sorted { TasteMath.compareByAffinityCountName(($0.score, $0.count, $0.name), ($1.score, $1.count, $1.name)) }
-    }
-
-    private func resolvePersonImage(for name: String, currentURL: String?) async -> String? {
-        PersonImageResolver.resolve(for: name, in: modelContext, currentURL: currentURL)
     }
 }

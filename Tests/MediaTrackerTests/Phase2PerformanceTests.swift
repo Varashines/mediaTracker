@@ -3,7 +3,7 @@ import SwiftUI
 @testable import MediaTracker
 
 @MainActor
-final class Phase2PerformanceTests: XCTestCase {
+final class Phase2PerformanceTests: MTTestCase {
     // MARK: - AppThemeCoordinator.updateMood
 
     func testUpdateMoodIsThrottled() {

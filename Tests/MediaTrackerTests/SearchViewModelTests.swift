@@ -3,7 +3,7 @@ import SwiftData
 @testable import MediaTracker
 
 @MainActor
-final class SearchViewModelTests: XCTestCase {
+final class SearchViewModelTests: MTTestCase {
     private var viewModel: SearchViewModel!
 
     override func setUp() {
@@ -17,6 +17,7 @@ final class SearchViewModelTests: XCTestCase {
         // Cancels the debounce task so performSearch never fires between tests.
         viewModel.cancelAllSearchOperations()
         viewModel = nil
+        super.tearDown()
     }
 
     func testIsSearchingNotSetImmediatelyDuringDebounceWindow() {

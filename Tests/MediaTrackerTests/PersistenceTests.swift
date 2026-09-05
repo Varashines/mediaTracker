@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class PersistenceTests: XCTestCase {
+final class PersistenceTests: MTTestCase {
     @MainActor
     func testFullSchemaInitializesWithoutError() throws {
         let schema = Schema([

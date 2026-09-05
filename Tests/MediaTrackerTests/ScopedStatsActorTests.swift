@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class ScopedStatsActorTests: XCTestCase {
+final class ScopedStatsActorTests: MTTestCase {
     @MainActor
     func testNetworkScopeTotalsUseOnlyMatchingItems() async throws {
         let schema = Schema([

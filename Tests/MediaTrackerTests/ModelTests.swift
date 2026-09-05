@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class GenreMapperTests: XCTestCase {
+final class GenreMapperTests: MTTestCase {
     func testStandardizeSimpleGenres() {
         let result = GenreMapper.standardize(["Action", "Drama"])
         XCTAssertEqual(result, ["Action", "Drama"])
@@ -52,7 +52,7 @@ final class GenreMapperTests: XCTestCase {
     }
 }
 
-final class LanguageUtilsTests: XCTestCase {
+final class LanguageUtilsTests: MTTestCase {
     func testLanguageNameForNil() {
         XCTAssertEqual(LanguageUtils.languageName(for: nil), "Unknown")
     }
@@ -72,7 +72,7 @@ final class LanguageUtilsTests: XCTestCase {
     }
 }
 
-final class MediaItemComputedPropertiesTests: XCTestCase {
+final class MediaItemComputedPropertiesTests: MTTestCase {
     @MainActor
     func testIsUpcomingTrueForFutureDate() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -159,7 +159,7 @@ final class MediaItemComputedPropertiesTests: XCTestCase {
     }
 }
 
-final class SmartRulesTests: XCTestCase {
+final class SmartRulesTests: MTTestCase {
     func testSmartRuleCodableRoundTrip() throws {
         let rules: [SmartRule] = [
             .genre("Action"),
@@ -223,7 +223,7 @@ final class SmartRulesTests: XCTestCase {
     }
 }
 
-final class MediaCollectionTests: XCTestCase {
+final class MediaCollectionTests: MTTestCase {
     @MainActor
     func testMediaCollectionInit() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -322,7 +322,7 @@ final class MediaCollectionTests: XCTestCase {
     }
 }
 
-final class MediaStateTests: XCTestCase {
+final class MediaStateTests: MTTestCase {
     func testMediaStateDisplayNames() {
         XCTAssertEqual(MediaState.wishlist.displayName, "Watchlist")
         XCTAssertEqual(MediaState.active.displayName, "In Progress")

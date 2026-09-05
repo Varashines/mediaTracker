@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 @testable import MediaTracker
 
-final class Phase3UITests: XCTestCase {
+final class Phase3UITests: MTTestCase {
     // MARK: - Hex parsing
 
     func testColorHexAcceptsSixDigitWithHash() {

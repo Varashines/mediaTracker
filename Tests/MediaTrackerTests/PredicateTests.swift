@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class PredicateTests: XCTestCase {
+final class PredicateTests: MTTestCase {
     @MainActor
     func makeContainer() -> ModelContainer {
         let schema = Schema([MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self])

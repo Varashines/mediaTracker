@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class BingeLogicTests: XCTestCase {
+final class BingeLogicTests: MTTestCase {
     // Reference date for all tests
     let nowString = "2026-04-29"
     var testNow: Date { DateUtils.parseDate(nowString)! }

@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class DateUtilsTests: XCTestCase {
+final class DateUtilsTests: MTTestCase {
     func testSameMonthDay() {
         let date = DateUtils.parseDate("2026-08-18")!
         let sameDayDifferentYear = DateUtils.parseDate("1999-08-18")!

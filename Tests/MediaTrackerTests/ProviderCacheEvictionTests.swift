@@ -4,7 +4,7 @@ import XCTest
 /// Regression tests for the provider-cache LRU eviction cap. This guards the
 /// `cacheProviders` helper — a recursion bug here previously crashed the whole
 /// test process (stack overflow), so any regression must fail loudly here.
-final class ProviderCacheEvictionTests: XCTestCase {
+final class ProviderCacheEvictionTests: MTTestCase {
 
     private nonisolated(unsafe) static var requestCount = 0
     private static let lock = NSLock()

@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class SearchScorerTests: XCTestCase {
+final class SearchScorerTests: MTTestCase {
     private func payload(
         title: String = "",
         overview: String = "",

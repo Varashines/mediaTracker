@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class MediaFilterActorTests: XCTestCase {
+final class MediaFilterActorTests: MTTestCase {
     @MainActor
     func testHomeContinueWatchingSorting() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])

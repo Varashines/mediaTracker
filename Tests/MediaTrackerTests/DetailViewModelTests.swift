@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 @testable import MediaTracker
 
-final class DetailViewModelTests: XCTestCase {
+final class DetailViewModelTests: MTTestCase {
     @MainActor
     func testNeedsUpdateReturnsTrueWhenLastUpdatedIsNil() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

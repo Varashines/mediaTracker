@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class BadgeEngineTests: XCTestCase {
+final class BadgeEngineTests: MTTestCase {
     let nowString = "2026-04-29"
     var testNow: Date { DateUtils.parseDate(nowString)! }
 

@@ -3,7 +3,7 @@ import SwiftData
 @testable import MediaTracker
 
 @MainActor
-final class Phase1StabilityTests: XCTestCase {
+final class Phase1StabilityTests: MTTestCase {
     private func makeContainer() -> ModelContainer {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self,

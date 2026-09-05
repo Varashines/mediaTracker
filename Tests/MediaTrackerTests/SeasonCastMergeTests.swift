@@ -5,7 +5,7 @@ import SwiftData
 /// Regression tests for `mergeSeasonCast`, exercised end-to-end through the
 /// public `refreshSeasonCast(tmdbID:seasonNumber:)` with a stubbed shared
 /// APIClient session (DEBUG-only hook, restored afterwards).
-final class SeasonCastMergeTests: XCTestCase {
+final class SeasonCastMergeTests: MTTestCase {
 
     private let tmdbID = 501
     private let seasonNumber = 1

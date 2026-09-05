@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class RuntimeFallbackTests: XCTestCase {
+final class RuntimeFallbackTests: MTTestCase {
     private func mazeEpisode(
         season: Int? = 1,
         number: Int?,

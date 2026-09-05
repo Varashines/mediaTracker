@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class DiscoverySyncServiceTests: XCTestCase {
+final class DiscoverySyncServiceTests: MTTestCase {
     @MainActor
     func testNetworkCountDeduplication() async throws {
         let schema = Schema([

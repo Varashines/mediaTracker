@@ -60,16 +60,9 @@ actor TasteActor {
             .sorted { $0.1 > $1.1 }
             .prefix(10)
 
-        var results: [(name: String, affinity: Double, imageURL: String?)] = []
-        for (name, affinity) in top {
-            let image = await resolvePersonImage(for: name)
-            results.append((name, affinity, image))
-        }
-        return results
-    }
-
-    private func resolvePersonImage(for name: String) async -> String? {
-        PersonImageResolver.resolve(for: name, in: modelContext)
+        // One batched resolve for all names instead of 1–2 fetches per person.
+        let imageMap = PersonImageResolver.resolveAll(for: top.map(\.0), in: modelContext)
+        return top.map { (name: $0.0, affinity: $0.1, imageURL: imageMap[$0.0]) }
     }
 
     private func calculateAffinityMaps() async -> (
@@ -403,5 +396,36 @@ enum PersonImageResolver {
         }
 
         return nil
+    }
+
+    /// Batch variant: two predicates total (cache table, then cast fallback)
+    /// instead of 1–2 fetches per person. Names already holding `currentURL`
+    /// at the call site are excluded by the caller.
+    static func resolveAll(for names: [String], in context: ModelContext) -> [String: String] {
+        guard !names.isEmpty else { return [:] }
+        var map: [String: String] = [:]
+
+        let nameSet = Set(names)
+        let cacheDescriptor = FetchDescriptor<PersonImageEntity>(
+            predicate: #Predicate { nameSet.contains($0.name) })
+        if let cached = try? context.fetch(cacheDescriptor) {
+            for entity in cached where entity.profileURL != nil {
+                map[entity.name] = entity.profileURL
+            }
+        }
+
+        let missingSet = Set(names.filter { map[$0] == nil })
+        guard !missingSet.isEmpty else { return map }
+
+        let castDescriptor = FetchDescriptor<CastMember>(
+            predicate: #Predicate { missingSet.contains($0.name) })
+        if let members = try? context.fetch(castDescriptor) {
+            for member in members {
+                guard let url = member.profileURL, map[member.name] == nil else { continue }
+                map[member.name] = url
+                context.insert(PersonImageEntity(name: member.name, profileURL: url))
+            }
+        }
+        return map
     }
 }

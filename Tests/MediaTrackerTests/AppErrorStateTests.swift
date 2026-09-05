@@ -2,7 +2,7 @@ import XCTest
 @testable import MediaTracker
 
 @MainActor
-final class AppErrorStateTests: XCTestCase {
+final class AppErrorStateTests: MTTestCase {
     private var state: AppErrorState { .shared }
 
     override func setUp() {
@@ -11,6 +11,7 @@ final class AppErrorStateTests: XCTestCase {
 
     override func tearDown() {
         state.dismissCurrentToast()
+        super.tearDown()
     }
 
     func testSecondToastQueuesBehindVisibleOne() async throws {

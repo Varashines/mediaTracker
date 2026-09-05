@@ -4,7 +4,7 @@ import SwiftData
 
 /// Regression tests for the shared facet-count helper (`adjustFacets`) exercised
 /// through the public incremental `updateItemAdded` / `updateItemDeleted` paths.
-final class FacetAdjustmentTests: XCTestCase {
+final class FacetAdjustmentTests: MTTestCase {
 
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([

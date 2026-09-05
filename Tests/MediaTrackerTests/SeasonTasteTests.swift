@@ -3,7 +3,7 @@ import SwiftData
 @testable import MediaTracker
 
 @MainActor
-final class SeasonTasteTests: XCTestCase {
+final class SeasonTasteTests: MTTestCase {
 
     private func makeContainer() -> ModelContainer {
         let schema = Schema([

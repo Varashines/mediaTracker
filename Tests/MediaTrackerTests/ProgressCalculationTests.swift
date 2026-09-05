@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class ProgressCalculationTests: XCTestCase {
+final class ProgressCalculationTests: MTTestCase {
     @MainActor
     func testFullProgressSingleSeason() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

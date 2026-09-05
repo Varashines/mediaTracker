@@ -424,14 +424,22 @@ class BackgroundTaskManager {
         guard !showIDs.isEmpty else { return }
 
         var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "TV Show" && $0.isSoftDeleted == false })
-        descriptor.propertiesToFetch = [\.id]
+        descriptor.propertiesToFetch = [\.id, \.stateValue, \.storedIsUpcoming]
         let allTV = (try? context.fetch(descriptor)) ?? []
-        var candidates: [MediaItem] = []
-        for item in allTV {
-            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString),
-                  showIDs.contains(tmdbID) else { continue }
-            candidates.append(item)
-            if candidates.count >= cap { break }
+        // Collect all matches (bounded by showIDs), then prioritize: upcoming and
+        // active shows heal first so the PREMIERE window always has air-date data —
+        // instead of whichever 25 shows happen to be first in fetch order.
+        let activeRaw = MediaState.activeRaw
+        var candidates: [MediaItem] = allTV.filter { item in
+            guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { return false }
+            return showIDs.contains(tmdbID)
+        }
+        candidates.sort { lhs, rhs in
+            if lhs.storedIsUpcoming != rhs.storedIsUpcoming { return lhs.storedIsUpcoming }
+            return (lhs.stateValue == activeRaw) && !(rhs.stateValue == activeRaw)
+        }
+        if candidates.count > cap {
+            candidates = Array(candidates.prefix(cap))
         }
         // Restore full models for the refresh pass
         guard !candidates.isEmpty else { return }

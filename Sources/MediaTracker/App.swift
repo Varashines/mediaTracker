@@ -176,6 +176,9 @@ struct MediaTrackerApp: App {
 
     init() {
         KeychainStore.restoreToUserDefaults()
+        // SaveCoordinator is the sole save path — disable SwiftData's implicit
+        // main-context autosave so it can't double-persist or race our debounced saves.
+        sharedModelContainer.mainContext.autosaveEnabled = false
         NotificationManager.shared.setModelContainer(sharedModelContainer)
         DataService.shared.setModelContainer(sharedModelContainer)
         NetworkThemeManager.shared.setup(with: sharedModelContainer)

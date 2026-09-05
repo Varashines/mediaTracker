@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 @testable import MediaTracker
 
-final class ColorExtractorTests: XCTestCase {
+final class ColorExtractorTests: MTTestCase {
 
     private func makeImage(width: Int, height: Int, pixelWriter: (Int, Int) -> (r: UInt8, g: UInt8, b: UInt8, a: UInt8)) -> CGImage {
         let bytesPerPixel = 4

@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class MediaTrackerTests: XCTestCase {
+final class MediaTrackerTests: MTTestCase {
     func testDateUtilsParsing() throws {
         // Test Apple TV+ (9:30 AM IST)
         let appleDate = DateUtils.parseEpisodeDate("2026-04-20", serviceName: "Apple TV+")

@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class YearInReviewTests: XCTestCase {
+final class YearInReviewTests: MTTestCase {
     private func makeContainer() throws -> (container: ModelContainer, directory: URL) {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,

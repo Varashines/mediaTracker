@@ -5,7 +5,7 @@ import SwiftData
 /// Parity tests between `MediaCategoryMatcher` (in-memory semantics) and
 /// `MediaFilterPredicates.buildFilteredPredicate` (database semantics),
 /// plus smart-rule parity between `countItems` and `filterAndSort`.
-final class CategoryMatcherParityTests: XCTestCase {
+final class CategoryMatcherParityTests: MTTestCase {
     private var container: ModelContainer!
     private var context: ModelContext!
     private var actor: MediaFilterActor!

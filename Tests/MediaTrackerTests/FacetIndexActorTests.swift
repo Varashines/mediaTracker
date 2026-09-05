@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class FacetIndexActorTests: XCTestCase {
+final class FacetIndexActorTests: MTTestCase {
     func testRebuildCreatesNormalizedUniqueFacetEntries() async throws {
         let schema = Schema([MediaItem.self, MediaFacetIndex.self])
         let container = try ModelContainer(

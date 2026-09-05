@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class NetworkingTests: XCTestCase {
+final class NetworkingTests: MTTestCase {
     var mockSession: URLSession!
 
     override func setUp() {
@@ -333,18 +333,25 @@ final class NetworkingTests: XCTestCase {
         // Juliet & Juliet regression: .urlQueryAllowed left "&" raw, so TVMaze
         // received q=Juliet (truncated at the ampersand).
         let json = Self.tvMazeSearchJSON([(90630, "Juliet & Juliet")])
+        // Capture the outgoing query and assert AFTER the request — XCTest's
+        // generic XCTAssertEqual is MainActor-isolated and traps when called
+        // from MockURLProtocol's non-main network queue.
+        nonisolated(unsafe) var capturedQuery: String?
         MockURLProtocol.requestHandler = { request in
-            let url = request.url!
-            XCTAssertTrue(url.absoluteString.contains("%26"), "Ampersand must be percent-encoded, got: \(url.absoluteString)")
-            XCTAssertFalse(url.absoluteString.contains("&Juliet"), "Raw ampersand must not appear inside the query value")
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            XCTAssertEqual(components.queryItems?.first(where: { $0.name == "q" })?.value, "Juliet & Juliet")
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            if let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false) {
+                capturedQuery = components.percentEncodedQuery
+            }
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, json.data(using: .utf8))
         }
 
         let client = APIClient(testing: mockSession)
         let id = try await client.lookupTVMazeIDByName(title: "Juliet & Juliet", force: true)
         XCTAssertEqual(id, 90630)
+
+        let query = capturedQuery
+        XCTAssertNotNil(query)
+        XCTAssertTrue(query?.contains("%26") == true, "Ampersand must be percent-encoded, got: \(query ?? "nil")")
+        XCTAssertFalse(query?.contains(" & ") == true, "Raw ampersand must not appear in the query")
     }
 }

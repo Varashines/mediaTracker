@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class EpisodeRangeTests: XCTestCase {
+final class EpisodeRangeTests: MTTestCase {
 
     // MARK: - Range Computation Tests
 

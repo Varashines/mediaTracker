@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class SaveCoordinatorTests: XCTestCase {
+final class SaveCoordinatorTests: MTTestCase {
     @MainActor
     func testSaveCoordinatorDebounces() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -45,7 +45,7 @@ final class SaveCoordinatorTests: XCTestCase {
 }
 
 @MainActor
-final class SleepManagerTests: XCTestCase {
+final class SleepManagerTests: MTTestCase {
     func testSleepAssertionLifecycle() {
         let sleepManager = SleepManager.shared
         XCTAssertFalse(sleepManager.isSleepBlocked)

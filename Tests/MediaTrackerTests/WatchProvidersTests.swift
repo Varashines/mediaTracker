@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class WatchProvidersTests: XCTestCase {
+final class WatchProvidersTests: MTTestCase {
 
     // MARK: - Helpers
 

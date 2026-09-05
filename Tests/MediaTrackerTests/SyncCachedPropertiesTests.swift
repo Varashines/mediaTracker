@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class SyncCachedPropertiesTests: XCTestCase {
+final class SyncCachedPropertiesTests: MTTestCase {
     @MainActor
     func testUpdateSearchableTextIncludesTitleAndOverview() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

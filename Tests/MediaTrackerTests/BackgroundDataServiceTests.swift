@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class BackgroundDataServiceTests: XCTestCase {
+final class BackgroundDataServiceTests: MTTestCase {
     @MainActor
     func makeContainer() -> ModelContainer {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self])

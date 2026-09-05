@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class SearchTextBackfillActorTests: XCTestCase {
+final class SearchTextBackfillActorTests: MTTestCase {
     func testRebuildAddsProvidersToExistingSearchableText() async throws {
         let schema = Schema([MediaItem.self])
         let container = try ModelContainer(

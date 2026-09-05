@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 @testable import MediaTracker
 
-final class FilterAndSortTests: XCTestCase {
+final class FilterAndSortTests: MTTestCase {
     private var testContainer: ModelContainer?
 
     override func tearDown() {

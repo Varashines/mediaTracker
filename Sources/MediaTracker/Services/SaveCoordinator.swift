@@ -32,8 +32,11 @@ class SaveCoordinator {
             do {
                 try await Task.sleep(nanoseconds: delayMs * 1_000_000)
                 if Task.isCancelled { return }
-                // Test contexts (and any closed scene contexts) may have gone
-                // away while the debounce timer was pending.
+                // Deliberately weak: a context captured strongly would outlive its
+                // test/scene, and SwiftData contexts do not retain their container —
+                // saving then crashes with "ModelContext.save() called after its
+                // ModelContainer has been deallocated". Tests cancel pending saves
+                // in tearDown (MTTestCase) so nothing fires after teardown.
                 guard let context else { return }
                 try context.save()
             } catch {

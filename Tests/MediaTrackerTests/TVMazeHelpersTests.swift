@@ -4,7 +4,7 @@ import XCTest
 /// Regression tests for the shared TVMaze helpers (`strippedSummary`,
 /// `rawBySeason`) that replaced four copies of inline HTML-stripping and two
 /// copies of season-grouping closures.
-final class TVMazeHelpersTests: XCTestCase {
+final class TVMazeHelpersTests: MTTestCase {
 
     private func makeEpisode(
         season: Int?, number: Int?, name: String?,
