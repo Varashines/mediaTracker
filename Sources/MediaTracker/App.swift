@@ -22,11 +22,11 @@ struct MediaTrackerApp: App {
 
         let modelConfiguration: ModelConfiguration
         do {
-            modelConfiguration = try DevelopmentStore.makeConfiguration(schema: schema)
+            modelConfiguration = try StoreLocation.makeConfiguration(schema: schema)
         } catch {
             fatalError("CRITICAL: Failed to configure the MediaTracker store: \(error)")
         }
-        let isDevelopmentStore = DevelopmentStore.isActive
+        let isDevelopmentStore = StoreLocation.isDevBundle
 
         // Check for backup files from a previous corruption recovery.
         // On the first launch after adding a backup, try to restore the oldest backup.
