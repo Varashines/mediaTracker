@@ -1,31 +1,27 @@
 import SwiftUI
-import SwiftData
 
 struct ForYouCompactCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
     var isFastScrolling: Bool = false
     @State private var isHovered = false
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.colorScheme) var colorScheme
-    @State private var item: MediaItem?
     
     nonisolated static func == (lhs: ForYouCompactCard, rhs: ForYouCompactCard) -> Bool {
         lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
     }
     
-    private let cardWidth: CGFloat = 420
-    private let cardHeight: CGFloat = 200
-    private let posterWidth: CGFloat = 110
-    private let posterHeight: CGFloat = 160
-    private let posterCornerRadius: CGFloat = AppTheme.Radius.medium
-    private let posterPadding: CGFloat = 16
+    private let cardWidth: CGFloat = 360
+    private let cardHeight: CGFloat = 180
+    private let posterWidth: CGFloat = 100
+    private let posterHeight: CGFloat = 150
+    private let posterCornerRadius: CGFloat = AppTheme.Radius.small
+    private let posterPadding: CGFloat = 14
     @State private var isLogoLight = false
     @AppStorage("use_title_logos") private var useTitleLogos = true
 
     var body: some View {
         ZStack(alignment: .leading) {
             // 1. Background Layer (Backdrop with Glass)
-            if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
+            if let backdrop = metadata.cardBackdropURL, let url = URL(string: backdrop) {
                 CachedImage(url: url, targetSize: .backdropCompact, priority: .low, isFastScrolling: isFastScrolling) { _ in } placeholder: {
                     Rectangle().fill(Color.secondary.opacity(0.1))
                 }
@@ -90,7 +86,7 @@ struct ForYouCompactCard: View, Equatable {
 
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
-                        if useTitleLogos, let logoURL = item?.effectiveLogoURL, let url = URL(string: logoURL) {
+                        if useTitleLogos, let logoURL = metadata.logoURL, let url = URL(string: logoURL) {
                             CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in } placeholder: {
                                 Text(metadata.title)
                                     .font(AppTheme.Font.title3)
@@ -98,7 +94,7 @@ struct ForYouCompactCard: View, Equatable {
                                     .lineLimit(2)
                             }
                             .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: 260, maxHeight: 52, alignment: .leading)
+                            .frame(maxWidth: 200, maxHeight: 40, alignment: .leading)
                             .shadow(color: Color.black.opacity(0.35), radius: 2, y: 1)
                         } else {
                             Text(metadata.title)
@@ -118,13 +114,8 @@ struct ForYouCompactCard: View, Equatable {
             }
         }
         .frame(width: cardWidth, height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-        }
-        .shadow(color: isHovered ? AppTheme.Colors.shadowElevated(for: colorScheme) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 8, y: 4)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.03 : 1.0))
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in
@@ -132,31 +123,15 @@ struct ForYouCompactCard: View, Equatable {
         }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)
-        .task {
-            if let fetched = modelContext.model(for: metadata.id) as? MediaItem {
-                self.item = fetched
-            }
-        }
     }
-    
+
+    /// Metadata-only tagline — no model fetch. Creators/cast need a live
+    /// `MediaItem`, so without one this falls back to genre, same as before.
     private var recommendationContext: String? {
         if let reason = metadata.recommendationReason { return reason }
-        guard let item = item else { return nil }
-        
-        let creators = item.cachedCreators
-        if let firstCreator = creators.first {
-            return "\(item.type == .movie ? "Directed by" : "Created by") \(firstCreator)"
-        }
-        
-        let cast = item.storedCast
-        if let firstActor = cast.sorted(by: { $0.order < $1.order }).first {
-            return "Starring \(firstActor.name)"
-        }
-        
         if let firstGenre = metadata.genres.first {
             return "\(firstGenre) Selection"
         }
-        
         return "Picked for you"
     }
 }

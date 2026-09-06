@@ -67,6 +67,9 @@ final class MediaItem: Identifiable {
     var storedSmartBadgeIsSparkle: Bool = false
     var storedIsUpcoming: Bool = false
     var storedNextEpisodeLabel: String?
+    /// Actual runtime of the next episode to watch (per-episode value, not a
+    /// series average). Set/cleared alongside `storedNextEpisodeLabel`.
+    var storedNextEpisodeRuntime: Int?
     var storedWatchProgressLabel: String?
     var storedProgress: Double?
     var searchableText: String = ""
@@ -256,9 +259,9 @@ extension MediaItem {
         \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount, \.remainingEpisodesCount,
         \.cachedSeasonCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
-        \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
+        \.storedNextEpisodeLabel, \.storedNextEpisodeRuntime, \.storedWatchProgressLabel, \.storedProgress,
         \.searchableText,
-        \.cachedTrailerKey, \.titleLogoURL,
+        \.cachedTrailerKey, \.titleLogoURL, \.customLogoURL,
     ]
 
     nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]

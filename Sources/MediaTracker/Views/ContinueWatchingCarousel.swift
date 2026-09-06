@@ -16,13 +16,14 @@ struct ContinueWatchingCarousel: View {
             scrollSpace: "CW_Scroll",
             items: items,
             showsScrollProgress: items.count > 1,
+            spacing: AppTheme.Spacing.smallMedium,
             onSelect: onSelect,
             emptyContent: {
                 discoverySpotlightCta
             }
         ) { metadata, fast in
-            MediaThumbnailView(
-                metadata: metadata, mode: .hero, namespace: namespace,
+            ContinueWatchingBackdropCard(
+                metadata: metadata,
                 isFastScrolling: isFastScrolling || fast)
         }
     }

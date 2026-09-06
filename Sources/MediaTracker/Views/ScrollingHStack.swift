@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScrollingHStack<Content: View>: View {
     let space: String
+    var spacing: CGFloat = AppTheme.Spacing.large
     @Binding var scrollProgress: Double
     @Binding var isFastScrolling: Bool
     @ViewBuilder let content: () -> Content
@@ -17,7 +18,7 @@ struct ScrollingHStack<Content: View>: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: AppTheme.Spacing.large) {
+            LazyHStack(spacing: spacing) {
                 content()
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)

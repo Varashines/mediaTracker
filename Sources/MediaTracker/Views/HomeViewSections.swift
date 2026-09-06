@@ -5,6 +5,7 @@ struct HomeViewSections: View {
     let homeContinueWatching: [MediaThumbnailMetadata]
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
+    let recentlyAdded: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]
     let pickOfTheDay: [MediaThumbnailMetadata]
     let trendingMovies: [MediaSearchResult]
@@ -101,6 +102,24 @@ struct HomeViewSections: View {
                     items: Array(comingSoon.prefix(20)), namespace: namespace,
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
+                .padding(.bottom, AppTheme.Spacing.small)
+            }
+
+            // 3. RECENTLY ADDED — permanent portrait row, same .grid card
+            // size as Coming Soon.
+            if !recentlyAdded.isEmpty {
+                HomeCarouselSection(
+                    title: "Recently Added",
+                    icon: "clock.badge.checkmark",
+                    iconColor: .orange,
+                    scrollSpace: "RA_Scroll",
+                    items: Array(recentlyAdded.prefix(20)),
+                    onSelect: onSelectHero
+                ) { metadata, fast in
+                    MediaThumbnailView(
+                        metadata: metadata, mode: .grid,
+                        namespace: namespace, isFastScrolling: isFastScrolling || fast)
+                }
                 .padding(.bottom, AppTheme.Spacing.small)
             }
         }

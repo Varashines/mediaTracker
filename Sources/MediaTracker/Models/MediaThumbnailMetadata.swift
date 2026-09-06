@@ -6,7 +6,9 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         return lhs.id == rhs.id &&
                lhs.progress == rhs.progress &&
                lhs.smartBadgeLabel == rhs.smartBadgeLabel &&
-               lhs.state == rhs.state
+               lhs.state == rhs.state &&
+               lhs.logoURL == rhs.logoURL &&
+               lhs.runtimeMinutes == rhs.runtimeMinutes
     }
 
     let id: PersistentIdentifier
@@ -14,6 +16,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let title: String
     let posterURL: String?
     let backdropURL: String?
+    let logoURL: String?
+    /// Runtime in minutes: movie → cachedRuntime, TV → the next episode's own
+    /// runtime, falling back to the series average over known runtimes.
+    let runtimeMinutes: Int?
     let releaseDate: Date?
     let type: MediaType?
     let state: MediaState?
@@ -44,6 +50,15 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         return year
     }
 
+    /// Smaller TMDB rendition for card contexts. The stored backdrop is w1280
+    /// (kept for detail views); cards display at ≤400pt so w780 halves the
+    /// download with no visible loss. Cache keys include the URL, so all card
+    /// + prewarm call sites must use this consistently for a single download.
+    var cardBackdropURL: String? {
+        guard let backdropURL else { return nil }
+        return backdropURL.replacingOccurrences(of: "/w1280", with: "/w780")
+    }
+
     static func makeHash(id: PersistentIdentifier, progress: Double?) -> String {
         "\(id.hashValue)_\(progress ?? 0)"
     }
@@ -54,6 +69,8 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.title = item.title
         self.posterURL = item.effectivePosterURL
         self.backdropURL = item.backdropURL
+        self.logoURL = item.effectiveLogoURL
+        self.runtimeMinutes = item.type == .movie ? item.cachedRuntime : (item.storedNextEpisodeRuntime ?? item.cachedEpisodeRuntime)
         self.releaseDate = item.releaseDate
         self.type = item.type
         self.state = item.state
@@ -80,6 +97,8 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.title = title
         self.posterURL = nil
         self.backdropURL = nil
+        self.logoURL = nil
+        self.runtimeMinutes = nil
         self.releaseDate = nil
         self.type = .movie
         self.state = .wishlist
@@ -112,13 +131,18 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         remainingCount: Int? = nil,
         isUpcoming: Bool = false,
         themeColorHex: String? = nil,
-        posterURL: String? = nil
+        posterURL: String? = nil,
+        backdropURL: String? = nil,
+        logoURL: String? = nil,
+        runtimeMinutes: Int? = nil
     ) {
         self.id = id
         self.itemID = ""
         self.title = title
         self.posterURL = posterURL
-        self.backdropURL = nil
+        self.backdropURL = backdropURL
+        self.logoURL = logoURL
+        self.runtimeMinutes = runtimeMinutes
         self.releaseDate = nil
         self.type = type
         self.state = state

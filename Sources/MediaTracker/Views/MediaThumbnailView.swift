@@ -280,16 +280,19 @@ struct MediaThumbnailView: View, Equatable {
                 height: height
             )
 
-            // 2. Hover Metadata Pills (Floating capsules)
-            HoverMetadataPills(
-                title: title,
-                year: yearLabel,
-                nextEpisodeLabel: nextEpisodeLabel,
-                nextAiringDate: nextAiringDate,
-                isUpcoming: isUpcoming,
-                isHovered: effectiveHover
-            )
-            .equatable()
+            // 2. Hover Metadata Pills (Floating capsules) — skipped for
+            // upcoming rows, which render their own pinned date + episode row.
+            if !isUpcomingSection {
+                HoverMetadataPills(
+                    title: title,
+                    year: yearLabel,
+                    nextEpisodeLabel: nextEpisodeLabel,
+                    nextAiringDate: nextAiringDate,
+                    isUpcoming: isUpcoming,
+                    isHovered: effectiveHover
+                )
+                .equatable()
+            }
 
             // Smart Badge (Top Leading)
             VStack {
@@ -337,6 +340,61 @@ struct MediaThumbnailView: View, Equatable {
                 .opacity(isHovered ? 0 : 1)
                 .offset(x: isHovered ? 4 : 0, y: isHovered ? -4 : 0)
             }
+
+            // Bottom Upcoming Row: rest shows a centered countdown pill
+            // (relative urgency at a glance); hover crossfades to fresh
+            // absolute pills — title above, date left + episode right.
+            // Movies have no episode: hover swaps countdown → centered date.
+            if isUpcomingSection, let airDate = nextAiringDate {
+                TimelineView(.animation(minimumInterval: 900)) { context in
+                    let now = context.date
+                    VStack(spacing: 6) {
+                        Spacer()
+                        if effectiveHover {
+                            Text(title)
+                                .font(AppTheme.Font.caption2)
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, AppTheme.Spacing.tiny)
+                                .padding(.vertical, AppTheme.Spacing.micro)
+                                .background(Capsule().fill(.thinMaterial))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
+                                )
+                                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
+                        HStack(spacing: 6) {
+                            if let episode = nextEpisodeLabel {
+                                if effectiveHover {
+                                    upcomingChip(icon: "calendar", text: upcomingDateLabel(airDate, now: now))
+                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                    Spacer(minLength: 0)
+                                    upcomingChip(icon: nil, text: episode)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                                } else {
+                                    Spacer(minLength: 0)
+                                    upcomingChip(icon: "hourglass", text: upcomingCountdownLabel(airDate, now: now))
+                                        .transition(.opacity)
+                                    Spacer(minLength: 0)
+                                }
+                            } else {
+                                Spacer(minLength: 0)
+                                upcomingChip(
+                                    icon: effectiveHover ? "calendar" : "hourglass",
+                                    text: effectiveHover
+                                        ? upcomingDateLabel(airDate, now: now)
+                                        : upcomingCountdownLabel(airDate, now: now)
+                                )
+                                .transition(.opacity)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+                .animation(AppTheme.Animation.springSnappy, value: effectiveHover)
+            }
         }
 
         ZStack {
@@ -352,16 +410,7 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
-            view.shadow(
-                color: isHovered
-                    ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                    : Color.clear,
-                radius: AppTheme.Shadow.cardHover.radius,
-                y: AppTheme.Shadow.cardHover.y
-            )
-        }
+        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered)
         .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9))))
         .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
@@ -378,7 +427,7 @@ struct MediaThumbnailView: View, Equatable {
                 isAppeared = true
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .onHover { hovering in
             guard !disableHover else { return }
             isHovered = hovering
@@ -408,6 +457,50 @@ struct MediaThumbnailView: View, Equatable {
             FeedbackManager.shared.trigger(.markWatched)
             item.commitChange(dirty: [.progress, .badge])
         }
+    }
+
+    private func upcomingChip(icon: String?, text: String) -> some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+            }
+            Text(text.uppercased())
+                .tracking(0.6)
+        }
+        .font(AppTheme.Font.caption2)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .foregroundStyle(.white)
+        .background {
+            Capsule().fill(Color.black.opacity(0.7))
+        }
+        .overlay {
+            Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+        }
+        .clipShape(Capsule())
+    }
+
+    private func upcomingDateLabel(_ date: Date, now: Date = Date()) -> String {
+        if Calendar.current.isDate(date, equalTo: now, toGranularity: .year) {
+            return date.formatted(.dateTime.month().day())
+        }
+        return date.formatted(.dateTime.month().day().year())
+    }
+
+    /// Relative urgency for the rest state: minute counts under an hour,
+    /// fuzzy "in hours" for the rest of the day, day counts beyond.
+    private func upcomingCountdownLabel(_ date: Date, now: Date) -> String {
+        let seconds = date.timeIntervalSince(now)
+        guard seconds > 0 else { return upcomingDateLabel(date, now: now) }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return "in \(max(minutes, 1)) min" }
+        if minutes < 24 * 60 {
+            let hours = minutes / 60
+            return hours == 1 ? "in 1 hour" : "in \(hours) hours"
+        }
+        let days = minutes / (24 * 60)
+        if days > 60 { return upcomingDateLabel(date, now: now) }
+        return days == 1 ? "in 1 day" : "in \(days) days"
     }
 
     private var typeBadge: some View {
