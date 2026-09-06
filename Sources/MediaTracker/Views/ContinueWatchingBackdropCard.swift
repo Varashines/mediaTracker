@@ -48,18 +48,9 @@ struct ContinueWatchingBackdropCard: View, Equatable {
 
                 if let detailLine {
                     Text(detailLine)
-                        .font(AppTheme.Font.caption)
-                        .foregroundStyle(.white.opacity(0.85))
+                        .font(AppTheme.Font.body)
+                        .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
-                }
-
-                if let progress = metadata.progress, progress > 0 {
-                    ProgressView(value: min(max(progress, 0), 1))
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .background(.white.opacity(0.3))
-                        .frame(width: 180)
-                        .clipShape(Capsule())
                 }
             }
             .padding(.horizontal, 14)
@@ -144,10 +135,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
     }
 
     private var detailLine: String? {
-        var parts: [String] = []
-        if let ep = metadata.nextEpisodeToWatchLabel { parts.append(ep) }
-        if let wp = metadata.watchProgress { parts.append(wp) }
-        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        if let ep = metadata.nextEpisodeToWatchLabel { return ep }
         let fallback = metadata.formattedMetadata
         return fallback.isEmpty ? nil : fallback
     }

@@ -51,7 +51,7 @@ class DisplayCache {
         // Continue Watching — landscape backdrops at .backdropCompact
         let cwBackdrops = homeContinueWatchingItems.prefix(8).compactMap(\.backdropURL).compactMap(URL.init(string:))
         cache.prewarmImages(urls: Array(cwBackdrops), targetSize: .backdropCompact, priority: .normal)
-        cache.prewarmImages(featuredUpcomingItems, limit: 8, targetSize: .thumbMedium, priority: .normal)
+        cache.prewarmImages(featuredUpcomingItems, limit: 8, targetSize: .thumbSmall, priority: .normal)
         
         // Pick of the Day & For You
         if !pickOfTheDay.isEmpty {
