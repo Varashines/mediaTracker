@@ -94,7 +94,7 @@ class MediaViewModel {
             await MainActor.run {
                 self?.display.recommendations = recs
                 ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
-                let backdrops = recs.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
+                let backdrops = recs.prefix(6).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
                 ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)
             }
         }

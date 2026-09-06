@@ -13,6 +13,7 @@ struct PickOfDayCarousel: View {
             iconColor: .yellow,
             scrollSpace: "POD_Scroll",
             items: items,
+            spacing: AppTheme.Spacing.smallMedium,
             onSelect: onSelect
         ) { metadata, fast in
             ForYouCompactCard(metadata: metadata, isFastScrolling: isFastScrolling || fast)

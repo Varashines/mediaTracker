@@ -145,7 +145,7 @@ extension MediaItem {
         self.remainingEpisodesCount = progressResult.remainingCount
         
         if progressResult.totalCount > 0 {
-            self.cachedEpisodeRuntime = progressResult.totalRuntime / progressResult.totalCount
+            self.cachedEpisodeRuntime = progressResult.averageEpisodeRuntime
             let progress = Double(progressResult.watchedCount) / Double(progressResult.totalCount)
             
             self.storedProgress = progress
@@ -188,19 +188,22 @@ extension MediaItem {
                         let newProgress = Double(tv.watchedEpisodesCount) / Double(progressResult.totalCount)
                         self.storedProgress = newProgress
                         self.storedWatchProgressLabel = "\(tv.watchedEpisodesCount)/\(progressResult.totalCount) EP"
-                        self.cachedEpisodeRuntime = progressResult.totalRuntime / progressResult.totalCount
+                        self.cachedEpisodeRuntime = progressResult.averageEpisodeRuntime
                     }
 
                     // All episodes now watched — no firstUnwatched
                     self.storedNextEpisodeLabel = nil
+                    self.storedNextEpisodeRuntime = nil
                     self.cachedNextAiringDate = tv.nextEpisodeDate
                 } else {
                     // No auto-mark needed, use original progressResult
                     if let next = progressResult.firstUnwatched {
                         self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                        self.storedNextEpisodeRuntime = next.runtime
                         self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
                     } else {
                         self.storedNextEpisodeLabel = nil
+                        self.storedNextEpisodeRuntime = nil
                         self.cachedNextAiringDate = tv.nextEpisodeDate
                     }
                 }
@@ -208,9 +211,11 @@ extension MediaItem {
                 // State is not Completed, no auto-mark, use original progressResult
                 if let next = progressResult.firstUnwatched {
                     self.storedNextEpisodeLabel = "S\(next.seasonNumber) E\(next.episodeNumber)"
+                    self.storedNextEpisodeRuntime = next.runtime
                     self.cachedNextAiringDate = next.airDateAsDate ?? tv.nextEpisodeDate
                 } else {
                     self.storedNextEpisodeLabel = nil
+                    self.storedNextEpisodeRuntime = nil
                     self.cachedNextAiringDate = tv.nextEpisodeDate
                 }
             }
@@ -218,6 +223,7 @@ extension MediaItem {
             self.storedProgress = 0
             self.storedWatchProgressLabel = nil
             self.storedNextEpisodeLabel = nil
+            self.storedNextEpisodeRuntime = nil
             self.cachedNextAiringDate = tv.nextEpisodeDate
         }
     }

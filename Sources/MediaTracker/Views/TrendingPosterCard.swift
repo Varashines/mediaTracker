@@ -4,7 +4,6 @@ struct TrendingPosterCard: View, Equatable {
     let item: MediaSearchResult
     var isFastScrolling: Bool = false
     @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
     
     nonisolated static func == (lhs: TrendingPosterCard, rhs: TrendingPosterCard) -> Bool {
         lhs.item.id == rhs.item.id && lhs.isFastScrolling == rhs.isFastScrolling
@@ -14,7 +13,6 @@ struct TrendingPosterCard: View, Equatable {
         ZStack(alignment: .topTrailing) {
             posterImage
                 .frame(width: 160, height: 240)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
 
             if isHovered {
                 LinearGradient(
@@ -22,7 +20,6 @@ struct TrendingPosterCard: View, Equatable {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
 
                 Image(systemName: "plus.circle.fill")
                     .font(AppTheme.Font.title)
@@ -45,8 +42,8 @@ struct TrendingPosterCard: View, Equatable {
             }
         }
         .frame(width: 160, height: 240)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
+        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered)
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.03 : 1.0))
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in

@@ -16,6 +16,7 @@ struct ContinueWatchingCarousel: View {
             scrollSpace: "CW_Scroll",
             items: items,
             showsScrollProgress: items.count > 1,
+            spacing: AppTheme.Spacing.smallMedium,
             onSelect: onSelect,
             emptyContent: {
                 discoverySpotlightCta

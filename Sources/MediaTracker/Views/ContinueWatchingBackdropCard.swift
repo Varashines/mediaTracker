@@ -11,15 +11,14 @@ struct ContinueWatchingBackdropCard: View, Equatable {
     var isFastScrolling: Bool = false
 
     @AppStorage("use_title_logos") private var useTitleLogos = true
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
     nonisolated static func == (lhs: ContinueWatchingBackdropCard, rhs: ContinueWatchingBackdropCard) -> Bool {
         lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
     }
 
-    private let cardWidth: CGFloat = 360
-    private let cardHeight: CGFloat = 202
+    private let cardWidth: CGFloat = 288
+    private let cardHeight: CGFloat = 162
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -36,41 +35,29 @@ struct ContinueWatchingBackdropCard: View, Equatable {
                 HStack {
                     SmartBadgeView(metadata: metadata)
                     Spacer()
-                    typeBadge
                 }
                 Spacer()
             }
             .padding(10)
 
-            // Bottom info: logo (or title) + episode/progress
-            VStack(alignment: .leading, spacing: 6) {
+            // Bottom info: logo (or title) + episode/genre
+            VStack(alignment: .leading, spacing: 4) {
                 titleLayer
 
                 if let detailLine {
                     Text(detailLine)
-                        .font(AppTheme.Font.body)
+                        .font(AppTheme.Font.caption)
                         .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
         }
         .frame(width: cardWidth, height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
-        }
-        .shadow(
-            color: isHovered
-                ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                : AppTheme.Colors.shadowAmbient(for: colorScheme),
-            radius: isHovered ? 10 : 5, y: isHovered ? 5 : 2
-        )
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.02 : 1.0))
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
-        .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in
             if fast { isHovered = false }
@@ -81,7 +68,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
 
     @ViewBuilder
     private var artLayer: some View {
-        if let backdrop = metadata.backdropURL, let url = URL(string: backdrop) {
+        if let backdrop = metadata.cardBackdropURL, let url = URL(string: backdrop) {
             CachedImage(url: url, targetSize: .backdropCompact, isFastScrolling: isFastScrolling) {
                 Rectangle().fill(Color.secondary.opacity(0.12))
             }
@@ -119,7 +106,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
                 titleText
             }
             .aspectRatio(contentMode: .fit)
-            .frame(maxWidth: 220, maxHeight: 44, alignment: .leading)
+            .frame(maxWidth: 190, maxHeight: 38, alignment: .leading)
             .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
         } else {
             titleText
@@ -128,35 +115,35 @@ struct ContinueWatchingBackdropCard: View, Equatable {
 
     private var titleText: some View {
         Text(metadata.title)
-            .font(AppTheme.Font.title3)
+            .font(AppTheme.Font.subtitle)
             .foregroundStyle(.white)
             .lineLimit(2)
             .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
     }
 
     private var detailLine: String? {
-        if let ep = metadata.nextEpisodeToWatchLabel { return ep }
-        let fallback = metadata.formattedMetadata
-        return fallback.isEmpty ? nil : fallback
+        if metadata.type == .tvShow {
+            // TV: episode label + top genre + runtime, no year. ("S2 E8 · Thriller · 42m")
+            var parts: [String] = []
+            if let ep = metadata.nextEpisodeToWatchLabel { parts.append(ep) }
+            if let genre = metadata.genres.first { parts.append(genre) }
+            if let runtime = metadata.runtimeMinutes, runtime > 0 { parts.append("\(runtime)m") }
+            if !parts.isEmpty { return parts.joined(separator: " · ") }
+            return nil
+        }
+        // Movies: year + genre + runtime. ("2024 · Action · 2h 9m")
+        var parts = [metadata.formattedMetadata].filter { !$0.isEmpty }
+        if let runtime = metadata.runtimeMinutes, runtime > 0 {
+            parts.append(formatMovieRuntime(runtime))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    @ViewBuilder
-    private var typeBadge: some View {
-        if let type = metadata.type {
-            Group {
-                switch type {
-                case .movie: Image(systemName: "film.fill")
-                case .tvShow: Image(systemName: "tv.fill")
-                }
-            }
-            .font(AppTheme.Icon.small)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .foregroundStyle(.white)
-            .background { Capsule().fill(Color.black.opacity(0.7)) }
-            .overlay { Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5) }
-            .clipShape(Capsule())
-        }
+    private func formatMovieRuntime(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours > 0 { return "\(hours)h \(remainder)m" }
+        return "\(minutes)m"
     }
 
     private var accessibilityLabel: String {
