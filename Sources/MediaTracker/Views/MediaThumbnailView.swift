@@ -494,7 +494,10 @@ struct MediaThumbnailView: View, Equatable {
         guard seconds > 0 else { return upcomingDateLabel(date, now: now) }
         let minutes = Int(seconds / 60)
         if minutes < 60 { return "in \(max(minutes, 1)) min" }
-        if minutes < 24 * 60 { return "in hours" }
+        if minutes < 24 * 60 {
+            let hours = minutes / 60
+            return hours == 1 ? "in 1 hour" : "in \(hours) hours"
+        }
         let days = minutes / (24 * 60)
         if days > 60 { return upcomingDateLabel(date, now: now) }
         return days == 1 ? "in 1 day" : "in \(days) days"

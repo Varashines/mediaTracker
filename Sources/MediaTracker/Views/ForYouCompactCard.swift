@@ -1,12 +1,9 @@
 import SwiftUI
-import SwiftData
 
 struct ForYouCompactCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
     var isFastScrolling: Bool = false
     @State private var isHovered = false
-    @Environment(\.modelContext) private var modelContext
-    @State private var item: MediaItem?
     
     nonisolated static func == (lhs: ForYouCompactCard, rhs: ForYouCompactCard) -> Bool {
         lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
@@ -89,7 +86,7 @@ struct ForYouCompactCard: View, Equatable {
 
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
-                        if useTitleLogos, let logoURL = item?.effectiveLogoURL, let url = URL(string: logoURL) {
+                        if useTitleLogos, let logoURL = metadata.logoURL, let url = URL(string: logoURL) {
                             CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in } placeholder: {
                                 Text(metadata.title)
                                     .font(AppTheme.Font.title3)
@@ -126,31 +123,15 @@ struct ForYouCompactCard: View, Equatable {
         }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)
-        .task {
-            if let fetched = modelContext.model(for: metadata.id) as? MediaItem {
-                self.item = fetched
-            }
-        }
     }
-    
+
+    /// Metadata-only tagline — no model fetch. Creators/cast need a live
+    /// `MediaItem`, so without one this falls back to genre, same as before.
     private var recommendationContext: String? {
         if let reason = metadata.recommendationReason { return reason }
-        guard let item = item else { return nil }
-        
-        let creators = item.cachedCreators
-        if let firstCreator = creators.first {
-            return "\(item.type == .movie ? "Directed by" : "Created by") \(firstCreator)"
-        }
-        
-        let cast = item.storedCast
-        if let firstActor = cast.sorted(by: { $0.order < $1.order }).first {
-            return "Starring \(firstActor.name)"
-        }
-        
         if let firstGenre = metadata.genres.first {
             return "\(firstGenre) Selection"
         }
-        
         return "Picked for you"
     }
 }
