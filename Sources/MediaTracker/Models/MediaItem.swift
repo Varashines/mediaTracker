@@ -258,7 +258,7 @@ extension MediaItem {
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedWatchProgressLabel, \.storedProgress,
         \.searchableText,
-        \.cachedTrailerKey, \.titleLogoURL,
+        \.cachedTrailerKey, \.titleLogoURL, \.customLogoURL,
     ]
 
     nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]

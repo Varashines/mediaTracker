@@ -21,8 +21,8 @@ struct ContinueWatchingCarousel: View {
                 discoverySpotlightCta
             }
         ) { metadata, fast in
-            MediaThumbnailView(
-                metadata: metadata, mode: .hero, namespace: namespace,
+            ContinueWatchingBackdropCard(
+                metadata: metadata,
                 isFastScrolling: isFastScrolling || fast)
         }
     }

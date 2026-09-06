@@ -567,7 +567,7 @@ actor LibraryStatsActor {
         // used to parallelize per-person DB fetches, which are now a single pass.
         let imageMap = PersonImageResolver.resolveAll(for: people.map(\.name), in: modelContext)
 
-        var results: [VisualPersonStat] = people.map { input in
+        let results: [VisualPersonStat] = people.map { input in
             VisualPersonStat(
                 name: input.name,
                 profileURL: input.stats.profileURL ?? imageMap[input.name],

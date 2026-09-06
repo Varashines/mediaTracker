@@ -50,6 +50,7 @@ struct MainLibraryView: View {
                             homeContinueWatching: homeContinueWatching,
                             featuredCarouselItems: featuredCarouselItems,
                             groupedItems: groupedItems,
+                            recentlyAdded: recentlyAdded,
                             recommendations: recommendations,
                             pickOfTheDay: pickOfTheDay,
                             trendingMovies: viewModel.trendingMovies,

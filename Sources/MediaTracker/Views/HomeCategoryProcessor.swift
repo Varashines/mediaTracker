@@ -85,10 +85,19 @@ extension MediaFilterActor {
 
         let pickOfDay = fetchPickOfTheDay(now: now)
 
+        var addedDesc = FetchDescriptor<MediaItem>()
+        addedDesc.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+        addedDesc.sortBy = [
+            SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
+            SortDescriptor<MediaItem>(\.title, order: .forward),
+        ]
+        addedDesc.fetchLimit = 20
+        let recentlyAdded = (try? modelContext.fetch(addedDesc))?.map { toMetadata($0) } ?? []
+
         return PaginatedResult(
             displayed: [],
             featuredUpcoming: [],
-            recentlyAdded: [],
+            recentlyAdded: recentlyAdded,
             homeContinueWatching: homeContinueWatching,
             grouped: [("Coming Soon", comingSoonItems.prefix(40).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,

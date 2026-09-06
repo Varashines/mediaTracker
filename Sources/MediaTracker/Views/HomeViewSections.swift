@@ -5,6 +5,7 @@ struct HomeViewSections: View {
     let homeContinueWatching: [MediaThumbnailMetadata]
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
+    let recentlyAdded: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]
     let pickOfTheDay: [MediaThumbnailMetadata]
     let trendingMovies: [MediaSearchResult]
@@ -17,7 +18,7 @@ struct HomeViewSections: View {
     var onFetchRecommendations: (() -> Void)? = nil
 
     private enum HomeSection {
-        case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
+        case recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
     }
 
     @State private var visibleSection: HomeSection? = nil
@@ -43,20 +44,6 @@ struct HomeViewSections: View {
                 WatchedThisWeek()
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.opacity)
-            }
-
-            if visibleSection == .forYou {
-                ForYouCarousel(
-                    items: recommendations, namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
-                )
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.opacity)
-                .onAppear {
-                    if recommendations.isEmpty {
-                        onFetchRecommendations?()
-                    }
-                }
             }
 
             if visibleSection == .pickOfTheDay {
@@ -103,6 +90,41 @@ struct HomeViewSections: View {
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
             }
+
+            // 3. RECENTLY ADDED — permanent portrait row (compact .grid cards
+            // to sit smaller under the Coming Soon heroes).
+            if !recentlyAdded.isEmpty {
+                HomeCarouselSection(
+                    title: "Recently Added",
+                    icon: "clock.badge.checkmark",
+                    iconColor: .orange,
+                    scrollSpace: "RA_Scroll",
+                    items: Array(recentlyAdded.prefix(20)),
+                    onSelect: onSelectHero
+                ) { metadata, fast in
+                    MediaThumbnailView(
+                        metadata: metadata, mode: .grid,
+                        namespace: namespace, isFastScrolling: isFastScrolling || fast)
+                }
+                .padding(.bottom, AppTheme.Spacing.small)
+            }
+
+            // 4. FOR YOU — permanent when recommendations exist (lazy fetch
+            // fills it in shortly after first appear).
+            if !recommendations.isEmpty {
+                ForYouCarousel(
+                    items: recommendations, namespace: namespace,
+                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                )
+                .padding(.bottom, AppTheme.Spacing.small)
+                .transition(.opacity)
+            } else {
+                Color.clear
+                    .frame(height: 1)
+                    .onAppear {
+                        onFetchRecommendations?()
+                    }
+            }
         }
         .padding(.top, AppTheme.Spacing.medium)
     }
@@ -111,12 +133,6 @@ struct HomeViewSections: View {
     private var sectionButtons: some View {
         HStack(spacing: AppTheme.Spacing.tiny) {
             Spacer(minLength: 0)
-            sectionButton(
-                section: .forYou,
-                icon: "sparkles",
-                label: "For You",
-                isActive: visibleSection == .forYou
-            )
             sectionButton(
                 section: .recentlyWatched,
                 icon: "clock.fill",

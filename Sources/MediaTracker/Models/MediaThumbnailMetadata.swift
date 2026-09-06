@@ -6,7 +6,8 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         return lhs.id == rhs.id &&
                lhs.progress == rhs.progress &&
                lhs.smartBadgeLabel == rhs.smartBadgeLabel &&
-               lhs.state == rhs.state
+               lhs.state == rhs.state &&
+               lhs.logoURL == rhs.logoURL
     }
 
     let id: PersistentIdentifier
@@ -14,6 +15,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let title: String
     let posterURL: String?
     let backdropURL: String?
+    let logoURL: String?
     let releaseDate: Date?
     let type: MediaType?
     let state: MediaState?
@@ -54,6 +56,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.title = item.title
         self.posterURL = item.effectivePosterURL
         self.backdropURL = item.backdropURL
+        self.logoURL = item.effectiveLogoURL
         self.releaseDate = item.releaseDate
         self.type = item.type
         self.state = item.state
@@ -80,6 +83,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.title = title
         self.posterURL = nil
         self.backdropURL = nil
+        self.logoURL = nil
         self.releaseDate = nil
         self.type = .movie
         self.state = .wishlist
@@ -112,13 +116,16 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         remainingCount: Int? = nil,
         isUpcoming: Bool = false,
         themeColorHex: String? = nil,
-        posterURL: String? = nil
+        posterURL: String? = nil,
+        backdropURL: String? = nil,
+        logoURL: String? = nil
     ) {
         self.id = id
         self.itemID = ""
         self.title = title
         self.posterURL = posterURL
-        self.backdropURL = nil
+        self.backdropURL = backdropURL
+        self.logoURL = logoURL
         self.releaseDate = nil
         self.type = type
         self.state = state

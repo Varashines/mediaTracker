@@ -18,7 +18,7 @@ struct DiscoverySection<HeaderAccessory: View>: View {
         switch title {
         case "Genres": return .indigo
         case "Languages": return .teal
-        case "Recent Activity": return .purple
+        case "Recent Activity": return AppTheme.Colors.accent
         default: return .gray
         }
     }
