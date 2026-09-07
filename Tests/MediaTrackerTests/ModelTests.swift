@@ -163,25 +163,61 @@ final class SmartRulesTests: MTTestCase {
     func testSmartRuleCodableRoundTrip() throws {
         let rules: [SmartRule] = [
             .genre("Action"),
+            .genre(["Action", "Adventure", "Comedy"]),
             .releaseYear(2020, .after),
             .releaseYearRange(1990, 2000),
             .mediaType(.movie),
+            .mediaType([.movie, .tvShow]),
             .state(.completed),
+            .state([.active, .wishlist]),
             .taste(.love),
-            .badge("NEW")
+            .taste([.love, .like]),
+            .badge("NEW"),
+            .badge(["NEW", "PREMIERE"]),
+            .network(["Netflix", "HBO"]),
+            .language(["en", "ja"])
         ]
 
         let data = try JSONEncoder().encode(rules)
         let decoded = try JSONDecoder().decode([SmartRule].self, from: data)
 
-        XCTAssertEqual(decoded.count, 7)
-        XCTAssertEqual(decoded[0], .genre("Action"))
-        XCTAssertEqual(decoded[1], .releaseYear(2020, .after))
-        XCTAssertEqual(decoded[2], .releaseYearRange(1990, 2000))
-        XCTAssertEqual(decoded[3], .mediaType(.movie))
-        XCTAssertEqual(decoded[4], .state(.completed))
-        XCTAssertEqual(decoded[5], .taste(.love))
-        XCTAssertEqual(decoded[6], .badge("NEW"))
+        XCTAssertEqual(decoded.count, rules.count)
+        XCTAssertEqual(decoded[0], .genre(["Action"]))
+        XCTAssertEqual(decoded[1], .genre(["Action", "Adventure", "Comedy"]))
+        XCTAssertEqual(decoded[2], .releaseYear(2020, .after))
+        XCTAssertEqual(decoded[3], .releaseYearRange(1990, 2000))
+        XCTAssertEqual(decoded[4], .mediaType([.movie]))
+        XCTAssertEqual(decoded[5], .mediaType([.movie, .tvShow]))
+        XCTAssertEqual(decoded[6], .state([.completed]))
+        XCTAssertEqual(decoded[7], .state([.active, .wishlist]))
+        XCTAssertEqual(decoded[8], .taste([.love]))
+        XCTAssertEqual(decoded[9], .taste([.love, .like]))
+        XCTAssertEqual(decoded[10], .badge(["NEW"]))
+        XCTAssertEqual(decoded[11], .badge(["NEW", "PREMIERE"]))
+        XCTAssertEqual(decoded[12], .network(["Netflix", "HBO"]))
+        XCTAssertEqual(decoded[13], .language(["en", "ja"]))
+    }
+
+    func testSmartRuleDecodesLegacySingleValueFormat() throws {
+        // Old format produced by synthesized Codable for enum cases with single associated value:
+        // {"taste": {"_0": "Love"}}
+        let legacyTasteJSON = """
+        {"taste": {"_0": "Love"}}
+        """.data(using: .utf8)!
+        let tasteRule = try JSONDecoder().decode(SmartRule.self, from: legacyTasteJSON)
+        XCTAssertEqual(tasteRule, .taste([.love]))
+
+        let legacyGenreJSON = """
+        {"genre": {"_0": "Action"}}
+        """.data(using: .utf8)!
+        let genreRule = try JSONDecoder().decode(SmartRule.self, from: legacyGenreJSON)
+        XCTAssertEqual(genreRule, .genre(["Action"]))
+
+        let legacyStateJSON = """
+        {"state": {"_0": "Active"}}
+        """.data(using: .utf8)!
+        let stateRule = try JSONDecoder().decode(SmartRule.self, from: legacyStateJSON)
+        XCTAssertEqual(stateRule, .state([.active]))
     }
 
     func testSmartRuleComparisonRawValues() {
