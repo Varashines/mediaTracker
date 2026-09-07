@@ -91,7 +91,7 @@ extension MediaFilterActor {
             return airDate > now && item.stateValue != MediaState.completedRaw
         }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
 
-        let pickOfDay = fetchPickOfTheDay(now: now)
+        let pickOfDay = pickOfTheDayCache?.picks ?? []
 
         var addedDesc = FetchDescriptor<MediaItem>()
         addedDesc.propertiesToFetch = MediaItem.thumbnailProperties
@@ -145,7 +145,7 @@ extension MediaFilterActor {
         return result
     }
 
-    private func fetchPickOfTheDay(now: Date) -> [MediaThumbnailMetadata] {
+    func fetchPickOfTheDay(now: Date = Date()) -> [MediaThumbnailMetadata] {
         let calendar = Calendar.current
         let dayOfYear = calendar.ordinality(of: .day, in: .year, for: now) ?? 0
         if let cached = pickOfTheDayCache, cached.dayOfYear == dayOfYear {

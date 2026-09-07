@@ -18,6 +18,8 @@ struct HomeViewSections: View {
     let onCategorySelected: (NavigationCategory) -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
     var onFetchRecommendations: (() -> Void)? = nil
+    var onFetchPickOfTheDay: (() -> Void)? = nil
+    var onFetchTrending: (() -> Void)? = nil
 
     private enum HomeSection {
         case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
@@ -71,6 +73,11 @@ struct HomeViewSections: View {
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
+                .onAppear {
+                    if pickOfTheDay.isEmpty {
+                        onFetchPickOfTheDay?()
+                    }
+                }
             }
 
             if visibleSection == .trendingMovies || visibleSection == .trendingShows {
@@ -80,6 +87,11 @@ struct HomeViewSections: View {
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.opacity)
+                    .onAppear {
+                        if trendingMovies.isEmpty {
+                            onFetchTrending?()
+                        }
+                    }
                 }
                 if visibleSection == .trendingShows {
                     TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
@@ -87,6 +99,11 @@ struct HomeViewSections: View {
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.opacity)
+                    .onAppear {
+                        if trendingShows.isEmpty {
+                            onFetchTrending?()
+                        }
+                    }
                 }
             }
 

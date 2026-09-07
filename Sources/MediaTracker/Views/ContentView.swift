@@ -298,37 +298,7 @@ struct LibraryDetailView: View {
             }
             .toolbarMaterial(isSleeping: sleepManager.isAsleep)
             .background {
-                Group {
-                    Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
-                    Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-                    Button("") {
-                        if !viewModel.navigationPath.isEmpty {
-                            viewModel.navigationPath.removeLast()
-                        } else if viewModel.collection.selectedCollectionID != nil {
-                            viewModel.collection.selectedCollectionID = nil
-                        } else if viewModel.filter.selectedCategory.isSmartCategory {
-                            sidebarSelection = .category(.smartHub)
-                        }
-                    }.keyboardShortcut(.leftArrow, modifiers: .command)
-                    Button("") {
-                        // Only claim Escape while the search overlay is open —
-                        // otherwise it belongs to focused content (calendar
-                        // deselection, overlays with onExitCommand).
-                        guard isSearchActive else { return }
-                        if !viewModel.filter.searchText.isEmpty {
-                            viewModel.filter.searchText = ""
-                        } else {
-                            isSearchActive = false
-                        }
-                    }.keyboardShortcut(.escape, modifiers: [])
-                }
-                .opacity(0)
+                globalKeyboardShortcuts
             }
         }
         .sheet(isPresented: $showingBulkManager) {
@@ -408,7 +378,6 @@ struct LibraryDetailView: View {
                 viewModel.purgeSleepCache()
             } else {
                 viewModel.filterSubject.send()
-                checkAndRepairStaleMetadata()
             }
         }
         .onChange(of: NavigationRouter.shared.pendingSpotlightItemID) { _, newID in
@@ -428,39 +397,6 @@ struct LibraryDetailView: View {
             updateTask = nil
             loadMoreTask?.cancel()
             loadMoreTask = nil
-        }
-        .task(priority: .background) {
-            guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.skipStartupTasks.rawValue) else { return }
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !SleepManager.shared.isAsleep else { return }
-            checkAndRepairMissingMetadata()
-            checkAndRepairStaleMetadata()
-            
-            // Phase 6: Genre Deconstruction Migration
-            let migrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.genreDeconstructionV1.rawValue)
-            if !migrated {
-                let container = modelContext.container
-                Task.detached(priority: .background) {
-                    try? await BackgroundOperationGate.shared.performHeal(label: "genreMigration", container: container) {
-                        let service = BackgroundDataService(modelContainer: container)
-                        try await service.performLibraryHeal()
-                    }
-                    UserDefaults.standard.set(true, forKey: "genre_deconstruction_v1")
-                }
-            }
-
-            // Phase 8: Searchable language migration
-            let languageMigrated = UserDefaults.standard.bool(forKey: UserDefaultsKeys.searchableLanguageV1.rawValue)
-            if !languageMigrated {
-                let container = modelContext.container
-                Task.detached(priority: .background) {
-                    try? await BackgroundOperationGate.shared.performHeal(label: "searchableLanguage", container: container) {
-                        let service = BackgroundDataService(modelContainer: container)
-                        try await service.performSearchableLanguageMigration()
-                    }
-                    UserDefaults.standard.set(true, forKey: UserDefaultsKeys.searchableLanguageV1.rawValue)
-                }
-            }
         }
     }
 
@@ -598,58 +534,6 @@ struct LibraryDetailView: View {
         viewModel.navigationPath.append(item)
     }
 
-    private func checkAndRepairStaleMetadata() {
-        let container = modelContext.container
-        Task.detached(priority: .background) {
-            let context = ModelContext(container)
-            let now = Date()
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.storedIsUpcoming == true && $0.cachedNextAiringDate != nil && $0.cachedNextAiringDate! < now })
-            
-            if let staleItems = try? context.fetch(descriptor), !staleItems.isEmpty {
-                AppLogger.info("♻️ Auto-healing \(staleItems.count) stale items...", logger: AppLogger.background)
-                for item in staleItems {
-                    item.syncCachedProperties(dirty: .all)
-                }
-                try? context.save()
-                
-                await MainActor.run {
-                    MediaStateService.shared.postMediaStateChanged()
-                }
-            }
-        }
-    }
-
-    private func checkAndRepairMissingMetadata() {
-        let container = modelContext.container
-        Task.detached(priority: .background) {
-            let context = ModelContext(container)
-            
-            var missingIDs = Set<String>()
-            
-            let p1 = #Predicate<MediaItem> { $0.overview == "" || $0.posterURL == nil }
-            var desc1 = FetchDescriptor<MediaItem>(predicate: p1)
-            desc1.fetchLimit = 100
-            desc1.propertiesToFetch = [\.id]
-            if let items = try? context.fetch(desc1) {
-                missingIDs.formUnion(items.map { $0.id })
-            }
-            let p2 = #Predicate<MediaItem> { $0.lastUpdated == nil || $0.cachedWatchedEpisodeCount == nil }
-            var desc2 = FetchDescriptor<MediaItem>(predicate: p2)
-            desc2.fetchLimit = 100
-            desc2.propertiesToFetch = [\.id]
-            if let items = try? context.fetch(desc2) {
-                missingIDs.formUnion(items.map { $0.id })
-            }
-            
-            if !missingIDs.isEmpty {
-                let idsArray = Array(missingIDs)
-                await MainActor.run {
-                    DataService.shared.refreshMetadata(forIDs: idsArray, modelContext: container.mainContext, force: true)
-                }
-            }
-        }
-    }
-
     private var refreshAction: () -> Void {
         switch viewModel.filter.selectedCategory {
         case .discover:
@@ -719,6 +603,38 @@ struct LibraryDetailView: View {
                 AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
             }
         }
+    }
+
+    @ViewBuilder
+    private var globalKeyboardShortcuts: some View {
+        Group {
+            Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
+            Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
+            Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
+            Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
+            Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
+            Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
+            Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+            Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
+            Button("") {
+                if !viewModel.navigationPath.isEmpty {
+                    viewModel.navigationPath.removeLast()
+                } else if viewModel.collection.selectedCollectionID != nil {
+                    viewModel.collection.selectedCollectionID = nil
+                } else if viewModel.filter.selectedCategory.isSmartCategory {
+                    sidebarSelection = .category(.smartHub)
+                }
+            }.keyboardShortcut(.leftArrow, modifiers: .command)
+            Button("") {
+                guard isSearchActive else { return }
+                if !viewModel.filter.searchText.isEmpty {
+                    viewModel.filter.searchText = ""
+                } else {
+                    isSearchActive = false
+                }
+            }.keyboardShortcut(.escape, modifiers: [])
+        }
+        .opacity(0)
     }
 }
 

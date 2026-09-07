@@ -15,9 +15,6 @@ struct DetailView: View {
     @Environment(\.sleepManager) private var sleepManager
 
     @State private var viewModel: DetailViewModel
-    @State private var showSeasons = false
-    @State private var showCast = false
-    @State private var showRecommendations = false
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
@@ -316,17 +313,6 @@ struct DetailView: View {
             viewModel.refreshData()
             refreshSeasonCastCache()
         }
-        .task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(AppTheme.Animation.springGentle) { showCast = true }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(AppTheme.Animation.springGentle) { showRecommendations = true }
-        }
         .onDisappear {
             viewModel.cancelTasks()
         }
@@ -465,7 +451,7 @@ struct DetailView: View {
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             // 1. TV TRACKING (Modular Card)
-            if showSeasons, viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
+            if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
                 ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {
                     TVTrackingView(
                         tvDetails: tv,
@@ -487,7 +473,7 @@ struct DetailView: View {
 
             // 2. TOP CAST (Modular Card)
             let showCastSection = !viewModel.item.displayCast.isEmpty || cachedSeasonCast != nil
-            if showCast, showCastSection {
+            if showCastSection {
                 ModularSection(title: (castScope == .season && showCastScopeToggle) ? "Top Cast · Season \(selectedSeasonNumber ?? 0)" : "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                         if showCastScopeToggle {
@@ -517,7 +503,7 @@ struct DetailView: View {
             }
 
             // 3. RECOMMENDATIONS (Modular Card)
-            if showRecommendations, MooreMetricsService.shared.isConfigured {
+            if MooreMetricsService.shared.isConfigured {
                     let detailTraits = viewModel.debugSelectedTraits
                     let detailTitle: String = {
                         if !detailTraits.isEmpty {
@@ -563,17 +549,7 @@ struct DetailView: View {
                     }
                 }
             }
-            if !showSeasons {
-                DetailSkeletonView(
-                    needsTV: viewModel.item.type == .tvShow,
-                    hasCast: !viewModel.item.displayCast.isEmpty
-                )
-                .shimmering()
-            }
         }
-        .animation(AppTheme.Animation.springGentle, value: showSeasons)
-        .animation(AppTheme.Animation.springGentle, value: showCast)
-        .animation(AppTheme.Animation.springGentle, value: showRecommendations)
     }
 
     @ToolbarContentBuilder

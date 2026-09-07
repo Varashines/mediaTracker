@@ -120,8 +120,6 @@ class BackgroundTaskManager {
             Task.detached(priority: .background) {
                 await self.refreshStaleBadges()
                 await DatabaseMigrations.runAllIfNeeded(container: container)
-                await self.backfillMissingLibraryMetadata()
-                await self.refreshMissingAirDates(cap: 50)
                 await self.refreshStalePremiereBadges()
             }
         }

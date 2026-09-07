@@ -117,23 +117,17 @@ struct ForYouCompactCard: View, Equatable {
         }
         .frame(width: cardWidth, height: cardHeight)
         .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
-        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.03 : 1.0))
-        .opacity(hasAppeared || isFastScrolling ? 1 : 0)
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
-        .task(id: staggerIndex) {
-            guard !isFastScrolling, !AppThemeCoordinator.isReducingVisualEffects else {
-                hasAppeared = true
-                return
-            }
-            // Stagger first paint so ten heavy cards don't mount in one frame.
-            let delay = Double((staggerIndex ?? 0) % 10) * 0.03
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            withAnimation(AppTheme.Animation.easeInOut) { hasAppeared = true }
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.02 : 1.0))
+        .opacity(hasAppeared ? 1 : 0)
+        .onAppear {
+            hasAppeared = true
         }
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in
             if fast { isHovered = false }
+        }
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.animation(.easeInOut(duration: 0.14), value: isHovered)
         }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)

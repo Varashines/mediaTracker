@@ -14,6 +14,8 @@ enum DatabaseMigrations {
         await runNetworkKindMigrationIfNeeded(container: container)
         await migrateWatchDatesFromLegacyStoreIfNeeded(container: container)
         await reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
+        await runGenreDeconstructionIfNeeded(container: container)
+        await runSearchableLanguageIfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -395,6 +397,30 @@ enum DatabaseMigrations {
             }
         }
 
+        UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    /// Phase 6: Genre Deconstruction Migration
+    static func runGenreDeconstructionIfNeeded(container: ModelContainer) async {
+        let flag = UserDefaultsKeys.genreDeconstructionV1.rawValue
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+
+        try? await BackgroundOperationGate.shared.performHeal(label: "genreMigration", container: container) {
+            let service = BackgroundDataService(modelContainer: container)
+            try await service.performLibraryHeal()
+        }
+        UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    /// Phase 8: Searchable language migration
+    static func runSearchableLanguageIfNeeded(container: ModelContainer) async {
+        let flag = UserDefaultsKeys.searchableLanguageV1.rawValue
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+
+        try? await BackgroundOperationGate.shared.performHeal(label: "searchableLanguage", container: container) {
+            let service = BackgroundDataService(modelContainer: container)
+            try await service.performSearchableLanguageMigration()
+        }
         UserDefaults.standard.set(true, forKey: flag)
     }
 }

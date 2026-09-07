@@ -106,6 +106,17 @@ class MediaViewModel {
         }
     }
 
+    func fetchPickOfTheDayIfNeeded(actor: MediaFilterActor) {
+        guard display.pickOfTheDay.isEmpty else { return }
+        Task { [weak self] in
+            let picks = await actor.fetchPickOfTheDay()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.display.pickOfTheDay = picks
+            }
+        }
+    }
+
     func purgeSleepCache() {
         display.purgeAll()
         discovery.purgeAll()

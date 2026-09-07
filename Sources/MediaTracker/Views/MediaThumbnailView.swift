@@ -411,21 +411,10 @@ struct MediaThumbnailView: View, Equatable {
         }
         .frame(width: width, height: height)
         .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered)
-        .opacity(isAppeared ? 1 : (isFastScrolling ? 1 : 0))
-        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.03 : (isAppeared ? 1 : (isFastScrolling ? 1 : 0.9))))
-        .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
-            view.offset(y: (isAppeared || isFastScrolling) ? 0 : 20)
-        }
+        .opacity(isAppeared ? 1 : 0)
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.015 : 1.0))
         .onAppear {
-            if isFastScrolling || staggerIndex == nil || hasStaggerPlayed || AppThemeCoordinator.isReducingVisualEffects {
-                isAppeared = true
-                return
-            }
-            hasStaggerPlayed = true
-            let delay = Double((staggerIndex ?? 0) % 8) * 0.04
-            withAnimation(AppTheme.Animation.springGentle.delay(delay)) {
-                isAppeared = true
-            }
+            isAppeared = true
         }
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .onHover { hovering in
@@ -436,7 +425,7 @@ struct MediaThumbnailView: View, Equatable {
             if fast { isHovered = false }
         }
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.animation(!disableHover ? AppTheme.Animation.springSnappy : nil, value: isHovered)
+            $0.animation(!disableHover ? .easeInOut(duration: 0.14) : nil, value: isHovered)
         }
     }
 

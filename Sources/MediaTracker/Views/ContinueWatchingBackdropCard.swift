@@ -55,8 +55,10 @@ struct ContinueWatchingBackdropCard: View, Equatable {
         }
         .frame(width: cardWidth, height: cardHeight)
         .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
-        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.02 : 1.0))
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.015 : 1.0))
+        .if(!AppThemeCoordinator.isReducingVisualEffects) {
+            $0.animation(.easeInOut(duration: 0.14), value: isHovered)
+        }
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in
             if fast { isHovered = false }
