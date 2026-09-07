@@ -3,17 +3,19 @@ import SwiftUI
 struct OverviewSection: View {
     let overview: String
     let themeColor: Color
+    /// Opens the full synopsis in a staged modal (DetailView level).
+    /// Nil hides the info button.
+    var onExpand: (() -> Void)? = nil
 
     @Environment(\.colorScheme) var colorScheme
-    @State private var isExpanded = false
     @State private var isHovering = false
 
     private var surfaceColor: Color {
         AppTheme.Colors.surfaceGhost(for: colorScheme)
     }
 
-    private var hasTruncation: Bool {
-        !isExpanded && overview.count > 200
+    private var isTruncated: Bool {
+        overview.count > 200
     }
 
     var body: some View {
@@ -29,6 +31,19 @@ struct OverviewSection: View {
                     .kerning(AppTheme.Kerning.wide)
 
                 Spacer()
+
+                if isTruncated {
+                    Button {
+                        onExpand?()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(isHovering ? .primary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .help("Read full synopsis")
+                }
             }
 
             VStack(alignment: .leading, spacing: 0) {
@@ -36,10 +51,10 @@ struct OverviewSection: View {
                     .font(AppTheme.Font.bodyMedium)
                     .lineSpacing(AppTheme.Spacing.tiny)
                     .foregroundStyle(.primary)
-                    .lineLimit(isExpanded ? nil : 3)
+                    .lineLimit(3)
                     .mask(
                         LinearGradient(
-                            stops: hasTruncation
+                            stops: isTruncated
                                 ? [
                                     .init(color: .black, location: 0),
                                     .init(color: .black, location: 0.6),
@@ -53,15 +68,6 @@ struct OverviewSection: View {
                             endPoint: .bottom
                         )
                     )
-                    .overlay(alignment: .bottom) {
-                        if hasTruncation && isHovering {
-                            Text("Tap to expand")
-                                .font(AppTheme.Font.caption)
-                                .foregroundStyle(.tertiary)
-                                .offset(y: -4)
-                                .transition(.opacity)
-                        }
-                    }
             }
         }
         .padding(AppTheme.Spacing.medium)
@@ -78,13 +84,6 @@ struct OverviewSection: View {
         }
         .onHover { hovering in
             isHovering = hovering
-        }
-        .onTapGesture {
-            if overview.count > 200 {
-                withAnimation(AppTheme.Animation.springGentle) {
-                    isExpanded.toggle()
-                }
-            }
         }
     }
 }
