@@ -261,7 +261,7 @@ actor MediaFilterActor {
                     guard runtime > 0 && runtime < 90 else { return false }
                 } else if item.typeValue == "TV Show" {
                     let epRuntime = item.cachedEpisodeRuntime ?? 0
-                    guard epRuntime > 0 && epRuntime < 25 else { return false }
+                    guard epRuntime > 0 && epRuntime <= 35 else { return false }
                 } else {
                     return false
                 }

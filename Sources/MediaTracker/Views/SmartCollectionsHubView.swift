@@ -234,7 +234,7 @@ struct SmartCollectionsHubView: View {
         case .catchUp: return "Liked shows with episodes to catch up on before the next release."
         case .loved: return "Your absolute favorites, marked with a heart."
         case .binge: return "Shows ready for your next binge, including full-season drops."
-        case .quickBites: return "Movies under 90 minutes and shows with episodes under 25 minutes."
+        case .quickBites: return "Movies under 90 minutes and shows with episodes 35 minutes or less."
         case .archive: return "On hold or dropped items you've shelved."
         case .onThisWeek: return "Movies and new series premieres released in the current week."
         default: return ""

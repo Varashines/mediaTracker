@@ -49,7 +49,7 @@ enum MediaCategoryMatcher {
                 return runtime > 0 && runtime < 90
             } else if item.typeValue == "TV Show" {
                 let epRuntime = item.cachedEpisodeRuntime ?? 0
-                return epRuntime > 0 && epRuntime < 25
+                return epRuntime > 0 && epRuntime <= 35
             }
             return false
         default:
