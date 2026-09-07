@@ -247,10 +247,11 @@ struct TitleSection: View {
                     }
                 }
                 
-                // 3. Unified Glass Action Bar
+                // 3. Unified Glass Action Bar (clustered left, hugs content —
+                // no trailing void whether mood shows or not)
                 GlassCard(cornerRadius: AppTheme.Radius.large) {
                     ViewThatFits(in: .horizontal) {
-                        HStack(spacing: AppTheme.Spacing.large) {
+                        HStack(spacing: AppTheme.Spacing.small) {
                             StatusPicker(item: item, onChange: onStatusChange)
 
                             Divider().frame(height: 24).opacity(0.3)
@@ -282,6 +283,7 @@ struct TitleSection: View {
                     .padding(.horizontal, AppTheme.Spacing.large)
                     .padding(.vertical, AppTheme.Spacing.compact)
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
     }

@@ -16,6 +16,7 @@ struct MediaHeaderView: View {
     var onMoodChanged: ((Mood?) -> Void)? = nil
     var accentColor: Color? = nil
     var bgAccentColor: Color? = nil
+    var onSynopsisExpand: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -30,7 +31,7 @@ struct MediaHeaderView: View {
                     onResetPoster: onResetPoster
                 )
                 
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
                     TitleSection(
                         item: item,
                         themeColor: themeColor,
@@ -46,10 +47,13 @@ struct MediaHeaderView: View {
                     )
                     
                     MetadataSection(item: item, themeColor: themeColor)
-                    
-                    OverviewSection(overview: item.overview, themeColor: themeColor)
+
+                    OverviewSection(
+                        overview: item.overview, themeColor: themeColor,
+                        onExpand: onSynopsisExpand
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 680, alignment: .leading)
             }
         }
     }

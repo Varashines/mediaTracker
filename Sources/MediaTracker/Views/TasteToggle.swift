@@ -8,7 +8,9 @@ struct TasteToggle: View {
     
     var body: some View {
         if item.modelContext != nil {
-            HStack(spacing: AppTheme.Spacing.small) {
+            // Segmented control: one dynamic-width capsule behind all three
+            // options instead of three separate pill backgrounds.
+            HStack(spacing: 2) {
                 TastePill(
                     label: "Love",
                     icon: "heart",
@@ -16,7 +18,7 @@ struct TasteToggle: View {
                     activeColor: .red,
                     action: { setTaste(.love) }
                 )
-                
+
                 TastePill(
                     label: "Like",
                     icon: "hand.thumbsup",
@@ -24,7 +26,7 @@ struct TasteToggle: View {
                     activeColor: .blue,
                     action: { setTaste(.like) }
                 )
-                
+
                 TastePill(
                     label: "Dislike",
                     icon: "hand.thumbsdown",
@@ -33,6 +35,11 @@ struct TasteToggle: View {
                     action: { setTaste(.dislike) }
                 )
             }
+            .padding(3)
+            .background {
+                Capsule().fill(Color.primary.opacity(0.06))
+            }
+            .clipShape(Capsule())
         }
     }
     
@@ -88,14 +95,12 @@ struct TastePill: View {
                 Text(label)
             }
             .font(AppTheme.Font.bodyBold)
-            .padding(.horizontal, AppTheme.Spacing.smallMedium)
+            .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.tiny)
-            .foregroundStyle(isSelected ? .white : .primary.opacity(0.8))
+            .foregroundStyle(isSelected ? .white : (isHovered ? .primary : .primary.opacity(0.75)))
             .background {
                 if isSelected {
                     activeColor
-                } else {
-                    Color.primary.opacity(isHovered ? 0.08 : 0.05)
                 }
             }
             .clipShape(Capsule())
