@@ -92,7 +92,9 @@ class SearchViewModel {
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContainer)
     }
-    private let searchSubject = PassthroughSubject<(String, SearchType), Never>()
+    private let localSearchSubject = PassthroughSubject<(String, SearchType), Never>()
+    private let webSearchSubject = PassthroughSubject<(String, SearchType), Never>()
+    private var webSearchTask: Task<Void, Never>?
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -100,12 +102,29 @@ class SearchViewModel {
     }
 
     private func setupSearchDebounce() {
-        searchSubject
-            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+        // Fast local library search: responsive 50ms debounce
+        localSearchSubject
+            .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
             .sink { [weak self] text, selectedType in
                 self?.searchTask?.cancel()
                 self?.searchTask = Task {
-                    await self?.performSearch(text: text, selectedType: selectedType)
+                    guard let self else { return }
+                    self.lastSearchTokens = SearchScorer.tokenize(text)
+                    let local = await self.performLocalSearch(text: text, selectedType: selectedType)
+                    if !Task.isCancelled {
+                        self.filteredLocalResults = local
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // Web TMDB search: 250ms debounce prevents rate limit (429) backoffs during typing
+        webSearchSubject
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] text, selectedType in
+                self?.webSearchTask?.cancel()
+                self?.webSearchTask = Task {
+                    await self?.performWebSearch(text: text, selectedType: selectedType)
                 }
             }
             .store(in: &cancellables)
@@ -115,14 +134,22 @@ class SearchViewModel {
         if text.isEmpty {
             cancelAllSearchOperations()
         } else {
-            searchSubject.send((text, selectedType))
+            localSearchSubject.send((text, selectedType))
+            webSearchSubject.send((text, selectedType))
         }
     }
 
     func triggerSearch(text: String, selectedType: SearchType) {
         searchTask?.cancel()
+        webSearchTask?.cancel()
         searchTask = Task {
-            await performSearch(text: text, selectedType: selectedType)
+            let local = await performLocalSearch(text: text, selectedType: selectedType)
+            if !Task.isCancelled {
+                self.filteredLocalResults = local
+            }
+        }
+        webSearchTask = Task {
+            await performWebSearch(text: text, selectedType: selectedType)
         }
     }
     
@@ -171,6 +198,8 @@ class SearchViewModel {
     func cancelAllSearchOperations() {
         searchTask?.cancel()
         searchTask = nil
+        webSearchTask?.cancel()
+        webSearchTask = nil
         movieResults = []
         tvResults = []
         filteredLocalResults = []
@@ -184,19 +213,18 @@ class SearchViewModel {
     func cancelSearchTaskOnly() {
         searchTask?.cancel()
         searchTask = nil
+        webSearchTask?.cancel()
+        webSearchTask = nil
         isSearching = false
     }
 
-    func performSearch(text: String, selectedType: SearchType) async {
+    func performWebSearch(text: String, selectedType: SearchType) async {
         guard !SleepManager.shared.isAsleep else { return }
         
-        lastSearchTokens = SearchScorer.tokenize(text)
         isSearching = true
         isOfflineResultsOnly = false
         
         // Fetch latest library TMDB IDs directly from SQLite to guarantee accurate filtering.
-        // Versioned snapshot: unchanged libraries reuse the cached ID set instead of
-        // re-running a full-table fetch on every keystroke burst.
         let filterActor = getFilterActor()
         let libraryVersion = MediaStateService.shared.needsFullRefreshCount
             &+ MediaStateService.shared.needsSingleItemUpdateCount
@@ -214,12 +242,7 @@ class SearchViewModel {
             self.movieResults = cached.filter { $0.type == .movie }
             self.tvResults = cached.filter { $0.type == .tvShow }
 
-            // If cache is very fresh (e.g. < 5 mins), skip network and show
-            // offline results. Only then run the local search here — otherwise
-            // the parallel phase below performs it, avoiding a duplicate run.
             if let first = aliasSearchTimestamp[text], Date().timeIntervalSince(first) < 300 {
-                let local = await performLocalSearch(text: text, selectedType: selectedType)
-                self.filteredLocalResults = local
                 self.isSearching = false
                 self.isOfflineResultsOnly = true
                 return
@@ -228,18 +251,10 @@ class SearchViewModel {
 
         do {
             if selectedType == .castCrew {
-                // Cast & Crew: search TMDB people (Acting/Directing) + local library titles.
-                async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
-                async let people = (try? await APIClient.shared.searchPeople(query: text)) ?? []
-
-                let (local, matches) = await (localSearch, people)
+                let matches = (try? await APIClient.shared.searchPeople(query: text)) ?? []
                 if Task.isCancelled { return }
 
-                self.filteredLocalResults = local
                 self.personMatches = matches
-
-                // Auto-select the most popular match (matches are sorted by
-                // popularity); the pills allow switching to another person.
                 if let person = matches.first {
                     self.selectedPerson = person
                     await self.loadCredits(for: person)
@@ -253,9 +268,6 @@ class SearchViewModel {
                 self.isOfflineResultsOnly = matches.isEmpty
                 return
             }
-
-            // Parallel Search: Local + Web
-            async let localSearch = performLocalSearch(text: text, selectedType: selectedType)
 
             async let webMovies: [MediaSearchResult]? = {
                 if selectedType == .all || selectedType == .movie {
@@ -271,12 +283,10 @@ class SearchViewModel {
                 return []
             }()
 
-            let (local, movies, tv) = await (localSearch, webMovies, webTV)
+            let (movies, tv) = await (webMovies, webTV)
 
             if Task.isCancelled { return }
 
-            self.filteredLocalResults = local
-            
             var hasNewResults = false
             if let movies = movies {
                 self.movieResults = movies
