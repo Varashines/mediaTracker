@@ -52,6 +52,7 @@ struct MainLibraryView: View {
                             groupedItems: groupedItems,
                             recentlyAdded: recentlyAdded,
                             recommendations: recommendations,
+                            recommendationsLoaded: viewModel.display.recommendationsFetched,
                             pickOfTheDay: pickOfTheDay,
                             trendingMovies: viewModel.trendingMovies,
                             trendingShows: viewModel.trendingShows,

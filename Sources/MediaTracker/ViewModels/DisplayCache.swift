@@ -9,6 +9,9 @@ class DisplayCache {
     var homeContinueWatchingItems: [MediaThumbnailMetadata] = []
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
+    /// True once a recommendations fetch has settled (even empty), so the
+    /// For You row can tell loading skeletons apart from a real empty state.
+    var recommendationsFetched = false
     var pickOfTheDay: [MediaThumbnailMetadata] = []
     var pickOfTheDayDate: Date? = nil
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
@@ -21,6 +24,7 @@ class DisplayCache {
         homeContinueWatchingItems = []
         groupedItems = []
         recommendations = []
+        recommendationsFetched = false
         pickOfTheDay = []
         pickOfTheDayDate = nil
         featuredUpcomingItems = []

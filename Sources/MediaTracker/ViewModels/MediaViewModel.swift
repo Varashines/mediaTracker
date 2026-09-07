@@ -87,12 +87,16 @@ class MediaViewModel {
     }
 
     func fetchRecommendationsIfNeeded(actor: MediaFilterActor) {
-        guard display.recommendations.isEmpty else { return }
+        guard display.recommendations.isEmpty else {
+            display.recommendationsFetched = true
+            return
+        }
         Task { [weak self] in
             let recs = await actor.fetchRecommendations()
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self?.display.recommendations = recs
+                self?.display.recommendationsFetched = true
                 ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
                 let backdrops = recs.prefix(6).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
                 ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)

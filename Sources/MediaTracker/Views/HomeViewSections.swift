@@ -7,6 +7,8 @@ struct HomeViewSections: View {
     let groupedItems: [(String, [MediaThumbnailMetadata])]
     let recentlyAdded: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]
+    /// True once a recommendations fetch has settled (even empty).
+    let recommendationsLoaded: Bool
     let pickOfTheDay: [MediaThumbnailMetadata]
     let trendingMovies: [MediaSearchResult]
     let trendingShows: [MediaSearchResult]
@@ -49,7 +51,9 @@ struct HomeViewSections: View {
             if visibleSection == .forYou {
                 ForYouCarousel(
                     items: recommendations, namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                    isFastScrolling: isFastScrolling, onSelect: onSelectHero,
+                    isLoading: !recommendationsLoaded,
+                    onDiscover: { onCategorySelected(.discover) }
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)

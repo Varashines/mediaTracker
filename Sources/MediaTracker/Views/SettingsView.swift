@@ -137,9 +137,14 @@ struct SettingsView: View {
                                 .foregroundStyle(tint(for: tab))
                         }
                         .frame(width: 22, height: 22)
-                        Text(tab.label)
-                            .font(AppTheme.Font.bodyBold)
-                            .lineLimit(1)
+                        // Label only on the selected tab — six full pills
+                        // overflow the 560pt window and force a scroll view.
+                        if isSelected {
+                            Text(tab.label)
+                                .font(AppTheme.Font.bodyBold)
+                                .lineLimit(1)
+                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                        }
                     }
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .padding(.horizontal, AppTheme.Spacing.compact)
@@ -152,6 +157,7 @@ struct SettingsView: View {
                         }
                     }
                     .contentShape(Capsule())
+                    .help(isSelected ? "" : tab.label)
                 }
                 .buttonStyle(.plain)
             }

@@ -107,12 +107,34 @@ extension MediaFilterActor {
     }
 
     func fetchRecommendations() async -> [MediaThumbnailMetadata] {
+#if DEBUG
+        let startedAt = Date()
+#endif
         let tasteActor = TasteActor(modelContainer: modelContext.container)
         let recs = await tasteActor.calculateRecommendations()
-        return recs.compactMap { rec in
-            guard let item = modelContext.model(for: rec.id) as? MediaItem else { return nil }
+        // One batched fault by library ID instead of per-item model(for:)
+        // roundtrips (string IN-list — the SQL-safe shape).
+        let ids = recs.map(\.itemID)
+        let items: [MediaItem]
+        if ids.isEmpty {
+            items = []
+        } else {
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ids.contains($0.id) })
+            descriptor.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+            items = (try? modelContext.fetch(descriptor)) ?? []
+        }
+        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let result: [MediaThumbnailMetadata] = recs.compactMap { rec -> MediaThumbnailMetadata? in
+            guard let item = byID[rec.itemID] else { return nil }
             return MediaThumbnailMetadata(item: item, recommendationReason: rec.reason)
         }
+#if DEBUG
+        AppLogger.debug(
+            "For You load: \(result.count) picks in \(Int(Date().timeIntervalSince(startedAt) * 1_000))ms",
+            logger: AppLogger.performance
+        )
+#endif
+        return result
     }
 
     private func fetchPickOfTheDay(now: Date) -> [MediaThumbnailMetadata] {

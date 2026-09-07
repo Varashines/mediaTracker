@@ -20,6 +20,16 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         return Bundle.main.bundleIdentifier != nil && !Bundle.main.bundlePath.hasSuffix(".xctest")
     }
 
+    /// Notification prefs default to ON — but `bool(forKey:)` returns false
+    /// when nothing was ever stored, so an unset key must read as enabled.
+    private func isChannelEnabled(_ key: UserDefaultsKeys) -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: key.rawValue) != nil else { return true }
+        return defaults.bool(forKey: key.rawValue)
+    }
+
+    private var areNotificationsEnabled: Bool { isChannelEnabled(.notificationsEnabled) }
+
     func requestPermission() async {
         guard isProperlyBundled else {
             AppLogger.warning("⚠️ Skipping notification permission request: App is not running from a proper .app bundle.", logger: AppLogger.notifications)
@@ -46,6 +56,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     
     func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
+        guard areNotificationsEnabled, isChannelEnabled(.notificationsMovies) else {
+            AppLogger.debug("🔕 Skipping notification for \(title): movie channel disabled.", logger: AppLogger.notifications)
+            return
+        }
         guard let releaseDate = releaseDate, releaseDate > Date() else { 
             AppLogger.debug("ℹ️ Skipping notification for \(title): Release date is in the past or nil.", logger: AppLogger.notifications)
             return 
@@ -65,9 +79,13 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         await finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
     }
-    
+
     func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) async {
         guard isProperlyBundled else { return }
+        guard areNotificationsEnabled, isChannelEnabled(.notificationsTV) else {
+            AppLogger.debug("🔕 Skipping notification for \(title): TV channel disabled.", logger: AppLogger.notifications)
+            return
+        }
         guard let nextDate = nextDate, nextDate > Date() else { 
             AppLogger.debug("ℹ️ Skipping notification for \(title): Next air date is in the past or nil.", logger: AppLogger.notifications)
             return 
@@ -101,10 +119,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
             content.attachments = [attachment]
         }
-        await finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime)
+        await finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime, usesDefaultTime: false)
     }
     
-    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil) async {
+    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil, usesDefaultTime: Bool = true) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
 
@@ -127,8 +145,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             }
         }
         
-        // 2. Default fallback: If it's still 00:00 local time, it's likely a date-only object from a generic release.
-        if dateComponents.hour == 0 && dateComponents.minute == 0 {
+        // 2. Default fallback (movies only — TV episodes carry air times):
+        // If it's still 00:00 local time, it's likely a date-only object
+        // from a generic release.
+        if usesDefaultTime, dateComponents.hour == 0 && dateComponents.minute == 0 {
             let storedTime = UserDefaults.standard.double(forKey: "notifications_time")
             let totalSeconds = storedTime > 0 ? storedTime : (9 * 3600)
             dateComponents.hour = Int(totalSeconds) / 3600
@@ -164,12 +184,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             AppErrorState.shared.surfaceError("Failed to schedule notification: \(error.localizedDescription)")
         }
         
-        // Secondary Reminder (Next Day at 9:30 AM)
+        // Secondary Reminder (next day at the user's Delivery Time)
         if let scheduledDate = calendar.date(from: dateComponents),
            let nextDay = calendar.date(byAdding: .day, value: 1, to: scheduledDate) {
             var date2 = calendar.dateComponents([.year, .month, .day], from: nextDay)
-            date2.hour = 9
-            date2.minute = 30
+            let storedDay2 = UserDefaults.standard.double(forKey: "notifications_time")
+            let day2Seconds = storedDay2 > 0 ? storedDay2 : (9 * 3600 + 1800)
+            date2.hour = Int(day2Seconds) / 3600
+            date2.minute = (Int(day2Seconds) % 3600) / 60
             
             guard let secondDayContent = content.mutableCopy() as? UNMutableNotificationContent else { return }
             secondDayContent.title = "Reminder: \(content.title)"
@@ -288,6 +310,11 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
 
     func scheduleAllUpcomingNotifications(onProgress: (@Sendable (String) -> Void)? = nil) async {
         guard let container = modelContainer else { return }
+        guard areNotificationsEnabled else {
+            AppLogger.debug("🔕 Skipping bulk schedule: notifications disabled.", logger: AppLogger.notifications)
+            return
+        }
+        let center = UNUserNotificationCenter.current()
         let context = ModelContext(container)
         
         let descriptor = FetchDescriptor<MediaItem>(
@@ -297,18 +324,59 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             onProgress?("Failed to fetch items")
             return 
         }
+
+        // Reconcile: drop our pending requests for items that are no longer
+        // upcoming (watched, completed, removed) so stale day-1/day-2 pings
+        // can't fire. The weekly digest is owned elsewhere — leave it alone.
+        let upcomingIDs = Set(upcomingItemsFetched.map(\.id))
+        let pending = await center.pendingNotificationRequests()
+        var stale: [String] = []
+        for request in pending {
+            let identifier = request.identifier
+            let base: String
+            if identifier.hasSuffix("-day1") {
+                base = String(identifier.dropLast(5))
+            } else if identifier.hasSuffix("-day2") {
+                base = String(identifier.dropLast(5))
+            } else {
+                continue
+            }
+            let itemID: String?
+            if base.hasPrefix("movie-") {
+                itemID = String(base.dropFirst(6))
+            } else if base.hasPrefix("tv-") {
+                itemID = String(base.dropFirst(3))
+            } else {
+                continue
+            }
+            if let itemID, !upcomingIDs.contains(itemID) {
+                stale.append(identifier)
+            }
+        }
+        if !stale.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            AppLogger.info("🧹 Cleared \(stale.count) stale notification(s).", logger: AppLogger.notifications)
+        }
         
-        let upcomingItems = upcomingItemsFetched.sorted { 
-            let date1 = $0.cachedNextAiringDate ?? $0.releaseDate ?? .distantPast
+        let upcomingItems = upcomingItemsFetched.sorted {
+            let date1 = $0.cachedNextAiringDate ?? $0.releaseDate ?? .distantFuture
             let date2 = $1.cachedNextAiringDate ?? $1.releaseDate ?? .distantFuture
             return date1 < date2
         }
+
+        let moviesAllowed = isChannelEnabled(.notificationsMovies)
+        let tvAllowed = isChannelEnabled(.notificationsTV)
+        let channelFiltered = upcomingItems.filter {
+            ($0.type == .movie && moviesAllowed) || ($0.type == .tvShow && tvAllowed)
+        }
         
-        onProgress?("Found \(upcomingItems.count) upcoming items")
+        onProgress?("Found \(channelFiltered.count) upcoming items")
         
-        // System limit is 64 total notifications. We schedule 2 per item.
-        let limit = 32 
-        let itemsToProcess = upcomingItems.prefix(limit)
+        // System limit is 64 total notifications. We schedule 2 per item and
+        // reserve one slot for the weekly digest when it's enabled.
+        let digestEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue)
+        let limit = digestEnabled ? 31 : 32
+        let itemsToProcess = channelFiltered.prefix(limit)
         
         for item in itemsToProcess {
             if Task.isCancelled { break }
@@ -318,13 +386,13 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             
             if item.type == .movie {
-                await self.scheduleMovieNotification(id: item.id, title: item.title, releaseDate: item.releaseDate, posterURL: item.posterURL)
+                await self.scheduleMovieNotification(id: item.id, title: item.title, releaseDate: item.releaseDate, posterURL: item.effectivePosterURL)
             } else if item.type == .tvShow {
                 let tv = item.tvShowDetails
                 await self.scheduleTVNotification(
                     id: item.id,
                     title: item.title,
-                    posterURL: item.posterURL,
+                    posterURL: item.effectivePosterURL,
                     nextDate: item.cachedNextAiringDate ?? tv?.nextEpisodeDate,
                     nextEpisodeNumber: tv?.nextEpisodeNumber,
                     nextSeasonNumber: tv?.nextSeasonNumber,

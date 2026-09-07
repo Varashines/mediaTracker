@@ -19,7 +19,7 @@ actor TasteActor {
     @MainActor private static var lastAffinityCalculation: Date?
     private let affinityCacheTTL: TimeInterval = .secondsInDay
 
-    @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, reason: String)]?
+    @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, itemID: String, reason: String)]?
     @MainActor private static var lastRecommendationsCache: Date?
     private let recommendationsCacheTTL: TimeInterval = 300 // 5 minutes
 
@@ -239,7 +239,7 @@ actor TasteActor {
         )
     }
 
-    func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
+    func calculateRecommendations() async -> [(id: PersistentIdentifier, itemID: String, reason: String)] {
         // Return cached recommendations if fresh enough
         let (cached, last) = await MainActor.run { (Self.cachedRecommendations, Self.lastRecommendationsCache) }
         if let cached = cached, let last = last, Date().timeIntervalSince(last) < recommendationsCacheTTL {
@@ -265,15 +265,26 @@ actor TasteActor {
         let creatorAffinity = profile.creator
         let langAffinity = profile.language
 
-        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue == "Wishlist" })
+        // Watchlist semantics (matches the Watchlist screen): wishlist state,
+        // already aired, never disliked. Upcoming lives in Coming Soon and
+        // disliked titles must never surface as picks.
+        let dislike = TasteValue.dislike.rawValue
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate {
+            $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && $0.tasteValue != dislike
+        })
         descriptor.propertiesToFetch = [
             \.id, \.title, \.releaseDate,
             \.typeValue, \.stateValue, \.tasteValue,
             \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
             \.cachedNextAiringDate, \.storedCast
         ]
+        // Score recent watchlist only: For You answers "what next", and this
+        // bounds cold compute on huge libraries (affinity maps already cache
+        // for a day, so this scan dominates first load).
+        descriptor.sortBy = [SortDescriptor(\MediaItem.dateAdded, order: .reverse)]
+        descriptor.fetchLimit = 200
         guard let wishlist = try? modelContext.fetch(descriptor) else { return [] }
-        var recommendations: [(id: PersistentIdentifier, score: Double, reason: String)] = []
+        var recommendations: [(id: PersistentIdentifier, itemID: String, score: Double, reason: String)] = []
         let now = Date()
 
         for item in wishlist {
@@ -363,11 +374,11 @@ actor TasteActor {
                 }
 
                 let bestReason = potentialReasons.max(by: { $0.score < $1.score })?.label ?? "Picked for your taste"
-                recommendations.append((item.persistentModelID, finalScore, bestReason))
+                recommendations.append((item.persistentModelID, item.id, finalScore, bestReason))
             }
         }
 
-        let result = recommendations.sorted { $0.score > $1.score }.prefix(10).map { ($0.id, $0.reason) }
+        let result = recommendations.sorted { $0.score > $1.score }.prefix(10).map { (id: $0.id, itemID: $0.itemID, reason: $0.reason) }
         await MainActor.run {
             Self.cachedRecommendations = result
             Self.lastRecommendationsCache = Date()
