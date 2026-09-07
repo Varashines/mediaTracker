@@ -280,6 +280,11 @@ struct LibraryDetailView: View {
                         viewModel.fetchRecommendationsIfNeeded(actor: actor, forceRefresh: false)
                     }
                 )
+                GlobalKeyboardShortcuts(
+                    isSearchActive: $isSearchActive,
+                    sidebarSelection: $sidebarSelection,
+                    viewModel: viewModel
+                )
             }
             .task(id: viewModel.filter.searchText) {
                 guard hasInitiallyLoaded else { return }
@@ -297,9 +302,6 @@ struct LibraryDetailView: View {
                 )
             }
             .toolbarMaterial(isSleeping: sleepManager.isAsleep)
-            .background {
-                globalKeyboardShortcuts
-            }
         }
         .sheet(isPresented: $showingBulkManager) {
             if let collectionID = viewModel.collection.selectedCollectionID,
@@ -604,9 +606,14 @@ struct LibraryDetailView: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var globalKeyboardShortcuts: some View {
+private struct GlobalKeyboardShortcuts: View {
+    @Binding var isSearchActive: Bool
+    @Binding var sidebarSelection: SidebarItem?
+    @Bindable var viewModel: MediaViewModel
+
+    var body: some View {
         Group {
             Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
             Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
