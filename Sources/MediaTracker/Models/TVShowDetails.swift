@@ -7,6 +7,9 @@ struct TVProgressResult {
     let remainingCount: Int
     let firstUnwatched: TVEpisode?
     let totalRuntime: Int
+    /// Mean over episodes with a known runtime (all regular seasons, watched
+    /// or not). Never divide a watched-only sum by the full episode count.
+    let averageEpisodeRuntime: Int?
 }
 
 @Model
@@ -53,7 +56,8 @@ final class TVShowDetails {
                 watchedCount: watchedEpisodesCount,
                 remainingCount: remainingEpisodesCount ?? 0,
                 firstUnwatched: findFirstUnwatched(),
-                totalRuntime: item?.cachedRuntime ?? 0
+                totalRuntime: item?.cachedRuntime ?? 0,
+                averageEpisodeRuntime: item?.cachedEpisodeRuntime
             )
         }
 
@@ -61,6 +65,8 @@ final class TVShowDetails {
         var watched = 0
         var aired = 0
         var runtime = 0
+        var knownRuntimeSum = 0
+        var knownRuntimeCount = 0
         var firstUnwatchedEpisode: TVEpisode? = nil
         
         // Ensure seasons are sorted for consistent traversal
@@ -90,6 +96,11 @@ final class TVShowDetails {
                     } else if firstUnwatchedEpisode == nil {
                         firstUnwatchedEpisode = ep
                     }
+
+                    if let epRuntime = ep.runtime, epRuntime > 0 {
+                        knownRuntimeSum += epRuntime
+                        knownRuntimeCount += 1
+                    }
                     
                     if let airDate = ep.airDateValue, airDate <= now {
                         aired += 1
@@ -116,7 +127,8 @@ final class TVShowDetails {
             watchedCount: watched,
             remainingCount: remaining,
             firstUnwatched: firstUnwatchedEpisode,
-            totalRuntime: runtime
+            totalRuntime: runtime,
+            averageEpisodeRuntime: knownRuntimeCount > 0 ? knownRuntimeSum / knownRuntimeCount : nil
         )
     }
 

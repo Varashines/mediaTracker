@@ -17,7 +17,7 @@ struct FeaturedUpcomingCarousel: View {
             onSelect: onSelect
         ) { metadata, fast in
             MediaThumbnailView(
-                metadata: metadata, mode: .hero, isUpcomingSection: true,
+                metadata: metadata, mode: .grid, isUpcomingSection: true,
                 namespace: namespace, isFastScrolling: isFastScrolling || fast)
         }
         .scrollClipDisabled()

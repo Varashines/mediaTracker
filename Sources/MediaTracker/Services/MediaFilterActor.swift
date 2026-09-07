@@ -13,6 +13,8 @@ actor MediaFilterActor {
     /// Cache for the library ID set: search re-requests it with the current
     /// MediaStateService version so keystroke bursts reuse one fetch.
     private var libraryIDCache: (version: Int, ids: Set<String>)?
+    /// Cache for Pick of the Day: keyed by dayOfYear to avoid daily re-queries.
+    var pickOfTheDayCache: (dayOfYear: Int, picks: [MediaThumbnailMetadata])?
 
     func filterAndSort(
         category: NavigationCategory,
@@ -254,12 +256,14 @@ actor MediaFilterActor {
             }
 
             if category == .quickBites {
+                guard item.stateValue != "Dropped" && item.stateValue != "On Hold" else { return false }
+                guard item.tasteValue != "Dislike" else { return false }
                 if item.typeValue == "Movie" {
                     let runtime = item.cachedRuntime ?? 0
                     guard runtime > 0 && runtime < 90 else { return false }
                 } else if item.typeValue == "TV Show" {
                     let epRuntime = item.cachedEpisodeRuntime ?? 0
-                    guard epRuntime > 0 && epRuntime < 25 else { return false }
+                    guard epRuntime > 0 && epRuntime <= 35 else { return false }
                 } else {
                     return false
                 }
@@ -428,8 +432,8 @@ actor MediaFilterActor {
     private func applySmartRule(_ item: MediaItem, rules: [SmartRule], matchAny: Bool = false) -> Bool {
         let satisfies: (SmartRule) -> Bool = { rule in
             switch rule {
-            case .genre(let g):
-                return item.cachedGenres.contains(g)
+            case .genre(let genres):
+                return genres.contains { g in item.cachedGenres.contains(g) }
             case .releaseYear(let year, let comp):
                 guard let releaseDate = item.releaseDate else { return false }
                 let itemYear = Calendar.current.component(.year, from: releaseDate)
@@ -442,19 +446,25 @@ actor MediaFilterActor {
                 guard let releaseDate = item.releaseDate else { return false }
                 let itemYear = Calendar.current.component(.year, from: releaseDate)
                 return itemYear >= start && itemYear <= end
-            case .mediaType(let type):
-                return item.type == type
-            case .state(let state):
-                return item.state == state
-            case .taste(let taste):
-                return item.taste == taste
-            case .badge(let badge):
-                return item.storedSmartBadgeLabel == badge
-            case .network(let network):
+            case .mediaType(let types):
+                guard let type = item.type else { return false }
+                return types.contains(type)
+            case .state(let states):
+                guard let state = item.state else { return false }
+                return states.contains(state)
+            case .taste(let tastes):
+                guard let taste = item.taste else { return false }
+                return tastes.contains(taste)
+            case .badge(let badges):
+                guard let itemBadge = item.storedSmartBadgeLabel else { return false }
+                return badges.contains(itemBadge)
+            case .network(let networks):
                 guard let rawNets = item.cachedNetwork else { return false }
-                return rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.contains(network.lowercased())
-            case .language(let language):
-                return item.cachedLanguage?.lowercased() == language.lowercased()
+                let itemNetworks = rawNets.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                return networks.contains { n in itemNetworks.contains(n.lowercased()) }
+            case .language(let languages):
+                guard let itemLang = item.cachedLanguage?.lowercased() else { return false }
+                return languages.contains { $0.lowercased() == itemLang }
             }
         }
         // Empty rule sets match everything (legacy semantics) in both modes.

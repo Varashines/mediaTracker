@@ -276,9 +276,6 @@ actor YearInReviewService {
         itemDescriptor.fetchLimit = LibraryScanLimits.statsScanCap
         let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
 
-        let aliasEntities = (try? modelContext.fetch(FetchDescriptor<StudioAliasEntity>())) ?? []
-        let aliasMap = DiscoverySyncService.buildSourceToTargetMap(from: aliasEntities)
-
         var itemByShowID: [Int: MediaItem] = [:]
         for item in allItems where item.typeValue == "TV Show" {
             let tmdbString = item.id.split(separator: "_").last.map(String.init) ?? ""

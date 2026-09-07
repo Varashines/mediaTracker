@@ -5,7 +5,10 @@ struct HomeViewSections: View {
     let homeContinueWatching: [MediaThumbnailMetadata]
     let featuredCarouselItems: [MediaThumbnailMetadata]
     let groupedItems: [(String, [MediaThumbnailMetadata])]
+    let recentlyAdded: [MediaThumbnailMetadata]
     let recommendations: [MediaThumbnailMetadata]
+    /// True once a recommendations fetch has settled (even empty).
+    let recommendationsLoaded: Bool
     let pickOfTheDay: [MediaThumbnailMetadata]
     let trendingMovies: [MediaSearchResult]
     let trendingShows: [MediaSearchResult]
@@ -15,6 +18,8 @@ struct HomeViewSections: View {
     let onCategorySelected: (NavigationCategory) -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
     var onFetchRecommendations: (() -> Void)? = nil
+    var onFetchPickOfTheDay: (() -> Void)? = nil
+    var onFetchTrending: (() -> Void)? = nil
 
     private enum HomeSection {
         case forYou, recentlyWatched, pickOfTheDay, trendingMovies, trendingShows
@@ -48,12 +53,14 @@ struct HomeViewSections: View {
             if visibleSection == .forYou {
                 ForYouCarousel(
                     items: recommendations, namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                    isFastScrolling: isFastScrolling, onSelect: onSelectHero,
+                    isLoading: !recommendationsLoaded,
+                    onDiscover: { onCategorySelected(.discover) }
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
                 .onAppear {
-                    if recommendations.isEmpty {
+                    if recommendations.isEmpty && !recommendationsLoaded {
                         onFetchRecommendations?()
                     }
                 }
@@ -66,6 +73,11 @@ struct HomeViewSections: View {
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
+                .onAppear {
+                    if pickOfTheDay.isEmpty {
+                        onFetchPickOfTheDay?()
+                    }
+                }
             }
 
             if visibleSection == .trendingMovies || visibleSection == .trendingShows {
@@ -75,6 +87,11 @@ struct HomeViewSections: View {
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.opacity)
+                    .onAppear {
+                        if trendingMovies.isEmpty {
+                            onFetchTrending?()
+                        }
+                    }
                 }
                 if visibleSection == .trendingShows {
                     TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
@@ -82,6 +99,11 @@ struct HomeViewSections: View {
                     }
                     .padding(.bottom, AppTheme.Spacing.small)
                     .transition(.opacity)
+                    .onAppear {
+                        if trendingShows.isEmpty {
+                            onFetchTrending?()
+                        }
+                    }
                 }
             }
 
@@ -101,6 +123,24 @@ struct HomeViewSections: View {
                     items: Array(comingSoon.prefix(20)), namespace: namespace,
                     isFastScrolling: isFastScrolling, onSelect: onSelectHero
                 )
+                .padding(.bottom, AppTheme.Spacing.small)
+            }
+
+            // 3. RECENTLY ADDED — permanent portrait row, same .grid card
+            // size as Coming Soon.
+            if !recentlyAdded.isEmpty {
+                HomeCarouselSection(
+                    title: "Recently Added",
+                    icon: "clock.badge.checkmark",
+                    iconColor: .orange,
+                    scrollSpace: "RA_Scroll",
+                    items: Array(recentlyAdded.prefix(20)),
+                    onSelect: onSelectHero
+                ) { metadata, fast in
+                    MediaThumbnailView(
+                        metadata: metadata, mode: .grid,
+                        namespace: namespace, isFastScrolling: isFastScrolling || fast)
+                }
                 .padding(.bottom, AppTheme.Spacing.small)
             }
         }

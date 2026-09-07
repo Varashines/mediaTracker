@@ -14,6 +14,9 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
     let items: [Item]
     /// Pass `false` to hide the header's scroll-progress indicator (e.g. single-item rows).
     let showsScrollProgress: Bool
+    /// Inter-card spacing. Defaults to the shared row gap; denser rows
+    /// (e.g. Apple TV-style landscape cards) pass something tighter.
+    let spacing: CGFloat
     /// When set, each card is wrapped in an interactive `Button`.
     let onSelect: ((Item) -> Void)?
     let emptyContent: (() -> EmptyContent)?
@@ -29,6 +32,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         scrollSpace: String,
         items: [Item],
         showsScrollProgress: Bool = true,
+        spacing: CGFloat = AppTheme.Spacing.large,
         onSelect: ((Item) -> Void)? = nil,
         @ViewBuilder emptyContent: @escaping () -> EmptyContent,
         card: @escaping (Item, _ isFastScrolling: Bool) -> Card
@@ -39,6 +43,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         self.scrollSpace = scrollSpace
         self.items = items
         self.showsScrollProgress = showsScrollProgress
+        self.spacing = spacing
         self.onSelect = onSelect
         self.emptyContent = emptyContent
         self.card = card
@@ -51,6 +56,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         scrollSpace: String,
         items: [Item],
         showsScrollProgress: Bool = true,
+        spacing: CGFloat = AppTheme.Spacing.large,
         onSelect: ((Item) -> Void)? = nil,
         card: @escaping (Item, _ isFastScrolling: Bool) -> Card
     ) where EmptyContent == EmptyView {
@@ -60,6 +66,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         self.scrollSpace = scrollSpace
         self.items = items
         self.showsScrollProgress = showsScrollProgress
+        self.spacing = spacing
         self.onSelect = onSelect
         self.emptyContent = nil
         self.card = card
@@ -75,7 +82,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
             )
 
             if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
+                ScrollingHStack(space: scrollSpace, spacing: spacing, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
                     ForEach(items) { item in
                         if let onSelect {
                             Button { onSelect(item) } label: {

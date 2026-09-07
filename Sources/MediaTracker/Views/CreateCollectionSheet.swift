@@ -353,16 +353,16 @@ struct RuleEditorRow: View {
     var body: some View {
         switch rule {
         case .genre(let current):
-            valueMenu(
+            multiValueMenu(
                 title: "Genre",
-                current: current,
+                selected: current,
                 options: (metadata?.genres.map(\.name) ?? []).filter { !$0.isEmpty }
             ) { rule = .genre($0) }
 
         case .network(let current):
-            valueMenu(
+            multiValueMenu(
                 title: "Network",
-                current: current,
+                selected: current,
                 options: metadata?.networks.map(\.name) ?? []
             ) { rule = .network($0) }
 
@@ -370,9 +370,9 @@ struct RuleEditorRow: View {
             languageMenu(current: current)
 
         case .badge(let current):
-            valueMenu(
+            multiValueMenu(
                 title: "Badge",
-                current: current,
+                selected: current,
                 options: ["NEW", "PREMIERE", "FINALE", "RETURNING", "BINGE", "BINGE DROP", "BEHIND"]
             ) { rule = .badge($0) }
 
@@ -399,24 +399,39 @@ struct RuleEditorRow: View {
             }
 
         case .mediaType(let current):
-            valueMenu(title: "Type", current: current.rawValue, options: MediaType.allCases.map(\.rawValue)) { raw in
-                if let type = MediaType(rawValue: raw) { rule = .mediaType(type) }
+            multiValueMenu(
+                title: "Type",
+                selected: current.map(\.rawValue),
+                options: MediaType.allCases.map(\.rawValue)
+            ) { selectedRaw in
+                let types = selectedRaw.compactMap(MediaType.init(rawValue:))
+                rule = .mediaType(types.isEmpty ? current : types)
             }
 
         case .state(let current):
-            valueMenu(title: "Status", current: current.displayName, options: MediaState.allCases.map(\.displayName)) { display in
-                if let state = MediaState.allCases.first(where: { $0.displayName == display }) { rule = .state(state) }
+            multiValueMenu(
+                title: "Status",
+                selected: current.map(\.displayName),
+                options: MediaState.allCases.map(\.displayName)
+            ) { selectedNames in
+                let states = selectedNames.compactMap { name in MediaState.allCases.first(where: { $0.displayName == name }) }
+                rule = .state(states.isEmpty ? current : states)
             }
 
         case .taste(let current):
-            valueMenu(title: "Taste", current: current.rawValue, options: TasteValue.allCases.map(\.rawValue)) { raw in
-                if let taste = TasteValue(rawValue: raw) { rule = .taste(taste) }
+            multiValueMenu(
+                title: "Taste",
+                selected: current.map(\.rawValue),
+                options: TasteValue.allCases.map(\.rawValue)
+            ) { selectedRaw in
+                let tastes = selectedRaw.compactMap(TasteValue.init(rawValue:))
+                rule = .taste(tastes.isEmpty ? current : tastes)
             }
         }
     }
 
     @ViewBuilder
-    private func valueMenu(title: String, current: String, options: [String], assign: @escaping (String) -> Void) -> some View {
+    private func multiValueMenu(title: String, selected: [String], options: [String], onSelectionChange: @escaping ([String]) -> Void) -> some View {
         HStack {
             Text(title.uppercased())
                 .font(AppTheme.Font.caption2)
@@ -425,11 +440,33 @@ struct RuleEditorRow: View {
             Spacer()
             Menu {
                 ForEach(options, id: \.self) { option in
-                    Button(option) { assign(option) }
+                    Button {
+                        var updated = selected
+                        if updated.contains(option) {
+                            if updated.count > 1 {
+                                updated.removeAll { $0 == option }
+                            }
+                        } else {
+                            updated.append(option)
+                        }
+                        onSelectionChange(updated)
+                    } label: {
+                        HStack {
+                            Text(option)
+                            if selected.contains(option) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text(current.isEmpty ? "Choose…" : current)
+                    let labelText: String = {
+                        if selected.isEmpty { return "Choose…" }
+                        if selected.count == 1 { return selected[0] }
+                        return "\(selected[0]) +\(selected.count - 1)"
+                    }()
+                    Text(labelText)
                         .font(AppTheme.Font.label)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(AppTheme.Font.caption2)
@@ -442,16 +479,19 @@ struct RuleEditorRow: View {
     }
 
     @ViewBuilder
-    private func languageMenu(current: String) -> some View {
+    private func languageMenu(current: [String]) -> some View {
         let nodes = metadata?.languages ?? []
-        valueMenu(
+        let options = nodes.map { LanguageUtils.languageName(for: $0.code ?? $0.name) }
+        let selectedNames = current.map { LanguageUtils.languageName(for: $0) }
+        multiValueMenu(
             title: "Language",
-            current: LanguageUtils.languageName(for: current),
-            options: nodes.map { LanguageUtils.languageName(for: $0.code ?? $0.name) }
-        ) { chosen in
-            if let node = nodes.first(where: { LanguageUtils.languageName(for: $0.code ?? $0.name) == chosen }) {
-                rule = .language(node.code ?? node.name)
+            selected: selectedNames,
+            options: options
+        ) { chosenNames in
+            let newCodes = chosenNames.compactMap { name in
+                nodes.first(where: { LanguageUtils.languageName(for: $0.code ?? $0.name) == name }).map { $0.code ?? $0.name }
             }
+            rule = .language(newCodes.isEmpty ? current : newCodes)
         }
     }
 

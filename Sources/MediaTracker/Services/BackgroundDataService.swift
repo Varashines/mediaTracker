@@ -215,7 +215,7 @@ actor BackgroundDataService {
                         id: item.id, 
                         title: item.title, 
                         releaseDate: item.releaseDate, 
-                        posterURL: item.posterURL
+                        posterURL: item.effectivePosterURL
                     )
                 } else if item.type == .tvShow, let tv = item.tvShowDetails {
                     let identifier = "tv-\(item.id)"
@@ -224,11 +224,11 @@ actor BackgroundDataService {
                     await NotificationManager.shared.scheduleTVNotification(
                         id: item.id, 
                         title: item.title, 
-                        posterURL: item.posterURL, 
+                        posterURL: item.effectivePosterURL, 
                         nextDate: tv.nextEpisodeDate, 
                         nextEpisodeNumber: tv.nextEpisodeNumber, 
                         nextSeasonNumber: tv.nextSeasonNumber, 
-                        nextEpisodeTime: nil
+                        nextEpisodeTime: tv.nextEpisodeTime
                     )
                 }
             }

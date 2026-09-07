@@ -8,11 +8,25 @@ extension MediaFilterActor {
         let finaleLabel = SmartBadge.finale.rawValue
         let premiereLabel = SmartBadge.premiere.rawValue
         let dislikeLabel = TasteValue.dislike.rawValue
+        let completedState = MediaState.completedRaw
+        let droppedState = MediaState.droppedRaw
+        let activeState = MediaState.activeRaw
+        let rewatchingState = MediaState.rewatchingRaw
+
+        // NOTE: keep these predicates small — the state exclusions live in
+        // Swift below, not SQL. A 4-way badge OR plus extra AND clauses
+        // exceeds the type-checker's budget on CI hardware.
+        // Badge-matching rows are rare, so post-filtering costs nothing.
         let pStreaming = #Predicate<MediaItem> { item in
             (item.storedSmartBadgeLabel == newLabel ||
              item.storedSmartBadgeLabel == bingeLabel ||
              item.storedSmartBadgeLabel == finaleLabel ||
              item.storedSmartBadgeLabel == premiereLabel) &&
+            item.tasteValue != dislikeLabel
+        }
+
+        let pActiveOrRewatching = #Predicate<MediaItem> { item in
+            (item.stateValue == activeState || item.stateValue == rewatchingState) &&
             item.tasteValue != dislikeLabel
         }
 
@@ -24,45 +38,43 @@ extension MediaFilterActor {
             )
         }
 
-        let activeState = MediaState.activeRaw
-        let rewatchingState = MediaState.rewatchingRaw
-        let pActiveOrRewatching = #Predicate<MediaItem> { item in
-            (item.stateValue == activeState || item.stateValue == rewatchingState) &&
-            item.tasteValue != dislikeLabel
-        }
-
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
-        descStreaming.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+        descStreaming.propertiesToFetch = MediaItem.thumbnailProperties
         descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreaming.fetchLimit = 150
+        descStreaming.fetchLimit = 40
+
+        var descActive = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
+        descActive.propertiesToFetch = MediaItem.thumbnailProperties
+        descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
+        descActive.fetchLimit = 40
 
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
-        descTransition.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+        descTransition.propertiesToFetch = MediaItem.thumbnailProperties
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descTransition.fetchLimit = 50
+        descTransition.fetchLimit = 30
 
-        var descActiveOrRewatching = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
-        descActiveOrRewatching.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
-        descActiveOrRewatching.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descActiveOrRewatching.fetchLimit = 100
-
-        let streamingItems = try modelContext.fetch(descStreaming)
-        let transitionItems = try modelContext.fetch(descTransition)
-        let activeItemsRaw = try modelContext.fetch(descActiveOrRewatching)
+        let streamingItems = try modelContext.fetch(descStreaming).filter {
+            $0.stateValue != completedState && $0.stateValue != droppedState
+        }
+        let activeItemsRaw = try modelContext.fetch(descActive)
+        let transitionItems = try modelContext.fetch(descTransition).filter {
+            $0.stateValue != completedState && $0.stateValue != droppedState
+        }
 
         let wishlistState = MediaState.wishlistRaw
         let recentPredicate = #Predicate<MediaItem> { item in
             item.stateValue == wishlistState && item.tasteValue != dislikeLabel
         }
         var recentDesc = FetchDescriptor<MediaItem>(predicate: recentPredicate)
+        recentDesc.propertiesToFetch = MediaItem.thumbnailProperties
         recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        recentDesc.fetchLimit = 100
+        recentDesc.fetchLimit = 40
 
         let recentItems = try modelContext.fetch(recentDesc)
 
         var seenIDs = Set<PersistentIdentifier>()
         var homeResults: [MediaItem] = []
-        for item in (streamingItems + transitionItems + activeItemsRaw + recentItems) {
+        for item in (streamingItems + activeItemsRaw + transitionItems + recentItems) {
             if seenIDs.insert(item.persistentModelID).inserted {
                 homeResults.append(item)
             }
@@ -85,10 +97,19 @@ extension MediaFilterActor {
 
         let pickOfDay = fetchPickOfTheDay(now: now)
 
+        var addedDesc = FetchDescriptor<MediaItem>()
+        addedDesc.propertiesToFetch = MediaItem.thumbnailProperties
+        addedDesc.sortBy = [
+            SortDescriptor<MediaItem>(\.dateAdded, order: .reverse),
+            SortDescriptor<MediaItem>(\.title, order: .forward),
+        ]
+        addedDesc.fetchLimit = 20
+        let recentlyAdded = (try? modelContext.fetch(addedDesc))?.map { toMetadata($0) } ?? []
+
         return PaginatedResult(
             displayed: [],
             featuredUpcoming: [],
-            recentlyAdded: [],
+            recentlyAdded: recentlyAdded,
             homeContinueWatching: homeContinueWatching,
             grouped: [("Coming Soon", comingSoonItems.prefix(40).map { toMetadata($0) })],
             pickOfTheDay: pickOfDay,
@@ -97,36 +118,61 @@ extension MediaFilterActor {
         )
     }
 
-    func fetchRecommendations() async -> [MediaThumbnailMetadata] {
+    func fetchRecommendations(forceRefresh: Bool = false) async -> [MediaThumbnailMetadata] {
+#if DEBUG
+        let startedAt = Date()
+#endif
         let tasteActor = TasteActor(modelContainer: modelContext.container)
-        let recs = await tasteActor.calculateRecommendations()
-        return recs.compactMap { rec in
-            guard let item = modelContext.model(for: rec.id) as? MediaItem else { return nil }
+        let recs = await tasteActor.calculateRecommendations(forceRefresh: forceRefresh)
+        // One batched fault by library ID instead of per-item model(for:)
+        // roundtrips (string IN-list — the SQL-safe shape).
+        let ids = recs.map(\.itemID)
+        let items: [MediaItem]
+        if ids.isEmpty {
+            items = []
+        } else {
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { ids.contains($0.id) })
+            descriptor.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
+            items = (try? modelContext.fetch(descriptor)) ?? []
+        }
+        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let result: [MediaThumbnailMetadata] = recs.compactMap { rec -> MediaThumbnailMetadata? in
+            guard let item = byID[rec.itemID] else { return nil }
             return MediaThumbnailMetadata(item: item, recommendationReason: rec.reason)
         }
+#if DEBUG
+        AppLogger.debug(
+            "For You load: \(result.count) picks in \(Int(Date().timeIntervalSince(startedAt) * 1_000))ms",
+            logger: AppLogger.performance
+        )
+#endif
+        return result
     }
 
-    private func fetchPickOfTheDay(now: Date) -> [MediaThumbnailMetadata] {
+    func fetchPickOfTheDay(now: Date = Date()) -> [MediaThumbnailMetadata] {
+        let calendar = Calendar.current
+        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: now) ?? 0
+        if let cached = pickOfTheDayCache, cached.dayOfYear == dayOfYear {
+            return cached.picks
+        }
+
         let loveLabel = TasteValue.love.rawValue
         let pLoved = #Predicate<MediaItem> { item in
             item.tasteValue == loveLabel
         }
 
         var lovedDesc = FetchDescriptor<MediaItem>(predicate: pLoved)
-        lovedDesc.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast
-        lovedDesc.fetchLimit = 200
+        lovedDesc.propertiesToFetch = MediaItem.thumbnailProperties
+        lovedDesc.fetchLimit = 60
 
         guard let lovedItems = try? modelContext.fetch(lovedDesc), !lovedItems.isEmpty else {
             return []
         }
 
-        let calendar = Calendar.current
         let isWeekend = calendar.component(.weekday, from: now) >= 6
-        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: now) ?? 0
 
-        let filtered = lovedItems.filter { item in
-            isWeekend ? true : item.typeValue == "Movie"
-        }
+        let moviePicks = lovedItems.filter { $0.typeValue == "Movie" }
+        let filtered = isWeekend ? lovedItems : (!moviePicks.isEmpty ? moviePicks : lovedItems)
 
         guard !filtered.isEmpty else { return [] }
 
@@ -143,9 +189,11 @@ extension MediaFilterActor {
             }
         }
 
-        return picks.map { item in
+        let results = picks.map { item in
             MediaThumbnailMetadata(item: item, recommendationReason: "Pick of the Day")
         }
+        pickOfTheDayCache = (dayOfYear: dayOfYear, picks: results)
+        return results
     }
 
     private func isHomeEligible(_ item: MediaItem, now: Date) -> Bool {

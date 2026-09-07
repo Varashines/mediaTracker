@@ -15,15 +15,13 @@ struct DetailView: View {
     @Environment(\.sleepManager) private var sleepManager
 
     @State private var viewModel: DetailViewModel
-    @State private var showSeasons = false
-    @State private var showCast = false
-    @State private var showRecommendations = false
-    @State private var staggerTask: Task<Void, Never>?
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
     @State private var showMoodBanner = false
     @State private var showSharePreview = false
+    @State private var showSynopsisReader = false
+    @State private var synopsisTextHeight: CGFloat = 300
     @State private var isHoveringRefresh = false
     @State private var isHoveringShare = false
     @State private var isHoveringDelete = false
@@ -279,7 +277,7 @@ struct DetailView: View {
             floatingActionBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 16)
-            .allowsHitTesting(!showDeleteConfirmation && !showSharePreview)
+            .allowsHitTesting(!showDeleteConfirmation && !showSharePreview && !showSynopsisReader)
 
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -297,6 +295,14 @@ struct DetailView: View {
                 )
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
+            if showSynopsisReader {
+                synopsisReaderOverlay
+                    .transition(
+                        AppThemeCoordinator.isReducingVisualEffects
+                            ? .opacity
+                            : .scale(scale: 0.94).combined(with: .opacity)
+                    )
+            }
         }
         .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
         .toolbar { detailToolbar }
@@ -306,18 +312,8 @@ struct DetailView: View {
         .onAppear {
             viewModel.refreshData()
             refreshSeasonCastCache()
-            staggerTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showCast = true }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showRecommendations = true }
-            }
         }
         .onDisappear {
-            staggerTask?.cancel()
-            staggerTask = nil
             viewModel.cancelTasks()
         }
         .userActivity("com.vara.MediaTracker.viewItem") { activity in
@@ -419,7 +415,10 @@ struct DetailView: View {
                 }
             },
             accentColor: viewModel.highContrastAccentColor,
-            bgAccentColor: viewModel.luminousAccentColor
+            bgAccentColor: viewModel.luminousAccentColor,
+            onSynopsisExpand: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = true }
+            },
         )
     }
 
@@ -452,7 +451,7 @@ struct DetailView: View {
     private var castAndTrackingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             // 1. TV TRACKING (Modular Card)
-            if showSeasons, viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
+            if viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails {
                 ModularSection(title: "Seasons & Episodes", icon: "square.stack.3d.down.right.fill", color: effectiveThemeColor) {
                     TVTrackingView(
                         tvDetails: tv,
@@ -474,7 +473,7 @@ struct DetailView: View {
 
             // 2. TOP CAST (Modular Card)
             let showCastSection = !viewModel.item.displayCast.isEmpty || cachedSeasonCast != nil
-            if showCast, showCastSection {
+            if showCastSection {
                 ModularSection(title: (castScope == .season && showCastScopeToggle) ? "Top Cast · Season \(selectedSeasonNumber ?? 0)" : "Top Cast", icon: "person.2.fill", color: effectiveThemeColor) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
                         if showCastScopeToggle {
@@ -504,7 +503,7 @@ struct DetailView: View {
             }
 
             // 3. RECOMMENDATIONS (Modular Card)
-            if showRecommendations, MooreMetricsService.shared.isConfigured {
+            if MooreMetricsService.shared.isConfigured {
                     let detailTraits = viewModel.debugSelectedTraits
                     let detailTitle: String = {
                         if !detailTraits.isEmpty {
@@ -550,17 +549,7 @@ struct DetailView: View {
                     }
                 }
             }
-            if !showSeasons {
-                DetailSkeletonView(
-                    needsTV: viewModel.item.type == .tvShow,
-                    hasCast: !viewModel.item.displayCast.isEmpty
-                )
-                .shimmering()
-            }
         }
-        .animation(AppTheme.Animation.springGentle, value: showSeasons)
-        .animation(AppTheme.Animation.springGentle, value: showCast)
-        .animation(AppTheme.Animation.springGentle, value: showRecommendations)
     }
 
     @ToolbarContentBuilder
@@ -749,7 +738,102 @@ struct DetailView: View {
     }
 
     @ViewBuilder
-    private var deleteConfirmationOverlay: some View {
+    private var synopsisReaderOverlay: some View {
+        ZStack {
+            // Plain contrast veil, no blur.
+            Color.black.opacity(colorScheme == .dark ? 0.55 : 0.4)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+                }
+                .transition(.opacity)
+
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                HStack(spacing: AppTheme.Spacing.tiny) {
+                    Image(systemName: "quote.opening")
+                        .font(AppTheme.Font.title)
+                        .foregroundStyle(effectiveThemeColor)
+                    Text("SYNOPSIS")
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .kerning(AppTheme.Kerning.wide)
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(AppTheme.Font.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .help("Close")
+                }
+
+                Text(viewModel.item.title)
+                    .font(AppTheme.Font.title3)
+                    .foregroundStyle(.primary)
+
+                ScrollView {
+                    Text(viewModel.item.overview)
+                        .font(AppTheme.Font.bodyMedium)
+                        .lineSpacing(AppTheme.Spacing.tiny)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(key: SynopsisHeightKey.self, value: geo.size.height)
+                            }
+                        }
+                }
+                // True auto-until-max: exact text height, scroll past the cap.
+                .frame(height: min(max(synopsisTextHeight, 60), 300))
+                .animation(AppTheme.Animation.easeInOut, value: synopsisTextHeight)
+            }
+            .padding(AppTheme.Spacing.large)
+            .frame(maxWidth: 600)
+            .background {
+                GlassCard(color: effectiveThemeColor, material: .ultraThinMaterial, cornerRadius: AppTheme.Radius.medium, shadowed: false) {
+                    Color.clear
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+            .shadow(color: effectiveThemeColor.opacity(colorScheme == .dark ? 0.2 : 0.08), radius: 16, y: 4)
+            .padding(.horizontal, 60)
+            // Stages in place: scale + fade. No geometry coupling, so the
+            // inline card underneath can never move.
+            .transition(.scale(scale: 0.94).combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
+
+            Button("") {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .hidden()
+        }
+        // A2: veil runs the same overshoot-free spring as the card staging.
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
+        .onPreferenceChange(SynopsisHeightKey.self) { height in
+            // Width is stable from the first frame (no flight), so the first
+            // measurement is already correct — just dedupe the writes.
+            if abs(synopsisTextHeight - height) > 0.5 {
+                synopsisTextHeight = height
+            }
+        }
+    }
+
+/// Measured height of the synopsis reader text — drives the true
+/// auto-until-max scroll area.
+private struct SynopsisHeightKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 300
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private var deleteConfirmationOverlay: some View {
         ZStack {
             Group {
                 if AppThemeCoordinator.isReducingVisualEffects {

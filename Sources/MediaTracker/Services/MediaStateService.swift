@@ -11,9 +11,11 @@ final class MediaStateService {
     // ContentView / LibraryGrid — trigger full library refresh
     private(set) var needsFullRefreshCount = 0
     private(set) var needsSingleItemUpdateCount = 0
+    private(set) var tasteChangedCount = 0
 
     // Discovery hub — forced clear + re-sync
     private(set) var discoveryResyncCount = 0
+    private(set) var recommendationsRefreshedCount = 0
 
     // DetailView — trigger targeted item refresh
     private(set) var refreshedItemID: String?
@@ -73,6 +75,22 @@ final class MediaStateService {
         }
     }
 
+    /// Call when a title's or season's taste rating changes (Loved, Liked, Disliked, None).
+    /// Clears taste caches and signals subscribers to re-fetch recommendations when viewed.
+    func postTasteChanged() {
+        tasteChangedCount += 1
+        let currentVersion = UserDefaults.standard.integer(forKey: UserDefaultsKeys.tasteVersion.rawValue)
+        UserDefaults.standard.set(currentVersion + 1, forKey: UserDefaultsKeys.tasteVersion.rawValue)
+        TasteActor.clearCache()
+        ScopedStatsActor.invalidateCache()
+        debouncedDerivedCacheInvalidation()
+    }
+
+    /// Call when a background recommendations re-computation completes and new picks are ready.
+    func postRecommendationsRefreshed() {
+        recommendationsRefreshedCount += 1
+    }
+
     /// Coalesce derived-cache invalidation so rapid state changes clear each
     /// affected aggregate once rather than triggering repeated library scans.
     private func debouncedDerivedCacheInvalidation() {
@@ -80,7 +98,6 @@ final class MediaStateService {
         derivedCacheDebounceTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
             guard !Task.isCancelled else { return }
-            TasteActor.clearCache()
             YearReviewCache.shared.invalidate()
             LibraryStatsActor.clearCache()
             ScopedStatsActor.invalidateCache()

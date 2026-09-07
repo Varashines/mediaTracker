@@ -140,36 +140,47 @@ struct WatchedThisWeek: View {
                 .transition(.mediaRowArrival)
             }
         }
-        .task { fetchRecentItems() }
+        .task { await fetchRecentItems() }
         .animation(AppTheme.Animation.easeInOut, value: filter)
     }
 
-    private func fetchRecentItems() {
-        movieItems = fetchPool(type: .movie)
-        showItems = fetchPool(type: .tvShow)
+    private func fetchRecentItems() async {
+        let container = modelContext.container
+        let (movieIDs, showIDs) = await Task.detached(priority: .userInitiated) { () -> ([PersistentIdentifier], [PersistentIdentifier]) in
+            let backgroundContext = ModelContext(container)
+            let movies = Self.fetchPool(type: .movie, context: backgroundContext)
+            let shows = Self.fetchPool(type: .tvShow, context: backgroundContext)
+            return (movies, shows)
+        }.value
+
+        movieItems = movieIDs.compactMap { modelContext.model(for: $0) as? MediaItem }
+        showItems = showIDs.compactMap { modelContext.model(for: $0) as? MediaItem }
         withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
     }
 
     /// Watched this week; if fewer than `minCount` of a type, expand the window until we have 10.
-    private func fetchPool(type: MediaType) -> [MediaItem] {
+    nonisolated private static func fetchPool(type: MediaType, context: ModelContext) -> [PersistentIdentifier] {
         let raw = type.rawValue
+        let minCount = 10
+        let weekCap = 30
+        let fillWindows: [TimeInterval] = [.days14, .days30]
 
         // Phase 1 — strict "watched this week", no filling. Show the whole week.
-        let week = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -.days7), limit: weekCap)
+        let week = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -.days7), limit: weekCap, context: context)
         if week.count >= minCount { return week }
 
         // Phase 2 — <10 this week → pull the last 10 from older history.
         var best = week
         for window in fillWindows {
-            let results = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -window), limit: minCount)
+            let results = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -window), limit: minCount, context: context)
             best = results
             if results.count >= minCount { return results }
         }
-        let allTime = fetch(typeRaw: raw, cutoff: .distantPast, limit: minCount)
+        let allTime = fetch(typeRaw: raw, cutoff: .distantPast, limit: minCount, context: context)
         return allTime.count >= best.count ? allTime : best
     }
 
-    private func fetch(typeRaw: String, cutoff: Date, limit: Int?) -> [MediaItem] {
+    nonisolated private static func fetch(typeRaw: String, cutoff: Date, limit: Int?, context: ModelContext) -> [PersistentIdentifier] {
         let predicate = #Predicate<MediaItem> {
             ($0.lastInteractionDate ?? cutoff) >= cutoff && $0.stateValue != "Wishlist" && $0.typeValue == typeRaw
         }
@@ -177,7 +188,7 @@ struct WatchedThisWeek: View {
         descriptor.fetchLimit = limit
         descriptor.sortBy = [SortDescriptor(\.lastInteractionDate, order: .reverse)]
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
-        return (try? modelContext.fetch(descriptor)) ?? []
+        return (try? context.fetch(descriptor))?.map(\.persistentModelID) ?? []
     }
 
     private var filterPills: some View {

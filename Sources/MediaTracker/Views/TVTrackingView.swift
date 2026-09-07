@@ -628,13 +628,12 @@ private struct SeasonSection: View {
 
     private func invalidateTasteCaches() {
         Task { @MainActor in
-            TasteActor.clearCache()
-            ScopedStatsActor.invalidateCache()
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
             let itemID = season.tvShowDetails?.item?.persistentModelID
             MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+            MediaStateService.shared.postTasteChanged()
         }
     }
 

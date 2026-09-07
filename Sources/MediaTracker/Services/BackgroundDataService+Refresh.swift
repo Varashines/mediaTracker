@@ -239,6 +239,25 @@ extension BackgroundDataService {
                 tvDetails.nextEpisodeDate = DateUtils.parseDate(tmdbNextDate)
             }
             
+            // Parallelize OMDB + logo fetch early alongside TVMaze lookups
+            let tvItemState = item.state
+            let tvItemTaste = item.tasteValue
+            let tvItemLogoURL = item.titleLogoURL
+            async let omdbTask: OMDBFullData? = {
+                if !(tvItemState == .wishlist && tvItemTaste == TasteValue.none.rawValue),
+                   let imdbID = details.imdbID, !imdbID.isEmpty {
+                    return await APIClient.shared.fetchOMDBData(imdbID: imdbID)
+                }
+                return nil
+            }()
+
+            async let tvLogoTask: String? = {
+                if tvItemLogoURL == nil {
+                    return try? await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
+                }
+                return nil
+            }()
+
             var tvMazeID = tvDetails.tvMazeID
             // Look up the TVMaze id if unknown, or re-attempt on a forced refresh.
             // A prior failed lookup stores -1 (which would otherwise disable TVMaze
@@ -266,7 +285,11 @@ extension BackgroundDataService {
             var mazeEpisodes: [TVMazeEpisode] = []
             var mazeGenres: [String]?
             if let mID = tvMazeID, mID > 0 {
-                if let (episode, timezone, service, airtime, genres, showType) = try? await APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID) {
+                async let scheduleTask = try? APIClient.shared.fetchTVMazeSchedule(tvMazeID: mID)
+                async let episodesTask = try? APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID, force: force)
+
+                let (scheduleResult, fetchedEpisodes) = await (scheduleTask, episodesTask)
+                if let (episode, timezone, service, airtime, genres, showType) = scheduleResult {
                     tvDetails.timezone = timezone
                     tvDetails.nextEpisodeTime = airtime
                     mazeGenres = genres
@@ -280,7 +303,7 @@ extension BackgroundDataService {
                     }
                 }
                 
-                mazeEpisodes = (try? await APIClient.shared.fetchTVMazeEpisodes(tvMazeID: mID, force: force)) ?? []
+                mazeEpisodes = fetchedEpisodes ?? []
             }
 
             let mazeDict: [String: TVMazeEpisode] = {
@@ -378,25 +401,6 @@ extension BackgroundDataService {
                     modelContext.insert(PersonImageEntity(name: creator.name, profileURL: APIClient.tmdbImageURL(path: creator.path, size: "w185")))
                 }
             }
-
-            // Parallelize OMDB + logo fetch (same pattern as the movie path)
-            let tvItemState = item.state
-            let tvItemTaste = item.tasteValue
-            let tvItemLogoURL = item.titleLogoURL
-            async let omdbTask: OMDBFullData? = {
-                if !(tvItemState == .wishlist && tvItemTaste == TasteValue.none.rawValue),
-                   let imdbID = details.imdbID, !imdbID.isEmpty {
-                    return await APIClient.shared.fetchOMDBData(imdbID: imdbID)
-                }
-                return nil
-            }()
-
-            async let tvLogoTask: String? = {
-                if tvItemLogoURL == nil {
-                    return try? await APIClient.shared.fetchTVLogos(tmdbID: tmdbID, originalLanguage: details.originalLanguage, force: force).first
-                }
-                return nil
-            }()
 
             if let omdb = await omdbTask {
                 tvDetails.imdbRating = omdb.imdbRating

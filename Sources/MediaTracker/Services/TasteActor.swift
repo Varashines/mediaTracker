@@ -19,15 +19,30 @@ actor TasteActor {
     @MainActor private static var lastAffinityCalculation: Date?
     private let affinityCacheTTL: TimeInterval = .secondsInDay
 
-    @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, reason: String)]?
+    @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, itemID: String, reason: String)]?
     @MainActor private static var lastRecommendationsCache: Date?
+    @MainActor private static var lastRecommendationsTasteVersion: Int?
     private let recommendationsCacheTTL: TimeInterval = 300 // 5 minutes
+
+    struct PersistedRecommendation: Codable, Sendable {
+        let itemID: String
+        let reason: String
+    }
+
+    struct PersistedPicksPayload: Codable, Sendable {
+        let picks: [PersistedRecommendation]
+        let timestamp: Date
+        let tasteVersion: Int
+    }
 
     @MainActor static func clearCache() {
         cachedAffinityMap = nil
         lastAffinityCalculation = nil
         cachedRecommendations = nil
         lastRecommendationsCache = nil
+        lastRecommendationsTasteVersion = nil
+        // Do not clear UserDefaults cachedForYouPicks here!
+        // Disk maintains last-known-good picks for instant cold start (stale-while-revalidate).
     }
 
     func fetchTasteInsights() async -> TasteInsights {
@@ -239,13 +254,78 @@ actor TasteActor {
         )
     }
 
-    func calculateRecommendations() async -> [(id: PersistentIdentifier, reason: String)] {
-        // Return cached recommendations if fresh enough
-        let (cached, last) = await MainActor.run { (Self.cachedRecommendations, Self.lastRecommendationsCache) }
-        if let cached = cached, let last = last, Date().timeIntervalSince(last) < recommendationsCacheTTL {
-            return cached
+    func calculateRecommendations(forceRefresh: Bool = false) async -> [(id: PersistentIdentifier, itemID: String, reason: String)] {
+        let currentTasteVersion = UserDefaults.standard.integer(forKey: UserDefaultsKeys.tasteVersion.rawValue)
+
+        // 1. In-memory cache check: return if fresh (< 5 mins) and tasteVersion matches
+        if !forceRefresh {
+            let (cached, lastDate, cachedVersion) = await MainActor.run {
+                (Self.cachedRecommendations, Self.lastRecommendationsCache, Self.lastRecommendationsTasteVersion)
+            }
+            if let cached = cached, let lastDate = lastDate, cachedVersion == currentTasteVersion,
+               Date().timeIntervalSince(lastDate) < recommendationsCacheTTL {
+                return cached
+            }
         }
 
+        // 2. Stale-while-revalidate from disk
+        var diskPayload: PersistedPicksPayload?
+        if !forceRefresh, let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.cachedForYouPicks.rawValue) {
+            if let payload = try? JSONDecoder().decode(PersistedPicksPayload.self, from: data), !payload.picks.isEmpty {
+                diskPayload = payload
+            } else if let legacyPicks = try? JSONDecoder().decode([PersistedRecommendation].self, from: data), !legacyPicks.isEmpty {
+                diskPayload = PersistedPicksPayload(picks: legacyPicks, timestamp: Date(), tasteVersion: currentTasteVersion)
+            }
+        }
+
+        if !forceRefresh, let payload = diskPayload {
+            let itemIDs = payload.picks.map(\.itemID)
+            let dislike = TasteValue.dislike.rawValue
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate {
+                itemIDs.contains($0.id) &&
+                $0.isSoftDeleted == false &&
+                $0.stateValue == "Wishlist" &&
+                $0.tasteValue != dislike
+            })
+            descriptor.propertiesToFetch = [\.id]
+            if let matched = try? modelContext.fetch(descriptor), !matched.isEmpty {
+                let idMap = Dictionary(uniqueKeysWithValues: matched.map { ($0.id, $0.persistentModelID) })
+                let restored: [(id: PersistentIdentifier, itemID: String, reason: String)] = payload.picks.compactMap { p in
+                    guard let persistentID = idMap[p.itemID] else { return nil }
+                    return (persistentID, p.itemID, p.reason)
+                }
+                if !restored.isEmpty {
+                    await MainActor.run {
+                        Self.cachedRecommendations = restored
+                        Self.lastRecommendationsCache = payload.timestamp
+                        Self.lastRecommendationsTasteVersion = payload.tasteVersion
+                    }
+
+                    let isFresh = (payload.tasteVersion == currentTasteVersion) &&
+                                  (Date().timeIntervalSince(payload.timestamp) < recommendationsCacheTTL)
+                    if isFresh {
+                        return restored
+                    }
+
+                    // Stale disk cache: return restored immediately for 0ms instant display,
+                    // but recalculate in background to refresh memory and overwrite disk.
+                    Task.detached(priority: .utility) { [container = modelContext.container] in
+                        let actor = TasteActor(modelContainer: container)
+                        _ = await actor.computeAndPersistRecommendations(currentTasteVersion: currentTasteVersion)
+                        await MainActor.run {
+                            MediaStateService.shared.postRecommendationsRefreshed()
+                        }
+                    }
+                    return restored
+                }
+            }
+        }
+
+        // 3. Cold compute if no valid disk cache or forceRefresh requested
+        return await computeAndPersistRecommendations(currentTasteVersion: currentTasteVersion)
+    }
+
+    private func computeAndPersistRecommendations(currentTasteVersion: Int) async -> [(id: PersistentIdentifier, itemID: String, reason: String)] {
         // Fetch Weights from UserDefaults (matches AppStorage keys in UI)
         func weight(_ key: UserDefaultsKeys, default defaultVal: Double) -> Double {
             let val = UserDefaults.standard.double(forKey: key.rawValue)
@@ -265,15 +345,21 @@ actor TasteActor {
         let creatorAffinity = profile.creator
         let langAffinity = profile.language
 
-        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.stateValue == "Wishlist" })
+        // Watchlist semantics: wishlist state, already aired, never disliked.
+        let dislike = TasteValue.dislike.rawValue
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate {
+            $0.stateValue == "Wishlist" && $0.storedIsUpcoming == false && $0.tasteValue != dislike
+        })
         descriptor.propertiesToFetch = [
             \.id, \.title, \.releaseDate,
             \.typeValue, \.stateValue, \.tasteValue,
             \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
             \.cachedNextAiringDate, \.storedCast
         ]
+        descriptor.sortBy = [SortDescriptor(\MediaItem.dateAdded, order: .reverse)]
+        descriptor.fetchLimit = 200
         guard let wishlist = try? modelContext.fetch(descriptor) else { return [] }
-        var recommendations: [(id: PersistentIdentifier, score: Double, reason: String)] = []
+        var recommendations: [(id: PersistentIdentifier, itemID: String, score: Double, reason: String)] = []
         let now = Date()
 
         for item in wishlist {
@@ -363,14 +449,20 @@ actor TasteActor {
                 }
 
                 let bestReason = potentialReasons.max(by: { $0.score < $1.score })?.label ?? "Picked for your taste"
-                recommendations.append((item.persistentModelID, finalScore, bestReason))
+                recommendations.append((item.persistentModelID, item.id, finalScore, bestReason))
             }
         }
 
-        let result = recommendations.sorted { $0.score > $1.score }.prefix(10).map { ($0.id, $0.reason) }
+        let result = recommendations.sorted { $0.score > $1.score }.prefix(10).map { (id: $0.id, itemID: $0.itemID, reason: $0.reason) }
+        let persistedPicks = result.map { PersistedRecommendation(itemID: $0.itemID, reason: $0.reason) }
+        let payload = PersistedPicksPayload(picks: persistedPicks, timestamp: Date(), tasteVersion: currentTasteVersion)
+        if let data = try? JSONEncoder().encode(payload) {
+            UserDefaults.standard.set(data, forKey: UserDefaultsKeys.cachedForYouPicks.rawValue)
+        }
         await MainActor.run {
             Self.cachedRecommendations = result
             Self.lastRecommendationsCache = Date()
+            Self.lastRecommendationsTasteVersion = currentTasteVersion
         }
         return result
     }

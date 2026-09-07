@@ -293,7 +293,7 @@ enum ColorExtractor {
 
     // MARK: - Vision Saliency
 
-    private final class SaliencyData {
+    private final class SaliencyData: Sendable {
         let values: [Float]
         let width: Int
         let height: Int
@@ -347,44 +347,40 @@ enum ColorExtractor {
             return cached
         }
 
-        let result: SaliencyData? = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let request = VNGenerateAttentionBasedSaliencyImageRequest()
-                let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                do {
-                    try handler.perform([request])
-                    guard let observation = request.results?.first as? VNSaliencyImageObservation else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-                    let pixelBuffer = observation.pixelBuffer
-                    let salWidth = CVPixelBufferGetWidth(pixelBuffer)
-                    let salHeight = CVPixelBufferGetHeight(pixelBuffer)
-                    let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-
-                    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-                    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-
-                    guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-
-                    var values = [Float](repeating: 0, count: salWidth * salHeight)
-                    for y in 0..<salHeight {
-                        let src = baseAddress.advanced(by: y * bytesPerRow).assumingMemoryBound(to: Float.self)
-                        let dstOffset = y * salWidth
-                        for x in 0..<salWidth {
-                            values[dstOffset + x] = src[x]
-                        }
-                    }
-
-                    continuation.resume(returning: SaliencyData(values: values, width: salWidth, height: salHeight))
-                } catch {
-                    continuation.resume(returning: nil)
+        let result: SaliencyData? = await Task.detached(priority: .userInitiated) {
+            let request = VNGenerateAttentionBasedSaliencyImageRequest()
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+                guard let observation = request.results?.first as? VNSaliencyImageObservation else {
+                    return nil
                 }
+                let pixelBuffer = observation.pixelBuffer
+                let salWidth = CVPixelBufferGetWidth(pixelBuffer)
+                let salHeight = CVPixelBufferGetHeight(pixelBuffer)
+                let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+
+                CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+                defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+                guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+                    return nil
+                }
+
+                var values = [Float](repeating: 0, count: salWidth * salHeight)
+                for y in 0..<salHeight {
+                    let src = baseAddress.advanced(by: y * bytesPerRow).assumingMemoryBound(to: Float.self)
+                    let dstOffset = y * salWidth
+                    for x in 0..<salWidth {
+                        values[dstOffset + x] = src[x]
+                    }
+                }
+
+                return SaliencyData(values: values, width: salWidth, height: salHeight)
+            } catch {
+                return nil
             }
-        }
+        }.value
 
         if let result {
             saliencyCache.setObject(result, forKey: key)

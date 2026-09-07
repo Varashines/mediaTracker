@@ -43,7 +43,7 @@ actor APIClient {
     private var inFlightTVDetails: [Int: Task<TVDetailsResult, Error>] = [:]
     private var inFlightSeasonDetails: [String: Task<[TVEpisodeResult], Error>] = [:]
     private var inFlightSeasonAggregateCredits: [String: Task<[SeasonAggregateCastResult], Error>] = [:]
-    private var inFlightImageFetches: [String: Task<[String], Error>] = [:]
+    private var inFlightImageFetches: [String: Task<TMDBImagesResponse, Error>] = [:]
     
     private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
     private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
@@ -84,6 +84,9 @@ actor APIClient {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .useProtocolCachePolicy
         config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        config.httpMaximumConnectionsPerHost = 12
+        config.waitsForConnectivity = true
         config.urlCache = apiURLCache
         self.session = URLSession(configuration: config)
         
@@ -707,60 +710,47 @@ actor APIClient {
     // MARK: - Title Logos
 
     func fetchMovieLogos(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
-        try await fetchImageURLs(
-            cacheKey: "movie_logos_\(tmdbID).json",
-            path: "/movie/\(tmdbID)/images",
-            force: force
-        ) { Self.processLogoURLs($0.logos, originalLanguage: originalLanguage) }
+        let resp = try await fetchImagesResponse(path: "/movie/\(tmdbID)/images", cacheKey: "movie_images_\(tmdbID).json", force: force)
+        return Self.processLogoURLs(resp.logos, originalLanguage: originalLanguage)
     }
 
     func fetchTVLogos(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
-        try await fetchImageURLs(
-            cacheKey: "tv_logos_\(tmdbID).json",
-            path: "/tv/\(tmdbID)/images",
-            force: force
-        ) { Self.processLogoURLs($0.logos, originalLanguage: originalLanguage) }
+        let resp = try await fetchImagesResponse(path: "/tv/\(tmdbID)/images", cacheKey: "tv_images_\(tmdbID).json", force: force)
+        return Self.processLogoURLs(resp.logos, originalLanguage: originalLanguage)
     }
 
     // MARK: - Poster Options
 
     func fetchMoviePosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
-        try await fetchImageURLs(
-            cacheKey: "movie_posters_\(tmdbID).json",
-            path: "/movie/\(tmdbID)/images",
-            force: force
-        ) { Self.processPosterURLs($0.posters, originalLanguage: originalLanguage) }
+        let resp = try await fetchImagesResponse(path: "/movie/\(tmdbID)/images", cacheKey: "movie_images_\(tmdbID).json", force: force)
+        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
     }
 
     func fetchTVPosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
-        try await fetchImageURLs(
-            cacheKey: "tv_posters_\(tmdbID).json",
-            path: "/tv/\(tmdbID)/images",
-            force: force
-        ) { Self.processPosterURLs($0.posters, originalLanguage: originalLanguage) }
+        let resp = try await fetchImagesResponse(path: "/tv/\(tmdbID)/images", cacheKey: "tv_images_\(tmdbID).json", force: force)
+        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
     }
 
     /// Shared pipeline for all `/images` fetches: disk cache → in-flight
-    /// coalescing → TMDB fetch, post-processed per variant by `process`.
-    private func fetchImageURLs(
-        cacheKey: String,
+    /// coalescing → TMDB fetch. A single request populates both logos and posters.
+    private func fetchImagesResponse(
         path: String,
-        force: Bool,
-        process: @escaping @Sendable (TMDBImagesResponse) -> [String]
-    ) async throws -> [String] {
+        cacheKey: String,
+        force: Bool
+    ) async throws -> TMDBImagesResponse {
         let ttl: TimeInterval = force ? -1 : 30 * .secondsInDay
 
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
-            return process(decoded)
+            return decoded
         }
 
         if !force, let existing = inFlightImageFetches[cacheKey] {
             return try await existing.value
         }
 
-        let task = Task<[String], Error> {
+        let task = Task<TMDBImagesResponse, Error> {
             defer { self.inFlightImageFetches.removeValue(forKey: cacheKey) }
             return try await self.executeWithRetry {
                 let url = try self.tmdbURL(path: path, queryItems: [
@@ -769,8 +759,7 @@ actor APIClient {
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
-                let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
-                return process(decoded)
+                return try self.decoder.decode(TMDBImagesResponse.self, from: data)
             }
         }
         inFlightImageFetches[cacheKey] = task

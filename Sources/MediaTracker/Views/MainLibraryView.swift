@@ -50,7 +50,9 @@ struct MainLibraryView: View {
                             homeContinueWatching: homeContinueWatching,
                             featuredCarouselItems: featuredCarouselItems,
                             groupedItems: groupedItems,
+                            recentlyAdded: recentlyAdded,
                             recommendations: recommendations,
+                            recommendationsLoaded: viewModel.display.recommendationsFetched,
                             pickOfTheDay: pickOfTheDay,
                             trendingMovies: viewModel.trendingMovies,
                             trendingShows: viewModel.trendingShows,
@@ -60,8 +62,15 @@ struct MainLibraryView: View {
                             onCategorySelected: onCategorySelected,
                             onTrendingAdd: onTrendingAdd,
                             onFetchRecommendations: {
-                                let actor = MediaFilterActor(modelContainer: modelContext.container)
+                                let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
                                 viewModel.fetchRecommendationsIfNeeded(actor: actor)
+                            },
+                            onFetchPickOfTheDay: {
+                                let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
+                                viewModel.fetchPickOfTheDayIfNeeded(actor: actor)
+                            },
+                            onFetchTrending: {
+                                viewModel.fetchTrendingIfNeeded()
                             }
                         )
                         .transition(.opacity)
@@ -98,9 +107,5 @@ struct MainLibraryView: View {
                 isFastScrolling = false
             }
         }
-        .onAppear {
-            viewModel.fetchTrendingIfNeeded()
-        }
     }
 }
-

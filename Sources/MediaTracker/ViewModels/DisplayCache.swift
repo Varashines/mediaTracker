@@ -9,6 +9,9 @@ class DisplayCache {
     var homeContinueWatchingItems: [MediaThumbnailMetadata] = []
     var groupedItems: [(String, [MediaThumbnailMetadata])] = []
     var recommendations: [MediaThumbnailMetadata] = []
+    /// True once a recommendations fetch has settled (even empty), so the
+    /// For You row can tell loading skeletons apart from a real empty state.
+    var recommendationsFetched = false
     var pickOfTheDay: [MediaThumbnailMetadata] = []
     var pickOfTheDayDate: Date? = nil
     var featuredUpcomingItems: [MediaThumbnailMetadata] = []
@@ -21,6 +24,7 @@ class DisplayCache {
         homeContinueWatchingItems = []
         groupedItems = []
         recommendations = []
+        recommendationsFetched = false
         pickOfTheDay = []
         pickOfTheDayDate = nil
         featuredUpcomingItems = []
@@ -48,19 +52,20 @@ class DisplayCache {
     private func prewarmCarouselImages() {
         let cache = ImageCache.shared
         
-        // Continue Watching & Featured Upcoming — hero thumbnails at .thumbMedium
-        cache.prewarmImages(homeContinueWatchingItems, limit: 8, targetSize: .thumbMedium, priority: .normal)
-        cache.prewarmImages(featuredUpcomingItems, limit: 8, targetSize: .thumbMedium, priority: .normal)
-        
+        // Continue Watching — landscape backdrops at .backdropCompact
+        let cwBackdrops = homeContinueWatchingItems.prefix(8).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
+        cache.prewarmImages(urls: Array(cwBackdrops), targetSize: .backdropCompact, priority: .normal)
+        cache.prewarmImages(featuredUpcomingItems, limit: 8, targetSize: .thumbSmall, priority: .normal)
+
         // Pick of the Day & For You
         if !pickOfTheDay.isEmpty {
             cache.prewarmImages(pickOfTheDay, limit: 4, targetSize: .thumbSmall, priority: .low)
-            let podBackdrops = pickOfTheDay.prefix(4).compactMap(\.backdropURL).compactMap(URL.init(string:))
+            let podBackdrops = pickOfTheDay.prefix(4).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
             cache.prewarmImages(urls: podBackdrops, targetSize: .backdropCompact, priority: .low)
         }
         if !recommendations.isEmpty {
             cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .low)
-            let recBackdrops = recommendations.prefix(6).compactMap(\.backdropURL).compactMap(URL.init(string:))
+            let recBackdrops = recommendations.prefix(6).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
             cache.prewarmImages(urls: recBackdrops, targetSize: .backdropCompact, priority: .low)
         }
     }

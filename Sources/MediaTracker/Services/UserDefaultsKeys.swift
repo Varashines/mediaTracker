@@ -53,6 +53,8 @@ enum UserDefaultsKeys: String {
     case tasteWeightCast = "taste_weight_cast"
     case tasteWeightNetwork = "taste_weight_network"
     case tasteWeightLang = "taste_weight_lang"
+    case cachedForYouPicks = "cached_for_you_picks"
+    case tasteVersion = "taste_version"
     
     // Spotlight
     case spotlightSearchQuery = "spotlight_search_query"
