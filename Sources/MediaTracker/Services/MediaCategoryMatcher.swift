@@ -44,6 +44,8 @@ enum MediaCategoryMatcher {
             guard let releaseDate = item.releaseDate else { return false }
             return DateUtils.sameWeek(releaseDate, now, calendar: calendar)
         case .quickBites:
+            guard item.stateValue != "Dropped" && item.stateValue != "On Hold" else { return false }
+            guard item.tasteValue != "Dislike" else { return false }
             if item.typeValue == "Movie" {
                 let runtime = item.cachedRuntime ?? 0
                 return runtime > 0 && runtime < 90

@@ -256,6 +256,8 @@ actor MediaFilterActor {
             }
 
             if category == .quickBites {
+                guard item.stateValue != "Dropped" && item.stateValue != "On Hold" else { return false }
+                guard item.tasteValue != "Dislike" else { return false }
                 if item.typeValue == "Movie" {
                     let runtime = item.cachedRuntime ?? 0
                     guard runtime > 0 && runtime < 90 else { return false }
