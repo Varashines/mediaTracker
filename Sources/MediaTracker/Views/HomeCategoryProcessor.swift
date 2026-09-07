@@ -13,14 +13,16 @@ extension MediaFilterActor {
         let activeState = MediaState.activeRaw
         let rewatchingState = MediaState.rewatchingRaw
 
+        // NOTE: keep these predicates small — the state exclusions live in
+        // Swift below, not SQL. A 4-way badge OR plus extra AND clauses
+        // exceeds the type-checker's budget on CI hardware.
+        // Badge-matching rows are rare, so post-filtering costs nothing.
         let pStreaming = #Predicate<MediaItem> { item in
             (item.storedSmartBadgeLabel == newLabel ||
              item.storedSmartBadgeLabel == bingeLabel ||
              item.storedSmartBadgeLabel == finaleLabel ||
              item.storedSmartBadgeLabel == premiereLabel) &&
-            item.tasteValue != dislikeLabel &&
-            item.stateValue != completedState &&
-            item.stateValue != droppedState
+            item.tasteValue != dislikeLabel
         }
 
         let pActiveOrRewatching = #Predicate<MediaItem> { item in
@@ -33,9 +35,7 @@ extension MediaFilterActor {
             item.storedIsUpcoming == true && (
                 (item.cachedNextAiringDate ?? distantFuture < now) ||
                 (item.releaseDate ?? distantFuture < now)
-            ) &&
-            item.stateValue != completedState &&
-            item.stateValue != droppedState
+            )
         }
 
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
@@ -53,9 +53,13 @@ extension MediaFilterActor {
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
         descTransition.fetchLimit = 30
 
-        let streamingItems = try modelContext.fetch(descStreaming)
+        let streamingItems = try modelContext.fetch(descStreaming).filter {
+            $0.stateValue != completedState && $0.stateValue != droppedState
+        }
         let activeItemsRaw = try modelContext.fetch(descActive)
-        let transitionItems = try modelContext.fetch(descTransition)
+        let transitionItems = try modelContext.fetch(descTransition).filter {
+            $0.stateValue != completedState && $0.stateValue != droppedState
+        }
 
         let wishlistState = MediaState.wishlistRaw
         let recentPredicate = #Predicate<MediaItem> { item in
