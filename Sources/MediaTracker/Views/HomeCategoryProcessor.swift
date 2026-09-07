@@ -91,7 +91,7 @@ extension MediaFilterActor {
             return airDate > now && item.stateValue != MediaState.completedRaw
         }.sorted { ($0.cachedNextAiringDate ?? .distantPast) < ($1.cachedNextAiringDate ?? .distantPast) }
 
-        let pickOfDay = pickOfTheDayCache?.picks ?? []
+        let pickOfDay = fetchPickOfTheDay(now: now)
 
         var addedDesc = FetchDescriptor<MediaItem>()
         addedDesc.propertiesToFetch = MediaItem.thumbnailProperties
@@ -167,9 +167,8 @@ extension MediaFilterActor {
 
         let isWeekend = calendar.component(.weekday, from: now) >= 6
 
-        let filtered = lovedItems.filter { item in
-            isWeekend ? true : item.typeValue == "Movie"
-        }
+        let moviePicks = lovedItems.filter { $0.typeValue == "Movie" }
+        let filtered = isWeekend ? lovedItems : (!moviePicks.isEmpty ? moviePicks : lovedItems)
 
         guard !filtered.isEmpty else { return [] }
 
