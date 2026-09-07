@@ -86,13 +86,15 @@ class MediaViewModel {
         }
     }
 
-    func fetchRecommendationsIfNeeded(actor: MediaFilterActor) {
-        guard display.recommendations.isEmpty else {
-            display.recommendationsFetched = true
-            return
+    func fetchRecommendationsIfNeeded(actor: MediaFilterActor, forceRefresh: Bool = false) {
+        if !forceRefresh {
+            guard display.recommendations.isEmpty else {
+                display.recommendationsFetched = true
+                return
+            }
         }
         Task { [weak self] in
-            let recs = await actor.fetchRecommendations()
+            let recs = await actor.fetchRecommendations(forceRefresh: forceRefresh)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self?.display.recommendations = recs

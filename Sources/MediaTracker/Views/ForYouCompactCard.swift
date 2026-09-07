@@ -120,18 +120,16 @@ struct ForYouCompactCard: View, Equatable {
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.03 : 1.0))
         .opacity(hasAppeared || isFastScrolling ? 1 : 0)
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
-        .onAppear {
+        .task(id: staggerIndex) {
             guard !isFastScrolling, !AppThemeCoordinator.isReducingVisualEffects else {
                 hasAppeared = true
                 return
             }
             // Stagger first paint so ten heavy cards don't mount in one frame.
             let delay = Double((staggerIndex ?? 0) % 10) * 0.03
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                withAnimation(AppTheme.Animation.easeInOut) { hasAppeared = true }
-            }
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            withAnimation(AppTheme.Animation.easeInOut) { hasAppeared = true }
         }
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in

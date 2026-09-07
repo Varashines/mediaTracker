@@ -270,6 +270,14 @@ struct LibraryDetailView: View {
                         LibraryStatsActor.clearCache()
                         guard hasInitiallyLoaded else { return }
                         viewModel.filterSubject.send()
+                    },
+                    onTasteChange: {
+                        let actor = getFilterActor()
+                        viewModel.fetchRecommendationsIfNeeded(actor: actor, forceRefresh: true)
+                    },
+                    onRecommendationsRefreshed: {
+                        let actor = getFilterActor()
+                        viewModel.fetchRecommendationsIfNeeded(actor: actor, forceRefresh: false)
                     }
                 )
             }
@@ -721,6 +729,8 @@ struct LibraryDetailView: View {
 private struct MediaChangeObserver: View {
     let onSingleItemUpdate: (PersistentIdentifier) -> Void
     let onFullRefresh: () -> Void
+    var onTasteChange: (() -> Void)? = nil
+    var onRecommendationsRefreshed: (() -> Void)? = nil
 
     var body: some View {
         EmptyView()
@@ -732,6 +742,12 @@ private struct MediaChangeObserver: View {
             .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
                 LibraryStatsActor.clearCache()
                 onFullRefresh()
+            }
+            .onChange(of: MediaStateService.shared.tasteChangedCount) { _, _ in
+                onTasteChange?()
+            }
+            .onChange(of: MediaStateService.shared.recommendationsRefreshedCount) { _, _ in
+                onRecommendationsRefreshed?()
             }
     }
 }

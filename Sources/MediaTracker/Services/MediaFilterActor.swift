@@ -13,6 +13,8 @@ actor MediaFilterActor {
     /// Cache for the library ID set: search re-requests it with the current
     /// MediaStateService version so keystroke bursts reuse one fetch.
     private var libraryIDCache: (version: Int, ids: Set<String>)?
+    /// Cache for Pick of the Day: keyed by dayOfYear to avoid daily re-queries.
+    var pickOfTheDayCache: (dayOfYear: Int, picks: [MediaThumbnailMetadata])?
 
     func filterAndSort(
         category: NavigationCategory,

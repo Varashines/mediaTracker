@@ -5,7 +5,7 @@ struct MoodCaptureBanner: View {
     let onSelectMood: (Mood) -> Void
     let onDismiss: () -> Void
     @State private var appears = false
-    @State private var dismissWork: DispatchWorkItem?
+    @State private var dismissTask: Task<Void, Never>?
     @State private var hoveredMood: Mood? = nil
     @Environment(\.colorScheme) var colorScheme
 
@@ -38,11 +38,13 @@ struct MoodCaptureBanner: View {
                 Spacer()
 
                 Button {
-                    dismissWork?.cancel()
+                    dismissTask?.cancel()
                     withAnimation(.easeInOut(duration: 0.25)) {
                         appears = false
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        guard !Task.isCancelled else { return }
                         onDismiss()
                     }
                 } label: {
@@ -108,29 +110,31 @@ struct MoodCaptureBanner: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.75), value: appears)
         .onAppear {
             appears = true
-            let task = DispatchWorkItem {
+            dismissTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
                     appears = false
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    onDismiss()
-                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                onDismiss()
             }
-            dismissWork = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: task)
         }
-        .onDisappear { dismissWork?.cancel() }
+        .onDisappear { dismissTask?.cancel() }
     }
 
     private func moodButton(_ mood: Mood) -> some View {
         let isHovered = hoveredMood == mood
 
         return Button {
-            dismissWork?.cancel()
+            dismissTask?.cancel()
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                 appears = false
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
                 onSelectMood(mood)
             }
         } label: {

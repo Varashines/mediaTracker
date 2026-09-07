@@ -18,7 +18,6 @@ struct DetailView: View {
     @State private var showSeasons = false
     @State private var showCast = false
     @State private var showRecommendations = false
-    @State private var staggerTask: Task<Void, Never>?
     @State private var showingCollectionPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showNavTitle = false
@@ -316,18 +315,19 @@ struct DetailView: View {
         .onAppear {
             viewModel.refreshData()
             refreshSeasonCastCache()
-            staggerTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showCast = true }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                withAnimation(AppTheme.Animation.springGentle) { showRecommendations = true }
-            }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(AppTheme.Animation.springGentle) { showSeasons = true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(AppTheme.Animation.springGentle) { showCast = true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(AppTheme.Animation.springGentle) { showRecommendations = true }
         }
         .onDisappear {
-            staggerTask?.cancel()
-            staggerTask = nil
             viewModel.cancelTasks()
         }
         .userActivity("com.vara.MediaTracker.viewItem") { activity in

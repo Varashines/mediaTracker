@@ -587,7 +587,9 @@ private struct LogoThumbnail: View {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                     selectionPulse = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 120_000_000)
+                    guard !Task.isCancelled else { return }
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                         selectionPulse = false
                     }

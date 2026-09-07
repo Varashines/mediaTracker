@@ -378,28 +378,50 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         let limit = digestEnabled ? 31 : 32
         let itemsToProcess = channelFiltered.prefix(limit)
         
-        for item in itemsToProcess {
-            if Task.isCancelled { break }
-            onProgress?("Processing \(item.title)...")
-            
-            // Sequential processing with a small breather for the system daemon
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-            
-            if item.type == .movie {
-                await self.scheduleMovieNotification(id: item.id, title: item.title, releaseDate: item.releaseDate, posterURL: item.effectivePosterURL)
-            } else if item.type == .tvShow {
+        // Process concurrently using TaskGroup with bounded parallelism (max 4 concurrent)
+        await withTaskGroup(of: Void.self) { group in
+            var activeWorkers = 0
+            let maxConcurrent = 4
+
+            for item in itemsToProcess {
+                if Task.isCancelled { break }
+
+                if activeWorkers >= maxConcurrent {
+                    _ = await group.next()
+                    activeWorkers -= 1
+                }
+
+                let id = item.id
+                let title = item.title
+                let type = item.type
+                let posterURL = item.effectivePosterURL
+                let releaseDate = item.releaseDate
                 let tv = item.tvShowDetails
-                await self.scheduleTVNotification(
-                    id: item.id,
-                    title: item.title,
-                    posterURL: item.effectivePosterURL,
-                    nextDate: item.cachedNextAiringDate ?? tv?.nextEpisodeDate,
-                    nextEpisodeNumber: tv?.nextEpisodeNumber,
-                    nextSeasonNumber: tv?.nextSeasonNumber,
-                    nextEpisodeTime: tv?.nextEpisodeTime
-                )
+                let nextDate = item.cachedNextAiringDate ?? tv?.nextEpisodeDate
+                let nextEpNum = tv?.nextEpisodeNumber
+                let nextSeasonNum = tv?.nextSeasonNumber
+                let nextTime = tv?.nextEpisodeTime
+
+                activeWorkers += 1
+                group.addTask {
+                    onProgress?("Processing \(title)...")
+                    if type == .movie {
+                        await self.scheduleMovieNotification(id: id, title: title, releaseDate: releaseDate, posterURL: posterURL)
+                    } else if type == .tvShow {
+                        await self.scheduleTVNotification(
+                            id: id,
+                            title: title,
+                            posterURL: posterURL,
+                            nextDate: nextDate,
+                            nextEpisodeNumber: nextEpNum,
+                            nextSeasonNumber: nextSeasonNum,
+                            nextEpisodeTime: nextTime
+                        )
+                    }
+                    onProgress?("Finished \(title)")
+                }
             }
-            onProgress?("Finished \(item.title)")
+            await group.waitForAll()
         }
         onProgress?("Sync Complete")
     }

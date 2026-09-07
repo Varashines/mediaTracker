@@ -177,6 +177,7 @@ final class MediaItem: Identifiable {
             tasteValue = newTaste.rawValue
             lastInteractionDate = Date()
             commitChange(dirty: [.badge, .searchable])
+            MediaStateService.shared.postTasteChanged()
         }
     }
 

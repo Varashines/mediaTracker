@@ -62,7 +62,7 @@ struct MainLibraryView: View {
                             onCategorySelected: onCategorySelected,
                             onTrendingAdd: onTrendingAdd,
                             onFetchRecommendations: {
-                                let actor = MediaFilterActor(modelContainer: modelContext.container)
+                                let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
                                 viewModel.fetchRecommendationsIfNeeded(actor: actor)
                             }
                         )

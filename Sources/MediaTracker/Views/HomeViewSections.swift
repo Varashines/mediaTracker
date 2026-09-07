@@ -58,7 +58,7 @@ struct HomeViewSections: View {
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
                 .onAppear {
-                    if recommendations.isEmpty {
+                    if recommendations.isEmpty && !recommendationsLoaded {
                         onFetchRecommendations?()
                     }
                 }
