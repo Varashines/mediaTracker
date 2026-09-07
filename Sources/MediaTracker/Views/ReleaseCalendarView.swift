@@ -149,13 +149,13 @@ struct ReleaseCalendarView: View {
         }
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .refreshable {
-            refreshData(for: currentDisplayMonth)
+            refreshData(for: currentDisplayMonth, force: true)
         }
         .onAppear {
             refreshData(for: currentDisplayMonth)
         }
         .onChange(of: refreshID) { _, _ in
-            refreshData(for: currentDisplayMonth)
+            refreshData(for: currentDisplayMonth, force: true)
         }
         .onDisappear {
             fetchTask?.cancel()
@@ -326,17 +326,21 @@ struct ReleaseCalendarView: View {
         }
     }
 
-    private func refreshData(for month: Date) {
+    private func refreshData(for month: Date, force: Bool = false) {
         let calendar = Calendar.current
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
         
-        // 1. Check Cache First
-        if let cached = viewModel.display.calendarCache[startOfMonth] {
+        // 1. Check Cache First (unless user explicitly requested a refresh)
+        if !force, let cached = viewModel.display.calendarCache[startOfMonth] {
             self.calendarData = cached
             self.isLoading = false
             // Even if cached, we trigger background adjacent loads
             preloadAdjacentMonths(around: startOfMonth)
             return
+        }
+
+        if force {
+            viewModel.display.calendarCache.removeValue(forKey: startOfMonth)
         }
 
         isLoading = true

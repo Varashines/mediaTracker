@@ -40,9 +40,22 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             if !isSearchActive {
                 HStack(spacing: AppTheme.Spacing.tiny) {
                     viewOptionsButton
-                    refreshButton
+                    if canRefreshCurrentCategory {
+                        refreshButton
+                    }
                 }
             }
+        }
+    }
+
+    private var canRefreshCurrentCategory: Bool {
+        switch viewModel.filter.selectedCategory {
+        case .discover, .upcoming, .insights:
+            return true
+        case .smartHub:
+            return viewModel.collection.selectedCollectionID == nil
+        default:
+            return false
         }
     }
 
@@ -167,8 +180,18 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         .buttonStyle(.borderless)
         .contentShape(Circle())
         .tint(.primary)
-        .help("Sync Library")
-        .accessibilityLabel("Sync Library")
+        .help(refreshTooltip)
+        .accessibilityLabel(refreshTooltip)
+    }
+
+    private var refreshTooltip: String {
+        switch viewModel.filter.selectedCategory {
+        case .discover: return "Refresh Discovery"
+        case .upcoming: return "Refresh Calendar"
+        case .insights: return "Refresh Insights"
+        case .smartHub: return "Refresh Collections"
+        default: return "Refresh"
+        }
     }
 }
 
