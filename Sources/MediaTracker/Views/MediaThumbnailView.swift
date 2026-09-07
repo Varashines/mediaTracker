@@ -595,30 +595,7 @@ struct MediaThumbnailView: View, Equatable {
                 AppErrorState.shared.showToast("Title copied", style: .success)
             }
 
-            if let item = modelContext.model(for: itemID) as? MediaItem {
-                let collectionsDescriptor = FetchDescriptor<MediaCollection>(
-                    predicate: #Predicate<MediaCollection> { $0.smartRulesData == nil }
-                )
-                if let manual = try? modelContext.fetch(collectionsDescriptor), !manual.isEmpty {
-                    Menu("Add to Collection") {
-                        ForEach(manual) { collection in
-                            let isIn = item.collections.contains(where: { $0.id == collection.id })
-                            Button {
-                                if isIn {
-                                    collection.completedItemIDs.removeAll { $0 == item.id }
-                                    item.collections.removeAll(where: { $0.id == collection.id })
-                                } else {
-                                    item.collections.append(collection)
-                                }
-                                SaveCoordinator.shared.requestSave(modelContext)
-                            } label: {
-                                Label(collection.name,
-                                      systemImage: isIn ? "checkmark.circle.fill" : "plus.circle")
-                            }
-                        }
-                    }
-                }
-            }
+            AddToCollectionMenu(itemID: itemID)
         }
 
         Section("Set Status") {
@@ -800,6 +777,36 @@ struct ThumbnailSearchOverlay: View {
             .background(
                 LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom)
             )
+        }
+    }
+}
+
+private struct AddToCollectionMenu: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name)
+    private var collections: [MediaCollection]
+
+    let itemID: PersistentIdentifier
+
+    var body: some View {
+        if !collections.isEmpty, let item = modelContext.model(for: itemID) as? MediaItem {
+            Menu("Add to Collection") {
+                ForEach(collections) { collection in
+                    let isIn = item.collections.contains(where: { $0.id == collection.id })
+                    Button {
+                        if isIn {
+                            collection.completedItemIDs.removeAll { $0 == item.id }
+                            item.collections.removeAll(where: { $0.id == collection.id })
+                        } else {
+                            item.collections.append(collection)
+                        }
+                        SaveCoordinator.shared.requestSave(modelContext)
+                    } label: {
+                        Label(collection.name,
+                              systemImage: isIn ? "checkmark.circle.fill" : "plus.circle")
+                    }
+                }
+            }
         }
     }
 }
