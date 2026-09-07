@@ -43,8 +43,15 @@ extension BackgroundDataService {
             })
             var seasonsByShowID: [Int: [TVSeason]] = [:]
             if !batchShowIDs.isEmpty {
+                // Optional-typed IN list, no nil-coalescing. Do NOT write
+                // `batchShowIDs.contains($0.showID ?? 0)`: a TERNARY as the LHS
+                // of IN is untranslatable by NSSQLGenerator — it throws an
+                // NSException (uncatchable from Swift) and aborts the app on
+                // every background sync with a non-empty library (9.0.3).
+                // Covered by HealPredicateRegressionTests.
+                let batchShowIDOptions: Set<Int?> = Set(batchShowIDs.map { $0 as Int? })
                 let batchSeasons = (try? modelContext.fetch(
-                    FetchDescriptor<TVSeason>(predicate: #Predicate { batchShowIDs.contains($0.showID ?? 0) })
+                    FetchDescriptor<TVSeason>(predicate: #Predicate { batchShowIDOptions.contains($0.showID) })
                 )) ?? []
                 for season in batchSeasons {
                     seasonsByShowID[season.showID ?? 0, default: []].append(season)
