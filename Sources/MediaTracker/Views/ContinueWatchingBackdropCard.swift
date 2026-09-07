@@ -10,7 +10,6 @@ struct ContinueWatchingBackdropCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
     var isFastScrolling: Bool = false
 
-    @AppStorage("use_title_logos") private var useTitleLogos = true
     @State private var isHovered = false
 
     nonisolated static func == (lhs: ContinueWatchingBackdropCard, rhs: ContinueWatchingBackdropCard) -> Bool {
@@ -101,7 +100,9 @@ struct ContinueWatchingBackdropCard: View, Equatable {
 
     @ViewBuilder
     private var titleLayer: some View {
-        if useTitleLogos, let logo = metadata.logoURL, let url = URL(string: logo) {
+        // Continue Watching always shows logos (ignores the global
+        // `use_title_logos` toggle) — the backdrop art carries no title.
+        if let logo = metadata.logoURL, let url = URL(string: logo) {
             CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) {
                 titleText
             }
