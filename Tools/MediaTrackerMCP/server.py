@@ -14,15 +14,13 @@ from fastmcp import FastMCP
 from schema import (
     open_store, to_date, local_date, local_month_key,
     decode_plist_array, decode_json_list, StoreError,
+    get_entity_id, get_collection_items_column,
 )
 mcp = FastMCP("media-tracker")
 
-# Core Data Z_ENT values (entity -> int). MediaItem is 6.
-# NOTE: do not hardcode TVEpisode's Z_ENT — Core Data renumbers entities between
-# model builds (episodes have been seen at both 13 and 14). Episode queries
-# deliberately skip the Z_ENT filter since ZTVEPISODE only holds episode rows.
-MEDIA_ITEM_ENT = 6
-MEDIA_COLLECTION_ENT = 5
+# Fallbacks for entity IDs. Resolved dynamically from Z_PRIMARYKEY at runtime.
+DEFAULT_MEDIA_ITEM_ENT = 7
+DEFAULT_MEDIA_COLLECTION_ENT = 5
 
 VALID_STATES = {"Wishlist", "Active", "Completed", "On Hold", "Dropped", "Rewatching"}
 VALID_TASTES = {"Love", "Like", "Dislike", "None"}
@@ -34,95 +32,144 @@ VALID_SORTS = {
 }
 
 
-def _decode_smart_rules(blob) -> list[dict]:
-    """Decode the smart-rules JSON. Swift Codable encodes enum cases as
-    {'caseName': {'_0': value}} (e.g. {'language': {'_0': 'th'}})."""
+def _media_item_ent(conn) -> int:
+    return get_entity_id(conn, "MediaItem", DEFAULT_MEDIA_ITEM_ENT)
+
+
+def _media_collection_ent(conn) -> int:
+    return get_entity_id(conn, "MediaCollection", DEFAULT_MEDIA_COLLECTION_ENT)
+
+
+def _decode_smart_rules(blob) -> tuple[list[dict], bool]:
+    """Decode smart-rules JSON.
+
+    Supports both:
+    1. SmartRuleSet: {'rules': [...], 'matchAny': bool}
+    2. Legacy bare list: [...] (always matchAny: False)
+    Returns (rules, matchAny).
+    """
     if not blob:
-        return []
+        return [], False
     try:
         data = json.loads(blob.decode("utf-8"))
     except Exception:
-        return []
-    return data if isinstance(data, list) else []
+        return [], False
+    if isinstance(data, dict):
+        rules = data.get("rules", [])
+        match_any = bool(data.get("matchAny", False))
+        return (rules if isinstance(rules, list) else []), match_any
+    elif isinstance(data, list):
+        return data, False
+    return [], False
 
 
-def _matches_rules(row, rules: list[dict]) -> bool:
-    """Evaluate smart rules against a raw ZMEDIAITEM row (all must match)."""
+def _matches_single_rule(row, rule: dict) -> bool:
+    """Evaluate a single smart rule against a raw ZMEDIAITEM row."""
     import datetime
-    for rule in rules:
-        if not isinstance(rule, dict):
+    if not isinstance(rule, dict):
+        return False
+    for case, payload in rule.items():
+        if not isinstance(payload, dict):
             return False
-        for case, payload in rule.items():
-            if not isinstance(payload, dict):
+        raw_val = payload.get("_0")
+        # Multi-value rules store arrays: {'taste': {'_0': ['Love', 'Like']}}
+        # Legacy rules stored scalars: {'taste': {'_0': 'Love'}}
+        values = raw_val if isinstance(raw_val, list) else ([raw_val] if raw_val is not None else [])
+
+        if case == "genre":
+            item_genres = {g.lower() for g in decode_plist_array(row["ZCACHEDGENRES"])}
+            target_genres = {v.lower() for v in values if isinstance(v, str)}
+            return bool(item_genres & target_genres)
+
+        elif case == "language":
+            item_lang = (row["ZCACHEDLANGUAGE"] or "").lower()
+            target_langs = {v.lower() for v in values if isinstance(v, str)}
+            return item_lang in target_langs
+
+        elif case == "state":
+            return row["ZSTATEVALUE"] in values
+
+        elif case == "taste":
+            return row["ZTASTEVALUE"] in values
+
+        elif case == "mediaType":
+            return row["ZTYPEVALUE"] in values
+
+        elif case == "badge":
+            badge = row["ZSTOREDSMARTBADGELABEL"]
+            return badge in values
+
+        elif case == "network":
+            raw = (row["ZCACHEDNETWORK"] or "")
+            nets = {n.strip().lower() for n in raw.split(",") if n.strip()}
+            target_nets = {v.lower() for v in values if isinstance(v, str)}
+            return bool(nets & target_nets)
+
+        elif case == "releaseYear":
+            # {'releaseYear': {'_0': [year, 'is'|'after'|'before']}} or {'_0': year, '_1': comp}
+            release = row["ZRELEASEDATE"]
+            if not release:
                 return False
-            value = payload.get("_0")
-            if case == "genre":
-                if value not in {g.lower() for g in decode_plist_array(row["ZCACHEDGENRES"])}:
-                    return False
-            elif case == "language":
-                if (row["ZCACHEDLANGUAGE"] or "").lower() != (value or "").lower():
-                    return False
-            elif case == "state":
-                if row["ZSTATEVALUE"] != value:
-                    return False
-            elif case == "taste":
-                if row["ZTASTEVALUE"] != value:
-                    return False
-            elif case == "mediaType":
-                if row["ZTYPEVALUE"] != value:
-                    return False
-            elif case == "badge":
-                if row["ZSTOREDSMARTBADGELABEL"] != value:
-                    return False
-            elif case == "network":
-                raw = (row["ZCACHEDNETWORK"] or "")
-                nets = {n.strip().lower() for n in raw.split(",") if n.strip()}
-                if (value or "").lower() not in nets:
-                    return False
-            elif case == "releaseYear":
-                # {'releaseYear': {'_0': [year, 'is'|'after'|'before']}}
-                year, comp = value[0], value[1]
-                release = row["ZRELEASEDATE"]
-                if not release:
-                    return False
-                item_year = datetime.datetime.fromtimestamp(
-                    release + 978307200.0).year
-                if comp == "is" and item_year != year:
-                    return False
-                if comp == "after" and item_year <= year:
-                    return False
-                if comp == "before" and item_year >= year:
-                    return False
-            elif case == "releaseYearRange":
-                start, end = value[0], value[1]
-                release = row["ZRELEASEDATE"]
-                if not release:
-                    return False
-                item_year = datetime.datetime.fromtimestamp(
-                    release + 978307200.0).year
-                if not (start <= item_year <= end):
-                    return False
+            item_year = datetime.datetime.fromtimestamp(release + 978307200.0).year
+            if isinstance(raw_val, list) and len(raw_val) >= 2:
+                year, comp = raw_val[0], raw_val[1]
+            elif "_0" in payload and "_1" in payload:
+                year, comp = payload["_0"], payload["_1"]
             else:
                 return False
+            if comp in ("is", "equals") and item_year != year:
+                return False
+            if comp == "after" and item_year <= year:
+                return False
+            if comp == "before" and item_year >= year:
+                return False
+            return True
+
+        elif case == "releaseYearRange":
+            release = row["ZRELEASEDATE"]
+            if not release:
+                return False
+            item_year = datetime.datetime.fromtimestamp(release + 978307200.0).year
+            if isinstance(raw_val, list) and len(raw_val) >= 2:
+                start, end = raw_val[0], raw_val[1]
+            elif "_0" in payload and "_1" in payload:
+                start, end = payload["_0"], payload["_1"]
+            else:
+                return False
+            return start <= item_year <= end
+
+        else:
+            return False
     return True
 
 
-def _collection_member_ids(conn, collection_pk: int, is_smart: bool, rules: list[dict]) -> set[int]:
+def _matches_rules(row, rules: list[dict], match_any: bool = False) -> bool:
+    """Evaluate smart rules against a raw ZMEDIAITEM row."""
+    if not rules:
+        return True
+    if match_any:
+        return any(_matches_single_rule(row, r) for r in rules)
+    return all(_matches_single_rule(row, r) for r in rules)
+
+
+def _collection_member_ids(conn, collection_pk: int, is_smart: bool, rules: list[dict], match_any: bool = False) -> set[int]:
     """Return the Z_PK set of items in a collection. Smart collections are
     computed dynamically from their rules (like the app does); manual
     collections use the stored join table."""
     if not is_smart:
+        item_col = get_collection_items_column(conn)
         rows = conn.execute(
-            "SELECT Z_6ITEMS FROM Z_5ITEMS WHERE Z_5COLLECTIONS = ?",
+            f"SELECT {item_col} FROM Z_5ITEMS WHERE Z_5COLLECTIONS = ?",
             (collection_pk,),
         ).fetchall()
-        return {r[0] for r in rows}
+        return {r[0] for r in rows if r[0] is not None}
     # Smart: evaluate rules over all non-soft-deleted items.
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
         "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZISSOFTDELETED = 0",
-        (MEDIA_ITEM_ENT,),
+        (item_ent,),
     ).fetchall()
-    return {r["Z_PK"] for r in rows if _matches_rules(r, rules)}
+    return {r["Z_PK"] for r in rows if _matches_rules(r, rules, match_any=match_any)}
 
 
 def _row_to_item(row) -> dict:
@@ -215,8 +262,10 @@ def search_titles(
     if type and type not in VALID_TYPES:
         return {"error": f"type must be one of {sorted(VALID_TYPES)}"}
 
+    conn = _conn()
+    item_ent = _media_item_ent(conn)
     q = "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?"
-    params: list = [MEDIA_ITEM_ENT]
+    params: list = [item_ent]
     if query:
         q += " AND ZTITLE LIKE ?"
         params.append(f"%{query}%")
@@ -226,34 +275,33 @@ def search_titles(
     if taste:
         q += " AND ZTASTEVALUE = ?"
         params.append(taste)
+    if mood:
+        q += " AND ZMOOD = ?"
+        params.append(mood)
     if type:
         q += " AND ZTYPEVALUE = ?"
         params.append(type)
     if is_upcoming:
         q += " AND ZSTOREDISUPCOMING = 1"
 
-    conn = _conn()
+    # Don't return soft-deleted items
+    q += " AND ZISSOFTDELETED = 0"
+
     rows = conn.execute(q, params).fetchall()
     items = [_row_to_item(r) for r in rows]
 
-    # Post-filter transformable fields (not SQL-safe).
-    if language:
-        items = [i for i in items if (i["language"] or "").lower() == language.lower()]
+    # Post-filter on fields stored as plists or requiring parsing
     if genre:
-        items = [i for i in items if genre.lower() in {g.lower() for g in i["genres"]}]
+        items = [i for i in items if genre.lower() in [g.lower() for g in i["genres"]]]
     if network:
         items = [i for i in items if network.lower() in (i["network"] or "").lower()]
-    if watched_from:
-        items = [i for i in items if (d := local_date(i["lastStateChangeDate"])) and d >= watched_from]
-    if watched_to:
-        items = [i for i in items if (d := local_date(i["lastStateChangeDate"])) and d < watched_to]
+    if language:
+        items = [i for i in items if (i["language"] or "").lower() == language.lower()]
 
-    if sort_by == "loved":
-        items = [i for i in items if i["taste"] == "Love"]
-        items.sort(key=lambda i: i["lastInteraction"] or "", reverse=(order == "desc"))
-    else:
-        col = _sort_key(items[0], sort_by) if items else "ZLASTINTERACTIONDATE"
-        # Re-run sort in SQL-free way: we already have rows; use the dict field.
+    # Watched date interval (evaluated against machine's local calendar)
+    if watched_from:
+        items = [i for i in items if (local_date(i["lastStateChangeDate"]) or "") >= watched_from]
+    if watched_to:
         field = {
             "interaction": "lastInteraction", "added": "dateAdded",
             "updated": "lastUpdated", "release": "releaseDate",
@@ -271,8 +319,9 @@ def search_titles(
 def get_title_detail(id: str) -> dict:
     """Return the full record for a single title by its unique id (e.g. 'movie_123', 'tv_456')."""
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     row = conn.execute(
-        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZID = ?", (MEDIA_ITEM_ENT, id)
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZID = ?", (item_ent, id)
     ).fetchone()
     if not row:
         return {"error": f"No title with id '{id}'"}
@@ -300,12 +349,13 @@ def get_title_detail(id: str) -> dict:
     item["collections"] = []
     item["smartCollections"] = []
     item_pk = row["Z_PK"]
+    col_ent = _media_collection_ent(conn)
     for cr in conn.execute(
-        "SELECT * FROM ZMEDIACOLLECTION WHERE Z_ENT = ?", (MEDIA_COLLECTION_ENT,)
+        "SELECT * FROM ZMEDIACOLLECTION WHERE Z_ENT = ?", (col_ent,)
     ).fetchall():
         is_smart = bool(cr["ZSMARTRULESDATA"])
-        rules = _decode_smart_rules(cr["ZSMARTRULESDATA"])
-        member_ids = _collection_member_ids(conn, cr["Z_PK"], is_smart, rules)
+        rules, match_any = _decode_smart_rules(cr["ZSMARTRULESDATA"])
+        member_ids = _collection_member_ids(conn, cr["Z_PK"], is_smart, rules, match_any=match_any)
         if item_pk in member_ids:
             if is_smart:
                 item["smartCollections"].append(cr["ZNAME"])
@@ -335,8 +385,9 @@ def _affinity(loved: int, liked: int, disliked: int, rated_count: int, total: in
 def library_stats() -> dict:
     """Aggregate totals: titles by type/state/taste/mood, completion, watch time."""
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
-        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (MEDIA_ITEM_ENT,)
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (item_ent,)
     ).fetchall()
     total = len(rows)
     by_type: dict[str, int] = {}
@@ -383,8 +434,9 @@ def genre_dna(limit: int = 15, rank_by: str = "affinity") -> dict:
     if rank_by not in ("affinity", "count"):
         return {"error": "rank_by must be 'affinity' or 'count'"}
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
-        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (MEDIA_ITEM_ENT,)
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (item_ent,)
     ).fetchall()
     stats: dict[str, dict] = {}
     for r in rows:
@@ -442,8 +494,9 @@ def network_studio_analysis(limit: int = 10, rank_by: str = "affinity") -> dict:
     if rank_by not in ("affinity", "count"):
         return {"error": "rank_by must be 'affinity' or 'count'"}
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
-        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (MEDIA_ITEM_ENT,)
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (item_ent,)
     ).fetchall()
 
     # Build source -> target alias map.
@@ -527,8 +580,9 @@ def cast_rankings(limit: int = 10, rank_by: str = "affinity") -> dict:
     if rank_by not in ("affinity", "count", "director", "director_count"):
         return {"error": "rank_by must be one of affinity, count, director, director_count"}
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
-        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (MEDIA_ITEM_ENT,)
+        "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ?", (item_ent,)
     ).fetchall()
 
     scope = "director" if rank_by in ("director", "director_count") else "cast"
@@ -603,10 +657,11 @@ def cast_rankings(limit: int = 10, rank_by: str = "affinity") -> dict:
 def watch_history(limit: int = 20, language: str = "", taste: str = "") -> dict:
     """Most recently interacted titles, optionally filtered by language or taste."""
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
         "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZLASTINTERACTIONDATE IS NOT NULL "
         "ORDER BY ZLASTINTERACTIONDATE DESC",
-        (MEDIA_ITEM_ENT,),
+        (item_ent,),
     ).fetchall()
     items = [_row_to_item(r) for r in rows]
     if language:
@@ -628,11 +683,12 @@ def monthly_watch_activity(year: int = 2026) -> dict:
     the app's Calendar.current grouping.
     """
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     months: dict[str, dict] = {}
 
     movie_rows = conn.execute(
         "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZTYPEVALUE = 'Movie' AND ZSTATEVALUE = 'Completed'",
-        (MEDIA_ITEM_ENT,),
+        (item_ent,),
     ).fetchall()
     for r in movie_rows:
         k = local_month_key(r["ZLASTSTATECHANGEDATE"])
@@ -674,14 +730,15 @@ def collections() -> dict:
     matching how the app computes them — so Thai GL / Watchlist show real members.
     """
     conn = _conn()
+    col_ent = _media_collection_ent(conn)
     rows = conn.execute(
-        "SELECT * FROM ZMEDIACOLLECTION WHERE Z_ENT = ?", (MEDIA_COLLECTION_ENT,)
+        "SELECT * FROM ZMEDIACOLLECTION WHERE Z_ENT = ?", (col_ent,)
     ).fetchall()
     out = []
     for r in rows:
         is_smart = bool(r["ZSMARTRULESDATA"])
-        rules = _decode_smart_rules(r["ZSMARTRULESDATA"])
-        member_ids = _collection_member_ids(conn, r["Z_PK"], is_smart, rules)
+        rules, match_any = _decode_smart_rules(r["ZSMARTRULESDATA"])
+        member_ids = _collection_member_ids(conn, r["Z_PK"], is_smart, rules, match_any=match_any)
         out.append({
             "name": r["ZNAME"],
             "icon": r["ZSYSTEMIMAGE"],
@@ -697,9 +754,10 @@ def collections() -> dict:
 def upcoming_releases(days: int = 90) -> dict:
     """Titles flagged as upcoming with a future release/air date, sorted by date."""
     conn = _conn()
+    item_ent = _media_item_ent(conn)
     rows = conn.execute(
         "SELECT * FROM ZMEDIAITEM WHERE Z_ENT = ? AND ZSTOREDISUPCOMING = 1",
-        (MEDIA_ITEM_ENT,),
+        (item_ent,),
     ).fetchall()
     items = [_row_to_item(r) for r in rows]
     items.sort(key=lambda i: i["nextAiringDate"] or i["releaseDate"] or "")
@@ -719,7 +777,7 @@ def library_snapshot() -> dict:
         "stats": stats,
         "topGenres": genres["genres"],
         "topNetworksStudios": networks["entries"],
-        "topCast": cast["cast"],
+        "topCast": cast.get("people", []),
         "collections": collections()["collections"],
     }
 
