@@ -317,6 +317,7 @@ struct MediaTrackerApp: App {
             }
             await NotificationManager.shared.requestPermission()
             await NotificationManager.shared.rescheduleWeeklyDigestIfNeeded()
+            await NotificationManager.shared.scheduleAllUpcomingNotifications()
         }
     }
 

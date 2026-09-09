@@ -54,18 +54,47 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
     }
     
+    /// Computes the effective trigger date for a release date, accounting for episode air time or default notification delivery time.
+    private func computeEffectiveTriggerDate(from date: Date, time: String? = nil, usesDefaultTime: Bool = true) -> (dateComponents: DateComponents, triggerDate: Date)? {
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+
+        // 1. If a specific time string is provided (e.g., "20:00") and the date is at 00:00, use the time string.
+        if let time = time, dateComponents.hour == 0 && dateComponents.minute == 0 {
+            let timeParts = time.split(separator: ":")
+            if timeParts.count >= 2, let h = Int(timeParts[0]), let m = Int(timeParts[1]) {
+                dateComponents.hour = h
+                dateComponents.minute = m
+            }
+        }
+
+        // 2. Default fallback (movies, or TV without specific air time):
+        // If it's still 00:00 local time, use the user's preferred notification delivery time.
+        if dateComponents.hour == 0 && dateComponents.minute == 0 {
+            let storedTime = UserDefaults.standard.double(forKey: "notifications_time")
+            let totalSeconds = storedTime > 0 ? storedTime : (9 * 3600)
+            dateComponents.hour = Int(totalSeconds) / 3600
+            dateComponents.minute = (Int(totalSeconds) % 3600) / 60
+        }
+
+        guard let triggerDate = calendar.date(from: dateComponents) else { return nil }
+        return (dateComponents, triggerDate)
+    }
+
     func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
         guard areNotificationsEnabled, isChannelEnabled(.notificationsMovies) else {
             AppLogger.debug("🔕 Skipping notification for \(title): movie channel disabled.", logger: AppLogger.notifications)
             return
         }
-        guard let releaseDate = releaseDate, releaseDate > Date() else { 
+        guard let releaseDate = releaseDate,
+              let computed = computeEffectiveTriggerDate(from: releaseDate, usesDefaultTime: true),
+              computed.triggerDate > Date() else { 
             AppLogger.debug("ℹ️ Skipping notification for \(title): Release date is in the past or nil.", logger: AppLogger.notifications)
             return 
         }
         
-        AppLogger.info("🔔 Scheduling notification for movie: \(title) (\(releaseDate))", logger: AppLogger.notifications)
+        AppLogger.info("🔔 Scheduling notification for movie: \(title) (\(computed.triggerDate))", logger: AppLogger.notifications)
         let identifier = "movie-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -77,7 +106,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
             content.attachments = [attachment]
         }
-        await finalizeSchedule(identifier: identifier, content: content, date: releaseDate)
+        await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
     }
 
     func scheduleTVNotification(id: String, title: String, posterURL: String?, nextDate: Date?, nextEpisodeNumber: Int?, nextSeasonNumber: Int?, nextEpisodeTime: String?) async {
@@ -86,12 +115,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             AppLogger.debug("🔕 Skipping notification for \(title): TV channel disabled.", logger: AppLogger.notifications)
             return
         }
-        guard let nextDate = nextDate, nextDate > Date() else { 
+        guard let nextDate = nextDate,
+              let computed = computeEffectiveTriggerDate(from: nextDate, time: nextEpisodeTime, usesDefaultTime: false),
+              computed.triggerDate > Date() else { 
             AppLogger.debug("ℹ️ Skipping notification for \(title): Next air date is in the past or nil.", logger: AppLogger.notifications)
             return 
         }
         
-        AppLogger.info("🔔 Scheduling notification for TV show: \(title) (\(nextDate))", logger: AppLogger.notifications)
+        AppLogger.info("🔔 Scheduling notification for TV show: \(title) (\(computed.triggerDate))", logger: AppLogger.notifications)
         let identifier = "tv-\(id)"
         let content = UNMutableNotificationContent()
         content.title = title
@@ -119,10 +150,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
             content.attachments = [attachment]
         }
-        await finalizeSchedule(identifier: identifier, content: content, date: nextDate, time: nextEpisodeTime, usesDefaultTime: false)
+        await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
     }
     
-    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, date: Date, time: String? = nil, usesDefaultTime: Bool = true) async {
+    private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, dateComponents: DateComponents, triggerDate: Date) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
 
@@ -132,29 +163,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return
         }
         
-        // Ensure we use the user's current calendar to respect their local timezone (e.g., IST)
         let calendar = Calendar.current
-        var dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        
-        // 1. If a specific time string is provided (e.g., "20:00") and the date is at 00:00, use the time string.
-        if let time = time, dateComponents.hour == 0 && dateComponents.minute == 0 {
-            let timeParts = time.split(separator: ":")
-            if timeParts.count >= 2, let h = Int(timeParts[0]), let m = Int(timeParts[1]) {
-                dateComponents.hour = h
-                dateComponents.minute = m
-            }
-        }
-        
-        // 2. Default fallback (movies only — TV episodes carry air times):
-        // If it's still 00:00 local time, it's likely a date-only object
-        // from a generic release.
-        if usesDefaultTime, dateComponents.hour == 0 && dateComponents.minute == 0 {
-            let storedTime = UserDefaults.standard.double(forKey: "notifications_time")
-            let totalSeconds = storedTime > 0 ? storedTime : (9 * 3600)
-            dateComponents.hour = Int(totalSeconds) / 3600
-            dateComponents.minute = (Int(totalSeconds) % 3600) / 60
-        }
-        
         let trigger1 = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
         
         // Phase 6 Critical Fix: Clone the attachment BEFORE handing request1 to the system.
@@ -185,8 +194,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         
         // Secondary Reminder (next day at the user's Delivery Time)
-        if let scheduledDate = calendar.date(from: dateComponents),
-           let nextDay = calendar.date(byAdding: .day, value: 1, to: scheduledDate) {
+        if let nextDay = calendar.date(byAdding: .day, value: 1, to: triggerDate) {
             var date2 = calendar.dateComponents([.year, .month, .day], from: nextDay)
             let storedDay2 = UserDefaults.standard.double(forKey: "notifications_time")
             let day2Seconds = storedDay2 > 0 ? storedDay2 : (9 * 3600 + 1800)
@@ -213,7 +221,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     private func downloadImage(from urlString: String) async throws -> UNNotificationAttachment? {
         guard let url = URL(string: urlString) else { return nil }
         
-        let (location, _) = try await URLSession.shared.download(from: url)
+        let sessionConfig = URLSessionConfiguration.ephemeral
+        sessionConfig.timeoutIntervalForRequest = 10.0
+        sessionConfig.timeoutIntervalForResource = 15.0
+        let session = URLSession(configuration: sessionConfig)
+        
+        let (location, _) = try await session.download(from: url)
         
         let tmpDir = FileManager.default.temporaryDirectory
         let tmpFile = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")

@@ -51,6 +51,8 @@ class BackgroundTaskManager {
     
     private var isDripSyncing = false
 
+    private var periodicBadgeTask: Task<Void, Never>?
+
     private var isThermalThrottled: Bool {
         ProcessInfo.processInfo.thermalState == .serious
             || ProcessInfo.processInfo.thermalState == .critical
@@ -127,6 +129,19 @@ class BackgroundTaskManager {
         // Schedule automated JSON backup (daily)
         Task.detached(priority: .background) {
             await self.runAutomatedBackup()
+        }
+
+        // Periodic badge refresher (runs every 30 minutes while app is running)
+        periodicBadgeTask?.cancel()
+        periodicBadgeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30 * 60 * 1_000_000_000)
+                guard !Task.isCancelled, let self else { break }
+                if !SleepManager.shared.isAsleep && !self.isThermalThrottled {
+                    await self.refreshStaleBadges()
+                    await self.refreshStalePremiereBadges()
+                }
+            }
         }
         
         #if os(macOS)
@@ -520,18 +535,10 @@ class BackgroundTaskManager {
                 for item in allStale {
                     try Task.checkCancellation()
                     BadgeEngine.invalidateScan(for: item.persistentModelID)
-                    item.syncCachedProperties(now: now, dirty: [.badge])
+                    item.syncCachedProperties(now: now, dirty: [.progress, .badge])
                 }
                 await BadgeEngine.flushBadgeChanges(container: container)
                 try context.save()
-                
-                // syncLibrary is no longer needed here — badge deltas were flushed above
-                Task.detached(priority: .background) {
-                    try? await BackgroundOperationGate.shared.performSync(label: "refreshStaleBadges", container: container) {
-                        let sync = DiscoverySyncService(modelContainer: container)
-                        await sync.syncLibrary(force: false)
-                    }
-                }
                 
                 // Broadcast to update UI
                 await MainActor.run {
