@@ -205,7 +205,7 @@ extension MediaFilterActor {
             let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
             if airDate > now { return false }
             let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
-            if daysSinceAir > 14 { return false }
+            if daysSinceAir > 3 { return false }
         }
 
         let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0 && (item.storedProgress ?? 0) > 0
@@ -232,7 +232,7 @@ extension MediaFilterActor {
                     ? (item.releaseDate ?? .distantPast)
                     : (item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast)
                 let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
-                if daysSinceRelease < 0 || daysSinceRelease > 14 { return false }
+                if daysSinceRelease < 0 || daysSinceRelease > 3 { return false }
             }
             return true
         }

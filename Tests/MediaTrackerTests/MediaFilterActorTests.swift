@@ -89,15 +89,15 @@ final class MediaFilterActorTests: MTTestCase {
         tvShow.lastInteractionDate = now.addingTimeInterval(-2 * .secondsInDay)
         context.insert(tvShow)
 
-        // 2. Newly premiered Movie: Wishlist, release date 3 days ago
+        // 2. Newly premiered Movie: Wishlist, release date 1 day ago
         let movie = MediaItem(id: "m1", title: "Premiered Movie", overview: "", type: .movie)
         movie.stateValue = MediaState.wishlistRaw
-        movie.releaseDate = now.addingTimeInterval(-3 * .secondsInDay)
-        movie.cachedNextAiringDate = now.addingTimeInterval(-3 * .secondsInDay)
+        movie.releaseDate = now.addingTimeInterval(-1 * .secondsInDay)
+        movie.cachedNextAiringDate = now.addingTimeInterval(-1 * .secondsInDay)
         movie.storedProgress = 0
         movie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
         movie.storedSmartBadgeIsSparkle = true
-        movie.lastInteractionDate = now.addingTimeInterval(-3 * .secondsInDay)
+        movie.lastInteractionDate = now.addingTimeInterval(-1 * .secondsInDay)
         context.insert(movie)
 
         // 3. TV show that is genuinely caught up: watched episode 1, remainingEpisodesCount = 0, episode 2 in 5 days
@@ -108,6 +108,17 @@ final class MediaFilterActorTests: MTTestCase {
         caughtUpShow.storedProgress = 0.5
         caughtUpShow.lastInteractionDate = now
         context.insert(caughtUpShow)
+
+        // 4. Movie released 4 days ago (> 3 days cutoff) — should not be in Continue Watching
+        let olderMovie = MediaItem(id: "m2", title: "Older Movie", overview: "", type: .movie)
+        olderMovie.stateValue = MediaState.wishlistRaw
+        olderMovie.releaseDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.storedProgress = 0
+        olderMovie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+        olderMovie.storedSmartBadgeIsSparkle = true
+        olderMovie.lastInteractionDate = now.addingTimeInterval(-4 * .secondsInDay)
+        context.insert(olderMovie)
 
         try context.save()
 
@@ -129,6 +140,7 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertTrue(titles.contains("Premiered Show"), "Newly premiered TV show must appear in Continue Watching")
         XCTAssertTrue(titles.contains("Premiered Movie"), "Newly premiered movie must appear in Continue Watching")
         XCTAssertFalse(titles.contains("Caught Up Show"), "Genuinely caught up show should not appear in Continue Watching")
+        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 3 days ago should not appear in Continue Watching")
     }
 
     @MainActor
