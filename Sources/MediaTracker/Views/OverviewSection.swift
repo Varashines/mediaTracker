@@ -19,7 +19,7 @@ struct OverviewSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.micro) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.mini) {
             HStack(spacing: AppTheme.Spacing.tiny) {
                 Image(systemName: "quote.opening")
                     .font(AppTheme.Font.title)
@@ -70,7 +70,8 @@ struct OverviewSection: View {
                     )
             }
         }
-        .padding(AppTheme.Spacing.medium)
+        .padding(.horizontal, AppTheme.Spacing.medium)
+        .padding(.vertical, AppTheme.Spacing.grid)
         .background {
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
                 .fill(AppThemeCoordinator.isReducingVisualEffects

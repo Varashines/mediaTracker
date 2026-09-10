@@ -141,6 +141,12 @@ struct WatchedThisWeek: View {
             }
         }
         .task { await fetchRecentItems() }
+        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
+            Task { await fetchRecentItems() }
+        }
+        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
+            Task { await fetchRecentItems() }
+        }
         .animation(AppTheme.Animation.easeInOut, value: filter)
     }
 

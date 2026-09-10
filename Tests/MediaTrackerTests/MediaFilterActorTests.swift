@@ -68,6 +68,138 @@ final class MediaFilterActorTests: MTTestCase {
     }
 
     @MainActor
+    func testHomeContinueWatchingPremieredItems() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let actor = MediaFilterActor(modelContainer: container)
+        let now = Date()
+
+        // 1. Newly premiered TV show: Wishlist, 0 episodes watched, episode 1 aired 2 days ago, episode 2 in 5 days
+        let tvShow = MediaItem(id: "tv1", title: "Premiered Show", overview: "", type: .tvShow)
+        tvShow.stateValue = MediaState.wishlistRaw
+        tvShow.releaseDate = now.addingTimeInterval(-2 * .secondsInDay)
+        tvShow.cachedNextAiringDate = now.addingTimeInterval(5 * .secondsInDay) // Episode 2
+        tvShow.remainingEpisodesCount = 1
+        tvShow.storedProgress = 0
+        tvShow.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+        tvShow.storedSmartBadgeIsSparkle = true
+        tvShow.lastInteractionDate = now.addingTimeInterval(-2 * .secondsInDay)
+        context.insert(tvShow)
+
+        // 2. Newly premiered Movie: Wishlist, release date 1 day ago
+        let movie = MediaItem(id: "m1", title: "Premiered Movie", overview: "", type: .movie)
+        movie.stateValue = MediaState.wishlistRaw
+        movie.releaseDate = now.addingTimeInterval(-1 * .secondsInDay)
+        movie.cachedNextAiringDate = now.addingTimeInterval(-1 * .secondsInDay)
+        movie.storedProgress = 0
+        movie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+        movie.storedSmartBadgeIsSparkle = true
+        movie.lastInteractionDate = now.addingTimeInterval(-1 * .secondsInDay)
+        context.insert(movie)
+
+        // 3. TV show that is genuinely caught up: watched episode 1, remainingEpisodesCount = 0, episode 2 in 5 days
+        let caughtUpShow = MediaItem(id: "tv2", title: "Caught Up Show", overview: "", type: .tvShow)
+        caughtUpShow.stateValue = MediaState.activeRaw
+        caughtUpShow.cachedNextAiringDate = now.addingTimeInterval(5 * .secondsInDay)
+        caughtUpShow.remainingEpisodesCount = 0
+        caughtUpShow.storedProgress = 0.5
+        caughtUpShow.lastInteractionDate = now
+        context.insert(caughtUpShow)
+
+        // 4. Movie released 4 days ago (> 3 days cutoff) — should not be in Continue Watching
+        let olderMovie = MediaItem(id: "m2", title: "Older Movie", overview: "", type: .movie)
+        olderMovie.stateValue = MediaState.wishlistRaw
+        olderMovie.releaseDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.storedProgress = 0
+        olderMovie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+        olderMovie.storedSmartBadgeIsSparkle = true
+        olderMovie.lastInteractionDate = now.addingTimeInterval(-4 * .secondsInDay)
+        context.insert(olderMovie)
+
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .home,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil,
+            genre: nil,
+            year: nil,
+            state: nil,
+            badge: nil
+        )
+
+        let continueWatching = result.homeContinueWatching
+        let titles = continueWatching.map { $0.title }
+
+        XCTAssertTrue(titles.contains("Premiered Show"), "Newly premiered TV show must appear in Continue Watching")
+        XCTAssertTrue(titles.contains("Premiered Movie"), "Newly premiered movie must appear in Continue Watching")
+        XCTAssertFalse(titles.contains("Caught Up Show"), "Genuinely caught up show should not appear in Continue Watching")
+        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 3 days ago should not appear in Continue Watching")
+    }
+
+    @MainActor
+    func testHomeContinueWatchingPremieredShowNotTruncatedByUpcomingPremieres() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let actor = MediaFilterActor(modelContainer: container)
+        let now = Date()
+
+        // Insert 45 upcoming future titles with PREMIERE badge that were added/interacted with 10 days ago
+        for i in 1...45 {
+            let futureShow = MediaItem(id: "future_\(i)", title: "Future Title \(i)", overview: "", type: .tvShow)
+            futureShow.stateValue = MediaState.wishlistRaw
+            futureShow.cachedNextAiringDate = now.addingTimeInterval(Double(i + 10) * .secondsInDay)
+            futureShow.releaseDate = now.addingTimeInterval(Double(i + 10) * .secondsInDay)
+            futureShow.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+            futureShow.storedSmartBadgeIsSparkle = true
+            futureShow.lastInteractionDate = now.addingTimeInterval(-10 * .secondsInDay)
+            futureShow.storedIsUpcoming = true
+            context.insert(futureShow)
+        }
+
+        // Insert "Crew Girl" case: Added 60 days ago, released today 5 hours ago
+        let crewGirl = MediaItem(id: "crew_girl", title: "Crew Girl", overview: "", type: .tvShow)
+        crewGirl.stateValue = MediaState.wishlistRaw
+        crewGirl.cachedNextAiringDate = now.addingTimeInterval(-5 * 3600) // Released 5 hours ago
+        crewGirl.releaseDate = now.addingTimeInterval(-5 * 3600)
+        crewGirl.remainingEpisodesCount = 8
+        crewGirl.storedProgress = 0
+        crewGirl.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
+        crewGirl.storedSmartBadgeIsSparkle = true
+        crewGirl.storedIsUpcoming = false
+        crewGirl.lastInteractionDate = now.addingTimeInterval(-60 * .secondsInDay) // Added 60 days ago
+        context.insert(crewGirl)
+
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .home,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: nil,
+            language: nil,
+            genre: nil,
+            year: nil,
+            state: nil,
+            badge: nil
+        )
+
+        let continueWatching = result.homeContinueWatching
+        let titles = continueWatching.map { $0.title }
+
+        XCTAssertTrue(titles.contains("Crew Girl"), "Crew Girl must appear in Continue Watching despite 45 newer future upcoming titles")
+    }
+
+    @MainActor
     func testFetchCalendarDataLazyLoading() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import AppKit
 
 /// Which cast to show in the Top Cast section. Defaults to the full series;
 /// "this season" shows the selected season's per-season cast.
@@ -21,7 +22,6 @@ struct DetailView: View {
     @State private var showMoodBanner = false
     @State private var showSharePreview = false
     @State private var showSynopsisReader = false
-    @State private var synopsisTextHeight: CGFloat = 300
     @State private var isHoveringRefresh = false
     @State private var isHoveringShare = false
     @State private var isHoveringDelete = false
@@ -773,23 +773,18 @@ struct DetailView: View {
 
                 Text(viewModel.item.title)
                     .font(AppTheme.Font.title3)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
 
-                ScrollView {
+                let textHeight = synopsisContentHeight(for: viewModel.item.overview)
+                ScrollView(showsIndicators: false) {
                     Text(viewModel.item.overview)
                         .font(AppTheme.Font.bodyMedium)
                         .lineSpacing(AppTheme.Spacing.tiny)
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background {
-                            GeometryReader { geo in
-                                Color.clear.preference(key: SynopsisHeightKey.self, value: geo.size.height)
-                            }
-                        }
                 }
-                // True auto-until-max: exact text height, scroll past the cap.
-                .frame(height: min(max(synopsisTextHeight, 60), 300))
-                .animation(AppTheme.Animation.easeInOut, value: synopsisTextHeight)
+                .scrollIndicators(.hidden)
+                .frame(height: textHeight)
             }
             .padding(AppTheme.Spacing.large)
             .frame(maxWidth: 600)
@@ -815,23 +810,27 @@ struct DetailView: View {
         }
         // A2: veil runs the same overshoot-free spring as the card staging.
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
-        .onPreferenceChange(SynopsisHeightKey.self) { height in
-            // Width is stable from the first frame (no flight), so the first
-            // measurement is already correct — just dedupe the writes.
-            if abs(synopsisTextHeight - height) > 0.5 {
-                synopsisTextHeight = height
-            }
-        }
     }
 
-/// Measured height of the synopsis reader text — drives the true
-/// auto-until-max scroll area.
-private struct SynopsisHeightKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 300
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    private func synopsisContentHeight(for text: String) -> CGFloat {
+        guard !text.isEmpty else { return 40 }
+        let font: NSFont
+        if let descriptor = NSFont.systemFont(ofSize: 15, weight: .medium).fontDescriptor.withDesign(.rounded),
+           let rounded = NSFont(descriptor: descriptor, size: 15) {
+            font = rounded
+        } else {
+            font = NSFont.systemFont(ofSize: 15, weight: .medium)
+        }
+        let style = NSMutableParagraphStyle()
+        style.lineSpacing = AppTheme.Spacing.tiny
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: 552, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font, .paragraphStyle: style]
+        )
+        let calculated = ceil(rect.height) + 6
+        return min(max(calculated, 40), 170)
     }
-}
 
 private var deleteConfirmationOverlay: some View {
         ZStack {

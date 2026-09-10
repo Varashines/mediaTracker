@@ -13,7 +13,14 @@ import plistlib
 from typing import Any, Optional
 
 # Default store location for the MediaTracker app.
-DEFAULT_STORE_PATH = os.path.expanduser("~/Library/Application Support/default.store")
+# Since the app-owned directory migration, the live store is
+# ~/Library/Application Support/MediaTracker/default.store — the legacy
+# shared path now holds a foreign (system daemon) store without our tables.
+# Override with MEDIATRACKER_STORE_PATH if needed.
+DEFAULT_STORE_PATH = os.environ.get(
+    "MEDIATRACKER_STORE_PATH",
+    os.path.expanduser("~/Library/Application Support/MediaTracker/default.store"),
+)
 
 # Core Data stores dates as seconds since 2001-01-01.
 COCOA_EPOCH_OFFSET = 978307200.0
@@ -57,6 +64,38 @@ def open_store(path: Optional[str] = None, readonly: bool = True) -> sqlite3.Con
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def get_entity_id(conn: sqlite3.Connection, entity_name: str, fallback: int) -> int:
+    """Resolve the Z_ENT value for a given SwiftData/Core Data entity name.
+
+    Core Data renumbers entity IDs between model migrations. Reads from
+    Z_PRIMARYKEY where available, falling back to a known default.
+    """
+    try:
+        row = conn.execute(
+            "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", (entity_name,)
+        ).fetchone()
+        if row and row["Z_ENT"] is not None:
+            return int(row["Z_ENT"])
+    except Exception:
+        pass
+    return fallback
+
+
+def get_collection_items_column(conn: sqlite3.Connection, items_table: str = "Z_5ITEMS") -> str:
+    """Detect the MediaItem foreign key column in the collection-items join table.
+
+    Typically Z_7ITEMS or Z_6ITEMS depending on MediaItem's Z_ENT.
+    """
+    try:
+        cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({items_table})").fetchall()]
+        for col in cols:
+            if col.endswith("ITEMS"):
+                return col
+    except Exception:
+        pass
+    return "Z_7ITEMS"
 
 
 def to_date(value: Optional[float]) -> Optional[str]:
