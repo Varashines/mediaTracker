@@ -578,7 +578,9 @@ struct MediaThumbnailView: View, Equatable {
                             item.lastInteractionDate = Date()
                             item.lastStateChangeDate = Date()
                             item.lastUpdated = Date()
+                            item.syncCachedProperties(dirty: [.progress, .badge])
                             SaveCoordinator.shared.requestSave(modelContext)
+                            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
                         }
                     }
                 } label: {
@@ -608,6 +610,7 @@ struct MediaThumbnailView: View, Equatable {
                             item.state = targetState
                             item.lastUpdated = Date()
                             SaveCoordinator.shared.requestSave(modelContext)
+                            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
                         }
                     }
                 }

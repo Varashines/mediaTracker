@@ -57,6 +57,9 @@ final class TVEpisode {
                     let epRuntime = self.runtime ?? 0
                     let currentRuntime = item.cachedRuntime ?? 0
                     item.cachedRuntime = max(0, currentRuntime + (watched ? epRuntime : -epRuntime))
+                    if watched {
+                        item.lastInteractionDate = Date()
+                    }
                 }
                 
                 // Only adjust remaining count if the episode has already aired
