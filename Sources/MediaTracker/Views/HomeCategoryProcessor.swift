@@ -41,17 +41,17 @@ extension MediaFilterActor {
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
         descStreaming.propertiesToFetch = MediaItem.thumbnailProperties
         descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreaming.fetchLimit = 40
+        descStreaming.fetchLimit = 150
 
         var descActive = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
         descActive.propertiesToFetch = MediaItem.thumbnailProperties
         descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descActive.fetchLimit = 40
+        descActive.fetchLimit = 100
 
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
         descTransition.propertiesToFetch = MediaItem.thumbnailProperties
         descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descTransition.fetchLimit = 30
+        descTransition.fetchLimit = 50
 
         let streamingItems = try modelContext.fetch(descStreaming).filter {
             $0.stateValue != completedState && $0.stateValue != droppedState
@@ -68,7 +68,7 @@ extension MediaFilterActor {
         var recentDesc = FetchDescriptor<MediaItem>(predicate: recentPredicate)
         recentDesc.propertiesToFetch = MediaItem.thumbnailProperties
         recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        recentDesc.fetchLimit = 40
+        recentDesc.fetchLimit = 60
 
         let recentItems = try modelContext.fetch(recentDesc)
 
@@ -202,13 +202,13 @@ extension MediaFilterActor {
            item.stateValue == MediaState.onHoldRaw { return false }
 
         if item.storedIsUpcoming {
-            let airDate = item.cachedNextAiringDate ?? .distantFuture
+            let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
             if airDate > now { return false }
             let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
             if daysSinceAir > 14 { return false }
         }
 
-        let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0
+        let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0 && (item.storedProgress ?? 0) > 0
         let nextAirDate = item.cachedNextAiringDate ?? .distantPast
         if isCaughtUp && nextAirDate > now && item.type == .tvShow { return false }
 
@@ -228,9 +228,11 @@ extension MediaFilterActor {
         let isNewDrop = SmartBadge.radarBadges.contains(where: { $0.rawValue == badge })
         if isNewDrop {
             if item.stateValue == MediaState.wishlistRaw && (item.storedProgress ?? 0) == 0 {
-                let releaseDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast
+                let releaseDate = (item.type == .tvShow && (item.releaseDate ?? .distantFuture) <= now)
+                    ? (item.releaseDate ?? .distantPast)
+                    : (item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast)
                 let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
-                if daysSinceRelease > 5 { return false }
+                if daysSinceRelease < 0 || daysSinceRelease > 14 { return false }
             }
             return true
         }
