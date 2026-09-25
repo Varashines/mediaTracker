@@ -573,9 +573,9 @@ struct RuleAddMenu: View {
                 Button("Only TV Shows") { smartRules.append(.mediaType(.tvShow)) }
             }
             Menu("Status") {
-                Button("In Progress") { smartRules.append(.state(.active)) }
-                Button("Watchlist") { smartRules.append(.state(.wishlist)) }
-                Button("Completed") { smartRules.append(.state(.completed)) }
+                ForEach(MediaState.allCases, id: \.self) { state in
+                    Button(state.displayName) { smartRules.append(.state(state)) }
+                }
             }
             Menu("Taste") {
                 Button("Loved") { smartRules.append(.taste(.love)) }
