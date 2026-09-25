@@ -425,7 +425,7 @@ struct MediaThumbnailView: View, Equatable {
         // reducing visual effects (matches HoverScaleEffect / CW backdrop).
         .animation(
             AppThemeCoordinator.isReducingVisualEffects || disableHover
-                ? nil : .easeInOut(duration: 0.14),
+                ? nil : AppTheme.Animation.hoverFade,
             value: isHovered
         )
         .onAppear {

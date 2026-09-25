@@ -159,7 +159,7 @@ private struct ClaymorphicHeroCard: View {
                 .scaleEffect(isHovered ? 1.2 : 1.0)
                 .rotationEffect(Angle(degrees: isHovered ? -10 : 0))
                 .offset(y: isHovered ? -4 : 0)
-                .animation(.spring(response: 0.35, dampingFraction: 0.5), value: isHovered)
+                .animation(AppTheme.Animation.adaptive(AppTheme.Animation.pop), value: isHovered)
                 .frame(width: 44, height: 44)
 
             // Right: Text Details
@@ -210,7 +210,7 @@ private struct ClaymorphicHeroCard: View {
         .shadow(color: color.opacity(isHovered ? 0.15 : 0.0), radius: 10, x: 0, y: 5)
         .shadow(color: .black.opacity(isHovered ? 0.06 : 0.02), radius: isHovered ? 6 : 3, x: 0, y: isHovered ? 3 : 1)
         .onHover { hovering in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            AppTheme.Animation.with(AppTheme.Animation.press) {
                 isHovered = hovering
             }
         }

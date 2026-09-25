@@ -125,7 +125,7 @@ struct TitleSection: View {
                                 .contentShape(Rectangle())
                                 .help(isLoadingLogoOptions ? "Loading logo options" : "Change logo")
                             .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.2), value: isLogosHovering || showLogoPicker)
+                                .animation(AppTheme.Animation.fade, value: isLogosHovering || showLogoPicker)
                                 .padding(8)
                                 .popover(isPresented: $showLogoPicker) {
                                     LogoPickerGrid(
@@ -589,13 +589,13 @@ private struct LogoThumbnail: View {
                 isHovered = hovering
             }
             .onTapGesture {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                AppTheme.Animation.with(AppTheme.Animation.press) {
                     selectionPulse = true
                 }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 120_000_000)
                     guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                    AppTheme.Animation.with(AppTheme.Animation.press) {
                         selectionPulse = false
                     }
                 }

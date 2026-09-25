@@ -61,7 +61,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
         )
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.015 : 1.0))
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.animation(.easeInOut(duration: 0.14), value: isHovered)
+            $0.animation(AppTheme.Animation.hoverFade, value: isHovered)
         }
         .onHover { isHovered = $0 }
         .onChange(of: isFastScrolling) { _, fast in

@@ -448,7 +448,7 @@ struct DetailView: View {
             accentColor: viewModel.highContrastAccentColor,
             bgAccentColor: viewModel.luminousAccentColor,
             onSynopsisExpand: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = true }
+                AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = true }
             },
         )
     }
@@ -768,7 +768,7 @@ struct DetailView: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+                    AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = false }
                 }
                 .transition(.opacity)
 
@@ -783,7 +783,7 @@ struct DetailView: View {
                         .kerning(AppTheme.Kerning.wide)
                     Spacer()
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+                        AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = false }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(AppTheme.Font.title3)
@@ -824,18 +824,18 @@ struct DetailView: View {
             // Stages in place: scale + fade. No geometry coupling, so the
             // inline card underneath can never move.
             .transition(.scale(scale: 0.94).combined(with: .opacity))
-            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
+            .animation(AppTheme.Animation.adaptive(AppTheme.Animation.readerExpand), value: showSynopsisReader)
 
             Button("") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+                AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = false }
             }
             .keyboardShortcut(.escape, modifiers: [])
             .hidden()
         }
         // A2: veil runs the same overshoot-free spring as the card staging.
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.readerExpand), value: showSynopsisReader)
         .onExitCommand {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+            AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = false }
         }
         .onAppear {
             synopsisCloseFocused = true
