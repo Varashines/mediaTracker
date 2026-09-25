@@ -132,7 +132,8 @@ struct CreateCollectionSheet: View {
                     }
                 }
             }
-            
+            .scrollIndicators(.hidden)
+
             // Buttons
             HStack(spacing: 16) {
                  Button("Cancel") { dismiss() }
@@ -539,6 +540,7 @@ struct IconPickerGridView: View {
             }
             .padding(.vertical, 4)
         }
+        .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize)
         .frame(height: 180)
     }
