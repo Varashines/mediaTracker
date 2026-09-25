@@ -122,9 +122,24 @@ struct AppTheme {
         static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
         static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
-        static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+         static let gridSettle: SwiftUI.Animation = .spring(response: 0.28, dampingFraction: 0.86)
+
+        @MainActor
+        static func adaptive(_ animation: SwiftUI.Animation) -> SwiftUI.Animation? {
+            AppThemeCoordinator.isReducingVisualEffects ? nil : animation
+        }
+
+        @MainActor
+        static func with(_ animation: SwiftUI.Animation, _ body: () -> Void) {
+            if AppThemeCoordinator.isReducingVisualEffects {
+                body()
+            } else {
+                SwiftUI.withAnimation(animation) { body() }
+            }
+        }
         static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
-        static let chartReveal: SwiftUI.Animation = .easeInOut(duration: 0.8)
+        static let chartReveal: SwiftUI.Animation = .easeOut(duration: 0.8)
     }
 
     struct Thumbnail {
@@ -133,9 +148,11 @@ struct AppTheme {
         static let medium = CGSize(width: 400, height: 600)
         static let large = CGSize(width: 800, height: 1200)
         static let backdropCompact = CGSize(width: 400, height: 226)
+        static let networkLogo = CGSize(width: 100, height: 50)
         /// ~2× of a ≤190×38pt title-logo frame on landscape cards. Must match
         /// every CW/ForYou logo `CachedImage` + prewarm `targetSize` (cache key).
         static let cardLogo = CGSize(width: 380, height: 90)
+        static let titleLogoLarge = CGSize(width: 780, height: 185)
     }
 
     /// Standardized icon sizes

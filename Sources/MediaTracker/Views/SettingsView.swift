@@ -121,7 +121,7 @@ struct SettingsView: View {
                     if AppThemeCoordinator.isReducingVisualEffects {
                         selectedTab = tab
                     } else {
-                        withAnimation(AppTheme.Animation.springSnappy) {
+                        AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                             selectedTab = tab
                         }
                     }

@@ -37,13 +37,14 @@ final class YearInReviewTests: MTTestCase {
     }
 
     @MainActor
-    private func makeEpisode(showID: Int, watchedAt: Date, runtime: Int, episodeNumber: Int = 1) -> TVEpisode {
+    private func makeEpisode(showID: Int, watchedAt: Date, runtime: Int, episodeNumber: Int = 1, airDate: Date? = nil) -> TVEpisode {
         let episode = TVEpisode(
             episodeNumber: episodeNumber, seasonNumber: 1,
             name: "Ep", overview: "",
             runtime: runtime, isWatched: true, showID: showID
         )
         episode.watchedDate = watchedAt
+        episode.airDateValue = airDate ?? watchedAt
         return episode
     }
 
@@ -344,6 +345,40 @@ final class YearInReviewTests: MTTestCase {
 
         XCTAssertEqual(review.allWatchedTitles().map(\.title), ["Loved Show", "Unrated Movie"])
         XCTAssertEqual(review.favoriteCandidates().map(\.title), ["Loved Show"])
+    }
+
+    @MainActor
+    func testShareCandidatesOnlyIncludeTitlesReleasedInReviewYear() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let oldMovie = makeItem(id: "movie_90", title: "Old Movie", type: .movie, releaseDate: date(2025, 1, 1), state: "Completed")
+        oldMovie.tasteValue = TasteValue.love.rawValue
+        oldMovie.lastStateChangeDate = date(2026, 7, 1)
+        context.insert(oldMovie)
+
+        let newMovie = makeItem(id: "movie_91", title: "New Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        newMovie.tasteValue = TasteValue.like.rawValue
+        newMovie.lastStateChangeDate = date(2026, 7, 2)
+        context.insert(newMovie)
+
+        let oldShow = makeItem(id: "tv_92", title: "Old Show", type: .tvShow, releaseDate: date(2020, 1, 1), state: "Active")
+        oldShow.tasteValue = TasteValue.love.rawValue
+        context.insert(oldShow)
+        context.insert(makeEpisode(showID: 92, watchedAt: date(2026, 7, 3), runtime: 45, airDate: date(2025, 6, 1)))
+
+        let newShow = makeItem(id: "tv_93", title: "New Show", type: .tvShow, releaseDate: date(2020, 1, 1), state: "Active")
+        newShow.tasteValue = TasteValue.love.rawValue
+        context.insert(newShow)
+        context.insert(makeEpisode(showID: 93, watchedAt: date(2026, 7, 4), runtime: 45, airDate: date(2026, 6, 1)))
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(Set(review.allWatchedTitles().map(\.title)), ["Old Movie", "New Movie", "Old Show", "New Show"])
+        XCTAssertEqual(Set(review.favoriteCandidates().map(\.title)), ["New Movie", "New Show"])
     }
 
     @MainActor

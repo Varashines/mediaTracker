@@ -37,6 +37,36 @@ struct MainLibraryView: View {
         }
     }
 
+    private struct GridFilterKey: Equatable {
+        let category: NavigationCategory
+        let searchText: String
+        let networks: [String]
+        let languages: [String]
+        let genres: [String]
+        let years: [String]
+        let states: [MediaState]
+        let providers: [String]
+        let sortOrder: SortOrder
+        let groupBy: GroupBy
+        let collectionID: UUID?
+    }
+
+    private var gridFilterKey: GridFilterKey {
+        GridFilterKey(
+            category: selectedCategory,
+            searchText: searchText,
+            networks: selectedNetworks ?? [],
+            languages: viewModel.filter.selectedLanguages,
+            genres: viewModel.filter.selectedGenres,
+            years: viewModel.filter.selectedYears,
+            states: viewModel.filter.selectedStates,
+            providers: viewModel.filter.selectedProviders,
+            sortOrder: viewModel.filter.currentSortOrder,
+            groupBy: viewModel.filter.currentGroupBy,
+            collectionID: viewModel.collection.selectedCollectionID
+        )
+    }
+
     private var activeFilterEntries: [(id: String, label: String)] {
         var entries: [(id: String, label: String)] = []
         if !viewModel.filter.selectedNetworks.isEmpty {
@@ -95,8 +125,9 @@ struct MainLibraryView: View {
                 }
             }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
                     if selectedCategory == .home && searchText.isEmpty && (selectedNetworks?.isEmpty ?? true) {
                         HomeViewSections(
                             homeContinueWatching: homeContinueWatching,
@@ -146,10 +177,17 @@ struct MainLibraryView: View {
                         .transition(.opacity)
                     }
                 }
+                .id("library-scroll-top")
             }
             .scrollBounceBehavior(selectedCategory == .home ? .always : .basedOnSize)
             .scrollIndicators(.hidden)
-            .trackFastScrollingEnv()
+                .trackFastScrollingEnv()
+                .onChange(of: gridFilterKey) { _, _ in
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
+                        scrollProxy.scrollTo("library-scroll-top", anchor: .top)
+                    }
+                }
+            }
         }
     }
 }

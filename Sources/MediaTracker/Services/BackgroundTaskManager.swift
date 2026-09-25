@@ -24,14 +24,44 @@ private actor DripSyncSelectionActor {
             return incomplete
         }
 
-        // Priority 2: Stale active items
         let stalePredicate = #Predicate<MediaItem> { item in
             !item.isSoftDeleted && item.stateValue == "Active" && (item.lastUpdated == nil || item.lastUpdated! < staleThreshold)
         }
         var staleDesc = FetchDescriptor<MediaItem>(predicate: stalePredicate)
-        staleDesc.propertiesToFetch = [\.id]
-        staleDesc.fetchLimit = limit
-        return try modelContext.fetch(staleDesc).map(\.id)
+        staleDesc.propertiesToFetch = [\.id, \.typeValue, \.lastUpdated]
+        let staleItems = try modelContext.fetch(staleDesc)
+        let statusByTMDBID = try providerStatusByTMDBID()
+        return Array(staleItems.lazy
+            .filter { item in
+                guard let tmdbID = Self.tmdbID(from: item.id) else { return false }
+                let type = MediaType(rawValue: item.typeValue) ?? .movie
+                return MediaRefreshPolicy.shouldRefresh(
+                    status: statusByTMDBID[tmdbID],
+                    type: type,
+                    lastUpdated: item.lastUpdated
+                )
+            }
+            .prefix(limit)
+            .map(\.id))
+    }
+
+    private func providerStatusByTMDBID() throws -> [Int: String] {
+        var movieDesc = FetchDescriptor<MovieDetails>()
+        movieDesc.propertiesToFetch = [\.tmdbID, \.status]
+        var tvDesc = FetchDescriptor<TVShowDetails>()
+        tvDesc.propertiesToFetch = [\.tmdbID, \.status]
+        var result: [Int: String] = [:]
+        for details in try modelContext.fetch(movieDesc) {
+            if let status = details.status { result[details.tmdbID] = status }
+        }
+        for details in try modelContext.fetch(tvDesc) {
+            if let status = details.status { result[details.tmdbID] = status }
+        }
+        return result
+    }
+
+    private nonisolated static func tmdbID(from id: String) -> Int? {
+        Int(id.split(separator: "_").last ?? "")
     }
 }
 
@@ -44,6 +74,8 @@ class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
     
     var isImportActive: Bool = false
+    var isRepairingMissingDates: Bool = false
+    var lastDateRepairSummary: String? = nil
     var activeTaskDescription: String? = nil
 
     private var isScheduled = false
@@ -241,7 +273,7 @@ class BackgroundTaskManager {
             await refreshMissingSeasonCast()
             await backfillMissingLibraryMetadata()
             await refreshStalePremiereBadges()
-            await refreshMissingAirDates(cap: 15)
+            await repairMissingDates(force: false, cap: 15)
         } else {
             AppLogger.info("🔄 Background network sync skipped — device is offline", logger: AppLogger.background)
         }
@@ -435,30 +467,120 @@ class BackgroundTaskManager {
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
 
-    /// Backfill missing airDateValue for tracked episodes (where ZAIRDATEVALUE IS NULL) — ensures PREMIERE window has data.
-    func refreshMissingAirDates(cap: Int = 25) async {
+    private func providerStatusByTMDBID(in context: ModelContext) -> [Int: String] {
+        var movieDesc = FetchDescriptor<MovieDetails>()
+        movieDesc.propertiesToFetch = [\.tmdbID, \.status]
+        var tvDesc = FetchDescriptor<TVShowDetails>()
+        tvDesc.propertiesToFetch = [\.tmdbID, \.status]
+        var result: [Int: String] = [:]
+        for details in (try? context.fetch(movieDesc)) ?? [] {
+            if let status = details.status { result[details.tmdbID] = status }
+        }
+        for details in (try? context.fetch(tvDesc)) ?? [] {
+            if let status = details.status { result[details.tmdbID] = status }
+        }
+        return result
+    }
+
+    func repairMissingDates(force: Bool = true, cap: Int = 50) async {
+        guard let container = container else { return }
+        guard !isRepairingMissingDates else { return }
+        guard !SleepManager.shared.isAsleep else { return }
+        guard !isThermalThrottled else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            lastDateRepairSummary = "Skipped — no network connection"
+            return
+        }
+
+        isRepairingMissingDates = true
+        activeTaskDescription = "Repairing missing release and episode dates…"
+        defer {
+            isRepairingMissingDates = false
+            if activeTaskDescription == "Repairing missing release and episode dates…" {
+                activeTaskDescription = nil
+            }
+        }
+
+        await refreshMissingAirDates(cap: cap, force: force, includeTerminated: force)
+
+        let context = ModelContext(container)
+        let recentCutoff = Date().addingTimeInterval(-.days7)
+        let descriptor: FetchDescriptor<MediaItem>
+        if force {
+            descriptor = FetchDescriptor(
+                predicate: #Predicate { $0.isSoftDeleted == false && $0.releaseDate == nil }
+            )
+        } else {
+            descriptor = FetchDescriptor(
+                predicate: #Predicate {
+                    $0.isSoftDeleted == false
+                        && $0.releaseDate == nil
+                        && ($0.lastUpdated == nil || $0.lastUpdated! < recentCutoff)
+                }
+            )
+        }
+        var titleDescriptor = descriptor
+        titleDescriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.stateValue, \.storedIsUpcoming, \.lastUpdated]
+        titleDescriptor.fetchLimit = max(cap, cap * 2)
+        var candidates = (try? context.fetch(titleDescriptor)) ?? []
+        if !force {
+            let statusByTMDBID = providerStatusByTMDBID(in: context)
+            candidates = candidates.filter { item in
+                guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { return false }
+                let type = MediaType(rawValue: item.typeValue) ?? .movie
+                return MediaRefreshPolicy.shouldRefresh(
+                    status: statusByTMDBID[tmdbID],
+                    type: type,
+                    lastUpdated: item.lastUpdated
+                )
+            }
+        }
+        let activeRaw = MediaState.activeRaw
+        candidates.sort { lhs, rhs in
+            if lhs.storedIsUpcoming != rhs.storedIsUpcoming { return lhs.storedIsUpcoming }
+            return (lhs.stateValue == activeRaw) && !(rhs.stateValue == activeRaw)
+        }
+        let selectedIDs = Array(candidates.prefix(cap).map(\.id))
+        guard !selectedIDs.isEmpty else {
+            lastDateRepairSummary = "No titles missing dates"
+            return
+        }
+
+        AppLogger.info("📅 Date repair: refreshing \(selectedIDs.count) titles missing release dates", logger: AppLogger.background)
+        let service = BackgroundDataService(modelContainer: container)
+        await service.refreshMetadata(for: selectedIDs, metadataOnly: false, force: force)
+        lastDateRepairSummary = "Checked \(selectedIDs.count) title\(selectedIDs.count == 1 ? "" : "s")"
+    }
+
+    func refreshMissingAirDates(cap: Int = 25, force: Bool = false, includeTerminated: Bool = true) async {
         let signpostState = Self.backgroundSignposter.beginInterval("healAirDates")
         defer { Self.backgroundSignposter.endInterval("healAirDates", signpostState) }
         guard let container = container else { return }
         guard !SleepManager.shared.isAsleep else { return }
         let context = ModelContext(container)
-        // Find shows with episodes missing airDateValue via a lightweight episode
-        // query instead of faulting every season/episode relationship graph.
+        let recentCutoff = Date().addingTimeInterval(-.days7)
         var missingAirDates = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.airDateValue == nil })
         missingAirDates.propertiesToFetch = [\.showID]
         let showIDs = Set(((try? context.fetch(missingAirDates)) ?? []).compactMap { $0.showID })
         guard !showIDs.isEmpty else { return }
 
         var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.typeValue == "TV Show" && $0.isSoftDeleted == false })
-        descriptor.propertiesToFetch = [\.id, \.stateValue, \.storedIsUpcoming]
+        descriptor.propertiesToFetch = [\.id, \.stateValue, \.storedIsUpcoming, \.lastUpdated]
         let allTV = (try? context.fetch(descriptor)) ?? []
-        // Collect all matches (bounded by showIDs), then prioritize: upcoming and
-        // active shows heal first so the PREMIERE window always has air-date data —
-        // instead of whichever 25 shows happen to be first in fetch order.
+        let statusByTMDBID: [Int: String] = includeTerminated ? [:] : providerStatusByTMDBID(in: context)
         let activeRaw = MediaState.activeRaw
         var candidates: [MediaItem] = allTV.filter { item in
             guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { return false }
-            return showIDs.contains(tmdbID)
+            guard showIDs.contains(tmdbID) else { return false }
+            guard force || item.lastUpdated == nil || (item.lastUpdated ?? .distantPast) < recentCutoff else { return false }
+            if !includeTerminated {
+                guard MediaRefreshPolicy.shouldRefresh(
+                    status: statusByTMDBID[tmdbID],
+                    type: .tvShow,
+                    lastUpdated: item.lastUpdated
+                ) else { return false }
+            }
+            return true
         }
         candidates.sort { lhs, rhs in
             if lhs.storedIsUpcoming != rhs.storedIsUpcoming { return lhs.storedIsUpcoming }
@@ -467,13 +589,12 @@ class BackgroundTaskManager {
         if candidates.count > cap {
             candidates = Array(candidates.prefix(cap))
         }
-        // Restore full models for the refresh pass
         guard !candidates.isEmpty else { return }
         AppLogger.info("📅 Air-date heal: \(candidates.count) shows with missing episode air dates", logger: AppLogger.background)
         for item in candidates {
             guard let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) else { continue }
             let service = BackgroundDataService(modelContainer: container)
-            _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: false)
+            _ = await service.refreshTVShow(id: item.id, tmdbID: tmdbID, metadataOnly: false, force: force)
             try? await Task.sleep(nanoseconds: 400_000_000)
         }
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }

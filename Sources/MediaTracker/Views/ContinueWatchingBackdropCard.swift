@@ -79,14 +79,16 @@ struct ContinueWatchingBackdropCard: View, Equatable {
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: cardWidth, height: cardHeight)
+            .brightness(isHovered ? 0.035 : 0)
             .clipped()
         } else if let poster = metadata.posterURL, let url = URL(string: poster) {
             // Center-cropped poster fallback: portrait art fills the 16:9 frame.
-            CachedImage(url: url, targetSize: .thumbMedium, isFastScrolling: isFastScrolling) {
+            CachedImage(url: url, targetSize: .backdropCompact, isFastScrolling: isFastScrolling) {
                 Rectangle().fill(Color.secondary.opacity(0.12))
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: cardWidth, height: cardHeight)
+            .brightness(isHovered ? 0.035 : 0)
             .clipped()
         } else {
             Rectangle()

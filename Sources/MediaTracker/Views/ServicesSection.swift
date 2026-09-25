@@ -51,7 +51,7 @@ struct ServicesSection: View {
                                     await NotificationManager.shared.scheduleAllUpcomingNotifications()
                                 }
                             } else {
-                                Task { UNUserNotificationCenter.current().removeAllPendingNotificationRequests() }
+                                Task { NotificationManager.shared.removeAllPendingNotifications() }
                             }
                         }
 

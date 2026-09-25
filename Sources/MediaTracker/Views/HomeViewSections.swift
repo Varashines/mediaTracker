@@ -26,76 +26,40 @@ struct HomeViewSections: View {
     }
 
     @State private var visibleSection: HomeSection? = nil
+    @State private var activePillAnchor: CGRect?
+    private static let focusCoordinateSpace = "homeFocusSurface"
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             SectionPicker(
                 visibleSection: $visibleSection,
+                activePillAnchor: $activePillAnchor,
+                coordinateSpace: Self.focusCoordinateSpace,
                 showsPickOfTheDay: !pickOfTheDay.isEmpty
             )
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-            if visibleSection == .recentlyWatched {
-                WatchedThisWeek()
-                    .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.opacity)
-            }
-
-            if visibleSection == .forYou {
-                ForYouCarousel(
-                    items: recommendations, namespace: namespace,
-                    onSelect: onSelectHero,
-                    isLoading: !recommendationsLoaded,
-                    onDiscover: { onCategorySelected(.discover) }
-                )
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.opacity)
-                .onAppear {
-                    if recommendations.isEmpty && !recommendationsLoaded {
-                        onFetchRecommendations?()
+            if visibleSection != nil {
+                selectedSectionContent
+                    .padding(.vertical, AppTheme.Spacing.medium)
+                    .background {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .fill(AppTheme.Colors.accent.opacity(0.07))
                     }
-                }
-            }
-
-            if visibleSection == .pickOfTheDay {
-                PickOfDayCarousel(
-                    items: pickOfTheDay, namespace: namespace,
-                    onSelect: onSelectHero
-                )
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.opacity)
-                .onAppear {
-                    if pickOfTheDay.isEmpty {
-                        onFetchPickOfTheDay?()
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
                     }
-                }
-            }
-
-            if visibleSection == .trendingMovies || visibleSection == .trendingShows {
-                if visibleSection == .trendingMovies {
-                    TrendingCarousel(items: trendingMovies, title: "Trending Movies") { result in
-                        onTrendingAdd?(result)
-                    }
-                    .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.opacity)
-                    .onAppear {
-                        if trendingMovies.isEmpty {
-                            onFetchTrending?()
+                    .overlay {
+                        GeometryReader { proxy in
+                            if let activePillAnchor {
+                                focusConnector(in: proxy, anchor: activePillAnchor)
+                                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: activePillAnchor)
+                            }
                         }
                     }
-                }
-                if visibleSection == .trendingShows {
-                    TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
-                        onTrendingAdd?(result)
-                    }
-                    .padding(.bottom, AppTheme.Spacing.small)
+                    .padding(.horizontal, AppTheme.Spacing.large)
                     .transition(.opacity)
-                    .onAppear {
-                        if trendingShows.isEmpty {
-                            onFetchTrending?()
-                        }
-                    }
-                }
             }
 
             // 1. CONTINUE WATCHING
@@ -135,11 +99,90 @@ struct HomeViewSections: View {
                 .padding(.bottom, AppTheme.Spacing.small)
             }
         }
+        .coordinateSpace(name: Self.focusCoordinateSpace)
         .padding(.top, AppTheme.Spacing.medium)
+    }
+
+    private func focusConnector(in proxy: GeometryProxy, anchor: CGRect) -> some View {
+        let surfaceFrame = proxy.frame(in: .named(Self.focusCoordinateSpace))
+        let rawX = anchor.midX - surfaceFrame.minX
+        let x = min(max(rawX, 14), max(14, proxy.size.width - 14))
+
+        return ZStack(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.Colors.accent.opacity(0.5))
+                .frame(width: 3, height: 8)
+                .offset(x: x - 1.5, y: -4)
+
+            Path { path in
+                path.move(to: CGPoint(x: x - 8, y: 0))
+                path.addLine(to: CGPoint(x: x + 8, y: 0))
+                path.addLine(to: CGPoint(x: x, y: 9))
+                path.closeSubpath()
+            }
+            .fill(AppTheme.Colors.accent.opacity(0.16))
+        }
+    }
+
+    @ViewBuilder
+    private var selectedSectionContent: some View {
+        if visibleSection == .recentlyWatched {
+            WatchedThisWeek()
+        }
+
+        if visibleSection == .forYou {
+            ForYouCarousel(
+                items: recommendations, namespace: namespace,
+                onSelect: onSelectHero,
+                isLoading: !recommendationsLoaded,
+                onDiscover: { onCategorySelected(.discover) }
+            )
+            .onAppear {
+                if recommendations.isEmpty && !recommendationsLoaded {
+                    onFetchRecommendations?()
+                }
+            }
+        }
+
+        if visibleSection == .pickOfTheDay {
+            PickOfDayCarousel(
+                items: pickOfTheDay, namespace: namespace,
+                onSelect: onSelectHero
+            )
+            .onAppear {
+                if pickOfTheDay.isEmpty {
+                    onFetchPickOfTheDay?()
+                }
+            }
+        }
+
+        if visibleSection == .trendingMovies {
+            TrendingCarousel(items: trendingMovies, title: "Trending Movies") { result in
+                onTrendingAdd?(result)
+            }
+            .onAppear {
+                if trendingMovies.isEmpty {
+                    onFetchTrending?()
+                }
+            }
+        }
+
+        if visibleSection == .trendingShows {
+            TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
+                onTrendingAdd?(result)
+            }
+            .onAppear {
+                if trendingShows.isEmpty {
+                    onFetchTrending?()
+                }
+            }
+        }
     }
 
     private struct SectionPicker: View {
         @Binding var visibleSection: HomeSection?
+        @Binding var activePillAnchor: CGRect?
+        let coordinateSpace: String
         let showsPickOfTheDay: Bool
         @State private var hoveredPill: HomeSection?
         @Namespace private var pillNamespace
@@ -197,9 +240,14 @@ struct HomeViewSections: View {
             }
         }
 
+        private func reportPillFrame(_ frame: CGRect, isActive: Bool) {
+            guard isActive, activePillAnchor != frame else { return }
+            activePillAnchor = frame
+        }
+
         private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
             Button {
-                withAnimation(AppTheme.Animation.springSnappy) {
+                AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                     if visibleSection == section {
                         visibleSection = nil
                     } else {
@@ -215,18 +263,33 @@ struct HomeViewSections: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.small)
                 .padding(.vertical, AppTheme.Spacing.mini)
-                .background {
-                    Capsule()
-                        .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? AppTheme.Colors.surfaceMuted(for: scheme) : AppTheme.Colors.surfaceSubtle(for: scheme)))
-                        .overlay {
-                            if isActive {
-                                Capsule()
-                                    .fill(AppTheme.Colors.accent)
-                                    .matchedGeometryEffect(id: "homePill", in: pillNamespace)
-                            }
-                        }
-                }
-                .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
+                 .background {
+                     Capsule()
+                         .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? AppTheme.Colors.surfaceMuted(for: scheme) : AppTheme.Colors.surfaceSubtle(for: scheme)))
+                         .overlay {
+                             if isActive {
+                                 Capsule()
+                                     .fill(AppTheme.Colors.accent)
+                                     .matchedGeometryEffect(id: "homePill", in: pillNamespace)
+                             }
+                         }
+                 }
+                 .background {
+                     GeometryReader { proxy in
+                         let frame = proxy.frame(in: .named(coordinateSpace))
+                         Color.clear
+                             .onAppear { reportPillFrame(frame, isActive: isActive) }
+                             .onChange(of: frame) { _, newFrame in
+                                 reportPillFrame(newFrame, isActive: isActive)
+                             }
+                             .onChange(of: isActive) { _, active in
+                                 if active {
+                                     reportPillFrame(proxy.frame(in: .named(coordinateSpace)), isActive: true)
+                                 }
+                             }
+                     }
+                 }
+                 .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
                 .foregroundStyle(isActive ? AppTheme.Colors.accent.readableForeground : .primary)
                 .clipShape(Capsule())
                 .contentShape(Capsule())

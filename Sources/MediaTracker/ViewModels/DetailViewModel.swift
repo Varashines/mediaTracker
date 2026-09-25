@@ -179,7 +179,7 @@ class DetailViewModel {
         // Note: fetching a "fresh" copy via the same context would return the
         // same registered instance as self.item, so there is nothing to copy.
         if let logoURL = item.titleLogoURL, let url = URL(string: logoURL) {
-            ImageCache.shared.prewarmImages(urls: [url], targetSize: CGSize(width: 780, height: 185))
+            ImageCache.shared.prewarmImages(urls: [url], targetSize: .titleLogoLarge)
         }
         item.syncCachedProperties(dirty: .all)
         // .all already recomputes progress + badge. Only the badge-scan cache needs

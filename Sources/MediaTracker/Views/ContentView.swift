@@ -492,7 +492,9 @@ struct LibraryDetailView: View {
                 await MainActor.run {
                     viewModel.pagination.totalItemCount = result.totalCount
                     viewModel.pagination.isInitialLoad = false
-                    viewModel.display.applyFilterResult(result)
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
+                        viewModel.display.applyFilterResult(result)
+                    }
                 }
 
 
@@ -546,7 +548,9 @@ struct LibraryDetailView: View {
                 guard !Task.isCancelled else { return }
 
                 await MainActor.run {
-                    viewModel.display.displayedItems.append(contentsOf: result.displayed)
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
+                        viewModel.display.displayedItems.append(contentsOf: result.displayed)
+                    }
                     viewModel.pagination.isLoadingMore = false
                 }
 
@@ -660,7 +664,9 @@ struct LibraryDetailView: View {
                 )
 
                 await MainActor.run {
-                    viewModel.display.applyUpdate(updatedMetadata, id: id)
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
+                        viewModel.display.applyUpdate(updatedMetadata, id: id)
+                    }
                     // Compute mood from the post-update list — the pre-update
                     // prefix(10) was reading stale rows.
                     let newMoodColors = viewModel.display.displayedItems

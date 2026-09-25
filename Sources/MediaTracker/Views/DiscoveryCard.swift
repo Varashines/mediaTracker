@@ -97,7 +97,7 @@ struct DiscoveryCard: View {
                             .fill(Color.white)
                             .shadow(color: AppTheme.Colors.shadowElevated(for: colorScheme), radius: 2, y: 1)
 
-                        CachedImage(url: url, targetSize: CGSize(width: 75, height: 32), priority: .low) { _ in } placeholder: {
+                        CachedImage(url: url, targetSize: .networkLogo, priority: .low) { _ in } placeholder: {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.secondary.opacity(0.08))
                         }
