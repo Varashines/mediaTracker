@@ -77,7 +77,7 @@ final class SeasonCastMergeTests: MTTestCase {
     func testInsertUpdateDeleteSemantics() async throws {
         let container = try makeContainer()
         let context = container.mainContext
-        try seedShow(in: context)
+        _ = try seedShow(in: context)
 
         // Stub APIClient.shared so fetchSeasonAggregateCredits serves our payload.
         let sessionConfig = URLSessionConfiguration.ephemeral

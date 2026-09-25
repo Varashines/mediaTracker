@@ -47,6 +47,8 @@ class MediaViewModel {
     var onFilterUpdate: (() -> Void)?
     private var cancellables = Set<AnyCancellable>()
     private var trendingTask: Task<Void, Never>?
+    private var recommendationsTask: Task<Void, Never>?
+    private var recommendationsTaskGeneration = 0
 
     init() {
         filterSubject
@@ -92,13 +94,21 @@ class MediaViewModel {
                 display.recommendationsFetched = true
                 return
             }
+            guard recommendationsTask == nil else { return }
+        } else {
+            recommendationsTask?.cancel()
         }
-        Task { [weak self] in
+
+        recommendationsTaskGeneration += 1
+        let generation = recommendationsTaskGeneration
+        recommendationsTask = Task { [weak self] in
             let recs = await actor.fetchRecommendations(forceRefresh: forceRefresh)
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                self?.display.recommendations = recs
-                self?.display.recommendationsFetched = true
+                guard let self, self.recommendationsTaskGeneration == generation else { return }
+                self.recommendationsTask = nil
+                self.display.recommendations = recs
+                self.display.recommendationsFetched = true
                 ImageCache.shared.prewarmImages(recs, limit: 6, targetSize: .thumbSmall, priority: .low)
                 let backdrops = recs.prefix(6).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
                 ImageCache.shared.prewarmImages(urls: backdrops, targetSize: .backdropCompact, priority: .low)
