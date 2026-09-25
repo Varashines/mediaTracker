@@ -26,6 +26,7 @@ struct HomeViewSections: View {
     }
 
     @State private var visibleSection: HomeSection? = nil
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -35,67 +36,18 @@ struct HomeViewSections: View {
             )
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
-            if visibleSection == .recentlyWatched {
-                WatchedThisWeek()
-                    .padding(.bottom, AppTheme.Spacing.small)
+            if visibleSection != nil {
+                selectedSectionContent
+                    .padding(.vertical, AppTheme.Spacing.medium)
+                    .background {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .fill(AppTheme.Colors.surfaceMuted(for: colorScheme).opacity(colorScheme == .dark ? 0.42 : 0.5))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                            .stroke(AppTheme.Colors.accent.opacity(0.14), lineWidth: 0.6)
+                    }
                     .transition(.opacity)
-            }
-
-            if visibleSection == .forYou {
-                ForYouCarousel(
-                    items: recommendations, namespace: namespace,
-                    onSelect: onSelectHero,
-                    isLoading: !recommendationsLoaded,
-                    onDiscover: { onCategorySelected(.discover) }
-                )
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.opacity)
-                .onAppear {
-                    if recommendations.isEmpty && !recommendationsLoaded {
-                        onFetchRecommendations?()
-                    }
-                }
-            }
-
-            if visibleSection == .pickOfTheDay {
-                PickOfDayCarousel(
-                    items: pickOfTheDay, namespace: namespace,
-                    onSelect: onSelectHero
-                )
-                .padding(.bottom, AppTheme.Spacing.small)
-                .transition(.opacity)
-                .onAppear {
-                    if pickOfTheDay.isEmpty {
-                        onFetchPickOfTheDay?()
-                    }
-                }
-            }
-
-            if visibleSection == .trendingMovies || visibleSection == .trendingShows {
-                if visibleSection == .trendingMovies {
-                    TrendingCarousel(items: trendingMovies, title: "Trending Movies") { result in
-                        onTrendingAdd?(result)
-                    }
-                    .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.opacity)
-                    .onAppear {
-                        if trendingMovies.isEmpty {
-                            onFetchTrending?()
-                        }
-                    }
-                }
-                if visibleSection == .trendingShows {
-                    TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
-                        onTrendingAdd?(result)
-                    }
-                    .padding(.bottom, AppTheme.Spacing.small)
-                    .transition(.opacity)
-                    .onAppear {
-                        if trendingShows.isEmpty {
-                            onFetchTrending?()
-                        }
-                    }
-                }
             }
 
             // 1. CONTINUE WATCHING
@@ -136,6 +88,61 @@ struct HomeViewSections: View {
             }
         }
         .padding(.top, AppTheme.Spacing.medium)
+    }
+
+    @ViewBuilder
+    private var selectedSectionContent: some View {
+        if visibleSection == .recentlyWatched {
+            WatchedThisWeek()
+        }
+
+        if visibleSection == .forYou {
+            ForYouCarousel(
+                items: recommendations, namespace: namespace,
+                onSelect: onSelectHero,
+                isLoading: !recommendationsLoaded,
+                onDiscover: { onCategorySelected(.discover) }
+            )
+            .onAppear {
+                if recommendations.isEmpty && !recommendationsLoaded {
+                    onFetchRecommendations?()
+                }
+            }
+        }
+
+        if visibleSection == .pickOfTheDay {
+            PickOfDayCarousel(
+                items: pickOfTheDay, namespace: namespace,
+                onSelect: onSelectHero
+            )
+            .onAppear {
+                if pickOfTheDay.isEmpty {
+                    onFetchPickOfTheDay?()
+                }
+            }
+        }
+
+        if visibleSection == .trendingMovies {
+            TrendingCarousel(items: trendingMovies, title: "Trending Movies") { result in
+                onTrendingAdd?(result)
+            }
+            .onAppear {
+                if trendingMovies.isEmpty {
+                    onFetchTrending?()
+                }
+            }
+        }
+
+        if visibleSection == .trendingShows {
+            TrendingCarousel(items: trendingShows, title: "Trending Shows") { result in
+                onTrendingAdd?(result)
+            }
+            .onAppear {
+                if trendingShows.isEmpty {
+                    onFetchTrending?()
+                }
+            }
+        }
     }
 
     private struct SectionPicker: View {
