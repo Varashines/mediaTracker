@@ -53,7 +53,7 @@ enum DatabaseMigrations {
                     guard let poster = item.posterURL, let url = URL(string: poster) else { continue }
 
                     var cgImage: CGImage?
-                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
+                    if let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) {
                         cgImage = cached.image
                     } else if let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
                               let image = NSImage(data: data) {

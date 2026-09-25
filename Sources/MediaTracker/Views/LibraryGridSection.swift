@@ -39,6 +39,7 @@ struct LibraryGridSection: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .scrollIndicators(.hidden)
+                    .transition(.opacity)
                 } else {
                     LibraryEmptyStateView(category: selectedCategory) {
                         withAnimation(AppTheme.Animation.springSnappy) {
@@ -47,13 +48,6 @@ struct LibraryGridSection: View {
                     }
                 }
             } else {
-                if selectedCategory == .all && searchText.isEmpty
-                    && (selectedNetworks?.isEmpty ?? true)
-                {
-                    RecentlyAddedRow(
-                        items: recentlyAdded, namespace: namespace)
-                }
-
                 if viewModel.filter.currentGroupBy == .none {
                     MainMediaGrid(
                         items: items,
@@ -77,7 +71,8 @@ struct LibraryGridSection: View {
         // Animate only on category/search changes — constructing a full
         // FilterSnapshot (12 property reads) as the animation value on every
         // body eval was pure overhead with no visual benefit.
-        .animation(AppTheme.Animation.easeInOut, value: selectedCategory)
-        .animation(AppTheme.Animation.easeInOut, value: searchText)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: isLoading)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: selectedCategory)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: searchText)
     }
 }

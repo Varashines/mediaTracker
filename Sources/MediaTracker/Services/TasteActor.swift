@@ -20,9 +20,7 @@ actor TasteActor {
     private let affinityCacheTTL: TimeInterval = .secondsInDay
 
     @MainActor private static var cachedRecommendations: [(id: PersistentIdentifier, itemID: String, reason: String)]?
-    @MainActor private static var lastRecommendationsCache: Date?
     @MainActor private static var lastRecommendationsTasteVersion: Int?
-    private let recommendationsCacheTTL: TimeInterval = 300 // 5 minutes
 
     struct PersistedRecommendation: Codable, Sendable {
         let itemID: String
@@ -39,7 +37,6 @@ actor TasteActor {
         cachedAffinityMap = nil
         lastAffinityCalculation = nil
         cachedRecommendations = nil
-        lastRecommendationsCache = nil
         lastRecommendationsTasteVersion = nil
         // Do not clear UserDefaults cachedForYouPicks here!
         // Disk maintains last-known-good picks for instant cold start (stale-while-revalidate).
@@ -257,13 +254,12 @@ actor TasteActor {
     func calculateRecommendations(forceRefresh: Bool = false) async -> [(id: PersistentIdentifier, itemID: String, reason: String)] {
         let currentTasteVersion = UserDefaults.standard.integer(forKey: UserDefaultsKeys.tasteVersion.rawValue)
 
-        // 1. In-memory cache check: return if fresh (< 5 mins) and tasteVersion matches
+        // 1. In-memory cache check: valid until the taste version changes
         if !forceRefresh {
-            let (cached, lastDate, cachedVersion) = await MainActor.run {
-                (Self.cachedRecommendations, Self.lastRecommendationsCache, Self.lastRecommendationsTasteVersion)
+            let (cached, cachedVersion) = await MainActor.run {
+                (Self.cachedRecommendations, Self.lastRecommendationsTasteVersion)
             }
-            if let cached = cached, let lastDate = lastDate, cachedVersion == currentTasteVersion,
-               Date().timeIntervalSince(lastDate) < recommendationsCacheTTL {
+            if let cached = cached, cachedVersion == currentTasteVersion {
                 return cached
             }
         }
@@ -297,18 +293,13 @@ actor TasteActor {
                 if !restored.isEmpty {
                     await MainActor.run {
                         Self.cachedRecommendations = restored
-                        Self.lastRecommendationsCache = payload.timestamp
                         Self.lastRecommendationsTasteVersion = payload.tasteVersion
                     }
 
-                    let isFresh = (payload.tasteVersion == currentTasteVersion) &&
-                                  (Date().timeIntervalSince(payload.timestamp) < recommendationsCacheTTL)
-                    if isFresh {
+                    if payload.tasteVersion == currentTasteVersion {
                         return restored
                     }
 
-                    // Stale disk cache: return restored immediately for 0ms instant display,
-                    // but recalculate in background to refresh memory and overwrite disk.
                     Task.detached(priority: .utility) { [container = modelContext.container] in
                         let actor = TasteActor(modelContainer: container)
                         _ = await actor.computeAndPersistRecommendations(currentTasteVersion: currentTasteVersion)
@@ -461,7 +452,6 @@ actor TasteActor {
         }
         await MainActor.run {
             Self.cachedRecommendations = result
-            Self.lastRecommendationsCache = Date()
             Self.lastRecommendationsTasteVersion = currentTasteVersion
         }
         return result

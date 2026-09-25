@@ -29,7 +29,6 @@ struct WatchedThisWeek: View {
     @State private var movieItems: [MediaItem] = []
     @State private var showItems: [MediaItem] = []
     @State private var watchDates: [PersistentIdentifier: Date] = [:]
-    @State private var includesOlderHistory = false
     @State private var isLoading = true
     @State private var filter: WatchFilter = .all
     @State private var hoveredPill: WatchFilter? = nil
@@ -69,8 +68,7 @@ struct WatchedThisWeek: View {
             WatchedThisWeekHeader(
                 scroll: scroll,
                 filter: filter,
-                filterPills: AnyView(filterPills),
-                subtitle: includesOlderHistory ? "Includes older history" : nil
+                filterPills: AnyView(filterPills)
             )
 
             if isLoading {
@@ -179,9 +177,6 @@ struct WatchedThisWeek: View {
         movieItems = movies.compactMap { modelContext.model(for: $0.id) as? MediaItem }
         showItems = shows.compactMap { modelContext.model(for: $0.id) as? MediaItem }
         watchDates = Dictionary(uniqueKeysWithValues: (movies + shows).map { ($0.id, $0.watchedAt) })
-        includesOlderHistory = (movies + shows).contains {
-            $0.watchedAt < Date().addingTimeInterval(-.days7)
-        }
         withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
     }
 
@@ -300,14 +295,12 @@ private struct WatchedThisWeekHeader: View {
     let scroll: CarouselScrollState
     let filter: WatchFilter
     let filterPills: AnyView
-    let subtitle: String?
 
     var body: some View {
         SectionHeader(
-            title: "Watched This Week",
+            title: "Recently Watched",
             icon: "clock.fill",
             iconColor: .green,
-            subtitle: subtitle,
             scrollProgress: scroll.progress,
             trailingAccessory: { filterPills }
         )

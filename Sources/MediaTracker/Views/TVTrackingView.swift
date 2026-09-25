@@ -73,11 +73,13 @@ struct TVTrackingView: View {
                                 season: season,
                                 isSelected: selectedSeasonNumber == season.seasonNumber,
                                 themeColor: themeColor
-                            ) {
-                                showCompletedEpisodes = true
-                                selectedSeasonNumber = season.seasonNumber
-                                onSeasonSelected?(season)
-                            }
+                             ) {
+                                 AppTheme.Animation.with(AppTheme.Animation.easeInOut) {
+                                     showCompletedEpisodes = true
+                                     selectedSeasonNumber = season.seasonNumber
+                                 }
+                                 onSeasonSelected?(season)
+                             }
                         }
                     }
                     .padding(.horizontal, 4)
@@ -115,6 +117,8 @@ struct TVTrackingView: View {
                         onWatchedToggle: onWatchedToggle,
                         onSeasonSelected: onSeasonSelected
                     )
+                    .id(selectedNumber)
+                    .transition(.opacity)
                     .onAppear {
                         autoFetchIfNeeded(season: selectedSeason)
                     }

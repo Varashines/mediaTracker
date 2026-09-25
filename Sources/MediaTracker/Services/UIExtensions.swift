@@ -71,7 +71,9 @@ extension CGSize {
     static let thumbMedium = AppTheme.Thumbnail.medium
     static let thumbLarge = AppTheme.Thumbnail.large
     static let backdropCompact = AppTheme.Thumbnail.backdropCompact
+    static let networkLogo = AppTheme.Thumbnail.networkLogo
     static let cardLogo = AppTheme.Thumbnail.cardLogo
+    static let titleLogoLarge = AppTheme.Thumbnail.titleLogoLarge
 }
 
 extension Color {

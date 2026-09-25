@@ -44,13 +44,18 @@ struct HeroStatPills: View {
                     detail: "\(completed)/\(total)",
                     color: .teal
                 )
-                ClaymorphicHeroCard(
-                    emoji: "💖",
-                    value: String(format: "%.0f%%", overallAffinity * 100),
-                    label: "Affinity",
-                    detail: "\(stats.lovedCount)❤️ · \(stats.likedCount)👍 · \(stats.dislikedCount)👎",
-                    color: .purple
-                )
+                 ClaymorphicHeroCard(
+                     emoji: "💖",
+                     value: String(format: "%.0f%%", overallAffinity * 100),
+                     label: "Affinity",
+                     detail: "",
+                     tasteCounts: [
+                         .init(count: stats.lovedCount, label: "Love", color: .red),
+                         .init(count: stats.likedCount, label: "Like", color: .blue),
+                         .init(count: stats.dislikedCount, label: "Dislike", color: .gray)
+                     ],
+                     color: .purple
+                 )
             }
 
             if geo.size.width >= totalWidth {
@@ -127,11 +132,20 @@ private struct ClaymorphicCard: View {
     }
 }
 
+private struct TasteCount: Identifiable {
+    let count: Int
+    let label: String
+    let color: Color
+
+    var id: String { label }
+}
+
 private struct ClaymorphicHeroCard: View {
     let emoji: String
     let value: String
     let label: String
     let detail: String
+    var tasteCounts: [TasteCount]? = nil
     let color: Color
 
     @Environment(\.colorScheme) var colorScheme
@@ -162,10 +176,29 @@ private struct ClaymorphicHeroCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
-                Text(detail)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if let tasteCounts {
+                    HStack(spacing: 0) {
+                        ForEach(tasteCounts) { tasteCount in
+                            VStack(spacing: 1) {
+                                Text("\(tasteCount.count)")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(tasteCount.color)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                Text(tasteCount.label)
+                                    .font(.system(size: 8, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                } else {
+                    Text(detail)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.horizontal, 20)

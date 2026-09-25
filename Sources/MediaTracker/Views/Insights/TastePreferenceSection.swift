@@ -61,7 +61,7 @@ private struct TastePreferenceRow: View {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Color.white)
                             .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
-                        CachedImage(url: url, targetSize: CGSize(width: 44, height: 24), priority: .low) { _ in
+                        CachedImage(url: url, targetSize: .networkLogo, priority: .low) { _ in
                         } placeholder: {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.secondary.opacity(0.08))
