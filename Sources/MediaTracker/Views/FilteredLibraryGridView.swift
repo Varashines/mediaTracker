@@ -89,6 +89,7 @@ struct FilteredLibraryGridView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
+                .transition(.opacity)
             } else if items.isEmpty && !isLoading {
                 if !searchText.isEmpty {
                     LibraryEmptyStateView(
@@ -174,6 +175,7 @@ struct FilteredLibraryGridView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
                 .trackFastScrollingEnv()
+                .transition(.opacity)
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)
@@ -182,6 +184,7 @@ struct FilteredLibraryGridView: View {
                 }
             }
         }
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: isLoading)
         .navigationTitle(
             sleepManager.isAsleep
                 ? ""

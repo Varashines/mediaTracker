@@ -23,9 +23,11 @@ struct MainMediaGrid: View {
                 }
                 
                 if isLoadingMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                 ProgressView()
+                     .frame(maxWidth: .infinity)
+                     .padding(.vertical, 24)
+                     .transition(.opacity)
+                     .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: isLoadingMore)
             }
         }
         .padding(AppTheme.Spacing.pageMargin)
