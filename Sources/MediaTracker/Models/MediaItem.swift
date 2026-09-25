@@ -42,6 +42,13 @@ final class MediaItem: Identifiable {
     var themeMutedColorHex: String?
     var lastInteractionDate: Date?
     var lastStateChangeDate: Date?
+    /// Earliest date this title was ever watched. Durable across rewatches —
+    /// `lastStateChangeDate` moves forward on every rewatch, this does not.
+    /// Per-occurrence history lives in `WatchEvent`.
+    var firstWatchedAt: Date?
+    /// Number of rewatch cycles started for this title. Denormalized from
+    /// `WatchCycle` so surfaces can show a rewatch count without a fetch.
+    var rewatchCount: Int = 0
     var dateAdded: Date?
     var lastUpdated: Date?
     var isSoftDeleted: Bool = false
@@ -161,10 +168,11 @@ final class MediaItem: Identifiable {
             let previousStateChangeDate = lastStateChangeDate
             stateValue = newValue?.rawValue ?? "Wishlist"
             if old != stateValue {
-                let oldState = MediaState(rawValue: old)
-                let newState = newValue ?? .wishlist
-                lastInteractionDate = Date()
-                lastStateChangeDate = Date()
+        let oldState = MediaState(rawValue: old)
+        let newState = newValue ?? .wishlist
+        lastInteractionDate = Date()
+        lastStateChangeDate = Date()
+        if newState == .completed { recordFirstWatchIfNeeded(lastStateChangeDate) }
 
                 if typeValue == "TV Show" {
                     BadgeEngine.invalidateScan(for: persistentModelID)
@@ -216,6 +224,7 @@ final class MediaItem: Identifiable {
         stateValue = newValue
         lastInteractionDate = now
         lastStateChangeDate = now
+        if newState == .completed { recordFirstWatchIfNeeded(now) }
 
         if typeValue == "TV Show" {
             BadgeEngine.invalidateScan(for: persistentModelID)
@@ -229,7 +238,8 @@ final class MediaItem: Identifiable {
                 from: oldState,
                 to: newState,
                 context: context,
-                now: now
+                now: now,
+                source: .automatic
             )
         }
         let pid = persistentModelID
@@ -237,6 +247,17 @@ final class MediaItem: Identifiable {
             guard item.modelContext != nil, let context else { return }
             SaveCoordinator.shared.requestSave(context)
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
+        }
+    }
+
+    /// Records the earliest watch date for the title. Never moves an existing
+    /// date backwards unless `date` predates it (e.g. a restored backup).
+    func recordFirstWatchIfNeeded(_ date: Date?) {
+        guard let date else { return }
+        if let existing = firstWatchedAt {
+            if date < existing { firstWatchedAt = date }
+        } else {
+            firstWatchedAt = date
         }
     }
 

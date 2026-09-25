@@ -914,6 +914,20 @@ private struct EpisodeCube: View {
                                 .kerning(0.6)
                         }
 
+                        // Rewatched: the badge date is the latest occurrence, so
+                        // surface the original first watch next to it.
+                        if let first = episode.firstWatchedDate,
+                           let watchDate,
+                           watchDate > first.addingTimeInterval(.days1) {
+                            Text("·")
+                                .font(AppTheme.Font.tiny)
+                                .foregroundStyle(.tertiary)
+                            Text("first \(first.formatted(date: .abbreviated, time: .omitted))")
+                                .font(AppTheme.Font.tiny)
+                                .foregroundStyle(.tertiary)
+                                .help("First watched \(first.formatted(date: .abbreviated, time: .omitted))")
+                        }
+
                         Button {
                             customWatchDate = episode.watchedDate ?? episode.lastWatchedDate ?? Date()
                             showingDatePicker.toggle()

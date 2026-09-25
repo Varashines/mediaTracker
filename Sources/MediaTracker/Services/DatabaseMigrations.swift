@@ -16,8 +16,9 @@ enum DatabaseMigrations {
         await reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
         await runGenreDeconstructionIfNeeded(container: container)
         await runSearchableLanguageIfNeeded(container: container)
-         await runWatchHistoryBackfillIfNeeded(container: container)
-         await runWatchHistoryRepairIfNeeded(container: container)
+        await runWatchHistoryBackfillIfNeeded(container: container)
+        await runWatchHistoryRepairIfNeeded(container: container)
+        await runFirstWatchedDateBackfillIfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -424,6 +425,93 @@ enum DatabaseMigrations {
             try await service.performSearchableLanguageMigration()
         }
         UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    /// Backfills the durable first-watch dates (`TVEpisode.firstWatchedDate`,
+    /// `MediaItem.firstWatchedAt`) for rows that predate them, using the
+    /// earliest still-active `WatchEvent` per episode. Rewatching had been
+    /// overwriting the episode-level projection, so the ledger is the only place
+    /// the original dates still exist.
+    static func runFirstWatchedDateBackfillIfNeeded(container: ModelContainer) async {
+        let versionKey = "firstWatchedDateBackfillVersion"
+        guard UserDefaults.standard.integer(forKey: versionKey) < 1 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "firstWatchedDateBackfill", container: container) {
+                let context = ModelContext(container)
+
+                // Earliest active occurrence per (mediaID, episodeID).
+                var earliestByEpisode: [String: Date] = [:]
+                var earliestByMedia: [String: Date] = [:]
+                var eventDescriptor = FetchDescriptor<WatchEvent>(
+                    predicate: #Predicate<WatchEvent> { $0.voidedAt == nil }
+                )
+                eventDescriptor.propertiesToFetch = [\.mediaID, \.episodeID, \.watchedAt]
+                for event in (try? context.fetch(eventDescriptor)) ?? [] {
+                    if let current = earliestByMedia[event.mediaID] {
+                        if event.watchedAt < current { earliestByMedia[event.mediaID] = event.watchedAt }
+                    } else {
+                        earliestByMedia[event.mediaID] = event.watchedAt
+                    }
+                    guard let episodeID = event.episodeID else { continue }
+                    let key = "\(event.mediaID)|\(episodeID)"
+                    if let current = earliestByEpisode[key] {
+                        if event.watchedAt < current { earliestByEpisode[key] = event.watchedAt }
+                    } else {
+                        earliestByEpisode[key] = event.watchedAt
+                    }
+                }
+
+                // Episodes first.
+                var episodeDescriptor = FetchDescriptor<TVEpisode>(
+                    predicate: #Predicate<TVEpisode> { episode in
+                        episode.isWatched == true && episode.firstWatchedDate == nil
+                    }
+                )
+                episodeDescriptor.propertiesToFetch = [\.uniqueID, \.showID, \.watchedDate, \.lastWatchedDate, \.firstWatchedDate]
+                var healedEpisodes = 0
+                for episode in (try? context.fetch(episodeDescriptor)) ?? [] {
+                    let mediaID = "tv_\(episode.showID ?? 0)"
+                    let key = "\(mediaID)|\(episode.uniqueID ?? "")"
+                    let candidate = earliestByEpisode[key]
+                        ?? episode.watchedDate
+                        ?? episode.lastWatchedDate
+                    guard let candidate else { continue }
+                    episode.firstWatchedDate = candidate
+                    healedEpisodes += 1
+                }
+
+                // Titles second: shows inherit the earliest episode date, movies
+                // use their earliest event (or the completion date as a fallback).
+                var itemDescriptor = FetchDescriptor<MediaItem>(
+                    predicate: #Predicate<MediaItem> { $0.firstWatchedAt == nil }
+                )
+                itemDescriptor.propertiesToFetch = [
+                    \.id, \.typeValue, \.stateValue, \.firstWatchedAt,
+                    \.lastStateChangeDate, \.lastInteractionDate, \.dateAdded
+                ]
+                var healedItems = 0
+                for item in (try? context.fetch(itemDescriptor)) ?? [] {
+                    if item.type == .tvShow {
+                        guard let earliest = item.tvShowDetails?.earliestEpisodeFirstWatchDate else { continue }
+                        item.recordFirstWatchIfNeeded(earliest)
+                    } else {
+                        guard item.state == .completed else { continue }
+                        let fallback = item.lastStateChangeDate ?? item.lastInteractionDate ?? item.dateAdded
+                        guard let candidate = earliestByMedia[item.id] ?? fallback else { continue }
+                        item.recordFirstWatchIfNeeded(candidate)
+                    }
+                    healedItems += 1
+                }
+
+                try context.save()
+                AppLogger.info("🕰️ First-watch date backfill: \(healedEpisodes) episodes, \(healedItems) titles", logger: AppLogger.background)
+            }
+            guard didRun else { return }
+            UserDefaults.standard.set(1, forKey: versionKey)
+        } catch {
+            AppLogger.error("First-watch date backfill failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
     }
 
     static func runWatchHistoryBackfillIfNeeded(container: ModelContainer) async {

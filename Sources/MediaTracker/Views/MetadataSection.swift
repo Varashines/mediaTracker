@@ -96,12 +96,33 @@ struct MetadataSection: View {
         if let date = item.releaseDate {
             infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
         }
+        if let firstWatched = firstWatchedSummary {
+            infoPill(text: firstWatched.text, icon: firstWatched.icon, accent: accent)
+                .help(firstWatched.help)
+        }
         if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
             infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
         }
         if let lang = item.cachedLanguage, !lang.isEmpty {
             infoPill(text: LanguageUtils.languageName(for: lang), icon: "globe", accent: accent)
         }
+    }
+
+    /// Durable "first watched" pill. Once a title has been rewatched the pill
+    /// says so, but the date shown is always the original first watch.
+    private var firstWatchedSummary: (text: String, icon: String, help: String)? {
+        guard let first = item.firstWatchedAt else { return nil }
+        let formatted = first.formatted(date: .abbreviated, time: .omitted)
+        let rewatches = max(0, item.rewatchCount)
+        if rewatches > 0 {
+            let times = rewatches == 1 ? "Rewatched once" : "Rewatched \(rewatches)×"
+            return (
+                "First watched \(formatted)",
+                "arrow.trianglehead.2.clockwise.rotate.90",
+                "\(times) — first watched \(formatted)"
+            )
+        }
+        return ("Watched \(formatted)", "checkmark.circle", "First watched \(formatted)")
     }
 
     private func ratingColor(for rating: Double) -> Color {

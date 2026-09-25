@@ -27,6 +27,11 @@ final class TVEpisode {
     var isWatched: Bool = false
     var lastWatchedDate: Date?
     var watchedDate: Date?
+    /// Earliest date this episode was ever watched. Durable: it survives
+    /// rewatch projection resets and bulk "mark all watched", so the original
+    /// first-watch date is never overwritten by a later occurrence.
+    /// Per-occurrence history lives in `WatchEvent`.
+    var firstWatchedDate: Date?
     var showID: Int?
     @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
@@ -48,6 +53,7 @@ final class TVEpisode {
             if let watchedAt {
                 lastWatchedDate = watchedAt
                 self.watchedDate = watchedAt
+                recordFirstWatch(importedAt: watchedAt)
             }
             return
         }
@@ -59,12 +65,33 @@ final class TVEpisode {
         applyWatchedState(true, date: date, updatesInteractionDate: false)
     }
 
-    private func applyWatchedState(_ watched: Bool, date: Date?, updatesInteractionDate: Bool) {
+    /// First-watch date for display, tolerating rows that predate the field.
+    var firstKnownWatchDate: Date? {
+        firstWatchedDate ?? watchedDate ?? lastWatchedDate
+    }
+
+    private func recordFirstWatch(importedAt date: Date) {
+        if let existing = firstWatchedDate {
+            // An import can carry an earlier date than what we already hold
+            // (e.g. restoring a backup) — keep the true minimum.
+            if date < existing { firstWatchedDate = date }
+        } else {
+            firstWatchedDate = date
+        }
+    }
+
+    func applyWatchedState(_ watched: Bool, date: Date?, updatesInteractionDate: Bool) {
         self.isWatched = watched
         if watched {
             self.lastWatchedDate = date
             self.watchedDate = date
+            // Occurrence dates are monotonically later occurrences, so the minimum
+            // is always the first watch. Rewatches never move this date.
+            if let date { recordFirstWatch(importedAt: date) }
         } else {
+            // Only the current projection is cleared. `firstWatchedDate` is
+            // intentionally preserved: unwatching is a projection edit, not a
+            // history deletion.
             self.lastWatchedDate = nil
             self.watchedDate = nil
         }
