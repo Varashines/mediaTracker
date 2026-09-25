@@ -137,6 +137,51 @@ enum WatchHistoryCoordinator {
         cycle.completedAt = now
         cycle.isComplete = true
         cycle.state = .completed
+        finalizePausedRewatchCycles(item: item, context: context, now: now)
+    }
+
+    /// A title completing can leave a paused rewatch behind — that happens when a
+    /// new season arrives mid-rewatch, because the catalog reconciliation pauses
+    /// the scoped cycle and opens a first-watch cycle for the new episodes. Only
+    /// the current cycle gets closed by `completeCurrentCycle`, so the rewatch is
+    /// finalized here: a fully rewatched scope is marked complete, an abandoned
+    /// one is archived as a partial attempt. Either way it stops lingering as
+    /// `paused`, which would otherwise keep offering "Resume Paused Rewatch" on a
+    /// completed title.
+    private static func finalizePausedRewatchCycles(item: MediaItem, context: ModelContext, now: Date) {
+        guard item.type == .tvShow else { return }
+        let mediaID = item.id
+        let pausedRaw = WatchCycleState.paused.rawValue
+        var descriptor = FetchDescriptor<WatchCycle>(
+            predicate: #Predicate {
+                $0.mediaID == mediaID && $0.stateRaw == pausedRaw && $0.isRewatch
+            }
+        )
+        descriptor.propertiesToFetch = [\.id, \.stateRaw, \.isRewatch, \.isComplete, \.scopeEpisodeIDs]
+        guard let pausedCycles = try? context.fetch(descriptor), !pausedCycles.isEmpty else { return }
+
+        for cycle in pausedCycles {
+            let cycleID = cycle.id
+            var eventDescriptor = FetchDescriptor<WatchEvent>(
+                predicate: #Predicate<WatchEvent> { event in
+                    event.cycleID == cycleID && event.voidedAt == nil
+                }
+            )
+            eventDescriptor.propertiesToFetch = [\.episodeID]
+            let watchedIDs = Set(((try? context.fetch(eventDescriptor)) ?? []).compactMap(\.episodeID))
+            let scope = Set(cycle.scopeEpisodeIDs)
+            let coveredEveryEpisode = scope.isEmpty
+                ? !watchedIDs.isEmpty
+                : scope.subtracting(watchedIDs).isEmpty
+
+            if coveredEveryEpisode {
+                cycle.isComplete = true
+                cycle.state = .completed
+                cycle.completedAt = cycle.completedAt ?? now
+            } else {
+                cycle.state = .archived
+            }
+        }
     }
 
     static func recordEpisodeMutation(
