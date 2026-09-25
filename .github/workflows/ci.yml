@@ -44,6 +44,7 @@ jobs:
             DetailViewModelTests
             EpisodeRangeTests
             FilterAndSortTests
+            FirstWatchedDateTests
             ImportSeasonTasteTests
             MarkWatchedTests
             ModelTests

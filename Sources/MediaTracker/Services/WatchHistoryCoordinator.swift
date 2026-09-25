@@ -70,6 +70,7 @@ enum WatchHistoryCoordinator {
             scopeEpisodeIDs: knownEpisodeIDs(for: item)
         )
         context.insert(next)
+        item.rewatchCount += 1
         resetCurrentProjection(item: item)
         return next
     }
@@ -476,6 +477,9 @@ enum WatchHistoryCoordinator {
         guard let details = item.tvShowDetails else { return }
         for season in details.seasons.liveModels {
             for episode in season.episodes.liveModels {
+                // Clears only the current projection (isWatched + watchedDate /
+                // lastWatchedDate). `firstWatchedDate` is deliberately untouched —
+                // the original first watch survives into the new cycle.
                 episode.markWatched(false, recordHistory: false)
             }
         }

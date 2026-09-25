@@ -147,6 +147,11 @@ extension MediaItem {
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount
+        // Shows inherit their first-watch date from the earliest episode. Only
+        // computed while unset, so this is a one-time scan per title.
+        if firstWatchedAt == nil {
+            recordFirstWatchIfNeeded(tv.earliestEpisodeFirstWatchDate)
+        }
         scheduleWatchHistoryCatalogCheck(tv: tv)
         
         if progressResult.totalCount > 0 {
