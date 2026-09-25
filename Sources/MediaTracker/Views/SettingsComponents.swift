@@ -117,6 +117,8 @@ struct SettingsRow<Trailing: View>: View {
     var subtitle: String? = nil
     var showDivider: Bool = true
     @ViewBuilder var trailing: () -> Trailing
+    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(alignment: .center) {
@@ -135,7 +137,14 @@ struct SettingsRow<Trailing: View>: View {
         }
         .padding(.horizontal, AppTheme.Spacing.medium)
         .padding(.vertical, AppTheme.Spacing.small)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
+                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                .opacity(isHovered ? 1 : 0)
+        }
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.microInteraction), value: isHovered)
         .overlay(alignment: .bottom) {
             if showDivider {
                 Divider()
@@ -234,7 +243,7 @@ struct SettingsButton: View {
                 }
                 .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
                 .scaleEffect(isHovered ? 1.02 : 1.0)
-                .animation(AppTheme.Animation.springSnappy, value: isHovered)
+                .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

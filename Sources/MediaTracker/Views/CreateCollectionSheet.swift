@@ -132,7 +132,8 @@ struct CreateCollectionSheet: View {
                     }
                 }
             }
-            
+            .scrollIndicators(.hidden)
+
             // Buttons
             HStack(spacing: 16) {
                  Button("Cancel") { dismiss() }
@@ -264,7 +265,7 @@ struct CreateCollectionSheet: View {
                                     .font(AppTheme.Font.label)
                                 Spacer()
                                 Button {
-                                    withAnimation(AppTheme.Animation.springGentle) {
+                                    AppTheme.Animation.with(AppTheme.Animation.springGentle) {
                                         expandedRuleIndex = expandedRuleIndex == idx ? nil : idx
                                     }
                                 } label: {
@@ -299,7 +300,11 @@ struct CreateCollectionSheet: View {
                                     .background(Color.primary.opacity(0.03))
                                     .cornerRadius(10)
                                     .padding(.top, 6)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(
+                                        AppThemeCoordinator.isReducingVisualEffects
+                                            ? .opacity
+                                            : .opacity.combined(with: .move(edge: .top))
+                                    )
                             }
                         }
                     }
@@ -322,7 +327,7 @@ struct CreateCollectionSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
-                    .animation(AppTheme.Animation.springGentle, value: previewCount)
+                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springGentle), value: previewCount)
                 }
             }
         }
@@ -519,7 +524,7 @@ struct IconPickerGridView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                 ForEach(filteredIcons, id: \.self) { iconName in
                     Button {
-                        withAnimation(AppTheme.Animation.springSnappy) { selectedIcon = iconName }
+                        AppTheme.Animation.with(AppTheme.Animation.springSnappy) { selectedIcon = iconName }
                     } label: {
                         Image(systemName: iconName)
                             .font(.title3)
@@ -535,6 +540,7 @@ struct IconPickerGridView: View {
             }
             .padding(.vertical, 4)
         }
+        .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize)
         .frame(height: 180)
     }
@@ -573,9 +579,9 @@ struct RuleAddMenu: View {
                 Button("Only TV Shows") { smartRules.append(.mediaType(.tvShow)) }
             }
             Menu("Status") {
-                Button("In Progress") { smartRules.append(.state(.active)) }
-                Button("Watchlist") { smartRules.append(.state(.wishlist)) }
-                Button("Completed") { smartRules.append(.state(.completed)) }
+                ForEach(MediaState.allCases, id: \.self) { state in
+                    Button(state.displayName) { smartRules.append(.state(state)) }
+                }
             }
             Menu("Taste") {
                 Button("Loved") { smartRules.append(.taste(.love)) }

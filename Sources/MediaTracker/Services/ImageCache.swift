@@ -80,6 +80,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     }
     
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
+    private var cacheKeysByURL: [String: Set<String>] = [:]
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
     private var prewarmTasks: [UUID: Task<Void, Never>] = [:]
     private var lowPriorityPrewarmIDs: Set<UUID> = []
@@ -113,6 +114,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     func clearMemoryCache() {
         cancelPrewarming()
+        cacheKeysByURL.removeAll()
         memoryCache.removeAllObjects()
     }
     
@@ -128,7 +130,10 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     func removeImage(forKey url: String?) async {
         guard let url = url else { return }
-        memoryCache.removeObject(forKey: url as NSString)
+        for key in cacheKeysByURL[url] ?? [] {
+            memoryCache.removeObject(forKey: key as NSString)
+        }
+        cacheKeysByURL[url] = nil
         if let nsURL = URL(string: url) {
             let request = URLRequest(url: nsURL)
             URLCache.shared.removeCachedResponse(for: request)
@@ -146,6 +151,10 @@ class ImageCache: NSObject, NSCacheDelegate {
             // would force a wasteful re-decode on scrub-back.
             guard activeTasks[cacheKey] == nil else { return }
             self.memoryCache.removeObject(forKey: cacheKey as NSString)
+            self.cacheKeysByURL[key]?.remove(cacheKey)
+            if self.cacheKeysByURL[key]?.isEmpty == true {
+                self.cacheKeysByURL[key] = nil
+            }
         }
     }
 
@@ -228,6 +237,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
         let cacheKey = generateCacheKey(key: key, size: targetSize)
+        cacheKeysByURL[key, default: []].insert(cacheKey)
         
         if let cached = checkMemoryCache(forKey: key, targetSize: targetSize) {
             return cached

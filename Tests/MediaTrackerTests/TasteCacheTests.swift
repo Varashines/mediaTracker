@@ -110,4 +110,42 @@ final class TasteCacheTests: MTTestCase {
         XCTAssertGreaterThan(MediaStateService.shared.recommendationsRefreshedCount, initialRefreshCount,
                              "Background recompute should post recommendationsRefreshed when stale")
     }
+
+    @MainActor
+    func testSameTasteVersionDiskCacheDoesNotRevalidate() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        let item = MediaItem(id: "m42", title: "Interstellar", overview: "Space exploration", type: .movie)
+        item.stateValue = MediaState.wishlistRaw
+        item.tasteValue = TasteValue.none.rawValue
+        item.cachedGenres = ["Science Fiction"]
+        item.releaseDate = Date().addingTimeInterval(-100_000)
+        context.insert(item)
+        try context.save()
+
+        UserDefaults.standard.set(0, forKey: UserDefaultsKeys.tasteVersion.rawValue)
+        let testPicks = [TasteActor.PersistedRecommendation(itemID: "m42", reason: "Cached Pick")]
+        let payload = TasteActor.PersistedPicksPayload(
+            picks: testPicks,
+            timestamp: Date().addingTimeInterval(-.days30),
+            tasteVersion: 0
+        )
+        UserDefaults.standard.set(
+            try JSONEncoder().encode(payload),
+            forKey: UserDefaultsKeys.cachedForYouPicks.rawValue
+        )
+        TasteActor.clearCache()
+
+        let initialRefreshCount = MediaStateService.shared.recommendationsRefreshedCount
+        let actor = TasteActor(modelContainer: container)
+        let recs = await actor.calculateRecommendations(forceRefresh: false)
+
+        XCTAssertEqual(recs.first?.reason, "Cached Pick")
+        for _ in 0..<10 {
+            if MediaStateService.shared.recommendationsRefreshedCount > initialRefreshCount { break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(MediaStateService.shared.recommendationsRefreshedCount, initialRefreshCount)
+    }
 }

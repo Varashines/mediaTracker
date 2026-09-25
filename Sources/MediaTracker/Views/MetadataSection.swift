@@ -20,6 +20,12 @@ struct MetadataSection: View {
         themeColor.highContrastAccent(colorScheme: colorScheme)
     }
 
+    private var providerStatus: String? {
+        let status = item.type == .movie ? item.movieDetails?.status : item.tvShowDetails?.status
+        guard let status, !status.isEmpty else { return nil }
+        return status
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
             // Row 1: All metadata pills — single line when it fits, wrapping flow otherwise
@@ -73,6 +79,9 @@ struct MetadataSection: View {
 
     @ViewBuilder
     private var metadataPills: some View {
+        if let providerStatus {
+            infoPill(text: providerStatus, icon: "dot.radiowaves.left.and.right", accent: accent)
+        }
         if let rating = voteAverage, rating > 0 {
             ratingPill(icon: "star.fill", value: String(format: "%.1f", rating), color: ratingColor(for: rating), accent: accent)
         }

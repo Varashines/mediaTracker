@@ -52,6 +52,9 @@ class DisplayCache {
     private func prewarmCarouselImages() {
         let cache = ImageCache.shared
 
+        cache.prewarmImages(displayedItems, limit: 18, targetSize: .thumbSmall, priority: .normal)
+        cache.prewarmImages(recentlyAddedItems, limit: 8, targetSize: .thumbSmall, priority: .low)
+
         // Continue Watching — the always-visible first row: warm the full list
         // (not just the first screen) so scrubbing past item 8 is still warm.
         let cwBackdrops = homeContinueWatchingItems.compactMap(\.cardBackdropURL).compactMap(URL.init(string:))

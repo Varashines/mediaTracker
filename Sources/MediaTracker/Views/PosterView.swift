@@ -21,13 +21,13 @@ struct PosterView: View {
             ZStack {
                 RadialGradient(
                     colors: [
-                        themeColor.opacity(0.65),
-                        themeColor.opacity(0.25),
+                        themeColor.opacity(0.42),
+                        themeColor.opacity(0.16),
                         .clear
                     ],
                     center: .center,
                     startRadius: 10,
-                    endRadius: 250
+                    endRadius: 220
                 )
                 .frame(width: posterFrame.width * 1.38, height: posterFrame.height * 1.26)
                 .drawingGroup()
@@ -46,24 +46,28 @@ struct PosterView: View {
                 .frame(width: posterFrame.width, height: posterFrame.height)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
                 .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 10)
-                .if(!AppThemeCoordinator.isReducingVisualEffects) {
-                    $0.shadow(color: themeColor.opacity(colorScheme == .dark ? 0.30 : 0.15), radius: 20, x: 0, y: 6)
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    themeColor.opacity(isHovering ? 0.55 : 0.08),
-                                    themeColor.opacity(isHovering ? 0.25 : 0.04)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: isHovering ? 1.5 : 0.5
-                        )
-                )
-                    .animation(AppTheme.Animation.springSnappy, value: isHovering)
+                 .if(!AppThemeCoordinator.isReducingVisualEffects) {
+                     $0.shadow(color: themeColor.opacity(colorScheme == .dark ? 0.18 : 0.09), radius: 20, x: 0, y: 6)
+                 }
+                 .overlay(
+                     RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                         .stroke(Color.black.opacity(0.42), lineWidth: 1.2)
+                 )
+                 .overlay(
+                     RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                         .stroke(
+                             LinearGradient(
+                                 colors: [
+                                     themeColor.opacity(isHovering ? 0.55 : 0.08),
+                                     themeColor.opacity(isHovering ? 0.25 : 0.04)
+                                 ],
+                                 startPoint: .topLeading,
+                                 endPoint: .bottomTrailing
+                             ),
+                             lineWidth: isHovering ? 1.5 : 0.5
+                         )
+                 )
+                 .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: isHovering)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item)
                         .padding(14)

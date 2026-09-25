@@ -227,7 +227,7 @@ struct BulkItemCard: View {
             ZStack(alignment: .topTrailing) {
                 // Poster
                 if let posterURL = item.posterURL, let url = URL(string: "https://image.tmdb.org/t/p/w300\(posterURL)") {
-                    CachedImage(url: url, targetSize: CGSize(width: 120, height: 180)) {
+                    CachedImage(url: url, targetSize: .thumbSmall) {
                         Rectangle()
                             .fill(Color.primary.opacity(0.1))
                             .frame(width: 120, height: 180)

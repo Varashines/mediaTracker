@@ -28,6 +28,16 @@ struct DataSection: View {
         return "\(backupCount) backups stored"
     }
 
+    private var dateRepairSubtitle: String {
+        if backgroundManager.isRepairingMissingDates {
+            return "Checking titles and episodes for missing dates…"
+        }
+        if let summary = backgroundManager.lastDateRepairSummary {
+            return summary
+        }
+        return "Repair titles and episodes without dates"
+    }
+
     private var backgroundManager: BackgroundTaskManager {
         BackgroundTaskManager.shared
     }
@@ -88,7 +98,7 @@ struct DataSection: View {
                             }
                         }
                         Spacer()
-                        if backgroundManager.isImportActive {
+                        if backgroundManager.isImportActive || backgroundManager.isRepairingMissingDates {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
@@ -110,6 +120,19 @@ struct DataSection: View {
                         } else {
                             SettingsButton(title: "Repair") {
                                 DataService.shared.runMaintenance(modelContext: modelContext)
+                            }
+                        }
+                    }
+                    SettingsRow(title: "Date Repair", subtitle: dateRepairSubtitle, showDivider: true) {
+                        if backgroundManager.isRepairingMissingDates {
+                            ProgressView()
+                                .controlSize(.small)
+                                .help("Date repair in progress…")
+                        } else {
+                            SettingsButton(title: "Repair Dates") {
+                                Task {
+                                    await backgroundManager.repairMissingDates(force: true, cap: 50)
+                                }
                             }
                         }
                     }

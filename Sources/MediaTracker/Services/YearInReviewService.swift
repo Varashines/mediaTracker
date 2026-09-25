@@ -78,6 +78,7 @@ struct YearInReview: Sendable {
     let totalRewatches: Int
     let titlesRewatched: Int
     let rewatchedTitles: [YearRewatchedTitle]
+    let releasedTitleIDs: Set<PersistentIdentifier>
 
     func monthStats(for month: Date) -> (movies: Int, series: Int, minutes: Int) {
         let calendar = Calendar.current
@@ -158,10 +159,12 @@ struct YearInReview: Sendable {
         }
     }
 
-    /// Liked and loved titles make the most personal default featured picks.
-    /// Fall back to `allWatchedTitles()` when the year has no explicit ratings.
+    /// Liked and loved titles released during the review year make the most
+    /// personal default featured picks. Older titles remain available in the
+    /// watch log, but are intentionally excluded from share-card candidates.
     func favoriteCandidates() -> [YearWatchedTitle] {
-        let favorites = allWatchedTitles().filter {
+        let released = allWatchedTitles().filter { releasedTitleIDs.contains($0.id) }
+        let favorites = released.filter {
             switch $0.tasteValue {
             case "Love", "Loved", "Like", "Liked":
                 return true
@@ -169,15 +172,14 @@ struct YearInReview: Sendable {
                 return false
             }
         }
-        return favorites.isEmpty ? allWatchedTitles() : favorites
+        return favorites.isEmpty ? released : favorites
     }
 
-    /// Explicitly loved titles for the Year in Review poster wall. Unlike the
-    /// broader favourite list, this intentionally excludes merely liked titles
-    /// and does not substitute other ratings when no titles are loved.
+    /// Explicitly loved titles released during the review year for the Year in
+    /// Review poster wall.
     func lovedCandidates() -> [YearWatchedTitle] {
         allWatchedTitles().filter {
-            $0.tasteValue == "Love" || $0.tasteValue == "Loved"
+            releasedTitleIDs.contains($0.id) && ($0.tasteValue == "Love" || $0.tasteValue == "Loved")
         }
     }
 
@@ -203,7 +205,8 @@ struct YearInReview: Sendable {
             busiestDay: nil,
             totalRewatches: 0,
             titlesRewatched: 0,
-            rewatchedTitles: []
+            rewatchedTitles: [],
+            releasedTitleIDs: []
         )
     }
 }
@@ -401,6 +404,36 @@ actor YearInReviewService {
         }
 
         let watchedTVItems = itemByShowID.filter { watchedShowIDs.contains($0.key) }.values
+        var releasedTitleIDs = Set<PersistentIdentifier>()
+        for item in allItems where item.type == .movie {
+            guard let releaseDate = item.releaseDate,
+                  calendar.component(.year, from: releaseDate) == year else { continue }
+            releasedTitleIDs.insert(item.persistentModelID)
+        }
+
+        let trackedShowIDs = Set(itemByShowID.keys)
+        if !trackedShowIDs.isEmpty {
+            let showIDOptions = Set(trackedShowIDs.map { $0 as Int? })
+            var releaseEpisodeDescriptor = FetchDescriptor<TVEpisode>(
+                predicate: #Predicate { episode in
+                    episode.showID != nil && showIDOptions.contains(episode.showID)
+                }
+            )
+            releaseEpisodeDescriptor.propertiesToFetch = [\.showID, \.airDate, \.airDateValue]
+            let releaseEpisodes = (try? modelContext.fetch(releaseEpisodeDescriptor)) ?? []
+            var releasedShowIDs = Set<Int>()
+            for episode in releaseEpisodes {
+                guard let showID = episode.showID,
+                      let airDate = episode.airDateValue ?? DateUtils.parseDate(episode.airDate),
+                      calendar.component(.year, from: airDate) == year else { continue }
+                releasedShowIDs.insert(showID)
+            }
+            for showID in releasedShowIDs {
+                if let item = itemByShowID[showID] {
+                    releasedTitleIDs.insert(item.persistentModelID)
+                }
+            }
+        }
         let busiestDay = activity.max { $0.value.minutes < $1.value.minutes }.map { ($0.key, $0.value.minutes) }
 
         let result = YearInReview(
@@ -415,7 +448,8 @@ actor YearInReviewService {
             busiestDay: busiestDay,
             totalRewatches: completedRewatchCycles.count,
             titlesRewatched: titlesRewatched,
-            rewatchedTitles: rewatchedTitles
+            rewatchedTitles: rewatchedTitles,
+            releasedTitleIDs: releasedTitleIDs
         )
         await YearReviewCache.shared.setReview(result, containerID: containerID, year: year, container: modelContext.container)
         return result

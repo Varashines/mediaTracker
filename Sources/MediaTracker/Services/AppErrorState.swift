@@ -84,7 +84,7 @@ class AppErrorState {
     private func presentNow(_ toast: Toast) {
         dismissTask?.cancel()
 
-        withAnimation(AppTheme.Animation.springGentle) {
+        AppTheme.Animation.with(AppTheme.Animation.springGentle) {
             currentToast = toast
         }
         announceForVoiceOver(toast)
@@ -99,7 +99,7 @@ class AppErrorState {
 
     /// Dismiss the visible toast and show the next queued one, if any.
     private func advanceToNextToast() {
-        withAnimation(AppTheme.Animation.springGentle) {
+        AppTheme.Animation.with(AppTheme.Animation.springGentle) {
             currentToast = nil
         }
         if !pendingToasts.isEmpty {
@@ -154,7 +154,11 @@ extension View {
                 if let toast = state.currentToast {
                     ToastView(toast: toast)
                         .padding(.bottom, 40)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(
+                            AppThemeCoordinator.isReducingVisualEffects
+                                ? .opacity
+                                : .move(edge: .bottom).combined(with: .opacity)
+                        )
                 }
             }
             .zIndex(1000)
@@ -184,7 +188,7 @@ struct ToastView: View {
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(toast.style.color)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(feedback: nil))
                 .contentShape(Rectangle())
             }
         }
