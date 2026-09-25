@@ -108,6 +108,8 @@ struct ImportWizardSheet: View {
             }
             .padding(AppTheme.Spacing.large)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
+            .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: stepProgress.current)
 
             Divider()
 
@@ -115,7 +117,7 @@ struct ImportWizardSheet: View {
             HStack {
                 if currentStep == .preview || currentStep == .strategy {
                     Button("Back") {
-                        withAnimation(AppTheme.Animation.springSnappy) {
+                        AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                             if currentStep == .strategy {
                                 currentStep = .preview
                             } else if currentStep == .preview {
@@ -139,7 +141,7 @@ struct ImportWizardSheet: View {
 
                 case .preview:
                     Button("Next: Choose Strategy") {
-                        withAnimation(AppTheme.Animation.springSnappy) {
+                        AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                             currentStep = .strategy
                         }
                     }
@@ -560,7 +562,7 @@ struct ImportWizardSheet: View {
                     self.existingMatchCount = match
                     self.newItemsCount = newCount
                     self.isAnalyzing = false
-                    withAnimation(AppTheme.Animation.springSnappy) {
+                    AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                         self.currentStep = .preview
                     }
                 }
@@ -577,7 +579,7 @@ struct ImportWizardSheet: View {
     private func startImportProcess() {
         guard let backup = backupData else { return }
 
-        withAnimation(AppTheme.Animation.springSnappy) {
+        AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
             currentStep = .progress
             currentPhase = .localRestore
         }
@@ -620,7 +622,7 @@ struct ImportWizardSheet: View {
 
             // Phase 2: Metadata Enrichment (TMDB/TVMaze genres, cast, episodes, providers)
             await MainActor.run {
-                withAnimation(AppTheme.Animation.springSnappy) {
+                AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                     self.currentPhase = .metadataEnrichment
                     self.enrichmentTotal = idsToBackfill.count
                     self.enrichmentProcessed = 0
@@ -649,7 +651,7 @@ struct ImportWizardSheet: View {
                 BackgroundTaskManager.shared.activeTaskDescription = nil
                 MediaStateService.shared.postMediaStateChanged()
 
-                withAnimation(AppTheme.Animation.springSnappy) {
+                AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                     self.currentStep = .summary
                 }
             }
