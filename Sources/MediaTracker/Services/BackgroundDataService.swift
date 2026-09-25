@@ -218,9 +218,8 @@ actor BackgroundDataService {
             // Phase 5: Notification Scheduling (skip in tests)
             if NSClassFromString("XCTest") == nil {
                 if item.type == .movie {
-                    let identifier = "movie-\(item.id)"
-                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(identifier)-day1", "\(identifier)-day2"])
-                    
+                    await NotificationManager.shared.cancelNotification(id: item.id, type: .movie)
+
                     await NotificationManager.shared.scheduleMovieNotification(
                         id: item.id, 
                         title: item.title, 
@@ -228,9 +227,8 @@ actor BackgroundDataService {
                         posterURL: item.effectivePosterURL
                     )
                 } else if item.type == .tvShow, let tv = item.tvShowDetails {
-                    let identifier = "tv-\(item.id)"
-                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(identifier)-day1", "\(identifier)-day2"])
-                    
+                    await NotificationManager.shared.cancelNotification(id: item.id, type: .tvShow)
+
                     await NotificationManager.shared.scheduleTVNotification(
                         id: item.id, 
                         title: item.title, 

@@ -91,7 +91,7 @@ struct TitleSection: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.tiny) {
                     if useTitleLogos, let logoURL = item.effectiveLogoURL, let url = URL(string: logoURL) {
                         ZStack(alignment: .topTrailing) {
-                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .critical) { _ in } placeholder: {
+                            CachedImage(url: url, targetSize: .titleLogoLarge, priority: .critical) { _ in } placeholder: {
                                 Text(item.title)
                                     .font(AppTheme.Font.largeTitle)
                                     .lineLimit(3)
@@ -552,7 +552,7 @@ private struct LogoThumbnail: View {
 
     var body: some View {
         if let url = URL(string: urlString) {
-            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in
+            CachedImage(url: url, targetSize: .titleLogoLarge, priority: .low) { _ in
             } placeholder: {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.06))

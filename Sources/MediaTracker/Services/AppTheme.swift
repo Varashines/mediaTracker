@@ -133,9 +133,11 @@ struct AppTheme {
         static let medium = CGSize(width: 400, height: 600)
         static let large = CGSize(width: 800, height: 1200)
         static let backdropCompact = CGSize(width: 400, height: 226)
+        static let networkLogo = CGSize(width: 100, height: 50)
         /// ~2× of a ≤190×38pt title-logo frame on landscape cards. Must match
         /// every CW/ForYou logo `CachedImage` + prewarm `targetSize` (cache key).
         static let cardLogo = CGSize(width: 380, height: 90)
+        static let titleLogoLarge = CGSize(width: 780, height: 185)
     }
 
     /// Standardized icon sizes

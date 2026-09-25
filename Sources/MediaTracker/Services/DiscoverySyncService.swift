@@ -570,18 +570,15 @@ actor DiscoverySyncService {
                         }
                         if let hex = cachedHex { return (id, hex) }
                         guard let path = logoPath,
-                              let urlString = APIClient.tmdbImageURL(path: path, size: "w300"),
-                              let url = URL(string: urlString) else { return (id, nil) }
-                        do {
-                            let (data, _) = try await ImageCache.shared.imageSession.data(from: url)
-                            let extractedColor = await ColorExtractor.dominantColor(from: data)
-                            let hexString = extractedColor.toHex()
-                            await MainActor.run { NetworkThemeManager.shared.save(color: extractedColor, for: name) }
-                            return (id, hexString)
-                        } catch {
-                            AppLogger.warning("Network color fetch failed for '\(name)': \(error)", logger: AppLogger.sync)
+                              let urlString = APIClient.tmdbImageURL(path: path, size: "w300") else { return (id, nil) }
+                        guard let cached = await ImageCache.shared.get(forKey: urlString, targetSize: .networkLogo) else {
+                            AppLogger.warning("Network logo cache miss for '\(name)'", logger: AppLogger.sync)
                             return (id, nil)
                         }
+                        let extractedColor = await ColorExtractor.dominantColor(from: cached.image)
+                        let hexString = extractedColor.toHex()
+                        await MainActor.run { NetworkThemeManager.shared.save(color: extractedColor, for: name) }
+                        return (id, hexString)
                     }
                 }
                 var results: [(PersistentIdentifier, String?)] = []

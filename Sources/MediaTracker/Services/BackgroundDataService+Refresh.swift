@@ -674,27 +674,17 @@ extension BackgroundDataService {
     }
 
 
-    func extractAndSavePosterColor(for item: MediaItem) async {        let effectivePoster = item.effectivePosterURL
+    func extractAndSavePosterColor(for item: MediaItem) async {
+        let effectivePoster = item.effectivePosterURL
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
               let poster = effectivePoster else { return }
 
-        // Try to get the image from cache first, avoiding a redundant network download
-        var cgImage: CGImage?
-        if let cached = await ImageCache.shared.get(forKey: poster, targetSize: CGSize(width: 200, height: 300)) {
-            cgImage = cached.image
-        } else if let url = URL(string: poster),
-                   let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
-                  let image = NSImage(data: data) {
-            cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        }
-
-        if let cgImage {
-            let palette = await ColorExtractor.extractThemePalette(from: cgImage)
-            item.themeColorHex = palette.primary.toHex()
-            item.themeSecondaryColorHex = palette.secondary.toHex()
-            item.themeMutedColorHex = palette.muted.toHex()
-            item.themeColorSourceURL = poster
-        }
+        guard let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) else { return }
+        let palette = await ColorExtractor.extractThemePalette(from: cached.image)
+        item.themeColorHex = palette.primary.toHex()
+        item.themeSecondaryColorHex = palette.secondary.toHex()
+        item.themeMutedColorHex = palette.muted.toHex()
+        item.themeColorSourceURL = poster
     }
 }

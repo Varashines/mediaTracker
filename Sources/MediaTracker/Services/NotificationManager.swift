@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftData
 @preconcurrency import UserNotifications
@@ -219,26 +220,28 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     }
 
     private func downloadImage(from urlString: String) async throws -> UNNotificationAttachment? {
-        guard let url = URL(string: urlString) else { return nil }
-        
-        let sessionConfig = URLSessionConfiguration.ephemeral
-        sessionConfig.timeoutIntervalForRequest = 10.0
-        sessionConfig.timeoutIntervalForResource = 15.0
-        let session = URLSession(configuration: sessionConfig)
-        
-        let (location, _) = try await session.download(from: url)
-        
-        let tmpDir = FileManager.default.temporaryDirectory
-        let tmpFile = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")
-        
-        try FileManager.default.moveItem(at: location, to: tmpFile)
-        return try UNNotificationAttachment(identifier: UUID().uuidString, url: tmpFile, options: nil)
+        guard let container = await ImageCache.shared.get(forKey: urlString, targetSize: .thumbMedium) else {
+            return nil
+        }
+        let bitmap = NSBitmapImageRep(cgImage: container.image)
+        guard let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.9]) else {
+            return nil
+        }
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".jpg")
+        try data.write(to: tmpURL, options: .atomic)
+        return try UNNotificationAttachment(identifier: UUID().uuidString, url: tmpURL, options: nil)
     }
     
     func cancelNotification(id: String, type: MediaType) {
         guard isProperlyBundled else { return }
         let baseID = type == .movie ? "movie-\(id)" : "tv-\(id)"
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(baseID)-day1", "\(baseID)-day2"])
+    }
+
+    func removeAllPendingNotifications() {
+        guard isProperlyBundled else { return }
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
     }
 
     // MARK: - Weekly Digest
@@ -286,12 +289,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     }
 
     func cancelWeeklyDigest() {
+        guard isProperlyBundled else { return }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.weeklyDigestID])
     }
 
     /// Re-schedules the weekly digest from Settings (or cancels if disabled).
     /// Also refreshes the counts on app launch.
     func rescheduleWeeklyDigestIfNeeded() async {
+        guard isProperlyBundled else { return }
         guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue) else {
             cancelWeeklyDigest()
             return
@@ -318,10 +323,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     }
 
     func getPendingNotifications() async -> [UNNotificationRequest] {
-        await UNUserNotificationCenter.current().pendingNotificationRequests()
+        guard isProperlyBundled else { return [] }
+        return await UNUserNotificationCenter.current().pendingNotificationRequests()
     }
 
     func scheduleAllUpcomingNotifications(onProgress: (@Sendable (String) -> Void)? = nil) async {
+        guard isProperlyBundled else { return }
         guard let container = modelContainer else { return }
         guard areNotificationsEnabled else {
             AppLogger.debug("🔕 Skipping bulk schedule: notifications disabled.", logger: AppLogger.notifications)

@@ -226,7 +226,7 @@ struct DiscoveryHubView: View {
         }
         if !logoURLs.isEmpty {
             Task {
-                ImageCache.shared.prewarmImages(urls: logoURLs, targetSize: CGSize(width: 100, height: 50))
+                ImageCache.shared.prewarmImages(urls: logoURLs, targetSize: .networkLogo)
             }
         }
     }
