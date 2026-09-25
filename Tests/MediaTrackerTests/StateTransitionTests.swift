@@ -35,8 +35,9 @@ final class StateTransitionTests: MTTestCase {
         XCTAssertEqual(item.state, .completed)
     }
 
+    /// A rewatch in progress must NOT complete while episodes remain unwatched.
     @MainActor
-    func testSyncDoesNotCompleteRewatching() throws {
+    func testSyncKeepsRewatchingWhileEpisodesRemain() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
@@ -58,10 +59,13 @@ final class StateTransitionTests: MTTestCase {
             ep.season = season
             season.episodes.append(ep)
             context.insert(ep)
-            ep.markWatched(true)
+            if i == 1 { ep.markWatched(true) }
         }
 
         try context.save()
+
+        tv.totalEpisodesCount = 2
+        tv.watchedEpisodesCount = 1
 
         item.syncCachedProperties(now: Date())
         XCTAssertEqual(item.state, .rewatching)
@@ -166,8 +170,9 @@ final class StateTransitionTests: MTTestCase {
         XCTAssertEqual(item.state, .completed)
     }
 
+    /// Finishing every episode of a rewatch completes the title.
     @MainActor
-    func testCheckOverallCompletionDoesNotOverrideRewatching() throws {
+    func testSyncCompletesRewatchingWhenAllEpisodesWatched() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: MediaItem.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, configurations: config)
         let context = container.mainContext
@@ -198,7 +203,7 @@ final class StateTransitionTests: MTTestCase {
         tv.watchedEpisodesCount = 2
 
         item.syncCachedProperties(now: Date())
-        XCTAssertEqual(item.state, .rewatching)
+        XCTAssertEqual(item.state, .completed)
     }
 
     @MainActor

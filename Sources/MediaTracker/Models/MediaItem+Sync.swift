@@ -147,6 +147,11 @@ extension MediaItem {
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount
+        // Shows inherit their first-watch date from the earliest episode. Only
+        // computed while unset, so this is a one-time scan per title.
+        if firstWatchedAt == nil {
+            recordFirstWatchIfNeeded(tv.earliestEpisodeFirstWatchDate)
+        }
         scheduleWatchHistoryCatalogCheck(tv: tv)
         
         if progressResult.totalCount > 0 {
@@ -158,7 +163,10 @@ extension MediaItem {
 
             // Unified Auto-advance State Logic (runs before auto-mark so state is updated first)
             // Set stateValue directly to avoid re-triggering syncCachedProperties via the state setter
-            if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
+            // Re-watching is intentionally not excluded: finishing every episode of a
+            // rewatch completes the title and closes the cycle, so the next
+            // Re-watching selection starts a fresh one.
+            if progress >= 1.0 && currentState != .completed && currentState != .onHold && currentState != .dropped {
                 self.applyAutomaticState(.completed, now: now)
             } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
                 self.applyAutomaticState(.active, now: now)

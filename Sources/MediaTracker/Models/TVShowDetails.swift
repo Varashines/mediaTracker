@@ -160,6 +160,24 @@ final class TVShowDetails {
             .first
     }
     
+    /// Earliest first-watch date across all known episodes. Falls back to the
+    /// current projection dates so rows created before `firstWatchedDate`
+    /// existed still report a sensible value.
+    var earliestEpisodeFirstWatchDate: Date? {
+        var earliest: Date?
+        for season in seasons.liveModels {
+            for episode in season.episodes.liveModels {
+                guard let date = episode.firstKnownWatchDate else { continue }
+                if let current = earliest {
+                    if date < current { earliest = date }
+                } else {
+                    earliest = date
+                }
+            }
+        }
+        return earliest
+    }
+
     func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
         _ = calculateProgress(forceRecalculate: force)
         // Invalidate badge scan cache when episodes change — this is the correct
