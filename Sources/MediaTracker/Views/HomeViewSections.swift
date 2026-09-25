@@ -59,11 +59,7 @@ struct HomeViewSections: View {
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.large)
-                    .transition(
-                        AppThemeCoordinator.isReducingVisualEffects
-                            ? .opacity
-                            : .opacity.combined(with: .move(edge: .top))
-                    )
+                    .transition(.opacity)
             }
 
             // 1. CONTINUE WATCHING
