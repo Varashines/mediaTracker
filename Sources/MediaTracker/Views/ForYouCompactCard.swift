@@ -29,6 +29,7 @@ struct ForYouCompactCard: View, Equatable {
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
+                .scaleEffect(AppThemeCoordinator.isReducingVisualEffects || isFastScrolling ? 1 : (isHovered ? 1.03 : 1.0))
                 .clipped()
                 .overlay(Color.black.opacity(isHovered ? 0.4 : 0.45))
             } else {
@@ -130,6 +131,8 @@ struct ForYouCompactCard: View, Equatable {
         .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered, suppressEffects: isFastScrolling)
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.02 : 1.0))
         .opacity(hasAppeared ? 1 : 0)
+        .offset(y: AppThemeCoordinator.isReducingVisualEffects ? 0 : (hasAppeared ? 0 : 8))
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: hasAppeared)
         .onAppear {
             hasAppeared = true
         }

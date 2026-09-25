@@ -57,8 +57,13 @@ struct HomeViewSections: View {
                             }
                         }
                     }
+                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: activePillAnchor)
                     .padding(.horizontal, AppTheme.Spacing.large)
-                    .transition(.opacity)
+                    .transition(
+                        AppThemeCoordinator.isReducingVisualEffects
+                            ? .opacity
+                            : .opacity.combined(with: .move(edge: .top))
+                    )
             }
 
             // 1. CONTINUE WATCHING

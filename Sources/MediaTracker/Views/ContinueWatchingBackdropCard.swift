@@ -79,6 +79,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: cardWidth, height: cardHeight)
+            .scaleEffect(AppThemeCoordinator.isReducingVisualEffects || isFastScrolling ? 1 : (isHovered ? 1.03 : 1.0))
             .clipped()
         } else if let poster = metadata.posterURL, let url = URL(string: poster) {
             // Center-cropped poster fallback: portrait art fills the 16:9 frame.
@@ -87,6 +88,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: cardWidth, height: cardHeight)
+            .scaleEffect(AppThemeCoordinator.isReducingVisualEffects || isFastScrolling ? 1 : (isHovered ? 1.03 : 1.0))
             .clipped()
         } else {
             Rectangle()
