@@ -234,7 +234,7 @@ struct SettingsButton: View {
                 }
                 .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
                 .scaleEffect(isHovered ? 1.02 : 1.0)
-                .animation(AppTheme.Animation.springSnappy, value: isHovered)
+                .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

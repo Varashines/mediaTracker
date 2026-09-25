@@ -246,7 +246,7 @@ struct HomeViewSections: View {
 
         private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
             Button {
-                withAnimation(AppTheme.Animation.springSnappy) {
+                AppTheme.Animation.with(AppTheme.Animation.springSnappy) {
                     if visibleSection == section {
                         visibleSection = nil
                     } else {
