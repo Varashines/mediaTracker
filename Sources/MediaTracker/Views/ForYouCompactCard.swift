@@ -29,7 +29,7 @@ struct ForYouCompactCard: View, Equatable {
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
-                .scaleEffect(AppThemeCoordinator.isReducingVisualEffects || isFastScrolling ? 1 : (isHovered ? 1.03 : 1.0))
+                .brightness(isHovered ? 0.035 : 0)
                 .clipped()
                 .overlay(Color.black.opacity(isHovered ? 0.4 : 0.45))
             } else {
