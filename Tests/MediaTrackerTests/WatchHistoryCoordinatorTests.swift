@@ -406,4 +406,63 @@ final class WatchHistoryCoordinatorTests: MTTestCase {
         XCTAssertEqual(try context.fetch(FetchDescriptor<WatchEvent>()).count, 1)
         XCTAssertEqual(try context.fetch(FetchDescriptor<WatchCycle>()).count, 2)
     }
+
+    /// Finishing a rewatch auto-completes the title and closes the cycle; the next
+    /// Re-watching selection must then open a brand new cycle.
+    func testFinishingRewatchCompletesTitleAndNextRewatchStartsFreshCycle() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_2", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 2)
+        details.item = item
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 1, showID: 2)
+        season.tvShowDetails = details
+        let episode = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Episode 1", overview: "", showID: 2)
+        episode.season = season
+        season.episodes.append(episode)
+        details.seasons.append(season)
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        context.insert(episode)
+        try context.save()
+
+        // First rewatch: the projection resets.
+        item.state = .rewatching
+        try context.save()
+        XCTAssertEqual(item.state, .rewatching)
+        XCTAssertEqual(item.rewatchCount, 1)
+        XCTAssertFalse(episode.isWatched)
+
+        // Watch the only episode — progress hits 100% and the title completes.
+        episode.markWatched(true, recordHistory: false)
+        try context.save()
+        item.syncCachedProperties(now: Date())
+        try context.save()
+
+        XCTAssertEqual(item.state, .completed, "finishing a rewatch completes the title")
+        let cyclesAfterFinish = try context.fetch(FetchDescriptor<WatchCycle>())
+        let finished = try XCTUnwrap(cyclesAfterFinish.first { $0.isRewatch })
+        XCTAssertTrue(finished.isComplete, "the rewatch cycle is closed")
+        XCTAssertEqual(finished.state, .completed)
+
+        // Next rewatch must start a fresh cycle rather than resuming the old one.
+        let previousCycleCount = cyclesAfterFinish.count
+        item.state = .rewatching
+        try context.save()
+
+        let cycles = try context.fetch(FetchDescriptor<WatchCycle>())
+        XCTAssertEqual(cycles.count, previousCycleCount + 1)
+        XCTAssertEqual(item.rewatchCount, 2)
+        let activeCycle = try XCTUnwrap(WatchHistoryCoordinator.currentCycle(for: item, context: context))
+        XCTAssertTrue(activeCycle.isRewatch)
+        XCTAssertFalse(activeCycle.isComplete)
+        XCTAssertEqual(activeCycle.stateRaw, WatchCycleState.active.rawValue)
+        XCTAssertFalse(episode.isWatched, "the projection resets again for the new cycle")
+    }
 }

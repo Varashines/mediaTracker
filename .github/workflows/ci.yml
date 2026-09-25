@@ -55,6 +55,7 @@ jobs:
             StateTransitionTests
             SyncCachedPropertiesTests
             UtilityTests
+            WatchHistoryCoordinatorTests
             WatchProvidersTests
             WeeklyDigestTests
             YearInReviewTests

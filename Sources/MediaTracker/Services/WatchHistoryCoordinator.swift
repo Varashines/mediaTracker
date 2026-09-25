@@ -8,7 +8,8 @@ enum WatchHistoryCoordinator {
         to newState: MediaState,
         context: ModelContext,
         now: Date = Date(),
-        legacyCompletedAt: Date? = nil
+        legacyCompletedAt: Date? = nil,
+        source: WatchEventSource = .manual
     ) {
         guard item.modelContext != nil else { return }
 
@@ -23,12 +24,12 @@ enum WatchHistoryCoordinator {
         }
 
         if newState == .completed, oldState == .rewatching {
-            completeCurrentCycle(item: item, context: context, now: now, source: .manual)
+            completeCurrentCycle(item: item, context: context, now: now, source: source)
             return
         }
 
         if newState == .completed, oldState != .completed, oldState != .rewatching {
-            completeCurrentCycle(item: item, context: context, now: now, source: .manual)
+            completeCurrentCycle(item: item, context: context, now: now, source: source)
         }
     }
 
@@ -331,11 +332,11 @@ enum WatchHistoryCoordinator {
         item.type == .tvShow ? .tvShow : .movie
     }
 
-    private static func currentCycle(for item: MediaItem, context: ModelContext) -> WatchCycle? {
+    static func currentCycle(for item: MediaItem, context: ModelContext) -> WatchCycle? {
         currentCycle(forMediaID: item.id, context: context)
     }
 
-    private static func currentCycle(forMediaID mediaID: String, context: ModelContext) -> WatchCycle? {
+    static func currentCycle(forMediaID mediaID: String, context: ModelContext) -> WatchCycle? {
         let active = WatchCycleState.active.rawValue
         let completed = WatchCycleState.completed.rawValue
         var descriptor = FetchDescriptor<WatchCycle>(

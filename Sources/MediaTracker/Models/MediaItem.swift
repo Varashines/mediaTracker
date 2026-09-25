@@ -238,7 +238,8 @@ final class MediaItem: Identifiable {
                 from: oldState,
                 to: newState,
                 context: context,
-                now: now
+                now: now,
+                source: .automatic
             )
         }
         let pid = persistentModelID
