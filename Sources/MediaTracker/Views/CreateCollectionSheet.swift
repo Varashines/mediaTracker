@@ -264,7 +264,7 @@ struct CreateCollectionSheet: View {
                                     .font(AppTheme.Font.label)
                                 Spacer()
                                 Button {
-                                    withAnimation(AppTheme.Animation.springGentle) {
+                                    AppTheme.Animation.with(AppTheme.Animation.springGentle) {
                                         expandedRuleIndex = expandedRuleIndex == idx ? nil : idx
                                     }
                                 } label: {
@@ -299,7 +299,11 @@ struct CreateCollectionSheet: View {
                                     .background(Color.primary.opacity(0.03))
                                     .cornerRadius(10)
                                     .padding(.top, 6)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(
+                                        AppThemeCoordinator.isReducingVisualEffects
+                                            ? .opacity
+                                            : .opacity.combined(with: .move(edge: .top))
+                                    )
                             }
                         }
                     }
@@ -322,7 +326,7 @@ struct CreateCollectionSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
-                    .animation(AppTheme.Animation.springGentle, value: previewCount)
+                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springGentle), value: previewCount)
                 }
             }
         }
@@ -519,7 +523,7 @@ struct IconPickerGridView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                 ForEach(filteredIcons, id: \.self) { iconName in
                     Button {
-                        withAnimation(AppTheme.Animation.springSnappy) { selectedIcon = iconName }
+                        AppTheme.Animation.with(AppTheme.Animation.springSnappy) { selectedIcon = iconName }
                     } label: {
                         Image(systemName: iconName)
                             .font(.title3)
