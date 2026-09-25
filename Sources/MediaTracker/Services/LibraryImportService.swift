@@ -128,6 +128,16 @@ extension BackgroundDataService {
                     itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
                     if !hasDetails { itemsNeedingBackfill.append(existing.id) }
                     existing.syncCachedProperties(dirty: .all)
+                    if mediaType == .movie,
+                       itemData.state == MediaState.completedRaw {
+                        let watchedAt = itemData.lastStateChangeDate ?? itemData.dateAdded
+                        WatchHistoryCoordinator.recordImportedMovie(
+                            mediaID: existing.id,
+                            watchedAt: watchedAt,
+                            runtimeMinutes: existing.cachedRuntime,
+                            context: context
+                        )
+                    }
                     mergedCount += 1
                 }
                 if strategy != .skip {
@@ -153,6 +163,16 @@ extension BackgroundDataService {
                 itemsNeedingBackfill.append(uniqueID)
                 item.syncCachedProperties(dirty: .all)
                 context.insert(item)
+                if mediaType == .movie,
+                   itemData.state == MediaState.completedRaw {
+                    let watchedAt = itemData.lastStateChangeDate ?? itemData.dateAdded
+                    WatchHistoryCoordinator.recordImportedMovie(
+                        mediaID: item.id,
+                        watchedAt: watchedAt,
+                        runtimeMinutes: item.cachedRuntime,
+                        context: context
+                    )
+                }
                 importedCount += 1
 
                 itemData.applySeasonTasteOverrides(to: item, in: context)
@@ -184,8 +204,16 @@ extension BackgroundDataService {
                         for eNum in watchedNumbers {
                             let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
                             if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
-                                existing.markWatched(true)
-                                if let d = watchedDates[epUniqueID] { existing.lastWatchedDate = d; existing.watchedDate = d }
+                                let watchedAt = watchedDates[epUniqueID]
+                                existing.applyImportedWatchState(watchedAt: watchedAt)
+                                let eventDate = watchedAt ?? existing.watchedDate ?? existing.lastWatchedDate ?? item.dateAdded ?? Date()
+                                WatchHistoryCoordinator.recordImportedEpisode(
+                                    mediaID: uniqueID,
+                                    episodeID: epUniqueID,
+                                    watchedAt: eventDate,
+                                    runtimeMinutes: existing.runtime,
+                                    context: context
+                                )
                                 continue
                             }
                             let episode = TVEpisode(
@@ -195,11 +223,18 @@ extension BackgroundDataService {
                                 isWatched: true, showID: tmdbID
                             )
                             episode.uniqueID = epUniqueID
-                            episode.lastWatchedDate = watchedDates[epUniqueID]
-                            episode.watchedDate = watchedDates[epUniqueID]
                             episode.season = season
+                            let watchedAt = watchedDates[epUniqueID] ?? item.dateAdded ?? Date()
+                            episode.applyImportedWatchState(watchedAt: watchedAt)
                             context.insert(episode)
                             existingEpisodesByUniqueID[epUniqueID] = episode
+                            WatchHistoryCoordinator.recordImportedEpisode(
+                                mediaID: uniqueID,
+                                episodeID: epUniqueID,
+                                watchedAt: watchedAt,
+                                runtimeMinutes: episode.runtime,
+                                context: context
+                            )
                         }
                     }
                 }
@@ -207,6 +242,9 @@ extension BackgroundDataService {
             
             processedCount += 1
             if processedCount % 25 == 0 || processedCount == totalCount {
+                // Intentional batch save inside import loop — SaveCoordinator's
+                // 350ms debounce would coalesce 25-item checkpoints into one
+                // late save and lose progress granularity / crash-safety.
                 do { try context.save() } catch {
                     AppLogger.warning("Import intermediate save failed: \(error)", logger: AppLogger.sync)
                 }
@@ -223,6 +261,7 @@ extension BackgroundDataService {
             }
         }
         
+        // Intentional final batch save — import must be durable before backfill Tasks.
         do { try context.save() } catch {
             AppLogger.warning("Import final save failed: \(error)", logger: AppLogger.sync)
         }
@@ -284,6 +323,7 @@ extension BackgroundDataService {
         }
 
         if importedCount > 0 {
+            // Intentional batch save — collection restore is a bulk write off the UI frame.
             try? context.save()
             await MainActor.run {
                 AppLogger.info("📦 Restored \(importedCount) collections from backup.", logger: AppLogger.data)

@@ -21,6 +21,14 @@ actor BackgroundOperationGate {
         try await perform(label: label, container: container, operation: operation)
     }
 
+    func performHealIfIdle(label: String = "heal", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws -> Bool {
+        guard !(isRunning[storeResource] ?? false) else { return false }
+        isRunning[storeResource] = true
+        defer { isRunning[storeResource] = false }
+        try await operation()
+        return true
+    }
+
     func performSync(label: String = "sync", container: ModelContainer, operation: @Sendable () async throws -> Void) async throws {
         try await perform(label: label, container: container, operation: operation)
     }

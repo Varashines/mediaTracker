@@ -19,6 +19,7 @@ struct CreateCollectionSheet: View {
     @State private var previewTask: Task<Void, Never>?
     @State private var expandedRuleIndex: Int?
     @FocusState private var isNameFocused: Bool
+    @FocusState private var isIconSearchFocused: Bool
     
     let suggestedIcons = [
         // Media & Apps
@@ -74,11 +75,9 @@ struct CreateCollectionSheet: View {
                             .foregroundStyle(.secondary)
                             .kerning(1.2)
                         TextField("Collection Name", text: $name)
-                            .textFieldStyle(.plain)
+                            .textFieldStyle(.roundedBorder)
+                            .controlSize(.large)
                             .font(AppTheme.Font.body)
-                            .padding()
-                            .background(Color.primary.opacity(0.05))
-                            .cornerRadius(AppTheme.Radius.medium)
                             .focused($isNameFocused)
                             .onSubmit(saveCollection)
                     }
@@ -118,15 +117,14 @@ struct CreateCollectionSheet: View {
                     // Icon Picker
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            TextField("Search symbols...", text: $iconSearchText)
-                                .textFieldStyle(.plain)
-                                .font(AppTheme.Font.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.primary.opacity(0.05))
-                                .cornerRadius(AppTheme.Radius.small)
-                                .frame(width: 180)
-                        
+                             TextField("Search symbols...", text: $iconSearchText)
+                                 .textFieldStyle(.roundedBorder)
+                                 .controlSize(.regular)
+                                 .font(AppTheme.Font.caption)
+                                 .frame(minWidth: 160, idealWidth: 220, maxWidth: .infinity)
+                                 .focused($isIconSearchFocused)
+
+
                             Spacer()
                         }
                     
@@ -137,34 +135,32 @@ struct CreateCollectionSheet: View {
             
             // Buttons
             HStack(spacing: 16) {
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .font(AppTheme.Font.bodyBold)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.primary.opacity(0.05))
-                    .cornerRadius(AppTheme.Radius.medium)
-                
-                Button(editingCollection == nil ? "Create" : "Save") {
-                    saveCollection()
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .font(AppTheme.Font.bodyBold)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 12)
-                .background(name.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(AppTheme.Colors.accent))
-                .foregroundStyle(.white)
-                .cornerRadius(AppTheme.Radius.medium)
-                .keyboardShortcut(.defaultAction)
+                 Button("Cancel") { dismiss() }
+                     .buttonStyle(.bordered)
+                     .controlSize(.large)
+                     .keyboardShortcut(.cancelAction)
+
+                 Button(editingCollection == nil ? "Create" : "Save") {
+                     saveCollection()
+                 }
+                 .buttonStyle(.borderedProminent)
+                 .controlSize(.large)
+                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                 .keyboardShortcut(.defaultAction)
+
             }
             .padding(.top, 10)
         }
         .padding(32)
-        .frame(minWidth: 500, idealWidth: 540, minHeight: 560, idealHeight: 680)
+        .frame(minWidth: 420, idealWidth: 520, maxWidth: 640, minHeight: 560, idealHeight: 680)
+        // 2A: Esc clears focused icon search first; second Esc dismisses sheet.
+        .onExitCommand {
+            if isIconSearchFocused && !iconSearchText.isEmpty {
+                iconSearchText = ""
+            } else {
+                dismiss()
+            }
+        }
         .onAppear {
             if let editing = editingCollection {
                 name = editing.name
@@ -460,21 +456,14 @@ struct RuleEditorRow: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    let labelText: String = {
-                        if selected.isEmpty { return "Choose…" }
-                        if selected.count == 1 { return selected[0] }
-                        return "\(selected[0]) +\(selected.count - 1)"
-                    }()
-                    Text(labelText)
-                        .font(AppTheme.Font.label)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                let labelText: String = {
+                    if selected.isEmpty { return "Choose…" }
+                    if selected.count == 1 { return selected[0] }
+                    return "\(selected[0]) +\(selected.count - 1)"
+                }()
+                Label(labelText, systemImage: "chevron.up.chevron.down")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+
         }
     }
 
@@ -504,16 +493,9 @@ struct RuleEditorRow: View {
                 Button("after") { comparison.wrappedValue = .after }
                 Button("before") { comparison.wrappedValue = .before }
             } label: {
-                HStack(spacing: 4) {
-                    Text(comparison.wrappedValue.rawValue)
-                        .font(AppTheme.Font.label)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Label(comparison.wrappedValue.rawValue, systemImage: "chevron.up.chevron.down")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+
         }
     }
 

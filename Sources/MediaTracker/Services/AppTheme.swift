@@ -29,6 +29,13 @@ struct AppTheme {
         static let card: CGFloat = 24
     }
 
+    enum ShareCard {
+        static let titleBase = Color(red: 0.055, green: 0.075, blue: 0.13)
+        static let recapBase = Color(red: 0.075, green: 0.055, blue: 0.14)
+        static let passportBase = Color(red: 0.045, green: 0.105, blue: 0.12)
+        static let textureOpacity: CGFloat = 0.045
+    }
+
     /// Semantic dimensions for the app's major window and content layouts.
     struct Layout {
         static let settingsMinimumWidth: CGFloat = 560
@@ -126,6 +133,9 @@ struct AppTheme {
         static let medium = CGSize(width: 400, height: 600)
         static let large = CGSize(width: 800, height: 1200)
         static let backdropCompact = CGSize(width: 400, height: 226)
+        /// ~2× of a ≤190×38pt title-logo frame on landscape cards. Must match
+        /// every CW/ForYou logo `CachedImage` + prewarm `targetSize` (cache key).
+        static let cardLogo = CGSize(width: 380, height: 90)
     }
 
     /// Standardized icon sizes

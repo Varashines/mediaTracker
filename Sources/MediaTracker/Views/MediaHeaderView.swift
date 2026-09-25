@@ -6,10 +6,16 @@ struct MediaHeaderView: View {
     let watchProviders: [WatchProviderResult]
     var onStatusChange: ((MediaState?) -> Void)? = nil
     var posterOptions: [String] = []
+    var hasLoadedPosterOptions = false
+    var isLoadingPosterOptions = false
+    var onRequestPosterOptions: (() -> Void)? = nil
     var isCustomPoster: Bool = false
     var onSelectPoster: ((String) -> Void)? = nil
     var onResetPoster: (() -> Void)? = nil
     var logoOptions: [String] = []
+    var hasLoadedLogoOptions = false
+    var isLoadingLogoOptions = false
+    var onRequestLogoOptions: (() -> Void)? = nil
     var isCustomLogo: Bool = false
     var onSelectLogo: ((String) -> Void)? = nil
     var onResetLogo: (() -> Void)? = nil
@@ -26,6 +32,9 @@ struct MediaHeaderView: View {
                     item: item,
                     themeColor: themeColor,
                     posterOptions: posterOptions,
+                    hasLoadedPosterOptions: hasLoadedPosterOptions,
+                    isLoadingPosterOptions: isLoadingPosterOptions,
+                    onRequestPosterOptions: onRequestPosterOptions,
                     isCustomPoster: isCustomPoster,
                     onSelectPoster: onSelectPoster,
                     onResetPoster: onResetPoster
@@ -38,6 +47,9 @@ struct MediaHeaderView: View {
                         watchProviders: watchProviders,
                         onStatusChange: onStatusChange,
                         logoOptions: logoOptions,
+                        hasLoadedLogoOptions: hasLoadedLogoOptions,
+                        isLoadingLogoOptions: isLoadingLogoOptions,
+                        onRequestLogoOptions: onRequestLogoOptions,
                         isCustomLogo: isCustomLogo,
                         onSelectLogo: onSelectLogo,
                         onResetLogo: onResetLogo,
@@ -47,6 +59,8 @@ struct MediaHeaderView: View {
                     )
                     
                     MetadataSection(item: item, themeColor: themeColor)
+
+                    WatchHistorySummaryView(mediaID: item.id)
 
                     OverviewSection(
                         overview: item.overview, themeColor: themeColor,

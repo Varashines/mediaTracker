@@ -10,10 +10,9 @@ struct DiscoveryHubView: View {
     @AppStorage("hidden_studios") private var hiddenStudios: String = ""
     @State private var hasDataLoaded = false
     @State private var isResyncing = false
-    @State private var isFastScrolling = false
-    @State private var scrollTask: Task<Void, Never>?
     @State private var refreshTask: Task<Void, Never>?
     @State private var networkTab: NetworkTab = .networks
+    @Environment(\.isFastScrolling) private var isFastScrolling
     
     enum NetworkTab { case networks, studios }
     
@@ -46,7 +45,6 @@ struct DiscoveryHubView: View {
                                 icon: "sparkles",
                                 nodes: viewModel.discovery.cachedBadges,
                                 style: .text,
-                                isFastScrolling: isFastScrolling,
                                 subtitle: "Your library, lately",
                                 isFeatured: true,
                                 limit: 6
@@ -58,7 +56,7 @@ struct DiscoveryHubView: View {
                         if !viewModel.discovery.cachedNetworks.isEmpty || !viewModel.discovery.cachedStudios.isEmpty {
                             let currentNodes = networkTab == .networks ? viewModel.discovery.cachedNetworks : viewModel.discovery.cachedStudios
                             let sectionTitle = networkTab == .networks ? "Networks" : "Studios"
-                            DiscoverySection(title: sectionTitle, icon: "tv", nodes: currentNodes, style: .logo, isFastScrolling: isFastScrolling, subtitle: "\(currentNodes.count) in your library", limit: 12, headerAccessory: {
+                            DiscoverySection(title: sectionTitle, icon: "tv", nodes: currentNodes, style: .logo, subtitle: "\(currentNodes.count) in your library", limit: 12, headerAccessory: {
                                 HStack(spacing: 6) {
                                     NetworkTabPill("Networks", isSelected: networkTab == .networks) { networkTab = .networks }
                                     NetworkTabPill("Studios", isSelected: networkTab == .studios) { networkTab = .studios }
@@ -68,18 +66,18 @@ struct DiscoveryHubView: View {
                             }
                         }
 
-                        DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedGenres.count) represented", limit: 12) { node in
+                        DiscoverySection(title: "Genres", icon: "film", nodes: viewModel.discovery.cachedGenres, style: .text, subtitle: "\(viewModel.discovery.cachedGenres.count) represented", limit: 12) { node in
                             onFilterSelected(DiscoveryFilter(type: .genre, name: node.name))
                         }
 
                         if !viewModel.discovery.cachedLanguages.isEmpty {
-                            DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedLanguages.count) represented", limit: 6) { node in
+                            DiscoverySection(title: "Languages", icon: "globe", nodes: viewModel.discovery.cachedLanguages, style: .text, subtitle: "\(viewModel.discovery.cachedLanguages.count) represented", limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .language, name: node.id))
                             }
                         }
 
                         if !viewModel.discovery.cachedProviders.isEmpty {
-                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, isFastScrolling: isFastScrolling, subtitle: "\(viewModel.discovery.cachedProviders.count) available", limit: 6) { node in
+                            DiscoverySection(title: "Providers", icon: "popcorn.fill", nodes: viewModel.discovery.cachedProviders, style: .logo, subtitle: "\(viewModel.discovery.cachedProviders.count) available", limit: 6) { node in
                                 onFilterSelected(DiscoveryFilter(type: .provider, name: node.name))
                             }
                         }
@@ -127,7 +125,7 @@ struct DiscoveryHubView: View {
         .accessibilityLabel("Discovery Hub")
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
-        .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+        .trackFastScrollingEnv()
         .onAppear { refreshData(force: false) }
         .refreshable { 
             refreshData(force: true) 
@@ -138,10 +136,6 @@ struct DiscoveryHubView: View {
             // full-screen skeleton flash over already-loaded content.
             refreshData(force: false)
         }
-        .onChange(of: MediaStateService.shared.discoveryResyncCount) { _, _ in
-            isResyncing = true
-            refreshData(force: true)
-        }
         .onChange(of: SleepManager.shared.isAsleep) { _, isAsleep in
             if !isAsleep {
                 if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discoveryAutoSync.rawValue) {
@@ -149,6 +143,15 @@ struct DiscoveryHubView: View {
                     refreshData(force: false)
                 }
             }
+        }
+        // Leaf observer: resync ticks must not re-eval this hub body.
+        .background {
+            MediaStateLeafObserver(
+                onDiscoveryResync: {
+                    isResyncing = true
+                    refreshData(force: true)
+                }
+            )
         }
         .onDisappear {
             refreshTask?.cancel()

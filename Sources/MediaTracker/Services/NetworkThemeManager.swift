@@ -46,7 +46,7 @@ class NetworkThemeManager {
                 for entity in entities {
                     entity.themeColorHex = nil
                 }
-                try? context.save()
+                SaveCoordinator.shared.forceSave(context)
             }
         }
     }
@@ -73,6 +73,8 @@ class NetworkThemeManager {
                     entity.themeColorHex = hex
                 }
             }
+            // Background utility context (setup Task) — batch save is intentional here;
+            // SaveCoordinator is MainActor and this path is already off the UI frame.
             try? context.save()
             
             // Once migrated, clear legacy

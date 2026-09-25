@@ -10,6 +10,8 @@ import SwiftUI
 struct CardHoverChrome: ViewModifier {
     var radius: CGFloat
     var isHovered: Bool
+    /// Drop stroke + shadow while a fast-scroll gesture is active (clip only).
+    var suppressEffects: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -17,27 +19,32 @@ struct CardHoverChrome: ViewModifier {
         content
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(
-                        isHovered
-                            ? AppTheme.Colors.strokeHover(for: colorScheme)
-                            : AppTheme.Colors.strokeDefault(for: colorScheme),
-                        lineWidth: 0.8
-                    )
+                // Hairline only when hovered or suppressed-off: idle cards skip
+                // an extra stroke layer per cell during grid scroll.
+                if !suppressEffects, isHovered {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .strokeBorder(
+                            AppTheme.Colors.strokeHover(for: colorScheme),
+                            lineWidth: 0.8
+                        )
+                }
             }
+            // Always attach shadow — a structural `.if(isHovered)` here rewrites
+            // ConditionalContent identity, remounts card content, and resets
+            // CachedImage @State (logo flashes back to its title placeholder).
             .shadow(
-                color: isHovered
+                color: (!suppressEffects && isHovered)
                     ? AppTheme.Colors.shadowElevated(for: colorScheme)
-                    : AppTheme.Colors.shadowAmbient(for: colorScheme),
-                radius: isHovered ? 10 : 5,
-                y: isHovered ? 5 : 2
+                    : .clear,
+                radius: (!suppressEffects && isHovered) ? 10 : 0,
+                y: (!suppressEffects && isHovered) ? 5 : 0
             )
             .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 
 extension View {
-    func cardHoverChrome(radius: CGFloat, isHovered: Bool) -> some View {
-        modifier(CardHoverChrome(radius: radius, isHovered: isHovered))
+    func cardHoverChrome(radius: CGFloat, isHovered: Bool, suppressEffects: Bool = false) -> some View {
+        modifier(CardHoverChrome(radius: radius, isHovered: isHovered, suppressEffects: suppressEffects))
     }
 }

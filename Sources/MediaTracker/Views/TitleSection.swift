@@ -7,6 +7,9 @@ struct TitleSection: View {
     let watchProviders: [WatchProviderResult]
     var onStatusChange: ((MediaState?) -> Void)?
     var logoOptions: [String] = []
+    var hasLoadedLogoOptions = false
+    var isLoadingLogoOptions = false
+    var onRequestLogoOptions: (() -> Void)? = nil
     var isCustomLogo: Bool = false
     var onSelectLogo: ((String) -> Void)? = nil
     var onResetLogo: (() -> Void)? = nil
@@ -98,8 +101,9 @@ struct TitleSection: View {
                             .frame(maxHeight: 110, alignment: .leading)
                             .shadow(color: Color.black.opacity(0.3), radius: 3, y: 1)
 
-                            if logoOptions.count > 1 {
+                            if logoOptions.count > 1 || (!hasLoadedLogoOptions && onRequestLogoOptions != nil) {
                                 Button {
+                                    onRequestLogoOptions?()
                                     showLogoPicker.toggle()
                                 } label: {
                                     Image(systemName: showLogoPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
@@ -119,7 +123,7 @@ struct TitleSection: View {
                                 }
                                 .buttonStyle(.plain)
                                 .contentShape(Rectangle())
-                                .help("Change logo")
+                                .help(isLoadingLogoOptions ? "Loading logo options" : "Change logo")
                             .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.2), value: isLogosHovering || showLogoPicker)
                                 .padding(8)
@@ -335,17 +339,18 @@ struct TitleSection: View {
         .buttonStyle(.plain)
         .contentShape(Capsule())
         .hoverScaled(.subtle)
+        .animation(AppTheme.Animation.springSnappy, value: currentMood)
         .popover(isPresented: $showMoodPicker) {
             MoodPickerPopover(
                 currentMood: currentMood,
                 mediaType: item.type,
                 onSelect: { mood in
-                    onMoodChanged?(mood)
                     showMoodPicker = false
+                    onMoodChanged?(mood)
                 },
                 onClear: {
-                    onMoodChanged?(nil)
                     showMoodPicker = false
+                    onMoodChanged?(nil)
                 }
             )
         }
@@ -445,10 +450,10 @@ private struct MoodPickerPopover: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .animation(AppTheme.Animation.springSnappy, value: isSelected)
+                    .animation(AppTheme.Animation.springSnappy, value: isHovered)
                     .onHover { hovering in
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            hoveredMood = hovering ? mood : nil
-                        }
+                        hoveredMood = hovering ? mood : nil
                     }
                 }
             }

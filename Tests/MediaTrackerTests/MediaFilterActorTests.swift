@@ -5,12 +5,13 @@ import SwiftData
 final class MediaFilterActorTests: MTTestCase {
     @MainActor
     func testHomeContinueWatchingSorting() async throws {
-        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, WatchEvent.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
         
         let actor = MediaFilterActor(modelContainer: container)
+        let now = Date()
         
         // Create 3 items
         // 1. Active, NEW, older interaction
@@ -33,6 +34,28 @@ final class MediaFilterActorTests: MTTestCase {
         item3.lastInteractionDate = Date().addingTimeInterval(2000)
         item3.releaseDate = Date().addingTimeInterval(-50000) // Within 48h (NEW)
         context.insert(item3)
+
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: item1.id,
+            episodeID: "1_1_1",
+            watchedAt: now.addingTimeInterval(-2 * 3600),
+            deduplicationKey: "test-1"
+        ))
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: item2.id,
+            episodeID: "2_1_1",
+            watchedAt: now.addingTimeInterval(-3600),
+            deduplicationKey: "test-2"
+        ))
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: item3.id,
+            episodeID: "3_1_1",
+            watchedAt: now.addingTimeInterval(-600),
+            deduplicationKey: "test-3"
+        ))
         
         // Manual sync to ensure badges are set correctly by BadgeEngine
         item1.syncCachedProperties()
@@ -45,11 +68,11 @@ final class MediaFilterActorTests: MTTestCase {
             category: .home,
             searchText: "",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
-            genre: nil,
-            year: nil,
-            state: nil,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
             badge: nil
         )
         
@@ -58,13 +81,54 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertEqual(continueWatching.count, 3)
         
         // Expected order:
-        // 1. Item 3 (NEW badge, newest interaction)
-        // 2. Item 1 (NEW badge, older interaction)
-        // 3. Item 2 (No NEW badge, newest interaction)
+        // 1. Item 3 (NEW badge, newest actual watch)
+        // 2. Item 1 (NEW badge, older actual watch)
+        // 3. Item 2 (No NEW badge, middle actual watch)
         
         XCTAssertEqual(continueWatching[0].title, "Streaming New")
         XCTAssertEqual(continueWatching[1].title, "Streaming Old")
         XCTAssertEqual(continueWatching[2].title, "Active New")
+    }
+
+    @MainActor
+    func testHomeContinueWatchingRequiresActualWatchActivity() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, WatchEvent.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let staleInteraction = MediaItem(id: "stale", title: "Interaction Only", overview: "", type: .tvShow)
+        staleInteraction.stateValue = MediaState.activeRaw
+        staleInteraction.lastInteractionDate = Date()
+        context.insert(staleInteraction)
+
+        let actuallyWatched = MediaItem(id: "watched", title: "Actually Watched", overview: "", type: .tvShow)
+        actuallyWatched.stateValue = MediaState.activeRaw
+        actuallyWatched.lastInteractionDate = .distantPast
+        context.insert(actuallyWatched)
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: actuallyWatched.id,
+            episodeID: "watched_1_1",
+            watchedAt: Date().addingTimeInterval(-3600),
+            deduplicationKey: "actual-watch"
+        ))
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .home,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
+            badge: nil
+        )
+
+        XCTAssertEqual(result.homeContinueWatching.map(\.title), ["Actually Watched"])
     }
 
     @MainActor
@@ -126,11 +190,11 @@ final class MediaFilterActorTests: MTTestCase {
             category: .home,
             searchText: "",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
-            genre: nil,
-            year: nil,
-            state: nil,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
             badge: nil
         )
 
@@ -185,11 +249,11 @@ final class MediaFilterActorTests: MTTestCase {
             category: .home,
             searchText: "",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
-            genre: nil,
-            year: nil,
-            state: nil,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
             badge: nil
         )
 
@@ -389,8 +453,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .onThisWeek,
             searchText: "",
             sortOrder: .newestRelease,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
 
         let titles = result.displayed.map(\.title)
@@ -430,8 +494,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .onThisWeek,
             searchText: "",
             sortOrder: .newestRelease,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
 
         XCTAssertEqual(result.totalCount, 7, "Should include all 7 days of the week from previous years")
@@ -472,8 +536,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .onThisWeek,
             searchText: "",
             sortOrder: .newestRelease,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
 
         let titles = result.displayed.map(\.title)
@@ -510,8 +574,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .onThisWeek,
             searchText: "",
             sortOrder: .newestRelease,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
 
         let titles = result.displayed.map(\.title)
@@ -607,8 +671,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .all,
             searchText: "",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
+            network: [],
+            language: [],
             groupBy: .dayOfWeek
         )
 
@@ -643,8 +707,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .all,
             searchText: "show",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
         XCTAssertFalse(result.hitScanCap, "Library under the candidate cap must not report hitScanCap")
         XCTAssertEqual(result.totalCount, 50)
@@ -672,8 +736,8 @@ final class MediaFilterActorTests: MTTestCase {
             category: .all,
             searchText: "show",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil
+            network: [],
+            language: []
         )
         XCTAssertTrue(result.hitScanCap, "Candidate scan reaching the cap must report hitScanCap")
         XCTAssertEqual(result.totalCount, cap, "Refined total is derived from the capped scan")

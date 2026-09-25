@@ -8,6 +8,7 @@ struct CategoryRouterView: View {
     @Bindable var viewModel: MediaViewModel
     var modelContainer: ModelContainer
     var onLoadMore: (() -> Void)?
+    var onCloseSearch: () -> Void = {}
     var refreshID: Int = 0
 
     var body: some View {
@@ -21,10 +22,12 @@ struct CategoryRouterView: View {
                     isSearchActive: $isSearchActive,
                     initialType: currentMediaType,
                     viewModel: viewModel,
-                    onSelectLocal: { item in
-                        viewModel.navigationPath.append(item.persistentModelID)
-                    },
-                    modelContainer: modelContainer
+                     onSelectLocal: { item in
+                         viewModel.navigationPath.append(item.persistentModelID)
+                     },
+                     modelContainer: modelContainer,
+                     onClose: onCloseSearch
+
                 )
                 .if(!AppThemeCoordinator.isReducingVisualEffects) {
                     $0.transition(.move(edge: .top).combined(with: .opacity))
@@ -53,7 +56,7 @@ struct CategoryRouterView: View {
             }
             .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .upcoming {
-            ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID)
+            ReleaseCalendarView(viewModel: viewModel, refreshID: refreshID, isSearchActive: isSearchActive)
                 .transition(slideTransition)
         } else if viewModel.filter.selectedCategory == .insights {
             InsightsView(refreshID: refreshID)
@@ -72,10 +75,11 @@ struct CategoryRouterView: View {
                 recommendations: viewModel.display.recommendations,
                 pickOfTheDay: viewModel.display.pickOfTheDay,
                 selectedCategory: viewModel.filter.selectedCategory,
-                searchText: viewModel.filter.searchText,
+                // Freeze the grid's searchText while the overlay is open so
+                // keystrokes don't re-eval MainLibraryView (opacity 0 anyway).
+                searchText: isSearchActive ? "" : viewModel.filter.searchText,
                 selectedNetworks: viewModel.filter.selectedNetworks,
                 namespace: posterNamespace,
-                isFastScrolling: $viewModel.pagination.isFastScrolling,
                 onSelectHero: { metadata in
                     if let item = modelContainer.mainContext.model(for: metadata.id) as? MediaItem {
                         viewModel.navigationPath.append(item)
@@ -83,7 +87,7 @@ struct CategoryRouterView: View {
                 },
                 onNetworkSelected: { networks in
                     withAnimation(AppTheme.Animation.springSnappy) {
-                        viewModel.filter.selectedNetworks = networks.isEmpty ? nil : networks
+                        viewModel.filter.selectedNetworks = networks
                         viewModel.filterSubject.send()
                     }
                 },

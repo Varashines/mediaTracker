@@ -96,10 +96,10 @@ final class FacetIndexActorTests: MTTestCase {
             category: .all,
             searchText: "",
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
-            genre: "Action",
-            provider: "Netflix"
+            network: [],
+            language: [],
+            genre: ["Action"],
+            provider: ["Netflix"]
         )
 
         XCTAssertEqual(result.totalCount, 1)

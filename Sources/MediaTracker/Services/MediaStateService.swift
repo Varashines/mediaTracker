@@ -23,6 +23,20 @@ final class MediaStateService {
     // Any view — update single item in-place
     private(set) var lastChangedItemID: PersistentIdentifier?
 
+    /// Monotonic token for version-keyed actor caches (SQL counts, refined-order pages).
+    /// Bumps on every full refresh and single-item update — Load More slices must
+    /// invalidate when membership can change.
+    var libraryChangeToken: Int {
+        needsFullRefreshCount &* 1_000_003 &+ needsSingleItemUpdateCount
+    }
+
+    /// Full-library refresh generation only. Search payloads and similar
+    /// per-item derived data should key on this so single-item ticks during
+    /// background sync don't wipe the cache every update.
+    var fullRefreshToken: Int {
+        needsFullRefreshCount
+    }
+
     // Debounce derived-cache invalidation — avoid full library re-scans on rapid state changes.
     private var derivedCacheDebounceTask: Task<Void, Never>?
 
@@ -61,6 +75,10 @@ final class MediaStateService {
     func requestDiscoveryResync() {
         discoveryResyncCount += 1
         scheduleDebouncedFullRefresh()
+        // Cover stats invalidation for resyncs that don't go through post* APIs
+        // (ContentView no longer clears LibraryStats on needsFullRefreshCount —
+        // the debounced path is the single owner).
+        debouncedDerivedCacheInvalidation()
     }
 
     /// Coalesces full-refresh broadcasts within a short window. Single-item
@@ -77,6 +95,7 @@ final class MediaStateService {
 
     /// Call when a title's or season's taste rating changes (Loved, Liked, Disliked, None).
     /// Clears taste caches and signals subscribers to re-fetch recommendations when viewed.
+    /// Cheap enough for a deferred Task after a taste tap — not on the click frame.
     func postTasteChanged() {
         tasteChangedCount += 1
         let currentVersion = UserDefaults.standard.integer(forKey: UserDefaultsKeys.tasteVersion.rawValue)

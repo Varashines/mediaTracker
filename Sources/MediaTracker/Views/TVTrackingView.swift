@@ -14,17 +14,24 @@ struct TVTrackingView: View {
     @State private var previousSeasonComplete = false
     @State private var sortedSeasons: [TVSeason] = []
     @State private var showCompletedEpisodes = false
+    /// Cached so body doesn't scan tvDetails.seasons.first every eval.
+    @State private var selectedSeasonCompleteCache = false
 
     private var allSeasonsWatched: Bool {
         let nonZero = sortedSeasons.filter { $0.seasonNumber > 0 }
         return !nonZero.isEmpty && nonZero.allSatisfy { $0.totalEpisodesCount > 0 && $0.watchedEpisodesCount == $0.totalEpisodesCount }
     }
 
-    private var selectedSeasonIsComplete: Bool {
+    private var selectedSeasonIsComplete: Bool { selectedSeasonCompleteCache }
+
+    private func recomputeSelectedSeasonComplete() {
         guard let selectedNumber = selectedSeasonNumber,
               let season = tvDetails.seasons.first(where: { $0.seasonNumber == selectedNumber }),
-              season.totalEpisodesCount > 0 else { return false }
-        return season.watchedEpisodesCount == season.totalEpisodesCount
+              season.totalEpisodesCount > 0 else {
+            selectedSeasonCompleteCache = false
+            return
+        }
+        selectedSeasonCompleteCache = season.watchedEpisodesCount == season.totalEpisodesCount
     }
 
     private func updateSortedSeasons() {
@@ -113,7 +120,6 @@ struct TVTrackingView: View {
                     }
                     .onChange(of: selectedNumber) { _, _ in
                         autoFetchIfNeeded(season: selectedSeason)
-                        previousSeasonComplete = selectedSeasonIsComplete
                     }
                 }
             }
@@ -121,13 +127,21 @@ struct TVTrackingView: View {
         .onAppear {
             updateSortedSeasons()
             refreshSeasonSelection()
+            recomputeSelectedSeasonComplete()
             if allSeasonsWatched { showCompletedEpisodes = false }
         }
         .onChange(of: tvDetails.seasons.count) { _, _ in
             refreshSeasonSelection()
             updateSortedSeasons()
+            recomputeSelectedSeasonComplete()
         }
-        .onChange(of: tvDetails.item?.lastUpdated) { _, _ in refreshSeasonSelection() }
+        .onChange(of: selectedSeasonNumber) { _, _ in
+            recomputeSelectedSeasonComplete()
+        }
+        .onChange(of: tvDetails.item?.lastUpdated) { _, _ in
+            refreshSeasonSelection()
+            recomputeSelectedSeasonComplete()
+        }
         .onChange(of: selectedSeasonIsComplete) { _, isNowComplete in
             if isNowComplete && !previousSeasonComplete {
                 onSeasonCompleted?()
@@ -711,6 +725,17 @@ private struct EpisodeCube: View {
     private func saveWatchDate(_ date: Date) {
         episode.watchedDate = date
         episode.lastWatchedDate = date
+        let mediaID = episode.season?.tvShowDetails?.item?.id
+        let episodeID = episode.uniqueID ?? "\(mediaID ?? "tv")_\(episode.seasonNumber)_\(episode.episodeNumber)"
+        if let context = episode.modelContext, let mediaID {
+            WatchHistoryCoordinator.updateEpisodeWatchDate(
+                mediaID: mediaID,
+                episodeID: episodeID,
+                watchedAt: date,
+                runtimeMinutes: episode.runtime,
+                context: context
+            )
+        }
         Task { @MainActor in
             if let context = episode.modelContext {
                 SaveCoordinator.shared.requestSave(context)

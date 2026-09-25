@@ -1,8 +1,7 @@
 # MediaTracker â€” Architecture & Design Document
 
 > Native macOS media tracking app built with SwiftUI + SwiftData.  
-> Targets macOS 15+, Swift 6.0 strict concurrency. Zero external dependencies.  
-> 141 source files, 19 test files, ~15,000 LOC source, ~4,000 LOC tests.
+> Targets macOS 15+, Swift 6.0 strict concurrency. Zero external dependencies.
 
 ---
 
@@ -413,6 +412,17 @@ Per-season aggregate cast from TMDb's `/tv/{id}/season/{n}/aggregate_credits` â€
 | `season: TVSeason?` | inverse, cascade delete |
 
 It backs both the **"This season" cast view** (`SeasonCastMemberCard`/`SeasonCastSection`) and the **season-based cast affinity** in `TasteActor`. `TVSeason.tasteOverrideRaw` (per-season taste) and `MediaItem.cachedSeasonCount` (weight-tier lookup) support the feature.
+
+### 3.1.10 Watch History Models
+
+`WatchCycle` and `WatchEvent` provide title-level viewing history without adding per-episode counts to the UI.
+
+- `WatchCycle` represents one movie or TV-series watch cycle, including first watch, rewatch, pause, and completion state.
+- `WatchEvent` records an actual watched occurrence and may be voided when an episode is unmarked.
+- `WatchHistoryCoordinator` is the mutation boundary for state changes, episode changes, imports, and date edits.
+- `WatchActivityResolver` derives Recently Watched and Continue Watching ordering from active events and episode watch dates, not generic interaction timestamps.
+- Deleting or purging a `MediaItem` must delete its scalar-keyed watch history; legacy ID repairs remap `mediaID` values.
+- Interrupted cycles are retained as incomplete history and are excluded from completed rewatch totals.
 
 ### 3.2 Relationship Cascade Chain
 

@@ -8,6 +8,7 @@ struct SearchView: View {
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
     var viewModel: MediaViewModel
+    let onClose: () -> Void
 
     @State private var searchVM: SearchViewModel
     @AppStorage("recent_searches") private var recentSearchesData: String = ""
@@ -53,13 +54,16 @@ struct SearchView: View {
 
     init(
         searchText: Binding<String>, isSearchActive: Binding<Bool>,
-        initialType: MediaType? = nil, viewModel: MediaViewModel, onSelectLocal: ((MediaItem) -> Void)? = nil,
-        modelContainer: ModelContainer
+        initialType: MediaType? = nil, viewModel: MediaViewModel,         onSelectLocal: ((MediaItem) -> Void)? = nil,
+        modelContainer: ModelContainer,
+        onClose: @escaping () -> Void = {}
+
     ) {
         self._searchText = searchText
         self._isSearchActive = isSearchActive
         self.viewModel = viewModel
         self.onSelectLocal = onSelectLocal
+        self.onClose = onClose
         self._searchVM = State(initialValue: SearchViewModel(modelContainer: modelContainer))
 
         if let type = initialType {
@@ -95,21 +99,25 @@ struct SearchView: View {
             }
         }
         .onChange(of: searchText) { _, newValue in
-            searchVM.displayCache = viewModel.display
+            searchVM.syncDisplayCache(viewModel.display)
             searchVM.handleSearchTextChange(newValue, selectedType: selectedType)
         }
         .onChange(of: selectedType) { _, newType in
-            searchVM.displayCache = viewModel.display
+            searchVM.syncDisplayCache(viewModel.display)
             searchVM.clearWebResults()
             if !searchText.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: newType)
             }
         }
-        .onChange(of: MediaStateService.shared.refreshedItemID) { _, _ in
-            searchVM.displayCache = viewModel.display
-            if !searchText.isEmpty {
-                searchVM.triggerSearch(text: searchText, selectedType: selectedType)
-            }
+        // Leaf observer: refreshedItemID reads must not re-eval this whole body.
+        .background {
+            MediaStateLeafObserver(
+                onRefreshedItem: { _ in
+                    searchVM.syncDisplayCache(viewModel.display)
+                    // Batch metadata-refresh storms — one re-search per quiet second.
+                    searchVM.scheduleRefreshedItemRetrigger(text: searchText, selectedType: selectedType)
+                }
+            )
         }
         .onSubmit(of: .search) { addRecentSearch(searchText) }
         .alert("Search Error", isPresented: $searchVM.showError, presenting: searchVM.errorMessage) { _ in
@@ -118,7 +126,7 @@ struct SearchView: View {
             Text(message)
         }
         .onAppear {
-            searchVM.displayCache = viewModel.display
+            searchVM.syncDisplayCache(viewModel.display)
             viewModel.fetchTrendingIfNeeded()
             if !searchText.isEmpty && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
                 searchVM.triggerSearch(text: searchText, selectedType: selectedType)
@@ -169,6 +177,18 @@ struct SearchView: View {
                 }
 
                 Spacer()
+
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .help("Close search")
+                .accessibilityLabel("Close search")
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.vertical, 12)
@@ -245,7 +265,9 @@ struct SearchView: View {
                 }
             }
                 .padding(.vertical, AppTheme.Spacing.xLarge)
-                .id(selectedType)
+                // Identity only on type change; the full-tree .id(selectedType)
+                // forced a complete recreate of every result cell on each
+                // filter tab switch.
                 .animation(AppTheme.Animation.easeInOut, value: selectedType)
         }
         .scrollBounceBehavior(.basedOnSize)

@@ -8,17 +8,17 @@ struct CollectionPickerView: View {
     @Query(filter: #Predicate<MediaCollection> { $0.smartRulesData == nil }, sort: \MediaCollection.name) private var collections: [MediaCollection]
     let item: MediaItem
     @State private var searchText = ""
-    
+
     private var filteredCollections: [MediaCollection] {
         guard !searchText.isEmpty else { return collections }
         return collections.filter { $0.name.localizedStandardContains(searchText) }
     }
-    
+
     var body: some View {
         VStack(spacing: AppTheme.Spacing.large) {
             Text("Add to Collection")
                 .font(AppTheme.Font.title3)
-            
+
             if collections.isEmpty {
                 VStack(spacing: AppTheme.Spacing.medium) {
                     Image(systemName: "folder.badge.plus")
@@ -60,7 +60,7 @@ struct CollectionPickerView: View {
                     .scrollBounceBehavior(.basedOnSize)
                 }
             }
-            
+
             Button {
                 dismiss()
             } label: {
@@ -77,6 +77,14 @@ struct CollectionPickerView: View {
         }
         .padding(AppTheme.Spacing.xLarge)
         .background(AppTheme.Colors.surface(for: colorScheme))
+        // 2A: Esc clears search first; second Esc dismisses the sheet.
+        .onExitCommand {
+            if !searchText.isEmpty {
+                searchText = ""
+            } else {
+                dismiss()
+            }
+        }
     }
 }
 

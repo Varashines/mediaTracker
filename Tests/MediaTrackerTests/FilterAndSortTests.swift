@@ -31,7 +31,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(show)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 2)
         XCTAssertEqual(result.displayed.count, 2)
@@ -51,7 +51,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(show)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .movie, searchText: "", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .movie, searchText: "", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Movie")
@@ -69,7 +69,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(show)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .tvShow, searchText: "", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .tvShow, searchText: "", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Show")
@@ -89,7 +89,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(notMatching)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "dark", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "dark", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Dark Knight")
@@ -111,7 +111,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(notMatching)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "ACTION", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "ACTION", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.displayed.map(\.title), ["Genre Match"])
     }
@@ -132,7 +132,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(notMatching)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "Netflix", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "Netflix", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.displayed.map(\.title), ["Provider Match"])
     }
@@ -151,7 +151,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(active)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, state: .completed)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], state: [.completed])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Done")
@@ -172,7 +172,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(withoutBadge)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, badge: "NEW")
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], badge: "NEW")
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "New Release")
@@ -194,7 +194,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(french)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: "en")
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: ["en"])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "English Film")
@@ -214,7 +214,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(newer)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .newestRelease, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .newestRelease, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 2)
         XCTAssertEqual(result.displayed[0].title, "New")
@@ -235,7 +235,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(drama)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, groupBy: .genre)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], groupBy: .genre)
 
         let genreNames = result.grouped.map { $0.0 }.sorted()
         XCTAssertTrue(genreNames.contains("Action"))
@@ -254,7 +254,7 @@ final class FilterAndSortTests: MTTestCase {
         }
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, limit: 2, offset: 0)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], limit: 2, offset: 0)
 
         XCTAssertEqual(result.displayed.count, 2)
         XCTAssertEqual(result.totalCount, 5)
@@ -320,7 +320,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(amazon)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: ["Netflix"], language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: ["Netflix"], language: [])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Netflix Show")
@@ -342,7 +342,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(drama)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, genre: "Action")
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], genre: ["Action"])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Action Movie")
@@ -364,7 +364,7 @@ final class FilterAndSortTests: MTTestCase {
         context.insert(new)
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, year: "1999")
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], year: ["1999"])
 
         XCTAssertEqual(result.totalCount, 1)
         XCTAssertEqual(result.displayed[0].title, "Old Movie")
@@ -375,7 +375,7 @@ final class FilterAndSortTests: MTTestCase {
         let container = makeContainer()
         let actor = MediaFilterActor(modelContainer: container)
 
-        let result = try await actor.filterAndSort(category: .all, searchText: "nonexistent", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .all, searchText: "nonexistent", sortOrder: .alphabetical, network: [], language: [])
 
         XCTAssertEqual(result.totalCount, 0)
         XCTAssertTrue(result.displayed.isEmpty)
@@ -396,8 +396,52 @@ final class FilterAndSortTests: MTTestCase {
         try context.save()
 
         // In completed category, filtering by Active should return 0
-        let result = try await actor.filterAndSort(category: .completed, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, state: .active)
+        let result = try await actor.filterAndSort(category: .completed, searchText: "", sortOrder: .alphabetical, network: [], language: [], state: [.active])
 
-        XCTAssertEqual(result.totalCount, 0)
+         XCTAssertEqual(result.totalCount, 0)
+    }
+
+    @MainActor
+
+    func testMultiSelectFacetsUseWithinFacetOrAndAcrossFacetAnd() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let actionEnglish = MediaItem(id: "1", title: "Action English", overview: "", type: .movie)
+        actionEnglish.cachedGenres = ["Action"]
+        actionEnglish.cachedLanguage = "en"
+        context.insert(actionEnglish)
+
+        let comedyEnglish = MediaItem(id: "2", title: "Comedy English", overview: "", type: .movie)
+        comedyEnglish.cachedGenres = ["Comedy"]
+        comedyEnglish.cachedLanguage = "en"
+        context.insert(comedyEnglish)
+
+        let actionFrench = MediaItem(id: "3", title: "Action French", overview: "", type: .movie)
+        actionFrench.cachedGenres = ["Action"]
+        actionFrench.cachedLanguage = "fr"
+        context.insert(actionFrench)
+        try context.save()
+
+        let withinFacet = try await actor.filterAndSort(
+            category: .all,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: [],
+            language: [],
+            genre: ["Action", "Comedy"]
+        )
+        XCTAssertEqual(Set(withinFacet.displayed.map(\.itemID)), ["1", "2", "3"])
+
+        let acrossFacets = try await actor.filterAndSort(
+            category: .all,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: [],
+            language: ["en", "fr"],
+            genre: ["Action"]
+        )
+        XCTAssertEqual(Set(acrossFacets.displayed.map(\.itemID)), ["1", "3"])
     }
 }

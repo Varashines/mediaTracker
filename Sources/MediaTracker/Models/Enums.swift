@@ -126,7 +126,7 @@ enum SidebarItem: Hashable, Sendable {
     }
 }
 
-enum MediaState: String, Codable, CaseIterable, Sendable {
+enum MediaState: String, Codable, CaseIterable, Hashable, Sendable {
     case wishlist = "Wishlist"
     case active = "Active"
     case onHold = "On Hold"

@@ -1,8 +1,82 @@
 import SwiftUI
 
+enum ShareCardBackdropStyle: Equatable {
+    case title
+    case recap
+    case passport
+}
+
+struct ShareCardBackdrop: View {
+    let style: ShareCardBackdropStyle
+    let accent: Color
+    let secondary: Color
+
+    private var baseColor: Color {
+        switch style {
+        case .title: AppTheme.ShareCard.titleBase
+        case .recap: AppTheme.ShareCard.recapBase
+        case .passport: AppTheme.ShareCard.passportBase
+        }
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                baseColor
+
+                LinearGradient(
+                    colors: [accent.opacity(0.42), .clear, secondary.opacity(0.28)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [accent.opacity(0.24), .clear],
+                    center: .topTrailing,
+                    startRadius: proxy.size.width * 0.03,
+                    endRadius: proxy.size.width * 1.05
+                )
+
+                if style == .title {
+                    Circle()
+                        .fill(secondary.opacity(0.16))
+                        .frame(width: proxy.size.width * 0.70, height: proxy.size.width * 0.70)
+                        .blur(radius: 42)
+                        .offset(x: proxy.size.width * 0.38, y: proxy.size.height * 0.36)
+                } else if style == .recap {
+                    RoundedRectangle(cornerRadius: proxy.size.width * 0.40, style: .continuous)
+                        .stroke(secondary.opacity(0.16), lineWidth: 28)
+                        .frame(width: proxy.size.width * 1.05, height: proxy.size.height * 0.38)
+                        .rotationEffect(.degrees(-18))
+                        .offset(x: -proxy.size.width * 0.38, y: proxy.size.height * 0.40)
+                } else {
+                    Capsule()
+                        .fill(accent.opacity(0.12))
+                        .frame(width: proxy.size.width * 1.24, height: proxy.size.height * 0.28)
+                        .rotationEffect(.degrees(28))
+                        .offset(x: proxy.size.width * 0.30, y: proxy.size.height * 0.40)
+                }
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.22)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                Rectangle()
+                    .fill(.white.opacity(AppTheme.ShareCard.textureOpacity))
+                    .blendMode(.overlay)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+    }
+}
+
 struct MediaShareCardView: View {
     let item: MediaItem
     var customCast: [SimpleCastMember]? = nil
+    var seasonLabel: String? = nil
 
     /// Single source of truth for the card's rendered dimensions. The preview
     /// scales from this, so it can never drift from the exported image.
@@ -23,10 +97,6 @@ struct MediaShareCardView: View {
 
     private var secondaryColor: Color {
         item.themeSecondaryColorHex.flatMap { Color(themeHex: $0) } ?? themeColor
-    }
-
-    private var mutedColor: Color {
-        item.themeMutedColorHex.flatMap { Color(themeHex: $0) } ?? themeColor
     }
 
     private var releaseYearString: String? {
@@ -76,21 +146,7 @@ struct MediaShareCardView: View {
         .padding(.horizontal, 16)
         .frame(width: Self.cardSize.width, height: Self.cardSize.height)
         .background {
-            ZStack {
-                Color(white: 0.03)
-                RadialGradient(
-                    colors: [themeColor.opacity(0.68), mutedColor.opacity(0.35), Color(white: 0.03)],
-                    center: .topLeading,
-                    startRadius: 10,
-                    endRadius: 540
-                )
-                RadialGradient(
-                    colors: [secondaryColor.opacity(0.42), Color.clear],
-                    center: .bottomTrailing,
-                    startRadius: 20,
-                    endRadius: 400
-                )
-            }
+            ShareCardBackdrop(style: .title, accent: themeColor, secondary: secondaryColor)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
@@ -167,6 +223,19 @@ struct MediaShareCardView: View {
                                 .overlay(Capsule().stroke(isTV ? .white.opacity(0.2) : themeColor.opacity(0.6), lineWidth: 0.8))
                         )
                 }
+                if let seasonLabel {
+                    Text(seasonLabel)
+                        .font(.system(size: 9, weight: .black, design: .monospaced))
+                        .kerning(0.8)
+                        .foregroundStyle(.white.opacity(0.95))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(themeColor.opacity(0.28))
+                                .overlay(Capsule().stroke(themeColor.opacity(0.65), lineWidth: 0.8))
+                        )
+                }
             }
         }
     }
@@ -183,7 +252,7 @@ struct MediaShareCardView: View {
     }
 
     private var centeredPoster: some View {
-        CachedImage(url: posterURL, targetSize: .thumbMedium) { _ in } placeholder: {
+        CachedImage(url: posterURL, targetSize: .thumbLarge) { _ in } placeholder: {
             posterPlaceholder
         }
         .aspectRatio(contentMode: .fill)

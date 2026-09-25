@@ -194,8 +194,19 @@ class BackgroundTaskManager {
                     await NotificationManager.shared.cancelNotification(id: item.id, type: item.type ?? .movie)
                     await ImageCache.shared.removeImage(forKey: item.posterURL)
                     await ImageCache.shared.removeImage(forKey: item.backdropURL)
+                    let mediaID = item.id
+                    let events = (try? context.fetch(
+                        FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.mediaID == mediaID })
+                    )) ?? []
+                    let cycles = (try? context.fetch(
+                        FetchDescriptor<WatchCycle>(predicate: #Predicate { $0.mediaID == mediaID })
+                    )) ?? []
+                    for event in events { context.delete(event) }
+                    for cycle in cycles { context.delete(cycle) }
                     context.delete(item)
                 }
+                // Intentional background batch save — purge is off the UI frame
+                // and must be durable before DiscoverySyncService runs.
                 try? context.save()
 
                 let sync = DiscoverySyncService(modelContainer: container)
@@ -294,6 +305,7 @@ class BackgroundTaskManager {
             await service.saveContext()
         }
         if backfilled > 0 {
+            // Intentional background batch save — season-cast counter backfill.
             try? context.save()
         }
         AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons (\(backfilled) counters backfilled)", logger: AppLogger.background)
@@ -418,6 +430,7 @@ class BackgroundTaskManager {
             item.syncCachedProperties(dirty: [.badge])
         }
         await BadgeEngine.flushBadgeChanges(container: container)
+        // Intentional background batch save — premiere heal loop.
         try? context.save()
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
@@ -538,8 +551,9 @@ class BackgroundTaskManager {
                     item.syncCachedProperties(now: now, dirty: [.progress, .badge])
                 }
                 await BadgeEngine.flushBadgeChanges(container: container)
+                // Intentional background batch save — stale badge healer loop.
                 try context.save()
-                
+
                 // Broadcast to update UI
                 await MainActor.run {
                     MediaStateService.shared.postMediaStateChanged()

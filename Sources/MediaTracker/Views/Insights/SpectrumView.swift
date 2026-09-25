@@ -6,9 +6,24 @@ struct SpectrumView: View {
     @State private var isScanning = false
     @State private var scanPosition: CGFloat = 0.0
     @Environment(\.colorScheme) private var colorScheme
+    private let validItems: [BarcodeSlice]
+    private let bars: [SpectrumBar]
 
-    private var validItems: [BarcodeSlice] {
-        items.filter { $0.themeColorHex != nil || $0.tasteValue != TasteValue.none.rawValue }
+    private struct SpectrumBar: Identifiable {
+        let item: BarcodeSlice
+        let color: Color
+        var id: String { item.id }
+    }
+
+    init(items: [BarcodeSlice]) {
+        let validItems = items.filter {
+            $0.themeColorHex != nil || $0.tasteValue != TasteValue.none.rawValue
+        }
+        self.items = items
+        self.validItems = validItems
+        self.bars = validItems.map {
+            SpectrumBar(item: $0, color: Self.makeBarColor(for: $0))
+        }
     }
 
     var body: some View {
@@ -92,18 +107,17 @@ struct SpectrumView: View {
             ZStack {
                 HStack(spacing: 1.5) {
                     Spacer(minLength: 0)
-                    ForEach(Array(validItems.prefix(160).enumerated()), id: \.element.id) { _, item in
-                        let isHov = hoveredItem?.id == item.id
-                        let barColor = barColor(item)
+                    ForEach(bars.prefix(160)) { bar in
+                        let isHov = hoveredItem?.id == bar.id
                         Rectangle()
-                            .fill(isHov ? barColor : barColor.opacity(0.8))
+                            .fill(isHov ? bar.color : bar.color.opacity(0.8))
                             .frame(height: isHov ? 62 : 46)
                             .frame(minWidth: 1.5, maxWidth: 3.5)
                             .animation(.easeInOut(duration: 0.1), value: isHov)
                             .contentShape(Rectangle())
                             .onHover { hovering in
                                 withAnimation(.easeInOut(duration: 0.12)) {
-                                    hoveredItem = hovering ? item : nil
+                                    hoveredItem = hovering ? bar.item : nil
                                     if hovering { isScanning = true }
                                     else if hoveredItem == nil { isScanning = false }
                                 }
@@ -149,12 +163,15 @@ struct SpectrumView: View {
         }
     }
 
-    /// Prefer the poster's theme color when available, else the semantic taste color.
-    private func barColor(_ item: BarcodeSlice) -> Color {
+    private static func makeBarColor(for item: BarcodeSlice) -> Color {
         if let hex = item.themeColorHex, let color = Color(hex: hex) {
             return color
         }
         guard let taste = TasteValue(rawValue: item.tasteValue) else { return .gray }
         return taste.color
+    }
+
+    private func barColor(_ item: BarcodeSlice) -> Color {
+        bars.first(where: { $0.id == item.id })?.color ?? Self.makeBarColor(for: item)
     }
 }

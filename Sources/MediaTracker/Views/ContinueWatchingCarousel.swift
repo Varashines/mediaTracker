@@ -4,7 +4,6 @@ import SwiftUI
 struct ContinueWatchingCarousel: View {
     let items: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
     var onDiscoverySpotlight: (() -> Void)?
 
@@ -21,10 +20,8 @@ struct ContinueWatchingCarousel: View {
             emptyContent: {
                 discoverySpotlightCta
             }
-        ) { metadata, fast in
-            ContinueWatchingBackdropCard(
-                metadata: metadata,
-                isFastScrolling: isFastScrolling || fast)
+        ) { metadata in
+            ContinueWatchingBackdropCard(metadata: metadata)
         }
     }
 

@@ -91,6 +91,10 @@ struct BadgeEngine {
     static func calculateBadge(for item: MediaItem, now: Date = Date()) -> BadgeResult? {
         guard item.state != .dropped else { return nil }
 
+        // Early-exit: badge inputs are state/dates/progress/engagement — not taste
+        // or mood. Callers that only changed those can skip calc entirely by
+        // not passing .badge; this guard is a belt-and-suspenders for .all syncs
+        // where taste/mood were the only logical changes.
         let scan: EpisodeScan
         if item.type == .tvShow {
             let pid = item.persistentModelID

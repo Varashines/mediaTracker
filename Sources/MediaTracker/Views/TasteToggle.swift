@@ -45,20 +45,35 @@ struct TasteToggle: View {
     
     private func setTaste(_ val: TasteValue) {
         guard item.modelContext != nil else { return }
-        withAnimation(AppTheme.Animation.easeInOut) {
-            let isRemoving = item.taste == val
-            if isRemoving {
-                item.applyTasteChange(.none)
-                FeedbackManager.shared.trigger(.click)
-            } else {
-                item.applyTasteChange(val)
+        let isRemoving = item.taste == val
+        let newTaste: TasteValue = isRemoving ? .none : val
+
+        // Mutate on the click frame — pill `.animation(value: isSelected)` handles the visual.
+        // Do NOT wrap commit/toast/save here: they block the frame and delay the tap feedback.
+        item.tasteValue = newTaste.rawValue
+        item.lastInteractionDate = Date()
+
+        FeedbackManager.shared.trigger(
+            isRemoving ? .click : {
                 switch val {
-                case .love: FeedbackManager.shared.trigger(.tasteLove)
-                case .like: FeedbackManager.shared.trigger(.tasteLike)
-                case .dislike: FeedbackManager.shared.trigger(.tasteDislike)
-                case .none: FeedbackManager.shared.trigger(.click)
+                case .love: return .tasteLove
+                case .like: return .tasteLike
+                case .dislike: return .tasteDislike
+                case .none: return .click
                 }
+            }()
+        )
+
+        Task { @MainActor [weak item] in
+            guard let item, item.modelContext != nil else { return }
+            // Taste is not an input to badge/searchable — dirty [] only refreshes
+            // storedIsUpcoming (cheap). Save + taste caches run off this frame.
+            item.syncCachedProperties(dirty: [])
+            if let context = item.modelContext {
+                SaveCoordinator.shared.requestSave(context)
             }
+            MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+            MediaStateService.shared.postTasteChanged()
             AppErrorState.shared.showToast(
                 isRemoving ? "Rating removed" : val.rawValue,
                 style: .success
@@ -93,24 +108,28 @@ struct TastePill: View {
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: isSelected)
                 Text(label)
+                    .contentTransition(.opacity)
             }
             .font(AppTheme.Font.bodyBold)
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.tiny)
             .foregroundStyle(isSelected ? .white : (isHovered ? .primary : .primary.opacity(0.75)))
             .background {
-                if isSelected {
-                    activeColor
-                }
+                // Opacity fill so select/deselect crossfades under one spring —
+                // a bare `if isSelected { color }` pops with no interpolation.
+                activeColor
+                    .opacity(isSelected ? 1 : 0)
             }
             .clipShape(Capsule())
             .contentShape(Capsule())
-            .scaleEffect(isHovered ? 1.04 : 1.0)
-            .shadow(color: isSelected ? activeColor.opacity(0.15) : .clear, radius: AppTheme.Shadow.card.radius, y: AppTheme.Shadow.card.y)
+            .scaleEffect(isSelected ? 1.05 : (isHovered ? 1.04 : 1.0))
+            .shadow(color: isSelected ? activeColor.opacity(0.2) : .clear, radius: AppTheme.Shadow.card.radius, y: AppTheme.Shadow.card.y)
         }
         .buttonStyle(.interactive(feedback: nil))
         .onHover { isHovered = $0 }
+        // One spring drives hover + selection so enter, exit, and taste change stay in sync.
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
+        .animation(AppTheme.Animation.springSnappy, value: isSelected)
     }
 }
 

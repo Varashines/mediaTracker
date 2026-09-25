@@ -33,6 +33,8 @@ struct DetailView: View {
     /// cast data changes — sorting liveModels on every body eval was wasted work.
     @State private var cachedSeasonCast: [SeasonCastMember]?
     @State private var isLoadingSeasonCast = false
+    @FocusState private var deleteCancelFocused: Bool
+    @FocusState private var synopsisCloseFocused: Bool
 
 
     var onSearchActor: ((String) -> Void)? = nil
@@ -186,9 +188,11 @@ struct DetailView: View {
     private var atmosphericGradients: some View {
         ZStack {
             // Layer 2: Radial bloom from top-right (keeps the poster side clean)
+            // Uses DetailViewModel's precomputed luminousAccent — same value,
+            // skips OKLCH math on every body eval.
             RadialGradient(
                 colors: [
-                    viewModel.themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.13 : 0.22),
+                    viewModel.luminousAccentColor.opacity(colorScheme == .dark ? 0.13 : 0.22),
                     .clear
                 ],
                 center: .topTrailing,
@@ -213,14 +217,16 @@ struct DetailView: View {
 
             topChrome
         }
-        .compositingGroup()
+        // Static radial gradients — no need to force an offscreen composite
+        // pass on every Detail body eval (compositingGroup was pure overhead
+        // for static content that never re-renders mid-scroll).
     }
 
     /// Layer 4: Narrow top-edge chrome so the poster color "bleeds" into the toolbar area.
     private var topChrome: some View {
         LinearGradient(
             colors: [
-                viewModel.themeColor.luminousAccent(colorScheme: colorScheme).opacity(colorScheme == .dark ? 0.10 : 0.18),
+                viewModel.luminousAccentColor.opacity(colorScheme == .dark ? 0.10 : 0.18),
                 .clear
             ],
             startPoint: .top,
@@ -242,14 +248,21 @@ struct DetailView: View {
                         MoodCaptureBanner(
                             mediaType: viewModel.item.type,
                             onSelectMood: { mood in
+                                // Dismiss first so the banner reacts on the click frame.
+                                withAnimation(AppTheme.Animation.springSnappy) {
+                                    showMoodBanner = false
+                                }
                                 viewModel.item.mood = mood.rawValue
-                                viewModel.item.commitChange(dirty: [.badge])
                                 FeedbackManager.shared.trigger(.moodSelected(mood))
-                                AppErrorState.shared.showToast("Mood: \(mood.rawValue)", style: .info)
-                                showMoodBanner = false
+                                Task { @MainActor in
+                                    viewModel.item.commitChange(dirty: [.badge])
+                                    AppErrorState.shared.showToast("Mood: \(mood.rawValue)", style: .info)
+                                }
                             },
                             onDismiss: {
-                                showMoodBanner = false
+                                withAnimation(AppTheme.Animation.springSnappy) {
+                                    showMoodBanner = false
+                                }
                             }
                         )
                         .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -327,11 +340,6 @@ struct DetailView: View {
             CollectionPickerView(item: viewModel.item)
                 .frame(minWidth: 350, maxWidth: 450)
         }
-        .onChange(of: MediaStateService.shared.refreshedItemID) { _, newID in
-            if let id = newID, id == viewModel.item.id {
-                viewModel.refreshLocalItem()
-            }
-        }
         .onChange(of: viewModel.item.themeColorHex) { _, newHex in
             if newHex != nil {
                 viewModel.updateThemeColor()
@@ -342,7 +350,17 @@ struct DetailView: View {
         }
         .tint(effectiveThemeColor)
         .background {
-            keyboardShortcutButtons.opacity(0)
+            // Leaf observer: refreshedItemID ticks must not re-eval this whole body.
+            MediaStateLeafObserver(
+                onRefreshedItem: { newID in
+                    if let id = newID, id == viewModel.item.id {
+                        viewModel.refreshLocalItem()
+                    }
+                }
+            )
+            if !showDeleteConfirmation && !showSharePreview && !showSynopsisReader {
+                keyboardShortcutButtons.opacity(0)
+            }
         }
     }
 
@@ -354,11 +372,16 @@ struct DetailView: View {
         Group {
             Button("") {
                 if viewModel.item.type == .tvShow {
-                    if let marked = viewModel.markNextEpisodeWatched() {
+                    switch viewModel.markNextEpisodeWatched() {
+                    case .marked(let episode):
                         FeedbackManager.shared.trigger(.markWatched)
-                        AppErrorState.shared.showToast("Marked S\(marked.seasonNumber) • E\(marked.episodeNumber) watched", style: .success)
-                    } else {
+                        AppErrorState.shared.showToast("Marked S\(episode.seasonNumber) • E\(episode.episodeNumber) watched", style: .success)
+                    case .loading:
+                        AppErrorState.shared.showToast("Loading episodes…", style: .info)
+                    case .allWatched:
                         AppErrorState.shared.showToast("All episodes watched", style: .info)
+                    case .unavailable:
+                        AppErrorState.shared.showToast("Episodes are unavailable right now", style: .warning)
                     }
                 } else {
                     viewModel.toggleWatched()
@@ -398,20 +421,28 @@ struct DetailView: View {
                 }
             },
             posterOptions: viewModel.posterOptions,
+            hasLoadedPosterOptions: viewModel.hasLoadedPosterOptions,
+            isLoadingPosterOptions: viewModel.isLoadingPosterOptions,
+            onRequestPosterOptions: { viewModel.fetchPosterOptions() },
             isCustomPoster: viewModel.isCustomPoster,
             onSelectPoster: { url in viewModel.selectPoster(url: url) },
             onResetPoster: { viewModel.resetToDefaultPoster() },
             logoOptions: viewModel.logoOptions,
+            hasLoadedLogoOptions: viewModel.hasLoadedLogoOptions,
+            isLoadingLogoOptions: viewModel.isLoadingLogoOptions,
+            onRequestLogoOptions: { viewModel.fetchTitleLogoIfNeeded() },
             isCustomLogo: viewModel.isCustomLogo,
             onSelectLogo: { url in viewModel.selectLogo(url: url) },
             onResetLogo: { viewModel.resetToDefaultLogo() },
             onMoodChanged: { mood in
                 viewModel.item.mood = mood?.rawValue
-                viewModel.item.commitChange(dirty: [.badge])
                 if let mood {
                     FeedbackManager.shared.trigger(.moodSelected(mood))
                 } else {
                     FeedbackManager.shared.trigger(.moodCleared)
+                }
+                Task { @MainActor in
+                    viewModel.item.commitChange(dirty: [.badge])
                 }
             },
             accentColor: viewModel.highContrastAccentColor,
@@ -633,12 +664,10 @@ struct DetailView: View {
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.neutralBackground(for: colorScheme))
-                        : AnyShapeStyle(.ultraThinMaterial))
-            )
+                .background(
+                    Capsule()
+                        .fill(AppTheme.Colors.surfaceMuted(for: colorScheme))
+                )
             .overlay(
                 Capsule()
                     .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
@@ -702,35 +731,29 @@ struct DetailView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background {
-            ZStack {
-                Capsule()
-                    .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.neutralBackground(for: colorScheme))
-                        : AnyShapeStyle(.ultraThinMaterial))
-
-                if viewModel.hasDerivedThemeColor {
+            .background {
+                // Flat accent-tinted capsule — dual material+gradient shadows
+                // on the floating bar were re-composited every scroll frame.
+                ZStack {
                     Capsule()
-                        .fill(effectiveThemeColor.opacity(colorScheme == .dark ? 0.22 : 0.14))
+                        .fill(AppTheme.Colors.neutralBackground(for: colorScheme).opacity(0.95))
+
+                    if viewModel.hasDerivedThemeColor {
+                        Capsule()
+                            .fill(effectiveThemeColor.opacity(colorScheme == .dark ? 0.22 : 0.14))
+                    }
                 }
             }
-        }
-        .overlay(
-            Capsule()
-                .stroke(
-                    viewModel.hasDerivedThemeColor
-                        ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25)
-                        : Color.primary.opacity(0.08),
-                    lineWidth: 0.8
-                )
-        )
-        .shadow(color: Color.black.opacity(0.20), radius: 8, y: 3)
-        .shadow(
-            color: viewModel.hasDerivedThemeColor
-                ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.30 : 0.18)
-                : .clear,
-            radius: 16, y: 2
-        )
+            .overlay(
+                Capsule()
+                    .stroke(
+                        viewModel.hasDerivedThemeColor
+                            ? effectiveThemeColor.opacity(colorScheme == .dark ? 0.35 : 0.25)
+                            : Color.primary.opacity(0.08),
+                        lineWidth: 0.8
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.20), radius: 8, y: 3)
     }
 
     private func actionChip(icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -768,6 +791,7 @@ struct DetailView: View {
                     }
                     .buttonStyle(.plain)
                     .contentShape(Circle())
+                    .focused($synopsisCloseFocused)
                     .help("Close")
                 }
 
@@ -810,6 +834,12 @@ struct DetailView: View {
         }
         // A2: veil runs the same overshoot-free spring as the card staging.
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSynopsisReader)
+        .onExitCommand {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showSynopsisReader = false }
+        }
+        .onAppear {
+            synopsisCloseFocused = true
+        }
     }
 
     private func synopsisContentHeight(for text: String) -> CGFloat {
@@ -832,7 +862,7 @@ struct DetailView: View {
         return min(max(calculated, 40), 170)
     }
 
-private var deleteConfirmationOverlay: some View {
+    private var deleteConfirmationOverlay: some View {
         ZStack {
             Group {
                 if AppThemeCoordinator.isReducingVisualEffects {
@@ -886,6 +916,7 @@ private var deleteConfirmationOverlay: some View {
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
+                    .focused($deleteCancelFocused)
 
                     Button {
                         deleteItem()
@@ -910,6 +941,12 @@ private var deleteConfirmationOverlay: some View {
             .shadow(color: effectiveThemeColor.opacity(colorScheme == .dark ? 0.2 : 0.08), radius: 16, y: 4)
             .padding(.horizontal, 80)
             .transition(.scale(scale: 0.95).combined(with: .opacity))
+        }
+        .onExitCommand {
+            showDeleteConfirmation = false
+        }
+        .onAppear {
+            deleteCancelFocused = true
         }
     }
 

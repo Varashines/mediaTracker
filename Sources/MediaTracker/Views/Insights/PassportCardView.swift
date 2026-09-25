@@ -17,20 +17,7 @@ struct PassportCardView: View {
 
     var body: some View {
         ZStack {
-            // Dark Velvet Backdrop
-            Color(white: 0.04)
-
-            // Accent Radial Glow Top-Right
-            RadialGradient(
-                colors: [
-                    personalityColor.opacity(0.28),
-                    personalityColor.opacity(0.08),
-                    Color.clear
-                ],
-                center: .topTrailing,
-                startRadius: 20,
-                endRadius: 360
-            )
+            ShareCardBackdrop(style: .passport, accent: personalityColor, secondary: personalityColor)
 
             VStack(spacing: 24) {
                 // Header: Spotify Wrapped Title & MediaTracker Logo Badge

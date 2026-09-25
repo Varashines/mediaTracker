@@ -139,10 +139,10 @@ struct MetadataSection: View {
         .padding(.vertical, AppTheme.Spacing.micro)
         .background(
             Capsule()
-                .fill(.ultraThinMaterial)
+                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                 .overlay(
                     Capsule()
-                        .stroke(.quaternary, lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
                 )
         )
     }

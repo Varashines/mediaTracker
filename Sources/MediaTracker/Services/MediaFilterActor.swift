@@ -16,21 +16,114 @@ actor MediaFilterActor {
     /// Cache for Pick of the Day: keyed by dayOfYear to avoid daily re-queries.
     var pickOfTheDayCache: (dayOfYear: Int, picks: [MediaThumbnailMetadata])?
 
+    /// Filter-parameter identity for count / refined-order caches.
+    private struct FilterCacheKey: Hashable {
+        let category: NavigationCategory
+        let searchText: String
+        let sortOrder: SortOrder
+        let network: [String]
+        let language: [String]
+        let genre: [String]
+        let year: [String]
+        let state: [String]
+        let badge: String?
+        let provider: [String]
+        let groupBy: GroupBy
+        let collectionID: UUID?
+    }
+
+    private var searchPayloadCache: [String: SearchPayload] = [:]
+    private var searchPayloadCacheVersion: Int = -1
+    /// Multi-slot caches so alternating filters don't thrash a single entry.
+    private var refinedOrderCacheByKey: [FilterCacheKey: (version: Int, ids: [String], totalCount: Int, hitScanCap: Bool)] = [:]
+    private var sqlCountCacheByKey: [FilterCacheKey: (version: Int, count: Int)] = [:]
+    private let filterCacheSlotLimit = 4
+
+    private func makeFilterCacheKey(
+        category: NavigationCategory,
+        searchText: String,
+        sortOrder: SortOrder,
+        network: [String],
+        language: [String],
+        genre: [String],
+        year: [String],
+        state: [String],
+        badge: String?,
+        provider: [String],
+        groupBy: GroupBy,
+        collectionID: UUID?
+    ) -> FilterCacheKey {
+        FilterCacheKey(
+            category: category, searchText: searchText, sortOrder: sortOrder,
+            network: network, language: language, genre: genre, year: year,
+            state: state, badge: badge, provider: provider,
+            groupBy: groupBy, collectionID: collectionID
+        )
+    }
+
+    /// Version-keyed payload cache. `payloadVersion == nil` skips the cache.
+    /// Pass `fullRefreshToken` so single-item sync ticks don't wipe every payload;
+    /// call `invalidateSearchPayload(for:)` when one row's searchable fields change.
+    private func cachedSearchPayload(for item: MediaItem, version: Int?) -> SearchPayload {
+        guard let version else { return item.searchPayload }
+        if searchPayloadCacheVersion != version {
+            searchPayloadCache.removeAll(keepingCapacity: true)
+            searchPayloadCacheVersion = version
+        }
+        if let hit = searchPayloadCache[item.id] { return hit }
+        let payload = item.searchPayload
+        searchPayloadCache[item.id] = payload
+        return payload
+    }
+
+    /// Drop one item's cached payload after a single-item metadata/state change.
+    func invalidateSearchPayload(for itemID: String) {
+        searchPayloadCache.removeValue(forKey: itemID)
+    }
+
+    private func evictRefinedOrderCacheIfNeeded() {
+        while refinedOrderCacheByKey.count > filterCacheSlotLimit {
+            guard let oldest = refinedOrderCacheByKey.keys.first else { break }
+            refinedOrderCacheByKey.removeValue(forKey: oldest)
+        }
+    }
+
+    private func evictSQLCountCacheIfNeeded() {
+        while sqlCountCacheByKey.count > filterCacheSlotLimit {
+            guard let oldest = sqlCountCacheByKey.keys.first else { break }
+            sqlCountCacheByKey.removeValue(forKey: oldest)
+        }
+    }
+
+    private func fetchItemsPreservingOrder(_ ids: [String]) -> [MediaItem] {
+        guard !ids.isEmpty else { return [] }
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { ids.contains($0.id) }
+        )
+        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        let byID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
+        return ids.compactMap { byID[$0] }
+    }
+
     func filterAndSort(
         category: NavigationCategory,
         searchText: String,
         sortOrder: SortOrder,
-        network: [String]?,
-        language: String?,
-        genre: String? = nil,
-        year: String? = nil,
-        state: MediaState? = nil,
+        network: [String],
+        language: [String],
+        genre: [String] = [],
+        year: [String] = [],
+        state: [MediaState] = [],
         badge: String? = nil,
-        provider: String? = nil,
+        provider: [String] = [],
         groupBy: GroupBy = .none,
         collectionID: UUID? = nil,
         limit: Int = 40,
-        offset: Int = 0
+        offset: Int = 0,
+        pageOnly: Bool = false,
+        libraryVersion: Int? = nil,
+        payloadVersion: Int? = nil
     ) async throws -> PaginatedResult {
         let signpostState = Self.librarySignposter.beginInterval("filterAndSort")
         defer { Self.librarySignposter.endInterval("filterAndSort", signpostState) }
@@ -42,11 +135,41 @@ actor MediaFilterActor {
         let processedSearch = searchTokens.joined(separator: " ")
         let searchToken = searchTokens.first ?? ""
         // Pre-compute filter values for Swift-level refinement
-        let stateRaw = state?.rawValue
+        let stateValues = state.map(\.rawValue)
+
+        let cacheKey = makeFilterCacheKey(
+            category: category, searchText: searchText, sortOrder: sortOrder,
+            network: network, language: language, genre: genre, year: year,
+            state: stateValues, badge: badge, provider: provider,
+            groupBy: groupBy, collectionID: collectionID
+        )
 
         // Home category uses its own queries — skip the general fetch entirely
         if category == .home {
             return try await processHomeCategory(now: now, totalCount: 0)
+        }
+
+        // Page-only Load More: slice the refined order from the last full run.
+        // Callers only read `displayed` — skip count, recently-added, and grouping.
+        // Only safe when `groupBy == .none`; grouped pageOnly falls through to the full path.
+        if pageOnly, groupBy == .none,
+           let cache = refinedOrderCacheByKey[cacheKey],
+           cache.version == libraryVersion {
+            let start = min(offset, cache.ids.count)
+            let end = min(start + limit, cache.ids.count)
+            let pageIDs = start < end ? Array(cache.ids[start..<end]) : []
+            let pageItems = fetchItemsPreservingOrder(pageIDs)
+            return PaginatedResult(
+                displayed: pageItems.map { toMetadata($0) },
+                featuredUpcoming: [],
+                recentlyAdded: [],
+                homeContinueWatching: [],
+                grouped: [],
+                pickOfTheDay: [],
+                recommendations: [],
+                totalCount: cache.totalCount,
+                hitScanCap: cache.hitScanCap
+            )
         }
 
         // 1. Handle collection override first
@@ -62,7 +185,7 @@ actor MediaFilterActor {
                     smartRules = ruleSet.rules
                     smartMatchAny = ruleSet.matchAny
                     basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                        category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
+                        category: category, searchToken: searchToken, stateValue: nil, badge: badge, language: nil
                     )
                 } else {
                     let itemIDs = collection.items.compactMap { $0.id }
@@ -70,18 +193,18 @@ actor MediaFilterActor {
                         basePredicate = #Predicate<MediaItem> { _ in false }
                     } else {
                         basePredicate = MediaFilterPredicates.buildManualCollectionPredicate(
-                            itemIDs: itemIDs, stateValue: stateRaw
+                            itemIDs: itemIDs, stateValue: nil
                         )
                     }
                 }
             } else {
                 basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                    category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
+                    category: category, searchToken: searchToken, stateValue: nil, badge: badge, language: nil
                 )
             }
         } else {
             basePredicate = MediaFilterPredicates.buildFilteredPredicate(
-                category: category, searchToken: searchToken, stateValue: stateRaw, badge: badge, language: language
+                category: category, searchToken: searchToken, stateValue: nil, badge: badge, language: nil
             )
         }
 
@@ -112,10 +235,12 @@ actor MediaFilterActor {
 
         // Optimization: Only use SQLite pagination when no Swift-level refinement is needed.
         // Swift-level refinement is now only needed for network (array of strings), genre (transformable array), stalled/quickBites/releaseRadar category date limits, or custom smart rules.
-        let needsSwiftRefinement = (network?.isEmpty == false) ||
-                                   (genre?.isEmpty == false) ||
-                                   year != nil ||
-                                   provider != nil ||
+        let needsSwiftRefinement = !network.isEmpty ||
+                                   !language.isEmpty ||
+                                   !genre.isEmpty ||
+                                   !year.isEmpty ||
+                                   !stateValues.isEmpty ||
+                                   !provider.isEmpty ||
                                    category == .releaseRadar ||
                                    category == .quickBites ||
                                    category == .onThisWeek ||
@@ -177,12 +302,36 @@ actor MediaFilterActor {
             category: category,
             smartRules: smartRules,
             smartMatchAny: smartMatchAny,
-            appliesCategoryFilter: canUseIndexedFacetFetch
+            appliesCategoryFilter: canUseIndexedFacetFetch,
+            libraryVersion: libraryVersion,
+            payloadVersion: payloadVersion
         )
 
-        let totalCount = (needsSwiftRefinement || groupBy != .none) ?
-                         results.count :
-                         (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
+        let totalCount: Int
+        if needsSwiftRefinement || groupBy != .none {
+            totalCount = results.count
+            // Remember full refined order for subsequent pageOnly Load More slices.
+            if groupBy == .none, let libraryVersion {
+                refinedOrderCacheByKey[cacheKey] = (
+                    version: libraryVersion,
+                    ids: results.map(\.id),
+                    totalCount: totalCount,
+                    hitScanCap: hitScanCap
+                )
+                evictRefinedOrderCacheIfNeeded()
+            }
+        } else if let libraryVersion,
+                  let cached = sqlCountCacheByKey[cacheKey],
+                  cached.version == libraryVersion {
+            totalCount = cached.count
+        } else {
+            let counted = (try? modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))) ?? results.count
+            totalCount = counted
+            if let libraryVersion {
+                sqlCountCacheByKey[cacheKey] = (version: libraryVersion, count: counted)
+                evictSQLCountCacheIfNeeded()
+            }
+        }
 
         if needsSwiftRefinement && groupBy == .none {
             let start = min(offset, results.count)
@@ -191,21 +340,23 @@ actor MediaFilterActor {
         }
 
         var featuredUpcoming: [MediaThumbnailMetadata] = []
-        
+
         // 3. Specialized Logic
         if category == .upcoming && collectionID == nil {
             featuredUpcoming = results.prefix(15).map { toMetadata($0) }
             results = Array(results.dropFirst(results.count > 15 ? 15 : 0))
         }
 
-        // 4. Grouping Logic
-        let finalGroupedItems = groupResults(results, groupBy: groupBy, collectionID: collectionID)
+        // 4. Grouping Logic — Load More only consumes `displayed`.
+        let finalGroupedItems = pageOnly
+            ? []
+            : groupResults(results, groupBy: groupBy, collectionID: collectionID)
 
-        // 5. Fetch Recently Added (skip for home — it uses its own queries)
+        // 5. Fetch Recently Added (skip for home — it uses its own queries; skip page-only)
         let recentAddedItems: [MediaThumbnailMetadata]
-        if category == .home {
+        if pageOnly || category == .home {
             recentAddedItems = []
-        } else if category == .all && searchText.isEmpty && network?.isEmpty != false {
+        } else if category == .all && searchText.isEmpty && network.isEmpty {
             recentAddedItems = fetchRecentlyAdded(category: category)
         } else {
             recentAddedItems = []
@@ -238,9 +389,14 @@ actor MediaFilterActor {
         return paginatedResult
     }
 
-    private func refineResults(_ results: [MediaItem], network: [String]?, language: String?, genre: String?, year: String?, state: MediaState?, badge: String?, provider: String? = nil, searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = [], smartMatchAny: Bool = false, appliesCategoryFilter: Bool = false) throws -> [MediaItem] {
+    private func refineResults(_ results: [MediaItem], network: [String], language: [String], genre: [String], year: [String], state: [MediaState], badge: String?, provider: [String] = [], searchText: String, category: NavigationCategory? = nil, smartRules: [SmartRule] = [], smartMatchAny: Bool = false, appliesCategoryFilter: Bool = false, libraryVersion: Int? = nil, payloadVersion: Int? = nil) throws -> [MediaItem] {
         try Task.checkCancellation()
-        let normalizedNets = network.map { Set($0.map { $0.lowercased() }) }
+        let normalizedNets = Set(network.map { $0.lowercased() })
+        let normalizedLanguages = Set(language.map { $0.lowercased() })
+        let normalizedGenres = Set(genre.map { $0.lowercased() })
+        let normalizedProviders = Set(provider.map { $0.lowercased() })
+        let normalizedYears = Set(year)
+        let selectedStates = Set(state)
         let searchTokens = searchText.isEmpty ? nil : searchText.split(separator: " ").map(String.init)
         let now = Date()
         let radarBadges: Set<String> = ["NEW", "BINGE DROP", "PREMIERE", "FINALE"]
@@ -283,32 +439,36 @@ actor MediaFilterActor {
                 guard item.storedSmartBadgeLabel == b else { return false }
             }
 
-            if let nets = normalizedNets {
+            if !normalizedNets.isEmpty {
                 guard let rawNets = item.cachedNetwork else { return false }
                 let itemNets = rawNets.commaSeparatedValues
-                guard itemNets.contains(where: { nets.contains($0.lowercased()) }) else { return false }
+                guard itemNets.contains(where: { normalizedNets.contains($0.lowercased()) }) else { return false }
             }
 
-            if let lang = language, !lang.isEmpty {
-                guard item.cachedLanguage == lang else { return false }
+            if !normalizedLanguages.isEmpty {
+                guard let itemLanguage = item.cachedLanguage,
+                      normalizedLanguages.contains(itemLanguage.lowercased()) else { return false }
             }
 
-            if let g = genre, !g.isEmpty {
-                guard item.cachedGenres.contains(g) else { return false }
+            if !normalizedGenres.isEmpty {
+                let itemGenres = Set(item.cachedGenres.map { $0.lowercased() })
+                guard !itemGenres.isDisjoint(with: normalizedGenres) else { return false }
             }
 
-            if let p = provider, !p.isEmpty {
-                guard item.cachedWatchProviders.contains(p) else { return false }
+            if !normalizedProviders.isEmpty {
+                let itemProviders = Set(item.cachedWatchProviders.map { $0.lowercased() })
+                guard !itemProviders.isDisjoint(with: normalizedProviders) else { return false }
             }
 
-            if let y = year, !y.isEmpty {
+            if !normalizedYears.isEmpty {
                 guard let date = item.releaseDate else { return false }
-                let itemYear = calendar.component(.year, from: date)
-                guard String(itemYear) == y else { return false }
+                let itemYear = String(calendar.component(.year, from: date))
+                guard normalizedYears.contains(itemYear) else { return false }
             }
 
-            if let s = state {
-                guard item.state == s else { return false }
+            if !selectedStates.isEmpty {
+                guard let itemState = item.state,
+                      selectedStates.contains(itemState) else { return false }
             }
 
             return true
@@ -330,7 +490,10 @@ actor MediaFilterActor {
         let payloadState = signposter.beginInterval("searchPayloadBuild")
         // Precompute the lowercased search payload once per item and reuse it for
         // both the AND and OR passes (avoids re-lowercasing every field per token).
-        let payloads: [(MediaItem, SearchPayload)] = nonSearchFiltered.map { ($0, $0.searchPayload) }
+        // Keyed by payloadVersion (full-refresh token) so single-item ticks don't wipe it.
+        let payloads: [(MediaItem, SearchPayload)] = nonSearchFiltered.map {
+            ($0, cachedSearchPayload(for: $0, version: payloadVersion ?? libraryVersion))
+        }
         signposter.endInterval("searchPayloadBuild", payloadState)
 
         let scoringState = signposter.beginInterval("searchScoring")
@@ -357,20 +520,20 @@ actor MediaFilterActor {
     }
 
     private func indexedFacetItemIDs(
-        network: [String]?,
-        genre: String?,
-        provider: String?
+        network: [String],
+        genre: [String],
+        provider: [String]
     ) -> Set<String>? {
         var filters: [(kind: MediaFacetKind, keys: [String])] = []
 
-        if let network, !network.isEmpty {
+        if !network.isEmpty {
             filters.append((.network, normalizedFacetKeys(network)))
         }
-        if let genre, !genre.isEmpty {
-            filters.append((.genre, normalizedFacetKeys([genre])))
+        if !genre.isEmpty {
+            filters.append((.genre, normalizedFacetKeys(genre)))
         }
-        if let provider, !provider.isEmpty {
-            filters.append((.provider, normalizedFacetKeys([provider])))
+        if !provider.isEmpty {
+            filters.append((.provider, normalizedFacetKeys(provider)))
         }
         guard !filters.isEmpty else { return nil }
 
@@ -604,13 +767,13 @@ actor MediaFilterActor {
         for id: PersistentIdentifier,
         category: NavigationCategory,
         searchText: String,
-        network: [String]? = nil,
-        language: String? = nil,
-        genre: String? = nil,
-        year: String? = nil,
-        state: MediaState? = nil,
+        network: [String] = [],
+        language: [String] = [],
+        genre: [String] = [],
+        year: [String] = [],
+        state: [MediaState] = [],
         badge: String? = nil,
-        provider: String? = nil,
+        provider: [String] = [],
         collectionID: UUID? = nil
     ) throws -> MediaThumbnailMetadata? {
         guard let fetchedItem = modelContext.model(for: id) as? MediaItem else { return nil }
@@ -662,8 +825,8 @@ actor MediaFilterActor {
         desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
         let items = try modelContext.fetch(desc)
         return try refineResults(
-            items, network: nil, language: nil, genre: nil, year: nil, state: nil,
-            badge: nil, provider: nil, searchText: "",
+            items, network: [], language: [], genre: [], year: [], state: [],
+            badge: nil, provider: [], searchText: "",
             smartRules: ruleSet.rules, smartMatchAny: ruleSet.matchAny
         ).count
     }
@@ -681,7 +844,7 @@ actor MediaFilterActor {
                     desc.propertiesToFetch = [\.id]
                     desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
-                    let refined = try refineResults(items, network: nil, language: nil, genre: nil, year: nil, state: nil, badge: nil, provider: nil, searchText: "", smartRules: collection.smartRules, smartMatchAny: collection.smartMatchAny)
+                    let refined = try refineResults(items, network: [], language: [], genre: [], year: [], state: [], badge: nil, provider: [], searchText: "", smartRules: collection.smartRules, smartMatchAny: collection.smartMatchAny)
                     return refined.count
                 }
                 let itemIDs = collection.items.compactMap { $0.id }

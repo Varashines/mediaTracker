@@ -4,6 +4,9 @@ struct PosterView: View {
     let item: MediaItem
     let themeColor: Color
     var posterOptions: [String] = []
+    var hasLoadedPosterOptions = false
+    var isLoadingPosterOptions = false
+    var onRequestPosterOptions: (() -> Void)? = nil
     var isCustomPoster: Bool = false
     var onSelectPoster: ((String) -> Void)? = nil
     var onResetPoster: (() -> Void)? = nil
@@ -60,14 +63,15 @@ struct PosterView: View {
                             lineWidth: isHovering ? 1.5 : 0.5
                         )
                 )
-                .animation(AppTheme.Animation.springSnappy, value: isHovering)
+                    .animation(AppTheme.Animation.springSnappy, value: isHovering)
                 .overlay(alignment: .topLeading) {
                     SmartBadgeView(item: item)
                         .padding(14)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if posterOptions.count > 1 {
+                    if posterOptions.count > 1 || (!hasLoadedPosterOptions && onRequestPosterOptions != nil) {
                         Button {
+                            onRequestPosterOptions?()
                             showPicker.toggle()
                         } label: {
                             Image(systemName: showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
@@ -85,7 +89,7 @@ struct PosterView: View {
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
-                        .help("Change poster")
+                        .help(isLoadingPosterOptions ? "Loading poster options" : "Change poster")
                         .opacity((isHovering || showPicker) ? 1 : 0)
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
                         .animation(.easeInOut(duration: 0.2), value: isHovering || showPicker)

@@ -45,28 +45,35 @@ struct DateUtils {
         }
     }
 
-    private static func getFormatter(format: String, timeZoneIdentifier: String?) -> DateFormatter {
+    private static func withFormatter<Result: Sendable>(
+        format: String,
+        timeZoneIdentifier: String?,
+        _ body: @Sendable (DateFormatter) -> Result
+    ) -> Result {
         let key = "\(format)_\(timeZoneIdentifier ?? "nil")"
         return formatters.withLock { formatters in
-            if let formatter = formatters[key] {
-                return formatter.copy() as! DateFormatter
+            let formatter: DateFormatter
+            if let existing = formatters[key] {
+                formatter = existing
+            } else {
+                let created = DateFormatter()
+                created.dateFormat = format
+                created.locale = Locale(identifier: "en_US_POSIX")
+                if let tzName = timeZoneIdentifier, let tz = TimeZone(identifier: tzName) {
+                    created.timeZone = tz
+                }
+                formatters[key] = created
+                formatter = created
             }
-
-            let formatter = DateFormatter()
-            formatter.dateFormat = format
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            if let tzName = timeZoneIdentifier, let tz = TimeZone(identifier: tzName) {
-                formatter.timeZone = tz
-            }
-            formatters[key] = formatter
-            return formatter.copy() as! DateFormatter
+            return body(formatter)
         }
     }
 
     static func parseDate(_ dateString: String?) -> Date? {
         guard let dateString = dateString else { return nil }
-        let formatter = getFormatter(format: "yyyy-MM-dd", timeZoneIdentifier: nil)
-        return formatter.date(from: dateString)
+        return withFormatter(format: "yyyy-MM-dd", timeZoneIdentifier: nil) {
+            $0.date(from: dateString)
+        }
     }
     
     static func formatRuntime(_ minutes: Int?) -> String {
@@ -126,8 +133,13 @@ struct DateUtils {
            let rule = StreamingServiceRule.defaults.first(where: { rule in
                rule.patterns.contains(where: { service.contains($0) })
            }), let dateStr = resolvedDateString {
-            let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: rule.timeZoneIdentifier)
-            if let baseDate = formatter.date(from: "\(dateStr) \(rule.releaseTime)") {
+            let baseDate = withFormatter(
+                format: "yyyy-MM-dd HH:mm",
+                timeZoneIdentifier: rule.timeZoneIdentifier
+            ) {
+                $0.date(from: "\(dateStr) \(rule.releaseTime)")
+            }
+            if let baseDate {
                 return Calendar.current.date(byAdding: .day, value: rule.dayOffset, to: baseDate)
             }
         }
@@ -137,10 +149,13 @@ struct DateUtils {
         if hasRealAirtime, let dateStr = resolvedDateString {
             let tzName = timezone ?? show?.timezone
             if let tName = tzName, let t = resolvedTime, TimeZone(identifier: tName) != nil {
-                let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tName)
-                if let date = formatter.date(from: "\(dateStr) \(t)") {
-                    return date
+                let date = withFormatter(
+                    format: "yyyy-MM-dd HH:mm",
+                    timeZoneIdentifier: tName
+                ) {
+                    $0.date(from: "\(dateStr) \(t)")
                 }
+                if let date { return date }
             }
         }
 
@@ -156,14 +171,16 @@ struct DateUtils {
 
         // 5. Timezone + time fallback
         if let tzName = timezone ?? show?.timezone, TimeZone(identifier: tzName) != nil {
-            let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName)
             let timeToUse = resolvedTime ?? "20:00"
-            return formatter.date(from: "\(dateStr) \(timeToUse)")
+            return withFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: tzName) {
+                $0.date(from: "\(dateStr) \(timeToUse)")
+            }
         }
-        
+
         // 6. US 8 PM ET fallback
-        let formatter = getFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York")
-        return formatter.date(from: "\(dateStr) 20:00")
+        return withFormatter(format: "yyyy-MM-dd HH:mm", timeZoneIdentifier: "America/New_York") {
+            $0.date(from: "\(dateStr) 20:00")
+        }
     }
 
     static func sameMonthDay(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
@@ -191,30 +208,44 @@ struct DateUtils {
 
     private static let weekdayDisplayFormatterLock = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
 
-    private static func getWeekdayDisplayFormatter() -> DateFormatter {
+    private static func withWeekdayDisplayFormatter<Result: Sendable>(
+        _ body: @Sendable (DateFormatter) -> Result
+    ) -> Result {
         weekdayDisplayFormatterLock.withLock { formatters in
             let key = "display"
-            if let formatter = formatters[key] { return formatter.copy() as! DateFormatter }
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "EEEE, MMM d"
-            formatter.timeZone = TimeZone.current
-            formatters[key] = formatter
-            return formatter.copy() as! DateFormatter
+            let formatter: DateFormatter
+            if let existing = formatters[key] {
+                formatter = existing
+            } else {
+                let created = DateFormatter()
+                created.locale = Locale(identifier: "en_US_POSIX")
+                created.dateFormat = "EEEE, MMM d"
+                created.timeZone = TimeZone.current
+                formatters[key] = created
+                formatter = created
+            }
+            return body(formatter)
         }
     }
 
-    private static func getWeekdayParseFormatter() -> DateFormatter {
+    private static func withWeekdayParseFormatter<Result: Sendable>(
+        _ body: @Sendable (DateFormatter) -> Result
+    ) -> Result {
         weekdayDisplayFormatterLock.withLock { formatters in
             let key = "parse"
-            if let formatter = formatters[key] { return formatter.copy() as! DateFormatter }
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "EEEE, MMM d"
-            formatter.timeZone = TimeZone.current
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatters[key] = formatter
-            return formatter.copy() as! DateFormatter
+            let formatter: DateFormatter
+            if let existing = formatters[key] {
+                formatter = existing
+            } else {
+                let created = DateFormatter()
+                created.locale = Locale(identifier: "en_US_POSIX")
+                created.dateFormat = "EEEE, MMM d"
+                created.timeZone = TimeZone.current
+                created.calendar = Calendar(identifier: .gregorian)
+                formatters[key] = created
+                formatter = created
+            }
+            return body(formatter)
         }
     }
 
@@ -226,19 +257,21 @@ struct DateUtils {
         let today = Date()
         let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
         let targetMD = calendar.dateComponents([.month, .day], from: date)
-        let formatter = getWeekdayDisplayFormatter()
-
-        for offset in 0..<7 {
-            guard let dayDate = calendar.date(byAdding: .day, value: offset, to: weekStart) else { continue }
-            let dayMD = calendar.dateComponents([.month, .day], from: dayDate)
-            if dayMD.month == targetMD.month && dayMD.day == targetMD.day {
+        let formattedDate: String? = withWeekdayDisplayFormatter { formatter -> String? in
+            for offset in 0..<7 {
+                guard let dayDate = calendar.date(byAdding: .day, value: offset, to: weekStart) else { continue }
+                let dayMD = calendar.dateComponents([.month, .day], from: dayDate)
+                guard dayMD.month == targetMD.month && dayMD.day == targetMD.day else { continue }
                 return formatter.string(from: dayDate)
             }
+            return nil
         }
-        return "Unknown"
+        return formattedDate ?? "Unknown"
     }
 
     static func weekdayDisplayDate(for key: String) -> Date {
-        getWeekdayParseFormatter().date(from: key) ?? .distantPast
+        withWeekdayParseFormatter { formatter in
+            formatter.date(from: key) ?? .distantPast
+        }
     }
 }

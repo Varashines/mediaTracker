@@ -51,10 +51,17 @@ class DisplayCache {
     
     private func prewarmCarouselImages() {
         let cache = ImageCache.shared
-        
-        // Continue Watching — landscape backdrops at .backdropCompact
-        let cwBackdrops = homeContinueWatchingItems.prefix(8).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
-        cache.prewarmImages(urls: Array(cwBackdrops), targetSize: .backdropCompact, priority: .normal)
+
+        // Continue Watching — the always-visible first row: warm the full list
+        // (not just the first screen) so scrubbing past item 8 is still warm.
+        let cwBackdrops = homeContinueWatchingItems.compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
+        cache.prewarmImages(urls: cwBackdrops, targetSize: .backdropCompact, priority: .normal)
+
+        // Title logos share the card decode size with ContinueWatchingBackdropCard
+        // (.cardLogo) so the memory-cache key matches on first paint.
+        let cwLogos = homeContinueWatchingItems.compactMap(\.logoURL).compactMap(URL.init(string:))
+        cache.prewarmImages(urls: cwLogos, targetSize: .cardLogo, priority: .low)
+
         cache.prewarmImages(featuredUpcomingItems, limit: 8, targetSize: .thumbSmall, priority: .normal)
 
         // Pick of the Day & For You
@@ -67,6 +74,8 @@ class DisplayCache {
             cache.prewarmImages(recommendations, limit: 6, targetSize: .thumbSmall, priority: .low)
             let recBackdrops = recommendations.prefix(6).compactMap(\.cardBackdropURL).compactMap(URL.init(string:))
             cache.prewarmImages(urls: recBackdrops, targetSize: .backdropCompact, priority: .low)
+            let recLogos = recommendations.prefix(6).compactMap(\.logoURL).compactMap(URL.init(string:))
+            cache.prewarmImages(urls: recLogos, targetSize: .cardLogo, priority: .low)
         }
     }
 
@@ -100,11 +109,10 @@ class DisplayCache {
             }
         }
 
-        if animated {
-            withAnimation(AppTheme.Animation.easeInOut) { mutate() }
-        } else {
-            mutate()
-        }
+        // No withAnimation: single-item metadata swaps don't need a full-list
+        // relayout spring — SwiftUI's diff already crossfades the changed cell.
+        // Animating every list mutation re-ran the ForEach with implicit anims.
+        mutate()
     }
 
     private func replaceInList(_ list: inout [MediaThumbnailMetadata], id: PersistentIdentifier, updated: MediaThumbnailMetadata?) {

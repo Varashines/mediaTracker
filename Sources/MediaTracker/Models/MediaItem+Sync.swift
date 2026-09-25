@@ -6,11 +6,15 @@ extension MediaItem {
         let currentState = state ?? .wishlist
         let fullSync = dirty.contains(.all)
 
+        // dirty [] means "only refresh cheap derived flags" (storedIsUpcoming).
+        // Taste/mood-only mutations use this to avoid badge/cast/TV/searchable work.
+        let wantsDerived = fullSync || !dirty.isEmpty
+
         if dirty.contains(.cast) || fullSync {
             syncCastCache(force: fullSync)
         }
 
-        if dirty.contains(.metadata) || dirty.contains(.progress) || fullSync {
+        if (dirty.contains(.metadata) || dirty.contains(.progress) || fullSync) && wantsDerived {
             let skipNetwork = !fullSync && !dirty.contains(.metadata)
             if type == .movie {
                 syncMovieProperties(skipNetwork: skipNetwork)
@@ -22,7 +26,7 @@ extension MediaItem {
             }
         }
 
-        if dirty.contains(.badge) || fullSync {
+        if (dirty.contains(.badge) || fullSync) && wantsDerived {
             let oldLabel = storedSmartBadgeLabel
             let oldSparkle = storedSmartBadgeIsSparkle
             if let result = BadgeEngine.calculateBadge(for: self, now: now) {
@@ -51,7 +55,7 @@ extension MediaItem {
             self.storedIsUpcoming = false
         }
 
-        if dirty.contains(.searchable) || fullSync {
+        if (dirty.contains(.searchable) || fullSync) && wantsDerived {
             updateSearchableText()
         }
     }
@@ -143,6 +147,7 @@ extension MediaItem {
         self.cachedRuntime = progressResult.totalRuntime
         self.cachedWatchedEpisodeCount = progressResult.watchedCount
         self.remainingEpisodesCount = progressResult.remainingCount
+        scheduleWatchHistoryCatalogCheck(tv: tv)
         
         if progressResult.totalCount > 0 {
             self.cachedEpisodeRuntime = progressResult.averageEpisodeRuntime
@@ -154,17 +159,11 @@ extension MediaItem {
             // Unified Auto-advance State Logic (runs before auto-mark so state is updated first)
             // Set stateValue directly to avoid re-triggering syncCachedProperties via the state setter
             if progress >= 1.0 && currentState != .completed && currentState != .rewatching && currentState != .onHold && currentState != .dropped {
-                self.stateValue = MediaState.completed.rawValue
-                self.lastInteractionDate = now
-                self.lastStateChangeDate = now
+                self.applyAutomaticState(.completed, now: now)
             } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
-                self.stateValue = MediaState.active.rawValue
-                self.lastInteractionDate = now
-                self.lastStateChangeDate = now
+                self.applyAutomaticState(.active, now: now)
             } else if progress == 0 && (currentState == .active || currentState == .completed) {
-                self.stateValue = MediaState.wishlist.rawValue
-                self.lastInteractionDate = now
-                self.lastStateChangeDate = now
+                self.applyAutomaticState(.wishlist, now: now)
             }
 
             // Auto-mark: only if state is still Completed after auto-advance
@@ -225,6 +224,32 @@ extension MediaItem {
             self.storedNextEpisodeLabel = nil
             self.storedNextEpisodeRuntime = nil
             self.cachedNextAiringDate = tv.nextEpisodeDate
+        }
+    }
+
+    private func scheduleWatchHistoryCatalogCheck(tv: TVShowDetails) {
+        let episodeIDs = tv.seasons.liveModels.flatMap { season in
+            season.episodes.liveModels.map {
+                $0.uniqueID ?? "\(id)_\(season.seasonNumber)_\($0.episodeNumber)"
+            }
+        }
+        let mediaID = id
+
+        Task { @MainActor in
+            guard let container = DataService.modelContainer else { return }
+            let context = container.mainContext
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == mediaID })
+            descriptor.fetchLimit = 1
+            guard let item = (try? context.fetch(descriptor))?.first,
+                  item.modelContext != nil,
+                  !item.isDeleted else { return }
+            WatchHistoryCoordinator.reconcileEpisodeCatalog(
+                item: item,
+                mediaID: mediaID,
+                knownIDs: episodeIDs,
+                context: context
+            )
+            SaveCoordinator.shared.requestSave(context)
         }
     }
 

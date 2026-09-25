@@ -72,9 +72,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(AppThemeCoordinator.isReducingVisualEffects
-            ? AnyShapeStyle(AppTheme.Colors.background(for: scheme))
-            : AnyShapeStyle(.ultraThinMaterial))
+        .background(AppTheme.Colors.background(for: scheme))
         .frame(
             minWidth: AppTheme.Layout.settingsMinimumWidth,
             idealWidth: AppTheme.Layout.settingsIdealWidth,

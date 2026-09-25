@@ -2,13 +2,13 @@ import SwiftUI
 
 struct ForYouCompactCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
-    var isFastScrolling: Bool = false
     var staggerIndex: Int? = nil
+    @Environment(\.isFastScrolling) private var isFastScrolling
     @State private var isHovered = false
     @State private var hasAppeared = false
 
     nonisolated static func == (lhs: ForYouCompactCard, rhs: ForYouCompactCard) -> Bool {
-        lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
+        lhs.metadata == rhs.metadata && lhs.staggerIndex == rhs.staggerIndex
     }
     
     private let cardWidth: CGFloat = 360
@@ -89,7 +89,12 @@ struct ForYouCompactCard: View, Equatable {
                     // 4. Info Pane
                     VStack(alignment: .leading, spacing: 8) {
                         if useTitleLogos, let logoURL = metadata.logoURL, let url = URL(string: logoURL) {
-                            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) { _ in } placeholder: {
+                            CachedImage(
+                                url: url,
+                                targetSize: .cardLogo,
+                                priority: .low,
+                                isFastScrolling: isFastScrolling
+                            ) { _ in } placeholder: {
                                 Text(metadata.title)
                                     .font(AppTheme.Font.title3)
                                     .foregroundStyle(.white)
@@ -97,7 +102,13 @@ struct ForYouCompactCard: View, Equatable {
                             }
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: 200, maxHeight: 40, alignment: .leading)
-                            .shadow(color: Color.black.opacity(0.35), radius: 2, y: 1)
+                            // Parameterized (not `.if`) so fast-scroll toggles don't
+                            // remount CachedImage and flash the title placeholder.
+                            .shadow(
+                                color: isFastScrolling ? .clear : .black.opacity(0.35),
+                                radius: isFastScrolling ? 0 : 2,
+                                y: isFastScrolling ? 0 : 1
+                            )
                         } else {
                             Text(metadata.title)
                                 .font(AppTheme.Font.title3)
@@ -116,7 +127,7 @@ struct ForYouCompactCard: View, Equatable {
             }
         }
         .frame(width: cardWidth, height: cardHeight)
-        .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
+        .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered, suppressEffects: isFastScrolling)
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.02 : 1.0))
         .opacity(hasAppeared ? 1 : 0)
         .onAppear {

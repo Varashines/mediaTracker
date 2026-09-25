@@ -7,7 +7,8 @@ final class YearInReviewTests: MTTestCase {
         let schema = Schema([
             MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,
             SeasonCastMember.self, TVEpisode.self, CastMember.self,
-            MediaCollection.self, StudioAliasEntity.self
+            MediaCollection.self, StudioAliasEntity.self,
+            WatchCycle.self, WatchEvent.self
         ])
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("MediaTracker-YearReview-\(UUID().uuidString)", isDirectory: true)
@@ -88,6 +89,55 @@ final class YearInReviewTests: MTTestCase {
 
         let titles = review.titlesByDay[Calendar.current.startOfDay(for: date(2026, 3, 10))] ?? []
         XCTAssertEqual(titles.map(\.title), ["2026 Show"])
+    }
+
+    @MainActor
+    func testRewatchesAreAggregatedAtTitleLevel() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let show = makeItem(id: "tv_101", title: "Rewatched Show", type: .tvShow, releaseDate: date(2026, 1, 1), state: "Completed")
+        context.insert(show)
+        context.insert(WatchCycle(
+            mediaID: show.id,
+            kind: .tvShow,
+            startedAt: date(2026, 1, 2),
+            completedAt: date(2026, 2, 1),
+            state: .completed
+        ))
+        context.insert(WatchCycle(
+            mediaID: show.id,
+            kind: .tvShow,
+            startedAt: date(2026, 3, 1),
+            completedAt: date(2026, 3, 10),
+            state: .completed,
+            isRewatch: true
+        ))
+        context.insert(WatchCycle(
+            mediaID: show.id,
+            kind: .tvShow,
+            startedAt: date(2026, 4, 1),
+            completedAt: date(2026, 4, 10),
+            state: .completed,
+            isRewatch: true
+        ))
+        context.insert(WatchCycle(
+            mediaID: show.id,
+            kind: .tvShow,
+            startedAt: date(2026, 5, 1),
+            state: .active,
+            isRewatch: true
+        ))
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.totalRewatches, 2)
+        XCTAssertEqual(review.titlesRewatched, 1)
+        XCTAssertEqual(review.rewatchedTitles.first?.title, "Rewatched Show")
+        XCTAssertEqual(review.rewatchedTitles.first?.rewatchCount, 2)
     }
 
     @MainActor
@@ -204,6 +254,40 @@ final class YearInReviewTests: MTTestCase {
         XCTAssertEqual(showEntry?.episodeCount, 2)
         let movieEntry = titles.first { $0.type == .movie }
         XCTAssertEqual(movieEntry?.episodeCount, 0)
+    }
+
+    @MainActor
+    func testEventLedgerCountsRepeatedMovieWatches() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let movie = makeItem(id: "movie_event", title: "Repeated Movie", type: .movie, releaseDate: date(2026, 1, 1), state: "Completed")
+        movie.cachedRuntime = 100
+        movie.lastStateChangeDate = date(2025, 12, 31)
+        context.insert(movie)
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: movie.id,
+            watchedAt: date(2026, 3, 1),
+            runtimeMinutes: 100,
+            deduplicationKey: "movie-event-1"
+        ))
+        context.insert(WatchEvent(
+            cycleID: UUID(),
+            mediaID: movie.id,
+            watchedAt: date(2026, 4, 1),
+            runtimeMinutes: 100,
+            deduplicationKey: "movie-event-2"
+        ))
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.totalMovies, 2)
+        XCTAssertEqual(review.totalMinutes, 200)
+        XCTAssertEqual(review.allWatchedTitles().filter { $0.title == "Repeated Movie" }.count, 1)
     }
 
     @MainActor

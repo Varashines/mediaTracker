@@ -415,6 +415,17 @@ extension BackgroundDataService {
             if !metadataOnly {
                 let seasonsToSync = details.seasons
 
+                // Prefetch existing seasons before the task group so cast fetches
+                // can skip seasons that already have cast rows (force still refetches).
+                let existingSeasonsDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
+                let existingSeasons = (try? modelContext.fetch(existingSeasonsDesc)) ?? []
+                var seasonByID: [String: TVSeason] = [:]
+                var seasonHasCast: [Int: Bool] = [:]
+                for s in existingSeasons {
+                    if let uid = s.uniqueID { seasonByID[uid] = s }
+                    seasonHasCast[s.seasonNumber] = s.seasonCastCount > 0
+                }
+
                 struct FetchedSeasonData {
                     let seasonNumber: Int
                     let name: String?
@@ -426,6 +437,9 @@ extension BackgroundDataService {
                     /// (nil when TMDB has no runtime for an episode).
                     let tmdbRuntimes: [Int: Int]
                     let seasonCast: [SeasonAggregateCastResult]
+                    /// False when cast was skipped because the season already has rows
+                    /// and this is not a force refresh — skip merge so empty [] can't wipe.
+                    let didFetchCast: Bool
                     /// True when both episode sources were fetched successfully, so
                     /// an unwatched row absent from their reconciled union is stale.
                     let shouldPruneStaleEpisodes: Bool
@@ -438,10 +452,17 @@ extension BackgroundDataService {
                 fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
+                        let needsCastFetch = force || !(seasonHasCast[sNum] ?? false)
 
                         group.addTask {
-                            // Always fetch per-season aggregate credits (new data; existing seasons lack it).
-                            let credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
+                            // Skip aggregate credits when the season already has cast
+                            // rows and this is not a force refresh (healer covers gaps).
+                            let credits: [SeasonAggregateCastResult]
+                            if needsCastFetch {
+                                credits = (try? await APIClient.shared.fetchSeasonAggregateCredits(tmdbID: tmdbID, seasonNumber: sNum, force: force)) ?? []
+                            } else {
+                                credits = []
+                            }
 
                             // Preserve announced TMDB episodes while enriching matching,
                             // already-published rows with TVMaze data. TVMaze can lag
@@ -490,6 +511,7 @@ extension BackgroundDataService {
                                 episodes: episodes,
                                 tmdbRuntimes: tmdbRuntimes,
                                 seasonCast: credits,
+                                didFetchCast: needsCastFetch,
                                 shouldPruneStaleEpisodes: usesTVMaze && fetchedTMDBEpisodes
                             )
                         }
@@ -500,12 +522,6 @@ extension BackgroundDataService {
                     }
                     return results.sorted { $0.seasonNumber < $1.seasonNumber }
                 }
-
-                // Batch pre-fetch all existing seasons and episodes for this show to avoid N+1 queries
-                let existingSeasonsDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
-                let existingSeasons = (try? modelContext.fetch(existingSeasonsDesc)) ?? []
-                var seasonByID: [String: TVSeason] = [:]
-                for s in existingSeasons { if let uid = s.uniqueID { seasonByID[uid] = s } }
 
                 let existingEpisodesDesc = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
                 let existingEpisodes = (try? modelContext.fetch(existingEpisodesDesc)) ?? []
@@ -566,8 +582,10 @@ extension BackgroundDataService {
                         }
                     }
 
-                    // Persist per-season aggregate credits
-                    if mergeSeasonCast(seasonData.seasonCast, into: season, tmdbID: tmdbID) {
+                    // Persist per-season aggregate credits (only when fetched —
+                    // a skipped [] must not wipe existing cast rows).
+                    if seasonData.didFetchCast,
+                       mergeSeasonCast(seasonData.seasonCast, into: season, tmdbID: tmdbID) {
                         didWriteSeasonCast = true
                     }
                 }

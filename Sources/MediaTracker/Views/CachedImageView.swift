@@ -51,7 +51,9 @@ struct CachedImage<Placeholder: View>: View {
                 staticPlaceholder
             }
         }
-        .animation(AppTheme.Animation.easeInOut, value: image)
+        // No implicit crossfade while fast-scrolling — every cell would animate
+        // its decode simultaneously, which is exactly when we need frames free.
+        .animation(isFastScrolling ? nil : AppTheme.Animation.easeInOut, value: image)
         .onDisappear {
             // The cache coalesces requests by URL and target size. Cancelling its
             // shared task here could abort a load another visible cell is awaiting.

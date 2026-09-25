@@ -118,6 +118,7 @@ struct BulkCollectionManagerView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // No .cancelAction — onExitCommand owns Esc (two-step clear → close).
                     Button("Cancel") {
                         dismiss()
                     }
@@ -132,6 +133,14 @@ struct BulkCollectionManagerView: View {
             }
             .onAppear {
                 selectedItemIDs = Set(collection.items.map { $0.id })
+            }
+            // 2A: Esc clears search first; second Esc closes the sheet.
+            .onExitCommand {
+                if !searchText.isEmpty {
+                    searchText = ""
+                } else {
+                    dismiss()
+                }
             }
             .task {
                 let container = modelContext.container

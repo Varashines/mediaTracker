@@ -10,7 +10,10 @@ struct StaggerModifier: ViewModifier {
     @State private var hasAppeared = false
 
     func body(content: Content) -> some View {
-        let skipAnimation = index >= modulo * 2
+        // Ambient env fast-scroll skips the entrance stagger entirely — the
+        // modifier already defaults isFastScrolling=false for non-carousel use.
+        @Environment(\.isFastScrolling) var envFast
+        let skipAnimation = index >= modulo * 2 || envFast
         content
             .opacity(hasAppeared || isFastScrolling || skipAnimation ? 1 : 0)
             .offset(y: hasAppeared || isFastScrolling || skipAnimation ? 0 : verticalOffset)

@@ -10,6 +10,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     let onRefresh: () -> Void
 
     @State private var showViewOptions = false
+    @State private var showFilters = false
     @State private var refreshRotation: Double = 0
     @Environment(\.colorScheme) private var colorScheme
 
@@ -39,6 +40,9 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             if !isSearchActive {
                 HStack(spacing: AppTheme.Spacing.tiny) {
+                    if isLibraryCategory {
+                        filterButton
+                    }
                     viewOptionsButton
                     if canRefreshCurrentCategory {
                         refreshButton
@@ -63,6 +67,53 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         switch viewModel.filter.selectedCategory {
         case .all, .movie, .tvShow, .completed: return true
         default: return false
+        }
+    }
+
+    private var activeFilterCount: Int {
+        [
+            !viewModel.filter.selectedNetworks.isEmpty,
+            !viewModel.filter.selectedLanguages.isEmpty,
+            !viewModel.filter.selectedGenres.isEmpty,
+            !viewModel.filter.selectedYears.isEmpty,
+            !viewModel.filter.selectedStates.isEmpty,
+            !viewModel.filter.selectedProviders.isEmpty
+        ].filter { $0 }.count
+    }
+
+    private var filterButton: some View {
+        Button {
+            showFilters.toggle()
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(AppTheme.Icon.medium)
+                .overlay(alignment: .topTrailing) {
+                    if activeFilterCount > 0 {
+                        Text("\(activeFilterCount)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(3)
+                            .background(Circle().fill(AppTheme.Colors.accent))
+                            .offset(x: 9, y: -7)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(activeFilterCount > 0 ? AppTheme.Colors.accent.opacity(0.12) : AppTheme.Colors.surfaceGhost(for: colorScheme))
+                )
+        }
+        .buttonStyle(.borderless)
+        .contentShape(Capsule())
+        .tint(.primary)
+        .help("Library filters")
+        .accessibilityLabel("Library filters")
+        .accessibilityValue(activeFilterCount == 0 ? "No filters" : "\(activeFilterCount) active")
+        .popover(isPresented: $showFilters) {
+            LibraryFilterPopover(viewModel: viewModel) {
+                viewModel.filterSubject.send()
+            }
         }
     }
 
@@ -192,6 +243,164 @@ struct LibraryDetailToolbarContent: ToolbarContent {
         case .smartHub: return "Refresh Collections"
         default: return "Refresh"
         }
+    }
+}
+
+private struct LibraryFilterPopover: View {
+    @Bindable var viewModel: MediaViewModel
+    let onChanged: () -> Void
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var availableYears: [String] = []
+    @State private var isLoadingYears = false
+
+    private func binding<Value: Hashable>(for keyPath: WritableKeyPath<FilterState, [Value]>) -> Binding<Set<Value>> {
+        Binding(
+            get: { Set(viewModel.filter[keyPath: keyPath]) },
+            set: { viewModel.filter[keyPath: keyPath] = Array($0) }
+        )
+    }
+
+    private var hasActiveFilters: Bool {
+        !viewModel.filter.selectedNetworks.isEmpty
+            || !viewModel.filter.selectedLanguages.isEmpty
+            || !viewModel.filter.selectedGenres.isEmpty
+            || !viewModel.filter.selectedYears.isEmpty
+            || !viewModel.filter.selectedStates.isEmpty
+            || !viewModel.filter.selectedProviders.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+            HStack {
+                Label("Filters", systemImage: "line.3.horizontal.decrease")
+                    .font(.headline)
+                Spacer()
+                Button("Clear All") {
+                    viewModel.filter.resetFilters()
+                    onChanged()
+                }
+                .disabled(!hasActiveFilters)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.medium) {
+                    LibraryMultiSelectMenu(
+                        title: "Networks",
+                        options: viewModel.discovery.cachedNetworks.map(\.name),
+                        selection: binding(for: \.selectedNetworks),
+                        onChanged: onChanged
+                    )
+
+                    LibraryMultiSelectMenu(
+                        title: "Languages",
+                        options: viewModel.discovery.cachedLanguages.map { $0.code ?? $0.name },
+                        label: { code in
+                            viewModel.discovery.cachedLanguages.first { ($0.code ?? $0.name) == code }?.name ?? code
+                        },
+                        selection: binding(for: \.selectedLanguages),
+                        onChanged: onChanged
+                    )
+
+                    LibraryMultiSelectMenu(
+                        title: "Genres",
+                        options: viewModel.discovery.cachedGenres.map(\.name),
+                        selection: binding(for: \.selectedGenres),
+                        onChanged: onChanged
+                    )
+
+                    LibraryMultiSelectMenu(
+                        title: "Years",
+                        options: availableYears,
+                        selection: binding(for: \.selectedYears),
+                        onChanged: onChanged,
+                        isDisabled: isLoadingYears
+                    )
+
+                    LibraryMultiSelectMenu(
+                        title: "Statuses",
+                        options: MediaState.allCases,
+                        label: \.displayName,
+                        selection: binding(for: \.selectedStates),
+                        onChanged: onChanged
+                    )
+
+                    LibraryMultiSelectMenu(
+                        title: "Providers",
+                        options: viewModel.discovery.cachedProviders.map(\.name),
+                        selection: binding(for: \.selectedProviders),
+                        onChanged: onChanged
+                    )
+                }
+            }
+            .frame(maxHeight: 360)
+        }
+        .padding(AppTheme.Spacing.large)
+        .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+        .task {
+            guard availableYears.isEmpty, !isLoadingYears else { return }
+            isLoadingYears = true
+            let actor = MediaFilterActor.shared(modelContainer: modelContext.container)
+            availableYears = await actor.fetchDistinctYears()
+            isLoadingYears = false
+        }
+    }
+
+}
+
+private struct LibraryMultiSelectMenu<Value: Hashable>: View {
+    let title: String
+    let options: [Value]
+    var label: (Value) -> String = { String(describing: $0) }
+    @Binding var selection: Set<Value>
+    let onChanged: () -> Void
+    var isDisabled = false
+
+    private var summary: String {
+        if selection.isEmpty { return "All \(title.lowercased())" }
+        if selection.count == 1, let value = selection.first { return label(value) }
+        return "\(selection.count) \(title.lowercased())"
+    }
+
+    var body: some View {
+        Menu {
+            Button("Clear \(title)") {
+                selection.removeAll()
+                onChanged()
+            }
+            ForEach(options, id: \.self) { option in
+                Button {
+                    if selection.contains(option) {
+                        selection.remove(option)
+                    } else {
+                        selection.insert(option)
+                    }
+                    onChanged()
+                } label: {
+                    if selection.contains(option) {
+                        Label(label(option), systemImage: "checkmark")
+                    } else {
+                        Text(label(option))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: AppTheme.Spacing.small) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(summary)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(isDisabled)
+        .accessibilityLabel(title)
+        .accessibilityValue(summary)
     }
 }
 

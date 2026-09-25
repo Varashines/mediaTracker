@@ -4,7 +4,6 @@ import SwiftData
 struct ForYouCarousel: View {
     let items: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
     /// False once a fetch has settled — distinguishes loading skeletons
     /// from a genuine empty state.
@@ -40,11 +39,10 @@ struct ForYouCarousel: View {
                     emptyStateCta
                 }
             }
-        ) { metadata, fast in
+        ) { metadata in
             let index = items.firstIndex(where: { $0.id == metadata.id })
             return ForYouCompactCard(
                 metadata: metadata,
-                isFastScrolling: isFastScrolling || fast,
                 staggerIndex: index
             )
         }

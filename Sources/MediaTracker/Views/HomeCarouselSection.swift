@@ -3,8 +3,8 @@ import SwiftUI
 /// Shared scaffolding for home-screen horizontal carousels: section header,
 /// fast-scroll-aware `ScrollingHStack`, and per-item interactive buttons.
 ///
-/// Consolidates what used to be copy-pasted across FeaturedUpcomingCarousel,
-/// PickOfDayCarousel, ForYouCarousel, and ContinueWatchingCarousel.
+/// Scroll progress and horizontal fast-scroll live on `CarouselScrollState`
+/// so progress ticks only invalidate the header child — not the card row.
 struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyContent: View>: View {
     let title: String
     let icon: String
@@ -20,10 +20,9 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
     /// When set, each card is wrapped in an interactive `Button`.
     let onSelect: ((Item) -> Void)?
     let emptyContent: (() -> EmptyContent)?
-    let card: (Item, _ isFastScrolling: Bool) -> Card
+    let card: (Item) -> Card
 
-    @State private var scrollProgress: Double = 0
-    @State private var horizontalFastScrolling = false
+    @State private var scroll = CarouselScrollState()
 
     init(
         title: String,
@@ -35,7 +34,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         spacing: CGFloat = AppTheme.Spacing.large,
         onSelect: ((Item) -> Void)? = nil,
         @ViewBuilder emptyContent: @escaping () -> EmptyContent,
-        card: @escaping (Item, _ isFastScrolling: Bool) -> Card
+        card: @escaping (Item) -> Card
     ) {
         self.title = title
         self.icon = icon
@@ -58,7 +57,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         showsScrollProgress: Bool = true,
         spacing: CGFloat = AppTheme.Spacing.large,
         onSelect: ((Item) -> Void)? = nil,
-        card: @escaping (Item, _ isFastScrolling: Bool) -> Card
+        card: @escaping (Item) -> Card
     ) where EmptyContent == EmptyView {
         self.title = title
         self.icon = icon
@@ -74,33 +73,51 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            SectionHeader(
+            CarouselProgressHeader(
                 title: title,
                 icon: icon,
                 iconColor: iconColor,
-                scrollProgress: showsScrollProgress ? scrollProgress : nil
+                state: showsScrollProgress ? scroll : nil
             )
 
             if !items.isEmpty {
-                ScrollingHStack(space: scrollSpace, spacing: spacing, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
+                ScrollingHStack(space: scrollSpace, spacing: spacing, state: scroll) {
                     ForEach(items) { item in
                         if let onSelect {
                             Button { onSelect(item) } label: {
-                                card(item, horizontalFastScrolling)
+                                card(item)
                                     .equatable()
-                                    .compositingGroupIfNeeded()
                             }
                             .buttonStyle(.interactive)
                         } else {
-                            card(item, horizontalFastScrolling)
+                            card(item)
                                 .equatable()
-                                .compositingGroupIfNeeded()
                         }
                     }
                 }
+                .fastScrollingEnvironment(state: scroll)
             } else if let emptyContent {
                 emptyContent()
             }
         }
+    }
+}
+
+/// Isolates `scroll.progress` reads so progress ticks do not re-run the
+/// parent section body (and its `ForEach`).
+private struct CarouselProgressHeader: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
+    /// Non-nil when the progress indicator should show.
+    let state: CarouselScrollState?
+
+    var body: some View {
+        SectionHeader(
+            title: title,
+            icon: icon,
+            iconColor: iconColor,
+            scrollProgress: state?.progress
+        )
     }
 }

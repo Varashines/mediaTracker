@@ -204,7 +204,7 @@ struct YearReviewSharePopup: View {
             }
             if let image = await ImageCache.shared.get(
                 forKey: posterURL,
-                targetSize: AppTheme.Thumbnail.small,
+                targetSize: AppTheme.Thumbnail.large,
                 priority: .critical
             )?.image {
                 posterImages[title.id] = image

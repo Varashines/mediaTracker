@@ -18,7 +18,6 @@ struct MediaThumbnailView: View, Equatable {
     var isLocalInSearch: Bool = false
     var namespace: Namespace.ID? = nil
     var staggerIndex: Int? = nil
-    var isFastScrolling: Bool = false
     var disableHover: Bool = false
     var action: (() -> Void)? = nil
 
@@ -44,7 +43,6 @@ struct MediaThumbnailView: View, Equatable {
         lhs.isLocalInSearch == rhs.isLocalInSearch &&
         lhs.isCompletedInCollection == rhs.isCompletedInCollection &&
         lhs.selectedCollectionID == rhs.selectedCollectionID &&
-        lhs.isFastScrolling == rhs.isFastScrolling &&
         lhs.disableHover == rhs.disableHover
     }
 
@@ -64,10 +62,16 @@ struct MediaThumbnailView: View, Equatable {
     private let capturedGridBadgeText: String?
     private let capturedNextAiringDate: Date?
     private let capturedDisplayYear: String?
-    private let capturedThemeColor: Color
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.isFastScrolling) private var envIsFastScrolling
+
+    /// Fast-scroll is env-only so `Equatable ==` stays metadata-only and
+    /// vertical flag flips do not invalidate every visible cell.
+    private var effectiveFastScrolling: Bool {
+        envIsFastScrolling
+    }
 
     @State private var isHovered = false
     @State private var isAppeared = false
@@ -81,7 +85,7 @@ struct MediaThumbnailView: View, Equatable {
     init(
         item: MediaItem, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
         isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil,
         disableHover: Bool = false,
         isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
         action: (() -> Void)? = nil
@@ -94,7 +98,6 @@ struct MediaThumbnailView: View, Equatable {
         self.isUpcomingSection = isUpcomingSection
         self.namespace = namespace
         self.staggerIndex = staggerIndex
-        self.isFastScrolling = isFastScrolling
         self.disableHover = disableHover
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
@@ -116,13 +119,12 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedGridBadgeText = item.badgeText
         self.capturedNextAiringDate = item.cachedNextAiringDate
         self.capturedDisplayYear = item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
-        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
     }
 
     init(
         metadata: MediaThumbnailMetadata, mode: DisplayMode = .grid, showTypeBadge: Bool = true,
         isUpcomingSection: Bool = false,
-        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil, isFastScrolling: Bool = false,
+        namespace: Namespace.ID? = nil, staggerIndex: Int? = nil,
         disableHover: Bool = false,
         isCompletedInCollection: Bool = false, selectedCollectionID: UUID? = nil,
         action: (() -> Void)? = nil
@@ -135,7 +137,6 @@ struct MediaThumbnailView: View, Equatable {
         self.isUpcomingSection = isUpcomingSection
         self.namespace = namespace
         self.staggerIndex = staggerIndex
-        self.isFastScrolling = isFastScrolling
         self.disableHover = disableHover
         self.isCompletedInCollection = isCompletedInCollection
         self.selectedCollectionID = selectedCollectionID
@@ -156,7 +157,6 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedGridBadgeText = metadata.badgeText
         self.capturedNextAiringDate = metadata.nextAiringDate
         self.capturedDisplayYear = metadata.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
-        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {
@@ -176,15 +176,15 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedType = result.type
         self.capturedState = .wishlist
         self.capturedProgress = 0
-        self.capturedReleaseDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
+        let parsedReleaseDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
+        self.capturedReleaseDate = parsedReleaseDate
         self.capturedThemeColorHex = nil
         self.capturedNextEpisodeLabel = nil
         self.capturedWatchProgress = nil
         self.capturedIsUpcoming = false
         self.capturedGridBadgeText = nil
-        self.capturedNextAiringDate = result.releaseDate.flatMap { DateUtils.parseDate($0) }
-        self.capturedDisplayYear = capturedReleaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
-        self.capturedThemeColor = capturedThemeColorHex.flatMap { Color(hex: $0) } ?? .accentColor
+        self.capturedNextAiringDate = parsedReleaseDate
+        self.capturedDisplayYear = parsedReleaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
     }
 
     private var width: CGFloat {
@@ -240,7 +240,7 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .onDisappear {
-            if isFastScrolling, let url = posterURL {
+            if effectiveFastScrolling, let url = posterURL {
                 let targetSize: CGSize = mode == .hero ? .thumbMedium : .thumbSmall
                 ImageCache.shared.evictOffscreenImage(forKey: url, targetSize: targetSize)
             }
@@ -275,7 +275,7 @@ struct MediaThumbnailView: View, Equatable {
                 themeColorHex: item?.themeColorHex ?? capturedThemeColorHex,
                 mode: mode,
                 type: type,
-                isFastScrolling: isFastScrolling,
+                isFastScrolling: effectiveFastScrolling,
                 width: width,
                 height: height
             )
@@ -294,7 +294,9 @@ struct MediaThumbnailView: View, Equatable {
                 .equatable()
             }
 
-            // Smart Badge (Top Leading)
+            // Smart Badge (Top Leading) — always present so badges don't flicker
+            // in/out on vertical fast-scroll (Recent/Coming Soon/Recently Added).
+            // Only the type+check chrome is stripped while fast-scrolling.
             VStack {
                 HStack {
                     if !isRemoved {
@@ -317,7 +319,8 @@ struct MediaThumbnailView: View, Equatable {
             .opacity(isHovered ? 0 : 1)
             .offset(x: isHovered ? -4 : 0, y: isHovered ? -4 : 0)
 
-            // Top Trailing Badges
+            // Top Trailing Badges — always present for the same reason as the
+            // smart badge above (no pop-in/out when vertical fast-scroll flips).
             if isCompletedInCollection || showTypeBadge {
                 VStack {
                     HStack {
@@ -331,7 +334,6 @@ struct MediaThumbnailView: View, Equatable {
                                 .padding(4)
                                 .background(AppTheme.Colors.accent)
                                 .clipShape(Circle())
-                                .if(!AppThemeCoordinator.isReducingVisualEffects) { $0.shadow(radius: 2) }
                         }
                     }
                     Spacer()
@@ -346,7 +348,13 @@ struct MediaThumbnailView: View, Equatable {
             // absolute pills — title above, date left + episode right.
             // Movies have no episode: hover swaps countdown → centered date.
             if isUpcomingSection, let airDate = nextAiringDate {
-                TimelineView(.animation(minimumInterval: 900)) { context in
+                // Pause while fast-scrolling; idle countdown only needs minute
+                // precision (hover keeps 0.9s for crossfade). Without this gate
+                // every upcoming card runs a 900ms timer forever.
+                TimelineView(.animation(
+                    minimumInterval: effectiveHover ? 0.9 : 60,
+                    paused: effectiveFastScrolling
+                )) { context in
                     let now = context.date
                     VStack(spacing: 6) {
                         Spacer()
@@ -393,7 +401,7 @@ struct MediaThumbnailView: View, Equatable {
                     }
                 }
                 .padding(8)
-                .animation(AppTheme.Animation.springSnappy, value: effectiveHover)
+                 .animation(AppTheme.Animation.springSnappy, value: effectiveHover)
             }
         }
 
@@ -410,9 +418,16 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
         .frame(width: width, height: height)
-        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered)
+        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered, suppressEffects: effectiveFastScrolling)
         .opacity(isAppeared ? 1 : 0)
-        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (!disableHover && isHovered ? 1.015 : 1.0))
+        .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.015 : 1.0))
+        // Always attach the animation so hover interpolates; only skip while
+        // reducing visual effects (matches HoverScaleEffect / CW backdrop).
+        .animation(
+            AppThemeCoordinator.isReducingVisualEffects || disableHover
+                ? nil : .easeInOut(duration: 0.14),
+            value: isHovered
+        )
         .onAppear {
             isAppeared = true
         }
@@ -421,11 +436,8 @@ struct MediaThumbnailView: View, Equatable {
             guard !disableHover else { return }
             isHovered = hovering
         }
-        .onChange(of: isFastScrolling) { _, fast in
+        .onChange(of: effectiveFastScrolling) { _, fast in
             if fast { isHovered = false }
-        }
-        .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.animation(!disableHover ? .easeInOut(duration: 0.14) : nil, value: isHovered)
         }
     }
 
@@ -501,22 +513,20 @@ struct MediaThumbnailView: View, Equatable {
                 Image(systemName: "tv.fill")
             }
         }
-        .font(AppTheme.Icon.small)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .foregroundStyle(.white)
-        .background {
-            Capsule().fill(Color.black.opacity(0.85))
+            .font(AppTheme.Icon.small)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .foregroundStyle(.white)
+            .background {
+                Capsule().fill(Color.black.opacity(0.85))
+            }
+            .overlay {
+                Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+            }
+            .clipShape(Capsule())
+            // No compositingGroup/shadow — the type badge is a flat capsule and
+            // forcing an offscreen composite per cell is pure scroll cost.
         }
-        .overlay {
-            Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
-        }
-        .clipShape(Capsule())
-        .compositingGroup()
-        .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.shadow(color: Color.black.opacity(0.25), radius: 2, y: 1)
-        }
-    }
 
     @ViewBuilder
     private func libraryContextMenu(
@@ -574,13 +584,8 @@ struct MediaThumbnailView: View, Equatable {
                                     await svc.markAllEpisodesWatched(itemID: rawID)
                                 }
                             }
-                            item.stateValue = MediaState.completed.rawValue
-                            item.lastInteractionDate = Date()
-                            item.lastStateChangeDate = Date()
                             item.lastUpdated = Date()
-                            item.syncCachedProperties(dirty: [.progress, .badge])
-                            SaveCoordinator.shared.requestSave(modelContext)
-                            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+                            item.state = .completed
                         }
                     }
                 } label: {
@@ -685,7 +690,6 @@ struct MediaThumbnailView: View, Equatable {
         showTypeBadge: true,
         isUpcomingSection: false,
         namespace: namespace,
-        isFastScrolling: false,
         isCompletedInCollection: false,
         selectedCollectionID: nil
     )

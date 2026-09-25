@@ -36,7 +36,7 @@ final class CategoryMatcherParityTests: MTTestCase {
         insert("upcomingActive") { $0.stateValue = "Active"; $0.storedIsUpcoming = true }
         try context.save()
 
-        let result = try await actor.filterAndSort(category: .inProgress, searchText: "", sortOrder: .alphabetical, network: nil, language: nil)
+        let result = try await actor.filterAndSort(category: .inProgress, searchText: "", sortOrder: .alphabetical, network: [], language: [])
         XCTAssertEqual(Set(result.displayed.map(\.itemID)), ["active"], "Upcoming active items must not appear in .inProgress")
 
         let viaPredicate = try context.fetch(FetchDescriptor<MediaItem>(predicate: MediaFilterPredicates.buildFilteredPredicate(category: .inProgress, searchToken: "", stateValue: nil, badge: nil, language: nil)))
@@ -87,7 +87,7 @@ final class CategoryMatcherParityTests: MTTestCase {
         try context.save()
 
         let count = try await actor.countItems(category: .all, collectionID: collection.id)
-        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: nil, language: nil, collectionID: collection.id)
+        let result = try await actor.filterAndSort(category: .all, searchText: "", sortOrder: .alphabetical, network: [], language: [], collectionID: collection.id)
         XCTAssertEqual(count, result.totalCount, "Smart-rule evaluation must be identical for counting and display (matchAny=\(matchAny))")
 
         if matchAny {

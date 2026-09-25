@@ -13,6 +13,7 @@ struct CustomShareMenuView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var showCopiedToast = false
+    @FocusState private var closeButtonFocused: Bool
 
     var body: some View {
         VStack(spacing: 20) {
@@ -122,6 +123,12 @@ struct CustomShareMenuView: View {
             }
             .shadow(color: .black.opacity(0.5), radius: 30, y: 15)
         )
+        .onExitCommand {
+            onDismiss()
+        }
+        .onAppear {
+            closeButtonFocused = true
+        }
     }
 
     private var availableSharingServices: [NSSharingService] {
@@ -165,6 +172,7 @@ struct CustomShareMenuView: View {
             }
             .buttonStyle(.plain)
             .contentShape(Circle())
+            .focused($closeButtonFocused)
         }
     }
 

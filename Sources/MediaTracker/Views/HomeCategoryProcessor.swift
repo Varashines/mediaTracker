@@ -22,7 +22,7 @@ extension MediaFilterActor {
              item.storedSmartBadgeLabel == bingeLabel ||
              item.storedSmartBadgeLabel == finaleLabel ||
              item.storedSmartBadgeLabel == premiereLabel) &&
-            item.tasteValue != dislikeLabel
+             item.tasteValue != dislikeLabel
         }
 
         let pActiveOrRewatching = #Predicate<MediaItem> { item in
@@ -40,25 +40,22 @@ extension MediaFilterActor {
 
         var descStreaming = FetchDescriptor<MediaItem>(predicate: pStreaming)
         descStreaming.propertiesToFetch = MediaItem.thumbnailProperties
-        descStreaming.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descStreaming.fetchLimit = 150
+        descStreaming.fetchLimit = LibraryScanLimits.refinementCandidateCap
 
         var descActive = FetchDescriptor<MediaItem>(predicate: pActiveOrRewatching)
         descActive.propertiesToFetch = MediaItem.thumbnailProperties
-        descActive.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descActive.fetchLimit = 100
+        descActive.fetchLimit = LibraryScanLimits.refinementCandidateCap
 
         var descTransition = FetchDescriptor<MediaItem>(predicate: pTransition)
         descTransition.propertiesToFetch = MediaItem.thumbnailProperties
-        descTransition.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        descTransition.fetchLimit = 50
+        descTransition.fetchLimit = LibraryScanLimits.refinementCandidateCap
 
         let streamingItems = try modelContext.fetch(descStreaming).filter {
-            $0.stateValue != completedState && $0.stateValue != droppedState
+            !$0.isSoftDeleted && $0.stateValue != completedState && $0.stateValue != droppedState
         }
         let activeItemsRaw = try modelContext.fetch(descActive)
         let transitionItems = try modelContext.fetch(descTransition).filter {
-            $0.stateValue != completedState && $0.stateValue != droppedState
+            !$0.isSoftDeleted && $0.stateValue != completedState && $0.stateValue != droppedState
         }
 
         let wishlistState = MediaState.wishlistRaw
@@ -67,8 +64,7 @@ extension MediaFilterActor {
         }
         var recentDesc = FetchDescriptor<MediaItem>(predicate: recentPredicate)
         recentDesc.propertiesToFetch = MediaItem.thumbnailProperties
-        recentDesc.sortBy = [SortDescriptor<MediaItem>(\.lastInteractionDate, order: .reverse)]
-        recentDesc.fetchLimit = 60
+        recentDesc.fetchLimit = LibraryScanLimits.refinementCandidateCap
 
         let recentItems = try modelContext.fetch(recentDesc)
 
@@ -80,13 +76,18 @@ extension MediaFilterActor {
             }
         }
 
-        let activeItems = homeResults.filter { isHomeEligible($0, now: now) }
-            .sorted { a, b in
-                let pa = homeSortPriority(a)
-                let pb = homeSortPriority(b)
-                if pa != pb { return pa > pb }
-                return (a.lastInteractionDate ?? .distantPast) > (b.lastInteractionDate ?? .distantPast)
+        let latestWatchDates = WatchActivityResolver.latestWatchDates(for: homeResults, context: modelContext)
+        let activeItems = homeResults
+            .compactMap { item -> (MediaItem, Int, Date)? in
+                let latestWatchDate = latestWatchDates[item.id]
+                guard isHomeEligible(item, now: now, latestWatchDate: latestWatchDate) else { return nil }
+                return (item, homeSortPriority(item), latestWatchDate ?? .distantPast)
             }
+            .sorted { a, b in
+                if a.1 != b.1 { return a.1 > b.1 }
+                return a.2 > b.2
+            }
+            .map(\.0)
 
         let homeContinueWatching = activeItems.prefix(20).map { toMetadata($0) }
 
@@ -196,7 +197,8 @@ extension MediaFilterActor {
         return results
     }
 
-    private func isHomeEligible(_ item: MediaItem, now: Date) -> Bool {
+    private func isHomeEligible(_ item: MediaItem, now: Date, latestWatchDate: Date?) -> Bool {
+        if item.isSoftDeleted { return false }
         if item.stateValue == MediaState.completedRaw ||
            item.stateValue == MediaState.droppedRaw ||
            item.stateValue == MediaState.onHoldRaw { return false }
@@ -212,18 +214,6 @@ extension MediaFilterActor {
         let nextAirDate = item.cachedNextAiringDate ?? .distantPast
         if isCaughtUp && nextAirDate > now && item.type == .tvShow { return false }
 
-        let isActive = item.stateValue == MediaState.activeRaw ||
-                       item.stateValue == MediaState.rewatchingRaw ||
-                       (item.storedProgress ?? 0) > 0
-        if isActive {
-            if (item.stateValue == MediaState.activeRaw || item.stateValue == MediaState.rewatchingRaw) &&
-               (item.storedProgress ?? 0) == 0 {
-                let lastInter = item.lastInteractionDate ?? .distantPast
-                if lastInter < now.addingTimeInterval(-.days30) { return false }
-            }
-            return true
-        }
-
         let badge = item.storedSmartBadgeLabel
         let isNewDrop = SmartBadge.radarBadges.contains(where: { $0.rawValue == badge })
         if isNewDrop {
@@ -233,6 +223,18 @@ extension MediaFilterActor {
                     : (item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast)
                 let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
                 if daysSinceRelease < 0 || daysSinceRelease > 3 { return false }
+            }
+            return true
+        }
+
+        let isActive = item.stateValue == MediaState.activeRaw ||
+                       item.stateValue == MediaState.rewatchingRaw ||
+                       (item.storedProgress ?? 0) > 0
+        if isActive {
+            if (item.stateValue == MediaState.activeRaw || item.stateValue == MediaState.rewatchingRaw) &&
+               (item.storedProgress ?? 0) == 0 {
+                guard let latestWatchDate,
+                      latestWatchDate >= now.addingTimeInterval(-.days30) else { return false }
             }
             return true
         }

@@ -3,7 +3,6 @@ import SwiftUI
 struct PickOfDayCarousel: View {
     let items: [MediaThumbnailMetadata]
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let onSelect: (MediaThumbnailMetadata) -> Void
 
     var body: some View {
@@ -15,8 +14,8 @@ struct PickOfDayCarousel: View {
             items: items,
             spacing: AppTheme.Spacing.smallMedium,
             onSelect: onSelect
-        ) { metadata, fast in
-            ForYouCompactCard(metadata: metadata, isFastScrolling: isFastScrolling || fast)
+        ) { metadata in
+            ForYouCompactCard(metadata: metadata)
         }
     }
 }

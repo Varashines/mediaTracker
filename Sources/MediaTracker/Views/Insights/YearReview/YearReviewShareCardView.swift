@@ -30,14 +30,7 @@ struct YearReviewShareCardView: View {
 
     var body: some View {
         ZStack {
-            Color.black
-
-            RadialGradient(
-                colors: [accent.opacity(0.28), .clear],
-                center: .top,
-                startRadius: 20,
-                endRadius: 370
-            )
+            ShareCardBackdrop(style: .recap, accent: accent, secondary: accent)
 
             VStack(spacing: AppTheme.Spacing.large) {
                 header

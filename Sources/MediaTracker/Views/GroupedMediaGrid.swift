@@ -6,7 +6,6 @@ struct GroupedMediaGrid: View {
     let selectedCategoryRef: NavigationCategory?
     var viewModel: MediaViewModel
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let disableHover: Bool
     let columns: [GridItem]
     
@@ -46,7 +45,6 @@ struct GroupedMediaGrid: View {
             mode: .grid,
             showTypeBadge: viewModel.filter.currentGroupBy != .category,
             namespace: namespace,
-            isFastScrolling: isFastScrolling,
             disableHover: disableHover,
             isCompletedInCollection: completedIDs.contains(metadata.itemID),
             selectedCollectionID: viewModel.collection.selectedCollectionID

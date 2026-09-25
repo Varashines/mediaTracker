@@ -97,8 +97,28 @@ final class MediaItem: Identifiable {
         self.dateAdded = now
     }
 
+    /// Hot-path commit: fields must already be mutated. Derived recompute,
+    /// disk save, and observation broadcast run off the current frame so a
+    /// tap never waits on badge/searchable/save work.
     @MainActor
     func commitChange(dirty: CacheDirtyFlags = .all) {
+        let context = modelContext
+        let pid = persistentModelID
+        Task { @MainActor [weak self, weak context] in
+            if let self, self.modelContext != nil {
+                self.syncCachedProperties(dirty: dirty)
+            }
+            if let context {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            MediaStateService.shared.postMediaStateChanged(itemID: pid)
+        }
+    }
+
+    /// Sync variant for background/batch callers that need derived caches
+    /// updated before the next await (imports, migrations, heal passes).
+    @MainActor
+    func commitChangeNow(dirty: CacheDirtyFlags = .all) {
         syncCachedProperties(dirty: dirty)
         if let context = modelContext {
             SaveCoordinator.shared.requestSave(context)
@@ -113,29 +133,43 @@ final class MediaItem: Identifiable {
 
     var taste: TasteValue? {
         get { TasteValue(rawValue: tasteValue) }
-        set { 
+        set {
             let old = tasteValue
             tasteValue = newValue?.rawValue ?? "None"
             if old != tasteValue {
                 lastInteractionDate = Date()
-                syncCachedProperties(dirty: [.badge, .searchable])
+                // Taste is not an input to badge or searchable text — skip both.
+                // Setter is nonisolated; capture for MainActor hop like markLoadedEpisodesAsWatched.
+                nonisolated(unsafe) let item = self
+                nonisolated(unsafe) let context = modelContext
+                let pid = persistentModelID
+                Task { @MainActor in
+                    // Guard container teardown: deferred Task must not save a dead context.
+                    guard item.modelContext != nil, let context else { return }
+                    item.syncCachedProperties(dirty: [])
+                    SaveCoordinator.shared.requestSave(context)
+                    MediaStateService.shared.postMediaStateChanged(itemID: pid)
+                }
             }
         }
     }
     
     var state: MediaState? {
         get { MediaState(rawValue: stateValue) }
-        set { 
+        set {
             let old = stateValue
+            let previousStateChangeDate = lastStateChangeDate
             stateValue = newValue?.rawValue ?? "Wishlist"
             if old != stateValue {
+                let oldState = MediaState(rawValue: old)
+                let newState = newValue ?? .wishlist
                 lastInteractionDate = Date()
                 lastStateChangeDate = Date()
-                
+
                 if typeValue == "TV Show" {
                     BadgeEngine.invalidateScan(for: persistentModelID)
                 }
-                
+
                 if typeValue == "TV Show" && stateValue == "Completed" {
                     if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoMarkEpisodesWatched.rawValue) {
                         markLoadedEpisodesAsWatched()
@@ -148,9 +182,61 @@ final class MediaItem: Identifiable {
                         }
                     }
                 }
-                
-                syncCachedProperties(dirty: [.badge, .searchable])
+
+                // Defer derived recompute + save + broadcast off the state-change frame.
+                // Setter is nonisolated; capture for MainActor hop.
+                nonisolated(unsafe) let item = self
+                nonisolated(unsafe) let context = modelContext
+                if let context {
+                    WatchHistoryCoordinator.handleStateChange(
+                        item: item,
+                        from: oldState,
+                        to: newState,
+                        context: context,
+                        legacyCompletedAt: previousStateChangeDate
+                    )
+                }
+                let pid = persistentModelID
+                Task { @MainActor in
+                    guard item.modelContext != nil, let context else { return }
+                    item.syncCachedProperties(dirty: [.badge, .searchable])
+                    SaveCoordinator.shared.requestSave(context)
+                    MediaStateService.shared.postMediaStateChanged(itemID: pid)
+                }
             }
+        }
+    }
+
+    func applyAutomaticState(_ newState: MediaState, now: Date = Date()) {
+        let oldValue = stateValue
+        let newValue = newState.rawValue
+        guard oldValue != newValue else { return }
+
+        let oldState = MediaState(rawValue: oldValue)
+        stateValue = newValue
+        lastInteractionDate = now
+        lastStateChangeDate = now
+
+        if typeValue == "TV Show" {
+            BadgeEngine.invalidateScan(for: persistentModelID)
+        }
+
+        nonisolated(unsafe) let item = self
+        nonisolated(unsafe) let context = modelContext
+        if let context {
+            WatchHistoryCoordinator.handleStateChange(
+                item: item,
+                from: oldState,
+                to: newState,
+                context: context,
+                now: now
+            )
+        }
+        let pid = persistentModelID
+        Task { @MainActor in
+            guard item.modelContext != nil, let context else { return }
+            SaveCoordinator.shared.requestSave(context)
+            MediaStateService.shared.postMediaStateChanged(itemID: pid)
         }
     }
 
@@ -176,8 +262,18 @@ final class MediaItem: Identifiable {
         if didChange {
             tasteValue = newTaste.rawValue
             lastInteractionDate = Date()
-            commitChange(dirty: [.badge, .searchable])
-            MediaStateService.shared.postTasteChanged()
+            // Taste is not an input to badge/searchable — skip both.
+            // postTasteChanged (cache clears) also runs off this frame.
+            // Weak context so deferred Task can't outlive the container.
+            let context = modelContext
+            let pid = persistentModelID
+            Task { @MainActor [weak self, weak context] in
+                guard let self, self.modelContext != nil, let context else { return }
+                self.syncCachedProperties(dirty: [])
+                SaveCoordinator.shared.requestSave(context)
+                MediaStateService.shared.postMediaStateChanged(itemID: pid)
+                MediaStateService.shared.postTasteChanged()
+            }
         }
     }
 
