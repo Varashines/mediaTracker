@@ -48,13 +48,6 @@ struct LibraryGridSection: View {
                     }
                 }
             } else {
-                if selectedCategory == .all && searchText.isEmpty
-                    && (selectedNetworks?.isEmpty ?? true)
-                {
-                    RecentlyAddedRow(
-                        items: recentlyAdded, namespace: namespace)
-                }
-
                 if viewModel.filter.currentGroupBy == .none {
                     MainMediaGrid(
                         items: items,

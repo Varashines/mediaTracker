@@ -317,7 +317,7 @@ struct DetailView: View {
                     )
             }
         }
-        .animation(AppTheme.Animation.springSnappy, value: showSharePreview)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: showSharePreview)
         .toolbar { detailToolbar }
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         .toolbarRole(.editor)
@@ -517,7 +517,7 @@ struct DetailView: View {
                             }
                     }
                     .padding(.top, 4)
-                    .animation(.easeInOut(duration: 0.2), value: castKey)
+                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.easeInOut), value: castKey)
                 }
                 .onChange(of: castScope) { _, newScope in
                     if newScope == .season { ensureSeasonCastLoaded() }
