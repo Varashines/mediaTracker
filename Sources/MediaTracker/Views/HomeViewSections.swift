@@ -54,10 +54,10 @@ struct HomeViewSections: View {
                         GeometryReader { proxy in
                             if let activePillAnchor {
                                 focusConnector(in: proxy, anchor: activePillAnchor)
+                                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: activePillAnchor)
                             }
                         }
                     }
-                    .animation(AppTheme.Animation.adaptive(AppTheme.Animation.springSnappy), value: activePillAnchor)
                     .padding(.horizontal, AppTheme.Spacing.large)
                     .transition(
                         AppThemeCoordinator.isReducingVisualEffects
