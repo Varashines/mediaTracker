@@ -26,7 +26,6 @@ struct HomeViewSections: View {
     }
 
     @State private var visibleSection: HomeSection? = nil
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
@@ -42,11 +41,11 @@ struct HomeViewSections: View {
                     .padding(.vertical, AppTheme.Spacing.medium)
                     .background {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                            .fill(AppTheme.Colors.surfaceMuted(for: colorScheme).opacity(colorScheme == .dark ? 0.42 : 0.5))
+                            .fill(AppTheme.Colors.accent.opacity(0.07))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                            .stroke(AppTheme.Colors.accent.opacity(0.14), lineWidth: 0.6)
+                            .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
                     }
                     .transition(.opacity)
             }
