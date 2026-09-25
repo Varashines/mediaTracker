@@ -37,7 +37,6 @@ struct HomeViewSections: View {
 
             if visibleSection != nil {
                 selectedSectionContent
-                    .padding(.horizontal, AppTheme.Spacing.large)
                     .padding(.vertical, AppTheme.Spacing.medium)
                     .background {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
@@ -47,6 +46,7 @@ struct HomeViewSections: View {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                             .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
                     }
+                    .padding(.horizontal, AppTheme.Spacing.large)
                     .transition(.opacity)
             }
 
