@@ -122,7 +122,9 @@ struct AppTheme {
         static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
         static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
-        static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+         static let gridSettle: SwiftUI.Animation = .spring(response: 0.28, dampingFraction: 0.86)
+
         @MainActor
         static func adaptive(_ animation: SwiftUI.Animation) -> SwiftUI.Animation? {
             AppThemeCoordinator.isReducingVisualEffects ? nil : animation

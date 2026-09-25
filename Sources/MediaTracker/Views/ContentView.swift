@@ -492,7 +492,7 @@ struct LibraryDetailView: View {
                 await MainActor.run {
                     viewModel.pagination.totalItemCount = result.totalCount
                     viewModel.pagination.isInitialLoad = false
-                    AppTheme.Animation.with(AppTheme.Animation.easeInOut) {
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
                         viewModel.display.applyFilterResult(result)
                     }
                 }
@@ -548,7 +548,7 @@ struct LibraryDetailView: View {
                 guard !Task.isCancelled else { return }
 
                 await MainActor.run {
-                    AppTheme.Animation.with(AppTheme.Animation.easeInOut) {
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
                         viewModel.display.displayedItems.append(contentsOf: result.displayed)
                     }
                     viewModel.pagination.isLoadingMore = false
@@ -664,7 +664,7 @@ struct LibraryDetailView: View {
                 )
 
                 await MainActor.run {
-                    AppTheme.Animation.with(AppTheme.Animation.easeInOut) {
+                    AppTheme.Animation.with(AppTheme.Animation.gridSettle) {
                         viewModel.display.applyUpdate(updatedMetadata, id: id)
                     }
                     // Compute mood from the post-update list — the pre-update
