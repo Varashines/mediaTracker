@@ -141,7 +141,7 @@ struct ForYouCompactCard: View, Equatable {
             if fast { isHovered = false }
         }
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.animation(.easeInOut(duration: 0.14), value: isHovered)
+            $0.animation(AppTheme.Animation.hoverFade, value: isHovered)
         }
         .accessibilityLabel(metadata.title)
         .accessibilityAddTraits(.isButton)

@@ -74,7 +74,7 @@ struct MoodCaptureBanner: View {
                         .opacity(appears || AppThemeCoordinator.isReducingVisualEffects ? 1 : 0)
                         .offset(y: appears || AppThemeCoordinator.isReducingVisualEffects ? 0 : 12)
                         .if(!AppThemeCoordinator.isReducingVisualEffects) {
-                            $0.animation(.spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04), value: appears)
+                            $0.animation(AppTheme.Animation.stagger(index), value: appears)
                         }
                 }
             }
@@ -100,7 +100,7 @@ struct MoodCaptureBanner: View {
         .padding(.horizontal, AppTheme.Spacing.pageMargin)
         .offset(y: appears ? 0 : -30)
         .opacity(appears ? 1 : 0)
-        .animation(.spring(response: 0.45, dampingFraction: 0.75), value: appears)
+        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.bannerSettle), value: appears)
         .onAppear {
             appears = true
             dismissTask = Task { @MainActor in

@@ -650,7 +650,7 @@ private struct CastCrewCell: View {
                     .background(Capsule().fill(.green.opacity(0.85)))
                     .padding(6)
                     .opacity(isHovered ? 0 : 1)
-                    .animation(.easeOut(duration: 0.15), value: isHovered)
+                    .animation(AppTheme.Animation.fade, value: isHovered)
             }
         }
         .contentShape(Rectangle())

@@ -214,7 +214,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
     private var refreshButton: some View {
         Button {
             FeedbackManager.shared.trigger(.click)
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
+            AppTheme.Animation.with(AppTheme.Animation.toolbarPop) {
                 refreshRotation += 360
             }
             onRefresh()

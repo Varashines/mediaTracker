@@ -81,6 +81,11 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     private let memoryCache = NSCache<NSString, CachedImageWrapper>()
     private var cacheKeysByURL: [String: Set<String>] = [:]
+    /// Insertion order for `cacheKeysByURL`, so the reverse index can be capped.
+    /// Without this the dictionary grows for every URL ever requested in a
+    /// session, even after NSCache has evicted the decoded image.
+    private var trackedURLOrder: [String] = []
+    private let maxTrackedURLs = 2000
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
     private var prewarmTasks: [UUID: Task<Void, Never>] = [:]
     private var lowPriorityPrewarmIDs: Set<UUID> = []
@@ -115,7 +120,24 @@ class ImageCache: NSObject, NSCacheDelegate {
     func clearMemoryCache() {
         cancelPrewarming()
         cacheKeysByURL.removeAll()
+        trackedURLOrder.removeAll()
         memoryCache.removeAllObjects()
+    }
+
+    /// Records a cache key for `url`, capping the reverse index so a long session
+    /// can't accumulate stale entries. Oldest URLs are dropped first; their
+    /// decoded images are left to NSCache's own limits.
+    private func trackCacheKey(_ cacheKey: String, forKey key: String) {
+        if cacheKeysByURL[key] == nil {
+            trackedURLOrder.append(key)
+        }
+        cacheKeysByURL[key, default: []].insert(cacheKey)
+        guard trackedURLOrder.count > maxTrackedURLs else { return }
+        let overflow = trackedURLOrder.count - maxTrackedURLs
+        for stale in trackedURLOrder.prefix(overflow) {
+            cacheKeysByURL[stale] = nil
+        }
+        trackedURLOrder.removeFirst(overflow)
     }
     
     func clearDiskIndex() {
@@ -134,6 +156,7 @@ class ImageCache: NSObject, NSCacheDelegate {
             memoryCache.removeObject(forKey: key as NSString)
         }
         cacheKeysByURL[url] = nil
+        trackedURLOrder.removeAll { $0 == url }
         if let nsURL = URL(string: url) {
             let request = URLRequest(url: nsURL)
             URLCache.shared.removeCachedResponse(for: request)
@@ -154,6 +177,7 @@ class ImageCache: NSObject, NSCacheDelegate {
             self.cacheKeysByURL[key]?.remove(cacheKey)
             if self.cacheKeysByURL[key]?.isEmpty == true {
                 self.cacheKeysByURL[key] = nil
+                self.trackedURLOrder.removeAll { $0 == key }
             }
         }
     }
@@ -237,7 +261,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
         let cacheKey = generateCacheKey(key: key, size: targetSize)
-        cacheKeysByURL[key, default: []].insert(cacheKey)
+        trackCacheKey(cacheKey, forKey: key)
         
         if let cached = checkMemoryCache(forKey: key, targetSize: targetSize) {
             return cached

@@ -84,7 +84,7 @@ struct SpectrumView: View {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: hoveredItem?.id)
+            .animation(AppTheme.Animation.adaptive(AppTheme.Animation.hoverFade), value: hoveredItem?.id)
         }
     }
 
@@ -113,10 +113,10 @@ struct SpectrumView: View {
                             .fill(isHov ? bar.color : bar.color.opacity(0.8))
                             .frame(height: isHov ? 62 : 46)
                             .frame(minWidth: 1.5, maxWidth: 3.5)
-                            .animation(.easeInOut(duration: 0.1), value: isHov)
+                            .animation(AppTheme.Animation.adaptive(AppTheme.Animation.hoverFade), value: isHov)
                             .contentShape(Rectangle())
                             .onHover { hovering in
-                                withAnimation(.easeInOut(duration: 0.12)) {
+                                AppTheme.Animation.with(AppTheme.Animation.hoverFade) {
                                     hoveredItem = hovering ? bar.item : nil
                                     if hovering { isScanning = true }
                                     else if hoveredItem == nil { isScanning = false }
@@ -149,7 +149,7 @@ struct SpectrumView: View {
                             .offset(x: scanPosition * geo.size.width)
                             .onAppear {
                                 scanPosition = 0
-                                withAnimation(.linear(duration: 2.2).repeatForever(autoreverses: true)) {
+                                AppTheme.Animation.with(AppTheme.Animation.pulseLoop) {
                                     scanPosition = 1.0
                                 }
                             }

@@ -307,7 +307,7 @@ struct ShimmeringModifier: ViewModifier {
                 )
                 .clipped()
                 .onAppear {
-                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    AppTheme.Animation.with(AppTheme.Animation.shimmerLoop) {
                         phase = 1
                     }
                 }
@@ -392,7 +392,7 @@ struct SkeletonPulseModifier: ViewModifier {
         content
             .opacity(isAnimating ? 0.5 : 0.85)
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                AppTheme.Animation.with(AppTheme.Animation.breatheLoop) {
                     isAnimating = true
                 }
             }
@@ -430,7 +430,7 @@ extension View {
         self
             .toolbar(isSleeping ? .hidden : .visible, for: .windowToolbar)
             .toolbarBackgroundVisibility(.automatic, for: .windowToolbar)
-            .animation(.easeInOut(duration: 0.6), value: isSleeping)
+            .animation(AppTheme.Animation.sleepTransition, value: isSleeping)
     }
 }
 struct AdaptiveBackgroundModifier: ViewModifier {
