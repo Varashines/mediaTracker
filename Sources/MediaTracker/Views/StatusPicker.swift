@@ -4,6 +4,8 @@ import SwiftData
 struct StatusPicker: View {
     @Bindable var item: MediaItem
     var onChange: ((MediaState?) -> Void)?
+    @Environment(\.modelContext) private var modelContext
+    @Query private var watchCycles: [WatchCycle]
     @Environment(\.colorScheme) var colorScheme
     @State private var isHovered = false
 
@@ -28,6 +30,23 @@ struct StatusPicker: View {
                         Label(state.displayName, systemImage: state.iconName)
                     }
                 }
+                if hasPausedRewatch {
+                    Divider()
+                    Button {
+                        guard item.modelContext != nil,
+                              WatchHistoryCoordinator.resumePausedRewatch(item: item, context: modelContext) != nil else { return }
+                        item.syncCachedProperties(dirty: [.progress, .badge])
+                        SaveCoordinator.shared.requestSave(modelContext)
+                        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
+                        FeedbackManager.shared.trigger(.stateChange)
+                    } label: {
+                        Label(
+                            hasActiveCycle ? "Finish current cycle to resume" : "Resume Paused Rewatch",
+                            systemImage: "arrow.clockwise"
+                        )
+                    }
+                    .disabled(hasActiveCycle)
+                }
             } label: {
                 HStack(spacing: AppTheme.Spacing.mini) {
                     Image(systemName: currentState.iconName)
@@ -43,12 +62,10 @@ struct StatusPicker: View {
                 .padding(.vertical, AppTheme.Spacing.mini)
                 .foregroundStyle(accent.readableForeground)
                 .background {
+                    // Flat accent fill — material blur on the status capsule
+                    // was unnecessary GPU work on the Detail header.
                     Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule()
-                                .fill(accent.opacity(colorScheme == .dark ? 0.85 : 0.9))
-                        )
+                        .fill(accent.opacity(colorScheme == .dark ? 0.85 : 0.9))
                 }
                 .overlay {
                     Capsule()
@@ -66,6 +83,16 @@ struct StatusPicker: View {
         }
     }
     
+    private var hasActiveCycle: Bool {
+        watchCycles.contains { $0.mediaID == item.id && $0.state == .active }
+    }
+
+    private var hasPausedRewatch: Bool {
+        watchCycles.contains {
+            $0.mediaID == item.id && $0.state == .paused && $0.isRewatch
+        }
+    }
+
     private var availableStates: [MediaState] {
         guard item.modelContext != nil else { return [] }
         return MediaItem.availableStates(for: item.type ?? .movie, progress: item.storedProgress)

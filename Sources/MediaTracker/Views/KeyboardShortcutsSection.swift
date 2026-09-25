@@ -15,7 +15,7 @@ struct KeyboardShortcutsSection: View {
                     shortcutRow(key: "7", modifiers: .command, label: "Smart Hub", showDivider: true)
                     shortcutRow(key: "F", modifiers: .command, label: "Search", showDivider: true)
                     shortcutRow(key: .leftArrow, modifiers: .command, label: "Back / Close Collection", showDivider: true)
-                    shortcutRow(key: .escape, modifiers: [], label: "Dismiss / Clear Search", showDivider: false)
+                    shortcutRow(key: .escape, modifiers: [], label: "Search: Clear Query, Then Exit + Restore View", showDivider: false)
                 }
             }
 
@@ -43,7 +43,7 @@ struct KeyboardShortcutsSection: View {
                 VStack(spacing: 0) {
                     shortcutRow(key: "[", modifiers: .command, label: "Calendar: Previous Month", showDivider: true)
                     shortcutRow(key: "]", modifiers: .command, label: "Calendar: Next Month", showDivider: true)
-                    shortcutRow(key: .escape, modifiers: [], label: "Calendar: Deselect Day / Close Overlays", showDivider: false)
+                    shortcutRow(key: .escape, modifiers: [], label: "Calendar: Deselect Day (when search closed)", showDivider: false)
                 }
             }
 

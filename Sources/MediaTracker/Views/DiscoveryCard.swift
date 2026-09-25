@@ -42,12 +42,14 @@ struct DiscoveryCard: View {
                 }
             }
             .frame(height: style == .logo ? 90 : 60)
-            .compositingGroupIfNeeded()
         }
         .buttonStyle(.plain)
+        // Shadow/scale only while not reducing effects. Must be unconditionally
+        // present (not gated on isHovered) so SwiftUI can interpolate hover.
+        // Gating the whole modifier made hover pop with no animation.
         .if(!AppThemeCoordinator.isReducingVisualEffects) { view in
             view.scaleEffect(isHovered ? 1.02 : 1.0)
-                .shadow(color: isHovered ? themeColor.opacity(0.12) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+                .shadow(color: isHovered ? themeColor.opacity(colorScheme == .dark ? 0.12 : 0.15) : .clear, radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
                 .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
         .onHover { isHovered = $0 }

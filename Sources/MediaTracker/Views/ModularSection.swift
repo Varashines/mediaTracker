@@ -29,13 +29,10 @@ struct ModularSection<Content: View>: View {
                 .padding(.horizontal, AppTheme.Spacing.small)
                 .padding(.vertical, AppTheme.Spacing.micro)
                 .background {
-                    if AppThemeCoordinator.isReducingVisualEffects {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                            .fill(AppTheme.Colors.neutralBackground(for: colorScheme))
-                    } else {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                            .fill(.ultraThinMaterial)
-                    }
+                    // Flat fill — the title pill's material blur was pure GPU
+                    // cost on every Detail/Settings section header.
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                        .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
                 }
                 Spacer()
             }

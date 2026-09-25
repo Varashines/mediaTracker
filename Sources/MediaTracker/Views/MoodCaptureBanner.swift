@@ -39,14 +39,9 @@ struct MoodCaptureBanner: View {
 
                 Button {
                     dismissTask?.cancel()
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        appears = false
-                    }
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                        guard !Task.isCancelled else { return }
-                        onDismiss()
-                    }
+                    // Parent owns the exit transition — call out immediately so
+                    // there's no internal sleep + parent-transition double-fire.
+                    onDismiss()
                 } label: {
                     HStack(spacing: 3) {
                         Text("Skip")
@@ -94,9 +89,7 @@ struct MoodCaptureBanner: View {
                 }
 
                 RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                    .fill(AppThemeCoordinator.isReducingVisualEffects
-                        ? AnyShapeStyle(AppTheme.Colors.background(for: colorScheme))
-                        : AnyShapeStyle(.ultraThinMaterial))
+                    .fill(AppTheme.Colors.background(for: colorScheme))
             }
         )
         .overlay(
@@ -113,11 +106,6 @@ struct MoodCaptureBanner: View {
             dismissTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    appears = false
-                }
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
                 onDismiss()
             }
         }
@@ -129,14 +117,9 @@ struct MoodCaptureBanner: View {
 
         return Button {
             dismissTask?.cancel()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
-                appears = false
-            }
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
-                onSelectMood(mood)
-            }
+            // Apply selection + let parent animate removal in the same tick —
+            // no 300ms delay racing the parent's `.transition`.
+            onSelectMood(mood)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: mood.emoji)
@@ -164,9 +147,9 @@ struct MoodCaptureBanner: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .scaleEffect(isHovered ? 1.04 : 1.0)
         .shadow(color: isHovered ? mood.color.opacity(0.2) : .clear, radius: 6, y: 3)
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { hovering in
             hoveredMood = hovering ? mood : nil
         }

@@ -3,18 +3,16 @@ import SwiftUI
 struct ScrollingHStack<Content: View>: View {
     let space: String
     var spacing: CGFloat = AppTheme.Spacing.large
-    @Binding var scrollProgress: Double
-    @Binding var isFastScrolling: Bool
+    var state: CarouselScrollState
     @ViewBuilder let content: () -> Content
 
-    @State private var contentWidth: CGFloat = 0
-    @State private var containerWidth: CGFloat = 0
     @State private var lastMinX: CGFloat = 0
-    @State private var lastVelocityCheck = Date()
+    @State private var lastTimestamp: Date = .distantPast
     @State private var scrollTask: Task<Void, Never>?
 
-    private let minSampleInterval: TimeInterval = 0.05
     private let velocityThreshold: CGFloat = 30
+    /// Progress-bar updates only — higher threshold = fewer observation pings.
+    private let progressDeltaThreshold: Double = 0.02
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -23,54 +21,41 @@ struct ScrollingHStack<Content: View>: View {
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.vertical, AppTheme.Spacing.medium - 1)
-            .background(
-                GeometryReader { geo in
-                    let minX = geo.frame(in: .named(space)).minX
-                    Color.clear
-                        .preference(key: ScrollOffsetKey.self, value: [space: minX])
-                        .onAppear { contentWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, nv in contentWidth = nv }
-                }
-            )
         }
         .scrollBounceBehavior(.basedOnSize)
-        .coordinateSpace(name: space)
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { containerWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { _, nv in containerWidth = nv }
-            }
-        )
-        .onPreferenceChange(ScrollOffsetKey.self) { dict in
-            guard let minX = dict[space] else { return }
-            let maxScroll = max(1, contentWidth - containerWidth)
-            let newProgress = min(1.0, Double(max(0, -minX) / maxScroll))
-            if newProgress == 0.0 || newProgress == 1.0 || abs(scrollProgress - newProgress) > 0.015 {
-                scrollProgress = newProgress
+        // Disable clip only while idle (cards can bleed slightly); during a
+        // fast-scroll gesture clipping is cheaper than per-frame clip revalidation.
+        .scrollClipDisabled(!state.isFastScrolling)
+        .onScrollGeometryChange(for: ScrollGeometry.self) { geo in
+            geo
+        } action: { _, geo in
+            let maxScroll = max(1, geo.contentSize.width - geo.containerSize.width)
+            // contentOffset.x grows from 0 → positive as you scroll right.
+            // (The old minX preference went negative — do not negate here.)
+            let offsetX = geo.contentOffset.x
+            let newProgress = min(1.0, Double(max(0, offsetX) / maxScroll))
+            if newProgress == 0.0 || newProgress == 1.0 || abs(state.progress - newProgress) > progressDeltaThreshold {
+                state.progress = newProgress
             }
 
             let now = Date()
-            let dt = now.timeIntervalSince(lastVelocityCheck)
-            guard dt > minSampleInterval else { return }
-            lastVelocityCheck = now
+            let dt = max(now.timeIntervalSince(lastTimestamp), 1.0 / 120.0)
+            let velocity = abs(offsetX - lastMinX) / CGFloat(dt)
+            lastMinX = offsetX
+            lastTimestamp = now
 
-            let velocity = abs(minX - lastMinX) / CGFloat(dt)
-            lastMinX = minX
-
-            if velocity > velocityThreshold && !isFastScrolling {
-                isFastScrolling = true
+            if velocity > velocityThreshold && !state.isFastScrolling {
+                state.isFastScrolling = true
             }
 
+            // Coalesce clear: one Task per gesture window; no animation on clear
+            // (withAnimation on fast-scroll clear re-renders header + env children).
             scrollTask?.cancel()
             scrollTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 150_000_000)
                 guard !Task.isCancelled else { return }
-                withAnimation(AppTheme.Animation.easeInOut) {
-                    isFastScrolling = false
-                }
+                state.isFastScrolling = false
             }
         }
-        .scrollClipDisabled()
     }
 }

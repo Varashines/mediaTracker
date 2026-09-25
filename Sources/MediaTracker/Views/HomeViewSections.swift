@@ -13,7 +13,7 @@ struct HomeViewSections: View {
     let trendingMovies: [MediaSearchResult]
     let trendingShows: [MediaSearchResult]
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
+    @Environment(\.isFastScrolling) private var isFastScrolling
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
@@ -26,22 +26,13 @@ struct HomeViewSections: View {
     }
 
     @State private var visibleSection: HomeSection? = nil
-    @State private var hoveredPill: HomeSection? = nil
-    @Namespace private var pillNamespace
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            // 0. SECTION TOGGLES
-            ViewThatFits(in: .horizontal) {
-                sectionButtons
-                    .frame(maxWidth: .infinity)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    sectionButtons
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            }
+            SectionPicker(
+                visibleSection: $visibleSection,
+                showsPickOfTheDay: !pickOfTheDay.isEmpty
+            )
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
 
             if visibleSection == .recentlyWatched {
@@ -53,7 +44,7 @@ struct HomeViewSections: View {
             if visibleSection == .forYou {
                 ForYouCarousel(
                     items: recommendations, namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero,
+                    onSelect: onSelectHero,
                     isLoading: !recommendationsLoaded,
                     onDiscover: { onCategorySelected(.discover) }
                 )
@@ -69,7 +60,7 @@ struct HomeViewSections: View {
             if visibleSection == .pickOfTheDay {
                 PickOfDayCarousel(
                     items: pickOfTheDay, namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                    onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.opacity)
@@ -110,7 +101,7 @@ struct HomeViewSections: View {
             // 1. CONTINUE WATCHING
             ContinueWatchingCarousel(
                 items: homeContinueWatching, namespace: namespace,
-                isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                onSelect: onSelectHero
             ) {
                 onCategorySelected(.discover)
             }
@@ -121,7 +112,7 @@ struct HomeViewSections: View {
             if !comingSoon.isEmpty {
                 FeaturedUpcomingCarousel(
                     items: Array(comingSoon.prefix(20)), namespace: namespace,
-                    isFastScrolling: isFastScrolling, onSelect: onSelectHero
+                    onSelect: onSelectHero
                 )
                 .padding(.bottom, AppTheme.Spacing.small)
             }
@@ -136,10 +127,10 @@ struct HomeViewSections: View {
                     scrollSpace: "RA_Scroll",
                     items: Array(recentlyAdded.prefix(20)),
                     onSelect: onSelectHero
-                ) { metadata, fast in
+                ) { metadata in
                     MediaThumbnailView(
                         metadata: metadata, mode: .grid,
-                        namespace: namespace, isFastScrolling: isFastScrolling || fast)
+                        namespace: namespace)
                 }
                 .padding(.bottom, AppTheme.Spacing.small)
             }
@@ -147,89 +138,109 @@ struct HomeViewSections: View {
         .padding(.top, AppTheme.Spacing.medium)
     }
 
-    @ViewBuilder
-    private var sectionButtons: some View {
-        HStack(spacing: AppTheme.Spacing.tiny) {
-            Spacer(minLength: 0)
-            sectionButton(
-                section: .forYou,
-                icon: "sparkles",
-                label: "For You",
-                isActive: visibleSection == .forYou
-            )
-            sectionButton(
-                section: .recentlyWatched,
-                icon: "clock.fill",
-                label: "Recently Watched",
-                isActive: visibleSection == .recentlyWatched
-            )
-            if !pickOfTheDay.isEmpty {
-                sectionButton(
-                    section: .pickOfTheDay,
-                    icon: "star.fill",
-                    label: "Pick of the Day",
-                    isActive: visibleSection == .pickOfTheDay
-                )
-            }
-            sectionButton(
-                section: .trendingMovies,
-                icon: "flame.fill",
-                label: "Trending Movies",
-                isActive: visibleSection == .trendingMovies
-            )
-            sectionButton(
-                section: .trendingShows,
-                icon: "flame.fill",
-                label: "Trending Shows",
-                isActive: visibleSection == .trendingShows
-            )
-            Spacer(minLength: 0)
-        }
-    }
+    private struct SectionPicker: View {
+        @Binding var visibleSection: HomeSection?
+        let showsPickOfTheDay: Bool
+        @State private var hoveredPill: HomeSection?
+        @Namespace private var pillNamespace
+        @Environment(\.colorScheme) private var scheme
 
-    private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
-        Button {
-            withAnimation(AppTheme.Animation.springSnappy) {
-                if visibleSection == section {
-                    visibleSection = nil
-                } else {
-                    visibleSection = section
+        var body: some View {
+            ViewThatFits(in: .horizontal) {
+                sectionButtons
+                    .frame(maxWidth: .infinity)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    sectionButtons
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
-        } label: {
-            HStack(spacing: AppTheme.Spacing.mini) {
-                Image(systemName: icon)
-                    .font(AppTheme.Font.caption2)
-                Text(label)
-                    .font(AppTheme.Font.caption)
+        }
+
+        @ViewBuilder
+        private var sectionButtons: some View {
+            HStack(spacing: AppTheme.Spacing.tiny) {
+                Spacer(minLength: 0)
+                sectionButton(
+                    section: .forYou,
+                    icon: "sparkles",
+                    label: "For You",
+                    isActive: visibleSection == .forYou
+                )
+                sectionButton(
+                    section: .recentlyWatched,
+                    icon: "clock.fill",
+                    label: "Recently Watched",
+                    isActive: visibleSection == .recentlyWatched
+                )
+                if showsPickOfTheDay {
+                    sectionButton(
+                        section: .pickOfTheDay,
+                        icon: "star.fill",
+                        label: "Pick of the Day",
+                        isActive: visibleSection == .pickOfTheDay
+                    )
+                }
+                sectionButton(
+                    section: .trendingMovies,
+                    icon: "flame.fill",
+                    label: "Trending Movies",
+                    isActive: visibleSection == .trendingMovies
+                )
+                sectionButton(
+                    section: .trendingShows,
+                    icon: "flame.fill",
+                    label: "Trending Shows",
+                    isActive: visibleSection == .trendingShows
+                )
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, AppTheme.Spacing.small)
-            .padding(.vertical, AppTheme.Spacing.mini)
-            .background {
-                Capsule()
-                    .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? AppTheme.Colors.surfaceMuted(for: scheme) : AppTheme.Colors.surfaceSubtle(for: scheme)))
-                    .overlay {
-                        if isActive {
-                            Capsule()
-                                .fill(AppTheme.Colors.accent)
-                                .matchedGeometryEffect(id: "homePill", in: pillNamespace)
-                        }
+        }
+
+        private func sectionButton(section: HomeSection, icon: String, label: String, isActive: Bool) -> some View {
+            Button {
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    if visibleSection == section {
+                        visibleSection = nil
+                    } else {
+                        visibleSection = section
                     }
+                }
+            } label: {
+                HStack(spacing: AppTheme.Spacing.mini) {
+                    Image(systemName: icon)
+                        .font(AppTheme.Font.caption2)
+                    Text(label)
+                        .font(AppTheme.Font.caption)
+                }
+                .padding(.horizontal, AppTheme.Spacing.small)
+                .padding(.vertical, AppTheme.Spacing.mini)
+                .background {
+                    Capsule()
+                        .fill(isActive ? AppTheme.Colors.accent : (hoveredPill == section ? AppTheme.Colors.surfaceMuted(for: scheme) : AppTheme.Colors.surfaceSubtle(for: scheme)))
+                        .overlay {
+                            if isActive {
+                                Capsule()
+                                    .fill(AppTheme.Colors.accent)
+                                    .matchedGeometryEffect(id: "homePill", in: pillNamespace)
+                            }
+                        }
+                }
+                .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
+                .foregroundStyle(isActive ? AppTheme.Colors.accent.readableForeground : .primary)
+                .clipShape(Capsule())
+                .contentShape(Capsule())
             }
-            .shadow(color: isActive ? AppTheme.Colors.accent.opacity(0.25) : .clear, radius: 4, y: 2)
-            .foregroundStyle(isActive ? AppTheme.Colors.accent.readableForeground : .primary)
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(!isActive && hoveredPill == section ? 1.03 : 1.0)
-        .animation(AppTheme.Animation.springSnappy, value: hoveredPill)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.springSnappy) {
-                hoveredPill = hovering ? section : nil
+            .buttonStyle(.plain)
+            .scaleEffect(!isActive && hoveredPill == section ? 1.03 : 1.0)
+            .animation(AppTheme.Animation.springSnappy, value: hoveredPill)
+            .onHover { hovering in
+                withAnimation(AppTheme.Animation.springSnappy) {
+                    hoveredPill = hovering ? section : nil
+                }
             }
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

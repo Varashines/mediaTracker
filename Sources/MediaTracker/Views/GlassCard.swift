@@ -18,7 +18,8 @@ struct GlassCard<Content: View>: View {
         }
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                // Reduced-effects mode swaps only the material fill for a flat card fill.
+                // Material is required for overlays (synopsis reader); dense
+                // section cards still pay the blur, but reduced-effects falls back.
                 .fill(
                     AppThemeCoordinator.isReducingVisualEffects
                         ? AnyShapeStyle(AppTheme.Colors.cardFill(for: scheme))

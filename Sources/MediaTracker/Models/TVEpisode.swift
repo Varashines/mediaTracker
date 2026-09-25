@@ -31,44 +31,88 @@ final class TVEpisode {
     @Attribute(.unique) var uniqueID: String? = nil
     var season: TVSeason?
 
-    func markWatched(_ watched: Bool) {
-        if self.isWatched != watched {
-            self.isWatched = watched
-            if watched {
-                self.lastWatchedDate = Date()
-                self.watchedDate = Date()
-            } else {
-                self.lastWatchedDate = nil
-                self.watchedDate = nil
+    func markWatched(_ watched: Bool, recordHistory: Bool = true) {
+        guard self.isWatched != watched else { return }
+        applyWatchedState(
+            watched,
+            date: watched ? Date() : nil,
+            updatesInteractionDate: true
+        )
+        if recordHistory {
+            scheduleWatchHistoryMutation(watched: watched)
+        }
+    }
+
+    func applyImportedWatchState(watchedAt: Date?) {
+        if isWatched {
+            if let watchedAt {
+                lastWatchedDate = watchedAt
+                self.watchedDate = watchedAt
             }
-            
-            let delta = watched ? 1 : -1
-            season?.watchedEpisodesCount += delta
-            
-            if let tv = season?.tvShowDetails {
-                // Only count non-Specials episodes in show-level watched count
-                // (matches calculateProgress which excludes Season 0)
-                if season?.seasonNumber ?? 0 > 0 {
-                    tv.watchedEpisodesCount += delta
-                }
-                
-                // Update total watched runtime incrementally on the MediaItem
-                if let item = tv.item {
-                    let epRuntime = self.runtime ?? 0
-                    let currentRuntime = item.cachedRuntime ?? 0
-                    item.cachedRuntime = max(0, currentRuntime + (watched ? epRuntime : -epRuntime))
-                    if watched {
-                        item.lastInteractionDate = Date()
-                    }
-                }
-                
-                // Only adjust remaining count if the episode has already aired
-                let now = Date()
-                if let airDate = airDateValue, airDate <= now {
-                    let oldRemaining = tv.remainingEpisodesCount ?? 0
-                    tv.remainingEpisodesCount = max(0, oldRemaining - delta)
+            return
+        }
+        applyWatchedState(true, date: watchedAt, updatesInteractionDate: false)
+    }
+
+    func restoreWatchedProjection(from date: Date?) {
+        guard !isWatched else { return }
+        applyWatchedState(true, date: date, updatesInteractionDate: false)
+    }
+
+    private func applyWatchedState(_ watched: Bool, date: Date?, updatesInteractionDate: Bool) {
+        self.isWatched = watched
+        if watched {
+            self.lastWatchedDate = date
+            self.watchedDate = date
+        } else {
+            self.lastWatchedDate = nil
+            self.watchedDate = nil
+        }
+
+        let delta = watched ? 1 : -1
+        season?.watchedEpisodesCount += delta
+
+        if let tv = season?.tvShowDetails {
+            if season?.seasonNumber ?? 0 > 0 {
+                tv.watchedEpisodesCount += delta
+            }
+
+            if let item = tv.item {
+                let epRuntime = self.runtime ?? 0
+                let currentRuntime = item.cachedRuntime ?? 0
+                item.cachedRuntime = max(0, currentRuntime + (watched ? epRuntime : -epRuntime))
+                if watched && updatesInteractionDate {
+                    item.lastInteractionDate = Date()
                 }
             }
+
+            let now = Date()
+            if let airDate = airDateValue, airDate <= now {
+                let oldRemaining = tv.remainingEpisodesCount ?? 0
+                tv.remainingEpisodesCount = max(0, oldRemaining - delta)
+            }
+        }
+    }
+
+    private func scheduleWatchHistoryMutation(watched: Bool) {
+        guard modelContext != nil,
+              let mediaID = season?.tvShowDetails?.item?.id ?? showID.map({ "tv_\($0)" }) else { return }
+        let episodeID = uniqueID ?? "\(mediaID)_\(seasonNumber)_\(episodeNumber)"
+        let watchedAt = watchedDate ?? lastWatchedDate ?? Date()
+        let runtimeMinutes = runtime
+
+        Task { @MainActor in
+            guard let container = DataService.modelContainer else { return }
+            let context = container.mainContext
+            WatchHistoryCoordinator.recordEpisodeMutation(
+                mediaID: mediaID,
+                episodeID: episodeID,
+                watchedAt: watchedAt,
+                runtimeMinutes: runtimeMinutes,
+                isWatched: watched,
+                context: context
+            )
+            SaveCoordinator.shared.requestSave(context)
         }
     }
     

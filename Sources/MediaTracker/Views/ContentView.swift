@@ -2,12 +2,39 @@ import SwiftData
 import SwiftUI
 import Combine
 
+/// Pre-search view state for Esc-close restore (choice 3C+4A).
+private struct SearchRestoreSnapshot {
+    let sidebarSelection: SidebarItem?
+    let navigationPath: NavigationPath
+    let category: NavigationCategory
+    let collectionID: UUID?
+    let collectionName: String?
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Namespace private var posterNamespace
     @State private var viewModel = MediaViewModel()
     @State private var sidebarSelection: SidebarItem? = .category(.home)
     @State private var isSearchActive = false
+    @State private var searchRestoreSnapshot: SearchRestoreSnapshot?
+    @State private var pendingSearchRestore = false
+
+    private func captureSearchRestoreSnapshot() {
+        guard searchRestoreSnapshot == nil else { return }
+        searchRestoreSnapshot = SearchRestoreSnapshot(
+            sidebarSelection: sidebarSelection,
+            navigationPath: viewModel.navigationPath,
+            category: viewModel.filter.selectedCategory,
+            collectionID: viewModel.collection.selectedCollectionID,
+            collectionName: viewModel.collection.selectedCollectionName
+        )
+    }
+
+    private func beginEscapeCloseSearch() {
+        pendingSearchRestore = true
+        isSearchActive = false
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -80,13 +107,29 @@ struct ContentView: View {
                 sidebarSelection: $sidebarSelection,
                 isSearchActive: $isSearchActive,
                 posterNamespace: posterNamespace,
-                viewModel: viewModel
+                viewModel: viewModel,
+                onCaptureSearchSnapshot: captureSearchRestoreSnapshot,
+                onEscapeCloseSearch: beginEscapeCloseSearch
             )
         }
         .navigationSplitViewStyle(.automatic)
         .frame(minWidth: 900, minHeight: 600)
         .onChange(of: isSearchActive) { _, active in
-            if !active {
+            if active {
+                captureSearchRestoreSnapshot()
+            } else if pendingSearchRestore, let snap = searchRestoreSnapshot {
+                // Esc-close (3C): restore pre-search sidebar + path + category + collection.
+                pendingSearchRestore = false
+                searchRestoreSnapshot = nil
+                viewModel.navigationPath = snap.navigationPath
+                viewModel.filter.selectedCategory = snap.category
+                viewModel.collection.selectedCollectionID = snap.collectionID
+                viewModel.collection.selectedCollectionName = snap.collectionName
+                sidebarSelection = snap.sidebarSelection
+                viewModel.filterSubject.send()
+            } else {
+                // Non-Esc close (sidebar nav, etc.): keep prior reset behavior.
+                searchRestoreSnapshot = nil
                 sidebarSelection = .category(viewModel.filter.selectedCategory)
             }
         }
@@ -114,19 +157,20 @@ struct LibraryDetailView: View {
     @Binding var isSearchActive: Bool
     var posterNamespace: Namespace.ID
     @Bindable var viewModel: MediaViewModel
-    
+    var onCaptureSearchSnapshot: () -> Void = {}
+    var onEscapeCloseSearch: () -> Void = {}
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.sleepManager) private var sleepManager
-    @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
-    
     @State private var showingBulkManager = false
     @State private var hasInitiallyLoaded = false
     @State private var refreshID = 0
     private let themeCoordinator = AppThemeCoordinator.shared
     @State private var updateTask: Task<Void, Never>?
     @State private var loadMoreTask: Task<Void, Never>?
-    
+    @State private var homeRefreshTask: Task<Void, Never>?
+
     @AppStorage("has_seen_welcome") private var hasSeenWelcome = false
     @State private var showWelcome = false
     @State private var showImportSheet = false
@@ -164,10 +208,12 @@ struct LibraryDetailView: View {
                     sidebarSelection: $sidebarSelection,
                     isSearchActive: $isSearchActive,
                     posterNamespace: posterNamespace,
-                    viewModel: viewModel,
-                    modelContainer: modelContext.container,
-                    onLoadMore: loadMoreItems,
-                    refreshID: refreshID
+                     viewModel: viewModel,
+                     modelContainer: modelContext.container,
+                     onLoadMore: loadMoreItems,
+                     onCloseSearch: onEscapeCloseSearch,
+                     refreshID: refreshID
+
                 )
 
                 Group {
@@ -250,24 +296,30 @@ struct LibraryDetailView: View {
             .navigationDestination(for: DiscoveryFilter.self) { filter in
                 FilteredLibraryGridView(
                     filter: filter, namespace: posterNamespace,
-                    isFastScrolling: $viewModel.pagination.isFastScrolling,
                     isSearchActive: $isSearchActive,
                     searchText: $viewModel.filter.searchText,
                     onNavigateToSearch: { name in navigateToActorSearch(name) })
             }
             .background {
-                // Observation isolation: reading the invalidation counters here
-                // (in a leaf child) instead of in onChange expressions on the root
-                // keeps every MediaStateService tick from re-evaluating the whole
-                // LibraryDetailView tree. The closures capture exactly what the
-                // old handlers did — viewModel display updates still re-render
-                // the grid, which is the intended second invalidation.
-                MediaChangeObserver(
+                // Leaf task: keystroke-driven filter sends live in a child so
+                // LibraryDetailView body doesn't restart per character.
+                SearchFilterTrigger(
+                    searchText: viewModel.filter.searchText,
+                    isSearchActive: isSearchActive,
+                    hasInitiallyLoaded: hasInitiallyLoaded
+                ) {
+                    viewModel.filterSubject.send()
+                }
+                // Observation isolation: reading the invalidation counters in a leaf
+                // child instead of onChange expressions on the root keeps every
+                // MediaStateService tick from re-evaluating the whole LibraryDetailView tree.
+                MediaStateLeafObserver(
                     onSingleItemUpdate: { itemID in
                         updateSingleItemInContentView(id: itemID)
                     },
                     onFullRefresh: {
-                        LibraryStatsActor.clearCache()
+                        // LibraryStatsActor.clearCache runs only in
+                        // MediaStateService's debounced derived path — skip duplicates.
                         guard hasInitiallyLoaded else { return }
                         viewModel.filterSubject.send()
                     },
@@ -283,12 +335,9 @@ struct LibraryDetailView: View {
                 GlobalKeyboardShortcuts(
                     isSearchActive: $isSearchActive,
                     sidebarSelection: $sidebarSelection,
-                    viewModel: viewModel
+                    viewModel: viewModel,
+                    onEscapeCloseSearch: onEscapeCloseSearch
                 )
-            }
-            .task(id: viewModel.filter.searchText) {
-                guard hasInitiallyLoaded else { return }
-                viewModel.filterSubject.send()
             }
             .toolbar {
 
@@ -304,19 +353,10 @@ struct LibraryDetailView: View {
             .toolbarMaterial(isSleeping: sleepManager.isAsleep)
         }
         .sheet(isPresented: $showingBulkManager) {
-            if let collectionID = viewModel.collection.selectedCollectionID,
-               let collection = collections.first(where: { $0.id == collectionID }) {
-                BulkCollectionManagerView(collection: collection)
-            } else {
-                LibraryEmptyStateView(
-                    title: "Collection not found",
-                    icon: "exclamationmark.triangle",
-                    description: "This collection may have been deleted.",
-                    actionLabel: "Close",
-                    action: { showingBulkManager = false }
-                )
-                .frame(width: 320, height: 280)
-            }
+            BulkCollectionSheet(
+                collectionID: viewModel.collection.selectedCollectionID,
+                isPresented: $showingBulkManager
+            )
         }
         .sheet(isPresented: $showWelcome) {
             WelcomeSheet {
@@ -399,6 +439,8 @@ struct LibraryDetailView: View {
             updateTask = nil
             loadMoreTask?.cancel()
             loadMoreTask = nil
+            homeRefreshTask?.cancel()
+            homeRefreshTask = nil
         }
     }
 
@@ -424,21 +466,25 @@ struct LibraryDetailView: View {
 
             do {
                 let filterActor = getFilterActor()
+                let libraryVersion = MediaStateService.shared.libraryChangeToken
+                let payloadVersion = MediaStateService.shared.fullRefreshToken
                 let result = try await filterActor.filterAndSort(
                     category: snapshot.category,
                     searchText: snapshot.searchText,
                     sortOrder: snapshot.sortOrder,
                     network: snapshot.networks,
-                    language: snapshot.language,
-                    genre: snapshot.genre,
-                    year: snapshot.year,
-                    state: snapshot.state,
+                    language: snapshot.languages,
+                    genre: snapshot.genres,
+                    year: snapshot.years,
+                    state: snapshot.states,
                     badge: nil,
-                    provider: snapshot.provider,
+                    provider: snapshot.providers,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
                     limit: viewModel.pagination.pageSize,
-                    offset: 0
+                    offset: 0,
+                    libraryVersion: libraryVersion,
+                    payloadVersion: payloadVersion
                 )
 
                 if Task.isCancelled { return }
@@ -475,21 +521,26 @@ struct LibraryDetailView: View {
         loadMoreTask = Task {
             do {
                 let filterActor = getFilterActor()
+                let libraryVersion = MediaStateService.shared.libraryChangeToken
+                let payloadVersion = MediaStateService.shared.fullRefreshToken
                 let result = try await filterActor.filterAndSort(
                     category: snapshot.category,
                     searchText: snapshot.searchText,
                     sortOrder: snapshot.sortOrder,
                     network: snapshot.networks,
-                    language: snapshot.language,
-                    genre: snapshot.genre,
-                    year: snapshot.year,
-                    state: snapshot.state,
+                    language: snapshot.languages,
+                    genre: snapshot.genres,
+                    year: snapshot.years,
+                    state: snapshot.states,
                     badge: nil,
-                    provider: snapshot.provider,
+                    provider: snapshot.providers,
                     groupBy: snapshot.groupBy,
                     collectionID: snapshot.collectionID,
                     limit: viewModel.pagination.pageSize,
-                    offset: nextOffset
+                    offset: nextOffset,
+                    pageOnly: true,
+                    libraryVersion: libraryVersion,
+                    payloadVersion: payloadVersion
                 )
 
                 guard !Task.isCancelled else { return }
@@ -521,6 +572,8 @@ struct LibraryDetailView: View {
     }
 
     private func navigateToActorSearch(_ actorName: String) {
+        // Snapshot BEFORE wiping so Esc-restore returns to the prior view (3C+4A).
+        onCaptureSearchSnapshot()
         viewModel.filter.resetFilters()
         viewModel.filter.selectedCategory = .all
         viewModel.filter.searchText = actorName
@@ -564,20 +617,30 @@ struct LibraryDetailView: View {
     private func updateSingleItemInContentView(id: PersistentIdentifier) {
         let category = viewModel.filter.selectedCategory
 
-        // Home category has special processing (eligibility, sorting, limiting)
-        // that single-item replacement cannot handle. Trigger a full refresh.
+        // Home has special processing (eligibility, sorting, limiting) that
+        // single-item replacement cannot handle — but a full re-query per tick
+        // thrashes during metadata sync. Coalesce into one refresh per quiet window.
         if category == .home {
-            viewModel.filterSubject.send()
+            scheduleDebouncedHomeRefresh()
             return
+        }
+
+        // Drop any cached search payload for this row so the next keystroke
+        // re-reads updated searchable fields without wiping the whole cache.
+        if let item = modelContext.model(for: id) as? MediaItem {
+            let stringID = item.id
+            Task {
+                await getFilterActor().invalidateSearchPayload(for: stringID)
+            }
         }
 
         let searchText = viewModel.filter.searchText
         let networks = viewModel.filter.selectedNetworks
-        let language = viewModel.filter.selectedLanguage
-        let genre = viewModel.filter.selectedGenre
-        let year = viewModel.filter.selectedYear
-        let state = viewModel.filter.selectedState
-        let provider = viewModel.filter.selectedProvider
+        let languages = viewModel.filter.selectedLanguages
+        let genres = viewModel.filter.selectedGenres
+        let years = viewModel.filter.selectedYears
+        let states = viewModel.filter.selectedStates
+        let providers = viewModel.filter.selectedProviders
         let collectionID = viewModel.collection.selectedCollectionID
 
         Task {
@@ -588,21 +651,60 @@ struct LibraryDetailView: View {
                     category: category,
                     searchText: searchText,
                     network: networks,
-                    language: language,
-                    genre: genre,
-                    year: year,
-                    state: state,
-                    provider: provider,
+                    language: languages,
+                    genre: genres,
+                    year: years,
+                    state: states,
+                    provider: providers,
                     collectionID: collectionID
                 )
 
-                let newMoodColors = viewModel.display.displayedItems.prefix(10).compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
                 await MainActor.run {
                     viewModel.display.applyUpdate(updatedMetadata, id: id)
+                    // Compute mood from the post-update list — the pre-update
+                    // prefix(10) was reading stale rows.
+                    let newMoodColors = viewModel.display.displayedItems
+                        .prefix(10)
+                        .compactMap { $0.themeColorHex.flatMap { Color(hex: $0) } }
                     themeCoordinator.updateMood(for: Array(newMoodColors), colorScheme: colorScheme)
                 }
             } catch {
                 AppLogger.debug("⚠️ Error updating single item optimistic UI in ContentView: \(error)")
+            }
+        }
+    }
+
+    /// Debounced full Home re-query — home eligibility can't be patched in place,
+    /// but rapid single-item ticks (episode marks / metadata sync) must not each
+    /// run a full pipeline pass.
+    private func scheduleDebouncedHomeRefresh() {
+        homeRefreshTask?.cancel()
+        homeRefreshTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            viewModel.filterSubject.send()
+        }
+    }
+}
+
+private struct BulkCollectionSheet: View {
+    @Query(sort: \MediaCollection.name) private var collections: [MediaCollection]
+    let collectionID: UUID?
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        Group {
+            if let collectionID, let collection = collections.first(where: { $0.id == collectionID }) {
+                BulkCollectionManagerView(collection: collection)
+            } else {
+                LibraryEmptyStateView(
+                    title: "Collection not found",
+                    icon: "exclamationmark.triangle",
+                    description: "This collection may have been deleted.",
+                    actionLabel: "Close",
+                    action: { isPresented = false }
+                )
+                .frame(width: 320, height: 280)
             }
         }
     }
@@ -612,32 +714,35 @@ private struct GlobalKeyboardShortcuts: View {
     @Binding var isSearchActive: Bool
     @Binding var sidebarSelection: SidebarItem?
     @Bindable var viewModel: MediaViewModel
+    var onEscapeCloseSearch: () -> Void = {}
 
     var body: some View {
         Group {
             Button("") { isSearchActive = true }.keyboardShortcut("f", modifiers: .command)
-            Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
-            Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
-            Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
-            Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
-            Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
-            Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
-            Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
-            Button("") {
-                if !viewModel.navigationPath.isEmpty {
-                    viewModel.navigationPath.removeLast()
-                } else if viewModel.collection.selectedCollectionID != nil {
-                    viewModel.collection.selectedCollectionID = nil
-                } else if viewModel.filter.selectedCategory.isSmartCategory {
-                    sidebarSelection = .category(.smartHub)
-                }
-            }.keyboardShortcut(.leftArrow, modifiers: .command)
+            if !isSearchActive {
+                Button("") { sidebarSelection = .category(.home) }.keyboardShortcut("1", modifiers: .command)
+                Button("") { sidebarSelection = .category(.discover) }.keyboardShortcut("2", modifiers: .command)
+                Button("") { sidebarSelection = .category(.upcoming) }.keyboardShortcut("3", modifiers: .command)
+                Button("") { sidebarSelection = .category(.all) }.keyboardShortcut("4", modifiers: .command)
+                Button("") { sidebarSelection = .category(.movie) }.keyboardShortcut("5", modifiers: .command)
+                Button("") { sidebarSelection = .category(.tvShow) }.keyboardShortcut("6", modifiers: .command)
+                Button("") { sidebarSelection = .category(.smartHub) }.keyboardShortcut("7", modifiers: .command)
+                Button("") {
+                    if !viewModel.navigationPath.isEmpty {
+                        viewModel.navigationPath.removeLast()
+                    } else if viewModel.collection.selectedCollectionID != nil {
+                        viewModel.collection.selectedCollectionID = nil
+                    } else if viewModel.filter.selectedCategory.isSmartCategory {
+                        sidebarSelection = .category(.smartHub)
+                    }
+                }.keyboardShortcut(.leftArrow, modifiers: .command)
+            }
             Button("") {
                 guard isSearchActive else { return }
                 if !viewModel.filter.searchText.isEmpty {
                     viewModel.filter.searchText = ""
                 } else {
-                    isSearchActive = false
+                    onEscapeCloseSearch()
                 }
             }.keyboardShortcut(.escape, modifiers: [])
         }
@@ -645,32 +750,23 @@ private struct GlobalKeyboardShortcuts: View {
     }
 }
 
-/// Leaf observer for MediaStateService invalidation counters. Reads the
-/// counters only in its own body so ticks re-evaluate this view — not the
-/// whole LibraryDetailView tree. Must not take observed objects as stored
-/// properties; communication is via closures only.
-private struct MediaChangeObserver: View {
-    let onSingleItemUpdate: (PersistentIdentifier) -> Void
-    let onFullRefresh: () -> Void
-    var onTasteChange: (() -> Void)? = nil
-    var onRecommendationsRefreshed: (() -> Void)? = nil
+/// Leaf that owns the keystroke → filterSubject `.task(id:)` so task restart
+/// is scoped to this subtree. Parent still reads `searchText` for `.searchable`
+/// and when constructing this view — full body isolation is not achieved here.
+private struct SearchFilterTrigger: View {
+    let searchText: String
+    let isSearchActive: Bool
+    let hasInitiallyLoaded: Bool
+    let onSend: () -> Void
 
     var body: some View {
         EmptyView()
-            .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
-                if let itemID = MediaStateService.shared.lastChangedItemID {
-                    onSingleItemUpdate(itemID)
-                }
-            }
-            .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-                LibraryStatsActor.clearCache()
-                onFullRefresh()
-            }
-            .onChange(of: MediaStateService.shared.tasteChangedCount) { _, _ in
-                onTasteChange?()
-            }
-            .onChange(of: MediaStateService.shared.recommendationsRefreshedCount) { _, _ in
-                onRecommendationsRefreshed?()
+            .task(id: searchText) {
+                guard hasInitiallyLoaded else { return }
+                // Overlay search is SearchViewModel's authority — don't also
+                // run the full library pipeline per keystroke.
+                guard !isSearchActive else { return }
+                onSend()
             }
     }
 }

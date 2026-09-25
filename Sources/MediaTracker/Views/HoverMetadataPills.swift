@@ -17,32 +17,31 @@ struct HoverMetadataPills: View, Equatable {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            Spacer()
+        // Off-hover: return nothing — zero pills, materials, or shadows to
+        // composite while the grid is idle (the common case).
+        if isHovered {
+            VStack(spacing: 8) {
+                Spacer()
 
-            // Row 1: Name Pill
-            HoverPill(text: title, isHovered: isHovered, style: .title)
-                .offset(y: isHovered ? 0 : 20)
-                .opacity(isHovered ? 1 : 0)
+                HoverPill(text: title, style: .title)
 
-            // Row 2: Consolidated Metadata (Year, Episode, Airing Date)
-            HStack(spacing: 6) {
-                if let year {
-                    HoverPill(text: year, isHovered: isHovered, style: .meta)
-                }
-                if let episode = nextEpisodeLabel {
-                    HoverPill(text: episode, isHovered: isHovered, style: .meta)
-                }
-                if let nextDate = nextAiringDate, nextDate > Date() {
-                    HoverPill(text: nextDate.formatted(.dateTime.month().day()), isHovered: isHovered, style: .meta)
+                HStack(spacing: 6) {
+                    if let year {
+                        HoverPill(text: year, style: .meta)
+                    }
+                    if let episode = nextEpisodeLabel {
+                        HoverPill(text: episode, style: .meta)
+                    }
+                    if let nextDate = nextAiringDate, nextDate > Date() {
+                        HoverPill(text: nextDate.formatted(.dateTime.month().day()), style: .meta)
+                    }
                 }
             }
-            .offset(y: isHovered ? 0 : 30)
-            .opacity(isHovered ? 1 : 0)
+            .padding(.bottom, 12)
+            .padding(.horizontal, 8)
+            .transition(.opacity.combined(with: .offset(y: 12)))
+            .animation(AppTheme.Animation.springSnappy, value: isHovered)
         }
-        .padding(.bottom, 12)
-        .padding(.horizontal, 8)
-        .animation(AppTheme.Animation.springSnappy, value: isHovered)
     }
 }
 
@@ -52,7 +51,6 @@ private enum HoverPillStyle {
 
 private struct HoverPill: View {
     let text: String
-    let isHovered: Bool
     let style: HoverPillStyle
 
     @Environment(\.colorScheme) var colorScheme
@@ -60,21 +58,23 @@ private struct HoverPill: View {
     var body: some View {
         Text(text)
             .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.tiny)
-            .foregroundStyle(.primary)
+            // Capsule fill is always near-black — .primary would be black-on-black in light mode.
+            .foregroundStyle(.white)
             .padding(.horizontal, style == .title ? AppTheme.Spacing.tiny : AppTheme.Spacing.mini)
             .padding(.vertical, style == .title ? AppTheme.Spacing.micro : 3)
-            .background(Capsule().fill(.thinMaterial))
+            // Flat translucent fill — only rendered on hover now, but a
+            // material here still forces an offscreen pass per pill.
+            .background(Capsule().fill(Color.black.opacity(colorScheme == .dark ? 0.55 : 0.72)))
             .overlay(
                 Capsule()
-                    .stroke(Color.primary.opacity(strokeOpacity), lineWidth: 0.5)
+                    .stroke(Color.white.opacity(strokeOpacity), lineWidth: 0.5)
             )
-            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
     }
 
     private var strokeOpacity: Double {
         if style == .title {
-            return colorScheme == .dark ? 0.15 : 0.45
+            return colorScheme == .dark ? 0.2 : 0.35
         }
-        return colorScheme == .dark ? 0.1 : 0.3
+        return colorScheme == .dark ? 0.12 : 0.25
     }
 }

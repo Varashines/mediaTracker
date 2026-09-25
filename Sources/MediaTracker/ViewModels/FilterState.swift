@@ -11,12 +11,12 @@ enum SearchType: String, CaseIterable {
 class FilterState {
     var selectedCategory: NavigationCategory = .home
     var searchText: String = ""
-    var selectedNetworks: [String]? = nil
-    var selectedLanguage: String? = nil
-    var selectedGenre: String? = nil
-    var selectedYear: String? = nil
-    var selectedState: MediaState? = nil
-    var selectedProvider: String? = nil
+    var selectedNetworks: [String] = []
+    var selectedLanguages: [String] = []
+    var selectedGenres: [String] = []
+    var selectedYears: [String] = []
+    var selectedStates: [MediaState] = []
+    var selectedProviders: [String] = []
     var searchTypeFilter: SearchType = .all
     var discoveryRefreshTrigger: Int = 0
     var categorySortOrders: [NavigationCategory: SortOrder] = [:]
@@ -32,11 +32,11 @@ class FilterState {
     }
 
     func resetFilters() {
-        selectedNetworks = nil
-        selectedLanguage = nil
-        selectedGenre = nil
-        selectedYear = nil
-        selectedState = nil
-        selectedProvider = nil
+        selectedNetworks.removeAll()
+        selectedLanguages.removeAll()
+        selectedGenres.removeAll()
+        selectedYears.removeAll()
+        selectedStates.removeAll()
+        selectedProviders.removeAll()
     }
 }

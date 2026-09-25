@@ -17,7 +17,8 @@ struct MediaTrackerApp: App {
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
             BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self
+            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self,
+            WatchCycle.self, WatchEvent.self
         ])
 
         let modelConfiguration: ModelConfiguration

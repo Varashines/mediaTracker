@@ -45,11 +45,33 @@ private nonisolated(unsafe) let hexColorCache: NSCache<NSString, NSColor> = {
     return cache
 }()
 
+// Memoized OKLCH-derived accents: luminous/highContrast do NSColor sRGB
+// conversion + pow per call; view bodies were re-running them per element.
+private nonisolated(unsafe) let luminousAccentCache: NSCache<NSString, NSColor> = {
+    let cache = NSCache<NSString, NSColor>()
+    cache.countLimit = 300
+    return cache
+}()
+
+private nonisolated(unsafe) let highContrastAccentCache: NSCache<NSString, NSColor> = {
+    let cache = NSCache<NSString, NSColor>()
+    cache.countLimit = 300
+    return cache
+}()
+
+private nonisolated(unsafe) let readableForegroundCache: NSCache<NSString, NSColor> = {
+    let cache = NSCache<NSString, NSColor>()
+    cache.countLimit = 200
+    return cache
+}()
+
 extension CGSize {
     static let thumbTiny = AppTheme.Thumbnail.tiny
     static let thumbSmall = AppTheme.Thumbnail.small
     static let thumbMedium = AppTheme.Thumbnail.medium
+    static let thumbLarge = AppTheme.Thumbnail.large
     static let backdropCompact = AppTheme.Thumbnail.backdropCompact
+    static let cardLogo = AppTheme.Thumbnail.cardLogo
 }
 
 extension Color {
@@ -100,7 +122,15 @@ extension Color {
 
     /// Contrasting black/white foreground for text/icons sitting on this color.
     var readableForeground: Color {
-        isLightColor ? .black : .white
+        let key = toHex() as NSString
+        if let cached = readableForegroundCache.object(forKey: key) {
+            return Color(nsColor: cached)
+        }
+        let result: Color = isLightColor ? .black : .white
+        if let ns = NSColor(result).usingColorSpace(.sRGB) {
+            readableForegroundCache.setObject(ns, forKey: key)
+        }
+        return result
     }
 
     var isNearlyWhite: Bool {
@@ -175,46 +205,59 @@ extension Color {
 
     /// Returns a version of the color optimized for background washes and gradients.
     func luminousAccent(colorScheme: ColorScheme) -> Color {
+        let key = "\(toHex())_\(colorScheme == .dark ? "d" : "l")" as NSString
+        if let cached = luminousAccentCache.object(forKey: key) {
+            return Color(nsColor: cached)
+        }
         let o = self.oklch
-        
+        let result: Color
         // Handle grayscale
         if o.c < 0.02 {
             if colorScheme == .dark {
-                return Color(white: max(min(o.l, 0.8), 0.65))
+                result = Color(white: max(min(o.l, 0.8), 0.65))
             } else {
-                return Color(white: max(min(o.l, 0.92), 0.82))
+                result = Color(white: max(min(o.l, 0.92), 0.82))
             }
-        }
-        
-        if colorScheme == .dark {
+        } else if colorScheme == .dark {
             // Phase 5 Refinement: Perceptually uniform moodiness - boosted for visibility.
-            return Color.fromOKLCH(l: max(min(o.l, 0.85), 0.7), c: max(o.c, 0.22), h: o.h)
+            result = Color.fromOKLCH(l: max(min(o.l, 0.85), 0.7), c: max(o.c, 0.22), h: o.h)
         } else {
             // Phase 5 Refinement: Perceptually uniform airiness.
-            return Color.fromOKLCH(l: max(min(o.l, 0.92), 0.82), c: max(o.c, 0.18), h: o.h)
+            result = Color.fromOKLCH(l: max(min(o.l, 0.92), 0.82), c: max(o.c, 0.18), h: o.h)
         }
+        if let ns = NSColor(result).usingColorSpace(.sRGB) {
+            luminousAccentCache.setObject(ns, forKey: key)
+        }
+        return result
     }
 
     /// Returns a version of the color optimized for text, icons, and small UI elements.
     func highContrastAccent(colorScheme: ColorScheme) -> Color {
+        let key = "\(toHex())_\(colorScheme == .dark ? "d" : "l")" as NSString
+        if let cached = highContrastAccentCache.object(forKey: key) {
+            return Color(nsColor: cached)
+        }
         let o = self.oklch
+        let result: Color
 
         // Handle grayscale
         if o.c < 0.02 {
             if colorScheme == .dark {
-                return Color(white: max(o.l, 0.95))
+                result = Color(white: max(o.l, 0.95))
             } else {
-                return Color(white: min(o.l, 0.35))
+                result = Color(white: min(o.l, 0.35))
             }
-        }
-
-        if colorScheme == .dark {
+        } else if colorScheme == .dark {
             // On dark backgrounds, ensure perceptual lightness and chroma are high for vibrancy
-            return Color.fromOKLCH(l: max(o.l, 0.92), c: max(o.c, 0.3), h: o.h)
+            result = Color.fromOKLCH(l: max(o.l, 0.92), c: max(o.c, 0.3), h: o.h)
         } else {
             // On light backgrounds, ensure it's deep enough for WCAG contrast but highly saturated
-            return Color.fromOKLCH(l: min(o.l, 0.45), c: max(o.c, 0.20), h: o.h)
+            result = Color.fromOKLCH(l: min(o.l, 0.45), c: max(o.c, 0.20), h: o.h)
         }
+        if let ns = NSColor(result).usingColorSpace(.sRGB) {
+            highContrastAccentCache.setObject(ns, forKey: key)
+        }
+        return result
     }
 
 

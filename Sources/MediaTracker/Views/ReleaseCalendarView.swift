@@ -23,12 +23,14 @@ struct ReleaseCalendarView: View {
     
     @State private var calendarData: CalendarResult?
     @State private var selectedDate: Date? = Calendar.current.startOfDay(for: Date())
+    var isSearchActive: Bool = false
     @State private var currentDisplayMonth: Date = {
         let calendar = Calendar.current
         return calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
     }()
     @State private var isLoading = true
     @State private var fetchTask: Task<Void, Never>? = nil
+    @State private var preloadTasks: [Date: Task<Void, Never>] = [:]
     @State private var releaseFilter: ReleaseFilter = .all
     @State private var loadError: String? = nil
     
@@ -160,6 +162,10 @@ struct ReleaseCalendarView: View {
         .onDisappear {
             fetchTask?.cancel()
             fetchTask = nil
+            for task in preloadTasks.values {
+                task.cancel()
+            }
+            preloadTasks.removeAll()
         }
         .background {
             Group {
@@ -169,13 +175,15 @@ struct ReleaseCalendarView: View {
                     .keyboardShortcut("[", modifiers: .command)
                 Button("") { changeMonth(by: 1) }
                     .keyboardShortcut("]", modifiers: .command)
+                // 5A / 1A: calendar Esc only when calendar is the top context —
+                // never competes with main search Esc while search is active.
                 Button("") {
                     withAnimation(AppTheme.Animation.springSnappy) {
                         selectedDate = nil
                     }
                 }
                 .keyboardShortcut(.escape, modifiers: [])
-                .disabled(selectedDate == nil)
+                .disabled(selectedDate == nil || isSearchActive)
             }
             .opacity(0)
         }
@@ -413,16 +421,17 @@ struct ReleaseCalendarView: View {
 
         let container = modelContext.container
         for date in adjacentDates {
-            guard viewModel.display.calendarCache[date] == nil else { continue }
-            
-            Task.detached(priority: .background) {
+            guard viewModel.display.calendarCache[date] == nil,
+                  preloadTasks[date] == nil else { continue }
+
+            let task = Task<Void, Never> { @MainActor in
+                defer { preloadTasks[date] = nil }
                 let actor = CalendarFilterActor(modelContainer: container)
-                if let result = try? await actor.fetchCalendarData(for: date) {
-                    await MainActor.run {
-                        viewModel.display.calendarCache[date] = result
-                    }
-                }
+                guard !Task.isCancelled,
+                      let result = try? await actor.fetchCalendarData(for: date) else { return }
+                viewModel.display.calendarCache[date] = result
             }
+            preloadTasks[date] = task
         }
         viewModel.display.trimCalendarCache(around: month)
     }

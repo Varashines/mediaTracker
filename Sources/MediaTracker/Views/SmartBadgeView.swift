@@ -80,7 +80,11 @@ struct SmartBadgeView: View {
             progress: progress,
             foregroundColor: badgeConfig.fg
         )
-        .shadow(color: isSparkle ? badgeConfig.bg.opacity(0.3) : AppTheme.Colors.shadowAmbient(for: colorScheme), radius: isSparkle ? 6 : 3, y: 2)
+        // Shadow only for sparkle badges — ambient shadow on every solid badge
+        // is a per-cell offscreen pass during grid scroll.
+        .if(isSparkle) {
+            $0.shadow(color: badgeConfig.bg.opacity(0.3), radius: 6, y: 2)
+        }
     }
 
     @ViewBuilder
@@ -165,12 +169,10 @@ struct StatusBadgePrimitive: View {
         .foregroundStyle(foregroundColor ?? (isSolid ? .white : contrastColor))
         .background {
             if isSolid {
+                // Flat fill instead of material: badges sit on every card, and
+                // per-card material blur is a major GPU cost during grid scroll.
                 Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .fill(accentColor.opacity(colorScheme == .dark ? 0.7 : 0.85))
-                    )
+                    .fill(accentColor.opacity(colorScheme == .dark ? 0.85 : 0.92))
             } else {
                 Capsule()
                     .fill(accentColor.opacity(colorScheme == .dark ? 0.15 : 0.2))

@@ -16,6 +16,8 @@ enum DatabaseMigrations {
         await reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
         await runGenreDeconstructionIfNeeded(container: container)
         await runSearchableLanguageIfNeeded(container: container)
+         await runWatchHistoryBackfillIfNeeded(container: container)
+         await runWatchHistoryRepairIfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -422,5 +424,157 @@ enum DatabaseMigrations {
             try await service.performSearchableLanguageMigration()
         }
         UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    static func runWatchHistoryBackfillIfNeeded(container: ModelContainer) async {
+        let versionKey = UserDefaultsKeys.watchHistoryBackfillV1.rawValue
+        guard UserDefaults.standard.integer(forKey: versionKey) < 1 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "watchHistoryBackfill", container: container) {
+                let context = ModelContext(container)
+                var itemDescriptor = FetchDescriptor<MediaItem>()
+                itemDescriptor.propertiesToFetch = [
+                    \.id, \.typeValue, \.stateValue, \.dateAdded,
+                    \.lastInteractionDate, \.lastStateChangeDate, \.cachedRuntime
+                ]
+                let items = try context.fetch(itemDescriptor)
+                let itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+                let validMediaIDs = Set(itemsByID.keys)
+                let allCycles = try context.fetch(FetchDescriptor<WatchCycle>())
+                let allEvents = try context.fetch(FetchDescriptor<WatchEvent>())
+                for cycle in allCycles where !validMediaIDs.contains(cycle.mediaID) {
+                    context.delete(cycle)
+                }
+                for event in allEvents where !validMediaIDs.contains(event.mediaID) {
+                    context.delete(event)
+                }
+                let remainingCycles = try context.fetch(FetchDescriptor<WatchCycle>())
+                let existingMediaIDs = Set(remainingCycles.map(\.mediaID))
+
+                for item in items where item.type == .movie && item.state == .completed && !existingMediaIDs.contains(item.id) {
+                    let date = item.lastStateChangeDate ?? item.lastInteractionDate ?? item.dateAdded ?? Date()
+                    let cycle = WatchCycle(
+                        mediaID: item.id,
+                        kind: .movie,
+                        startedAt: date,
+                        completedAt: date,
+                        state: .completed,
+                        isBackfilled: true,
+                        isComplete: true
+                    )
+                    context.insert(cycle)
+                    let key = "\(cycle.id.uuidString):movie"
+                    context.insert(WatchEvent(
+                        cycleID: cycle.id,
+                        mediaID: item.id,
+                        watchedAt: date,
+                        source: .migration,
+                        runtimeMinutes: item.cachedRuntime,
+                        deduplicationKey: key,
+                        isBackfilled: true
+                    ))
+                }
+
+                var episodeDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.isWatched })
+                episodeDescriptor.propertiesToFetch = [
+                    \.showID, \.uniqueID, \.seasonNumber, \.episodeNumber,
+                    \.watchedDate, \.lastWatchedDate, \.runtime
+                ]
+                let watchedEpisodes = try context.fetch(episodeDescriptor)
+                let groupedEpisodes: [Int: [(showID: Int, episode: TVEpisode)]] = Dictionary(
+                    grouping: watchedEpisodes.compactMap { episode -> (showID: Int, episode: TVEpisode)? in
+                        guard let showID = episode.showID else { return nil }
+                        return (showID, episode)
+                    },
+                    by: { $0.showID }
+                )
+
+                for (showID, entries) in groupedEpisodes {
+                    let mediaID = "tv_\(showID)"
+                    guard let item = itemsByID[mediaID], !existingMediaIDs.contains(mediaID) else { continue }
+                    let episodes = entries.map(\.episode)
+                    let dates = episodes.compactMap { $0.watchedDate ?? $0.lastWatchedDate }
+                    let start = dates.min() ?? item.lastInteractionDate ?? item.dateAdded ?? Date()
+                    let end = dates.max()
+                    let completed = item.state == .completed
+                    let cycle = WatchCycle(
+                        mediaID: mediaID,
+                        kind: .tvShow,
+                        startedAt: start,
+                        completedAt: completed ? end : nil,
+                        state: completed ? .completed : .active,
+                        isBackfilled: true,
+                        isComplete: completed
+                    )
+                    context.insert(cycle)
+
+                    for episode in episodes {
+                        let episodeID = episode.uniqueID ?? "\(mediaID)_\(episode.seasonNumber)_\(episode.episodeNumber)"
+                        let key = "\(cycle.id.uuidString):\(episodeID)"
+                        context.insert(WatchEvent(
+                            cycleID: cycle.id,
+                            mediaID: mediaID,
+                            episodeID: episodeID,
+                            watchedAt: episode.watchedDate ?? episode.lastWatchedDate ?? start,
+                            source: .migration,
+                            runtimeMinutes: episode.runtime,
+                            deduplicationKey: key,
+                            isBackfilled: true
+                        ))
+                    }
+                }
+
+                try context.save()
+            }
+            guard didRun else { return }
+            UserDefaults.standard.set(1, forKey: versionKey)
+            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        } catch {
+            AppLogger.error("Watch history backfill failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    static func runWatchHistoryRepairIfNeeded(container: ModelContainer) async {
+        let versionKey = UserDefaultsKeys.watchHistoryRepairV1.rawValue
+        guard UserDefaults.standard.integer(forKey: versionKey) < 1 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "watchHistoryRepair", container: container) {
+                let context = ModelContext(container)
+                let items = try context.fetch(FetchDescriptor<MediaItem>())
+                let validMediaIDs = Set(items.map(\.id))
+                let cycles = try context.fetch(FetchDescriptor<WatchCycle>())
+                let events = try context.fetch(FetchDescriptor<WatchEvent>())
+                let cycleByID = Dictionary(uniqueKeysWithValues: cycles.map { ($0.id, $0) })
+                var activeEventKeys = Set<String>()
+                for event in events {
+                    guard validMediaIDs.contains(event.mediaID),
+                          cycleByID[event.cycleID]?.mediaID == event.mediaID else {
+                        context.delete(event)
+                        continue
+                    }
+                    guard event.isActive else { continue }
+                    let key = "\(event.cycleID.uuidString)|\(event.episodeID ?? "movie")"
+                    if !activeEventKeys.insert(key).inserted {
+                        context.delete(event)
+                    }
+                }
+                for cycle in cycles {
+                    if cycle.stateRaw == WatchCycleState.completed.rawValue {
+                        cycle.isComplete = true
+                    }
+                    if !validMediaIDs.contains(cycle.mediaID) {
+                        context.delete(cycle)
+                    }
+                }
+                try context.save()
+            }
+            guard didRun else { return }
+            UserDefaults.standard.set(1, forKey: versionKey)
+            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        } catch {
+            AppLogger.error("Watch history repair failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
     }
 }

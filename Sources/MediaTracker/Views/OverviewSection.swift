@@ -74,9 +74,9 @@ struct OverviewSection: View {
         .padding(.vertical, AppTheme.Spacing.grid)
         .background {
             RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                .fill(AppThemeCoordinator.isReducingVisualEffects
-                    ? AnyShapeStyle(surfaceColor)
-                    : AnyShapeStyle(.ultraThinMaterial))
+                // Flat fill — material blur on the synopsis card re-rasterized
+                // on every Detail scroll frame.
+                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
         }
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
         .overlay {

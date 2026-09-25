@@ -10,13 +10,34 @@ actor BackgroundActionService {
         guard let item = try modelContext.fetch(descriptor).first else { return }
         
         if type == "movie" {
-            item.state = .completed
+            let oldState = item.state
+            let now = Date()
+            item.stateValue = MediaState.completed.rawValue
+            item.lastInteractionDate = now
+            item.lastStateChangeDate = now
+            WatchHistoryCoordinator.handleStateChange(
+                item: item,
+                from: oldState,
+                to: .completed,
+                context: modelContext,
+                now: now
+            )
         } else if type == "tvShow", let s = season, let e = episode {
-            // Find specific episode
             if let tvDetails = item.tvShowDetails {
                 seasonLoop: for seasonObj in tvDetails.seasons where seasonObj.seasonNumber == s {
                     for episodeObj in seasonObj.episodes where episodeObj.episodeNumber == e {
-                        episodeObj.markWatched(true)
+                        let now = Date()
+                        episodeObj.markWatched(true, recordHistory: false)
+                        let episodeID = episodeObj.uniqueID ?? "\(item.id)_\(s)_\(e)"
+                        WatchHistoryCoordinator.recordEpisodeMutation(
+                            mediaID: item.id,
+                            episodeID: episodeID,
+                            watchedAt: episodeObj.watchedDate ?? now,
+                            runtimeMinutes: episodeObj.runtime,
+                            isWatched: true,
+                            context: modelContext,
+                            source: .manual
+                        )
                         break seasonLoop
                     }
                 }

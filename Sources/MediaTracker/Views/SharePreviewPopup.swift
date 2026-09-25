@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct SharePreviewPopup: View {
@@ -5,12 +6,58 @@ struct SharePreviewPopup: View {
     let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedCastIDs: Set<String> = []
+    @State private var selectedSeasonNumber: Int?
+    @State private var isLoadingSeasonCast = false
     @State private var customShareImage: NSImage? = nil
     @State private var showCustomShareMenu = false
+    @FocusState private var closeButtonFocused: Bool
+
+    private var isTV: Bool {
+        item.type == .tvShow
+    }
+
+    private var availableSeasons: [TVSeason] {
+        guard isTV, let tv = item.tvShowDetails else { return [] }
+        return tv.seasons.liveModels
+            .filter { $0.seasonNumber > 0 }
+            .sorted { $0.seasonNumber < $1.seasonNumber }
+    }
+
+    private var selectedSeason: TVSeason? {
+        guard let selectedSeasonNumber else { return nil }
+        return availableSeasons.first { $0.seasonNumber == selectedSeasonNumber }
+    }
 
     private var availableCast: [SimpleCastMember] {
-        item.displayCast
+        guard isTV, let selectedSeason else { return item.displayCast }
+        return selectedSeason.seasonCast.liveModels
+            .filter { $0.episodeCount > 0 }
+            .sorted {
+                if $0.episodeCount == $1.episodeCount {
+                    return $0.order < $1.order
+                }
+                return $0.episodeCount > $1.episodeCount
+            }
+            .map {
+                SimpleCastMember(
+                    id: String($0.tmdbPersonID),
+                    name: $0.name,
+                    characterName: $0.characterName,
+                    profileURL: $0.profileURL,
+                    order: $0.order
+                )
+            }
+    }
+
+    private var castScopeTitle: String {
+        guard let selectedSeasonNumber else { return "Series Cast" }
+        return "Season \(selectedSeasonNumber) Cast"
+    }
+
+    private var selectedSeasonLabel: String? {
+        selectedSeasonNumber.map { "SEASON \($0)" }
     }
 
     private var selectedCastMembers: [SimpleCastMember] {
@@ -37,7 +84,7 @@ struct SharePreviewPopup: View {
                 .onTapGesture { onDismiss() }
                 .transition(.opacity)
 
-            if availableCast.isEmpty {
+            if availableCast.isEmpty && !isTV {
                 cardOnly
             } else {
                 sideBySideLayout
@@ -65,9 +112,21 @@ struct SharePreviewPopup: View {
             }
         }
         .animation(AppTheme.Animation.springSnappy, value: showCustomShareMenu)
+        .onExitCommand {
+            guard !showCustomShareMenu else { return }
+            onDismiss()
+        }
         .onAppear {
+            closeButtonFocused = true
             let initial = Array(availableCast.prefix(3)).map(\.id)
             selectedCastIDs = Set(initial)
+        }
+        .onChange(of: selectedSeasonNumber) { _, newValue in
+            selectedCastIDs = Set(availableCast.prefix(3).map(\.id))
+            if let newValue,
+               let season = availableSeasons.first(where: { $0.seasonNumber == newValue }) {
+                loadSeasonCastIfNeeded(season)
+            }
         }
     }
 
@@ -100,14 +159,14 @@ struct SharePreviewPopup: View {
             HStack(alignment: .top, spacing: 20) {
                 // Left: Card column with action button underneath
                 VStack(spacing: 14) {
-                    MediaShareCardView(item: item, customCast: selectedCastMembers)
+                    MediaShareCardView(item: item, customCast: selectedCastMembers, seasonLabel: selectedSeasonLabel)
                         .environment(\.colorScheme, .dark)
                         .scaleEffect(0.65)
                         .frame(width: MediaShareCardView.cardSize.width * 0.65, height: MediaShareCardView.cardSize.height * 0.65)
                         .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
 
                     shareButton {
-                        let card = MediaShareCardView(item: item, customCast: selectedCastMembers)
+                        let card = MediaShareCardView(item: item, customCast: selectedCastMembers, seasonLabel: selectedSeasonLabel)
                         if let image = card.renderToImage() {
                             customShareImage = image
                             withAnimation(AppTheme.Animation.springSnappy) { showCustomShareMenu = true }
@@ -118,6 +177,10 @@ struct SharePreviewPopup: View {
 
                 // Right: Cast Selection column (2 columns of 180px wide CastMemberCards)
                 VStack(alignment: .leading, spacing: 12) {
+                    if isTV {
+                        castScopeMenu
+                    }
+
                     VStack(alignment: .leading, spacing: 3) {
                         Text("FEATURED CAST")
                             .font(.system(size: 10, weight: .black, design: .monospaced))
@@ -129,38 +192,56 @@ struct SharePreviewPopup: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    ScrollView(.vertical, showsIndicators: true) {
-                        LazyVGrid(columns: [GridItem(.fixed(180), spacing: 10), GridItem(.fixed(180), spacing: 10)], spacing: 10) {
-                            ForEach(availableCast, id: \.id) { actor in
-                                let isSelected = selectedCastIDs.contains(actor.id)
-                                CastMemberCard(member: actor, themeColor: isSelected ? AppTheme.Colors.accent : .secondary) {
-                                    if isSelected {
-                                        selectedCastIDs.remove(actor.id)
-                                    } else if selectedCastIDs.count < 3 {
-                                        selectedCastIDs.insert(actor.id)
-                                    }
-                                }
-                                .scaleEffect(0.9)
-                                .frame(width: 180, height: 81)
-                                .overlay(alignment: .topTrailing) {
-                                    if isSelected {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.white, AppTheme.Colors.accent)
-                                            .background(Circle().fill(.white).frame(width: 13, height: 13))
-                                            .padding(3)
-                                    }
-                                }
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
-                                        .stroke(isSelected ? AppTheme.Colors.accent.opacity(0.6) : .clear, lineWidth: 2)
-                                )
-                            }
+                    if isLoadingSeasonCast {
+                        HStack(spacing: AppTheme.Spacing.small) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading season cast…")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 2)
-                        .padding(.trailing, 4)
+                        .frame(maxWidth: .infinity, minHeight: 410)
+                    } else if availableCast.isEmpty {
+                        ContentUnavailableView(
+                            "No cast available",
+                            systemImage: "person.2.slash",
+                            description: Text("Season cast could not be loaded.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 410)
+                    } else {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            LazyVGrid(columns: [GridItem(.fixed(180), spacing: 10), GridItem(.fixed(180), spacing: 10)], spacing: 10) {
+                                ForEach(availableCast, id: \.id) { actor in
+                                    let isSelected = selectedCastIDs.contains(actor.id)
+                                    CastMemberCard(member: actor, themeColor: isSelected ? AppTheme.Colors.accent : .secondary) {
+                                        if isSelected {
+                                            selectedCastIDs.remove(actor.id)
+                                        } else if selectedCastIDs.count < 3 {
+                                            selectedCastIDs.insert(actor.id)
+                                        }
+                                    }
+                                    .scaleEffect(0.9)
+                                    .frame(width: 180, height: 81)
+                                    .overlay(alignment: .topTrailing) {
+                                        if isSelected {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 15, weight: .bold))
+                                                .foregroundStyle(.white, AppTheme.Colors.accent)
+                                                .background(Circle().fill(.white).frame(width: 13, height: 13))
+                                                .padding(3)
+                                        }
+                                    }
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous)
+                                            .stroke(isSelected ? AppTheme.Colors.accent.opacity(0.6) : .clear, lineWidth: 2)
+                                    )
+                                }
+                            }
+                            .padding(.vertical, 2)
+                            .padding(.trailing, 4)
+                        }
+                        .frame(height: 410)
                     }
-                    .frame(height: 410)
                 }
                 .frame(width: 374)
             }
@@ -168,6 +249,41 @@ struct SharePreviewPopup: View {
         .padding(20)
         .frame(width: 730)
         .background(modalBackground)
+    }
+
+    private var castScopeMenu: some View {
+        Picker(
+            "Cast",
+            selection: Binding(
+                get: { selectedSeasonNumber ?? 0 },
+                set: { value in
+                    selectedSeasonNumber = value == 0 ? nil : value
+                }
+            )
+        ) {
+            Text("Series Cast").tag(0)
+            ForEach(availableSeasons) { season in
+                Text("Season \(season.seasonNumber)").tag(season.seasonNumber)
+            }
+        }
+        .pickerStyle(.menu)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("Cast scope")
+        .accessibilityValue(castScopeTitle)
+    }
+
+    private func loadSeasonCastIfNeeded(_ season: TVSeason) {
+        guard season.seasonCast.isEmpty,
+              let tmdbID = item.tvShowDetails?.tmdbID,
+              tmdbID > 0 else { return }
+        isLoadingSeasonCast = true
+        let container = modelContext.container
+        Task { @MainActor in
+            let service = BackgroundDataService(modelContainer: container)
+            await service.refreshSeasonCast(tmdbID: tmdbID, seasonNumber: season.seasonNumber)
+            selectedCastIDs = Set(availableCast.prefix(3).map(\.id))
+            isLoadingSeasonCast = false
+        }
     }
 
     private var headerRow: some View {
@@ -188,6 +304,7 @@ struct SharePreviewPopup: View {
             }
             .buttonStyle(.plain)
             .contentShape(Circle())
+            .focused($closeButtonFocused)
             .help("Close")
         }
     }

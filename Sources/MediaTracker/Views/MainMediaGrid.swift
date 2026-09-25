@@ -5,7 +5,6 @@ struct MainMediaGrid: View {
     let items: [MediaThumbnailMetadata]
     let isCategoryPage: Bool
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let disableHover: Bool
     let selectedCollectionID: UUID?
     let onLoadMore: () -> Void
@@ -41,7 +40,6 @@ struct MainMediaGrid: View {
             showTypeBadge: !isCategoryPage,
             namespace: namespace,
             staggerIndex: idx,
-            isFastScrolling: isFastScrolling,
             disableHover: disableHover,
             isCompletedInCollection: completedIDs.contains(metadata.itemID),
             selectedCollectionID: selectedCollectionID

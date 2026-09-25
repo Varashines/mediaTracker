@@ -11,13 +11,62 @@ final class PersistenceTests: MTTestCase {
             NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
             BadgeEntity.self, PersonImageEntity.self,
             StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self
+            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self,
+            WatchCycle.self, WatchEvent.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         XCTAssertNoThrow(try ModelContainer(for: schema, configurations: [config]),
                          "Full schema should initialize without error — if this fails, a @Model property change broke auto-migration compatibility")
     }
     
+    @MainActor
+    func testPersistentRepairPreservesValidHistoryAndRemovesOrphans() async throws {
+        let schema = Schema([
+            MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self,
+            SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self,
+            NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self,
+            PersonImageEntity.self, StudioAliasEntity.self, SearchCacheEntity.self,
+            ProviderEntity.self, MediaFacetIndex.self, WatchCycle.self, WatchEvent.self
+        ])
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaTracker-Repair-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("repair.store")
+
+        do {
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: storeURL)]
+            )
+            let context = container.mainContext
+            let item = MediaItem(id: "movie_valid", title: "Valid", overview: "", type: .movie)
+            context.insert(item)
+            let validCycle = WatchCycle(mediaID: item.id, kind: .movie, state: .completed, isComplete: true)
+            let orphanCycle = WatchCycle(mediaID: "missing_media", kind: .movie)
+            context.insert(validCycle)
+            context.insert(orphanCycle)
+            context.insert(WatchEvent(cycleID: validCycle.id, mediaID: item.id, watchedAt: Date(), deduplicationKey: "valid"))
+            context.insert(WatchEvent(cycleID: orphanCycle.id, mediaID: orphanCycle.mediaID, watchedAt: Date(), deduplicationKey: "orphan"))
+            try context.save()
+        }
+
+        let versionKey = UserDefaultsKeys.watchHistoryRepairV1.rawValue
+        UserDefaults.standard.set(0, forKey: versionKey)
+        defer { UserDefaults.standard.removeObject(forKey: versionKey) }
+
+        let repairedContainer = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, url: storeURL)]
+        )
+        await DatabaseMigrations.runWatchHistoryRepairIfNeeded(container: repairedContainer)
+
+        let context = repairedContainer.mainContext
+        XCTAssertEqual(try context.fetch(FetchDescriptor<MediaItem>()).map(\.id), ["movie_valid"])
+        XCTAssertEqual(try context.fetch(FetchDescriptor<WatchCycle>()).map(\.mediaID), ["movie_valid"])
+        XCTAssertEqual(try context.fetch(FetchDescriptor<WatchEvent>()).map(\.mediaID), ["movie_valid"])
+    }
+
     @MainActor
     func testTVEpisodePersistence() async throws {
         let schema = Schema([

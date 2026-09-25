@@ -15,7 +15,21 @@ class SearchViewModel {
     var isOfflineResultsOnly = false
     var errorMessage: String?
     var showError = false
-    var displayCache: DisplayCache? { didSet { scheduleRecompute() } }
+    var displayCache: DisplayCache? {
+        didSet {
+            // Fires on any assignment (including same instance). Use
+            // syncDisplayCache(_:) when re-assigning an identical reference
+            // to skip a spurious recompute.
+            scheduleRecompute()
+        }
+    }
+
+    /// Assign only when the instance actually changes (identity check).
+    func syncDisplayCache(_ cache: DisplayCache?) {
+        if displayCache !== cache {
+            displayCache = cache
+        }
+    }
 
     /// Filmography of the selected person with ownership flags (for the
     /// merged Cast & Crew grid). Entries already in the library have
@@ -25,6 +39,7 @@ class SearchViewModel {
     static let castCrewCap = 30
 
     private var recomputeTask: Task<Void, Never>?
+    private var refreshedItemDebounce: Task<Void, Never>?
 
     private func scheduleRecompute() {
         recomputeTask?.cancel()
@@ -32,6 +47,17 @@ class SearchViewModel {
             try? await Task.sleep(nanoseconds: 0)
             guard !Task.isCancelled else { return }
             recomputeAllWebResults()
+        }
+    }
+
+    /// Batch metadata-refresh storms: one full re-search per quiet window instead of per item.
+    func scheduleRefreshedItemRetrigger(text: String, selectedType: SearchType) {
+        refreshedItemDebounce?.cancel()
+        refreshedItemDebounce = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            guard !text.isEmpty else { return }
+            triggerSearch(text: text, selectedType: selectedType)
         }
     }
     
@@ -323,19 +349,23 @@ class SearchViewModel {
         case .tvShow: category = .tvShow
         }
         let filterActor = getFilterActor()
+        let libraryVersion = MediaStateService.shared.libraryChangeToken
+        let payloadVersion = MediaStateService.shared.fullRefreshToken
         let result = try? await filterActor.filterAndSort(
             category: category,
             searchText: text,
             sortOrder: .alphabetical,
-            network: nil,
-            language: nil,
-            genre: nil,
-            year: nil,
-            state: nil,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
             badge: nil,
-            provider: nil,
+            provider: [],
             limit: 500,
-            offset: 0
+            offset: 0,
+            libraryVersion: libraryVersion,
+            payloadVersion: payloadVersion
         )
         return result?.displayed ?? []
     }
@@ -377,6 +407,9 @@ class SearchViewModel {
             if let data = try? JSONEncoder().encode(results) {
                 let cache = SearchCacheEntity(query: query, type: type.rawValue, resultsData: data)
                 context.insert(cache)
+                // Intentional background-context save — SearchCacheEntity is not
+                // on the main UI context; SaveCoordinator keys by ObjectIdentifier
+                // and runs on MainActor, which would hop contexts incorrectly.
                 try? context.save()
             }
         }

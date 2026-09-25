@@ -6,18 +6,21 @@ private actor HubCountsCache {
     private var counts: [NavigationCategory: Int]?
     private var customCounts: [UUID: Int]?
     private var savedAt: Date?
+    private var version: Int?
 
-    func load() -> ([NavigationCategory: Int], [UUID: Int])? {
-        guard let savedAt, savedAt > Date().addingTimeInterval(-300) else {
+    func load(version requestedVersion: Int) -> ([NavigationCategory: Int], [UUID: Int])? {
+        guard let savedAt, savedAt > Date().addingTimeInterval(-300),
+              let version, version == requestedVersion else {
             counts = nil; customCounts = nil; return nil
         }
         guard let counts, let customCounts else { return nil }
         return (counts, customCounts)
     }
 
-    func save(counts: [NavigationCategory: Int], customCounts: [UUID: Int]) {
+    func save(counts: [NavigationCategory: Int], customCounts: [UUID: Int], version newVersion: Int) {
         self.counts = counts
         self.customCounts = customCounts
+        self.version = newVersion
         savedAt = Date()
     }
 }
@@ -33,6 +36,8 @@ struct SmartCollectionsHubView: View {
     @State private var counts: [NavigationCategory: Int] = [:]
     @State private var customSmartCounts: [UUID: Int] = [:]
     @State private var countsLoaded = false
+    @State private var lastCountsToken: Int = -1
+    @State private var countsRefreshTask: Task<Void, Never>?
     private func getFilterActor() -> MediaFilterActor {
         MediaFilterActor.shared(modelContainer: modelContext.container)
     }
@@ -149,7 +154,8 @@ struct SmartCollectionsHubView: View {
         }
         .task {
             await fetchCollections()
-            if let cached = await HubCountsCache.shared.load() {
+            let token = MediaStateService.shared.libraryChangeToken
+            if let cached = await HubCountsCache.shared.load(version: token) {
                 self.counts = cached.0
                 self.customSmartCounts = cached.1
                 self.countsLoaded = true
@@ -157,18 +163,37 @@ struct SmartCollectionsHubView: View {
                 await fetchCounts()
             }
         }
-        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-            Task { await fetchCollections() }
-            // Also refresh counts when items change
-            countsLoaded = false
-            Task { await fetchCounts() }
-        }
         .onChange(of: refreshID) { _, _ in
             countsLoaded = false
             Task {
                 await fetchCollections()
                 await fetchCounts()
             }
+        }
+        // Leaf observer: full-refresh ticks must not re-eval this hub body.
+        .background {
+            MediaStateLeafObserver(
+                onFullRefresh: {
+                    Task { await fetchCollections() }
+                    // Only recompute when the library actually moved since last counts.
+                    let token = MediaStateService.shared.libraryChangeToken
+                    guard token != lastCountsToken else { return }
+                    countsLoaded = false
+                    countsRefreshTask?.cancel()
+                    countsRefreshTask = Task {
+                        // Coalesce full-refresh ticks; land after the 500ms stats debounce.
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        guard !Task.isCancelled else { return }
+                        let current = MediaStateService.shared.libraryChangeToken
+                        guard current != lastCountsToken else { return }
+                        await fetchCounts()
+                    }
+                }
+            )
+        }
+        .onDisappear {
+            countsRefreshTask?.cancel()
+            countsRefreshTask = nil
         }
     }
     
@@ -196,14 +221,9 @@ struct SmartCollectionsHubView: View {
             }
         } label: {
             Label("New Collection", systemImage: "plus")
-                .font(AppTheme.Font.caption)
-                .foregroundStyle(AppTheme.Colors.accent)
-                .padding(.horizontal, AppTheme.Spacing.small)
-                .padding(.vertical, AppTheme.Spacing.micro)
-                .background(AppTheme.Colors.accent.opacity(0.10), in: Capsule())
-                .contentShape(Capsule())
         }
         .menuStyle(.borderlessButton)
+        .controlSize(.regular)
         .accessibilityLabel("Create collection")
     }
 
@@ -304,8 +324,10 @@ struct SmartCollectionsHubView: View {
             return counts
         }
         
-        await HubCountsCache.shared.save(counts: smartCounts, customCounts: customCounts)
+        let token = MediaStateService.shared.libraryChangeToken
+        await HubCountsCache.shared.save(counts: smartCounts, customCounts: customCounts, version: token)
         await MainActor.run {
+            lastCountsToken = token
             withAnimation(AppTheme.Animation.easeInOut) {
                 self.counts = smartCounts
                 self.customSmartCounts = customCounts
@@ -449,20 +471,24 @@ private struct SmartCollectionCard: View {
             }
         }
         .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
-                .fill(.thinMaterial)
                 .background {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
-                        .fill(Color.primary.opacity(isHovered ? 0.04 : 0.015))
+                        .fill(AppTheme.Colors.cardFill(for: colorScheme))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                                .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.05), lineWidth: 0.8)
+                        }
+                        // Always-present shadow with 0 radius when idle so the
+                        // spring interpolates on hover instead of appearing instantly.
+                        .shadow(
+                            color: isHovered ? accentColor.opacity(colorScheme == .dark ? 0.12 : 0.08) : .clear,
+                            radius: isHovered ? 10 : 0,
+                            y: isHovered ? 5 : 0
+                        )
                 }
-                .shadow(color: accentColor.opacity(isHovered ? (colorScheme == .dark ? 0.12 : 0.08) : 0), radius: isHovered ? 10 : 0, y: isHovered ? 5 : 0)
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
-                        .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.05), lineWidth: 0.8)
-                }
-        }
         .scaleEffect(isHovered ? 1.04 : 1.0)
+        // Shadow already conditional above; keep scale+shadow animation always
+        // attached so hover interpolates instead of popping.
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous))
         .onTapGesture {

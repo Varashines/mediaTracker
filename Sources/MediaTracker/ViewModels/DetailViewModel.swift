@@ -18,6 +18,10 @@ class DetailViewModel {
     var watchProviders: [WatchProviderResult] = []
     var posterOptions: [String] = []
     var logoOptions: [String] = []
+    var hasLoadedPosterOptions = false
+    var hasLoadedLogoOptions = false
+    var isLoadingPosterOptions = false
+    var isLoadingLogoOptions = false
     var debugSelectedTraits: [String] = []
     private var _highContrastAccent: Color = .primary
     private var _luminousAccent: Color = .clear
@@ -138,8 +142,9 @@ class DetailViewModel {
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         updateThemeColor()
-        fetchTitleLogoIfNeeded()
-        fetchPosterOptions()
+        if item.effectiveLogoURL == nil {
+            fetchTitleLogoIfNeeded()
+        }
         fetchWatchProvidersIfNeeded()
 
         let hasData = item.lastUpdated != nil
@@ -189,15 +194,18 @@ class DetailViewModel {
     /// This ensures logos are loaded even when `refreshData` returns early due to
     /// session debouncing or freshness guards.
     func fetchTitleLogoIfNeeded() {
-        guard item.titleLogoURL == nil || logoOptions.isEmpty else { return }
+        guard item.modelContext != nil, !hasLoadedLogoOptions, !isLoadingLogoOptions else { return }
         guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
 
         let type = item.type
         let originalLanguage = item.cachedLanguage
         let defaultLogo = item.effectiveLogoURL
 
+        isLoadingLogoOptions = true
         logoTask?.cancel()
-        logoTask = Task {
+        logoTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isLoadingLogoOptions = false }
             do {
                 var logos: [String]
                 if type == .tvShow {
@@ -205,20 +213,24 @@ class DetailViewModel {
                 } else {
                     logos = try await APIClient.shared.fetchMovieLogos(tmdbID: tmdbID, originalLanguage: originalLanguage)
                 }
-                if !logos.isEmpty {
-                    // Ensure the current effective logo is always first
-                    if let current = defaultLogo {
-                        logos.removeAll { $0 == current }
-                        logos.insert(current, at: 0)
+                guard !Task.isCancelled else { return }
+                if !logos.isEmpty, let current = defaultLogo {
+                    logos.removeAll { $0 == current }
+                    logos.insert(current, at: 0)
+                }
+                await MainActor.run {
+                    guard self.item.modelContext != nil else { return }
+                    self.hasLoadedLogoOptions = true
+                    if let firstLogo = logos.first {
+                        self.item.titleLogoURL = firstLogo
                     }
-                    await MainActor.run {
-                        self.item.titleLogoURL = logos.first
-                        self.logoOptions = logos
-                        if let context = self.item.modelContext {
-                            SaveCoordinator.shared.requestSave(context)
-                        }
+                    self.logoOptions = logos
+                    if let context = self.item.modelContext {
+                        SaveCoordinator.shared.requestSave(context)
                     }
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 AppLogger.warning("Logo fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
             }
@@ -227,15 +239,18 @@ class DetailViewModel {
 
     /// Fetch alternative poster options from TMDB lazily.
     func fetchPosterOptions() {
-        guard posterOptions.isEmpty else { return }
+        guard item.modelContext != nil, !hasLoadedPosterOptions, !isLoadingPosterOptions else { return }
         guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
 
         let type = item.type
         let originalLanguage = item.cachedLanguage
         let defaultPoster = item.effectivePosterURL
 
+        isLoadingPosterOptions = true
         posterTask?.cancel()
-        posterTask = Task {
+        posterTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isLoadingPosterOptions = false }
             do {
                 var options: [String] = []
                 if type == .tvShow {
@@ -248,11 +263,15 @@ class DetailViewModel {
                     options.removeAll { $0 == current }
                     options.insert(current, at: 0)
                 }
-                await MainActor.run { [weak self] in
-                    self?.posterOptions = options
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.hasLoadedPosterOptions = true
+                    self.posterOptions = options
                 }
+            } catch is CancellationError {
+                return
             } catch {
-                AppLogger.warning("Poster options fetch failed for \(type?.rawValue ?? "?") \(tmdbID): \(error)", logger: AppLogger.background)
+                AppLogger.warning("Poster options fetch failed for \(tmdbID): \(error)", logger: AppLogger.background)
             }
         }
     }
@@ -378,15 +397,8 @@ class DetailViewModel {
         }
 
         if item.state != .completed {
-            item.stateValue = MediaState.completed.rawValue
-            item.lastInteractionDate = Date()
-            item.lastStateChangeDate = Date()
-            item.syncCachedProperties(dirty: [.progress, .badge])
+            item.state = .completed
         }
-        if let context = item.modelContext {
-            SaveCoordinator.shared.requestSave(context)
-        }
-        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 
     func fetchEpisodes(for season: TVSeason, force: Bool = false) {
@@ -533,27 +545,32 @@ class DetailViewModel {
         watchProvidersTask?.cancel()
     }
 
-    @discardableResult
-    func markNextEpisodeWatched() -> TVEpisode? {
-        guard item.modelContext != nil, let tv = item.tvShowDetails else { return nil }
-        
-        // Optimize: Make sure seasons are loaded
+    enum DetailWatchResult {
+        case marked(TVEpisode)
+        case loading
+        case allWatched
+        case unavailable
+    }
+
+    func markNextEpisodeWatched() -> DetailWatchResult {
+        guard item.modelContext != nil, let tv = item.tvShowDetails else { return .unavailable }
+
         let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
-        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return nil }
-        
-        // Make sure episodes are loaded or fetched
+        guard !sortedSeasons.isEmpty else { return .unavailable }
+        guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return .allWatched }
+
         if currentSeason.episodes.isEmpty {
             fetchEpisodes(for: currentSeason)
-            return nil
+            return .loading
         }
-        
+
         let sortedEpisodes = currentSeason.episodes.sorted { $0.episodeNumber < $1.episodeNumber }
         if let next = sortedEpisodes.first(where: { !$0.isWatched }) {
             next.markWatched(true)
             item.commitChange(dirty: [.progress, .badge])
-            return next
+            return .marked(next)
         }
-        return nil
+        return .allWatched
     }
 
     func toggleWatched() {
@@ -563,7 +580,7 @@ class DetailViewModel {
         } else {
             item.state = .completed
         }
-        // The state setter already synced [.badge, .searchable]; this covers progress.
+        // State setter defers badge/searchable sync + save; this covers progress only.
         item.commitChange(dirty: [.progress])
     }
 
@@ -577,14 +594,10 @@ class DetailViewModel {
         let nextState = allStates[nextIndex]
 
         withAnimation(AppTheme.Animation.springSnappy) {
-            // The state setter performs the badge/searchable cache sync itself.
+            // State setter defers badge/searchable sync + save + broadcast itself.
             item.state = nextState
             item.lastUpdated = Date()
             item.lastInteractionDate = Date()
         }
-        if let context = item.modelContext {
-            SaveCoordinator.shared.requestSave(context)
-        }
-        MediaStateService.shared.postMediaStateChanged(itemID: item.persistentModelID)
     }
 }

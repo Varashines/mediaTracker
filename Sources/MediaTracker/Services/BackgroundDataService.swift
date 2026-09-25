@@ -65,6 +65,14 @@ actor BackgroundDataService {
             }
         }
         
+        let cycles = (try? modelContext.fetch(
+            FetchDescriptor<WatchCycle>(predicate: #Predicate { $0.mediaID == id })
+        )) ?? []
+        let events = (try? modelContext.fetch(
+            FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.mediaID == id })
+        )) ?? []
+        for event in events { modelContext.delete(event) }
+        for cycle in cycles { modelContext.delete(cycle) }
         modelContext.delete(item)
         
         do {
@@ -86,6 +94,8 @@ actor BackgroundDataService {
 
     func clearDatabase() async {
         do {
+            try modelContext.delete(model: WatchEvent.self)
+            try modelContext.delete(model: WatchCycle.self)
             try modelContext.delete(model: MediaItem.self)
             try modelContext.delete(model: NetworkEntity.self)
             try modelContext.delete(model: GenreEntity.self)

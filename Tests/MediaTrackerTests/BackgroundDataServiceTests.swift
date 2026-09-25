@@ -5,7 +5,7 @@ import SwiftData
 final class BackgroundDataServiceTests: MTTestCase {
     @MainActor
     func makeContainer() -> ModelContainer {
-        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self])
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, NetworkEntity.self, GenreEntity.self, LanguageEntity.self, BadgeEntity.self, PersonImageEntity.self, StudioAliasEntity.self, SearchCacheEntity.self, ProviderEntity.self, WatchCycle.self, WatchEvent.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
     }
@@ -97,6 +97,14 @@ final class BackgroundDataServiceTests: MTTestCase {
 
         let item = MediaItem(id: "delete_me", title: "To Delete", overview: "", type: .movie)
         context.insert(item)
+        let cycle = WatchCycle(mediaID: item.id, kind: .movie, state: .completed, isComplete: true)
+        context.insert(cycle)
+        context.insert(WatchEvent(
+            cycleID: cycle.id,
+            mediaID: item.id,
+            watchedAt: Date(),
+            deduplicationKey: "delete-event"
+        ))
         try context.save()
 
         let preDelete = try context.fetch(FetchDescriptor<MediaItem>())
@@ -107,6 +115,32 @@ final class BackgroundDataServiceTests: MTTestCase {
         // Verify deletion (may be async)
         let remaining = try context.fetch(FetchDescriptor<MediaItem>())
         XCTAssertTrue(remaining.isEmpty || remaining.allSatisfy { $0.id != "delete_me" })
+        XCTAssertTrue(try context.fetch(FetchDescriptor<WatchCycle>()).isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<WatchEvent>()).isEmpty)
+    }
+
+    @MainActor
+    func testClearDatabaseDeletesWatchHistory() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let service = BackgroundDataService(modelContainer: container)
+        let item = MediaItem(id: "clear_me", title: "Clear", overview: "", type: .movie)
+        context.insert(item)
+        let cycle = WatchCycle(mediaID: item.id, kind: .movie, state: .completed, isComplete: true)
+        context.insert(cycle)
+        context.insert(WatchEvent(
+            cycleID: cycle.id,
+            mediaID: item.id,
+            watchedAt: Date(),
+            deduplicationKey: "clear-event"
+        ))
+        try context.save()
+
+        await service.clearDatabase()
+
+        XCTAssertTrue(try context.fetch(FetchDescriptor<MediaItem>()).isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<WatchCycle>()).isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<WatchEvent>()).isEmpty)
     }
 
     @MainActor

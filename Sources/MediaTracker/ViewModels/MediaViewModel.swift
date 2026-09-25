@@ -5,12 +5,12 @@ struct FilterSnapshot: Sendable, Hashable {
     let category: NavigationCategory
     let searchText: String
     let sortOrder: SortOrder
-    let networks: [String]?
-    let language: String?
-    let genre: String?
-    let year: String?
-    let state: MediaState?
-    let provider: String?
+    let networks: [String]
+    let languages: [String]
+    let genres: [String]
+    let years: [String]
+    let states: [MediaState]
+    let providers: [String]
     let groupBy: GroupBy
     let collectionID: UUID?
 
@@ -20,11 +20,11 @@ struct FilterSnapshot: Sendable, Hashable {
         self.searchText = viewModel.filter.searchText
         self.sortOrder = viewModel.filter.currentSortOrder
         self.networks = viewModel.filter.selectedNetworks
-        self.language = viewModel.filter.selectedLanguage
-        self.genre = viewModel.filter.selectedGenre
-        self.year = viewModel.filter.selectedYear
-        self.state = viewModel.filter.selectedState
-        self.provider = viewModel.filter.selectedProvider
+        self.languages = viewModel.filter.selectedLanguages
+        self.genres = viewModel.filter.selectedGenres
+        self.years = viewModel.filter.selectedYears
+        self.states = viewModel.filter.selectedStates
+        self.providers = viewModel.filter.selectedProviders
         self.groupBy = viewModel.filter.currentGroupBy
         self.collectionID = viewModel.collection.selectedCollectionID
     }
@@ -61,10 +61,10 @@ class MediaViewModel {
         if let colName = collection.selectedCollectionName {
             return colName
         }
-        if let networks = filter.selectedNetworks, let first = networks.first {
-            return networks.count == 1 ? first : "Merged Studios"
+        if let first = filter.selectedNetworks.first {
+            return filter.selectedNetworks.count == 1 ? first : "Merged Studios"
         }
-        if let lang = filter.selectedLanguage {
+        if let lang = filter.selectedLanguages.first {
             return Locale.current.localizedString(forLanguageCode: lang) ?? lang.uppercased()
         }
         return category.title

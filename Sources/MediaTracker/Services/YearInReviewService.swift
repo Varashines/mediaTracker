@@ -52,6 +52,15 @@ struct YearWatchedTitle: Sendable, Identifiable, Hashable, Equatable {
     let episodeCount: Int
 }
 
+struct YearRewatchedTitle: Sendable, Identifiable, Hashable, Equatable {
+    let id: PersistentIdentifier
+    let mediaID: String
+    let title: String
+    let posterURL: String?
+    let type: MediaType
+    let rewatchCount: Int
+}
+
 /// Snapshot of a single year's review: watch-activity heatmap data, the set of
 /// titles released that year and watched by the user, and taste derived ONLY
 /// from that released-that-year set (not general library taste).
@@ -66,6 +75,9 @@ struct YearInReview: Sendable {
     let totalSeries: Int
     let totalDaysWatched: Int
     let busiestDay: (day: Date, minutes: Int)?
+    let totalRewatches: Int
+    let titlesRewatched: Int
+    let rewatchedTitles: [YearRewatchedTitle]
 
     func monthStats(for month: Date) -> (movies: Int, series: Int, minutes: Int) {
         let calendar = Calendar.current
@@ -188,7 +200,10 @@ struct YearInReview: Sendable {
             totalMovies: 0,
             totalSeries: 0,
             totalDaysWatched: 0,
-            busiestDay: nil
+            busiestDay: nil,
+            totalRewatches: 0,
+            titlesRewatched: 0,
+            rewatchedTitles: []
         )
     }
 }
@@ -212,6 +227,36 @@ actor YearInReviewService {
             return .empty(year: year)
         }
 
+        let itemBatchSize = LibraryScanLimits.refinementBatchSize
+        var itemDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.isSoftDeleted == false })
+        itemDescriptor.fetchLimit = itemBatchSize
+        var itemOffset = 0
+        itemDescriptor.fetchOffset = itemOffset
+        var allItems: [MediaItem] = []
+        while true {
+            if Task.isCancelled { break }
+            let batch = (try? modelContext.fetch(itemDescriptor)) ?? []
+            allItems.append(contentsOf: batch)
+            guard batch.count == itemBatchSize else { break }
+            itemOffset += itemBatchSize
+            itemDescriptor.fetchOffset = itemOffset
+        }
+        let itemByMediaID = Dictionary(uniqueKeysWithValues: allItems.map { ($0.id, $0) })
+        var itemByShowID: [Int: MediaItem] = [:]
+        for item in allItems where item.typeValue == "TV Show" {
+            let tmdbString = item.id.split(separator: "_").last.map(String.init) ?? ""
+            if let showID = Int(tmdbString) { itemByShowID[showID] = item }
+        }
+
+        var eventDescriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate { event in
+                event.watchedAt >= start && event.watchedAt < end && event.voidedAt == nil
+            }
+        )
+        eventDescriptor.propertiesToFetch = [\.mediaID, \.episodeID, \.watchedAt, \.runtimeMinutes, \.voidedAt]
+        let events = (try? modelContext.fetch(eventDescriptor)) ?? []
+        let eventMediaIDs = Set(events.map(\.mediaID))
+
         // 1. TV episodes watched within the year (drives per-day activity + TV "watched" ids).
         //    Season 0 (specials) are excluded, matching the app's progress logic.
         let episodeDescriptor = FetchDescriptor<TVEpisode>(
@@ -228,6 +273,7 @@ actor YearInReviewService {
         var totalEpisodes = 0
         for episode in watchedEpisodes {
             guard let watchedDate = episode.watchedDate else { continue }
+            if let showID = episode.showID, eventMediaIDs.contains("tv_\(showID)") { continue }
             let day = calendar.startOfDay(for: watchedDate)
             var slot = activity[day] ?? .zero
             slot.episodes += 1
@@ -252,7 +298,8 @@ actor YearInReviewService {
         var titlesByDay: [Date: [YearWatchedTitle]] = [:]
         var totalMovies = 0
         for movie in completedMovies {
-            guard let completedDate = movie.lastStateChangeDate else { continue }
+            guard let completedDate = movie.lastStateChangeDate,
+                  !eventMediaIDs.contains(movie.id) else { continue }
             let day = calendar.startOfDay(for: completedDate)
             var slot = activity[day] ?? .zero
             slot.movies += 1
@@ -272,15 +319,6 @@ actor YearInReviewService {
         // 3. TV show metadata for titlesByDay + taste. Use full model fetches
         // here because partial SwiftData fetches are not reliable across the
         // supported macOS/Xcode runtimes for custom array-backed properties.
-        var itemDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.isSoftDeleted == false })
-        itemDescriptor.fetchLimit = LibraryScanLimits.statsScanCap
-        let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
-
-        var itemByShowID: [Int: MediaItem] = [:]
-        for item in allItems where item.typeValue == "TV Show" {
-            let tmdbString = item.id.split(separator: "_").last.map(String.init) ?? ""
-            if let showID = Int(tmdbString) { itemByShowID[showID] = item }
-        }
         for (showID, dayCounts) in showDayCounts {
             guard let item = itemByShowID[showID] else { continue }
             for (day, count) in dayCounts {
@@ -295,6 +333,73 @@ actor YearInReviewService {
             }
         }
 
+        var eventTitleData: [Date: [String: (item: MediaItem, episodeCount: Int)]] = [:]
+        for event in events {
+            guard let item = itemByMediaID[event.mediaID] else { continue }
+            let watchedAt = event.watchedAt
+            guard watchedAt >= start && watchedAt < end else { continue }
+            let day = calendar.startOfDay(for: watchedAt)
+            let isTV = item.type == .tvShow || event.episodeID != nil
+            let runtime = event.runtimeMinutes ?? (isTV ? item.cachedEpisodeRuntime : item.cachedRuntime) ?? 0
+            var slot = activity[day] ?? .zero
+            if isTV {
+                slot.episodes += 1
+                totalEpisodes += 1
+                if let showID = Int(item.id.split(separator: "_").last ?? "") {
+                    watchedShowIDs.insert(showID)
+                }
+            } else {
+                slot.movies += 1
+                totalMovies += 1
+            }
+            slot.minutes += runtime
+            activity[day] = slot
+
+            var entry = eventTitleData[day]?[event.mediaID] ?? (item, 0)
+            if isTV { entry.episodeCount += 1 }
+            eventTitleData[day, default: [:]][event.mediaID] = entry
+        }
+        for (day, entries) in eventTitleData {
+            for entry in entries.values {
+                titlesByDay[day, default: []].append(YearWatchedTitle(
+                    id: entry.item.persistentModelID,
+                    title: entry.item.title,
+                    posterURL: entry.item.effectivePosterURL,
+                    type: entry.item.type ?? .movie,
+                    tasteValue: entry.item.tasteValue,
+                    episodeCount: entry.episodeCount
+                ))
+            }
+        }
+
+        var cycleDescriptor = FetchDescriptor<WatchCycle>()
+        cycleDescriptor.propertiesToFetch = [\.mediaID, \.completedAt, \.stateRaw, \.isRewatch, \.isComplete]
+        let cycles = (try? modelContext.fetch(cycleDescriptor)) ?? []
+        let completedStates: Set<String> = [WatchCycleState.completed.rawValue]
+        let completedRewatchCycles = cycles.filter { cycle in
+            guard cycle.isRewatch,
+                  cycle.isComplete || completedStates.contains(cycle.stateRaw),
+                  let completedAt = cycle.completedAt else { return false }
+            return completedAt >= start && completedAt < end
+        }
+        let rewatchGroups = Dictionary(grouping: completedRewatchCycles, by: \.mediaID)
+        let titlesRewatched = Set(completedRewatchCycles.map(\.mediaID)).count
+        let rewatchedTitles = rewatchGroups.compactMap { mediaID, groupedCycles -> YearRewatchedTitle? in
+            guard let item = itemByMediaID[mediaID], let type = item.type else { return nil }
+            return YearRewatchedTitle(
+                id: item.persistentModelID,
+                mediaID: mediaID,
+                title: item.title,
+                posterURL: item.effectivePosterURL,
+                type: type,
+                rewatchCount: groupedCycles.count
+            )
+        }
+        .sorted {
+            if $0.rewatchCount != $1.rewatchCount { return $0.rewatchCount > $1.rewatchCount }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+
         let watchedTVItems = itemByShowID.filter { watchedShowIDs.contains($0.key) }.values
         let busiestDay = activity.max { $0.value.minutes < $1.value.minutes }.map { ($0.key, $0.value.minutes) }
 
@@ -307,7 +412,10 @@ actor YearInReviewService {
             totalMovies: totalMovies,
             totalSeries: watchedTVItems.count,
             totalDaysWatched: activity.count,
-            busiestDay: busiestDay
+            busiestDay: busiestDay,
+            totalRewatches: completedRewatchCycles.count,
+            titlesRewatched: titlesRewatched,
+            rewatchedTitles: rewatchedTitles
         )
         await YearReviewCache.shared.setReview(result, containerID: containerID, year: year, container: modelContext.container)
         return result

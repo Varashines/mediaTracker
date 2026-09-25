@@ -14,38 +14,90 @@ struct MainLibraryView: View {
     let searchText: String
     let selectedNetworks: [String]?
     let namespace: Namespace.ID
-    @Binding var isFastScrolling: Bool
     let onSelectHero: (MediaThumbnailMetadata) -> Void
     let onNetworkSelected: ([String]) -> Void
     let onCategorySelected: (NavigationCategory) -> Void
     let onBack: (() -> Void)?
     let onLoadMore: () -> Void
     let onTrendingAdd: ((MediaSearchResult) -> Void)?
-    var viewModel: MediaViewModel
+    @Bindable var viewModel: MediaViewModel
 
     @Environment(\.modelContext) private var modelContext
-    @State private var scrollTask: Task<Void, Never>?
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isFastScrolling) private var isFastScrolling
 
     var isCategoryPage: Bool {
         return selectedCategory == .movie || selectedCategory == .tvShow
+    }
+
+    private var isLibraryCategory: Bool {
+        switch selectedCategory {
+        case .all, .movie, .tvShow, .completed: return true
+        default: return false
+        }
+    }
+
+    private var activeFilterEntries: [(id: String, label: String)] {
+        var entries: [(id: String, label: String)] = []
+        if !viewModel.filter.selectedNetworks.isEmpty {
+            entries.append(("networks", "Networks · \(viewModel.filter.selectedNetworks.count)"))
+        }
+        if !viewModel.filter.selectedLanguages.isEmpty {
+            entries.append(("languages", "Languages · \(viewModel.filter.selectedLanguages.count)"))
+        }
+        if !viewModel.filter.selectedGenres.isEmpty {
+            entries.append(("genres", "Genres · \(viewModel.filter.selectedGenres.count)"))
+        }
+        if !viewModel.filter.selectedYears.isEmpty {
+            entries.append(("years", "Years · \(viewModel.filter.selectedYears.count)"))
+        }
+        if !viewModel.filter.selectedStates.isEmpty {
+            entries.append(("states", "Statuses · \(viewModel.filter.selectedStates.count)"))
+        }
+        if !viewModel.filter.selectedProviders.isEmpty {
+            entries.append(("providers", "Providers · \(viewModel.filter.selectedProviders.count)"))
+        }
+        return entries
     }
 
     var body: some View {
         let columns: [GridItem] = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
         VStack(spacing: 0) {
-            if selectedCategory != .home && !(viewModel.collection.selectedCollectionID != nil || selectedCategory.isSmartCategory) {
-                if let networks = selectedNetworks, !networks.isEmpty {
-                    LibraryHeaderView(
-                        selectedNetworks: networks,
-                        onNetworkSelected: onNetworkSelected
-                    )
+            if isLibraryCategory, !activeFilterEntries.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppTheme.Spacing.tiny) {
+                        Text("Library filters")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        ForEach(activeFilterEntries, id: \.id) { entry in
+                            Text(entry.label)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .padding(.horizontal, AppTheme.Spacing.small)
+                                .padding(.vertical, AppTheme.Spacing.micro)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                                )
+                        }
+                        Button("Clear all") {
+                            viewModel.filter.resetFilters()
+                            viewModel.filterSubject.send()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, AppTheme.Spacing.tiny)
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.vertical, AppTheme.Spacing.tiny)
                 }
             }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                    if selectedCategory == .home && searchText.isEmpty && selectedNetworks == nil {
+                    if selectedCategory == .home && searchText.isEmpty && (selectedNetworks?.isEmpty ?? true) {
                         HomeViewSections(
                             homeContinueWatching: homeContinueWatching,
                             featuredCarouselItems: featuredCarouselItems,
@@ -57,7 +109,6 @@ struct MainLibraryView: View {
                             trendingMovies: viewModel.trendingMovies,
                             trendingShows: viewModel.trendingShows,
                             namespace: namespace,
-                            isFastScrolling: isFastScrolling,
                             onSelectHero: onSelectHero,
                             onCategorySelected: onCategorySelected,
                             onTrendingAdd: onTrendingAdd,
@@ -87,7 +138,6 @@ struct MainLibraryView: View {
                             searchText: searchText,
                             selectedNetworks: selectedNetworks,
                             namespace: namespace,
-                            isFastScrolling: isFastScrolling,
                             disableHover: false,
                             columns: columns,
                             viewModel: viewModel,
@@ -99,13 +149,7 @@ struct MainLibraryView: View {
             }
             .scrollBounceBehavior(selectedCategory == .home ? .always : .basedOnSize)
             .scrollIndicators(.hidden)
-            .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
-        }
-        .onChange(of: SleepManager.shared.isAsleep) { oldValue, isAsleep in
-            if isAsleep {
-                scrollTask?.cancel()
-                isFastScrolling = false
-            }
+            .trackFastScrollingEnv()
         }
     }
 }

@@ -5,8 +5,7 @@ struct TrendingCarousel: View {
     let title: String
     let onSelect: (MediaSearchResult) -> Void
 
-    @State private var scrollProgress: Double = 0
-    @State private var horizontalFastScrolling = false
+    @State private var scroll = CarouselScrollState()
     private let scrollSpace: String
 
     init(items: [MediaSearchResult], title: String, onSelect: @escaping (MediaSearchResult) -> Void) {
@@ -18,7 +17,7 @@ struct TrendingCarousel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            SectionHeader(title: title, icon: "flame.fill", iconColor: .red, scrollProgress: scrollProgress)
+            TrendingSectionHeader(title: title, scroll: items.count > 1 ? scroll : nil)
 
             if items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -32,15 +31,29 @@ struct TrendingCarousel: View {
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                 }
             } else {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
+                ScrollingHStack(space: scrollSpace, state: scroll) {
                     ForEach(items) { item in
-                        TrendingPosterCard(item: item, isFastScrolling: horizontalFastScrolling)
+                        TrendingPosterCard(item: item)
                             .equatable()
-                            .compositingGroupIfNeeded()
                             .onTapGesture { onSelect(item) }
                     }
                 }
+                .fastScrollingEnvironment(state: scroll)
             }
         }
+    }
+}
+
+private struct TrendingSectionHeader: View {
+    let title: String
+    let scroll: CarouselScrollState?
+
+    var body: some View {
+        SectionHeader(
+            title: title,
+            icon: "flame.fill",
+            iconColor: .red,
+            scrollProgress: scroll?.progress
+        )
     }
 }

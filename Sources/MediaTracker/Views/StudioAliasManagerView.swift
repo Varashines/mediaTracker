@@ -23,6 +23,15 @@ struct StudioAliasManagerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        // 2A: Esc clears the group-name field first; second Esc collapses the row.
+        .onExitCommand {
+            guard showingAddGroup else { return }
+            if !newGroupName.isEmpty {
+                newGroupName = ""
+            } else {
+                showingAddGroup = false
+            }
+        }
     }
 
     @ViewBuilder

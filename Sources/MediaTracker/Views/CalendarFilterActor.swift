@@ -78,20 +78,18 @@ actor CalendarFilterActor {
             (item.cachedNextAiringDate ?? fallbackPast) >= startOfDay && (item.cachedNextAiringDate ?? fallbackFuture) <= endOfDay
         }
         var movieDesc = FetchDescriptor<MediaItem>(predicate: moviePredicate)
-        movieDesc.propertiesToFetch = [
-            \.id, \.title, \.posterURL, \.releaseDate, \.typeValue, \.themeColorHex,
-            \.cachedNextAiringDate, \.cachedRuntime, \.storedProgress, \.stateValue
-        ]
+        movieDesc.propertiesToFetch = MediaItem.thumbnailProperties
         var movies = try modelContext.fetch(movieDesc)
 
         let unindexedPredicate = #Predicate<MediaItem> { item in
-            item.typeValue == "Movie" && item.cachedNextAiringDate == nil
+            item.typeValue == "Movie" &&
+            item.cachedNextAiringDate == nil &&
+            item.releaseDate != nil &&
+            (item.releaseDate ?? fallbackPast) >= startOfDay &&
+            (item.releaseDate ?? fallbackFuture) <= endOfDay
         }
         var unindexedDesc = FetchDescriptor<MediaItem>(predicate: unindexedPredicate)
-        unindexedDesc.propertiesToFetch = [
-            \.id, \.title, \.posterURL, \.releaseDate, \.typeValue, \.themeColorHex,
-            \.cachedNextAiringDate, \.cachedRuntime, \.storedProgress, \.stateValue
-        ]
+        unindexedDesc.propertiesToFetch = MediaItem.thumbnailProperties
         let unindexed = (try? modelContext.fetch(unindexedDesc)) ?? []
         let matched = unindexed.filter { movie in
             guard let date = movie.releaseDate else { return false }
@@ -147,6 +145,8 @@ actor CalendarFilterActor {
             for ep in episodes[i..<end] {
                 ep.updateAirDateValue()
             }
+            // Intentional batch save every 50 healed dates — heal runs off the
+            // UI frame; debouncing would delay crash-safety during long heals.
             try? context.save()
         }
     }
@@ -165,28 +165,38 @@ actor CalendarFilterActor {
     }
 
     private func processEpisodes(_ episodes: [TVEpisode], calendar: Calendar, dailyItems: inout [Date: [CalendarReleaseItem]], allItems: inout [CalendarReleaseItem]) throws {
+        let showIDs = Set(episodes.compactMap(\.showID))
+        let itemIDs = showIDs.map { "tv_\($0)" }
+        var showsByID: [String: MediaItem] = [:]
+        if !itemIDs.isEmpty {
+            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { item in
+                itemIDs.contains(item.id)
+            })
+            descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+            showsByID = Dictionary(uniqueKeysWithValues: try modelContext.fetch(descriptor).map { ($0.id, $0) })
+        }
+
         let grouped = Dictionary(grouping: episodes) { ep -> String in
             let day = calendar.startOfDay(for: ep.airDateAsDate ?? .distantPast)
-            let showID = ep.season?.tvShowDetails?.item?.id ?? (ep.showID != nil ? String(ep.showID!) : UUID().uuidString)
+            let showID = ep.showID.map { "tv_\($0)" }
+                ?? ep.season?.tvShowDetails?.item?.id
+                ?? UUID().uuidString
             return "\(day.timeIntervalSince1970)_\(showID)"
         }
-        
+
         for (_, eps) in grouped {
             guard let firstEp = eps.first, let airDate = firstEp.airDateAsDate else { continue }
             let day = calendar.startOfDay(for: airDate)
-            
-            var item = firstEp.season?.tvShowDetails?.item
-            if item == nil, let showID = firstEp.showID {
-                let idStr = "tv_\(showID)"
-                item = try? modelContext.fetch(FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == idStr })).first
-            }
-            
+
+            let item = firstEp.showID.flatMap { showsByID["tv_\($0)"] }
+                ?? firstEp.season?.tvShowDetails?.item
+
             guard let foundItem = item else { continue }
-            
+
             let season = firstEp.seasonNumber
             let sorted = eps.sorted { $0.episodeNumber < $1.episodeNumber }
             let context = sorted.count > 3 ? "Season \(season)" : "S\(season) " + sorted.map { "E\($0.episodeNumber)" }.joined(separator: ", ")
-            
+
             let releaseItem = CalendarReleaseItem(metadata: Self.toMetadata(foundItem), releaseContext: context, date: airDate, weight: eps.count)
             dailyItems[day, default: []].append(releaseItem)
             allItems.append(releaseItem)

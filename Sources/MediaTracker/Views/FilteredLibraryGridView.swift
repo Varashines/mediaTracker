@@ -4,13 +4,13 @@ import SwiftData
 struct FilteredLibraryGridView: View {
     let filter: DiscoveryFilter
     let namespace: Namespace.ID
-    @Binding var isFastScrolling: Bool
     @Binding var isSearchActive: Bool
     @Binding var searchText: String
     var onNavigateToSearch: ((String) -> Void)? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.sleepManager) private var sleepManager
+    @Environment(\.isFastScrolling) private var isFastScrolling
 
     @State private var items: [MediaThumbnailMetadata] = []
     @State private var networkColor: Color? = nil
@@ -28,7 +28,6 @@ struct FilteredLibraryGridView: View {
     @State private var loadMoreTask: Task<Void, Never>? = nil
     @State private var scopedStatsTask: Task<Void, Never>? = nil
     @State private var recsTask: Task<Void, Never>? = nil
-    @State private var scrollTask: Task<Void, Never>? = nil
     @State private var cachedLikedTitles: [String] = []
     @State private var cachedRecommendedDomain: String = "showdive"
     private func getFilterActor() -> MediaFilterActor {
@@ -129,7 +128,7 @@ struct FilteredLibraryGridView: View {
                                             NavigationLink(value: metadata.id) {
                                                 MediaThumbnailView(
                                                     metadata: metadata, mode: .grid, namespace: namespace,
-                                                    staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                                    staggerIndex: idx)
                                                 .equatable()
                                             }
                                             .buttonStyle(.interactive)
@@ -151,7 +150,7 @@ struct FilteredLibraryGridView: View {
                                     NavigationLink(value: metadata.id) {
                                         MediaThumbnailView(
                                             metadata: metadata, mode: .grid, namespace: namespace,
-                                            staggerIndex: idx, isFastScrolling: isFastScrolling)
+                                            staggerIndex: idx)
                                         .equatable()
                                     }
                                     .buttonStyle(.interactive)
@@ -174,7 +173,7 @@ struct FilteredLibraryGridView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+                .trackFastScrollingEnv()
                 .background {
                     if let color = networkColor {
                         color.opacity(colorScheme == .dark ? 0.08 : 0.04)
@@ -189,23 +188,27 @@ struct FilteredLibraryGridView: View {
                 : (filter.type == .language ? LanguageUtils.languageName(for: filter.name) : filter.name)
         )
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
-        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-            ScopedStatsActor.invalidateCache()
-            let itemID = MediaStateService.shared.lastChangedItemID
-            if let itemID = itemID {
-                updateSingleItem(id: itemID)
-                fetchScopedStats()
-            } else {
-                scopedStats = nil
-                fetchItems()
-                fetchScopedStats()
-            }
-        }
-        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
-            guard let itemID = MediaStateService.shared.lastChangedItemID else { return }
-            ScopedStatsActor.invalidateCache()
-            updateSingleItem(id: itemID)
-            fetchScopedStats()
+        // Counter reads live in the leaf so ticks don't re-eval this whole body.
+        .background {
+            MediaStateLeafObserver(
+                onSingleItemUpdate: { itemID in
+                    updateSingleItem(id: itemID)
+                    fetchScopedStats(afterInvalidation: true)
+                },
+                onFullRefresh: {
+                    // Invalidation is owned by MediaStateService's debounced derived path
+                    // (500ms) — wait past it before refetching so the cache is actually stale.
+                    let itemID = MediaStateService.shared.lastChangedItemID
+                    if let itemID = itemID {
+                        updateSingleItem(id: itemID)
+                        fetchScopedStats(afterInvalidation: true)
+                    } else {
+                        scopedStats = nil
+                        fetchItems()
+                        fetchScopedStats(afterInvalidation: true)
+                    }
+                }
+            )
         }
         .task {
             fetchItems()
@@ -280,11 +283,11 @@ struct FilteredLibraryGridView: View {
     }
 
     private struct FilterQueryParameters {
-        var network: [String]? = nil
-        var language: String? = nil
-        var genre: String? = nil
+        var network: [String] = []
+        var language: [String] = []
+        var genre: [String] = []
         var badge: String? = nil
-        var provider: String? = nil
+        var provider: [String] = []
         var sortOrder: SortOrder = .alphabetical
     }
 
@@ -293,12 +296,12 @@ struct FilteredLibraryGridView: View {
         var params = FilterQueryParameters()
         switch filter.type {
         case .studio, .network: params.network = filter.sourceNames ?? [filter.name]
-        case .genre: params.genre = filter.name
-        case .language: params.language = filter.name
+        case .genre: params.genre = [filter.name]
+        case .language: params.language = [filter.name]
         case .badge:
             params.badge = filter.name
             if includeSortOrder { params.sortOrder = .recentInteraction }
-        case .provider: params.provider = filter.name
+        case .provider: params.provider = [filter.name]
         case .onThisWeek:
             if includeSortOrder { params.sortOrder = .newestRelease }
         }
@@ -315,10 +318,11 @@ struct FilteredLibraryGridView: View {
         loadMoreTask?.cancel()
         loadMoreTask = Task {
             do {
+                let libraryVersion = MediaStateService.shared.libraryChangeToken
                 let result = try await filterActor.filterAndSort(
                     category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: params.sortOrder,
                     network: params.network, language: params.language, genre: params.genre, badge: params.badge, provider: params.provider,
-                    limit: pageSize, offset: offset
+                    limit: pageSize, offset: offset, pageOnly: true, libraryVersion: libraryVersion
                 )
                 if Task.isCancelled { return }
                 await MainActor.run {
@@ -347,9 +351,16 @@ struct FilteredLibraryGridView: View {
         }
     }
 
-    private func fetchScopedStats() {
+    private func fetchScopedStats(afterInvalidation: Bool = false) {
         scopedStatsTask?.cancel()
         scopedStatsTask = Task {
+            if afterInvalidation {
+                // Land after MediaStateService's 500ms derived-cache invalidation so
+                // we recompute against cleared state instead of racing a live cache.
+                // Cold .task loads must NOT wait — stats appear immediately.
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                guard !Task.isCancelled else { return }
+            }
             let actor = ScopedStatsActor(modelContainer: modelContext.container)
             let sections = ScopedStatsSections.visibleSections(for: filter.type)
             let stats = await actor.fetchScopedStats(filter: filter, sections: sections)
@@ -420,7 +431,8 @@ struct FilteredLibraryGridView: View {
                 let result = try await filterActor.filterAndSort(
                     category: filter.type == .onThisWeek ? .onThisWeek : .all, searchText: "", sortOrder: params.sortOrder,
                     network: params.network, language: params.language, genre: params.genre, badge: params.badge, provider: params.provider,
-                    limit: pageSize, offset: 0
+                    limit: pageSize, offset: 0,
+                    libraryVersion: MediaStateService.shared.libraryChangeToken
                 )
                 if Task.isCancelled { return }
                 await MainActor.run {

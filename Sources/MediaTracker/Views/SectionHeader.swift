@@ -39,23 +39,21 @@ struct SectionHeader: View {
                 }
                 
                 if let progress = scrollProgress {
-                    GeometryReader { geo in
-                        let availableWidth = geo.size.width
-                        let itemWidth = max(40, min(availableWidth, availableWidth * 0.3))
-                        let scrollableTrackWidth = availableWidth - itemWidth
-                        
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
-                                .frame(height: AppTheme.Spacing.micro)
-                            
-                            Capsule()
-                                .fill(AppTheme.Colors.accent.gradient)
-                                .frame(width: itemWidth, height: AppTheme.Spacing.micro)
-                                .offset(x: progress * scrollableTrackWidth)
-                                .animation(.easeOut, value: progress)
-                        }
-                        .frame(maxHeight: .infinity, alignment: .center)
+                    // Fixed frame — GeometryReader for a 4pt progress bar
+                    // measured layout on every progress tick (5% deltas).
+                    let itemWidth: CGFloat = 45
+                    let scrollableTrackWidth: CGFloat = 150 - itemWidth
+
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                            .frame(height: AppTheme.Spacing.micro)
+
+                        Capsule()
+                            .fill(AppTheme.Colors.accent.gradient)
+                            .frame(width: itemWidth, height: AppTheme.Spacing.micro)
+                            .offset(x: progress * scrollableTrackWidth)
+                            .animation(.easeOut, value: progress)
                     }
                     .frame(width: 150, height: AppTheme.Spacing.micro)
                     .padding(.trailing, AppTheme.Spacing.small)

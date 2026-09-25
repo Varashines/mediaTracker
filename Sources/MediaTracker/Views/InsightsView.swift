@@ -13,8 +13,7 @@ struct InsightsView: View {
     @State private var isRefreshing = false
     @State private var errorMessage: String?
     @State private var statsTask: Task<Void, Never>?
-    @State private var isFastScrolling = false
-    @State private var scrollTask: Task<Void, Never>?
+    @State private var refreshGeneration = 0
     @State private var customPassportImage: NSImage? = nil
     @State private var showCustomShareMenu = false
     @State private var showPassportPreview = false
@@ -87,7 +86,7 @@ struct InsightsView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.hidden)
-                .trackFastScrolling(isFastScrolling: $isFastScrolling, scrollTask: $scrollTask)
+                .trackFastScrollingEnv()
             } else if let error = errorMessage {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
@@ -98,7 +97,7 @@ struct InsightsView: View {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Retry") { refreshData() }
+                    Button("Retry") { refreshData(force: true) }
                         .buttonStyle(.borderedProminent)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -108,30 +107,18 @@ struct InsightsView: View {
         .blur(radius: showPassportPreview ? 5 : 0)
         .animation(AppTheme.Animation.springSnappy, value: showPassportPreview)
         .toolbarMaterial(isSleeping: sleepManager.isAsleep)
-        .onAppear(perform: refreshData)
-        .onChange(of: refreshID) { _, _ in refreshData() }
+        .onAppear(perform: { refreshData() })
+        .onChange(of: refreshID) { _, _ in refreshData(force: true) }
         .onDisappear {
             statsTask?.cancel()
             statsTask = nil
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if stats != nil {
-                    Button {
-                        if isRefreshing { return }
-                        withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = true }
-                    } label: {
-                        if isRefreshing {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                    }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .help("Share Cinema Wrapped Passport (⌘S)")
-                    .accessibilityLabel("Share Cinema Wrapped Passport")
-                }
-            }
+            InsightsToolbar(
+                hasStats: stats != nil,
+                isRefreshing: $isRefreshing,
+                showPassportPreview: $showPassportPreview
+            )
         }
         .overlay {
             if showPassportPreview, let stats {
@@ -237,30 +224,66 @@ struct InsightsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func refreshData() {
+    private func refreshData(force: Bool = false) {
+        if !force, statsTask != nil { return }
+
         statsTask?.cancel()
+        refreshGeneration += 1
+        let generation = refreshGeneration
         isRefreshing = stats != nil
         statsTask = Task {
             let actor = LibraryStatsActor(modelContainer: modelContext.container)
             do {
                 let result = try await actor.fetchStats(includeCinephileData: true)
-                if Task.isCancelled { return }
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    guard self.refreshGeneration == generation else { return }
                     withAnimation(AppTheme.Animation.easeInOut) {
-                        self.stats = result
+                        if self.stats != result {
+                            self.stats = result
+                        }
                         self.isLoading = false
                         self.isRefreshing = false
                     }
+                    self.statsTask = nil
                 }
             } catch {
                 if !(error is CancellationError) {
                     AppLogger.debug("Error fetching stats: \(error)")
                     await MainActor.run {
+                        guard self.refreshGeneration == generation else { return }
                         self.errorMessage = "Something went wrong while loading your insights. Try Database Repair in Settings > Data, then retry."
                         self.isLoading = false
                         self.isRefreshing = false
+                        self.statsTask = nil
                     }
                 }
+            }
+        }
+    }
+}
+
+private struct InsightsToolbar: ToolbarContent {
+    let hasStats: Bool
+    @Binding var isRefreshing: Bool
+    @Binding var showPassportPreview: Bool
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            if hasStats {
+                Button {
+                    guard !isRefreshing else { return }
+                    withAnimation(AppTheme.Animation.springSnappy) { showPassportPreview = true }
+                } label: {
+                    if isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .help("Share Cinema Wrapped Passport (⌘S)")
+                .accessibilityLabel("Share Cinema Wrapped Passport")
             }
         }
     }

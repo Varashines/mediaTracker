@@ -5,7 +5,6 @@ struct DiscoverySection<HeaderAccessory: View>: View {
     let icon: String
     let nodes: [DiscoveryNode]
     let style: DiscoveryCardStyle
-    let isFastScrolling: Bool
     var subtitle: String? = nil
     var isFeatured = false
     var limit: Int? = nil
@@ -13,6 +12,7 @@ struct DiscoverySection<HeaderAccessory: View>: View {
     let onSelected: (DiscoveryNode) -> Void
     
     @State private var isExpanded = false
+    @Environment(\.isFastScrolling) private var isFastScrolling
     
     var sectionColor: Color {
         switch title {
@@ -55,7 +55,7 @@ struct DiscoverySection<HeaderAccessory: View>: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: AppTheme.Spacing.large)], spacing: AppTheme.Spacing.large) {
                 ForEach(Array(displayedNodes.enumerated()), id: \.element.id) { index, node in
                     DiscoveryCard(node: node, style: style, baseColor: sectionColor) { onSelected(node) }
-                        .modifier(StaggerModifier(index: index, isFastScrolling: isFastScrolling))
+                        .modifier(StaggerModifier(index: index))
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
@@ -78,12 +78,11 @@ struct DiscoverySection<HeaderAccessory: View>: View {
 // MARK: - No-Accessory Convenience
 
 extension DiscoverySection where HeaderAccessory == EmptyView {
-    init(title: String, icon: String, nodes: [DiscoveryNode], style: DiscoveryCardStyle, isFastScrolling: Bool, subtitle: String? = nil, isFeatured: Bool = false, limit: Int? = nil, onSelected: @escaping (DiscoveryNode) -> Void) {
+    init(title: String, icon: String, nodes: [DiscoveryNode], style: DiscoveryCardStyle, subtitle: String? = nil, isFeatured: Bool = false, limit: Int? = nil, onSelected: @escaping (DiscoveryNode) -> Void) {
         self.title = title
         self.icon = icon
         self.nodes = nodes
         self.style = style
-        self.isFastScrolling = isFastScrolling
         self.subtitle = subtitle
         self.isFeatured = isFeatured
         self.limit = limit

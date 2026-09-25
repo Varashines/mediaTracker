@@ -28,23 +28,21 @@ struct WatchedThisWeek: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var movieItems: [MediaItem] = []
     @State private var showItems: [MediaItem] = []
+    @State private var watchDates: [PersistentIdentifier: Date] = [:]
+    @State private var includesOlderHistory = false
     @State private var isLoading = true
     @State private var filter: WatchFilter = .all
     @State private var hoveredPill: WatchFilter? = nil
-    @State private var scrollProgress: Double = 0
-    @State private var horizontalFastScrolling = false
+    @State private var scroll = CarouselScrollState()
+    @State private var refreshCoalesceTask: Task<Void, Never>?
     @Namespace private var filterAnimation
     private let scrollSpace = "WTW_Scroll"
-
-    private let minCount = 10
-    private let weekCap = 30
-    private let fillWindows: [TimeInterval] = [.days14, .days30]
 
     private var filteredItems: [MediaItem] {
         switch filter {
         case .all:
             return (movieItems + showItems).sorted {
-                ($0.lastInteractionDate ?? .distantPast) > ($1.lastInteractionDate ?? .distantPast)
+                (watchDates[$0.persistentModelID] ?? .distantPast) > (watchDates[$1.persistentModelID] ?? .distantPast)
             }
         case .movies:
             return movieItems
@@ -68,12 +66,11 @@ struct WatchedThisWeek: View {
         let items = filteredItems
 
         return VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            SectionHeader(
-                title: "Watched This Week",
-                icon: "clock.fill",
-                iconColor: .green,
-                scrollProgress: scrollProgress,
-                trailingAccessory: { AnyView(filterPills) }
+            WatchedThisWeekHeader(
+                scroll: scroll,
+                filter: filter,
+                filterPills: AnyView(filterPills),
+                subtitle: includesOlderHistory ? "Includes older history" : nil
             )
 
             if isLoading {
@@ -120,81 +117,109 @@ struct WatchedThisWeek: View {
                 .padding(.bottom, AppTheme.Spacing.small)
                 .transition(.mediaRowArrival)
             } else {
-                ScrollingHStack(space: scrollSpace, scrollProgress: $scrollProgress, isFastScrolling: $horizontalFastScrolling) {
+                ScrollingHStack(space: scrollSpace, state: scroll) {
                     ForEach(items, id: \.persistentModelID) { item in
                         NavigationLink(value: item) {
                             MediaThumbnailView(
                                 item: item,
                                 mode: .grid,
-                                showTypeBadge: true,
-                                isFastScrolling: horizontalFastScrolling
+                                showTypeBadge: true
                             )
                             .equatable()
-                            .compositingGroupIfNeeded()
                             .frame(width: 160)
                         }
                         .buttonStyle(.interactive)
                     }
                 }
+                .fastScrollingEnvironment(state: scroll)
                 .id(filter)
                 .transition(.mediaRowArrival)
             }
         }
         .task { await fetchRecentItems() }
-        .onChange(of: MediaStateService.shared.needsSingleItemUpdateCount) { _, _ in
-            Task { await fetchRecentItems() }
-        }
-        .onChange(of: MediaStateService.shared.needsFullRefreshCount) { _, _ in
-            Task { await fetchRecentItems() }
+        .onDisappear {
+            refreshCoalesceTask?.cancel()
+            refreshCoalesceTask = nil
         }
         .animation(AppTheme.Animation.easeInOut, value: filter)
+        // Leaf observer: counter ticks must not re-eval this row body.
+        .background {
+            MediaStateLeafObserver(
+                onSingleItemUpdate: { _ in scheduleCoalescedRecentRefresh() },
+                onFullRefresh: { scheduleCoalescedRecentRefresh() }
+            )
+        }
+    }
+
+    /// Coalesce undebounced single-item ticks + full-refresh ticks into one
+    /// pool refetch (binge marks were firing two expanding scans per episode).
+    private func scheduleCoalescedRecentRefresh() {
+        refreshCoalesceTask?.cancel()
+        refreshCoalesceTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            await fetchRecentItems()
+        }
     }
 
     private func fetchRecentItems() async {
         let container = modelContext.container
-        let (movieIDs, showIDs) = await Task.detached(priority: .userInitiated) { () -> ([PersistentIdentifier], [PersistentIdentifier]) in
+        let (movies, shows) = await Task.detached(priority: .userInitiated) { () -> ([WatchActivityCandidate], [WatchActivityCandidate]) in
             let backgroundContext = ModelContext(container)
-            let movies = Self.fetchPool(type: .movie, context: backgroundContext)
-            let shows = Self.fetchPool(type: .tvShow, context: backgroundContext)
-            return (movies, shows)
+            let candidates = WatchActivityResolver.candidates(
+                types: [.movie, .tvShow],
+                context: backgroundContext
+            )
+            return (
+                Self.fetchPool(type: .movie, candidates: candidates),
+                Self.fetchPool(type: .tvShow, candidates: candidates)
+            )
         }.value
 
-        movieItems = movieIDs.compactMap { modelContext.model(for: $0) as? MediaItem }
-        showItems = showIDs.compactMap { modelContext.model(for: $0) as? MediaItem }
+        movieItems = movies.compactMap { modelContext.model(for: $0.id) as? MediaItem }
+        showItems = shows.compactMap { modelContext.model(for: $0.id) as? MediaItem }
+        watchDates = Dictionary(uniqueKeysWithValues: (movies + shows).map { ($0.id, $0.watchedAt) })
+        includesOlderHistory = (movies + shows).contains {
+            $0.watchedAt < Date().addingTimeInterval(-.days7)
+        }
         withAnimation(AppTheme.Animation.easeInOut) { isLoading = false }
     }
 
     /// Watched this week; if fewer than `minCount` of a type, expand the window until we have 10.
-    nonisolated private static func fetchPool(type: MediaType, context: ModelContext) -> [PersistentIdentifier] {
-        let raw = type.rawValue
+    nonisolated private static func fetchPool(
+        type: MediaType,
+        candidates: [WatchActivityCandidate]
+    ) -> [WatchActivityCandidate] {
         let minCount = 10
         let weekCap = 30
         let fillWindows: [TimeInterval] = [.days14, .days30]
+        let candidates = candidates.filter { $0.type == type }
 
         // Phase 1 — strict "watched this week", no filling. Show the whole week.
-        let week = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -.days7), limit: weekCap, context: context)
+        let week = WatchActivityResolver.recentCandidates(
+            candidates: candidates,
+            cutoff: Date(timeIntervalSinceNow: -.days7),
+            limit: weekCap
+        )
         if week.count >= minCount { return week }
 
         // Phase 2 — <10 this week → pull the last 10 from older history.
         var best = week
         for window in fillWindows {
-            let results = fetch(typeRaw: raw, cutoff: Date(timeIntervalSinceNow: -window), limit: minCount, context: context)
+            let results = WatchActivityResolver.recentCandidates(
+                candidates: candidates,
+                cutoff: Date(timeIntervalSinceNow: -window),
+                limit: minCount
+            )
             best = results
             if results.count >= minCount { return results }
         }
-        let allTime = fetch(typeRaw: raw, cutoff: .distantPast, limit: minCount, context: context)
+        let allTime = WatchActivityResolver.recentCandidates(
+            candidates: candidates,
+            cutoff: .distantPast,
+            limit: minCount
+        )
         return allTime.count >= best.count ? allTime : best
-    }
-
-    nonisolated private static func fetch(typeRaw: String, cutoff: Date, limit: Int?, context: ModelContext) -> [PersistentIdentifier] {
-        let predicate = #Predicate<MediaItem> {
-            ($0.lastInteractionDate ?? cutoff) >= cutoff && $0.stateValue != "Wishlist" && $0.typeValue == typeRaw
-        }
-        var descriptor = FetchDescriptor<MediaItem>(predicate: predicate)
-        descriptor.fetchLimit = limit
-        descriptor.sortBy = [SortDescriptor(\.lastInteractionDate, order: .reverse)]
-        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
-        return (try? context.fetch(descriptor))?.map(\.persistentModelID) ?? []
     }
 
     private var filterPills: some View {
@@ -205,22 +230,13 @@ struct WatchedThisWeek: View {
         }
         .padding(3)
         .background {
-            Capsule().fill(AppThemeCoordinator.isReducingVisualEffects
-                ? AnyShapeStyle(AppTheme.Colors.cardFill(for: colorScheme))
-                : AnyShapeStyle(.ultraThinMaterial))
+            Capsule().fill(AppTheme.Colors.cardFill(for: colorScheme))
         }
         .overlay {
             Capsule().stroke(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.18), AppTheme.Colors.strokeDefault(for: colorScheme)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
+                AppTheme.Colors.strokeDefault(for: colorScheme),
                 lineWidth: 0.5
             )
-        }
-        .if(!AppThemeCoordinator.isReducingVisualEffects) {
-            $0.shadow(color: AppTheme.Colors.shadowAmbient(for: colorScheme), radius: 6, y: 2)
         }
     }
 
@@ -231,7 +247,7 @@ struct WatchedThisWeek: View {
             withAnimation(AppTheme.Animation.springSnappy) {
                 filter = option
             }
-            scrollProgress = 0
+            scroll.progress = 0
             FeedbackManager.shared.trigger(.click)
         } label: {
             HStack(spacing: 5) {
@@ -275,5 +291,25 @@ struct WatchedThisWeek: View {
         .help(option.title)
         .accessibilityLabel(option.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// Reads `scroll.progress` in isolation so preference ticks don't re-run
+/// WatchedThisWeek's body (fetch, filter lists, card ForEach).
+private struct WatchedThisWeekHeader: View {
+    let scroll: CarouselScrollState
+    let filter: WatchFilter
+    let filterPills: AnyView
+    let subtitle: String?
+
+    var body: some View {
+        SectionHeader(
+            title: "Watched This Week",
+            icon: "clock.fill",
+            iconColor: .green,
+            subtitle: subtitle,
+            scrollProgress: scroll.progress,
+            trailingAccessory: { filterPills }
+        )
     }
 }

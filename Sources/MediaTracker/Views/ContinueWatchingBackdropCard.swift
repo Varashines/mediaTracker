@@ -8,12 +8,12 @@ import SwiftUI
 /// card reads without hover.
 struct ContinueWatchingBackdropCard: View, Equatable {
     let metadata: MediaThumbnailMetadata
-    var isFastScrolling: Bool = false
 
+    @Environment(\.isFastScrolling) private var isFastScrolling
     @State private var isHovered = false
 
     nonisolated static func == (lhs: ContinueWatchingBackdropCard, rhs: ContinueWatchingBackdropCard) -> Bool {
-        lhs.metadata == rhs.metadata && lhs.isFastScrolling == rhs.isFastScrolling
+        lhs.metadata == rhs.metadata
     }
 
     private let cardWidth: CGFloat = 288
@@ -54,7 +54,11 @@ struct ContinueWatchingBackdropCard: View, Equatable {
             .padding(.bottom, 10)
         }
         .frame(width: cardWidth, height: cardHeight)
-        .cardHoverChrome(radius: AppTheme.Radius.appleTV, isHovered: isHovered)
+        .cardHoverChrome(
+            radius: AppTheme.Radius.appleTV,
+            isHovered: isHovered,
+            suppressEffects: isFastScrolling
+        )
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.015 : 1.0))
         .if(!AppThemeCoordinator.isReducingVisualEffects) {
             $0.animation(.easeInOut(duration: 0.14), value: isHovered)
@@ -105,12 +109,23 @@ struct ContinueWatchingBackdropCard: View, Equatable {
         // Continue Watching always shows logos (ignores the global
         // `use_title_logos` toggle) — the backdrop art carries no title.
         if let logo = metadata.logoURL, let url = URL(string: logo) {
-            CachedImage(url: url, targetSize: CGSize(width: 780, height: 185), priority: .low) {
+            CachedImage(
+                url: url,
+                targetSize: .cardLogo,
+                priority: .low,
+                isFastScrolling: isFastScrolling
+            ) {
                 titleText
             }
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: 190, maxHeight: 38, alignment: .leading)
-            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            // Parameterized (not `.if`) so fast-scroll toggles don't remount
+            // CachedImage and reset its image state back to the title placeholder.
+            .shadow(
+                color: isFastScrolling ? .clear : .black.opacity(0.4),
+                radius: isFastScrolling ? 0 : 2,
+                y: isFastScrolling ? 0 : 1
+            )
         } else {
             titleText
         }

@@ -1,21 +1,21 @@
 import Foundation
 import SwiftData
 
-struct VisualPersonStat: Sendable, Codable {
+struct VisualPersonStat: Sendable, Codable, Equatable {
     let name: String
     let profileURL: String?
     let score: Double
     let count: Int
 }
 
-struct BarcodeSlice: Sendable, Identifiable, Codable {
+struct BarcodeSlice: Sendable, Identifiable, Codable, Equatable {
     let id: String
     let title: String
     let tasteValue: String
     let themeColorHex: String?
 }
 
-struct LibraryStats: Sendable {
+struct LibraryStats: Sendable, Equatable {
     let totalWatchTimeMinutes: Int
 
     let totalMovies: Int
@@ -25,6 +25,9 @@ struct LibraryStats: Sendable {
     let completedTVShows: Int
 
     let totalEpisodesWatched: Int
+    let totalRewatches: Int
+    let titlesRewatched: Int
+    let partialRewatches: Int
 
     // Genre DNA (for Radar Chart)
     let genreDNA: [(name: String, percentage: Double)]
@@ -49,6 +52,46 @@ struct LibraryStats: Sendable {
     let topGenre: String?
     let memberSince: Date?
 
+    static func == (lhs: LibraryStats, rhs: LibraryStats) -> Bool {
+        let genreMatches = lhs.genreDNA.count == rhs.genreDNA.count && zip(lhs.genreDNA, rhs.genreDNA).allSatisfy {
+            $0.name == $1.name && $0.percentage == $1.percentage
+        }
+        let networkMatches = lhs.topRatedNetworks.count == rhs.topRatedNetworks.count && zip(lhs.topRatedNetworks, rhs.topRatedNetworks).allSatisfy {
+            $0.name == $1.name && $0.score == $1.score
+        }
+        let studioMatches = lhs.topRatedStudios.count == rhs.topRatedStudios.count && zip(lhs.topRatedStudios, rhs.topRatedStudios).allSatisfy {
+            $0.name == $1.name && $0.score == $1.score
+        }
+        let languageMatches = lhs.topRatedLanguages.count == rhs.topRatedLanguages.count && zip(lhs.topRatedLanguages, rhs.topRatedLanguages).allSatisfy {
+            $0.name == $1.name && $0.score == $1.score
+        }
+
+        return lhs.totalWatchTimeMinutes == rhs.totalWatchTimeMinutes &&
+            lhs.totalMovies == rhs.totalMovies &&
+            lhs.completedMovies == rhs.completedMovies &&
+            lhs.totalTVShows == rhs.totalTVShows &&
+            lhs.completedTVShows == rhs.completedTVShows &&
+            lhs.totalEpisodesWatched == rhs.totalEpisodesWatched &&
+            lhs.totalRewatches == rhs.totalRewatches &&
+            lhs.titlesRewatched == rhs.titlesRewatched &&
+            lhs.partialRewatches == rhs.partialRewatches &&
+            genreMatches &&
+            lhs.topRatedActors == rhs.topRatedActors &&
+            lhs.topRatedCreators == rhs.topRatedCreators &&
+            networkMatches &&
+            studioMatches &&
+            languageMatches &&
+            lhs.lovedCount == rhs.lovedCount &&
+            lhs.likedCount == rhs.likedCount &&
+            lhs.dislikedCount == rhs.dislikedCount &&
+            lhs.unratedCount == rhs.unratedCount &&
+            lhs.barcodeData == rhs.barcodeData &&
+            lhs.ratingPersonality == rhs.ratingPersonality &&
+            lhs.archetype == rhs.archetype &&
+            lhs.topGenre == rhs.topGenre &&
+            lhs.memberSince == rhs.memberSince
+    }
+
     static let empty = LibraryStats(
         totalWatchTimeMinutes: 0,
         totalMovies: 0,
@@ -56,6 +99,9 @@ struct LibraryStats: Sendable {
         totalTVShows: 0,
         completedTVShows: 0,
         totalEpisodesWatched: 0,
+        totalRewatches: 0,
+        titlesRewatched: 0,
+        partialRewatches: 0,
         genreDNA: [],
         topRatedActors: [],
         topRatedCreators: [],
@@ -89,6 +135,9 @@ struct CodableLibraryStats: Codable {
     let totalTVShows: Int
     let completedTVShows: Int
     let totalEpisodesWatched: Int
+    let totalRewatches: Int
+    let titlesRewatched: Int
+    let partialRewatches: Int
 
     let genreDNA: [NamePercentage]
     let topRatedActors: [VisualPersonStat]
@@ -116,6 +165,9 @@ struct CodableLibraryStats: Codable {
         self.totalTVShows = stats.totalTVShows
         self.completedTVShows = stats.completedTVShows
         self.totalEpisodesWatched = stats.totalEpisodesWatched
+        self.totalRewatches = stats.totalRewatches
+        self.titlesRewatched = stats.titlesRewatched
+        self.partialRewatches = stats.partialRewatches
         self.genreDNA = stats.genreDNA.map { NamePercentage(name: $0.name, percentage: $0.percentage) }
         self.topRatedActors = stats.topRatedActors
         self.topRatedCreators = stats.topRatedCreators
@@ -141,6 +193,9 @@ struct CodableLibraryStats: Codable {
             totalTVShows: totalTVShows,
             completedTVShows: completedTVShows,
             totalEpisodesWatched: totalEpisodesWatched,
+            totalRewatches: totalRewatches,
+            titlesRewatched: titlesRewatched,
+            partialRewatches: partialRewatches,
             genreDNA: genreDNA.map { ($0.name, $0.percentage) },
             topRatedActors: topRatedActors,
             topRatedCreators: topRatedCreators,
@@ -255,7 +310,7 @@ actor LibraryStatsActor {
             descriptor.propertiesToFetch = [
                 \.id, \.title, \.releaseDate,
                 \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
-                \.lastInteractionDate, \.lastStateChangeDate,
+                \.lastInteractionDate, \.lastStateChangeDate, \.dateAdded,
                 \.cachedGenres, \.cachedCreators, \.cachedLanguage, \.cachedNetwork,
                 \.cachedRuntime, \.cachedEpisodeRuntime, \.cachedWatchedEpisodeCount,
                 \.storedSmartBadgeLabel, \.storedIsUpcoming, \.storedCast, \.mood, \.cachedSeasonCount
@@ -272,7 +327,28 @@ actor LibraryStatsActor {
 
         try Task.checkCancellation()
 
-        let result = try await finalizeStats(stats: statsContainer, taste: tasteMaps)
+        var cycleDescriptor = FetchDescriptor<WatchCycle>()
+        cycleDescriptor.propertiesToFetch = [\.mediaID, \.stateRaw, \.isRewatch, \.isComplete]
+        let cycles = (try? modelContext.fetch(cycleDescriptor)) ?? []
+        let completedStates: Set<String> = [WatchCycleState.completed.rawValue]
+        let completedRewatches = cycles.filter {
+            $0.isRewatch && ($0.isComplete || completedStates.contains($0.stateRaw))
+        }
+        let partialRewatches = cycles.filter {
+            $0.isRewatch && !$0.isComplete && (
+                $0.stateRaw == WatchCycleState.active.rawValue ||
+                $0.stateRaw == WatchCycleState.paused.rawValue ||
+                $0.stateRaw == WatchCycleState.archived.rawValue
+            )
+        }
+
+        let result = try await finalizeStats(
+            stats: statsContainer,
+            taste: tasteMaps,
+            totalRewatches: completedRewatches.count,
+            titlesRewatched: Set(completedRewatches.map(\.mediaID)).count,
+            partialRewatches: partialRewatches.count
+        )
 
         let calculationDate = Date()
         await MainActor.run {
@@ -426,7 +502,13 @@ actor LibraryStatsActor {
         }
     }
 
-    private func finalizeStats(stats: RawStatsContainer, taste: TasteMapsContainer) async throws -> LibraryStats {
+    private func finalizeStats(
+        stats: RawStatsContainer,
+        taste: TasteMapsContainer,
+        totalRewatches: Int,
+        titlesRewatched: Int,
+        partialRewatches: Int
+    ) async throws -> LibraryStats {
         // 1. Process Genre DNA - Require minimum 10 titles watched, ranked strictly by Taste Affinity score
         let genreDNAMap = taste.genreTaste.compactMap { name, categoryStats -> (String, Double, Int)? in
             guard categoryStats.total >= 10, categoryStats.ratedCount >= 5 else { return nil }
@@ -501,6 +583,9 @@ actor LibraryStatsActor {
             totalTVShows: stats.tvCount,
             completedTVShows: stats.tvCompleted,
             totalEpisodesWatched: stats.epWatched,
+            totalRewatches: totalRewatches,
+            titlesRewatched: titlesRewatched,
+            partialRewatches: partialRewatches,
             genreDNA: Array(genreDNA),
             topRatedActors: dedupedActors,
             topRatedCreators: dedupedCreators,

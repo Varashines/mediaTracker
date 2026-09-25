@@ -2,11 +2,11 @@ import SwiftUI
 
 struct TrendingPosterCard: View, Equatable {
     let item: MediaSearchResult
-    var isFastScrolling: Bool = false
+    @Environment(\.isFastScrolling) private var isFastScrolling
     @State private var isHovered = false
-    
+
     nonisolated static func == (lhs: TrendingPosterCard, rhs: TrendingPosterCard) -> Bool {
-        lhs.item.id == rhs.item.id && lhs.isFastScrolling == rhs.isFastScrolling
+        lhs.item.id == rhs.item.id
     }
 
     var body: some View {
@@ -42,7 +42,7 @@ struct TrendingPosterCard: View, Equatable {
             }
         }
         .frame(width: 160, height: 240)
-        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered)
+        .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered, suppressEffects: isFastScrolling)
         .scaleEffect(AppThemeCoordinator.isReducingVisualEffects ? 1 : (isHovered ? 1.03 : 1.0))
         .animation(AppTheme.Animation.springSnappy, value: isHovered)
         .onHover { isHovered = $0 }

@@ -46,6 +46,8 @@ enum UserDefaultsKeys: String {
     case genreDeconstructionV1 = "genre_deconstruction_v1"
     case searchableLanguageV1 = "searchable_language_v1"
     case colorExtractionVersion = "colorExtractionVersion"
+    case watchHistoryBackfillV1 = "watch_history_backfill_v1"
+    case watchHistoryRepairV1 = "watch_history_repair_v1"
     
     // Taste weights
     case tasteWeightGenre = "taste_weight_genre"

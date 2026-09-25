@@ -68,8 +68,11 @@ extension BackgroundDataService {
             }
             // Migrate legacy IDs
             if !item.id.contains("_") {
+                let oldID = item.id
                 let typePrefix = item.type == .movie ? "movie" : "tv"
-                item.id = "\(typePrefix)_\(item.id)"
+                let newID = "\(typePrefix)_\(oldID)"
+                WatchHistoryCoordinator.remapHistory(from: oldID, to: newID, context: modelContext)
+                item.id = newID
             }
 
             if let tmdbIDString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbIDString) {
@@ -153,8 +156,8 @@ extension BackgroundDataService {
                     // 4. Single recalculate at the end (was 3 separate calls)
                     tv.recalculateCachedProperties(triggerSync: true, force: true)
 
-                    // 5. Heal: keep lastInteractionDate in sync with the most recent episode watch,
-                    // so "Recently Watched" reflects real watch times.
+                    // 5. Keep lastInteractionDate in sync with the most recent episode watch
+                    // for interaction-based library surfaces.
                     if let latestWatch = liveSeasons
                         .flatMap({ $0.episodes.liveModels })
                         .compactMap({ $0.lastWatchedDate })

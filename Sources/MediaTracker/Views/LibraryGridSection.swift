@@ -11,12 +11,11 @@ struct LibraryGridSection: View {
     let searchText: String
     let selectedNetworks: [String]?
     let namespace: Namespace.ID
-    let isFastScrolling: Bool
     let disableHover: Bool
     let columns: [GridItem]
     let viewModel: MediaViewModel
     let onLoadMore: () -> Void
-    
+
     var isCategoryPage: Bool {
         return selectedCategory == .movie || selectedCategory == .tvShow
     }
@@ -49,17 +48,16 @@ struct LibraryGridSection: View {
                 }
             } else {
                 if selectedCategory == .all && searchText.isEmpty
-                    && selectedNetworks == nil
+                    && (selectedNetworks?.isEmpty ?? true)
                 {
                     RecentlyAddedRow(
-                        items: recentlyAdded, isFastScrolling: isFastScrolling, namespace: namespace)
+                        items: recentlyAdded, namespace: namespace)
                 }
 
                 if viewModel.filter.currentGroupBy == .none {
                     MainMediaGrid(
                         items: items,
                         isCategoryPage: isCategoryPage, namespace: namespace,
-                        isFastScrolling: isFastScrolling,
                         disableHover: disableHover,
                         selectedCollectionID: viewModel.collection.selectedCollectionID,
                         onLoadMore: onLoadMore,
@@ -71,12 +69,15 @@ struct LibraryGridSection: View {
                         groupedItems: groupedItems,
                         selectedCategoryRef: selectedCategory,
                         viewModel: viewModel, namespace: namespace,
-                        isFastScrolling: isFastScrolling,
                         disableHover: disableHover,
                         columns: columns)
                 }
             }
         }
-        .animation(AppTheme.Animation.easeInOut, value: FilterSnapshot(from: viewModel))
+        // Animate only on category/search changes — constructing a full
+        // FilterSnapshot (12 property reads) as the animation value on every
+        // body eval was pure overhead with no visual benefit.
+        .animation(AppTheme.Animation.easeInOut, value: selectedCategory)
+        .animation(AppTheme.Animation.easeInOut, value: searchText)
     }
 }

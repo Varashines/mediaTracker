@@ -103,6 +103,12 @@ struct DiscoveryManagementView: View {
         .onChange(of: hiddenStudios) { _, _ in recomputeLists() }
         .onChange(of: networkSearchText) { _, _ in recomputeAddable() }
         .onAppear { recomputeLists() }
+        // 2A: embedded settings field — Esc clears text only (no parent to close).
+        .onExitCommand {
+            if !networkSearchText.isEmpty {
+                networkSearchText = ""
+            }
+        }
     }
     
     private func recomputeLists() {

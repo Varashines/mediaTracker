@@ -10,8 +10,7 @@ struct ClaymorphicSurface: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            // Puffed neutral background
+        let base = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
@@ -22,7 +21,6 @@ struct ClaymorphicSurface: View {
                     endPoint: .bottomTrailing
                 )
             )
-            // Outer subtle border
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
@@ -32,25 +30,31 @@ struct ClaymorphicSurface: View {
                         lineWidth: isHovered ? 1.0 : 0.6
                     )
             )
-            // Inner Highlight (Glossy)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.40), lineWidth: 2.5)
-                    .blur(radius: 1.2)
-                    .offset(x: 1.2, y: 1.2)
-                    .mask(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    )
-            )
-            // Inner Shadow (Depth)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.black.opacity(colorScheme == .dark ? 0.32 : 0.06), lineWidth: 3)
-                    .blur(radius: 1.5)
-                    .offset(x: -1.5, y: -1.5)
-                    .mask(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    )
-            )
+
+        if AppThemeCoordinator.isReducingVisualEffects {
+            base
+        } else {
+            base
+                // Inner Highlight (Glossy)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.40), lineWidth: 2.5)
+                        .blur(radius: 1.2)
+                        .offset(x: 1.2, y: 1.2)
+                        .mask(
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        )
+                )
+                // Inner Shadow (Depth)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.black.opacity(colorScheme == .dark ? 0.32 : 0.06), lineWidth: 3)
+                        .blur(radius: 1.5)
+                        .offset(x: -1.5, y: -1.5)
+                        .mask(
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        )
+                )
+        }
     }
 }
