@@ -572,7 +572,9 @@ actor DiscoverySyncService {
                         guard let path = logoPath,
                               let urlString = APIClient.tmdbImageURL(path: path, size: "w300") else { return (id, nil) }
                         guard let cached = await ImageCache.shared.get(forKey: urlString, targetSize: .networkLogo) else {
-                            AppLogger.warning("Network logo cache miss for '\(name)'", logger: AppLogger.sync)
+                            // Covers both a cold cache and a failed logo download —
+                            // `get` fetches on miss, so this is a load failure.
+                            AppLogger.warning("Network logo unavailable for '\(name)' — skipping theme color", logger: AppLogger.sync)
                             return (id, nil)
                         }
                         let extractedColor = await ColorExtractor.dominantColor(from: cached.image)

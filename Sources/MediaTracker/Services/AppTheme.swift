@@ -122,8 +122,35 @@ struct AppTheme {
         static let springSnappy: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.7)
         static let springGentle: SwiftUI.Animation = .spring(response: 0.6, dampingFraction: 0.8)
         static let easeInOut: SwiftUI.Animation = .easeInOut(duration: 0.25)
-         static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
-         static let gridSettle: SwiftUI.Animation = .spring(response: 0.28, dampingFraction: 0.86)
+        static let microInteraction: SwiftUI.Animation = .spring(response: 0.2, dampingFraction: 0.65)
+        static let gridSettle: SwiftUI.Animation = .spring(response: 0.28, dampingFraction: 0.86)
+        static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
+        static let chartReveal: SwiftUI.Animation = .easeOut(duration: 0.8)
+
+        /// Opacity-only crossfades. Cheap, non-vestibular, safe to run even when
+        /// Reduce Motion is on, so these intentionally stay unconditional.
+        static let hoverFade: SwiftUI.Animation = .easeInOut(duration: 0.14)
+        static let fade: SwiftUI.Animation = .easeInOut(duration: 0.2)
+
+        /// Transform-driven motion. Route these through `adaptive`/`with` so
+        /// Reduce Motion suppresses the movement but keeps the state change.
+        static let press: SwiftUI.Animation = .spring(response: 0.25, dampingFraction: 0.5)
+        static let pop: SwiftUI.Animation = .spring(response: 0.35, dampingFraction: 0.5)
+        static let toolbarPop: SwiftUI.Animation = .spring(response: 0.4, dampingFraction: 0.5)
+        static let readerExpand: SwiftUI.Animation = .spring(response: 0.3, dampingFraction: 0.85)
+        static let banner: SwiftUI.Animation = .spring(response: 0.4, dampingFraction: 0.7)
+        static let bannerSettle: SwiftUI.Animation = .spring(response: 0.45, dampingFraction: 0.75)
+
+        /// Looping motion. Always suppress under Reduce Motion — these are the
+        /// strongest vestibular triggers in the app.
+        static let pulseLoop: SwiftUI.Animation = .linear(duration: 2.2).repeatForever(autoreverses: true)
+        static let shimmerLoop: SwiftUI.Animation = .linear(duration: 1.5).repeatForever(autoreverses: false)
+        static let breatheLoop: SwiftUI.Animation = .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
+
+        /// Per-index stagger for list entrances, e.g. `banner.stagger(3)`.
+        static func stagger(_ index: Int, step: Double = 0.04) -> SwiftUI.Animation {
+            banner.delay(Double(index) * step)
+        }
 
         @MainActor
         static func adaptive(_ animation: SwiftUI.Animation) -> SwiftUI.Animation? {
@@ -138,8 +165,6 @@ struct AppTheme {
                 SwiftUI.withAnimation(animation) { body() }
             }
         }
-        static let sleepTransition: SwiftUI.Animation = .easeInOut(duration: 0.6)
-        static let chartReveal: SwiftUI.Animation = .easeOut(duration: 0.8)
     }
 
     struct Thumbnail {

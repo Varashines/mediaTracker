@@ -60,4 +60,22 @@ final class MediaRefreshPolicyTests: XCTestCase {
             now: now
         ))
     }
+
+    func testWeeklyTierIsLimitedToTVShows() {
+        // A movie labelled with an episodic status is metadata-stable, so it must
+        // not get the weekly cadence.
+        XCTAssertEqual(
+            MediaRefreshPolicy.refreshInterval(for: "Returning Series", type: .movie),
+            .days30
+        )
+        XCTAssertEqual(
+            MediaRefreshPolicy.refreshInterval(for: "Returning Series", type: .tvShow),
+            .days7
+        )
+    }
+
+    func testStatusMatchingIsCaseAndWhitespaceInsensitive() {
+        XCTAssertNil(MediaRefreshPolicy.refreshInterval(for: "  ENDED ", type: .tvShow))
+        XCTAssertEqual(MediaRefreshPolicy.refreshInterval(for: " Released ", type: .movie), .days30)
+    }
 }

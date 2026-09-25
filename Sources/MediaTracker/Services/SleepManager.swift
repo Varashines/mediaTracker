@@ -92,7 +92,7 @@ class SleepManager {
         lastInteractionDate = Date()
         if isIdle { isIdle = false }
         if isAsleep {
-            withAnimation(.easeInOut(duration: 0.4)) {
+            AppTheme.Animation.with(AppTheme.Animation.sleepTransition) {
                 isAsleep = false
             }
             // Reschedule idle/sleep checks

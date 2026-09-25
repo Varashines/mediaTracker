@@ -96,7 +96,7 @@ struct PosterView: View {
                         .help(isLoadingPosterOptions ? "Loading poster options" : "Change poster")
                         .opacity((isHovering || showPicker) ? 1 : 0)
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
-                        .animation(.easeInOut(duration: 0.2), value: isHovering || showPicker)
+                        .animation(AppTheme.Animation.adaptive(AppTheme.Animation.fade), value: isHovering || showPicker)
                         .padding(10)
                         .popover(isPresented: $showPicker) {
                             PosterPickerGrid(
@@ -118,7 +118,7 @@ struct PosterView: View {
             }
             .compositingGroupIfNeeded()
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                AppTheme.Animation.with(AppTheme.Animation.fade) {
                     isHovering = hovering
                 }
             }
@@ -248,13 +248,13 @@ private struct PosterThumbnail: View {
                 isHovered = hovering
             }
             .onTapGesture {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                AppTheme.Animation.with(AppTheme.Animation.press) {
                     selectionPulse = true
                 }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 120_000_000)
                     guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                    AppTheme.Animation.with(AppTheme.Animation.press) {
                         selectionPulse = false
                     }
                 }
