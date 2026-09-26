@@ -60,7 +60,11 @@ struct MediaHeaderView: View {
                     
                     MetadataSection(item: item, themeColor: themeColor)
 
-                    WatchHistorySummaryView(mediaID: item.id)
+                    WatchHistorySummaryView(
+                        mediaID: item.id,
+                        firstWatchedAt: item.firstWatchedAt,
+                        themeColor: themeColor
+                    )
 
                     OverviewSection(
                         overview: item.overview, themeColor: themeColor,
