@@ -62,6 +62,12 @@ struct MediaHeaderView: View {
 
                     WatchHistorySummaryView(mediaID: item.id)
 
+                    WatchLogView(
+                        mediaID: item.id,
+                        firstWatchedAt: item.firstWatchedAt,
+                        themeColor: themeColor
+                    )
+
                     OverviewSection(
                         overview: item.overview, themeColor: themeColor,
                         onExpand: onSynopsisExpand

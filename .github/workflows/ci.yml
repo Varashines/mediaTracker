@@ -57,6 +57,7 @@ jobs:
             SyncCachedPropertiesTests
             UtilityTests
             WatchHistoryCoordinatorTests
+            WatchLogBuilderTests
             WatchProvidersTests
             WeeklyDigestTests
             YearInReviewTests
