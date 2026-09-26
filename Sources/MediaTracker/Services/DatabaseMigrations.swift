@@ -441,7 +441,9 @@ enum DatabaseMigrations {
             let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "firstWatchedDateBackfill", container: container) {
                 let context = ModelContext(container)
 
-                // Earliest active occurrence per (mediaID, episodeID).
+                // Earliest active occurrence per episode, and per title for movies.
+                // Keyed on the episode's unique ID rather than a derived media ID so
+                // it does not depend on the "tv_<id>" id convention.
                 var earliestByEpisode: [String: Date] = [:]
                 var earliestByMedia: [String: Date] = [:]
                 var eventDescriptor = FetchDescriptor<WatchEvent>(
@@ -455,26 +457,24 @@ enum DatabaseMigrations {
                         earliestByMedia[event.mediaID] = event.watchedAt
                     }
                     guard let episodeID = event.episodeID else { continue }
-                    let key = "\(event.mediaID)|\(episodeID)"
-                    if let current = earliestByEpisode[key] {
-                        if event.watchedAt < current { earliestByEpisode[key] = event.watchedAt }
+                    if let current = earliestByEpisode[episodeID] {
+                        if event.watchedAt < current { earliestByEpisode[episodeID] = event.watchedAt }
                     } else {
-                        earliestByEpisode[key] = event.watchedAt
+                        earliestByEpisode[episodeID] = event.watchedAt
                     }
                 }
 
-                // Episodes first.
+                // Episodes first. Deliberately not filtered on `isWatched`: a
+                // rewatch clears that projection, so episodes waiting in the
+                // current cycle would be skipped even though the ledger still
+                // knows when they were first watched.
                 var episodeDescriptor = FetchDescriptor<TVEpisode>(
-                    predicate: #Predicate<TVEpisode> { episode in
-                        episode.isWatched == true && episode.firstWatchedDate == nil
-                    }
+                    predicate: #Predicate<TVEpisode> { $0.firstWatchedDate == nil }
                 )
                 episodeDescriptor.propertiesToFetch = [\.uniqueID, \.showID, \.watchedDate, \.lastWatchedDate, \.firstWatchedDate]
                 var healedEpisodes = 0
                 for episode in (try? context.fetch(episodeDescriptor)) ?? [] {
-                    let mediaID = "tv_\(episode.showID ?? 0)"
-                    let key = "\(mediaID)|\(episode.uniqueID ?? "")"
-                    let candidate = earliestByEpisode[key]
+                    let candidate = episode.uniqueID.flatMap { earliestByEpisode[$0] }
                         ?? episode.watchedDate
                         ?? episode.lastWatchedDate
                     guard let candidate else { continue }
