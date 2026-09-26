@@ -98,25 +98,30 @@ struct PosterView: View {
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
                         .animation(AppTheme.Animation.adaptive(AppTheme.Animation.fade), value: isHovering || showPicker)
                         .padding(10)
-                        .popover(isPresented: $showPicker) {
-                            PosterPickerGrid(
-                                options: posterOptions,
-                                currentURL: item.effectivePosterURL,
-                                isCustom: isCustomPoster,
-                                onSelect: { url in
-                                    onSelectPoster?(url)
-                                    showPicker = false
-                                },
-                                onReset: {
-                                    onResetPoster?()
-                                    showPicker = false
-                                }
-                            )
-                        }
                     }
                 }
             }
             .compositingGroupIfNeeded()
+            // Deliberately attached here rather than to the button above. A popover
+            // whose presenting view sits inside a `compositingGroup()` cannot present
+            // — the group flattens the hierarchy into one layer and the anchor loses
+            // its presentation context, so the picker simply never opens. Anchoring to
+            // the whole poster is also a larger, more reliable hit target.
+            .popover(isPresented: $showPicker) {
+                PosterPickerGrid(
+                    options: posterOptions,
+                    currentURL: item.effectivePosterURL,
+                    isCustom: isCustomPoster,
+                    onSelect: { url in
+                        onSelectPoster?(url)
+                        showPicker = false
+                    },
+                    onReset: {
+                        onResetPoster?()
+                        showPicker = false
+                    }
+                )
+            }
             .onHover { hovering in
                 AppTheme.Animation.with(AppTheme.Animation.fade) {
                     isHovering = hovering
