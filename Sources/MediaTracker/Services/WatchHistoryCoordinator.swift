@@ -493,10 +493,16 @@ enum WatchHistoryCoordinator {
 
         guard let details = item.tvShowDetails else { return }
         let scope = Set(cycle.scopeEpisodeIDs)
+        // `recordEpisodeMutation` writes keys as "<cycle>:<episode>:watch" while
+        // this snapshot writes "<cycle>:<episode>", so matching on the key alone
+        // would add a second event for every episode already logged in this
+        // cycle. Match on the episode instead, like the movie branch above.
+        let alreadyLogged = Set(existing.filter(\.isActive).compactMap(\.episodeID))
         for season in details.seasons.liveModels {
             for episode in season.episodes.liveModels where episode.isWatched {
                 let episodeID = episode.uniqueID ?? "\(item.id)_\(season.seasonNumber)_\(episode.episodeNumber)"
                 guard scope.isEmpty || scope.contains(episodeID) else { continue }
+                guard !alreadyLogged.contains(episodeID) else { continue }
                 let key = "\(cycle.id.uuidString):\(episodeID)"
                 guard keys.insert(key).inserted else { continue }
                 context.insert(WatchEvent(
