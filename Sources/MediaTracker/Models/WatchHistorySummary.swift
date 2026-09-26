@@ -57,10 +57,12 @@ struct WatchHistorySummaryView: View {
     }
 
     /// Durable first-watch date. Leads the row so the watch history reads as one
-    /// unit: when you first watched it, then how many times since.
+    /// unit: when you first watched it, then how many times since. Month and year
+    /// is the useful precision here — the day a first watch started is noise, and
+    /// it kept reading like the release date beside it.
     private var firstWatchedText: String? {
         guard let firstWatchedAt else { return nil }
-        return "First watched \(firstWatchedAt.formatted(date: .abbreviated, time: .omitted))"
+        return "First watched \(firstWatchedAt.formatted(.dateTime.month(.abbreviated).year()))"
     }
 
     var body: some View {
@@ -90,51 +92,42 @@ struct WatchHistorySummaryView: View {
                 text: summary.completedCycleCount == 1 ? "Watched once" : "Watched ×\(summary.completedCycleCount)"
             )
         }
+        // Only counts live here. "Re-watching" / "In progress" are already stated
+        // by the status capsule above, so repeating them was saying the same thing
+        // twice in two visual languages. A partial rewatch is kept because the
+        // capsule cannot express it — the title reads as Completed.
         if summary.hasRewatchHistory {
-            // Rewatch pills are accent-tinted so a rewatch reads as a distinct
-            // kind of pass rather than another count.
             summaryPill(
                 icon: "arrow.trianglehead.2.clockwise.rotate.90",
                 text: summary.completedRewatchCount == 1 ? "Rewatched once" : "Rewatched ×\(summary.completedRewatchCount)",
-                isEmphasised: true
+                isRewatch: true
             )
         }
-        if summary.activeRewatchCount > 0 {
-            summaryPill(icon: "play.circle.fill", text: "Rewatch in progress", isEmphasised: true)
-        }
-        if summary.pausedRewatchCount > 0 {
-            summaryPill(icon: "pause.circle.fill", text: "Rewatch paused", isEmphasised: true)
-        }
         if summary.archivedPartialRewatchCount > 0 {
-            summaryPill(icon: "minus.circle.fill", text: "Partial rewatch", isEmphasised: true)
-        }
-        if summary.hasInProgressFirstWatch {
-            summaryPill(icon: "circle.dotted", text: "Watch in progress")
+            summaryPill(icon: "minus.circle.fill", text: "Partial rewatch", isRewatch: true)
         }
     }
 
-    private func summaryPill(icon: String, text: String, isEmphasised: Bool = false) -> some View {
+    /// `isRewatch` pills are outlined rather than filled. The accent colour is
+    /// derived from the poster, so a filled accent made the status read as an
+    /// error on a red poster and as a different arbitrary hue on every title —
+    /// a status should not inherit an arbitrary palette.
+    private func summaryPill(icon: String, text: String, isRewatch: Bool = false) -> some View {
         Label(text, systemImage: icon)
             .font(AppTheme.Font.caption2.weight(.semibold))
-            .foregroundStyle(isEmphasised ? accent : .primary.opacity(0.75))
+            .foregroundStyle(isRewatch ? accent : .primary.opacity(0.75))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.micro)
             .background {
                 Capsule()
-                    .fill(
-                        isEmphasised
-                            ? accent.opacity(colorScheme == .dark ? 0.16 : 0.14)
-                            : AppTheme.Colors.surfaceGhost(for: colorScheme)
-                    )
+                    .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
                     .overlay(
                         Capsule()
                             .stroke(
-                                isEmphasised
-                                    ? accent.opacity(0.35)
-                                    : AppTheme.Colors.strokeDefault(for: colorScheme),
-                                lineWidth: 0.5
+                                isRewatch ? accent.opacity(0.55) : AppTheme.Colors.strokeDefault(for: colorScheme),
+                                lineWidth: isRewatch ? 1 : 0.5
                             )
                     )
             }
@@ -145,10 +138,8 @@ struct WatchHistorySummaryView: View {
         if let firstWatchedText { parts.append(firstWatchedText) }
         if summary.hasCompletedHistory { parts.append("Watched \(summary.completedCycleCount) times") }
         if summary.hasRewatchHistory { parts.append("Rewatched \(summary.completedRewatchCount) times") }
-        if summary.activeRewatchCount > 0 { parts.append("Rewatch in progress") }
-        if summary.pausedRewatchCount > 0 { parts.append("Rewatch paused") }
         if summary.archivedPartialRewatchCount > 0 { parts.append("Partial rewatch") }
-        if parts.isEmpty { parts.append("Watch in progress") }
+        if parts.isEmpty { parts.append("Not watched yet") }
         return parts.joined(separator: ", ")
     }
 }

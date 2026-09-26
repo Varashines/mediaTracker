@@ -94,7 +94,9 @@ struct MetadataSection: View {
             infoPill(text: net, accent: accent)
         }
         if let date = item.releaseDate {
-            infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
+            // Labelled, because the watch-history row carries a first-watched date
+            // in the same pill style and the two are easy to read as one fact.
+            infoPill(text: "Released \(date.formatted(date: .abbreviated, time: .omitted))", icon: "calendar", accent: accent)
         }
         if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
             infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
