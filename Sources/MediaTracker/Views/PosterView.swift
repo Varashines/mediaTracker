@@ -73,10 +73,9 @@ struct PosterView: View {
                         .padding(14)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if posterOptions.count > 1 || (!hasLoadedPosterOptions && onRequestPosterOptions != nil) {
+                    if hasLoadedPosterOptions && posterOptions.count > 1 {
                         Button {
-                            onRequestPosterOptions?()
-                            showPicker.toggle()
+                            showPicker = true
                         } label: {
                             Image(systemName: showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
                                 .font(.system(size: 12, weight: .medium))
@@ -93,7 +92,7 @@ struct PosterView: View {
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
-                        .help(isLoadingPosterOptions ? "Loading poster options" : "Change poster")
+                        .help("Change poster")
                         .opacity((isHovering || showPicker) ? 1 : 0)
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
                         .animation(AppTheme.Animation.adaptive(AppTheme.Animation.fade), value: isHovering || showPicker)
@@ -118,6 +117,11 @@ struct PosterView: View {
             }
             .compositingGroupIfNeeded()
             .onHover { hovering in
+                // Options load lazily, and the button stays hidden until they are
+                // known — so hovering the poster is what kicks the load off. A title
+                // with a single poster never shows the icon, because there is no
+                // choice to offer.
+                if hovering { onRequestPosterOptions?() }
                 AppTheme.Animation.with(AppTheme.Animation.fade) {
                     isHovering = hovering
                 }
