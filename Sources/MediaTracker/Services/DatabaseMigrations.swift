@@ -18,6 +18,7 @@ enum DatabaseMigrations {
         await runSearchableLanguageIfNeeded(container: container)
         await runWatchHistoryBackfillIfNeeded(container: container)
         await runWatchHistoryRepairIfNeeded(container: container)
+        await runWatchHistoryDedupIfNeeded(container: container)
         await runFirstWatchedDateBackfillIfNeeded(container: container)
     }
 
@@ -620,6 +621,52 @@ enum DatabaseMigrations {
             await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
         } catch {
             AppLogger.error("Watch history backfill failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Removes duplicate active `WatchEvent` rows for the same (cycle, episode).
+    /// The v1 repair ran once and predates these, and closing a rewatch cycle
+    /// used to append a second event per episode, so affected titles need a
+    /// dedicated pass. The earliest occurrence is kept.
+    static func runWatchHistoryDedupIfNeeded(container: ModelContainer) async {
+        let versionKey = UserDefaultsKeys.watchHistoryDedupV1.rawValue
+        guard UserDefaults.standard.integer(forKey: versionKey) < 1 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "watchHistoryDedup", container: container) {
+                let context = ModelContext(container)
+                let cycles = try context.fetch(FetchDescriptor<WatchCycle>())
+                let validCycleIDs = Set(cycles.map(\.id))
+                var events = try context.fetch(FetchDescriptor<WatchEvent>())
+                // Oldest first so the survivor for each (cycle, episode) is the
+                // original occurrence rather than an arbitrary fetch order.
+                events.sort { $0.watchedAt < $1.watchedAt }
+
+                var seen = Set<String>()
+                var removed = 0
+                for event in events {
+                    guard validCycleIDs.contains(event.cycleID) else {
+                        context.delete(event)
+                        removed += 1
+                        continue
+                    }
+                    guard event.isActive else { continue }
+                    let key = "\(event.cycleID.uuidString)|\(event.episodeID ?? "movie")"
+                    if !seen.insert(key).inserted {
+                        context.delete(event)
+                        removed += 1
+                    }
+                }
+                if removed > 0 {
+                    try context.save()
+                    AppLogger.info("🧹 Watch history dedup removed \(removed) duplicate events", logger: AppLogger.background)
+                }
+            }
+            guard didRun else { return }
+            UserDefaults.standard.set(1, forKey: versionKey)
+            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        } catch {
+            AppLogger.error("Watch history dedup failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 

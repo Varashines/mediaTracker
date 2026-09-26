@@ -48,6 +48,7 @@ enum UserDefaultsKeys: String {
     case colorExtractionVersion = "colorExtractionVersion"
     case watchHistoryBackfillV1 = "watch_history_backfill_v1"
     case watchHistoryRepairV1 = "watch_history_repair_v1"
+    case watchHistoryDedupV1 = "watch_history_dedup_v1"
     
     // Taste weights
     case tasteWeightGenre = "taste_weight_genre"

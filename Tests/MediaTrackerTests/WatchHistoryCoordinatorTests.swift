@@ -385,6 +385,60 @@ final class WatchHistoryCoordinatorTests: MTTestCase {
         )
     }
 
+    /// Closing a rewatch cycle must not append a second event for episodes that
+    /// were already logged while watching: the two writers use different
+    /// deduplication keys ("<cycle>:<episode>:watch" vs "<cycle>:<episode>"), so
+    /// key matching alone duplicated every episode.
+    func testCompletingRewatchCycleDoesNotDuplicateEpisodeEvents() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = MediaItem(id: "tv_4", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 4)
+        details.item = item
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 1, showID: 4)
+        season.tvShowDetails = details
+        let episode = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Episode 1", overview: "", showID: 4)
+        episode.season = season
+        season.episodes.append(episode)
+        details.seasons.append(season)
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        context.insert(episode)
+        try context.save()
+
+        let rewatch = WatchHistoryCoordinator.startRewatch(item: item, context: context)
+        let episodeID = try XCTUnwrap(episode.uniqueID)
+
+        // Watched during the rewatch — recorded with the ":watch" key.
+        WatchHistoryCoordinator.recordEpisodeMutation(
+            mediaID: item.id,
+            episodeID: episodeID,
+            watchedAt: Date(timeIntervalSince1970: 250),
+            runtimeMinutes: 45,
+            isWatched: true,
+            context: context,
+            source: .automatic
+        )
+        episode.markWatched(true, recordHistory: false)
+        try context.save()
+
+        // Finishing the rewatch closes the cycle and snapshots progress.
+        item.state = .rewatching
+        try context.save()
+        episode.markWatched(true, recordHistory: false)
+        item.syncCachedProperties(now: Date())
+        try context.save()
+
+        let rewatchEvents = try context.fetch(FetchDescriptor<WatchEvent>())
+            .filter { $0.cycleID == rewatch.id && $0.isActive }
+        XCTAssertEqual(
+            rewatchEvents.count, 1,
+            "one active event per (cycle, episode) — got keys: \(rewatchEvents.map(\.deduplicationKey))"
+        )
+    }
+
     /// Same flow, but the rewatch had finished its whole scope before the new
     /// season landed — the paused cycle must be recorded as a completed rewatch.
     func testFinalizingPausedRewatchMarksFullCoverageComplete() throws {
