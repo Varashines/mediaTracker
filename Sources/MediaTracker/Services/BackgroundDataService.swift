@@ -275,6 +275,10 @@ actor BackgroundDataService {
         let sDescriptor = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID == tmdbID })
         if let seasons = try? modelContext.fetch(sDescriptor) {
             let liveSeasons = seasons.liveModels
+            // Specials (season 0) stay out of the auto-complete sweep. Both the
+            // prefetch below and the marking loop read this, so one filter keeps
+            // season 0 unmarked instead of being created-and-watched on refresh.
+            let completionSeasons = liveSeasons.filter { $0.seasonNumber > 0 }
             
             // N+1 Prevention: Prefetch all episodes for this show into a map
             let eDescriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
@@ -293,7 +297,7 @@ actor BackgroundDataService {
             // Concurrent Fetching: Pre-fetch all missing season details in parallel to avoid sequential network bottleneck
             var results: [Int: [TVEpisodeResult]] = [:]
             await withTaskGroup(of: (Int, Result<[TVEpisodeResult], Error>).self) { group in
-                for season in liveSeasons {
+                for season in completionSeasons {
                     let sNum = season.seasonNumber
                     if season.episodes.isEmpty || season.episodes.count < season.episodeCount {
                         group.addTask {
@@ -317,7 +321,7 @@ actor BackgroundDataService {
                 }
             }
             
-            for season in liveSeasons {
+            for season in completionSeasons {
                 if isThermalThrottled {
                     AppLogger.warning("🌡️ Thermal throttle during episode marking. Stopping early.", logger: AppLogger.background)
                     break

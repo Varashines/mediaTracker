@@ -263,7 +263,10 @@ final class MediaItem: Identifiable {
 
     func markLoadedEpisodesAsWatched() {
         guard type == .tvShow, let details = tvShowDetails else { return }
-        let liveSeasons = details.seasons.liveModels
+        // Specials (season 0) are not part of "watched this show". They used to be
+        // swept in here, which is how a bulk mark left hundreds of specials marked
+        // watched across the library.
+        let liveSeasons = details.seasons.liveModels.filter { $0.seasonNumber > 0 }
         for season in liveSeasons {
             let liveEpisodes = season.episodes.liveModels
             for episode in liveEpisodes {

@@ -606,7 +606,10 @@ class DetailViewModel {
     func markNextEpisodeWatched() -> DetailWatchResult {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return .unavailable }
 
-        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        // Specials (season 0) sort first, so they used to absorb every press: the
+        // spacebar marked a special before it ever reached season 1. Match the
+        // tracking view and skip them, which also makes the first mark S1E1.
+        let sortedSeasons = tv.seasons.filter { $0.seasonNumber > 0 }.sorted { $0.seasonNumber < $1.seasonNumber }
         guard !sortedSeasons.isEmpty else { return .unavailable }
         guard let currentSeason = sortedSeasons.first(where: { $0.watchedEpisodesCount < $0.totalEpisodesCount }) else { return .allWatched }
 
