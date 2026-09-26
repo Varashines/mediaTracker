@@ -37,18 +37,16 @@ struct WatchHistorySummary: Equatable, Sendable {
 
 struct WatchHistorySummaryView: View {
     @Query private var cycles: [WatchCycle]
-    let firstWatchedAt: Date?
     let themeColor: Color
     @Environment(\.colorScheme) private var colorScheme
 
-    init(mediaID: String, firstWatchedAt: Date?, themeColor: Color) {
+    init(mediaID: String, themeColor: Color) {
         _cycles = Query(
             filter: #Predicate<WatchCycle> { cycle in
                 cycle.mediaID == mediaID
             },
             sort: [SortDescriptor(\WatchCycle.startedAt, order: .reverse)]
         )
-        self.firstWatchedAt = firstWatchedAt
         self.themeColor = themeColor
     }
 
@@ -56,18 +54,9 @@ struct WatchHistorySummaryView: View {
         themeColor.highContrastAccent(colorScheme: colorScheme)
     }
 
-    /// Durable first-watch date. Leads the row so the watch history reads as one
-    /// unit: when you first watched it, then how many times since. Month and year
-    /// is the useful precision here — the day a first watch started is noise, and
-    /// it kept reading like the release date beside it.
-    private var firstWatchedText: String? {
-        guard let firstWatchedAt else { return nil }
-        return "First watched \(firstWatchedAt.formatted(.dateTime.month(.abbreviated).year()))"
-    }
-
     var body: some View {
         let summary = WatchHistorySummary(cycles: cycles)
-        if summary.cycleCount > 0 || firstWatchedText != nil {
+        if summary.cycleCount > 0 {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: AppTheme.Spacing.small) {
                     summaryPills(summary)
@@ -83,9 +72,6 @@ struct WatchHistorySummaryView: View {
 
     @ViewBuilder
     private func summaryPills(_ summary: WatchHistorySummary) -> some View {
-        if let firstWatchedText {
-            summaryPill(icon: "checkmark.seal.fill", text: firstWatchedText)
-        }
         if summary.hasCompletedHistory {
             summaryPill(
                 icon: "checkmark.circle.fill",
@@ -135,7 +121,6 @@ struct WatchHistorySummaryView: View {
 
     private func summaryAccessibilityLabel(_ summary: WatchHistorySummary) -> String {
         var parts: [String] = []
-        if let firstWatchedText { parts.append(firstWatchedText) }
         if summary.hasCompletedHistory { parts.append("Watched \(summary.completedCycleCount) times") }
         if summary.hasRewatchHistory { parts.append("Rewatched \(summary.completedRewatchCount) times") }
         if summary.archivedPartialRewatchCount > 0 { parts.append("Partial rewatch") }

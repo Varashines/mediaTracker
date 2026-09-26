@@ -3,8 +3,8 @@ import SwiftUI
 struct OverviewSection: View {
     let overview: String
     let themeColor: Color
-    /// Opens the full synopsis in a staged modal (DetailView level).
-    /// Nil hides the info button.
+    /// Opens the full synopsis in a staged modal (DetailView level), which also
+    /// lists genres. Nil hides the info button.
     var onExpand: (() -> Void)? = nil
 
     @Environment(\.colorScheme) var colorScheme
@@ -32,9 +32,12 @@ struct OverviewSection: View {
 
                 Spacer()
 
-                if isTruncated {
+                // Always offered, not just for a truncated synopsis: this popup is
+                // also where genres live, so gating it on length left short
+                // synopses with no way to reach them.
+                if let onExpand {
                     Button {
-                        onExpand?()
+                        onExpand()
                     } label: {
                         Image(systemName: "info.circle")
                             .font(AppTheme.Font.caption)
@@ -42,7 +45,7 @@ struct OverviewSection: View {
                     }
                     .buttonStyle(.plain)
                     .contentShape(Circle())
-                    .help("Read full synopsis")
+                    .help("More about this title")
                 }
             }
 
