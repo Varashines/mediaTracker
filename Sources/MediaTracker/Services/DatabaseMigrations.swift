@@ -435,7 +435,7 @@ enum DatabaseMigrations {
     /// the original dates still exist.
     static func runFirstWatchedDateBackfillIfNeeded(container: ModelContainer) async {
         let versionKey = "firstWatchedDateBackfillVersion"
-        guard UserDefaults.standard.integer(forKey: versionKey) < 2 else { return }
+        guard UserDefaults.standard.integer(forKey: versionKey) < 3 else { return }
 
         do {
             let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "firstWatchedDateBackfill", container: container) {
@@ -485,8 +485,23 @@ enum DatabaseMigrations {
                     healedEpisodes += 1
                 }
 
-                // Titles second: shows inherit the earliest episode date, movies
-                // use their earliest event (or the completion date as a fallback).
+                // Titles second. Resolved with direct queries rather than by walking
+                // `item.tvShowDetails -> seasons -> episodes`: relationship traversal
+                // from this background context returned nothing for large shows, so
+                // their title-level date was silently skipped. Episodes are grouped by
+                // `showID`, which is the same key the events already use.
+                var earliestByShowID: [Int: Date] = [:]
+                var showIDDescriptor = FetchDescriptor<TVEpisode>()
+                showIDDescriptor.propertiesToFetch = [\.showID, \.firstWatchedDate]
+                for episode in (try? context.fetch(showIDDescriptor)) ?? [] {
+                    guard let showID = episode.showID, let date = episode.firstWatchedDate else { continue }
+                    if let current = earliestByShowID[showID] {
+                        if date < current { earliestByShowID[showID] = date }
+                    } else {
+                        earliestByShowID[showID] = date
+                    }
+                }
+
                 // Rewatch counts predate the denormalized field, so derive them from
                 // the cycles that already exist.
                 var rewatchCounts: [String: Int] = [:]
@@ -497,31 +512,79 @@ enum DatabaseMigrations {
 
                 let itemDescriptor = FetchDescriptor<MediaItem>()
                 var healedItems = 0
+                var repairedIDs: [String] = []
                 for item in (try? context.fetch(itemDescriptor)) ?? [] {
                     if let counted = rewatchCounts[item.id], item.rewatchCount != counted {
                         item.rewatchCount = counted
                         healedRewatchCounts += 1
                     }
+                    let before = item.firstWatchedAt
                     if item.type == .tvShow {
-                        guard let earliest = item.tvShowDetails?.earliestEpisodeFirstWatchDate else { continue }
-                        let before = item.firstWatchedAt
-                        item.recordFirstWatchIfNeeded(earliest)
-                        if item.firstWatchedAt != before { healedItems += 1 }
+                        let tmdbID = item.id.split(separator: "_").last.flatMap { Int($0) }
+                        guard let candidate = tmdbID.flatMap({ earliestByShowID[$0] }) ?? earliestByMedia[item.id]
+                        else { continue }
+                        item.recordFirstWatchIfNeeded(candidate)
                     } else {
                         guard item.state == .completed else { continue }
                         let fallback = item.lastStateChangeDate ?? item.lastInteractionDate ?? item.dateAdded
                         guard let candidate = earliestByMedia[item.id] ?? fallback else { continue }
-                        let before = item.firstWatchedAt
                         item.recordFirstWatchIfNeeded(candidate)
-                        if item.firstWatchedAt != before { healedItems += 1 }
+                    }
+                    if item.firstWatchedAt != before {
+                        healedItems += 1
+                        repairedIDs.append(item.id)
                     }
                 }
 
                 try context.save()
                 AppLogger.info("🕰️ First-watch date backfill: \(healedEpisodes) episodes, \(healedItems) titles, \(healedRewatchCounts) rewatch counts", logger: AppLogger.background)
+                if !repairedIDs.isEmpty {
+                    AppLogger.info("🕰️ Titles repaired: \(repairedIDs.joined(separator: ", "))", logger: AppLogger.background)
+                }
+
+                // The main context still holds the pre-migration value in memory and
+                // writes it back over this repair on its next save, which is how a
+                // pinned rewatch date survived the previous pass. Re-apply the same
+                // min-only correction there so the in-memory value is correct and any
+                // later save persists the fix rather than clobbering it.
+                let repaired = repairedIDs
+                let counts = rewatchCounts
+                await MainActor.run {
+                    guard let mainContext = DataService.modelContainer?.mainContext else { return }
+                    for mediaID in repaired {
+                        var itemDescriptor = FetchDescriptor<MediaItem>(
+                            predicate: #Predicate { $0.id == mediaID }
+                        )
+                        itemDescriptor.fetchLimit = 1
+                        guard let live = try? mainContext.fetch(itemDescriptor).first else { continue }
+                        if let counted = counts[mediaID] { live.rewatchCount = counted }
+
+                        let candidate: Date?
+                        if live.type == .tvShow,
+                           let showID = Int(live.id.split(separator: "_").last ?? "") {
+                            var episodeDescriptor = FetchDescriptor<TVEpisode>(
+                                predicate: #Predicate { $0.showID == showID && $0.firstWatchedDate != nil }
+                            )
+                            episodeDescriptor.propertiesToFetch = [\.firstWatchedDate]
+                            candidate = ((try? mainContext.fetch(episodeDescriptor)) ?? [])
+                                .compactMap(\.firstWatchedDate)
+                                .min()
+                        } else {
+                            var eventDescriptor = FetchDescriptor<WatchEvent>(
+                                predicate: #Predicate { $0.mediaID == mediaID && $0.voidedAt == nil }
+                            )
+                            eventDescriptor.propertiesToFetch = [\.watchedAt]
+                            candidate = ((try? mainContext.fetch(eventDescriptor)) ?? [])
+                                .map(\.watchedAt)
+                                .min()
+                        }
+                        if let candidate { live.recordFirstWatchIfNeeded(candidate) }
+                    }
+                    MediaStateService.shared.postMediaStateChanged()
+                }
             }
             guard didRun else { return }
-            UserDefaults.standard.set(2, forKey: versionKey)
+            UserDefaults.standard.set(3, forKey: versionKey)
         } catch {
             AppLogger.error("First-watch date backfill failed: \(error.localizedDescription)", logger: AppLogger.background)
         }

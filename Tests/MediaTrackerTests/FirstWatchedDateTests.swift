@@ -349,6 +349,81 @@ final class FirstWatchedDateTests: MTTestCase {
         )
     }
 
+    /// The real failure: a long-running show whose episodes carry correct
+    /// first-watch dates while the title is pinned to a rewatch date, with an
+    /// active rewatch cycle. The repair must resolve the title through a direct
+    /// episode query rather than relationship traversal, which returned nothing
+    /// for a show this size.
+    func testBackfillRepairsPinnedTitleOnALargeShow() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_555", title: "Long Show", overview: "", type: .tvShow)
+        let tv = TVShowDetails(tmdbID: 555)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(item)
+        context.insert(tv)
+
+        let episodeCount = 120
+        let original = Date().addingTimeInterval(-(1000 * 86400))
+        var episodes: [TVEpisode] = []
+        for seasonNumber in 1...6 {
+            let season = TVSeason(seasonNumber: seasonNumber, name: "S\(seasonNumber)", episodeCount: 20, showID: 555)
+            season.tvShowDetails = tv
+            tv.seasons.append(season)
+            context.insert(season)
+            for episodeNumber in 1...20 {
+                let ep = TVEpisode(
+                    episodeNumber: episodeNumber,
+                    seasonNumber: seasonNumber,
+                    name: "E\(episodeNumber)",
+                    overview: "",
+                    showID: 555
+                )
+                ep.season = season
+                season.episodes.append(ep)
+                ep.firstWatchedDate = original
+                context.insert(ep)
+                episodes.append(ep)
+            }
+        }
+        try context.save()
+        XCTAssertEqual(episodes.count, episodeCount)
+
+        // A rewatch cycle exists, and the title was pinned to a later date.
+        let rewatch = WatchCycle(
+            mediaID: item.id,
+            kind: .tvShow,
+            startedAt: Date(),
+            state: .active,
+            isRewatch: true
+        )
+        context.insert(rewatch)
+        item.firstWatchedAt = Date()
+        item.rewatchCount = 0
+        try context.save()
+
+        UserDefaults.standard.set(2, forKey: "firstWatchedDateBackfillVersion")
+        await DatabaseMigrations.runFirstWatchedDateBackfillIfNeeded(container: container)
+
+        let verifyContext = ModelContext(container)
+        let healed = try XCTUnwrap(try verifyContext.fetch(FetchDescriptor<MediaItem>()).first)
+        XCTAssertEqual(
+            healed.firstWatchedAt, original,
+            "a pinned title date must be lowered from its episodes on a large show"
+        )
+        XCTAssertEqual(healed.rewatchCount, 1, "rewatch counts come from the existing cycles")
+
+        // And the main context must hold the corrected value, or its next save
+        // would clobber the repair.
+        let mainItem = try XCTUnwrap(item.modelContext.flatMap { try? $0.fetch(FetchDescriptor<MediaItem>()).first })
+        XCTAssertEqual(mainItem.firstWatchedAt, original, "the main context must not keep the stale value")
+    }
+
     // MARK: - Title level
 
     func testShowInheritsFirstWatchedAtFromEarliestEpisode() throws {
