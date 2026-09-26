@@ -169,6 +169,84 @@ final class FirstWatchedDateTests: MTTestCase {
         }
     }
 
+    /// A rewatch clears `isWatched`, so the backfill must be driven by the event
+    /// ledger rather than the current projection — otherwise episodes still
+    /// waiting in the new cycle lose their original date and get stamped with
+    /// the rewatch date when they are eventually watched.
+    func testBackfillRecoversFirstWatchDateForUnwatchedProjection() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_fw_8", title: "Show", overview: "", type: .tvShow)
+        item.stateValue = MediaState.rewatching.rawValue
+        let tv = TVShowDetails(tmdbID: 9108)
+        tv.item = item
+        item.tvShowDetails = tv
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 2, showID: 9108)
+        season.tvShowDetails = tv
+        tv.seasons.append(season)
+
+        var episodes: [TVEpisode] = []
+        for i in 1...2 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", showID: 9108)
+            ep.season = season
+            season.episodes.append(ep)
+            episodes.append(ep)
+        }
+        context.insert(item)
+        context.insert(tv)
+        context.insert(season)
+        episodes.forEach(context.insert)
+        try context.save()
+
+        // The original watch, recorded in the first-watch cycle.
+        let original = Date().addingTimeInterval(-(400 * 86400))
+        let cycle = WatchCycle(mediaID: item.id, kind: .tvShow, startedAt: original, state: .completed, isComplete: true)
+        context.insert(cycle)
+        for ep in episodes {
+            let episodeID = try XCTUnwrap(ep.uniqueID)
+            context.insert(WatchEvent(
+                cycleID: cycle.id,
+                mediaID: item.id,
+                episodeID: episodeID,
+                watchedAt: original,
+                deduplicationKey: "\(cycle.id.uuidString):\(episodeID)"
+            ))
+        }
+        try context.save()
+
+        // Rewatch started: the projection is cleared, dates are gone.
+        for ep in episodes {
+            ep.markWatched(false, recordHistory: false)
+        }
+        try context.save()
+        for ep in episodes {
+            XCTAssertFalse(ep.isWatched)
+            XCTAssertNil(ep.watchedDate)
+            XCTAssertNil(ep.firstWatchedDate)
+        }
+
+        UserDefaults.standard.set(0, forKey: "firstWatchedDateBackfillVersion")
+        await DatabaseMigrations.runFirstWatchedDateBackfillIfNeeded(container: container)
+
+        // The migration runs in its own ModelContext, so assert against a fresh
+        // fetch rather than the objects this test already holds.
+        let verifyContext = ModelContext(container)
+        let healedEpisodes = try verifyContext.fetch(FetchDescriptor<TVEpisode>())
+        XCTAssertEqual(healedEpisodes.count, 2)
+        for ep in healedEpisodes {
+            XCTAssertEqual(
+                ep.firstWatchedDate, original,
+                "the backfill must recover the date even while the episode is unwatched in the current cycle"
+            )
+        }
+        let healedItem = try XCTUnwrap(try verifyContext.fetch(FetchDescriptor<MediaItem>()).first)
+        XCTAssertEqual(healedItem.firstWatchedAt, original)
+    }
+
     // MARK: - Title level
 
     func testShowInheritsFirstWatchedAtFromEarliestEpisode() throws {
