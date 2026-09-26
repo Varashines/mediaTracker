@@ -86,6 +86,9 @@ class ImageCache: NSObject, NSCacheDelegate {
     /// session, even after NSCache has evicted the decoded image.
     private var trackedURLOrder: [String] = []
     private let maxTrackedURLs = 2000
+    /// When each cache key was last asked for, so a delayed eviction can tell
+    /// whether the cell came back while it was waiting.
+    private var lastRequestedAt: [String: Date] = [:]
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
     private var prewarmTasks: [UUID: Task<Void, Never>] = [:]
     private var lowPriorityPrewarmIDs: Set<UUID> = []
@@ -121,6 +124,7 @@ class ImageCache: NSObject, NSCacheDelegate {
         cancelPrewarming()
         cacheKeysByURL.removeAll()
         trackedURLOrder.removeAll()
+        lastRequestedAt.removeAll()
         memoryCache.removeAllObjects()
     }
 
@@ -166,6 +170,7 @@ class ImageCache: NSObject, NSCacheDelegate {
     func evictOffscreenImage(forKey key: String?, targetSize: CGSize? = nil) {
         guard let key = key, !key.isEmpty else { return }
         let cacheKey = generateCacheKey(key: key, size: targetSize)
+        let scheduledAt = Date()
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
@@ -173,7 +178,15 @@ class ImageCache: NSObject, NSCacheDelegate {
             // cell scrolled back into view while this task was waiting. Evicting it
             // would force a wasteful re-decode on scrub-back.
             guard activeTasks[cacheKey] == nil else { return }
+            // A cell that came back is usually served from the cache, which never
+            // registers in `activeTasks`, so the check above misses it. Compare
+            // request timestamps instead: any request made after this eviction was
+            // scheduled means something is using the image again.
+            if let lastRequest = self.lastRequestedAt[cacheKey], lastRequest > scheduledAt {
+                return
+            }
             self.memoryCache.removeObject(forKey: cacheKey as NSString)
+            self.lastRequestedAt[cacheKey] = nil
             self.cacheKeysByURL[key]?.remove(cacheKey)
             if self.cacheKeysByURL[key]?.isEmpty == true {
                 self.cacheKeysByURL[key] = nil
@@ -262,7 +275,8 @@ class ImageCache: NSObject, NSCacheDelegate {
     func get(forKey key: String, targetSize: CGSize? = nil, priority: ImagePriority = .normal, alwaysPreserveAlpha: Bool = false) async -> ImageContainer? {
         let cacheKey = generateCacheKey(key: key, size: targetSize)
         trackCacheKey(cacheKey, forKey: key)
-        
+        lastRequestedAt[cacheKey] = Date()
+
         if let cached = checkMemoryCache(forKey: key, targetSize: targetSize) {
             return cached
         }
@@ -284,11 +298,24 @@ class ImageCache: NSObject, NSCacheDelegate {
                 let (data, response) = try await capturedSession.data(for: request)
                 guard !Task.isCancelled else { return nil }
 
+                // A non-2xx body (rate limit, expired CDN path) decodes to nothing,
+                // and `.returnCacheDataElseLoad` would store it in URLCache — making
+                // one transient failure permanent until a cache purge. Fail fast
+                // instead so the next attempt can hit the network again.
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    AppLogger.debug("Image request failed (\(http.statusCode)) for \(key)", logger: AppLogger.network)
+                    return nil
+                }
+
                 // Decode off the main actor to avoid blocking UI.
                 let finalCGImage: CGImage? = await Task.detached(priority: .utility) { [scale] in
                     await ImageDecodeLimiter.shared.acquire()
                     defer { ImageDecodeLimiter.shared.release() }
-                    if key.lowercased().hasSuffix(".svg") || (response.mimeType?.contains(".svg") ?? false) {
+                    // "image/svg+xml" has no ".svg" substring, so the mime test
+                    // never matched and SVG logos only worked via the URL suffix.
+                    let isSVG = key.lowercased().hasSuffix(".svg")
+                        || (response.mimeType?.lowercased().contains("svg") ?? false)
+                    if isSVG {
                         return Self.renderSVGToCGImage(data: data, targetSize: targetSize)
                     } else if let source = CGImageSourceCreateWithData(data as CFData, nil) {
                         if let target = targetSize {

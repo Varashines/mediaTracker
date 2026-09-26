@@ -122,12 +122,18 @@ struct CachedImage<Placeholder: View>: View {
     }
     
     private func loadImage() async {
-        guard let url = url, !isLoading else { return }
+        guard let url = url else { return }
         isLoading = true
         defer { isLoading = false }
-        
+
+        // Deliberately does not bail on cancellation. The decode is already done
+        // and already in the shared cache by the time this returns, and the
+        // enclosing `.task` is cancelled by ordinary navigation (a poster tap
+        // pushes a detail view). Discarding here left the cell showing its
+        // placeholder with a warm cache, and the only recovery paths are state
+        // changes — which is why an image appeared to need a second click.
+        // Writing `@State` on a view that is going away is harmless.
         if let container = await ImageCache.shared.get(forKey: url.absoluteString, targetSize: targetSize, priority: priority, alwaysPreserveAlpha: alwaysPreserveAlpha) {
-            if Task.isCancelled { return }
             self.image = container.image
             onImageLoaded?(container.image)
         }
