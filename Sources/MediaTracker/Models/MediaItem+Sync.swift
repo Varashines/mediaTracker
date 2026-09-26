@@ -174,6 +174,14 @@ extension MediaItem {
                 self.applyAutomaticState(.wishlist, now: now)
             }
 
+            // Re-watching has no downward branch above, because a freshly started
+            // rewatch also sits at 0%. Distinguish "started but nothing watched"
+            // from "in progress" by the cycle: an empty rewatch that reaches 0%
+            // was abandoned, so settle it and restore the pre-rewatch state.
+            if progress <= 0, let context = modelContext {
+                WatchHistoryCoordinator.abandonEmptyRewatchIfNeeded(item: self, context: context, now: now)
+            }
+
             // Auto-mark: only if state is still Completed after auto-advance
             // This prevents re-marking when user unmarks an episode (progress drops → state changes to Active)
             if stateValue == "Completed" {

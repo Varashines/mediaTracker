@@ -113,6 +113,11 @@ enum WatchHistoryCoordinator {
             }
             details.recalculateCachedProperties(triggerSync: false)
         }
+        // Resuming restarts the pass, so the previous attempt's events must be
+        // voided. They stayed active before, which meant the cycle looked fully
+        // covered even though the projection had just been cleared, and the
+        // re-watch recorded nothing.
+        voidActiveEvents(inCycle: paused, context: context, at: now)
         item.stateValue = MediaState.rewatching.rawValue
         item.lastInteractionDate = now
         item.lastStateChangeDate = now
@@ -121,60 +126,73 @@ enum WatchHistoryCoordinator {
         return paused
     }
 
+    /// Voids every active event in a cycle, used when a pass is restarted.
+    static func voidActiveEvents(inCycle cycle: WatchCycle, context: ModelContext, at date: Date) {
+        let cycleID = cycle.id
+        let descriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate<WatchEvent> { event in
+                event.cycleID == cycleID && event.voidedAt == nil
+            }
+        )
+        for event in (try? context.fetch(descriptor)) ?? [] {
+            event.voidedAt = date
+        }
+    }
+
     static func completeCurrentCycle(
         item: MediaItem,
         context: ModelContext,
         now: Date = Date(),
         source: WatchEventSource = .manual
     ) {
-        let cycle = currentCycle(for: item, context: context) ?? {
+        // A title can hold more than one open cycle: a new season arriving
+        // mid-rewatch pauses the scoped rewatch and opens a first-watch cycle for
+        // the new episodes, and resuming can leave both `.active`. Closing only
+        // the newest used to strand the other as `.active` forever — invisible in
+        // the stats, still holding events, and never returned by `currentCycle`.
+        let open = openCycles(forMediaID: item.id, context: context)
+        let cycle: WatchCycle
+        if let newest = open.first {
+            cycle = newest
+        } else {
             let created = WatchCycle(mediaID: item.id, kind: cycleKind(for: item), startedAt: now)
             context.insert(created)
-            return created
-        }()
+            cycle = created
+        }
 
         snapshotCurrentProgress(item: item, into: cycle, context: context, now: now, source: source)
         cycle.completedAt = now
         cycle.isComplete = true
         cycle.state = .completed
-        finalizePausedRewatchCycles(item: item, context: context, now: now)
+        settleSupersededCycles(item: item, context: context, now: now, keeping: cycle.id)
     }
 
-    /// A title completing can leave a paused rewatch behind — that happens when a
-    /// new season arrives mid-rewatch, because the catalog reconciliation pauses
-    /// the scoped cycle and opens a first-watch cycle for the new episodes. Only
-    /// the current cycle gets closed by `completeCurrentCycle`, so the rewatch is
-    /// finalized here: a fully rewatched scope is marked complete, an abandoned
-    /// one is archived as a partial attempt. Either way it stops lingering as
-    /// `paused`, which would otherwise keep offering "Resume Paused Rewatch" on a
-    /// completed title.
-    private static func finalizePausedRewatchCycles(item: MediaItem, context: ModelContext, now: Date) {
+    /// Settles every other open cycle once the title completes. A rewatch that
+    /// covered its whole scope is recorded as a completed rewatch; anything else
+    /// is archived as a partial attempt. Either way it stops lingering in
+    /// `.active`/`.paused`, which is what kept "Resume Paused Rewatch" on offer
+    /// for a completed title and left stale cycles in the stats.
+    private static func settleSupersededCycles(
+        item: MediaItem,
+        context: ModelContext,
+        now: Date,
+        keeping keptCycleID: UUID
+    ) {
         guard item.type == .tvShow else { return }
         let mediaID = item.id
+        let activeRaw = WatchCycleState.active.rawValue
         let pausedRaw = WatchCycleState.paused.rawValue
-        var descriptor = FetchDescriptor<WatchCycle>(
-            predicate: #Predicate {
-                $0.mediaID == mediaID && $0.stateRaw == pausedRaw && $0.isRewatch
+        let descriptor = FetchDescriptor<WatchCycle>(
+            predicate: #Predicate { cycle in
+                cycle.mediaID == mediaID
+                    && (cycle.stateRaw == activeRaw || cycle.stateRaw == pausedRaw)
             }
         )
-        descriptor.propertiesToFetch = [\.id, \.stateRaw, \.isRewatch, \.isComplete, \.scopeEpisodeIDs]
-        guard let pausedCycles = try? context.fetch(descriptor), !pausedCycles.isEmpty else { return }
+        let superseded = ((try? context.fetch(descriptor)) ?? []).filter { $0.id != keptCycleID }
+        guard !superseded.isEmpty else { return }
 
-        for cycle in pausedCycles {
-            let cycleID = cycle.id
-            var eventDescriptor = FetchDescriptor<WatchEvent>(
-                predicate: #Predicate<WatchEvent> { event in
-                    event.cycleID == cycleID && event.voidedAt == nil
-                }
-            )
-            eventDescriptor.propertiesToFetch = [\.episodeID]
-            let watchedIDs = Set(((try? context.fetch(eventDescriptor)) ?? []).compactMap(\.episodeID))
-            let scope = Set(cycle.scopeEpisodeIDs)
-            let coveredEveryEpisode = scope.isEmpty
-                ? !watchedIDs.isEmpty
-                : scope.subtracting(watchedIDs).isEmpty
-
-            if coveredEveryEpisode {
+        for cycle in superseded {
+            if cycle.isRewatch, coveredEveryEpisode(cycle, context: context) {
                 cycle.isComplete = true
                 cycle.state = .completed
                 cycle.completedAt = cycle.completedAt ?? now
@@ -182,6 +200,22 @@ enum WatchHistoryCoordinator {
                 cycle.state = .archived
             }
         }
+    }
+
+    /// True when every episode the cycle was scoped to has an active event in it.
+    private static func coveredEveryEpisode(_ cycle: WatchCycle, context: ModelContext) -> Bool {
+        let cycleID = cycle.id
+        var eventDescriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate<WatchEvent> { event in
+                event.cycleID == cycleID && event.voidedAt == nil
+            }
+        )
+        eventDescriptor.propertiesToFetch = [\.episodeID]
+        let watchedIDs = Set(((try? context.fetch(eventDescriptor)) ?? []).compactMap(\.episodeID))
+        let scope = Set(cycle.scopeEpisodeIDs)
+        // An unscoped cycle can't be judged by coverage, so require at least one
+        // logged episode rather than treating it as a completed rewatch.
+        return scope.isEmpty ? !watchedIDs.isEmpty : scope.subtracting(watchedIDs).isEmpty
     }
 
     static func recordEpisodeMutation(
@@ -194,8 +228,9 @@ enum WatchHistoryCoordinator {
         source: WatchEventSource = .automatic
     ) {
         let cycle: WatchCycle
-        if let current = currentCycle(forMediaID: mediaID, context: context), current.state == .active {
-            cycle = current
+        if let owning = openCycle(forMediaID: mediaID, episodeID: episodeID, context: context),
+           owning.state == .active {
+            cycle = owning
         } else if isWatched {
             let created = WatchCycle(mediaID: mediaID, kind: .tvShow, startedAt: watchedAt)
             context.insert(created)
@@ -204,11 +239,16 @@ enum WatchHistoryCoordinator {
             return
         }
 
-        let scope = Set(cycle.scopeEpisodeIDs)
-        guard scope.isEmpty || scope.contains(episodeID) else { return }
+        // A rewatch keeps the scope it was opened with, but a first-watch cycle
+        // adopts any episode it is handed. Previously a non-empty first-watch
+        // scope dropped every episode outside it, so bulk passes lost those
+        // events until a catalog check happened to widen the scope.
+        var scope = Set(cycle.scopeEpisodeIDs)
         if isWatched && !cycle.isRewatch && !scope.contains(episodeID) {
             cycle.scopeEpisodeIDs.append(episodeID)
+            scope.insert(episodeID)
         }
+        if cycle.isRewatch, !scope.isEmpty, !scope.contains(episodeID) { return }
 
         let cycleID = cycle.id
         let events = (try? context.fetch(
@@ -382,16 +422,43 @@ enum WatchHistoryCoordinator {
     }
 
     static func currentCycle(forMediaID mediaID: String, context: ModelContext) -> WatchCycle? {
+        openCycles(forMediaID: mediaID, context: context).first
+    }
+
+    /// Every cycle that can still accept events, newest first.
+    ///
+    /// A title can legitimately have more than one open cycle: a new season
+    /// arriving mid-rewatch pauses the scoped rewatch and opens a first-watch
+    /// cycle for the new episodes. Resuming the rewatch then leaves two `.active`
+    /// cycles, so "newest wins" is not a safe way to pick one.
+    static func openCycles(forMediaID mediaID: String, context: ModelContext) -> [WatchCycle] {
         let active = WatchCycleState.active.rawValue
         let completed = WatchCycleState.completed.rawValue
-        var descriptor = FetchDescriptor<WatchCycle>(
+        let descriptor = FetchDescriptor<WatchCycle>(
             predicate: #Predicate { cycle in
                 cycle.mediaID == mediaID && (cycle.stateRaw == active || cycle.stateRaw == completed)
             },
             sortBy: [SortDescriptor(\WatchCycle.startedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// The open cycle that owns `episodeID`. Prefers a cycle whose scope already
+    /// lists the episode, then a rewatch, then the newest — so an episode is
+    /// always logged to the pass that is actually tracking it.
+    static func openCycle(
+        forMediaID mediaID: String,
+        episodeID: String,
+        context: ModelContext
+    ) -> WatchCycle? {
+        let cycles = openCycles(forMediaID: mediaID, context: context)
+        if let scoped = cycles.first(where: { $0.scopeEpisodeIDs.contains(episodeID) }) {
+            return scoped
+        }
+        if let rewatch = cycles.first(where: \.isRewatch) {
+            return rewatch
+        }
+        return cycles.first
     }
 
     private static func knownEpisodeIDs(for item: MediaItem) -> [String] {
@@ -410,10 +477,10 @@ enum WatchHistoryCoordinator {
         context: ModelContext,
         now: Date = Date()
     ) {
-        guard item.modelContext != nil,
-              !item.isDeleted,
-              let cycle = currentCycle(forMediaID: mediaID, context: context),
-              cycle.state == .active else { return }
+        guard item.modelContext != nil, !item.isDeleted else { return }
+        guard let cycle = openCycles(forMediaID: mediaID, context: context)
+            .first(where: { $0.state == .active || ($0.state == .paused && $0.isRewatch) })
+        else { return }
 
         let known = Set(knownIDs)
         let scoped = Set(cycle.scopeEpisodeIDs)
@@ -427,7 +494,16 @@ enum WatchHistoryCoordinator {
         let newIDs = known.subtracting(scoped)
         guard !newIDs.isEmpty else { return }
 
-        cycle.state = .paused
+        // A rewatch that is already paused stays paused: the new episodes open
+        // their own first-watch cycle and the paused pass is left for the user to
+        // resume or settle. Previously the guard above required `.active`, so a
+        // second season arriving while paused left those episodes in no cycle at
+        // all — every watch event for them was dropped, even though they still
+        // counted toward progress.
+        let wasActive = cycle.state == .active
+        if wasActive {
+            cycle.state = .paused
+        }
         let cycleID = cycle.id
         let events = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.cycleID == cycleID })
@@ -437,7 +513,7 @@ enum WatchHistoryCoordinator {
             result[episodeID] = event.watchedAt
         }
 
-        if let details = item.tvShowDetails {
+        if wasActive, let details = item.tvShowDetails {
             for season in details.seasons.liveModels {
                 for episode in season.episodes.liveModels {
                     let episodeID = episode.uniqueID ?? "\(mediaID)_\(season.seasonNumber)_\(episode.episodeNumber)"
@@ -455,11 +531,53 @@ enum WatchHistoryCoordinator {
             scopeEpisodeIDs: Array(newIDs)
         )
         context.insert(next)
-        if item.state == .rewatching {
+        if wasActive, item.state == .rewatching {
             item.stateValue = MediaState.active.rawValue
             item.lastInteractionDate = now
             item.lastStateChangeDate = now
         }
+    }
+
+    /// A rewatch that was started and then left with nothing watched is not a
+    /// rewatch — it is a title the user changed their mind about. `Re-watching`
+    /// has no downward transition in the auto-advance rules (a fresh rewatch also
+    /// sits at 0%), so the empty cycle is settled here instead: archived, and the
+    /// title returns to the state it held before the rewatch.
+    static func abandonEmptyRewatchIfNeeded(
+        item: MediaItem,
+        context: ModelContext,
+        now: Date = Date()
+    ) {
+        guard item.state == .rewatching,
+              (item.storedProgress ?? 0) <= 0,
+              let cycle = openCycles(forMediaID: item.id, context: context)
+                .first(where: { $0.isRewatch && $0.state == .active })
+        else { return }
+
+        // A rewatch that was started a moment ago also sits at 0% with an empty
+        // cycle, so require evidence that episodes were touched during this pass:
+        // `lastInteractionDate` moves whenever an episode is watched. Without
+        // this, every fresh rewatch was cancelled by the sync its own state
+        // change triggered.
+        guard let lastInteraction = item.lastInteractionDate, lastInteraction > cycle.startedAt else { return }
+
+        cycle.state = .archived
+        cycle.completedAt = cycle.completedAt ?? now
+        // Back to whatever the title was before the rewatch: completed if it had
+        // a finished first-watch cycle, otherwise the wishlist. Archiving a cycle
+        // moves it out of `.completed`, so judge it by `isComplete` the same way
+        // the stats do.
+        let mediaID = item.id
+        let allCycles = (try? context.fetch(
+            FetchDescriptor<WatchCycle>(predicate: #Predicate { $0.mediaID == mediaID })
+        )) ?? []
+        let completedRaw = WatchCycleState.completed.rawValue
+        let hadCompletedFirstWatch = allCycles.contains { cycle in
+            !cycle.isRewatch && (cycle.isComplete || cycle.stateRaw == completedRaw)
+        }
+        item.stateValue = (hadCompletedFirstWatch ? MediaState.completed : MediaState.wishlist).rawValue
+        item.lastInteractionDate = now
+        item.lastStateChangeDate = now
     }
 
     private static func snapshotCurrentProgress(
