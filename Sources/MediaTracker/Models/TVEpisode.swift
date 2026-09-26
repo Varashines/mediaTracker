@@ -70,12 +70,19 @@ final class TVEpisode {
         firstWatchedDate ?? watchedDate ?? lastWatchedDate
     }
 
+    /// True while the owning show is in a rewatch cycle. During a rewatch the
+    /// current occurrence is *not* the first watch, so the durable date must come
+    /// from the ledger rather than from this event.
+    private var isInRewatchCycle: Bool {
+        season?.tvShowDetails?.item?.state == .rewatching
+    }
+
     private func recordFirstWatch(importedAt date: Date) {
         if let existing = firstWatchedDate {
             // An import can carry an earlier date than what we already hold
             // (e.g. restoring a backup) — keep the true minimum.
             if date < existing { firstWatchedDate = date }
-        } else {
+        } else if !isInRewatchCycle {
             firstWatchedDate = date
         }
     }

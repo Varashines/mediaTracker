@@ -160,10 +160,31 @@ final class TVShowDetails {
             .first
     }
     
-    /// Earliest first-watch date across all known episodes. Falls back to the
-    /// current projection dates so rows created before `firstWatchedDate`
-    /// existed still report a sensible value.
+    /// Earliest durable first-watch date across all known episodes.
+    ///
+    /// Deliberately reads `firstWatchedDate` only, never the
+    /// `watchedDate`/`lastWatchedDate` projection: mid-rewatch those hold the
+    /// *rewatch* date, so falling back to them would pin the title's first-watch
+    /// date to the current pass. A title simply has no first-watch date until
+    /// the ledger (or the backfill migration) supplies one.
     var earliestEpisodeFirstWatchDate: Date? {
+        var earliest: Date?
+        for season in seasons.liveModels {
+            for episode in season.episodes.liveModels {
+                guard let date = episode.firstWatchedDate else { continue }
+                if let current = earliest {
+                    if date < current { earliest = date }
+                } else {
+                    earliest = date
+                }
+            }
+        }
+        return earliest
+    }
+
+    /// Earliest known watch date including the projection. Display-only — never
+    /// use this to derive a durable first-watch date.
+    var earliestEpisodeKnownWatchDate: Date? {
         var earliest: Date?
         for season in seasons.liveModels {
             for episode in season.episodes.liveModels {

@@ -15,6 +15,14 @@ final class FirstWatchedDateTests: MTTestCase {
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 
+    /// The `state` setter defers a `syncCachedProperties` onto the main actor.
+    /// Without letting it drain, it can run after the in-memory container is
+    /// gone and trap inside SwiftData — so any test that assigns `item.state`
+    /// must await this before returning.
+    private func settleDeferredSync() async {
+        try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+
     /// Builds a show with one season of `episodeCount` episodes, all unwatched.
     private func makeShow(
         in context: ModelContext,
@@ -113,7 +121,7 @@ final class FirstWatchedDateTests: MTTestCase {
 
     // MARK: - Rewatch cycle integration
 
-    func testStartingRewatchPreservesEpisodeFirstWatchedDates() throws {
+    func testStartingRewatchPreservesEpisodeFirstWatchedDates() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let previousContainer = DataService.modelContainer
@@ -135,9 +143,10 @@ final class FirstWatchedDateTests: MTTestCase {
             XCTAssertFalse(ep.isWatched, "the projection is reset for the new cycle")
             XCTAssertEqual(ep.firstWatchedDate, original, "first-watch date survives into the rewatch")
         }
+        await settleDeferredSync()
     }
 
-    func testBulkCompleteAfterRewatchKeepsOriginalFirstWatchedDates() throws {
+    func testBulkCompleteAfterRewatchKeepsOriginalFirstWatchedDates() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let previousContainer = DataService.modelContainer
@@ -167,6 +176,7 @@ final class FirstWatchedDateTests: MTTestCase {
                 "bulk-completing a rewatch must not restamp the original first watch"
             )
         }
+        await settleDeferredSync()
     }
 
     /// A rewatch clears `isWatched`, so the backfill must be driven by the event
@@ -247,6 +257,98 @@ final class FirstWatchedDateTests: MTTestCase {
         XCTAssertEqual(healedItem.firstWatchedAt, original)
     }
 
+    /// A sync that lands before the backfill must not pin a title's first-watch
+    /// date to the current rewatch date, and the backfill must be able to lower
+    /// a value that was already pinned that way.
+    func testTitleFirstWatchedAtIgnoresProjectionAndBackfillLowersIt() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_fw_9", title: "Show", overview: "", type: .tvShow)
+        item.stateValue = MediaState.rewatching.rawValue
+        let tv = TVShowDetails(tmdbID: 9109)
+        tv.item = item
+        item.tvShowDetails = tv
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 2, showID: 9109)
+        season.tvShowDetails = tv
+        tv.seasons.append(season)
+
+        var episodes: [TVEpisode] = []
+        for i in 1...2 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "Ep \(i)", overview: "", showID: 9109)
+            ep.season = season
+            season.episodes.append(ep)
+            episodes.append(ep)
+        }
+        context.insert(item)
+        context.insert(tv)
+        context.insert(season)
+        episodes.forEach(context.insert)
+        try context.save()
+
+        // Mid-rewatch: one episode already rewatched, carrying only the
+        // projection date, and no durable episode dates yet.
+        let rewatchDate = Date()
+        episodes[0].markWatched(true, recordHistory: false)
+        item.syncCachedProperties(now: Date())
+        XCTAssertNil(
+            item.firstWatchedAt,
+            "a title must not take its first-watch date from the current projection"
+        )
+
+        // The ledger has the real original dates.
+        let original = Date().addingTimeInterval(-(500 * 86400))
+        let firstCycle = WatchCycle(
+            mediaID: item.id,
+            kind: .tvShow,
+            startedAt: original,
+            state: .completed,
+            isComplete: true
+        )
+        let rewatchCycle = WatchCycle(
+            mediaID: item.id,
+            kind: .tvShow,
+            startedAt: rewatchDate,
+            state: .active,
+            isRewatch: true,
+            scopeEpisodeIDs: [try XCTUnwrap(episodes[0].uniqueID)]
+        )
+        context.insert(firstCycle)
+        context.insert(rewatchCycle)
+        for ep in episodes {
+            let episodeID = try XCTUnwrap(ep.uniqueID)
+            context.insert(WatchEvent(
+                cycleID: firstCycle.id,
+                mediaID: item.id,
+                episodeID: episodeID,
+                watchedAt: original,
+                deduplicationKey: "\(firstCycle.id.uuidString):\(episodeID)"
+            ))
+        }
+        try context.save()
+
+        // Something pinned the title to the rewatch date before the migration ran.
+        item.firstWatchedAt = rewatchDate
+        try context.save()
+
+        UserDefaults.standard.set(1, forKey: "firstWatchedDateBackfillVersion")
+        await DatabaseMigrations.runFirstWatchedDateBackfillIfNeeded(container: container)
+
+        let verifyContext = ModelContext(container)
+        let healedItem = try XCTUnwrap(try verifyContext.fetch(FetchDescriptor<MediaItem>()).first)
+        XCTAssertEqual(
+            healedItem.firstWatchedAt, original,
+            "the backfill must lower a first-watch date that was pinned to a rewatch"
+        )
+        XCTAssertEqual(
+            healedItem.rewatchCount, 1,
+            "rewatch counts predate the field, so they are derived from existing cycles"
+        )
+    }
+
     // MARK: - Title level
 
     func testShowInheritsFirstWatchedAtFromEarliestEpisode() throws {
@@ -264,7 +366,7 @@ final class FirstWatchedDateTests: MTTestCase {
         XCTAssertEqual(item.firstWatchedAt, earlier)
     }
 
-    func testMovieRecordsFirstWatchOnCompletionAndKeepsItAcrossRewatch() throws {
+    func testMovieRecordsFirstWatchOnCompletionAndKeepsItAcrossRewatch() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let previousContainer = DataService.modelContainer
@@ -284,5 +386,6 @@ final class FirstWatchedDateTests: MTTestCase {
         movie.state = .completed
         XCTAssertEqual(movie.firstWatchedAt, firstCompletion, "a rewatch must not move the first-watch date")
         XCTAssertEqual(movie.rewatchCount, 1)
+        await settleDeferredSync()
     }
 }
