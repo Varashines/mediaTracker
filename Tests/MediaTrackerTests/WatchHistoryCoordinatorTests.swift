@@ -592,4 +592,357 @@ final class WatchHistoryCoordinatorTests: MTTestCase {
         XCTAssertEqual(activeCycle.stateRaw, WatchCycleState.active.rawValue)
         XCTAssertFalse(episode.isWatched, "the projection resets again for the new cycle")
     }
+
+    // MARK: - Multi-cycle routing
+
+    /// Builds a show with two single-episode seasons and returns the pieces a
+    /// rewatch test needs: the item, and the S1E1 / S2E1 episodes.
+    private func makeTwoSeasonShow(
+        in context: ModelContext,
+        id: String,
+        tmdbID: Int
+    ) throws -> (MediaItem, TVEpisode, TVEpisode) {
+        let item = MediaItem(id: id, title: "Show \(id)", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: tmdbID)
+        details.item = item
+        item.tvShowDetails = details
+        var episodes: [TVEpisode] = []
+        for seasonNumber in 1...2 {
+            let season = TVSeason(seasonNumber: seasonNumber, name: "S\(seasonNumber)", episodeCount: 1, showID: tmdbID)
+            season.tvShowDetails = details
+            details.seasons.append(season)
+            let episode = TVEpisode(
+                episodeNumber: 1,
+                seasonNumber: seasonNumber,
+                name: "S\(seasonNumber)E1",
+                overview: "",
+                showID: tmdbID
+            )
+            episode.season = season
+            season.episodes.append(episode)
+            episodes.append(episode)
+        }
+        context.insert(item)
+        context.insert(details)
+        for season in details.seasons { context.insert(season) }
+        episodes.forEach(context.insert)
+        return (item, episodes[0], episodes[1])
+    }
+
+    /// A new season arriving while the rewatch is already paused must still get a
+    /// cycle, otherwise its watch events are dropped even though the episodes
+    /// count toward progress.
+    func testNewSeasonArrivingWhileRewatchIsPausedStillOpensACycle() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = MediaItem(id: "tv_10", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 10)
+        details.item = item
+        item.tvShowDetails = details
+        let seasonOne = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 1, showID: 10)
+        seasonOne.tvShowDetails = details
+        details.seasons.append(seasonOne)
+        let s1e1 = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "S1E1", overview: "", showID: 10)
+        s1e1.season = seasonOne
+        seasonOne.episodes.append(s1e1)
+        s1e1.markWatched(true)
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(seasonOne)
+        context.insert(s1e1)
+        try context.save()
+
+        let s1ID = try XCTUnwrap(s1e1.uniqueID)
+        _ = WatchHistoryCoordinator.startRewatch(item: item, context: context)
+        item.stateValue = MediaState.rewatching.rawValue
+
+        // Season 2 arrives and pauses the rewatch.
+        let seasonTwo = TVSeason(seasonNumber: 2, name: "S2", episodeCount: 1, showID: 10)
+        seasonTwo.tvShowDetails = details
+        details.seasons.append(seasonTwo)
+        let s2e1 = TVEpisode(episodeNumber: 1, seasonNumber: 2, name: "S2E1", overview: "", showID: 10)
+        s2e1.season = seasonTwo
+        seasonTwo.episodes.append(s2e1)
+        context.insert(seasonTwo)
+        context.insert(s2e1)
+        try context.save()
+        let s2ID = try XCTUnwrap(s2e1.uniqueID)
+
+        WatchHistoryCoordinator.reconcileEpisodeCatalog(
+            item: item,
+            mediaID: item.id,
+            knownIDs: [s1ID, s2ID],
+            context: context
+        )
+        try context.save()
+
+        let pausedRewatch = try XCTUnwrap(
+            try context.fetch(FetchDescriptor<WatchCycle>()).first { $0.isRewatch && $0.state == .paused }
+        )
+
+        // More season 2 content shows up while the rewatch is still paused.
+        let s2e2 = TVEpisode(episodeNumber: 2, seasonNumber: 2, name: "S2E2", overview: "", showID: 10)
+        s2e2.season = seasonTwo
+        seasonTwo.episodes.append(s2e2)
+        context.insert(s2e2)
+        let extraID = try XCTUnwrap(s2e2.uniqueID)
+        try context.save()
+
+        WatchHistoryCoordinator.reconcileEpisodeCatalog(
+            item: item,
+            mediaID: item.id,
+            knownIDs: [s1ID, s2ID, extraID],
+            context: context
+        )
+        try context.save()
+
+        let cycles = try context.fetch(FetchDescriptor<WatchCycle>())
+        XCTAssertEqual(pausedRewatch.state, .paused, "an already paused rewatch stays paused")
+        XCTAssertTrue(
+            cycles.contains { !$0.isRewatch && $0.scopeEpisodeIDs.contains(extraID) },
+            "the new episode must belong to a cycle or its events are dropped"
+        )
+    }
+
+    /// Resuming restarts the pass, so the previous attempt's events must be
+    /// voided. Left active, the cycle looked fully covered even though its
+    /// projection had just been cleared.
+    func testResumingPausedRewatchVoidsThePreviousAttemptEvents() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = MediaItem(id: "tv_11", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 11)
+        details.item = item
+        item.tvShowDetails = details
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 1, showID: 11)
+        season.tvShowDetails = details
+        details.seasons.append(season)
+        let episode = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "E1", overview: "", showID: 11)
+        episode.season = season
+        season.episodes.append(episode)
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        context.insert(episode)
+        try context.save()
+
+        let rewatch = WatchHistoryCoordinator.startRewatch(item: item, context: context)
+        let episodeID = try XCTUnwrap(episode.uniqueID)
+        context.insert(WatchEvent(
+            cycleID: rewatch.id,
+            mediaID: item.id,
+            episodeID: episodeID,
+            watchedAt: Date(timeIntervalSince1970: 250),
+            deduplicationKey: "\(rewatch.id.uuidString):\(episodeID):watch"
+        ))
+        rewatch.state = .paused
+        item.stateValue = MediaState.active.rawValue
+        try context.save()
+
+        let resumed = try XCTUnwrap(WatchHistoryCoordinator.resumePausedRewatch(item: item, context: context))
+        try context.save()
+
+        XCTAssertEqual(resumed.state, .active)
+        XCTAssertTrue(
+            ((try? context.fetch(FetchDescriptor<WatchEvent>())) ?? []).allSatisfy { $0.voidedAt != nil },
+            "resuming restarts the pass, so the previous attempt's events must be voided"
+        )
+    }
+
+    /// Completing a title must settle every other open cycle, otherwise a
+    /// resumed rewatch stays `.active` forever: invisible in the stats, never
+    /// returned by currentCycle, and still offering "Resume Paused Rewatch".
+    func testCompletingTitleSettlesASecondOpenCycle() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let item = MediaItem(id: "tv_12", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 12)
+        details.item = item
+        item.tvShowDetails = details
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 1, showID: 12)
+        season.tvShowDetails = details
+        details.seasons.append(season)
+        let episode = TVEpisode(episodeNumber: 1, seasonNumber: 1, name: "E1", overview: "", showID: 12)
+        episode.season = season
+        season.episodes.append(episode)
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        context.insert(episode)
+        try context.save()
+
+        // A stale older cycle alongside the current one, as left behind by the
+        // old resume path: two open cycles for one title.
+        let stale = WatchCycle(
+            mediaID: item.id,
+            kind: .tvShow,
+            startedAt: Date(timeIntervalSince1970: 100),
+            state: .active,
+            isRewatch: true
+        )
+        let current = WatchCycle(
+            mediaID: item.id,
+            kind: .tvShow,
+            startedAt: Date(timeIntervalSince1970: 200),
+            state: .active
+        )
+        context.insert(stale)
+        context.insert(current)
+        try context.save()
+
+        WatchHistoryCoordinator.completeCurrentCycle(item: item, context: context)
+        try context.save()
+
+        XCTAssertEqual(current.state, .completed, "the newest open cycle is the one that closes")
+        XCTAssertEqual(
+            stale.state, .archived,
+            "a second open cycle must not stay active after the title completes"
+        )
+        XCTAssertFalse(stale.isComplete, "an uncovered rewatch is a partial attempt")
+    }
+
+    /// `Re-watching` has no downward auto-advance branch because a fresh rewatch
+    /// also sits at 0%. An empty rewatch that reaches 0% was abandoned, so it
+    /// should be settled and the pre-rewatch state restored.
+    func testAbandonedEmptyRewatchIsSettledOnSync() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_13", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 13)
+        details.item = item
+        item.tvShowDetails = details
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 2, showID: 13)
+        season.tvShowDetails = details
+        details.seasons.append(season)
+        var episodes: [TVEpisode] = []
+        for i in 1...2 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "E\(i)", overview: "", showID: 13)
+            ep.season = season
+            season.episodes.append(ep)
+            episodes.append(ep)
+        }
+        item.stateValue = MediaState.active.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        episodes.forEach(context.insert)
+        for ep in episodes { ep.markWatched(true) }
+        try context.save()
+
+        // Let the auto-advance complete the title, which is what creates the
+        // completed first-watch cycle an abandoned rewatch is restored from.
+        item.syncCachedProperties(now: Date())
+        try context.save()
+        XCTAssertEqual(item.state, .completed)
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Start a rewatch, watch an episode, then change your mind. A rewatch
+        // that was merely started also sits at 0% with an empty cycle, so the
+        // interaction is what distinguishes an abandoned pass from a fresh one.
+        item.state = .rewatching
+        try context.save()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(item.state, .rewatching, "a freshly started rewatch is left alone")
+
+        episodes[0].markWatched(true)
+        try context.save()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        episodes[0].markWatched(false)
+        try context.save()
+
+        item.syncCachedProperties(now: Date())
+        try context.save()
+
+        XCTAssertEqual(
+            item.state, .completed,
+            "an abandoned rewatch restores the state the title held before it"
+        )
+        let cycles = try context.fetch(FetchDescriptor<WatchCycle>())
+        XCTAssertTrue(
+            cycles.contains { $0.isRewatch && $0.state == .archived },
+            "the abandoned rewatch is archived, not left active"
+        )
+    }
+
+    /// A rewatch that is genuinely in progress must not be settled just because
+    /// progress is not yet 100%. Single season, so the catalog check cannot
+    /// introduce a second cycle and pause the pass.
+    func testRewatchInProgressIsNotSettledBySync() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let previousContainer = DataService.modelContainer
+        DataService.modelContainer = container
+        defer { DataService.modelContainer = previousContainer }
+
+        let item = MediaItem(id: "tv_14", title: "Show", overview: "", type: .tvShow)
+        let details = TVShowDetails(tmdbID: 14)
+        details.item = item
+        item.tvShowDetails = details
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 2, showID: 14)
+        season.tvShowDetails = details
+        details.seasons.append(season)
+        var episodes: [TVEpisode] = []
+        for i in 1...2 {
+            let ep = TVEpisode(episodeNumber: i, seasonNumber: 1, name: "E\(i)", overview: "", showID: 14)
+            ep.season = season
+            season.episodes.append(ep)
+            episodes.append(ep)
+        }
+        item.stateValue = MediaState.completed.rawValue
+        context.insert(item)
+        context.insert(details)
+        context.insert(season)
+        episodes.forEach(context.insert)
+        for ep in episodes { ep.markWatched(true) }
+        try context.save()
+
+        item.state = .rewatching
+        episodes[0].markWatched(true, recordHistory: false)
+        try context.save()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        item.syncCachedProperties(now: Date())
+        try context.save()
+
+        XCTAssertEqual(item.state, .rewatching, "a rewatch with progress is left alone")
+    }
+
+    /// A first-watch cycle must adopt every episode it is handed. Previously a
+    /// non-empty scope silently dropped out-of-scope episodes, so a bulk pass
+    /// lost every event after the first.
+    func testFirstWatchCycleAdoptsOutOfScopeEpisodes() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let (item, s1e1, s2e1) = try makeTwoSeasonShow(in: context, id: "tv_15", tmdbID: 15)
+        try context.save()
+        let s1ID = try XCTUnwrap(s1e1.uniqueID)
+        let s2ID = try XCTUnwrap(s2e1.uniqueID)
+
+        // Two bulk-style mutations back to back, as a "mark all watched" pass does.
+        for episodeID in [s1ID, s2ID] {
+            WatchHistoryCoordinator.recordEpisodeMutation(
+                mediaID: item.id,
+                episodeID: episodeID,
+                watchedAt: Date(),
+                runtimeMinutes: 42,
+                isWatched: true,
+                context: context
+            )
+        }
+        try context.save()
+
+        let events = try context.fetch(FetchDescriptor<WatchEvent>())
+            .filter { $0.isActive && $0.mediaID == item.id }
+        XCTAssertEqual(
+            Set(events.compactMap(\.episodeID)), [s1ID, s2ID],
+            "a first-watch cycle must not drop episodes outside its current scope"
+        )
+    }
 }

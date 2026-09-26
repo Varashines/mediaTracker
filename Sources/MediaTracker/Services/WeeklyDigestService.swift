@@ -50,6 +50,27 @@ actor WeeklyDigestService {
                 episodeCounts[showID, default: 0] += 1
             }
         }
+
+        // A rewatch clears the episode projection, so the rows above go missing
+        // for exactly the shows being rewatched. The ledger still has the dates,
+        // so fold in any show that has an event in the window and isn't counted
+        // yet — otherwise a rewatched series vanishes from the digest and then
+        // reappears in bulk on the day it is completed.
+        var eventDescriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate<WatchEvent> { event in
+                event.watchedAt >= start && event.watchedAt < end && event.voidedAt == nil
+            }
+        )
+        eventDescriptor.propertiesToFetch = [\.mediaID, \.episodeID, \.watchedAt, \.voidedAt]
+        let eventShowIDs = Set(((try? modelContext.fetch(eventDescriptor)) ?? []).compactMap { event -> Int? in
+            guard let episodeID = event.episodeID else { return nil }
+            let parts = episodeID.split(separator: "_")
+            guard parts.count >= 3 else { return nil }
+            return Int(parts[0])
+        })
+        for showID in eventShowIDs where episodeCounts[showID] == nil {
+            episodeCounts[showID] = 0
+        }
         let shows = episodeCounts.count
 
         // 2. Movies completed in the window.
@@ -60,9 +81,19 @@ actor WeeklyDigestService {
         movieDescriptor.propertiesToFetch = [
             \.id, \.typeValue, \.stateValue, \.lastStateChangeDate
         ]
-        let movies = ((try? modelContext.fetch(movieDescriptor)) ?? []).count { item in
-            guard let stateChangeDate = item.lastStateChangeDate else { return false }
-            return stateChangeDate >= start && stateChangeDate < end
+        let moviesByStateChange = ((try? modelContext.fetch(movieDescriptor)) ?? []).compactMap { item -> String? in
+            guard let stateChangeDate = item.lastStateChangeDate else { return nil }
+            guard stateChangeDate >= start, stateChangeDate < end else { return nil }
+            return item.id
+        }
+        // Same story for movies: a rewatch moves `lastStateChangeDate` forward, so
+        // fall back to the ledger for anything the state-change path missed.
+        var alreadyCounted = Set(moviesByStateChange)
+        var movies = moviesByStateChange.count
+        for event in (try? modelContext.fetch(eventDescriptor)) ?? [] where event.episodeID == nil {
+            guard !alreadyCounted.contains(event.mediaID) else { continue }
+            alreadyCounted.insert(event.mediaID)
+            movies += 1
         }
 
         // 3. Top shows by episode count (resolve titles).
