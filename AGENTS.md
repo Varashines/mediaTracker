@@ -17,6 +17,35 @@ swift test --filter "BadgeEngineTests|DetailViewModelTests"  # run multiple test
 ### GitHub workflows
 - `.github/workflows/release.yml` — triggers on `v*` tags; builds both-arch DMGs **and creates a public GitHub Release**.
 - `.github/workflows/build-only.yml` — manual `workflow_dispatch`; builds both-arch DMGs and uploads them as **artifacts only** (no release). Version is a workflow input.
+- `.github/workflows/ci.yml` — the `build-and-test` gate. Required on `main`, so a release push must land on a green `develop`.
+
+### Release process (fast-forward, no release PR)
+`main` is released by **fast-forwarding `develop`**, so both branches share the same commits. This keeps `main` linear (`required_linear_history`), makes `git log`/blame/bisect/cherry-pick work across branches, and means there is never any "N ahead / N behind" drift to reconcile.
+
+```bash
+# feature work: PR -> develop (CI + review gate), as normal
+
+# release:
+# 1. bump MARKETING_VERSION in project.yml (two targets) on a branch, merge to develop
+git switch develop && git pull
+# 2. confirm CI is green, then fast-forward main. NO pull request, NO merge commit.
+git push origin develop:main
+# 3. tag to trigger the release workflow
+git tag -a v9.6.4 -m "Release v9.6.4: …" && git push origin v9.6.4
+```
+
+There is no merge-back step: `main` is behind by definition, which is the correct steady state. To verify the branches are healthy at any time:
+
+```bash
+git rev-list --left-right --count origin/main...origin/develop   # expect "0  <n>"
+git merge-base --is-ancestor origin/main origin/develop          # must be true
+```
+
+**Rules that keep this working:**
+- **Never merge `develop` into `main` via a GitHub PR.** Any PR merge mints new commits on `main`, so it can no longer fast-forward and the branch drift returns. This is also why "Rebase and merge" fails with *This branch can't be rebased* once a merge commit exists in `develop`.
+- **Never force-push `main`.** It is append-only, protected, and linear.
+- **Never force-push `develop` to chase a cosmetic `0  0` either.** `develop` is legitimately ahead of `main` between releases.
+- Trade-off accepted: there is no release PR, so the auditable release checkpoint is gone — CI passing before the push is the gate.
 
 ## Architecture
 
