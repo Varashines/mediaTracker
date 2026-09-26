@@ -15,6 +15,11 @@ struct PosterView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var showPicker = false
+    /// Set when a click has to wait for the options to load. The popover used to
+    /// present immediately, so the first click always opened an empty grid — the
+    /// presented popover does not rebuild itself when the options arrive, which
+    /// made selecting a poster look like it needed a second click.
+    @State private var isAwaitingOptions = false
 
     var body: some View {
         if let urlString = item.effectivePosterURL, let url = URL(string: urlString) {
@@ -76,9 +81,17 @@ struct PosterView: View {
                     if posterOptions.count > 1 || (!hasLoadedPosterOptions && onRequestPosterOptions != nil) {
                         Button {
                             onRequestPosterOptions?()
-                            showPicker.toggle()
+                            if posterOptions.isEmpty {
+                                // Nothing to show yet — wait, and present as soon as
+                                // the options land rather than opening an empty grid.
+                                isAwaitingOptions = true
+                            } else {
+                                showPicker = true
+                            }
                         } label: {
-                            Image(systemName: showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
+                            Image(systemName: isAwaitingOptions
+                                  ? "arrow.trianglehead.2.clockwise.rotate.90"
+                                  : (showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right"))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(showPicker ? Color.primary : .primary)
                                 .padding(7)
@@ -93,34 +106,42 @@ struct PosterView: View {
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
-                        .help(isLoadingPosterOptions ? "Loading poster options" : "Change poster")
-                        .opacity((isHovering || showPicker) ? 1 : 0)
+                        .help(isLoadingPosterOptions || isAwaitingOptions ? "Loading poster options" : "Change poster")
+                        .opacity((isHovering || showPicker || isAwaitingOptions) ? 1 : 0)
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
                         .animation(AppTheme.Animation.adaptive(AppTheme.Animation.fade), value: isHovering || showPicker)
                         .padding(10)
+                        .popover(isPresented: $showPicker) {
+                            PosterPickerGrid(
+                                options: posterOptions,
+                                currentURL: item.effectivePosterURL,
+                                isCustom: isCustomPoster,
+                                onSelect: { url in
+                                    onSelectPoster?(url)
+                                    showPicker = false
+                                },
+                                onReset: {
+                                    onResetPoster?()
+                                    showPicker = false
+                                }
+                            )
+                        }
                     }
                 }
             }
             .compositingGroupIfNeeded()
-            // Deliberately attached here rather than to the button above. A popover
-            // whose presenting view sits inside a `compositingGroup()` cannot present
-            // — the group flattens the hierarchy into one layer and the anchor loses
-            // its presentation context, so the picker simply never opens. Anchoring to
-            // the whole poster is also a larger, more reliable hit target.
-            .popover(isPresented: $showPicker) {
-                PosterPickerGrid(
-                    options: posterOptions,
-                    currentURL: item.effectivePosterURL,
-                    isCustom: isCustomPoster,
-                    onSelect: { url in
-                        onSelectPoster?(url)
-                        showPicker = false
-                    },
-                    onReset: {
-                        onResetPoster?()
-                        showPicker = false
-                    }
-                )
+            .onChange(of: hasLoadedPosterOptions) { _, loaded in
+                guard loaded, isAwaitingOptions else { return }
+                isAwaitingOptions = false
+                // Only present once there is something to show; an empty grid is
+                // what made the first click look like a dud.
+                if !posterOptions.isEmpty { showPicker = true }
+            }
+            .onChange(of: isLoadingPosterOptions) { _, loading in
+                if !loading, isAwaitingOptions, hasLoadedPosterOptions {
+                    isAwaitingOptions = false
+                    if !posterOptions.isEmpty { showPicker = true }
+                }
             }
             .onHover { hovering in
                 AppTheme.Animation.with(AppTheme.Animation.fade) {
