@@ -6,7 +6,6 @@ struct MetadataSection: View {
     let themeColor: Color
     
     @Environment(\.colorScheme) var colorScheme
-    @State private var showAllGenres = false
 
     var voteAverage: Double? {
         if item.type == .movie {
@@ -27,51 +26,11 @@ struct MetadataSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-            // Row 1: All metadata pills — single line when it fits, wrapping flow otherwise
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: AppTheme.Spacing.small) { metadataPills }
-                FlowLayout(spacing: AppTheme.Spacing.small) { metadataPills }
-            }
-
-            // Row 2: Genres (pills)
-            if !item.cachedGenres.isEmpty {
-                let genres = item.cachedGenres
-                let displayGenres = showAllGenres ? genres : Array(genres.prefix(5))
-                let extraCount = genres.count - 5
-
-                HStack(spacing: AppTheme.Spacing.small) {
-                    ForEach(displayGenres, id: \.self) { genre in
-                        Text(genre)
-                            .font(AppTheme.Font.caption2)
-                            .foregroundStyle(accent)
-                            .padding(.horizontal, AppTheme.Spacing.small)
-                            .padding(.vertical, AppTheme.Spacing.micro)
-                            .background(
-                                Capsule()
-                                    .fill(accent.opacity(colorScheme == .dark ? 0.10 : 0.12))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(accent.opacity(0.15), lineWidth: 0.5)
-                            )
-                    }
-
-                    if extraCount > 0 && !showAllGenres {
-                        Button {
-                            withAnimation(AppTheme.Animation.springSnappy) {
-                                showAllGenres = true
-                            }
-                        } label: {
-                            Text("+\(extraCount)")
-                                .font(AppTheme.Font.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .contentShape(Capsule())
-                    }
-                }
-            }
+        // Genres moved to the synopsis popup, below the title, so the header is a
+        // single metadata row.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AppTheme.Spacing.small) { metadataPills }
+            FlowLayout(spacing: AppTheme.Spacing.small) { metadataPills }
         }
     }
 
@@ -94,9 +53,7 @@ struct MetadataSection: View {
             infoPill(text: net, accent: accent)
         }
         if let date = item.releaseDate {
-            // Labelled, because the watch-history row carries a first-watched date
-            // in the same pill style and the two are easy to read as one fact.
-            infoPill(text: "Released \(date.formatted(date: .abbreviated, time: .omitted))", icon: "calendar", accent: accent)
+            infoPill(text: date.formatted(date: .abbreviated, time: .omitted), icon: "calendar", accent: accent)
         }
         if item.type == .movie, let runtime = item.cachedRuntime, runtime > 0 {
             infoPill(text: DateUtils.formatRuntime(runtime), icon: "clock.fill", accent: accent)
