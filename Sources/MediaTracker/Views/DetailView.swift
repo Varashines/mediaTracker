@@ -402,7 +402,19 @@ struct DetailView: View {
                 )
             }
             .keyboardShortcut("w", modifiers: [])
+
+            Button("") {
+                presentSynopsisReader()
+            }
+            .keyboardShortcut("i", modifiers: [])
+            .help("More about this title")
         }
+    }
+
+    /// Single entry point for the synopsis/genres popup, so the button, the `i`
+    /// shortcut and the expander all stage it identically.
+    private func presentSynopsisReader() {
+        AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = true }
     }
 
     private var headerSection: some View {
@@ -447,9 +459,7 @@ struct DetailView: View {
             },
             accentColor: viewModel.highContrastAccentColor,
             bgAccentColor: viewModel.luminousAccentColor,
-            onSynopsisExpand: {
-                AppTheme.Animation.with(AppTheme.Animation.readerExpand) { showSynopsisReader = true }
-            },
+            onSynopsisExpand: presentSynopsisReader,
         )
     }
 
@@ -798,6 +808,17 @@ struct DetailView: View {
                 Text(viewModel.item.title)
                     .font(AppTheme.Font.title3)
                     .foregroundStyle(effectiveThemeColor.highContrastAccent(colorScheme: colorScheme))
+
+                // Genres live here rather than in the header: they are reference
+                // detail, and the synopsis card already has a full-height popup to
+                // hold them without adding another row above the synopsis.
+                if !viewModel.item.cachedGenres.isEmpty {
+                    Text(viewModel.item.cachedGenres.joined(separator: " · "))
+                        .font(AppTheme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, AppTheme.Spacing.tiny)
+                }
 
                 let textHeight = synopsisContentHeight(for: viewModel.item.overview)
                 ScrollView(showsIndicators: false) {
