@@ -15,11 +15,6 @@ struct PosterView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var showPicker = false
-    /// Set when a click has to wait for the options to load. The popover used to
-    /// present immediately, so the first click always opened an empty grid — the
-    /// presented popover does not rebuild itself when the options arrive, which
-    /// made selecting a poster look like it needed a second click.
-    @State private var isAwaitingOptions = false
 
     var body: some View {
         if let urlString = item.effectivePosterURL, let url = URL(string: urlString) {
@@ -78,20 +73,11 @@ struct PosterView: View {
                         .padding(14)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if posterOptions.count > 1 || (!hasLoadedPosterOptions && onRequestPosterOptions != nil) {
+                    if hasLoadedPosterOptions && posterOptions.count > 1 {
                         Button {
-                            onRequestPosterOptions?()
-                            if posterOptions.isEmpty {
-                                // Nothing to show yet — wait, and present as soon as
-                                // the options land rather than opening an empty grid.
-                                isAwaitingOptions = true
-                            } else {
-                                showPicker = true
-                            }
+                            showPicker = true
                         } label: {
-                            Image(systemName: isAwaitingOptions
-                                  ? "arrow.trianglehead.2.clockwise.rotate.90"
-                                  : (showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right"))
+                            Image(systemName: showPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(showPicker ? Color.primary : .primary)
                                 .padding(7)
@@ -106,8 +92,8 @@ struct PosterView: View {
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
-                        .help(isLoadingPosterOptions || isAwaitingOptions ? "Loading poster options" : "Change poster")
-                        .opacity((isHovering || showPicker || isAwaitingOptions) ? 1 : 0)
+                        .help("Change poster")
+                        .opacity((isHovering || showPicker) ? 1 : 0)
                         .scaleEffect((isHovering || showPicker) ? 1 : 0.85)
                         .animation(AppTheme.Animation.adaptive(AppTheme.Animation.fade), value: isHovering || showPicker)
                         .padding(10)
@@ -130,20 +116,12 @@ struct PosterView: View {
                 }
             }
             .compositingGroupIfNeeded()
-            .onChange(of: hasLoadedPosterOptions) { _, loaded in
-                guard loaded, isAwaitingOptions else { return }
-                isAwaitingOptions = false
-                // Only present once there is something to show; an empty grid is
-                // what made the first click look like a dud.
-                if !posterOptions.isEmpty { showPicker = true }
-            }
-            .onChange(of: isLoadingPosterOptions) { _, loading in
-                if !loading, isAwaitingOptions, hasLoadedPosterOptions {
-                    isAwaitingOptions = false
-                    if !posterOptions.isEmpty { showPicker = true }
-                }
-            }
             .onHover { hovering in
+                // Options load lazily, and the button stays hidden until they are
+                // known — so hovering the poster is what kicks the load off. A title
+                // with a single poster never shows the icon, because there is no
+                // choice to offer.
+                if hovering { onRequestPosterOptions?() }
                 AppTheme.Animation.with(AppTheme.Animation.fade) {
                     isHovering = hovering
                 }
