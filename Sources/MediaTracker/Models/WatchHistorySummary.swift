@@ -37,20 +37,35 @@ struct WatchHistorySummary: Equatable, Sendable {
 
 struct WatchHistorySummaryView: View {
     @Query private var cycles: [WatchCycle]
+    let firstWatchedAt: Date?
+    let themeColor: Color
     @Environment(\.colorScheme) private var colorScheme
 
-    init(mediaID: String) {
+    init(mediaID: String, firstWatchedAt: Date?, themeColor: Color) {
         _cycles = Query(
             filter: #Predicate<WatchCycle> { cycle in
                 cycle.mediaID == mediaID
             },
             sort: [SortDescriptor(\WatchCycle.startedAt, order: .reverse)]
         )
+        self.firstWatchedAt = firstWatchedAt
+        self.themeColor = themeColor
+    }
+
+    private var accent: Color {
+        themeColor.highContrastAccent(colorScheme: colorScheme)
+    }
+
+    /// Durable first-watch date. Leads the row so the watch history reads as one
+    /// unit: when you first watched it, then how many times since.
+    private var firstWatchedText: String? {
+        guard let firstWatchedAt else { return nil }
+        return "First watched \(firstWatchedAt.formatted(date: .abbreviated, time: .omitted))"
     }
 
     var body: some View {
         let summary = WatchHistorySummary(cycles: cycles)
-        if summary.cycleCount > 0 {
+        if summary.cycleCount > 0 || firstWatchedText != nil {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: AppTheme.Spacing.small) {
                     summaryPills(summary)
@@ -66,6 +81,9 @@ struct WatchHistorySummaryView: View {
 
     @ViewBuilder
     private func summaryPills(_ summary: WatchHistorySummary) -> some View {
+        if let firstWatchedText {
+            summaryPill(icon: "checkmark.seal.fill", text: firstWatchedText)
+        }
         if summary.hasCompletedHistory {
             summaryPill(
                 icon: "checkmark.circle.fill",
@@ -73,45 +91,58 @@ struct WatchHistorySummaryView: View {
             )
         }
         if summary.hasRewatchHistory {
+            // Rewatch pills are accent-tinted so a rewatch reads as a distinct
+            // kind of pass rather than another count.
             summaryPill(
-                icon: "arrow.clockwise",
-                text: summary.completedRewatchCount == 1 ? "Rewatched once" : "Rewatched ×\(summary.completedRewatchCount)"
+                icon: "arrow.trianglehead.2.clockwise.rotate.90",
+                text: summary.completedRewatchCount == 1 ? "Rewatched once" : "Rewatched ×\(summary.completedRewatchCount)",
+                isEmphasised: true
             )
         }
         if summary.activeRewatchCount > 0 {
-            summaryPill(icon: "play.circle.fill", text: "Rewatch in progress")
+            summaryPill(icon: "play.circle.fill", text: "Rewatch in progress", isEmphasised: true)
         }
         if summary.pausedRewatchCount > 0 {
-            summaryPill(icon: "pause.circle.fill", text: "Rewatch paused")
+            summaryPill(icon: "pause.circle.fill", text: "Rewatch paused", isEmphasised: true)
         }
         if summary.archivedPartialRewatchCount > 0 {
-            summaryPill(icon: "minus.circle.fill", text: "Partial rewatch")
+            summaryPill(icon: "minus.circle.fill", text: "Partial rewatch", isEmphasised: true)
         }
         if summary.hasInProgressFirstWatch {
             summaryPill(icon: "circle.dotted", text: "Watch in progress")
         }
     }
 
-    private func summaryPill(icon: String, text: String) -> some View {
+    private func summaryPill(icon: String, text: String, isEmphasised: Bool = false) -> some View {
         Label(text, systemImage: icon)
             .font(AppTheme.Font.caption2.weight(.semibold))
-            .foregroundStyle(.primary.opacity(0.75))
+            .foregroundStyle(isEmphasised ? accent : .primary.opacity(0.75))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, AppTheme.Spacing.small)
             .padding(.vertical, AppTheme.Spacing.micro)
-            .background(
+            .background {
                 Capsule()
-                    .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                    .fill(
+                        isEmphasised
+                            ? accent.opacity(colorScheme == .dark ? 0.16 : 0.14)
+                            : AppTheme.Colors.surfaceGhost(for: colorScheme)
+                    )
                     .overlay(
                         Capsule()
-                            .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.5)
+                            .stroke(
+                                isEmphasised
+                                    ? accent.opacity(0.35)
+                                    : AppTheme.Colors.strokeDefault(for: colorScheme),
+                                lineWidth: 0.5
+                            )
                     )
-            )
+            }
     }
 
     private func summaryAccessibilityLabel(_ summary: WatchHistorySummary) -> String {
         var parts: [String] = []
+        if let firstWatchedText { parts.append(firstWatchedText) }
         if summary.hasCompletedHistory { parts.append("Watched \(summary.completedCycleCount) times") }
         if summary.hasRewatchHistory { parts.append("Rewatched \(summary.completedRewatchCount) times") }
         if summary.activeRewatchCount > 0 { parts.append("Rewatch in progress") }
