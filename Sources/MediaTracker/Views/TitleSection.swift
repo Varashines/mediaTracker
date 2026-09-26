@@ -101,10 +101,9 @@ struct TitleSection: View {
                             .frame(maxHeight: 110, alignment: .leading)
                             .shadow(color: Color.black.opacity(0.3), radius: 3, y: 1)
 
-                            if logoOptions.count > 1 || (!hasLoadedLogoOptions && onRequestLogoOptions != nil) {
+                            if hasLoadedLogoOptions && logoOptions.count > 1 {
                                 Button {
-                                    onRequestLogoOptions?()
-                                    showLogoPicker.toggle()
+                                    showLogoPicker = true
                                 } label: {
                                     Image(systemName: showLogoPicker ? "square.stack.3d.down.right.fill" : "square.stack.3d.down.right")
                                         .font(.system(size: 12, weight: .medium))
@@ -145,6 +144,9 @@ struct TitleSection: View {
                             }
                         }
                         .onHover { hovering in
+                            // The icon stays hidden until the options are known and
+                            // there is more than one, so hovering is what loads them.
+                            if hovering { onRequestLogoOptions?() }
                             isLogosHovering = hovering
                         }
                     } else {

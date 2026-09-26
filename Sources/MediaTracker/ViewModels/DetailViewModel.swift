@@ -308,6 +308,57 @@ class DetailViewModel {
         item.commitChange(dirty: [.badge])
         updateThemeColor()
         AppErrorState.shared.showToast("Poster reset to default", style: .success)
+
+        Task { await adoptLatestTMDPoster() }
+    }
+
+    /// Clearing the custom poster only falls back to whatever TMDB poster we
+    /// happen to have stored, which can be months old. Pull the current one so
+    /// "default" means the latest TMDB artwork, not the last thing we fetched.
+    ///
+    /// Fetches only the details we need and writes them on the main context,
+    /// rather than going through `BackgroundDataService` — a service context would
+    /// write `posterURL` behind the main context's back and be clobbered on its
+    /// next save.
+    private func adoptLatestTMDPoster() async {
+        guard item.modelContext != nil,
+              let tmdbID = Int(item.id.split(separator: "_").last ?? "")
+        else { return }
+
+        do {
+            let path: String?
+            if item.type == .movie {
+                // force: true, or the API client can answer from its own cache and
+                // hand back the same poster path we are trying to replace.
+                let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: true)
+                path = details.posterPath
+            } else {
+                let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: true)
+                path = details.posterPath
+            }
+
+            guard item.modelContext != nil,
+                  let path,
+                  let newURL = APIClient.tmdbImageURL(path: path),
+                  newURL != item.posterURL
+            else { return }
+
+            let previousURL = item.posterURL
+            item.posterURL = newURL
+            // The artwork changed, so the extracted palette no longer applies.
+            item.themeColorSourceURL = newURL
+            item.themeColorHex = nil
+            item.commitChange(dirty: [.badge])
+            updateThemeColor()
+
+            if let previousURL {
+                await ImageCache.shared.removeImage(forKey: previousURL)
+            }
+        } catch {
+            // Offline or rate limited: the custom poster is already cleared, so the
+            // stored TMDB poster stands. Nothing to recover.
+            AppLogger.debug("Could not refresh default poster: \(error.localizedDescription)", logger: AppLogger.network)
+        }
     }
 
     var isCustomLogo: Bool {
