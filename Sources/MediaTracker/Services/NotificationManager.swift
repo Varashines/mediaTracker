@@ -262,6 +262,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
 
     private static let weeklyDigestID = "weekly-digest"
 
+    /// Exposed so the scheduled-notifications view can recognise the digest
+    /// without duplicating the identifier.
+    static var weeklyDigestIdentifier: String { weeklyDigestID }
+
     /// Schedules the next weekly digest (one-shot so the counts are computed
     /// fresh at schedule time; re-scheduled on launch and when the user taps it).
     func scheduleWeeklyDigest(weekday: Int, hour: Int, minute: Int) async {
