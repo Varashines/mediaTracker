@@ -9,16 +9,41 @@ BUNDLE_ID="com.vara.mediatracker"
 EXECUTABLE_NAME="MediaTracker"
 INSTALL_DIR="/Applications"
 
+# Read the real marketing version from project.yml so the bundle can't drift.
+# Grep the key directly rather than using `grep -A 1`, which also matches
+# CURRENT_PROJECT_VERSION and yields the wrong number.
+APP_VERSION=$(sed -n 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"\([^"]*\)".*/\1/p' project.yml | head -1)
+if [ -z "$APP_VERSION" ]; then
+    echo "⚠️  Could not read MARKETING_VERSION from project.yml; falling back to 0.0.0"
+    APP_VERSION="0.0.0"
+fi
+# Keep the installed build distinguishable from a release one.
+if [ "$DEBUG_APP" == "true" ]; then
+    APP_VERSION="$APP_VERSION-debug"
+fi
+
 BUILD_MODE="release"
 BUILD_CONFIG="release"
 DO_CLEAN=false
 FORCE=false
 
 # Parse arguments
+DEBUG_APP=false
 for arg in "$@"; do
     if [ "$arg" == "--debug" ]; then
         BUILD_MODE="debug"
         BUILD_CONFIG="debug"
+    elif [ "$arg" == "--debug-app" ]; then
+        # Debug binary, but still packaged as a real .app and installed.
+        # Plain --debug stops before packaging, which is useless for anything
+        # touching UNUserNotificationCenter: NotificationManager gates on
+        # isProperlyBundled (Bundle.main.bundleIdentifier != nil), so a bare
+        # executable silently skips every notification path. A release bundle
+        # is no good either — AppLogger's enableDebugLogging is false there,
+        # so the scheduling path is unobservable.
+        BUILD_MODE="debug"
+        BUILD_CONFIG="debug"
+        DEBUG_APP=true
     elif [ "$arg" == "--clean" ]; then
         DO_CLEAN=true
         FORCE=true
@@ -28,9 +53,13 @@ for arg in "$@"; do
         echo "Usage: ./install.sh [options]"
         echo ""
         echo "Options:"
-        echo "  --clean      Perform a full clean build (removes .build directory)"
-        echo "  --debug      Build in debug mode (skips icon/packaging/codesign)"
-        echo "  --force,-f   Build and install even if no source changes detected"
+        echo "  --clean        Perform a full clean build (removes .build directory)"
+        echo "  --debug        Build in debug mode (skips icon/packaging/codesign)"
+        echo "  --debug-app    Debug binary, packaged and installed as a real .app."
+        echo "                 Use this when testing notifications: the bundle ID is"
+        echo "                 required by UNUserNotificationCenter, and only a debug"
+        echo "                 build has AppLogger logging enabled."
+        echo "  --force,-f     Build and install even if no source changes detected"
         echo "  --help       Show this help message"
         exit 0
     fi
@@ -81,9 +110,10 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
-# For debug builds, skip icon generation, packaging, and installation
-if [ "$BUILD_CONFIG" == "debug" ]; then
+# For --debug (without --debug-app), skip icon generation, packaging, and installation
+if [ "$BUILD_CONFIG" == "debug" ] && [ "$DEBUG_APP" == "false" ]; then
     echo "✅ Debug build complete. Binary at: $BINARY_PATH"
+    echo "   (not packaged — use --debug-app if you need a real .app, e.g. for notifications)"
     exit 0
 fi
 
@@ -125,7 +155,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>9.0.3</string>
+    <string>$APP_VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>NSHighResolutionCapable</key>

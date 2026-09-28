@@ -18,7 +18,6 @@ struct ServicesSection: View {
     @State private var showMMKey = false
     @State private var tmdbValidation: KeyValidationState = .idle
     @State private var omdbValidation: KeyValidationState = .idle
-    @State private var showScheduledNotifications = false
     @Environment(\.colorScheme) var scheme
 
     enum KeyValidationState: Equatable {
@@ -106,23 +105,14 @@ struct ServicesSection: View {
                             }
                         }
 
-                        SettingsRow(title: "Reschedule", subtitle: "Refresh notification queue", showDivider: true) {
+                        SettingsRow(title: "Reschedule", subtitle: "Refresh notification queue", showDivider: false) {
                             SettingsButton(title: "Reschedule All") {
                                 Task { await NotificationManager.shared.scheduleAllUpcomingNotifications() }
-                            }
-                        }
-
-                        SettingsRow(title: "Scheduled", subtitle: "See what is queued, grouped by type", showDivider: false) {
-                            SettingsButton(title: "View Scheduled") {
-                                showScheduledNotifications = true
                             }
                         }
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showScheduledNotifications) {
-            ScheduledNotificationsView()
         }
     }
 

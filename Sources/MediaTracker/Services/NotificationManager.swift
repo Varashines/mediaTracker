@@ -82,6 +82,53 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         return (dateComponents, triggerDate)
     }
 
+    /// Identifiers that should be removed: a `-day2` request (the next-morning
+    /// reminder no longer exists), or any request whose item is no longer upcoming.
+    ///
+    /// Split out and pure so it is testable. This ran inline for years, and the
+    /// season-end suffix bug — every season-end alert scheduled correctly, then
+    /// deleted as stale on the next pass — was invisible precisely because nothing
+    /// covered it.
+    static func staleIdentifiers(from requests: [UNNotificationRequest], upcomingIDs: Set<String>) -> [String] {
+        var stale: [String] = []
+        for request in requests {
+            let identifier = request.identifier
+            let base: String
+            if identifier.hasSuffix("-day1") {
+                base = String(identifier.dropLast(5))
+            } else if identifier.hasSuffix("-day2") {
+                // No longer scheduled. Always stale, whether or not the item is
+                // still upcoming.
+                stale.append(identifier)
+                continue
+            } else {
+                base = identifier
+            }
+            guard let itemID = itemID(fromIdentifier: base) else { continue }
+            if !upcomingIDs.contains(itemID) { stale.append(identifier) }
+        }
+        return stale
+    }
+
+    /// The MediaItem id behind a notification identifier, or nil when the
+    /// identifier is not item-scoped (the weekly digest).
+    static func itemID(fromIdentifier identifier: String) -> String? {
+        var base = identifier
+        // A season-end alert carries "-seasonend-S<n>" after the item id. It has to
+        // come off before the item id is extracted, or the result is
+        // "tv_97546-seasonend-S4", which never matches an upcoming item id and so
+        // marks a perfectly good request for deletion on the next pass.
+        if let range = base.range(of: "-seasonend-") {
+            base = String(base[base.startIndex..<range.lowerBound])
+        }
+        // "-day1" is the older reminder suffix. Handled here rather than only at
+        // the call site so this is correct on its own.
+        if base.hasSuffix("-day1") { base = String(base.dropLast(5)) }
+        if base.hasPrefix("movie-") { return String(base.dropFirst(6)) }
+        if base.hasPrefix("tv-") { return String(base.dropFirst(3)) }
+        return nil
+    }
+
     func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
         guard areNotificationsEnabled, isChannelEnabled(.notificationsMovies) else {
@@ -262,10 +309,6 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
 
     private static let weeklyDigestID = "weekly-digest"
 
-    /// Exposed so the scheduled-notifications view can recognise the digest
-    /// without duplicating the identifier.
-    static var weeklyDigestIdentifier: String { weeklyDigestID }
-
     /// Schedules the next weekly digest (one-shot so the counts are computed
     /// fresh at schedule time; re-scheduled on launch and when the user taps it).
     func scheduleWeeklyDigest(weekday: Int, hour: Int, minute: Int) async {
@@ -364,36 +407,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
 
         // Reconcile: drop our pending requests for items that are no longer
-        // upcoming (watched, completed, removed) so stale day-1/day-2 pings
-        // can't fire. The weekly digest is owned elsewhere — leave it alone.
-        let upcomingIDs = Set(upcomingItemsFetched.map(\.id))
-        let pending = await center.pendingNotificationRequests()
-        var stale: [String] = []
-        for request in pending {
-            let identifier = request.identifier
-            let base: String
-            if identifier.hasSuffix("-day1") {
-                base = String(identifier.dropLast(5))
-            } else if identifier.hasSuffix("-day2") {
-                // No longer scheduled. Always stale, whether or not the item is
-                // still upcoming, so flag it for removal rather than skipping it.
-                stale.append(identifier)
-                continue
-            } else {
-                base = identifier
-            }
-            let itemID: String?
-            if base.hasPrefix("movie-") {
-                itemID = String(base.dropFirst(6))
-            } else if base.hasPrefix("tv-") {
-                itemID = String(base.dropFirst(3))
-            } else {
-                continue
-            }
-            if let itemID, !upcomingIDs.contains(itemID) {
-                stale.append(identifier)
-            }
-        }
+        // upcoming (watched, completed, removed) so stale pings can't fire. The
+        // weekly digest is owned elsewhere — leave it alone.
+        let stale = Self.staleIdentifiers(
+            from: await center.pendingNotificationRequests(),
+            upcomingIDs: Set(upcomingItemsFetched.map(\.id))
+        )
         if !stale.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: stale)
             AppLogger.info("🧹 Cleared \(stale.count) stale notification(s).", logger: AppLogger.notifications)
