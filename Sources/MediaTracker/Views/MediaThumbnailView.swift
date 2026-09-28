@@ -444,8 +444,9 @@ struct MediaThumbnailView: View, Equatable {
     private func markNextEpisodeAsWatched(for item: MediaItem) {
         guard item.modelContext != nil, let tv = item.tvShowDetails else { return }
 
-        // Find first unwatched season
-        let sortedSeasons = tv.seasons.sorted { $0.seasonNumber < $1.seasonNumber }
+        // Find first unwatched season. Specials (season 0) sort first and would
+        // otherwise absorb every press — skip them, matching DetailViewModel.
+        let sortedSeasons = tv.seasons.filter { $0.seasonNumber > 0 }.sorted { $0.seasonNumber < $1.seasonNumber }
         guard let currentSeason = sortedSeasons.first(where: {
             $0.watchedEpisodesCount < $0.totalEpisodesCount
         }) else { return }

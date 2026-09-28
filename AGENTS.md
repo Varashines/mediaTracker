@@ -19,33 +19,46 @@ swift test --filter "BadgeEngineTests|DetailViewModelTests"  # run multiple test
 - `.github/workflows/build-only.yml` — manual `workflow_dispatch`; builds both-arch DMGs and uploads them as **artifacts only** (no release). Version is a workflow input.
 - `.github/workflows/ci.yml` — the `build-and-test` gate. Required on `main`, so a release push must land on a green `develop`.
 
-### Release process (fast-forward, no release PR)
-`main` is released by **fast-forwarding `develop`**, so both branches share the same commits. This keeps `main` linear (`required_linear_history`), makes `git log`/blame/bisect/cherry-pick work across branches, and means there is never any "N ahead / N behind" drift to reconcile.
+### Release process
+`develop` is the integration branch; `main` is the release branch. Releases go through a PR so every release has an auditable checkpoint with CI and approval on the release itself.
 
 ```bash
-# feature work: PR -> develop (CI + review gate), as normal
-
-# release:
-# 1. bump MARKETING_VERSION in project.yml (two targets) on a branch, merge to develop
+# 1. feature work
 git switch develop && git pull
-# 2. confirm CI is green, then fast-forward main. NO pull request, NO merge commit.
-git push origin develop:main
-# 3. tag to trigger the release workflow
+git switch -c feature/my-change        # branch off develop
+# ... make changes, commit per phase ...
+git push -u origin feature/my-change
+
+# 2. verify with a real both-arch build before merging
+gh workflow run build-only.yml --ref feature/my-change -f version=9.6.4
+gh run watch <run-id> --exit-status
+
+# 3. merge to develop
+gh pr create --base develop --head feature/my-change
+gh pr merge <n> --squash
+
+# 4. bump the version (only when planning a release)
+#    MARKETING_VERSION in project.yml, both targets, on its own branch -> PR -> develop
+
+# 5. release: develop -> main via PR, then tag
+gh pr create --base main --head develop
+gh pr merge <n> --squash               # squash or rebase; NOT a merge commit (see below)
 git tag -a v9.6.4 -m "Release v9.6.4: …" && git push origin v9.6.4
 ```
 
-There is no merge-back step: `main` is behind by definition, which is the correct steady state. To verify the branches are healthy at any time:
+**Notes:**
+- `main` has `required_linear_history` enabled, so a release PR **must** be squashed or rebased. A merge commit will be rejected.
+- The release tag fires `.github/workflows/release.yml`, which publishes the GitHub Release and both DMGs.
+- `main...develop` normally reads `0  <n>` with a non-zero count. That is **expected**: each release PR mints new commits on `main`, so the same change exists under two hashes (the squash twin on `main`, the original on `develop`). The trees are identical and nothing is stranded. It is cosmetic — do not force-push either branch to chase a `0  0`.
+- Because of that, cherry-picking between branches needs the PR number rather than the raw SHA.
+- Do not merge `main` back into `develop`. A merge commit in `develop` is what makes *"This branch can't be rebased"* appear on later PRs.
+
+**Health check:**
 
 ```bash
 git rev-list --left-right --count origin/main...origin/develop   # expect "0  <n>"
-git merge-base --is-ancestor origin/main origin/develop          # must be true
+git diff --stat origin/main origin/develop                        # should be empty when nothing is pending
 ```
-
-**Rules that keep this working:**
-- **Never merge `develop` into `main` via a GitHub PR.** Any PR merge mints new commits on `main`, so it can no longer fast-forward and the branch drift returns. This is also why "Rebase and merge" fails with *This branch can't be rebased* once a merge commit exists in `develop`.
-- **Never force-push `main`.** It is append-only, protected, and linear.
-- **Never force-push `develop` to chase a cosmetic `0  0` either.** `develop` is legitimately ahead of `main` between releases.
-- Trade-off accepted: there is no release PR, so the auditable release checkpoint is gone — CI passing before the push is the gate.
 
 ## Architecture
 

@@ -117,7 +117,12 @@ extension BackgroundDataService {
                     // 2. Auto-mark unwatched episodes if Completed
                     let autoMark = autoMarkPreference
                     if autoMark && item.stateValue == "Completed" {
-                        let liveEps = liveSeasons.flatMap { $0.episodes.liveModels }
+                        // Exclude specials (season 0), same as the detail view and the
+                        // background auto-complete. A background heal used to be a third
+                        // way for season 0 to end up watched.
+                        let liveEps = liveSeasons
+                            .filter { $0.seasonNumber > 0 }
+                            .flatMap { $0.episodes.liveModels }
                         for ep in liveEps where !ep.isWatched {
                             ep.markWatched(true)
                         }
