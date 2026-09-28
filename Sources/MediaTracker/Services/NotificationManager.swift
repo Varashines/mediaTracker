@@ -154,6 +154,49 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
     }
 
+    /// "Season N ends today — binge watch if you haven't already."
+    ///
+    /// Fires alongside the per-episode notification for the finale, not instead
+    /// of it: the episode ping says something is available, this one says the
+    /// season is now complete. Purely additive.
+    ///
+    /// No poster attachment, so it reads as a different kind of alert in
+    /// Notification Centre, and no next-day reminder — the day after a finale is
+    /// not news.
+    func scheduleSeasonEndNotification(
+        id: String,
+        title: String,
+        seasonNumber: Int,
+        finaleAirDate: Date,
+        airTime: String?
+    ) async {
+        guard isProperlyBundled else { return }
+        guard areNotificationsEnabled, isChannelEnabled(.notificationsTV) else { return }
+        guard let computed = computeEffectiveTriggerDate(from: finaleAirDate, time: airTime, usesDefaultTime: false),
+              computed.triggerDate > Date() else { return }
+
+        let identifier = "tv-\(id)-seasonend-S\(seasonNumber)"
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.subtitle = "Season \(seasonNumber) ends today"
+        content.body = "Binge watch if you haven't already."
+        content.sound = .default
+        // Reuse the TV category so the existing "Mark as Watched" action works
+        // on this notification too. EPISODE_NUMBER -1 marks it as a season-level
+        // alert, so the action falls back to "next unwatched" rather than
+        // resolving a bogus episode.
+        content.categoryIdentifier = "TV_EPISODE_RELEASE"
+        content.userInfo = [
+            "ITEM_ID": id,
+            "ITEM_TYPE": "tvShow",
+            "SEASON_NUMBER": seasonNumber,
+            "EPISODE_NUMBER": -1
+        ]
+
+        AppLogger.info("🔔 Scheduling season-end notification: \(title) S\(seasonNumber) (\(computed.triggerDate))", logger: AppLogger.notifications)
+        await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
+    }
+
     private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, dateComponents: DateComponents, triggerDate: Date) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
@@ -364,8 +407,45 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         // the next-morning reminder is gone, so the whole budget covers items and
         // still leaves headroom for the weekly digest and season-end notifications.
         let digestEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue)
-        let limit = digestEnabled ? 62 : 63
-        let itemsToProcess = channelFiltered.prefix(limit)
+
+        // Reserve season-end slots *before* spending the remainder on episode
+        // pings, otherwise these would push the last item(s) off the end. Capped so
+        // a burst of simultaneous finales can't crowd out every episode alert, and
+        // windowed so the set shrinks on its own as finales air.
+        let seasonEndCap = 6
+        let seasonEndWindow: TimeInterval = .days14
+        let seasonEndCandidates: [(item: MediaItem, seasonNumber: Int, airDate: Date)] = tvAllowed
+            ? channelFiltered.compactMap { item in
+                guard item.type == .tvShow,
+                      let tv = item.tvShowDetails,
+                      let finale = tv.upcomingSeasonFinale(within: seasonEndWindow)
+                else { return nil }
+                // On Hold means deliberately paused, so skip it. Wishlist is
+                // wanted — "binge if you haven't" covers never-started shows.
+                // Completed is not a nudge.
+                guard item.state != .onHold, item.state != .completed else { return nil }
+                return (item, finale.season.seasonNumber, finale.airDate)
+            }
+            .sorted { $0.airDate < $1.airDate }
+            .prefix(seasonEndCap)
+            .map { $0 }
+            : []
+
+        for candidate in seasonEndCandidates {
+            await scheduleSeasonEndNotification(
+                id: candidate.item.id,
+                title: candidate.item.title,
+                seasonNumber: candidate.seasonNumber,
+                finaleAirDate: candidate.airDate,
+                airTime: candidate.item.tvShowDetails?.nextEpisodeTime
+            )
+        }
+        if !seasonEndCandidates.isEmpty {
+            AppLogger.info("🔔 Scheduled \(seasonEndCandidates.count) season-end notification(s).", logger: AppLogger.notifications)
+        }
+
+        let limit = (digestEnabled ? 62 : 63) - seasonEndCandidates.count
+        let itemsToProcess = channelFiltered.prefix(max(0, limit))
         
         // Process concurrently using TaskGroup with bounded parallelism (max 4 concurrent)
         await withTaskGroup(of: Void.self) { group in
