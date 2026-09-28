@@ -249,4 +249,31 @@ final class TVShowDetails {
             .sorted { $0.episodeNumber < $1.episodeNumber }
             .first { !$0.isWatched }
     }
+
+    /// The soonest season whose last episode is still unwatched and airs within
+    /// `window` — the cue for a "season's out, go binge" notification.
+    ///
+    /// The `episodeCount >= 3` guard is load-bearing. A season that hasn't been
+    /// fully fetched reports `episodeCount` of 1 or 2, so "highest episode number"
+    /// is really the premiere, and treating that as a finale produced alerts for
+    /// Abbott Elementary S6E1, 9-1-1 S10E1, Silo S4E1 and similar. 11 of 45
+    /// candidates were that false positive. Seasons that short are treated as
+    /// unsynced rather than genuinely short.
+    func upcomingSeasonFinale(within window: TimeInterval, now: Date = Date()) -> (season: TVSeason, episode: TVEpisode, airDate: Date)? {
+        let cutoff = now.addingTimeInterval(window)
+        var soonest: (season: TVSeason, episode: TVEpisode, airDate: Date)?
+
+        for season in seasons.liveModels where season.seasonNumber > 0 {
+            guard season.episodeCount >= 3,
+                  let finalEpisode = season.episodes.liveModels.first(where: { $0.episodeNumber == season.episodeCount }),
+                  !finalEpisode.isWatched,
+                  let airDate = finalEpisode.airDateAsDate,
+                  airDate > now,
+                  airDate <= cutoff else { continue }
+            if soonest == nil || airDate < soonest!.airDate {
+                soonest = (season, finalEpisode, airDate)
+            }
+        }
+        return soonest
+    }
 }

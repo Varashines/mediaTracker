@@ -150,8 +150,14 @@ final class MediaItem: Identifiable {
                 nonisolated(unsafe) let item = self
                 nonisolated(unsafe) let context = modelContext
                 let pid = persistentModelID
+                // Container captured on purpose — see the `state` setter. The
+                // `modelContext != nil` guard below does not detect a
+                // deallocated ModelContainer, so without this the task outlives
+                // the store and traps inside SwiftData.
+                let storeContainer = context?.container
                 Task { @MainActor in
-                    // Guard container teardown: deferred Task must not save a dead context.
+                    guard let storeContainer else { return }
+                    defer { withExtendedLifetime(storeContainer) {} }
                     guard item.modelContext != nil, let context else { return }
                     item.syncCachedProperties(dirty: [])
                     SaveCoordinator.shared.requestSave(context)
@@ -205,7 +211,17 @@ final class MediaItem: Identifiable {
                     )
                 }
                 let pid = persistentModelID
+                // The container is captured on purpose. A `ModelContext` does not
+                // keep its `ModelContainer` alive, so this deferred work can
+                // outlive a deallocated store — the guard below checks
+                // `modelContext != nil`, which stays true after the container is
+                // gone, and the task then traps inside SwiftData. Holding the
+                // container for the task's lifetime makes the store outlive the
+                // work that touches it.
+                let storeContainer = context?.container
                 Task { @MainActor in
+                    guard let storeContainer else { return }
+                    defer { withExtendedLifetime(storeContainer) {} }
                     guard item.modelContext != nil, let context else { return }
                     item.syncCachedProperties(dirty: [.badge, .searchable])
                     SaveCoordinator.shared.requestSave(context)

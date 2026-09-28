@@ -12,7 +12,7 @@ swift test --filter <TestCase>       # run single test class
 swift test --filter "BadgeEngineTests|DetailViewModelTests"  # run multiple test classes
 ```
 
-**Note**: `DiscoverySyncServiceTests/testNetworkCountDeduplication` previously made **real network calls** (via `extractMissingColors`); it is now stubbed with `MockURLProtocol` (through `ImageCache.configureForTesting`) and is deterministic/fast in isolation. A **separate, general SwiftData in-memory-container teardown autosave race** can still crash a *full-suite* run (`ModelContext.save() called after its ModelContainer has been deallocated`). All assertions pass — it is a SwiftData issue, not a real failure.
+**Note**: `DiscoverySyncServiceTests/testNetworkCountDeduplication` previously made **real network calls** (via `extractMissingColors`); it is now stubbed with `MockURLProtocol` (through `ImageCache.configureForTesting`) and is deterministic/fast in isolation. The SwiftData teardown crash that used to break full-suite runs — a deferred `Task { @MainActor in … }` outliving a deallocated `ModelContainer` — is now **fixed at the root**: `MediaItem`'s `state` and `taste` setters capture `modelContext?.container` and hold it for the task's lifetime, so the store outlives the work that touches it. Note `guard modelContext != nil` does *not* detect a dead container. If the suite crashes this way again, look for a new deferred task that was not given the same treatment.
 
 ### GitHub workflows
 - `.github/workflows/release.yml` — triggers on `v*` tags; builds both-arch DMGs **and creates a public GitHub Release**.

@@ -82,6 +82,53 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         return (dateComponents, triggerDate)
     }
 
+    /// Identifiers that should be removed: a `-day2` request (the next-morning
+    /// reminder no longer exists), or any request whose item is no longer upcoming.
+    ///
+    /// Split out and pure so it is testable. This ran inline for years, and the
+    /// season-end suffix bug — every season-end alert scheduled correctly, then
+    /// deleted as stale on the next pass — was invisible precisely because nothing
+    /// covered it.
+    static func staleIdentifiers(from requests: [UNNotificationRequest], upcomingIDs: Set<String>) -> [String] {
+        var stale: [String] = []
+        for request in requests {
+            let identifier = request.identifier
+            let base: String
+            if identifier.hasSuffix("-day1") {
+                base = String(identifier.dropLast(5))
+            } else if identifier.hasSuffix("-day2") {
+                // No longer scheduled. Always stale, whether or not the item is
+                // still upcoming.
+                stale.append(identifier)
+                continue
+            } else {
+                base = identifier
+            }
+            guard let itemID = itemID(fromIdentifier: base) else { continue }
+            if !upcomingIDs.contains(itemID) { stale.append(identifier) }
+        }
+        return stale
+    }
+
+    /// The MediaItem id behind a notification identifier, or nil when the
+    /// identifier is not item-scoped (the weekly digest).
+    static func itemID(fromIdentifier identifier: String) -> String? {
+        var base = identifier
+        // A season-end alert carries "-seasonend-S<n>" after the item id. It has to
+        // come off before the item id is extracted, or the result is
+        // "tv_97546-seasonend-S4", which never matches an upcoming item id and so
+        // marks a perfectly good request for deletion on the next pass.
+        if let range = base.range(of: "-seasonend-") {
+            base = String(base[base.startIndex..<range.lowerBound])
+        }
+        // "-day1" is the older reminder suffix. Handled here rather than only at
+        // the call site so this is correct on its own.
+        if base.hasSuffix("-day1") { base = String(base.dropLast(5)) }
+        if base.hasPrefix("movie-") { return String(base.dropFirst(6)) }
+        if base.hasPrefix("tv-") { return String(base.dropFirst(3)) }
+        return nil
+    }
+
     func scheduleMovieNotification(id: String, title: String, releaseDate: Date?, posterURL: String?) async {
         guard isProperlyBundled else { return }
         guard areNotificationsEnabled, isChannelEnabled(.notificationsMovies) else {
@@ -132,6 +179,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         let season = nextSeasonNumber ?? 0
         let episode = nextEpisodeNumber ?? 0
         
+        // Season/episode are logged because this is the only place the resolved
+        // target is observable: a pending notification's content is not
+        // inspectable until it fires, and naming the wrong S/E is exactly what
+        // this code path used to do.
+        AppLogger.info("🔔   -> notifying S\(season)E\(episode) for \(title)", logger: AppLogger.notifications)
+
         content.userInfo = [
             "ITEM_ID": id, 
             "ITEM_TYPE": "tvShow",
@@ -151,6 +204,49 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         if let posterURL = posterURL, let attachment = try? await downloadImage(from: posterURL) {
             content.attachments = [attachment]
         }
+        await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
+    }
+
+    /// "Season N ends today — binge watch if you haven't already."
+    ///
+    /// Fires alongside the per-episode notification for the finale, not instead
+    /// of it: the episode ping says something is available, this one says the
+    /// season is now complete. Purely additive.
+    ///
+    /// No poster attachment, so it reads as a different kind of alert in
+    /// Notification Centre, and no next-day reminder — the day after a finale is
+    /// not news.
+    func scheduleSeasonEndNotification(
+        id: String,
+        title: String,
+        seasonNumber: Int,
+        finaleAirDate: Date,
+        airTime: String?
+    ) async {
+        guard isProperlyBundled else { return }
+        guard areNotificationsEnabled, isChannelEnabled(.notificationsTV) else { return }
+        guard let computed = computeEffectiveTriggerDate(from: finaleAirDate, time: airTime, usesDefaultTime: false),
+              computed.triggerDate > Date() else { return }
+
+        let identifier = "tv-\(id)-seasonend-S\(seasonNumber)"
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.subtitle = "Season \(seasonNumber) ends today"
+        content.body = "Binge watch if you haven't already."
+        content.sound = .default
+        // Reuse the TV category so the existing "Mark as Watched" action works
+        // on this notification too. EPISODE_NUMBER -1 marks it as a season-level
+        // alert, so the action falls back to "next unwatched" rather than
+        // resolving a bogus episode.
+        content.categoryIdentifier = "TV_EPISODE_RELEASE"
+        content.userInfo = [
+            "ITEM_ID": id,
+            "ITEM_TYPE": "tvShow",
+            "SEASON_NUMBER": seasonNumber,
+            "EPISODE_NUMBER": -1
+        ]
+
+        AppLogger.info("🔔 Scheduling season-end notification: \(title) S\(seasonNumber) (\(computed.triggerDate))", logger: AppLogger.notifications)
         await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
     }
 
@@ -311,36 +407,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
 
         // Reconcile: drop our pending requests for items that are no longer
-        // upcoming (watched, completed, removed) so stale day-1/day-2 pings
-        // can't fire. The weekly digest is owned elsewhere — leave it alone.
-        let upcomingIDs = Set(upcomingItemsFetched.map(\.id))
-        let pending = await center.pendingNotificationRequests()
-        var stale: [String] = []
-        for request in pending {
-            let identifier = request.identifier
-            let base: String
-            if identifier.hasSuffix("-day1") {
-                base = String(identifier.dropLast(5))
-            } else if identifier.hasSuffix("-day2") {
-                // No longer scheduled. Always stale, whether or not the item is
-                // still upcoming, so flag it for removal rather than skipping it.
-                stale.append(identifier)
-                continue
-            } else {
-                base = identifier
-            }
-            let itemID: String?
-            if base.hasPrefix("movie-") {
-                itemID = String(base.dropFirst(6))
-            } else if base.hasPrefix("tv-") {
-                itemID = String(base.dropFirst(3))
-            } else {
-                continue
-            }
-            if let itemID, !upcomingIDs.contains(itemID) {
-                stale.append(identifier)
-            }
-        }
+        // upcoming (watched, completed, removed) so stale pings can't fire. The
+        // weekly digest is owned elsewhere — leave it alone.
+        let stale = Self.staleIdentifiers(
+            from: await center.pendingNotificationRequests(),
+            upcomingIDs: Set(upcomingItemsFetched.map(\.id))
+        )
         if !stale.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: stale)
             AppLogger.info("🧹 Cleared \(stale.count) stale notification(s).", logger: AppLogger.notifications)
@@ -364,8 +436,52 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         // the next-morning reminder is gone, so the whole budget covers items and
         // still leaves headroom for the weekly digest and season-end notifications.
         let digestEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue)
-        let limit = digestEnabled ? 62 : 63
-        let itemsToProcess = channelFiltered.prefix(limit)
+
+        // Reserve season-end slots *before* spending the remainder on episode
+        // pings, otherwise these would push the last item(s) off the end. Capped so
+        // a burst of simultaneous finales can't crowd out every episode alert, and
+        // windowed so the set shrinks on its own as finales air.
+        let seasonEndCap = 6
+        let seasonEndWindow: TimeInterval = .days14
+        let seasonEndCandidates: [(item: MediaItem, seasonNumber: Int, airDate: Date)] = tvAllowed
+            ? channelFiltered.compactMap { item in
+                guard item.type == .tvShow,
+                      let tv = item.tvShowDetails,
+                      let finale = tv.upcomingSeasonFinale(within: seasonEndWindow)
+                else { return nil }
+                // On Hold means deliberately paused, so skip it. Wishlist is
+                // wanted — "binge if you haven't" covers never-started shows.
+                // Completed is not a nudge.
+                guard item.state != .onHold, item.state != .completed else { return nil }
+                return (item, finale.season.seasonNumber, finale.airDate)
+            }
+            // Title is a tiebreak because the cap is a hard cut: three shows whose
+            // finales land on the same day would otherwise race for the last slot
+            // and the winner could differ between launches. Ordering by title makes
+            // the same set win every time.
+            .sorted { lhs, rhs in
+                if lhs.airDate == rhs.airDate { return lhs.item.title < rhs.item.title }
+                return lhs.airDate < rhs.airDate
+            }
+            .prefix(seasonEndCap)
+            .map { $0 }
+            : []
+
+        for candidate in seasonEndCandidates {
+            await scheduleSeasonEndNotification(
+                id: candidate.item.id,
+                title: candidate.item.title,
+                seasonNumber: candidate.seasonNumber,
+                finaleAirDate: candidate.airDate,
+                airTime: candidate.item.tvShowDetails?.nextEpisodeTime
+            )
+        }
+        if !seasonEndCandidates.isEmpty {
+            AppLogger.info("🔔 Scheduled \(seasonEndCandidates.count) season-end notification(s).", logger: AppLogger.notifications)
+        }
+
+        let limit = (digestEnabled ? 62 : 63) - seasonEndCandidates.count
+        let itemsToProcess = channelFiltered.prefix(max(0, limit))
         
         // Process concurrently using TaskGroup with bounded parallelism (max 4 concurrent)
         await withTaskGroup(of: Void.self) { group in
