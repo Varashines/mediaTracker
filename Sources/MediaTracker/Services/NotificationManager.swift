@@ -153,7 +153,7 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         }
         await finalizeSchedule(identifier: identifier, content: content, dateComponents: computed.dateComponents, triggerDate: computed.triggerDate)
     }
-    
+
     private func finalizeSchedule(identifier: String, content: UNMutableNotificationContent, dateComponents: DateComponents, triggerDate: Date) async {
         guard isProperlyBundled else { return }
         let center = UNUserNotificationCenter.current()
@@ -164,58 +164,19 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return
         }
         
-        let calendar = Calendar.current
-        let trigger1 = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
-        
-        // Phase 6 Critical Fix: Clone the attachment BEFORE handing request1 to the system.
-        // The OS takes ownership of the file and moves it when `center.add` is called.
-        var day2Attachments: [UNNotificationAttachment] = []
-        if let firstAttachment = content.attachments.first {
-            let originalURL = firstAttachment.url
-            let tmpDir = FileManager.default.temporaryDirectory
-            let clonedURL = tmpDir.appendingPathComponent(UUID().uuidString + ".jpg")
-            do {
-                if FileManager.default.fileExists(atPath: originalURL.path) {
-                    try FileManager.default.copyItem(at: originalURL, to: clonedURL)
-                    let newAttachment = try UNNotificationAttachment(identifier: UUID().uuidString, url: clonedURL, options: nil)
-                    day2Attachments = [newAttachment]
-                }
-            } catch {
-                AppLogger.warning("⚠️ Failed to clone attachment for day2: \(error)", logger: AppLogger.notifications)
-            }
-        }
-        
-        let request1 = UNNotificationRequest(identifier: "\(identifier)-day1", content: content, trigger: trigger1)
-        
+        // One ping per item, on the bare base identifier (no -day1/-day2 suffix).
+        // The old next-morning "in case you missed it" reminder doubled the request
+        // count, and against the 64-request system cap that consumed the entire
+        // budget before any other notification type could be scheduled. It also
+        // forced the poster attachment to be cloned for a second copy, because the
+        // system takes ownership of a file once it has been handed over.
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         do {
-            try await center.add(request1)
-            AppLogger.info("✅ Scheduled \(identifier)-day1", logger: AppLogger.notifications)
+            try await center.add(request)
+            AppLogger.info("✅ Scheduled \(identifier) for \(triggerDate)", logger: AppLogger.notifications)
         } catch {
             AppErrorState.shared.surfaceError("Failed to schedule notification: \(error.localizedDescription)")
-        }
-        
-        // Secondary Reminder (next day at the user's Delivery Time)
-        if let nextDay = calendar.date(byAdding: .day, value: 1, to: triggerDate) {
-            var date2 = calendar.dateComponents([.year, .month, .day], from: nextDay)
-            let storedDay2 = UserDefaults.standard.double(forKey: "notifications_time")
-            let day2Seconds = storedDay2 > 0 ? storedDay2 : (9 * 3600 + 1800)
-            date2.hour = Int(day2Seconds) / 3600
-            date2.minute = (Int(day2Seconds) % 3600) / 60
-            
-            guard let secondDayContent = content.mutableCopy() as? UNMutableNotificationContent else { return }
-            secondDayContent.title = "Reminder: \(content.title)"
-            secondDayContent.body = "In case you missed it: \(content.body)"
-            secondDayContent.attachments = day2Attachments
-            
-            let trigger2 = UNCalendarNotificationTrigger(dateMatching: date2, repeats: false)
-            let request2 = UNNotificationRequest(identifier: "\(identifier)-day2", content: secondDayContent, trigger: trigger2)
-            
-            do {
-                try await center.add(request2)
-                AppLogger.info("✅ Scheduled \(identifier)-day2", logger: AppLogger.notifications)
-            } catch {
-                AppErrorState.shared.surfaceError("Failed to schedule reminder: \(error.localizedDescription)")
-            }
         }
     }
 
@@ -236,7 +197,11 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     func cancelNotification(id: String, type: MediaType) {
         guard isProperlyBundled else { return }
         let baseID = type == .movie ? "movie-\(id)" : "tv-\(id)"
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["\(baseID)-day1", "\(baseID)-day2"])
+        // Bare identifier is current; the -day1/-day2 pair is what older builds
+        // scheduled, so clear those too or they survive as orphaned requests.
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [baseID, "\(baseID)-day1", "\(baseID)-day2"]
+        )
     }
 
     func removeAllPendingNotifications() {
@@ -357,9 +322,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             if identifier.hasSuffix("-day1") {
                 base = String(identifier.dropLast(5))
             } else if identifier.hasSuffix("-day2") {
-                base = String(identifier.dropLast(5))
-            } else {
+                // No longer scheduled. Always stale, whether or not the item is
+                // still upcoming, so flag it for removal rather than skipping it.
+                stale.append(identifier)
                 continue
+            } else {
+                base = identifier
             }
             let itemID: String?
             if base.hasPrefix("movie-") {
@@ -392,10 +360,11 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         
         onProgress?("Found \(channelFiltered.count) upcoming items")
         
-        // System limit is 64 total notifications. We schedule 2 per item and
-        // reserve one slot for the weekly digest when it's enabled.
+        // System limit is 64 pending notifications. One request per item now that
+        // the next-morning reminder is gone, so the whole budget covers items and
+        // still leaves headroom for the weekly digest and season-end notifications.
         let digestEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyDigestEnabled.rawValue)
-        let limit = digestEnabled ? 31 : 32
+        let limit = digestEnabled ? 62 : 63
         let itemsToProcess = channelFiltered.prefix(limit)
         
         // Process concurrently using TaskGroup with bounded parallelism (max 4 concurrent)
@@ -417,9 +386,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                 let posterURL = item.effectivePosterURL
                 let releaseDate = item.releaseDate
                 let tv = item.tvShowDetails
-                let nextDate = item.cachedNextAiringDate ?? tv?.nextEpisodeDate
-                let nextEpNum = tv?.nextEpisodeNumber
-                let nextSeasonNum = tv?.nextSeasonNumber
+                // Local watch state, not the cached TMDB/TVMaze "next episode" —
+                // see TVShowDetails.nextUnwatchedUnairedEpisode().
+                let nextEpisode = tv?.nextUnwatchedUnairedEpisode()
+                let nextDate = nextEpisode?.airDateAsDate ?? item.cachedNextAiringDate
+                let nextEpNum = nextEpisode?.episodeNumber
+                let nextSeasonNum = nextEpisode?.seasonNumber
+                // Air time still comes from the network metadata: airDateAsDate can
+                // land on midnight, and the trigger needs the real broadcast hour.
                 let nextTime = tv?.nextEpisodeTime
 
                 activeWorkers += 1
