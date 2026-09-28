@@ -132,6 +132,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         let season = nextSeasonNumber ?? 0
         let episode = nextEpisodeNumber ?? 0
         
+        // Season/episode are logged because this is the only place the resolved
+        // target is observable: a pending notification's content is not
+        // inspectable until it fires, and naming the wrong S/E is exactly what
+        // this code path used to do.
+        AppLogger.info("🔔   -> notifying S\(season)E\(episode) for \(title)", logger: AppLogger.notifications)
+
         content.userInfo = [
             "ITEM_ID": id, 
             "ITEM_TYPE": "tvShow",
@@ -426,7 +432,14 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
                 guard item.state != .onHold, item.state != .completed else { return nil }
                 return (item, finale.season.seasonNumber, finale.airDate)
             }
-            .sorted { $0.airDate < $1.airDate }
+            // Title is a tiebreak because the cap is a hard cut: three shows whose
+            // finales land on the same day would otherwise race for the last slot
+            // and the winner could differ between launches. Ordering by title makes
+            // the same set win every time.
+            .sorted { lhs, rhs in
+                if lhs.airDate == rhs.airDate { return lhs.item.title < rhs.item.title }
+                return lhs.airDate < rhs.airDate
+            }
             .prefix(seasonEndCap)
             .map { $0 }
             : []
