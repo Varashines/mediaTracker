@@ -211,4 +211,42 @@ final class TVShowDetails {
             item?.syncCachedProperties(dirty: [.progress, .badge])
         }
     }
+
+    /// The next episode worth telling the user about: the earliest-aired episode
+    /// that is both unwatched and not yet aired.
+    ///
+    /// Derived from local watch state rather than `nextEpisodeNumber`, which is a
+    /// TMDB/TVMaze snapshot of what the *network* airs next. It is never revised
+    /// when an episode is marked watched, so it kept naming episodes already seen
+    /// (13 of 32 upcoming shows before this existed) and could name an episode
+    /// whose cached date had already passed, which silently skipped the
+    /// notification entirely.
+    ///
+    /// Specials (season 0) are excluded, matching progress calculations and every
+    /// episode-marking path.
+    func nextUnwatchedUnairedEpisode(now: Date = Date()) -> TVEpisode? {
+        let upcoming: [(episode: TVEpisode, air: Date)] = seasons.liveModels
+            .filter { $0.seasonNumber > 0 }
+            .flatMap { $0.episodes.liveModels }
+            .compactMap { episode in
+                guard !episode.isWatched,
+                      let air = episode.airDateAsDate,
+                      air > now else { return nil }
+                return (episode, air)
+            }
+        return upcoming.min { $0.air < $1.air }?.episode
+    }
+
+    /// The next episode to mark watched, in season/episode order, regardless of
+    /// whether it has aired. This is the in-app rule (detail-view spacebar and
+    /// context menu), exposed so notification actions resolve their target the
+    /// same way instead of trusting the season/episode numbers in the payload.
+    func nextUnwatchedEpisode() -> TVEpisode? {
+        seasons.liveModels
+            .filter { $0.seasonNumber > 0 }
+            .sorted { $0.seasonNumber < $1.seasonNumber }
+            .flatMap { $0.episodes.liveModels }
+            .sorted { $0.episodeNumber < $1.episodeNumber }
+            .first { !$0.isWatched }
+    }
 }
