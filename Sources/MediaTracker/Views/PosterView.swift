@@ -290,7 +290,7 @@ private struct RewatchMultiplierBadge: View {
 
     var body: some View {
         let completedCount = cycles.filter { $0.isComplete || $0.state == .completed }.count
-        if completedCount >= 2 {
+        if completedCount > 1 {
             HStack(spacing: 3) {
                 Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.system(size: 9, weight: .bold))
