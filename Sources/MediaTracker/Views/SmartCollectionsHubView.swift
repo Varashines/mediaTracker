@@ -400,9 +400,13 @@ private struct SmartCollectionCard: View {
         VStack(alignment: .leading, spacing: 15) {
             HStack {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(accentColor.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(accentColor.opacity(0.14))
                         .frame(width: 44, height: 44)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(accentColor.opacity(0.2), lineWidth: 0.8)
+                        }
                     
                     CollectionIconView(systemImage: icon, font: .system(size: 18, weight: .semibold), color: accentColor)
                 }
@@ -440,12 +444,15 @@ private struct SmartCollectionCard: View {
                 } else if let count {
                     if count > 0 {
                         Text("\(count)")
-                            .font(AppTheme.Font.caption2)
+                            .font(AppTheme.Font.caption2.weight(.bold))
                             .foregroundStyle(accentColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(accentColor.opacity(0.12))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3.5)
+                            .background(accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10))
                             .clipShape(Capsule())
+                            .overlay {
+                                Capsule().stroke(accentColor.opacity(0.25), lineWidth: 0.8)
+                            }
                     } else {
                         Text("0")
                             .font(AppTheme.Font.bodyMedium)

@@ -526,7 +526,7 @@ struct SearchView: View {
                 let columns = [GridItem(.adaptive(minimum: 160), spacing: 20, alignment: .top)]
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                     ForEach(Array(searchVM.filteredLocalResults.enumerated()), id: \.element.id) { idx, metadata in
-                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: true) {
+                        MediaThumbnailView(metadata: metadata, mode: .grid, showTypeBadge: selectedType == .all) {
                             addRecentSearch(searchText)
                             if let item = modelContext.model(for: metadata.id) as? MediaItem {
                                 onSelectLocal?(item)

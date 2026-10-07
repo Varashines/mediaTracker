@@ -90,6 +90,19 @@ struct MainLibraryView: View {
         return entries
     }
 
+    private func clearFilterSection(_ id: String) {
+        switch id {
+        case "networks": viewModel.filter.selectedNetworks = []
+        case "languages": viewModel.filter.selectedLanguages = []
+        case "genres": viewModel.filter.selectedGenres = []
+        case "years": viewModel.filter.selectedYears = []
+        case "states": viewModel.filter.selectedStates = []
+        case "providers": viewModel.filter.selectedProviders = []
+        default: break
+        }
+        viewModel.filterSubject.send()
+    }
+
     var body: some View {
         let columns: [GridItem] = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
@@ -97,28 +110,57 @@ struct MainLibraryView: View {
             if isLibraryCategory, !activeFilterEntries.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.tiny) {
-                        Text("Library filters")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
                         ForEach(activeFilterEntries, id: \.id) { entry in
-                            Text(entry.label)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .padding(.horizontal, AppTheme.Spacing.small)
-                                .padding(.vertical, AppTheme.Spacing.micro)
-                                .background(
-                                    Capsule()
-                                        .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
-                                )
+                            HStack(spacing: 4) {
+                                Text(entry.label)
+                                    .font(AppTheme.Font.caption.weight(.medium))
+                                    .lineLimit(1)
+
+                                Button {
+                                    withAnimation(AppTheme.Animation.springSnappy) {
+                                        clearFilterSection(entry.id)
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Circle())
+                                .help("Remove \(entry.label)")
+                            }
+                            .padding(.leading, AppTheme.Spacing.compact)
+                            .padding(.trailing, 6)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.15 : 0.10))
+                            )
+                            .overlay {
+                                Capsule()
+                                    .stroke(AppTheme.Colors.accent.opacity(0.25), lineWidth: 0.8)
+                            }
                         }
-                        Button("Clear all") {
-                            viewModel.filter.resetFilters()
-                            viewModel.filterSubject.send()
+
+                        Button {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                viewModel.filter.resetFilters()
+                                viewModel.filterSubject.send()
+                            }
+                        } label: {
+                            Text("Clear all")
+                                .font(AppTheme.Font.caption.weight(.bold))
+                                .foregroundStyle(AppTheme.Colors.accent)
+                                .padding(.horizontal, AppTheme.Spacing.compact)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(AppTheme.Colors.surfaceSubtle(for: colorScheme)))
+                                .overlay {
+                                    Capsule().stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
+                                }
                         }
                         .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, AppTheme.Spacing.tiny)
+                        .contentShape(Capsule())
+                        .help("Clear all active filters")
                     }
                     .padding(.horizontal, AppTheme.Spacing.pageMargin)
                     .padding(.vertical, AppTheme.Spacing.tiny)

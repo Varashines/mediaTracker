@@ -42,12 +42,15 @@ struct MetadataSection: View {
             infoPill(text: providerStatus, icon: "dot.radiowaves.left.and.right", accent: accent)
         }
         if let rating = voteAverage, rating > 0 {
-            ratingPill(icon: "star.fill", value: String(format: "%.1f", rating), color: ratingColor(for: rating), accent: accent)
+            scoreBadge(label: "TMDB", value: String(format: "%.1f", rating), icon: "star.fill", tintColor: ratingColor(for: rating))
+        }
+        if let imdb = item.movieDetails?.imdbRating ?? item.tvShowDetails?.imdbRating, imdb > 0 {
+            scoreBadge(label: "IMDb", value: String(format: "%.1f", imdb), icon: nil, tintColor: Color(red: 0.96, green: 0.77, blue: 0.19))
         }
         if let rt = item.movieDetails?.rottenTomatoesScore ?? item.tvShowDetails?.rottenTomatoesScore, rt > 0 {
-            let rtIcon = rt >= 60 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
-            let rtColor: Color = rt >= 60 ? .green : .red
-            ratingPill(icon: rtIcon, value: "\(rt)%", color: rtColor, accent: accent)
+            let isFresh = rt >= 60
+            let rtColor = isFresh ? Color.semanticGreen(for: colorScheme) : Color.red
+            scoreBadge(label: "RT", value: "\(rt)%", icon: isFresh ? "checkmark.seal.fill" : "exclamationmark.triangle.fill", tintColor: rtColor)
         }
         if item.type == .tvShow, let net = item.cachedNetwork, !net.isEmpty {
             infoPill(text: net, accent: accent)
@@ -64,36 +67,44 @@ struct MetadataSection: View {
     }
 
     private func ratingColor(for rating: Double) -> Color {
-        if rating >= 7 { return Color.semanticGold(for: colorScheme) }
-        if rating >= 5 { return .yellow }
+        if rating >= 7.0 { return Color.semanticGold(for: colorScheme) }
+        if rating >= 5.0 { return .yellow }
         return .red
     }
 
     @ViewBuilder
-    private func ratingPill(icon: String, value: String, color: Color, accent: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(AppTheme.Font.caption2)
-                .foregroundStyle(color)
+    private func scoreBadge(label: String, value: String, icon: String?, tintColor: Color) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(size: 9.5, weight: .black, design: .rounded))
+                .foregroundStyle(tintColor)
+                .opacity(0.9)
+
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(tintColor)
+            }
+
             Text(value)
                 .font(AppTheme.Font.bodyBold.monospacedDigit())
                 .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 9)
         .padding(.vertical, 4)
         .background {
             Capsule()
-                .fill(color.opacity(colorScheme == .dark ? 0.15 : 0.12))
+                .fill(tintColor.opacity(colorScheme == .dark ? 0.16 : 0.12))
         }
         .overlay {
             Capsule()
-                .stroke(color.opacity(0.25), lineWidth: 0.5)
+                .stroke(tintColor.opacity(colorScheme == .dark ? 0.35 : 0.28), lineWidth: 0.8)
         }
     }
 
     @ViewBuilder
     private func infoPill(text: String, icon: String? = nil, accent: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.5) {
             if let icon {
                 Image(systemName: icon)
                     .font(AppTheme.Font.caption2)
