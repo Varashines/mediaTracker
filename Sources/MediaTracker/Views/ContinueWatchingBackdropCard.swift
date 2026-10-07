@@ -39,7 +39,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
             }
             .padding(10)
 
-            // Bottom info: logo (or title) + episode/genre + optional progress bar
+            // Bottom info: logo (or title) + episode/genre
             VStack(alignment: .leading, spacing: 4) {
                 titleLayer
 
@@ -48,20 +48,6 @@ struct ContinueWatchingBackdropCard: View, Equatable {
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
-                }
-
-                if let progress = metadata.progress, progress > 0 && progress < 1.0 {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.25))
-                            Capsule()
-                                .fill(metadata.themeColorHex.flatMap { Color(hex: $0) } ?? Color.accentColor)
-                                .frame(width: geo.size.width * CGFloat(progress))
-                        }
-                    }
-                    .frame(height: 3)
-                    .padding(.top, 2)
                 }
             }
             .padding(.horizontal, 10)

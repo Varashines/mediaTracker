@@ -291,15 +291,11 @@ private struct RewatchMultiplierBadge: View {
     var body: some View {
         let completedCount = cycles.filter { $0.isComplete || $0.state == .completed }.count
         if completedCount > 1 {
-            HStack(spacing: 3) {
-                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.system(size: 9, weight: .bold))
-                Text("×\(completedCount)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3.5)
+            Text("×\(completedCount)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
             .background {
                 Capsule()
                     .fill(Color.black.opacity(0.65))
