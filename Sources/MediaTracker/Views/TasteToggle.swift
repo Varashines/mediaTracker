@@ -10,7 +10,7 @@ struct TasteToggle: View {
         if item.modelContext != nil {
             // Segmented control: one dynamic-width capsule behind all three
             // options instead of three separate pill backgrounds.
-            HStack(spacing: 2) {
+            HStack(spacing: 3) {
                 TastePill(
                     label: "Love",
                     icon: "heart",
@@ -35,9 +35,12 @@ struct TasteToggle: View {
                     action: { setTaste(.dislike) }
                 )
             }
-            .padding(3)
+            .padding(4)
             .background {
-                Capsule().fill(Color.primary.opacity(0.06))
+                Capsule().fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+            }
+            .overlay {
+                Capsule().stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
             }
             .clipShape(Capsule())
         }
@@ -110,20 +113,20 @@ struct TastePill: View {
                 Text(label)
                     .contentTransition(.opacity)
             }
-            .font(AppTheme.Font.bodyBold)
-            .padding(.horizontal, AppTheme.Spacing.small)
-            .padding(.vertical, AppTheme.Spacing.tiny)
-            .foregroundStyle(isSelected ? .white : (isHovered ? .primary : .primary.opacity(0.75)))
+            .font(AppTheme.Font.caption.weight(isSelected ? .bold : .semibold))
+            .padding(.horizontal, AppTheme.Spacing.compact)
+            .padding(.vertical, AppTheme.Spacing.mini)
+            .foregroundStyle(isSelected ? .white : (isHovered ? .primary : .primary.opacity(0.8)))
             .background {
                 // Opacity fill so select/deselect crossfades under one spring —
                 // a bare `if isSelected { color }` pops with no interpolation.
                 activeColor
-                    .opacity(isSelected ? 1 : 0)
+                    .opacity(isSelected ? 1 : (isHovered ? 0.12 : 0))
             }
             .clipShape(Capsule())
             .contentShape(Capsule())
-            .scaleEffect(isSelected ? 1.05 : (isHovered ? 1.04 : 1.0))
-            .shadow(color: isSelected ? activeColor.opacity(0.2) : .clear, radius: AppTheme.Shadow.card.radius, y: AppTheme.Shadow.card.y)
+            .scaleEffect(isSelected ? 1.04 : (isHovered ? 1.02 : 1.0))
+            .shadow(color: isSelected ? activeColor.opacity(0.3) : .clear, radius: 4, y: 1.5)
         }
         .buttonStyle(.interactive(feedback: nil))
         .onHover { isHovered = $0 }

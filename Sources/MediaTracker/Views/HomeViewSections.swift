@@ -50,6 +50,7 @@ struct HomeViewSections: View {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                             .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                     .overlay {
                         GeometryReader { proxy in
                             if let activePillAnchor {
@@ -105,22 +106,23 @@ struct HomeViewSections: View {
 
     private func focusConnector(in proxy: GeometryProxy, anchor: CGRect) -> some View {
         let surfaceFrame = proxy.frame(in: .named(Self.focusCoordinateSpace))
-        let rawX = anchor.midX - surfaceFrame.minX
-        let x = min(max(rawX, 14), max(14, proxy.size.width - 14))
+        let relativeX = anchor.midX - surfaceFrame.minX
+        let clampedX = min(max(relativeX, 24), max(24, proxy.size.width - 24))
 
-        return ZStack(alignment: .top) {
-            Rectangle()
-                .fill(AppTheme.Colors.accent.opacity(0.5))
-                .frame(width: 3, height: 8)
-                .offset(x: x - 1.5, y: -4)
-
+        return Path { path in
+            path.move(to: CGPoint(x: clampedX - 7, y: 0))
+            path.addLine(to: CGPoint(x: clampedX, y: -6))
+            path.addLine(to: CGPoint(x: clampedX + 7, y: 0))
+            path.closeSubpath()
+        }
+        .fill(AppTheme.Colors.accent)
+        .overlay {
             Path { path in
-                path.move(to: CGPoint(x: x - 8, y: 0))
-                path.addLine(to: CGPoint(x: x + 8, y: 0))
-                path.addLine(to: CGPoint(x: x, y: 9))
-                path.closeSubpath()
+                path.move(to: CGPoint(x: clampedX - 7, y: 0))
+                path.addLine(to: CGPoint(x: clampedX, y: -6))
+                path.addLine(to: CGPoint(x: clampedX + 7, y: 0))
             }
-            .fill(AppTheme.Colors.accent.opacity(0.16))
+            .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.8)
         }
     }
 

@@ -519,10 +519,10 @@ struct MediaThumbnailView: View, Equatable {
             .padding(.vertical, 4)
             .foregroundStyle(.white)
             .background {
-                Capsule().fill(Color.black.opacity(0.85))
+                Capsule().fill(Color.black.opacity(colorScheme == .dark ? 0.65 : 0.75))
             }
             .overlay {
-                Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8)
             }
             .clipShape(Capsule())
             // No compositingGroup/shadow — the type badge is a flat capsule and

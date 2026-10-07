@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct PosterView: View {
     let item: MediaItem
@@ -114,6 +115,10 @@ struct PosterView: View {
                         }
                     }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    RewatchMultiplierBadge(mediaID: item.id)
+                        .padding(12)
+                }
             }
             .compositingGroupIfNeeded()
             .onHover { hovering in
@@ -224,24 +229,28 @@ private struct PosterThumbnail: View {
             .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(isHovered ? 0.18 : 0), radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+            .shadow(color: .black.opacity(isHovered ? 0.25 : (isSelected ? 0.15 : 0)), radius: isHovered ? 8 : (isSelected ? 4 : 0), y: isHovered ? 4 : (isSelected ? 2 : 0))
             .overlay(alignment: .bottomTrailing) {
                 if isSelected {
                     ZStack {
                         Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 20, height: 20)
+                            .fill(AppTheme.Colors.accent)
+                            .frame(width: 22, height: 22)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.Colors.accent.readableForeground)
                     }
+                    .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                     .padding(6)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.primary.opacity(0.25) : (isHovered ? Color.secondary.opacity(0.2) : .clear), lineWidth: isSelected ? 1.5 : 1)
+                    .stroke(
+                        isSelected ? AppTheme.Colors.accent : (isHovered ? Color.secondary.opacity(0.35) : Color.primary.opacity(0.08)),
+                        lineWidth: isSelected ? 2 : 0.8
+                    )
             )
             .if(!AppThemeCoordinator.isReducingVisualEffects) {
                 $0.scaleEffect(isHovered ? 1.03 : 1.0)
@@ -264,6 +273,44 @@ private struct PosterThumbnail: View {
                 }
                 onSelect()
             }
+        }
+    }
+}
+
+/// Glass multiplier badge displayed on the bottom-trailing corner of the poster
+/// ONLY when a title has completed rewatch cycles (total completed >= 2).
+/// Hidden for first-time watches and single completions.
+private struct RewatchMultiplierBadge: View {
+    @Query private var cycles: [WatchCycle]
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(mediaID: String) {
+        _cycles = Query(
+            filter: #Predicate<WatchCycle> { cycle in
+                cycle.mediaID == mediaID
+            }
+        )
+    }
+
+    var body: some View {
+        let completedCount = cycles.filter { $0.isComplete || $0.state == .completed }.count
+        if completedCount > 1 {
+            Text("×\(completedCount)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
+            .background {
+                Capsule()
+                    .fill(Color.black.opacity(0.65))
+            }
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+            }
+            .shadow(color: Color.black.opacity(0.4), radius: 4, y: 2)
+            .help("Watched \(completedCount) times")
+            .accessibilityLabel("Rewatched \(completedCount) times")
         }
     }
 }

@@ -27,6 +27,10 @@ struct AppTheme {
         static let large: CGFloat = 20
         static let xl: CGFloat = 28
         static let card: CGFloat = 24
+        /// Stitch Expressive token: high corner-radius pill / squircle containers
+        static let expressivePill: CGFloat = 20
+        /// Stitch Expressive token: hero and landscape cards
+        static let expressiveCard: CGFloat = 24
     }
 
     enum ShareCard {
@@ -73,13 +77,13 @@ struct AppTheme {
         static let subtitle = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
         static let heading = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
 
-        // Body sizes
-        static let bodyMedium = SwiftUI.Font.system(size: 15, weight: .medium, design: .rounded)
-        static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
-        static let bodyBold = SwiftUI.Font.system(size: 13, weight: .bold, design: .rounded)
+        // Body sizes - editorial / clean cinematic readability
+        static let bodyMedium = SwiftUI.Font.system(size: 15, weight: .medium, design: .default)
+        static let body = SwiftUI.Font.system(size: 13, weight: .regular, design: .default)
+        static let bodyBold = SwiftUI.Font.system(size: 13, weight: .semibold, design: .default)
 
         // Label / caption sizes
-        static let label = SwiftUI.Font.system(size: 12, weight: .regular, design: .rounded)
+        static let label = SwiftUI.Font.system(size: 12, weight: .regular, design: .default)
         static let caption = SwiftUI.Font.system(size: 11, weight: .bold, design: .rounded)
         static let caption2 = SwiftUI.Font.system(size: 10, weight: .semibold, design: .rounded)
 
@@ -92,17 +96,19 @@ struct AppTheme {
         // Settings
         static let settingsSectionHeader = SwiftUI.Font.system(size: 14, weight: .semibold, design: .rounded)
         static let settingsRowTitle = SwiftUI.Font.system(size: 14, weight: .medium, design: .rounded)
-        static let settingsSubtitle = SwiftUI.Font.system(size: 11, weight: .regular, design: .rounded)
+        static let settingsSubtitle = SwiftUI.Font.system(size: 11, weight: .regular, design: .default)
 
-        // Monospaced
+        // Monospaced & Tech / Film Slate metadata
         static let mono = SwiftUI.Font.system(size: 9, weight: .regular, design: .monospaced)
         static let monoCaption = SwiftUI.Font.system(size: 11, weight: .semibold, design: .monospaced)
+        /// Expressive metadata chip token (e.g. S02E08, 4K, 120m, 2026)
+        static let metadataChip = SwiftUI.Font.system(size: 10.5, weight: .bold, design: .monospaced)
 
         // Settings
         static let titleMedium = SwiftUI.Font.system(size: 18, weight: .semibold, design: .rounded)
 
         // Stats / numeric values
-        static let statValue = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded)
+        static let statValue = SwiftUI.Font.system(size: 26, weight: .bold, design: .rounded).monospacedDigit()
     }
 
     struct ShadowConfig {
