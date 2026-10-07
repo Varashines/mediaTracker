@@ -356,20 +356,10 @@ struct MediaThumbnailView: View, Equatable {
                     paused: effectiveFastScrolling
                 )) { context in
                     let now = context.date
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         Spacer()
                         if effectiveHover {
-                            Text(title)
-                                .font(AppTheme.Font.caption2)
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, AppTheme.Spacing.tiny)
-                                .padding(.vertical, AppTheme.Spacing.micro)
-                                .background(Capsule().fill(.thinMaterial))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
-                                )
-                                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                            HoverPill(text: title, style: .title)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                         HStack(spacing: 6) {
@@ -400,8 +390,9 @@ struct MediaThumbnailView: View, Equatable {
                         }
                     }
                 }
-                .padding(8)
-                 .animation(AppTheme.Animation.springSnappy, value: effectiveHover)
+                .padding(.bottom, 12)
+                .padding(.horizontal, 8)
+                .animation(AppTheme.Animation.springSnappy, value: effectiveHover)
             }
         }
 
@@ -462,24 +453,7 @@ struct MediaThumbnailView: View, Equatable {
     }
 
     private func upcomingChip(icon: String?, text: String) -> some View {
-        HStack(spacing: 4) {
-            if let icon {
-                Image(systemName: icon)
-            }
-            Text(text.uppercased())
-                .tracking(0.6)
-        }
-        .font(AppTheme.Font.caption2)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .foregroundStyle(.white)
-        .background {
-            Capsule().fill(Color.black.opacity(0.7))
-        }
-        .overlay {
-            Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5)
-        }
-        .clipShape(Capsule())
+        HoverPill(text: text, icon: icon, style: .meta)
     }
 
     private func upcomingDateLabel(_ date: Date, now: Date = Date()) -> String {
