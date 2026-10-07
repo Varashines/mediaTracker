@@ -174,12 +174,12 @@ extension BackgroundDataService {
             // comparison is like-for-like instead of uncapped-vs-capped.
             var seen = Set<String>()
             var normalizedNew: [CastMemberResult] = []
-            for c in newCastResults {
+            for c in newCastResults.sorted(by: { $0.order < $1.order }) {
                 guard c.character != "Creator", c.character != "Director" else { continue }
                 let key = "\(c.name)|\(c.character)"
                 guard seen.insert(key).inserted else { continue }
                 normalizedNew.append(c)
-                if normalizedNew.count >= 30 { break }
+                if normalizedNew.count >= 15 { break }
             }
             let currentNormalized = currentCast.map { (name: $0.name, character: $0.characterName) }
             let newNormalized = normalizedNew.map { (name: $0.name, character: $0.character) }
@@ -355,20 +355,22 @@ extension BackgroundDataService {
             if hasChanged || tvDetails.cast.isEmpty {
                 tvDetails.cast.forEach { modelContext.delete($0) }
             
-            var seen = Set<String>()
-            var newCastList: [CastMember] = []
-            for c in newCastResults {
-                let key = "\(c.name)|\(c.character)"
-                if seen.contains(key) { continue }
-                seen.insert(key)
-                
-                let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
-                let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
-                member.tvShowDetails = tvDetails
-                modelContext.insert(member)
-                newCastList.append(member)
-            }
-            tvDetails.cast = newCastList
+                var seen = Set<String>()
+                var newCastList: [CastMember] = []
+                for c in newCastResults.sorted(by: { $0.order < $1.order }) {
+                    guard c.character != "Creator", c.character != "Director" else { continue }
+                    let key = "\(c.name)|\(c.character)"
+                    if seen.contains(key) { continue }
+                    seen.insert(key)
+                    
+                    let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
+                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
+                    member.tvShowDetails = tvDetails
+                    modelContext.insert(member)
+                    newCastList.append(member)
+                    if newCastList.count >= 15 { break }
+                }
+                tvDetails.cast = newCastList
             }
 
             if tvDetails.modelContext == nil { modelContext.insert(tvDetails) }
