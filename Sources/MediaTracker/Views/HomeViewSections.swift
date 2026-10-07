@@ -50,6 +50,7 @@ struct HomeViewSections: View {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
                             .stroke(AppTheme.Colors.accent.opacity(0.16), lineWidth: 0.5)
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous))
                     .overlay {
                         GeometryReader { proxy in
                             if let activePillAnchor {
