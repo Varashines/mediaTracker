@@ -45,19 +45,25 @@ struct HoverMetadataPills: View, Equatable {
     }
 }
 
-private enum HoverPillStyle {
+enum HoverPillStyle {
     case title, meta
 }
 
-private struct HoverPill: View {
+struct HoverPill: View {
     let text: String
+    var icon: String? = nil
     let style: HoverPillStyle
 
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        Text(text)
-            .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.metadataChip)
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+            }
+            Text(text)
+        }
+        .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.metadataChip)
             // Capsule fill is always near-black — .primary would be black-on-black in light mode.
             .foregroundStyle(.white)
             .padding(.horizontal, style == .title ? AppTheme.Spacing.tiny : AppTheme.Spacing.mini)
