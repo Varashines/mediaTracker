@@ -27,6 +27,10 @@ struct AppTheme {
         static let large: CGFloat = 20
         static let xl: CGFloat = 28
         static let card: CGFloat = 24
+        /// Stitch Expressive token: high corner-radius pill / squircle containers
+        static let expressivePill: CGFloat = 20
+        /// Stitch Expressive token: hero and landscape cards
+        static let expressiveCard: CGFloat = 24
     }
 
     enum ShareCard {
