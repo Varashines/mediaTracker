@@ -20,6 +20,7 @@ enum DatabaseMigrations {
         await runWatchHistoryRepairIfNeeded(container: container)
         await runWatchHistoryDedupIfNeeded(container: container)
         await runFirstWatchedDateBackfillIfNeeded(container: container)
+        await prunePersistentHistoryIfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -785,6 +786,96 @@ enum DatabaseMigrations {
             await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
         } catch {
             AppLogger.error("Watch history repair failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Prunes CoreData/SwiftData internal change tracking tables (`ACHANGE`, `ATRANSACTION`)
+    /// older than 14 days and cleans up stale transaction metadata.
+    /// Runs weekly in the background to prevent unbounded growth of change logs.
+    static func prunePersistentHistoryIfNeeded(container: ModelContainer) async {
+        let lastPruneKey = "lastPersistentHistoryPruneTimestamp"
+        let lastPrune = UserDefaults.standard.double(forKey: lastPruneKey)
+        let now = Date().timeIntervalSince1970
+        // Throttle to once every 7 days (TimeInterval.days7)
+        guard now - lastPrune > TimeInterval.days7 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "prunePersistentHistory", container: container) {
+                // Use the store URL to execute SQLite deletion directly on CoreData's history tracking tables.
+                // ACHANGE and ATRANSACTION are system tables not exposed via SwiftData models.
+                let storeURL = StoreLocation.isDevBundle
+                    ? try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                        .appendingPathComponent(StoreLocation.devDirectoryName)
+                        .appendingPathComponent(StoreLocation.storeFilename)
+                    : try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                        .appendingPathComponent(StoreLocation.productionDirectoryName)
+                        .appendingPathComponent(StoreLocation.storeFilename)
+
+                guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+
+                var db: OpaquePointer?
+                guard sqlite3_open_v2(storeURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+                    if let db { sqlite3_close(db) }
+                    return
+                }
+                defer { sqlite3_close(db) }
+
+                // Cutoff: CoreData timestamp (seconds since 2001-01-01) for 14 days ago
+                let cutoffCoreData = (Date().timeIntervalSince1970 - TimeInterval.days7 * 2) - 978307200.0
+
+                // Delete change records for transactions older than cutoff
+                let deleteChangesSQL = """
+                DELETE FROM ACHANGE 
+                WHERE ZTRANSACTIONID IN (
+                    SELECT Z_PK FROM ATRANSACTION WHERE ZTIMESTAMP < ?
+                );
+                """
+                var deleteChangesStmt: OpaquePointer?
+                if sqlite3_prepare_v2(db, deleteChangesSQL, -1, &deleteChangesStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_double(deleteChangesStmt, 1, cutoffCoreData)
+                    sqlite3_step(deleteChangesStmt)
+                    sqlite3_finalize(deleteChangesStmt)
+                }
+
+                // Delete transaction records older than cutoff
+                let deleteTxSQL = "DELETE FROM ATRANSACTION WHERE ZTIMESTAMP < ?;"
+                var deleteTxStmt: OpaquePointer?
+                if sqlite3_prepare_v2(db, deleteTxSQL, -1, &deleteTxStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_double(deleteTxStmt, 1, cutoffCoreData)
+                    sqlite3_step(deleteTxStmt)
+                    sqlite3_finalize(deleteTxStmt)
+                }
+
+                // Clean orphaned transaction strings if table exists
+                let deleteTxStringsSQL = """
+                DELETE FROM ATRANSACTIONSTRING 
+                WHERE Z_PK NOT IN (
+                    SELECT DISTINCT ZPROCESSID FROM ATRANSACTION WHERE ZPROCESSID IS NOT NULL
+                    UNION
+                    SELECT DISTINCT ZCONTEXTNAME FROM ATRANSACTION WHERE ZCONTEXTNAME IS NOT NULL
+                    UNION
+                    SELECT DISTINCT ZAUTHOR FROM ATRANSACTION WHERE ZAUTHOR IS NOT NULL
+                );
+                """
+                var deleteTxStrStmt: OpaquePointer?
+                if sqlite3_prepare_v2(db, deleteTxStringsSQL, -1, &deleteTxStrStmt, nil) == SQLITE_OK {
+                    sqlite3_step(deleteTxStrStmt)
+                    sqlite3_finalize(deleteTxStrStmt)
+                }
+
+                // Drop legacy scratch debug table if lingering from past imports/scripts
+                sqlite3_exec(db, "DROP TABLE IF EXISTS \"log\";", nil, nil, nil)
+
+                // Checkpoint WAL so changes merge back into primary database file
+                sqlite3_wal_checkpoint_v2(db, nil, SQLITE_CHECKPOINT_PASSIVE, nil, nil)
+                AppLogger.info("🧹 Cleaned CoreData persistent history older than 14 days", logger: AppLogger.background)
+            }
+
+            if didRun {
+                UserDefaults.standard.set(now, forKey: lastPruneKey)
+            }
+        } catch {
+            AppLogger.error("Persistent history pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 }
