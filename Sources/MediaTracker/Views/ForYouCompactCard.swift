@@ -43,27 +43,32 @@ struct ForYouCompactCard: View, Equatable {
                 VStack {
                     HStack {
                         Spacer()
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Image(systemName: "wand.and.stars")
-                                .font(AppTheme.Font.small)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(accent)
                             Text(context.uppercased())
-                                .font(AppTheme.Font.small)
-                                .tracking(0.8)
+                                .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                                .tracking(0.6)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
+                                .foregroundStyle(.white)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .foregroundStyle(AppTheme.Colors.accent.readableForeground)
                         .background {
                             Capsule()
-                                .fill(accent)
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule()
+                                        .fill(accent.opacity(0.18))
+                                }
                         }
                         .clipShape(Capsule())
                         .overlay {
-                            Capsule().stroke(Color.white.opacity(0.35), lineWidth: 0.8)
+                            Capsule().stroke(accent.opacity(0.4), lineWidth: 0.8)
                         }
-                        .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
+                        .shadow(color: .black.opacity(0.35), radius: 5, y: 2)
                         .padding(12)
                     }
                     Spacer()

@@ -229,24 +229,28 @@ private struct PosterThumbnail: View {
             .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(isHovered ? 0.18 : 0), radius: isHovered ? 8 : 0, y: isHovered ? 4 : 0)
+            .shadow(color: .black.opacity(isHovered ? 0.25 : (isSelected ? 0.15 : 0)), radius: isHovered ? 8 : (isSelected ? 4 : 0), y: isHovered ? 4 : (isSelected ? 2 : 0))
             .overlay(alignment: .bottomTrailing) {
                 if isSelected {
                     ZStack {
                         Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 20, height: 20)
+                            .fill(AppTheme.Colors.accent)
+                            .frame(width: 22, height: 22)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.Colors.accent.readableForeground)
                     }
+                    .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                     .padding(6)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.primary.opacity(0.25) : (isHovered ? Color.secondary.opacity(0.2) : .clear), lineWidth: isSelected ? 1.5 : 1)
+                    .stroke(
+                        isSelected ? AppTheme.Colors.accent : (isHovered ? Color.secondary.opacity(0.35) : Color.primary.opacity(0.08)),
+                        lineWidth: isSelected ? 2 : 0.8
+                    )
             )
             .if(!AppThemeCoordinator.isReducingVisualEffects) {
                 $0.scaleEffect(isHovered ? 1.03 : 1.0)
