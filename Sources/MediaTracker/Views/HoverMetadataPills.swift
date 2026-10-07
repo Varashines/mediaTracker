@@ -57,7 +57,7 @@ private struct HoverPill: View {
 
     var body: some View {
         Text(text)
-            .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.tiny)
+            .font(style == .title ? AppTheme.Font.caption2 : AppTheme.Font.metadataChip)
             // Capsule fill is always near-black — .primary would be black-on-black in light mode.
             .foregroundStyle(.white)
             .padding(.horizontal, style == .title ? AppTheme.Spacing.tiny : AppTheme.Spacing.mini)
