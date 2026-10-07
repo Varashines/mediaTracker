@@ -630,11 +630,15 @@ extension BackgroundDataService {
 
     /// Upserts an aggregate-cast list into a season: updates field-by-field,
     /// inserts missing members, and deletes rows absent from the incoming list.
+    /// Caps persisted members to top 12 billed to prevent database & memory bloat.
     /// Returns true when any row was inserted or deleted.
     @discardableResult
     private func mergeSeasonCast(_ cast: [SeasonAggregateCastResult], into season: TVSeason, tmdbID: Int) -> Bool {
         var didWrite = false
         let seasonNumber = season.seasonNumber
+
+        // Keep top 12 billing actors sorted by order ascending
+        let cappedCast = Array(cast.sorted { $0.order < $1.order }.prefix(12))
 
         var existingByID: [String: SeasonCastMember] = [:]
         for c in season.seasonCast.liveModels {
@@ -642,7 +646,7 @@ extension BackgroundDataService {
         }
         var seenIDs = Set<String>()
         var insertedCount = 0
-        for cr in cast {
+        for cr in cappedCast {
             let uid = "\(tmdbID)_\(seasonNumber)_\(cr.tmdbPersonID)"
             seenIDs.insert(uid)
             let member = existingByID[uid]
