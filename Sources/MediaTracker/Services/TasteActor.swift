@@ -88,27 +88,26 @@ actor TasteActor {
             return cached
         }
 
-        var accumulators = AffinityAccumulators()
-        let lookups = await buildSeasonLookups()
-
-        let batchSize = 500
-        var offset = 0
-        while true {
-            var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.tasteValue != "None" })
-            descriptor.propertiesToFetch = [
-                \.id, \.title,
-                \.typeValue, \.stateValue, \.tasteValue,
-                \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
-                \.storedCast, \.cachedSeasonCount
-            ]
-            descriptor.fetchLimit = batchSize
-            descriptor.fetchOffset = offset
-            
-            guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { break }
-            accumulateBatch(items, into: &accumulators, lookups: lookups)
-            
-            offset += batchSize
+        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.tasteValue != "None" })
+        descriptor.propertiesToFetch = [
+            \.id, \.title,
+            \.typeValue, \.stateValue, \.tasteValue,
+            \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.cachedCreators,
+            \.storedCast, \.cachedSeasonCount
+        ]
+        
+        guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else {
+            return ([:], [:], [:], [:], [:])
         }
+
+        let ratedShowIDs = Set(items.compactMap { item -> Int? in
+            guard item.type == .tvShow else { return nil }
+            return Self.tmdbID(from: item.id)
+        })
+
+        var accumulators = AffinityAccumulators()
+        let lookups = await buildSeasonLookups(ratedShowIDs: ratedShowIDs)
+        accumulateBatch(items, into: &accumulators, lookups: lookups)
 
         let result = finalizeAffinities(accumulators)
 
@@ -121,27 +120,27 @@ actor TasteActor {
 
     /// Pre-fetch per-season cast and season taste overrides once per affinity
     /// calculation, keyed by show id, so the hot accumulation loop avoids
-    /// relationship faults.
-    private func buildSeasonLookups() async -> SeasonLookups {
+    /// relationship faults. Scoped to rated shows to avoid scanning unrated catalog.
+    private func buildSeasonLookups(ratedShowIDs: Set<Int>) async -> SeasonLookups {
         var lookups = SeasonLookups()
+        guard !ratedShowIDs.isEmpty else { return lookups }
 
         var seasonCastDesc = FetchDescriptor<SeasonCastMember>(predicate: #Predicate { $0.episodeCount > 0 })
         seasonCastDesc.propertiesToFetch = [
             \.showID, \.seasonNumber, \.name, \.tmdbPersonID, \.episodeCount
         ]
         if let allSeasonCast = try? modelContext.fetch(seasonCastDesc) {
-            for sc in allSeasonCast where sc.qualifiesForTaste && sc.seasonNumber > 0 {
+            for sc in allSeasonCast where ratedShowIDs.contains(sc.showID) && sc.qualifiesForTaste && sc.seasonNumber > 0 {
                 lookups.castByShow[sc.showID, default: []].append(sc)
             }
         }
 
-        // Fetch all seasons once: overrides AND watched status (inheritance of
-        // the show's taste only applies to fully watched seasons).
+        // Fetch seasons for rated shows only: overrides AND watched status
         var seasonDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID != nil })
         seasonDesc.propertiesToFetch = [\.showID, \.seasonNumber, \.tasteOverrideRaw, \.watchedEpisodesCount, \.totalEpisodesCount, \.episodeCount]
         if let allSeasons = try? modelContext.fetch(seasonDesc) {
             for s in allSeasons {
-                guard let sid = s.showID else { continue }
+                guard let sid = s.showID, ratedShowIDs.contains(sid) else { continue }
                 if let ov = s.tasteOverrideRaw {
                     lookups.overrideByShowSeason[sid, default: [:]][s.seasonNumber] = ov
                 }

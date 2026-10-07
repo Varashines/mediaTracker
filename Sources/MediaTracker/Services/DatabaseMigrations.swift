@@ -22,6 +22,8 @@ enum DatabaseMigrations {
         await runFirstWatchedDateBackfillIfNeeded(container: container)
         await prunePersistentHistoryIfNeeded(container: container)
         await pruneSeasonCastToTop12IfNeeded(container: container)
+        await pruneCastMembersToTop15IfNeeded(container: container)
+        await vacuumDatabaseIfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -946,6 +948,103 @@ enum DatabaseMigrations {
             }
         } catch {
             AppLogger.error("Season cast pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Prunes series-level and movie CastMember rows beyond rank 15 per title.
+    /// Halves ZCASTMEMBER table storage and speeds up CastSectionView.
+    static func pruneCastMembersToTop15IfNeeded(container: ModelContainer) async {
+        let migrationKey = "prunedCastMembersToTop15"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        do {
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            let storeURL: URL = isPreview
+                ? try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.devDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+                : try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.productionDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+
+            guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+
+            var db: OpaquePointer?
+            guard sqlite3_open_v2(storeURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+                if let db { sqlite3_close(db) }
+                return
+            }
+            defer { sqlite3_close(db) }
+
+            let pruneSQL = """
+            WITH RankedCast AS (
+                SELECT Z_PK,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY COALESCE(ZMOVIEDETAILS, ZTVSHOWDETAILS, ZMEDIAID)
+                           ORDER BY ZORDER ASC
+                       ) as rank
+                FROM ZCASTMEMBER
+            )
+            DELETE FROM ZCASTMEMBER
+            WHERE Z_PK IN (
+                SELECT Z_PK FROM RankedCast WHERE rank > 15
+            );
+            """
+
+            var pruneStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, pruneSQL, -1, &pruneStmt, nil) == SQLITE_OK {
+                sqlite3_step(pruneStmt)
+                sqlite3_finalize(pruneStmt)
+            }
+
+            sqlite3_wal_checkpoint_v2(db, nil, SQLITE_CHECKPOINT_PASSIVE, nil, nil)
+            AppLogger.info("🧹 Pruned series and movie cast members to top 15 per title", logger: AppLogger.background)
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        } catch {
+            AppLogger.error("Cast member pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Reclaims freelist pages and defragments SQLite storage once a month when idle.
+    static func vacuumDatabaseIfNeeded(container: ModelContainer) async {
+        let lastVacuumKey = "lastDatabaseVacuumTimestamp"
+        let lastVacuum = UserDefaults.standard.double(forKey: lastVacuumKey)
+        let now = Date().timeIntervalSince1970
+        guard now - lastVacuum >= TimeInterval.days30 else { return }
+
+        do {
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            let storeURL: URL = isPreview
+                ? try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.devDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+                : try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.productionDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+
+            guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+
+            var db: OpaquePointer?
+            guard sqlite3_open_v2(storeURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+                if let db { sqlite3_close(db) }
+                return
+            }
+            defer { sqlite3_close(db) }
+
+            // VACUUM shrinks the SQLite database on disk by defragmenting and removing unallocated pages
+            var errMsg: UnsafeMutablePointer<CChar>?
+            let result = sqlite3_exec(db, "VACUUM;", nil, nil, &errMsg)
+            if result == SQLITE_OK {
+                sqlite3_wal_checkpoint_v2(db, nil, SQLITE_CHECKPOINT_PASSIVE, nil, nil)
+                AppLogger.info("🗜️ Defragmented and vacuumed database successfully", logger: AppLogger.background)
+                UserDefaults.standard.set(now, forKey: lastVacuumKey)
+            } else if let errMsg {
+                let msg = String(cString: errMsg)
+                sqlite3_free(errMsg)
+                AppLogger.warning("Database vacuum skipped/deferred: \(msg)", logger: AppLogger.background)
+            }
+        } catch {
+            AppLogger.error("Database vacuum failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 }
