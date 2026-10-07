@@ -83,7 +83,11 @@ struct SegmentedPillControl<Option: Hashable, Label: View>: View {
                         .background {
                             if isSelected {
                                 Capsule()
-                                    .fill(AppTheme.Colors.accent.opacity(0.18))
+                                    .fill(AppTheme.Colors.accent.opacity(scheme == .dark ? 0.22 : 0.16))
+                                    .overlay {
+                                        Capsule()
+                                            .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.8)
+                                    }
                                     .matchedGeometryEffect(id: "segmented_selection", in: selectionNamespace)
                             } else if isHovered {
                                 Capsule()
@@ -105,7 +109,7 @@ struct SegmentedPillControl<Option: Hashable, Label: View>: View {
         .background(AppTheme.Colors.cardFill(for: scheme), in: Capsule())
         .overlay {
             Capsule()
-                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.5)
+                .stroke(AppTheme.Colors.strokeDefault(for: scheme), lineWidth: 0.8)
         }
     }
 }
