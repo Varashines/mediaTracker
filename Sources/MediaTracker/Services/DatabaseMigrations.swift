@@ -21,6 +21,7 @@ enum DatabaseMigrations {
         await runWatchHistoryDedupIfNeeded(container: container)
         await runFirstWatchedDateBackfillIfNeeded(container: container)
         await prunePersistentHistoryIfNeeded(container: container)
+        await pruneSeasonCastToTop12IfNeeded(container: container)
     }
 
     /// v7: re-extracts the premium poster palette (primary/secondary/muted) for every item.
@@ -876,6 +877,75 @@ enum DatabaseMigrations {
             }
         } catch {
             AppLogger.error("Persistent history pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Prunes excess season cast members beyond rank 12 per show season.
+    /// Reduces season cast from ~69k rows to ~10k rows, reclaiming ~10MB disk and ~35MB RAM.
+    static func pruneSeasonCastToTop12IfNeeded(container: ModelContainer) async {
+        let migrationKey = "prunedSeasonCastToTop12"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        do {
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            let storeURL: URL = isPreview
+                ? try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.devDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+                : try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.productionDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+
+            guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+
+            var db: OpaquePointer?
+            guard sqlite3_open_v2(storeURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+                if let db { sqlite3_close(db) }
+                return
+            }
+            defer { sqlite3_close(db) }
+
+            let pruneSQL = """
+            WITH RankedCast AS (
+                SELECT Z_PK,
+                       ROW_NUMBER() OVER (PARTITION BY ZSHOWID, ZSEASONNUMBER ORDER BY ZORDER ASC) as rank
+                FROM ZSEASONCASTMEMBER
+            )
+            DELETE FROM ZSEASONCASTMEMBER
+            WHERE Z_PK IN (
+                SELECT Z_PK FROM RankedCast WHERE rank > 12
+            );
+            """
+
+            var pruneStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, pruneSQL, -1, &pruneStmt, nil) == SQLITE_OK {
+                sqlite3_step(pruneStmt)
+                sqlite3_finalize(pruneStmt)
+            }
+
+            // Sync denormalized counts on TVSeason
+            let syncCountsSQL = """
+            UPDATE ZTVSEASON
+            SET ZSEASONCASTCOUNT = (
+                SELECT COUNT(*) FROM ZSEASONCASTMEMBER WHERE ZSEASONCASTMEMBER.ZSEASON = ZTVSEASON.Z_PK
+            );
+            """
+            var syncStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, syncCountsSQL, -1, &syncStmt, nil) == SQLITE_OK {
+                sqlite3_step(syncStmt)
+                sqlite3_finalize(syncStmt)
+            }
+
+            sqlite3_wal_checkpoint_v2(db, nil, SQLITE_CHECKPOINT_PASSIVE, nil, nil)
+            AppLogger.info("🧹 Pruned excess season cast members to top 12 per season", logger: AppLogger.background)
+            UserDefaults.standard.set(true, forKey: migrationKey)
+
+            await MainActor.run {
+                TasteActor.clearCache()
+                ScopedStatsActor.invalidateCache()
+            }
+        } catch {
+            AppLogger.error("Season cast pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 }
