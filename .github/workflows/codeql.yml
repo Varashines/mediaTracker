@@ -2,8 +2,17 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+    paths:
+      - 'Sources/**'
+      - 'Package.*'
+      - '.github/workflows/codeql.yml'
   pull_request:
+    branches: [main, develop]
+    paths:
+      - 'Sources/**'
+      - 'Package.*'
+      - '.github/workflows/codeql.yml'
   schedule:
     - cron: '30 3 * * 1'
 
@@ -28,13 +37,21 @@ jobs:
         with:
           xcode-version: '26.6.0'
 
+      - name: Cache Swift PM Build Directory
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-codeql-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-codeql-
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: swift
 
       - name: Build
-        run: swift build
+        run: swift build -c release -Xswiftc -gnone
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
