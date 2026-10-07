@@ -553,29 +553,6 @@ private struct SeasonSection: View {
             }
             .padding(.horizontal, 4)
 
-            // Season completion progress bar
-            if season.totalEpisodesCount > 0 {
-                let seasonProgress = Double(season.watchedEpisodesCount) / Double(season.totalEpisodesCount)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
-                            .frame(height: 3)
-                        
-                        Capsule()
-                            .fill(
-                                seasonProgress >= 1.0
-                                    ? Color.semanticGreen(for: colorScheme)
-                                    : accent
-                            )
-                            .frame(width: max(0, geo.size.width * CGFloat(seasonProgress)), height: 3)
-                    }
-                }
-                .frame(height: 3)
-                .padding(.horizontal, 4)
-                .animation(AppTheme.Animation.springSnappy, value: seasonProgress)
-            }
-
             if season.totalEpisodesCount == 0 {
                 VStack(spacing: 16) {
                     Image(systemName: "sparkles.tv")
