@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct PosterView: View {
     let item: MediaItem
@@ -113,6 +114,10 @@ struct PosterView: View {
                             )
                         }
                     }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    RewatchMultiplierBadge(mediaID: item.id)
+                        .padding(12)
                 }
             }
             .compositingGroupIfNeeded()
@@ -264,6 +269,48 @@ private struct PosterThumbnail: View {
                 }
                 onSelect()
             }
+        }
+    }
+}
+
+/// Glass multiplier badge displayed on the bottom-trailing corner of the poster
+/// ONLY when a title has completed rewatch cycles (total completed >= 2).
+/// Hidden for first-time watches and single completions.
+private struct RewatchMultiplierBadge: View {
+    @Query private var cycles: [WatchCycle]
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(mediaID: String) {
+        _cycles = Query(
+            filter: #Predicate<WatchCycle> { cycle in
+                cycle.mediaID == mediaID
+            }
+        )
+    }
+
+    var body: some View {
+        let completedCount = cycles.filter { $0.isComplete || $0.state == .completed }.count
+        if completedCount >= 2 {
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                    .font(.system(size: 9, weight: .bold))
+                Text("×\(completedCount)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3.5)
+            .background {
+                Capsule()
+                    .fill(Color.black.opacity(0.65))
+            }
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+            }
+            .shadow(color: Color.black.opacity(0.4), radius: 4, y: 2)
+            .help("Watched \(completedCount) times")
+            .accessibilityLabel("Rewatched \(completedCount) times")
         }
     }
 }
