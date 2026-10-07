@@ -37,6 +37,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let recommendationReason: String?
     let lastInteractionDate: Date?
     let tasteValue: String?
+    let network: String?
+    let networkLogoPath: String?
+    let watchProvider: String?
+    let watchProviderLogoPath: String?
     /// Pre-computed once in the initializer. Used as a stable identity for SwiftUI's ForEach
     /// so cells aren't recreated when other (unrelated) fields change. Avoids the cost of
     /// re-interpolating on every body re-evaluation.
@@ -88,6 +92,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.genres = item.cachedGenres
         self.lastInteractionDate = item.lastInteractionDate
         self.tasteValue = item.tasteValue
+        self.network = item.cachedNetwork?.commaSeparatedValues.first ?? item.cachedNetwork
+        self.networkLogoPath = item.cachedNetworkLogoPath?.commaSeparatedValues.first ?? item.cachedNetworkLogoPath
+        self.watchProvider = item.cachedWatchProviders.first
+        self.watchProviderLogoPath = item.cachedWatchProviderLogoPaths?.first
         self.versionHash = Self.makeHash(id: item.persistentModelID, progress: item.storedProgress)
     }
 
@@ -116,6 +124,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.recommendationReason = nil
         self.lastInteractionDate = nil
         self.tasteValue = nil
+        self.network = nil
+        self.networkLogoPath = nil
+        self.watchProvider = nil
+        self.watchProviderLogoPath = nil
         self.versionHash = Self.makeHash(id: id, progress: nil)
     }
 
@@ -160,6 +172,10 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.recommendationReason = nil
         self.lastInteractionDate = nil
         self.tasteValue = nil
+        self.network = nil
+        self.networkLogoPath = nil
+        self.watchProvider = nil
+        self.watchProviderLogoPath = nil
         self.versionHash = Self.makeHash(id: id, progress: progress)
     }
 }

@@ -31,9 +31,10 @@ struct ContinueWatchingBackdropCard: View, Equatable {
 
             // Top badges
             VStack {
-                HStack {
+                HStack(alignment: .top) {
                     SmartBadgeView(metadata: metadata)
                     Spacer()
+                    networkProviderBadge
                 }
                 Spacer()
             }
@@ -55,7 +56,7 @@ struct ContinueWatchingBackdropCard: View, Equatable {
         }
         .frame(width: cardWidth, height: cardHeight)
         .cardHoverChrome(
-            radius: AppTheme.Radius.expressiveCard,
+            radius: AppTheme.Radius.appleTV,
             isHovered: isHovered,
             suppressEffects: isFastScrolling
         )
@@ -170,5 +171,53 @@ struct ContinueWatchingBackdropCard: View, Equatable {
         var parts = [metadata.title]
         if let detailLine { parts.append(detailLine) }
         return parts.joined(separator: ", ")
+    }
+
+    @ViewBuilder
+    private var networkProviderBadge: some View {
+        let isTV = metadata.type == .tvShow
+        let logoPath = isTV ? (metadata.networkLogoPath ?? metadata.watchProviderLogoPath) : (metadata.watchProviderLogoPath ?? metadata.networkLogoPath)
+        let name = isTV ? (metadata.network ?? metadata.watchProvider) : (metadata.watchProvider ?? metadata.network)
+
+        if let logoPath, !logoPath.isEmpty, let urlString = APIClient.tmdbImageURL(path: logoPath, size: "w300"), let url = URL(string: urlString) {
+            CachedImage(url: url, targetSize: .networkLogo, priority: .low, isFastScrolling: isFastScrolling) { _ in } placeholder: {
+                if let name, !name.isEmpty {
+                    textBadge(name)
+                }
+            }
+            .aspectRatio(contentMode: .fit)
+            .frame(maxHeight: 14)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3.5)
+            .background {
+                Capsule()
+                    .fill(Color.white.opacity(0.92))
+            }
+            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+        } else if let name, !name.isEmpty {
+            textBadge(name)
+        }
+    }
+
+    private func textBadge(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+            .tracking(0.5)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3.5)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule()
+                            .fill(Color.black.opacity(0.3))
+                    }
+            }
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
     }
 }
