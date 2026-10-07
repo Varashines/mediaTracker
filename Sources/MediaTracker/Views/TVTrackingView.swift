@@ -232,45 +232,61 @@ private struct SeasonTab: View {
     var body: some View {
         Button(action: action) {
             let accent = themeColor.highContrastAccent(colorScheme: colorScheme)
+            let green = Color.semanticGreen(for: colorScheme)
+            
             HStack(spacing: 8) {
                 Text(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name)
+                    .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
 
-                if isSelected, season.totalEpisodesCount > 0 {
-                    Text("\(season.watchedEpisodesCount)/\(season.totalEpisodesCount)")
-                        .font(AppTheme.Font.caption2.monospacedDigit())
-                        .foregroundStyle(accent)
-                }
+                if season.totalEpisodesCount > 0 {
+                    if isFullyWatched {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(green)
+                    } else if progress > 0 {
+                        HStack(spacing: 4) {
+                            // Circular micro ring
+                            ZStack {
+                                Circle()
+                                    .stroke(isSelected ? accent.opacity(0.3) : Color.primary.opacity(0.12), lineWidth: 2)
+                                Circle()
+                                    .trim(from: 0.0, to: CGFloat(progress))
+                                    .stroke(accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                            }
+                            .frame(width: 10, height: 10)
 
-                if isFullyWatched {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(AppTheme.Font.caption2)
-                        .foregroundStyle(Color.semanticGreen(for: colorScheme))
-                } else if progress > 0 {
-                    Circle()
-                        .trim(from: 0.0, to: CGFloat(progress))
-                        .stroke(accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                        .frame(width: 8, height: 8)
-                        .rotationEffect(.degrees(-90))
-                } else {
-                    Circle()
-                        .stroke(Color.primary.opacity(0.15), lineWidth: 1.5)
-                        .frame(width: 8, height: 8)
+                            if isSelected {
+                                Text("\(season.watchedEpisodesCount)/\(season.totalEpisodesCount)")
+                                    .font(AppTheme.Font.caption2.monospacedDigit())
+                                    .foregroundStyle(accent)
+                            }
+                        }
+                    } else if isSelected {
+                        Text("0/\(season.totalEpisodesCount)")
+                            .font(AppTheme.Font.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-            .font(isSelected ? AppTheme.Font.bodyBold : AppTheme.Font.body)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
             .background {
                 Capsule()
-                    .fill(isSelected ? Color.primary.opacity(0.15) : Color.primary.opacity(0.03))
+                    .fill(
+                        isSelected
+                            ? accent.opacity(colorScheme == .dark ? 0.20 : 0.14)
+                            : AppTheme.Colors.surfaceGhost(for: colorScheme)
+                    )
             }
             .overlay {
                 Capsule()
                     .stroke(
-                        isSelected ? accent.opacity(0.5) : Color.clear,
-                        lineWidth: isSelected ? 1.5 : 1)
+                        isSelected ? accent.opacity(colorScheme == .dark ? 0.45 : 0.35) : AppTheme.Colors.strokeDefault(for: colorScheme),
+                        lineWidth: isSelected ? 1.2 : 0.5
+                    )
             }
-            .foregroundStyle(isSelected ? Color.primary : .secondary)
+            .foregroundStyle(isSelected ? (colorScheme == .dark ? .white : accent) : .secondary)
             .contentShape(Capsule())
             .accessibilityLabel("\(season.name.isEmpty ? "Season \(season.seasonNumber)" : season.name), \(Int(progress * 100))% watched")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -518,10 +534,17 @@ private struct SeasonSection: View {
                     .background(
                         isAllWatched
                             ? accent.opacity(colorScheme == .dark ? 0.1 : 0.05)
-                            : accent.opacity(colorScheme == .dark ? 0.15 : 0.12)
+                            : accent.opacity(colorScheme == .dark ? 0.18 : 0.14)
                     )
                     .foregroundStyle(isAllWatched ? .secondary : accent)
                     .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                isAllWatched ? Color.clear : accent.opacity(colorScheme == .dark ? 0.35 : 0.25),
+                                lineWidth: 0.8
+                            )
+                    )
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -529,6 +552,29 @@ private struct SeasonSection: View {
                 .hoverScaled(.subtle)
             }
             .padding(.horizontal, 4)
+
+            // Season completion progress bar
+            if season.totalEpisodesCount > 0 {
+                let seasonProgress = Double(season.watchedEpisodesCount) / Double(season.totalEpisodesCount)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.Colors.surfaceGhost(for: colorScheme))
+                            .frame(height: 3)
+                        
+                        Capsule()
+                            .fill(
+                                seasonProgress >= 1.0
+                                    ? Color.semanticGreen(for: colorScheme)
+                                    : accent
+                            )
+                            .frame(width: max(0, geo.size.width * CGFloat(seasonProgress)), height: 3)
+                    }
+                }
+                .frame(height: 3)
+                .padding(.horizontal, 4)
+                .animation(AppTheme.Animation.springSnappy, value: seasonProgress)
+            }
 
             if season.totalEpisodesCount == 0 {
                 VStack(spacing: 16) {
