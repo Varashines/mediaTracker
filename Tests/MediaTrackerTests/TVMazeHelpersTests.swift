@@ -65,38 +65,57 @@ final class TVMazeHelpersTests: MTTestCase {
     // MARK: - exactTVMazeMatch (Merry Berry Love regression: fuzzy search
     // ranked "Kerry Katona: Crazy in Love" first and the app blindly took it)
 
-    private func makeResults(_ entries: [(id: Int, name: String)]) -> [TVMazeSearchResult] {
-        entries.map { TVMazeSearchResult(score: 0, show: TVMazeSearchShow(id: $0.id, name: $0.name)) }
+    private func makeResults(_ entries: [(id: Int, name: String, premiered: String?, language: String?)]) -> [TVMazeSearchResult] {
+        entries.map { TVMazeSearchResult(score: 0, show: TVMazeSearchShow(id: $0.id, name: $0.name, premiered: $0.premiered, language: $0.language)) }
     }
 
     func testExactMatchWinsOverFuzzyFirstResult() {
         let results = makeResults([
-            (35666, "Kerry Katona: Crazy in Love"),
-            (58858, "Mary Berry - Love to Cook"),
-            (93925, "Merry Berry Love")
+            (35666, "Kerry Katona: Crazy in Love", "2010-01-01", "English"),
+            (58858, "Mary Berry - Love to Cook", "2021-01-01", "English"),
+            (93925, "Merry Berry Love", "2024-01-01", "English")
         ])
         XCTAssertEqual(Self.testMatch(for: "Merry Berry Love", in: results)?.show.id, 93925)
     }
 
     func testExactMatchIsCaseAndWhitespaceInsensitive() {
-        let results = makeResults([(1, "THE  DEALER")])
+        let results = makeResults([(1, "THE  DEALER", "2023-01-01", "English")])
         XCTAssertEqual(Self.testMatch(for: "the dealer", in: results)?.show.id, 1)
 
-        let ampersand = makeResults([(2, "Juliet & Juliet")])
+        let ampersand = makeResults([(2, "Juliet & Juliet", "2023-01-01", "English")])
         XCTAssertEqual(Self.testMatch(for: "juliet & juliet", in: ampersand)?.show.id, 2)
     }
 
     func testNoExactMatchReturnsNil() {
         let results = makeResults([
-            (35666, "Kerry Katona: Crazy in Love"),
-            (58858, "Mary Berry - Love to Cook")
+            (35666, "Kerry Katona: Crazy in Love", "2010-01-01", "English"),
+            (58858, "Mary Berry - Love to Cook", "2021-01-01", "English")
         ])
         XCTAssertNil(Self.testMatch(for: "Merry Berry Love", in: results), "No exact match must resolve nil (use TMDB details only)")
     }
 
     func testNoExactMatchEvenWhenSubstringMatches() {
-        let results = makeResults([(1, "Love Me to Hurt Me")])
+        let results = makeResults([(1, "Love Me to Hurt Me", "2020-01-01", "English")])
         XCTAssertNil(Self.testMatch(for: "Love Me", in: results))
+    }
+
+    func testDisambiguatesByYearAndLanguage() {
+        // "My Boss": Chinese 2024 vs Thai upcoming/unreleased
+        let results = makeResults([
+            (73773, "My Boss", "2024-01-04", "Chinese")
+        ])
+
+        // When looking for 2024 Chinese show -> matches 73773
+        let chineseMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: 2024, language: "zh", in: results)
+        XCTAssertEqual(chineseMatch?.show.id, 73773)
+
+        // When looking for upcoming Thai show (no release year yet, language "th") -> must reject 73773
+        let thaiMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: nil, language: "th", in: results)
+        XCTAssertNil(thaiMatch, "Older Chinese series must not be matched to an unreleased Thai series")
+
+        // When looking for a 2026 show -> must reject 2024 show (+2 years difference)
+        let futureMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: 2026, language: "zh", in: results)
+        XCTAssertNil(futureMatch, "A show 2+ years apart must not match")
     }
 
     private static func testMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
