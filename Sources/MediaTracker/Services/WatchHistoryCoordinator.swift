@@ -251,10 +251,11 @@ enum WatchHistoryCoordinator {
         if cycle.isRewatch, !scope.isEmpty, !scope.contains(episodeID) { return }
 
         let cycleID = cycle.id
-        let events = (try? context.fetch(
-            FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.cycleID == cycleID })
-        )) ?? []
-        let activeEvent = events.first { $0.episodeID == episodeID && $0.isActive }
+        var eventDescriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate { $0.cycleID == cycleID && $0.episodeID == episodeID && $0.voidedAt == nil }
+        )
+        eventDescriptor.fetchLimit = 1
+        let activeEvent = (try? context.fetch(eventDescriptor))?.first
         let deduplicationKey = "\(cycle.id.uuidString):\(episodeID):watch"
 
         if isWatched {

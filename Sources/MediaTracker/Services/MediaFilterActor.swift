@@ -839,9 +839,9 @@ actor MediaFilterActor {
             let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
             if let collection = try? modelContext.fetch(colDescriptor).first {
                 if collection.isSmart && !collection.smartRules.isEmpty {
-                    // Smart rules require Swift-level evaluation — fetch thumbnail properties and count
+                    // Smart rules require Swift-level evaluation — fetch lean rule properties and count
                     var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
-                    desc.propertiesToFetch = MediaItem.thumbnailProperties
+                    desc.propertiesToFetch = MediaItem.smartRuleProperties
                     desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
                     let refined = try refineResults(items, network: [], language: [], genre: [], year: [], state: [], badge: nil, provider: [], searchText: "", smartRules: collection.smartRules, smartMatchAny: collection.smartMatchAny)
