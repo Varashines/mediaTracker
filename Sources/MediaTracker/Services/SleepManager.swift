@@ -124,13 +124,14 @@ class SleepManager {
     }
     
     private var eventMonitor: Any?
+    private var windowObserver: (any NSObjectProtocol)?
     private let eventMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown, .mouseMoved, .scrollWheel]
 
     private func setupInteractionMonitor() {
         #if os(macOS)
         // macOS does not deliver .mouseMoved events unless the window explicitly opts in.
         // Observe the main window so we can enable it as soon as it appears.
-        NotificationCenter.default.addObserver(
+        windowObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
             object: nil,
             queue: .main
@@ -160,8 +161,10 @@ class SleepManager {
 
             let now = Date()
 
-            // While awake, debounce mouse-move to 1 Hz
-            if event.type == .mouseMoved {
+            // While awake, debounce high-frequency streams (.mouseMoved and .scrollWheel) to 1 Hz.
+            // A trackpad scroll fires at 60-120 Hz; resetting the 60s timer on every tick
+            // causes ~240 main-thread work-item allocations/cancellations per second.
+            if event.type == .mouseMoved || event.type == .scrollWheel {
                 let elapsed = now.timeIntervalSince(self.lastInteractionDate)
                 if elapsed < 1.0 {
                     return event

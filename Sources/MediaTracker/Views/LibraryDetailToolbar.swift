@@ -257,7 +257,16 @@ private struct LibraryFilterPopover: View {
     private func binding<Value: Hashable>(for keyPath: WritableKeyPath<FilterState, [Value]>) -> Binding<Set<Value>> {
         Binding(
             get: { Set(viewModel.filter[keyPath: keyPath]) },
-            set: { viewModel.filter[keyPath: keyPath] = Array($0) }
+            set: { newSet in
+                if let comparableSet = newSet as? Set<String> {
+                    viewModel.filter[keyPath: keyPath] = (comparableSet.sorted() as! [Value])
+                } else if let stateSet = newSet as? Set<MediaState> {
+                    // Stable order matching allCases
+                    viewModel.filter[keyPath: keyPath] = (MediaState.allCases.filter { stateSet.contains($0) } as! [Value])
+                } else {
+                    viewModel.filter[keyPath: keyPath] = Array(newSet)
+                }
+            }
         )
     }
 

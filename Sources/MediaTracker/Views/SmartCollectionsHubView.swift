@@ -283,45 +283,28 @@ struct SmartCollectionsHubView: View {
     private func fetchCounts() async {
         let actor = getFilterActor()
         
-        // Parallelize smart category counts using TaskGroup
-        let smartCounts = await withTaskGroup(of: (NavigationCategory, Int)?.self, returning: [NavigationCategory: Int].self) { group in
-            for cat in smartCategories {
-                group.addTask {
-                    do {
-                        let count = try await actor.countItems(category: cat)
-                        return (cat, count)
-                    } catch {
-                        AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
-                        return nil
-                    }
-                }
+        // Count smart categories directly on actor (actor serializes calls anyway)
+        var smartCounts: [NavigationCategory: Int] = [:]
+        for cat in smartCategories {
+            if Task.isCancelled { return }
+            do {
+                let count = try await actor.countItems(category: cat)
+                smartCounts[cat] = count
+            } catch {
+                AppLogger.debug("Error fetching count for \(cat.rawValue): \(error)")
             }
-            var counts: [NavigationCategory: Int] = [:]
-            for await result in group {
-                if let (cat, count) = result { counts[cat] = count }
-            }
-            return counts
         }
         
-        // Parallelize custom collection counts
-        let customCollectionIDs = customSmartCollections.map { ($0.id, $0.name) }
-        let customCounts = await withTaskGroup(of: (UUID, Int)?.self, returning: [UUID: Int].self) { group in
-            for (collectionID, collectionName) in customCollectionIDs {
-                group.addTask {
-                    do {
-                        let count = try await actor.countItems(category: .all, collectionID: collectionID)
-                        return (collectionID, count)
-                    } catch {
-                        AppLogger.debug("Error fetching count for smart collection \(collectionName): \(error)")
-                        return nil
-                    }
-                }
+        // Count custom collections directly
+        var customCounts: [UUID: Int] = [:]
+        for collection in customSmartCollections {
+            if Task.isCancelled { return }
+            do {
+                let count = try await actor.countItems(category: .all, collectionID: collection.id)
+                customCounts[collection.id] = count
+            } catch {
+                AppLogger.debug("Error fetching count for smart collection \(collection.name): \(error)")
             }
-            var counts: [UUID: Int] = [:]
-            for await result in group {
-                if let (id, count) = result { counts[id] = count }
-            }
-            return counts
         }
         
         let token = MediaStateService.shared.libraryChangeToken

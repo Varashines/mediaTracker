@@ -62,7 +62,9 @@ actor WeeklyDigestService {
             }
         )
         eventDescriptor.propertiesToFetch = [\.mediaID, \.episodeID, \.watchedAt, \.voidedAt]
-        let eventShowIDs = Set(((try? modelContext.fetch(eventDescriptor)) ?? []).compactMap { event -> Int? in
+        let windowEvents = (try? modelContext.fetch(eventDescriptor)) ?? []
+
+        let eventShowIDs = Set(windowEvents.compactMap { event -> Int? in
             guard let episodeID = event.episodeID else { return nil }
             let parts = episodeID.split(separator: "_")
             guard parts.count >= 3 else { return nil }
@@ -90,7 +92,7 @@ actor WeeklyDigestService {
         // fall back to the ledger for anything the state-change path missed.
         var alreadyCounted = Set(moviesByStateChange)
         var movies = moviesByStateChange.count
-        for event in (try? modelContext.fetch(eventDescriptor)) ?? [] where event.episodeID == nil {
+        for event in windowEvents where event.episodeID == nil {
             guard !alreadyCounted.contains(event.mediaID) else { continue }
             alreadyCounted.insert(event.mediaID)
             movies += 1
