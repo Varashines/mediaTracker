@@ -87,13 +87,15 @@ class SearchViewModel {
 
     private func interleave(movies: [MediaSearchResult], tv: [MediaSearchResult], scorer: SearchScorer) -> [MediaSearchResult] {
         var result: [MediaSearchResult] = []
+        let movieScores = movies.map { scorer.score(item: $0) }
+        let tvScores = tv.map { scorer.score(item: $0) }
         var m = 0
         var t = 0
         var takeMovie = true
 
         while m < movies.count || t < tv.count {
-            let movieScore = m < movies.count ? scorer.score(item: movies[m]) : Int.min
-            let tvScore = t < tv.count ? scorer.score(item: tv[t]) : Int.min
+            let movieScore = m < movies.count ? movieScores[m] : Int.min
+            let tvScore = t < tv.count ? tvScores[t] : Int.min
 
             if movieScore > tvScore {
                 result.append(movies[m]); m += 1

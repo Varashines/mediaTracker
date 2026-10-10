@@ -274,6 +274,77 @@ enum WatchHistoryCoordinator {
         }
     }
 
+    static func batchRecordEpisodeMutations(
+        mediaID: String,
+        mutations: [(episodeID: String, watchedAt: Date, runtimeMinutes: Int?, isWatched: Bool)],
+        context: ModelContext,
+        source: WatchEventSource = .automatic
+    ) {
+        guard !mutations.isEmpty else { return }
+
+        // Fetch or create the primary active cycle once
+        let firstEpID = mutations[0].episodeID
+        let firstWatchedDate = mutations.first(where: { $0.isWatched })?.watchedAt ?? Date()
+        let cycle: WatchCycle
+        if let owning = openCycle(forMediaID: mediaID, episodeID: firstEpID, context: context),
+           owning.state == .active {
+            cycle = owning
+        } else if mutations.contains(where: { $0.isWatched }) {
+            let created = WatchCycle(mediaID: mediaID, kind: .tvShow, startedAt: firstWatchedDate)
+            context.insert(created)
+            cycle = created
+        } else {
+            return
+        }
+
+        var scope = Set(cycle.scopeEpisodeIDs)
+        if !cycle.isRewatch {
+            for mut in mutations where mut.isWatched && !scope.contains(mut.episodeID) {
+                cycle.scopeEpisodeIDs.append(mut.episodeID)
+                scope.insert(mut.episodeID)
+            }
+        }
+
+        let cycleID = cycle.id
+        let mutEpisodeIDs = Set(mutations.map(\.episodeID))
+        let existingEvents = (try? context.fetch(
+            FetchDescriptor<WatchEvent>(predicate: #Predicate { event in
+                event.cycleID == cycleID && event.voidedAt == nil
+            })
+        )) ?? []
+
+        var activeEventsByEpisodeID: [String: WatchEvent] = [:]
+        for event in existingEvents {
+            if let epID = event.episodeID, mutEpisodeIDs.contains(epID) {
+                activeEventsByEpisodeID[epID] = event
+            }
+        }
+
+        for mut in mutations {
+            if cycle.isRewatch, !scope.isEmpty, !scope.contains(mut.episodeID) { continue }
+
+            let activeEvent = activeEventsByEpisodeID[mut.episodeID]
+            if mut.isWatched {
+                guard activeEvent == nil else { continue }
+                let deduplicationKey = "\(cycle.id.uuidString):\(mut.episodeID):watch"
+                let newEvent = WatchEvent(
+                    cycleID: cycle.id,
+                    mediaID: mediaID,
+                    episodeID: mut.episodeID,
+                    watchedAt: mut.watchedAt,
+                    source: source,
+                    runtimeMinutes: mut.runtimeMinutes,
+                    deduplicationKey: deduplicationKey
+                )
+                context.insert(newEvent)
+                activeEventsByEpisodeID[mut.episodeID] = newEvent
+            } else {
+                activeEvent?.voidedAt = Date()
+                activeEventsByEpisodeID.removeValue(forKey: mut.episodeID)
+            }
+        }
+    }
+
     nonisolated static func recordImportedMovie(
         mediaID: String,
         watchedAt: Date,
@@ -325,24 +396,50 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        updateEpisodeWatchDates(
+            mediaID: mediaID,
+            episodes: [(episodeID: episodeID, runtimeMinutes: runtimeMinutes)],
+            watchedAt: watchedAt,
+            context: context
+        )
+    }
+
+    nonisolated static func updateEpisodeWatchDates(
+        mediaID: String,
+        episodes: [(episodeID: String, runtimeMinutes: Int?)],
+        watchedAt: Date,
+        context: ModelContext
+    ) {
+        guard !episodes.isEmpty else { return }
+        let epIDs = Set(episodes.map(\.episodeID))
         let events = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { event in
-                event.mediaID == mediaID && event.episodeID == episodeID && event.voidedAt == nil
+                event.mediaID == mediaID && event.voidedAt == nil
             })
         )) ?? []
-        if events.isEmpty {
-            recordEpisodeMutation(
-                mediaID: mediaID,
-                episodeID: episodeID,
-                watchedAt: watchedAt,
-                runtimeMinutes: runtimeMinutes,
-                isWatched: true,
-                context: context
-            )
-            return
-        }
+
+        var eventsByEpisodeID: [String: [WatchEvent]] = [:]
         for event in events {
-            event.watchedAt = watchedAt
+            if let epID = event.episodeID, epIDs.contains(epID) {
+                eventsByEpisodeID[epID, default: []].append(event)
+            }
+        }
+
+        for (epID, runtime) in episodes {
+            if let matching = eventsByEpisodeID[epID], !matching.isEmpty {
+                for event in matching {
+                    event.watchedAt = watchedAt
+                }
+            } else {
+                recordEpisodeMutation(
+                    mediaID: mediaID,
+                    episodeID: epID,
+                    watchedAt: watchedAt,
+                    runtimeMinutes: runtime,
+                    isWatched: true,
+                    context: context
+                )
+            }
         }
     }
 
