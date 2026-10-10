@@ -8,7 +8,7 @@ extension MediaFilterActor {
         let dict = Dictionary(grouping: results) { item -> String in
             switch groupBy {
             case .genre: return item.cachedGenres.first ?? "Uncategorized"
-            case .language: return item.cachedLanguage ?? "Unknown"
+            case .language: return LanguageUtils.languageName(for: item.cachedLanguage)
             case .network:
                 if let rawNetwork = item.cachedNetwork {
                     return rawNetwork.commaSeparatedValues.first ?? "Unknown"
