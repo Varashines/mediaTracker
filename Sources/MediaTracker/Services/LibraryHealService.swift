@@ -22,6 +22,7 @@ extension BackgroundDataService {
         await purgeStaleSearchCache()
 
         var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.sortBy = [SortDescriptor(\.id)]
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
         descriptor.fetchLimit = 100
         

@@ -259,11 +259,16 @@ actor LibraryStatsActor {
     }
 
     @MainActor
-    static func clearCache() {
+    static func invalidateMemoryCache() {
         cachedLightStats = nil
         cachedFullStats = nil
         cachedContainers = nil
         lastCalculation = nil
+    }
+
+    @MainActor
+    static func clearCache() {
+        invalidateMemoryCache()
         deletePersistentStats()
     }
 
@@ -306,7 +311,10 @@ actor LibraryStatsActor {
         var offset = 0
         while true {
             try Task.checkCancellation()
-            var descriptor = FetchDescriptor<MediaItem>()
+            var descriptor = FetchDescriptor<MediaItem>(
+                predicate: #Predicate<MediaItem> { !$0.isSoftDeleted }
+            )
+            descriptor.sortBy = [SortDescriptor(\.id)]
             descriptor.propertiesToFetch = [
                 \.id, \.title, \.releaseDate,
                 \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex,
