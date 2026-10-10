@@ -197,4 +197,44 @@ final class SeasonTasteTests: MTTestCase {
         XCTAssertNil(insights.castAffinities.first { $0.name == "Alice" },
                      "Unwatched season should not inherit the show's loved taste")
     }
+
+    func testProjectedSeasonCastMemberDoesNotFault() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        let item = MediaItem(id: "tv_500", title: "Test Show", overview: "", type: .tvShow)
+        item.tasteValue = TasteValue.like.rawValue
+        item.cachedSeasonCount = 1
+        context.insert(item)
+
+        let tv = TVShowDetails(tmdbID: 500)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(tv)
+
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 10, showID: 500)
+        season.tvShowDetails = tv
+        tv.seasons.append(season)
+        context.insert(season)
+
+        // Member without attached season (orphaned)
+        let member = SeasonCastMember(seasonNumber: 1, tmdbPersonID: 501, name: "Bob", characterName: "B", episodeCount: 5, showID: 500)
+        context.insert(member)
+        try context.save()
+
+        // Fetch with partial projection (simulating TasteActor.buildSeasonLookups)
+        var desc = FetchDescriptor<SeasonCastMember>(predicate: #Predicate { $0.episodeCount > 0 })
+        desc.propertiesToFetch = [\.showID, \.seasonNumber, \.name, \.tmdbPersonID, \.episodeCount]
+        let cast = try context.fetch(desc)
+        XCTAssertEqual(cast.count, 1)
+
+        // Qualifying with cached season episode count must succeed without relationship fault crash
+        XCTAssertTrue(cast[0].qualifiesForTaste(seasonEpisodes: 10))
+
+        // TasteActor calculateAffinityMaps / fetchTasteInsights should run cleanly
+        TasteActor.clearCache()
+        let actor = TasteActor(modelContainer: container)
+        let insights = await actor.fetchTasteInsights()
+        XCTAssertNotNil(insights)
+    }
 }
