@@ -514,8 +514,11 @@ actor MediaFilterActor {
         }
         signposter.endInterval("searchScoring", scoringState)
 
-        // Sort by score descending
-        scored.sort { $0.1 > $1.1 }
+        // Sort by score descending with stable tiebreak on item ID
+        scored.sort {
+            if $0.1 != $1.1 { return $0.1 > $1.1 }
+            return $0.0.id < $1.0.id
+        }
         return scored.map(\.0)
     }
 

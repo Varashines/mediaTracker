@@ -29,6 +29,9 @@ struct DetailView: View {
     @State private var titleCopiedTask: Task<Void, Never>?
     @State private var castScope: CastScope = .series
     @State private var selectedSeasonNumber: Int?
+    /// Cached count of non-specials seasons, recomputed only when seasons count changes
+    /// rather than re-traversing liveModels multiple times per body eval.
+    @State private var cachedRealSeasonCount: Int = 0
     /// Sorted per-season cast, recomputed only when the season selection or
     /// cast data changes — sorting liveModels on every body eval was wasted work.
     @State private var cachedSeasonCast: [SeasonCastMember]?
@@ -104,12 +107,19 @@ struct DetailView: View {
         }
     }
 
+    private func refreshRealSeasonCount() {
+        guard viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails else {
+            cachedRealSeasonCount = 0
+            return
+        }
+        cachedRealSeasonCount = tv.seasons.liveModels.filter { $0.seasonNumber > 0 }.count
+    }
+
     /// Whether the Series | This season toggle should show: only for multi-season
     /// TV shows, and not when the selected season is Season 0 (specials).
     private var showCastScopeToggle: Bool {
-        guard viewModel.item.type == .tvShow, let tv = viewModel.item.tvShowDetails else { return false }
-        let realSeasons = tv.seasons.liveModels.filter { $0.seasonNumber > 0 }.count
-        guard realSeasons > 1 else { return false }
+        guard viewModel.item.type == .tvShow else { return false }
+        guard cachedRealSeasonCount > 1 else { return false }
         return (selectedSeasonNumber ?? 0) != 0
     }
 
@@ -324,6 +334,11 @@ struct DetailView: View {
         .navigationTitle(sleepManager.isAsleep ? "" : (showNavTitle ? viewModel.item.title : "Details"))
         .onAppear {
             viewModel.refreshData()
+            refreshRealSeasonCount()
+            refreshSeasonCastCache()
+        }
+        .onChange(of: viewModel.item.tvShowDetails?.seasons.count) { _, _ in
+            refreshRealSeasonCount()
             refreshSeasonCastCache()
         }
         .onDisappear {
