@@ -270,7 +270,13 @@ extension BackgroundDataService {
                     resolved = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID, force: force)
                 }
                 if resolved == nil {
-                    resolved = try? await APIClient.shared.lookupTVMazeIDByName(title: item.title, force: force)
+                    let releaseYear = item.releaseDate.map { Calendar.current.component(.year, from: $0) }
+                    resolved = try? await APIClient.shared.lookupTVMazeIDByName(
+                        title: item.title,
+                        releaseYear: releaseYear,
+                        language: details.originalLanguage,
+                        force: force
+                    )
                 }
                 if let resolved {
                     tvMazeID = resolved
@@ -598,6 +604,19 @@ extension BackgroundDataService {
                         didWriteSeasonCast = true
                     }
                 }
+
+                // Prune any existing seasons that do not exist in the authoritative TMDB season list
+                let fetchedSeasonNumbers = Set(fetchedSeasons.map(\.seasonNumber))
+                for existingSeason in existingSeasons {
+                    if !fetchedSeasonNumbers.contains(existingSeason.seasonNumber) {
+                        // Delete all episodes attached to this orphaned season first
+                        for ep in existingSeason.episodes.liveModels {
+                            if ep.modelContext != nil { modelContext.delete(ep) }
+                        }
+                        if existingSeason.modelContext != nil { modelContext.delete(existingSeason) }
+                    }
+                }
+
                 tvDetails.recalculateCachedProperties(triggerSync: true, force: true)
                 if didWriteSeasonCast {
                     await MainActor.run { TasteActor.clearCache() }

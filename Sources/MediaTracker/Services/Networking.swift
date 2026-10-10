@@ -868,15 +868,16 @@ actor APIClient {
         }
     }
 
-    /// Resolves a TVMaze show ID by exact title match. TVMaze's fuzzy search
-    /// frequently ranks unrelated shows first (e.g. "Kerry Katona: Crazy in
-    /// Love" for "Merry Berry Love"), so only a normalized exact title match is
-    /// accepted; nil means "use TMDB details only".
-    func lookupTVMazeIDByName(title: String, force: Bool = false) async throws -> Int? {
-        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))"
+    /// Resolves a TVMaze show ID by title match with multi-factor verification
+    /// (release year proximity and language alignment) to prevent collisions between
+    /// identically titled shows from different countries or air periods.
+    func lookupTVMazeIDByName(title: String, releaseYear: Int? = nil, language: String? = nil, force: Bool = false) async throws -> Int? {
+        let yearKey = releaseYear.map { "_\($0)" } ?? ""
+        let langKey = language.map { "_\($0)" } ?? ""
+        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))\(yearKey)\(langKey)"
         if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
            let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData),
-           let exact = Self.exactTVMazeMatch(for: title, in: results) {
+           let exact = Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results) {
             return exact.show.id
         }
 
@@ -888,15 +889,105 @@ actor APIClient {
             try self.validateResponse(response)
             let results = try self.decoder.decode([TVMazeSearchResult].self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return Self.exactTVMazeMatch(for: title, in: results)?.show.id
+            return Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results)?.show.id
         }
     }
 
-    /// Case/whitespace-insensitive exact title match across ALL results
-    /// (fuzzy ranking may place the correct show anywhere in the list).
+    /// Multi-factor verification: Finds the candidate that matches the title,
+    /// verifies release year proximity (within +/- 1 year), and verifies language.
+    nonisolated static func bestTVMazeMatch(
+        for title: String,
+        releaseYear: Int? = nil,
+        language: String? = nil,
+        in results: [TVMazeSearchResult]
+    ) -> TVMazeSearchResult? {
+        let target = normalizedShowTitle(title)
+        let titleMatches = results.filter { normalizedShowTitle($0.show.name) == target }
+        guard !titleMatches.isEmpty else { return nil }
+
+        // If there is only one exact title match and we have no year or language info to verify against, return it
+        if titleMatches.count == 1 && releaseYear == nil && language == nil {
+            return titleMatches.first
+        }
+
+        // Score each candidate based on release year and language
+        var scored: [(candidate: TVMazeSearchResult, score: Int)] = []
+
+        for candidate in titleMatches {
+            var score = 10 // Base score for exact title match
+
+            // 1. Release year evaluation
+            let candidateYear: Int? = {
+                guard let premiered = candidate.show.premiered,
+                      let firstPart = premiered.split(separator: "-").first,
+                      let y = Int(firstPart) else { return nil }
+                return y
+            }()
+
+            if let targetYear = releaseYear {
+                if let candidateYear {
+                    let diff = abs(targetYear - candidateYear)
+                    if diff == 0 {
+                        score += 30 // Exact year match
+                    } else if diff == 1 {
+                        score += 20 // 1-year tolerance
+                    } else {
+                        // Big year mismatch (e.g. 2024 vs 2026) -> penalize heavily
+                        score -= 50
+                    }
+                } else {
+                    // Candidate has no premiered date yet, small neutral penalty
+                    score -= 5
+                }
+            } else if candidateYear != nil {
+                // Incoming show has no known year (e.g. unreleased/in-production),
+                // while candidate has already premiered in the past -> penalize
+                score -= 15
+            }
+
+            // 2. Language evaluation
+            if let targetLang = language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
+                if let candidateLang = candidate.show.language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
+                    if matchesLanguage(tmdbCode: targetLang, tvmazeLanguage: candidateLang) {
+                        score += 20
+                    } else {
+                        score -= 40 // Clear language mismatch (e.g. Thai vs Chinese)
+                    }
+                }
+            }
+
+            scored.append((candidate, score))
+        }
+
+        // Only accept candidates with positive score (must meet verification threshold)
+        return scored.filter { $0.score > 0 }.max(by: { $0.score < $1.score })?.candidate
+    }
+
+    /// Maps TMDB ISO 639-1 language codes to TVMaze full language names
+    nonisolated private static func matchesLanguage(tmdbCode: String, tvmazeLanguage: String) -> Bool {
+        let code = tmdbCode.prefix(2).lowercased()
+        let lang = tvmazeLanguage.lowercased()
+        switch code {
+        case "en": return lang == "english"
+        case "zh": return lang == "chinese" || lang == "mandarin" || lang == "cantonese"
+        case "th": return lang == "thai"
+        case "ko": return lang == "korean"
+        case "ja": return lang == "japanese"
+        case "hi": return lang == "hindi"
+        case "te": return lang == "telugu"
+        case "ta": return lang == "tamil"
+        case "es": return lang == "spanish"
+        case "fr": return lang == "french"
+        case "de": return lang == "german"
+        case "it": return lang == "italian"
+        case "pt": return lang == "portuguese"
+        default:
+            return lang.contains(code)
+        }
+    }
+
     nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
-        let target = Self.normalizedShowTitle(title)
-        return results.first { Self.normalizedShowTitle($0.show.name) == target }
+        bestTVMazeMatch(for: title, in: results)
     }
 
     nonisolated private static func normalizedShowTitle(_ title: String) -> String {
