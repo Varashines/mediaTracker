@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 private struct FacetIndexEntry: Hashable, Sendable {
     let mediaItemID: String
@@ -79,13 +80,28 @@ struct FacetIndexRebuildResult: Sendable, Equatable {
     let unchanged: Bool
 }
 
+private struct CachedFacetIndexActor {
+    let containerID: ObjectIdentifier
+    let actor: FacetIndexActor
+}
+
+private let _facetIndexActorCache = OSAllocatedUnfairLock<CachedFacetIndexActor?>(uncheckedState: nil)
+
 @ModelActor
 actor FacetIndexActor {
     private static let schemaVersion = 1
     private static let schemaVersionKey = "com.vara.mediatracker.facetIndexVersion"
 
     nonisolated static func shared(modelContainer: ModelContainer) -> FacetIndexActor {
-        FacetIndexActor(modelContainer: modelContainer)
+        let containerID = ObjectIdentifier(modelContainer)
+        return _facetIndexActorCache.withLockUnchecked { state in
+            if let cached = state, cached.containerID == containerID {
+                return cached.actor
+            }
+            let actor = FacetIndexActor(modelContainer: modelContainer)
+            state = CachedFacetIndexActor(containerID: containerID, actor: actor)
+            return actor
+        }
     }
 
     func rebuildIfNeeded() throws -> FacetIndexRebuildResult {

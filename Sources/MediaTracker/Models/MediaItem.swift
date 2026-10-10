@@ -402,4 +402,9 @@ extension MediaItem {
     ]
 
     nonisolated(unsafe) static let thumbnailPropertiesWithCast: [PartialKeyPath<MediaItem>] = thumbnailProperties + [\.storedCast]
+
+    nonisolated(unsafe) static let smartRuleProperties: [PartialKeyPath<MediaItem>] = [
+        \.id, \.title, \.releaseDate, \.typeValue, \.stateValue, \.tasteValue,
+        \.cachedGenres, \.cachedLanguage, \.cachedNetwork, \.storedSmartBadgeLabel
+    ]
 }

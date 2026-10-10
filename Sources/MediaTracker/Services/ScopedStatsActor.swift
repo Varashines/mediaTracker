@@ -79,6 +79,7 @@ actor ScopedStatsActor {
         guard !Task.isCancelled else { return .empty }
 
         var descriptor = FetchDescriptor<MediaItem>()
+        descriptor.sortBy = [SortDescriptor(\.id)]
         descriptor.propertiesToFetch = [
             \.id, \.title,
             \.typeValue, \.tasteValue,
@@ -90,9 +91,16 @@ actor ScopedStatsActor {
         let name = filter.name
         switch filter.type {
         case .genre:
-            // Do not use contains on cachedGenres in SQL predicate as it crashes on translation.
-            // Fetch everything (or filtered by isSoftDeleted == false) and filter in memory.
-            descriptor.predicate = #Predicate { $0.isSoftDeleted == false }
+            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let facetDesc = FetchDescriptor<MediaFacetIndex>(
+                predicate: #Predicate { $0.kind == "genre" && $0.key == key }
+            )
+            if let entries = try? modelContext.fetch(facetDesc), !entries.isEmpty {
+                let ids = entries.map(\.mediaItemID)
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false && ids.contains($0.id) }
+            } else {
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false }
+            }
         case .language:
             let langName = LanguageUtils.languageName(for: name)
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && ($0.cachedLanguage == name || $0.cachedLanguage == langName) }
@@ -101,7 +109,16 @@ actor ScopedStatsActor {
         case .badge:
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == name }
         case .provider:
-            descriptor.predicate = #Predicate { $0.isSoftDeleted == false }
+            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let facetDesc = FetchDescriptor<MediaFacetIndex>(
+                predicate: #Predicate { $0.kind == "provider" && $0.key == key }
+            )
+            if let entries = try? modelContext.fetch(facetDesc), !entries.isEmpty {
+                let ids = entries.map(\.mediaItemID)
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false && ids.contains($0.id) }
+            } else {
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false }
+            }
         case .onThisWeek:
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.releaseDate != nil }
         }
