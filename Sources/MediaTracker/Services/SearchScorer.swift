@@ -11,6 +11,29 @@ struct SearchPayload: Sendable {
     let providers: [String]
     let network: String?
     let language: String?
+    let titleWords: [String]
+
+    init(
+        title: String,
+        overview: String,
+        creators: [String],
+        cast: [String],
+        genres: [String],
+        providers: [String],
+        network: String?,
+        language: String?,
+        titleWords: [String]? = nil
+    ) {
+        self.title = title
+        self.overview = overview
+        self.creators = creators
+        self.cast = cast
+        self.genres = genres
+        self.providers = providers
+        self.network = network
+        self.language = language
+        self.titleWords = titleWords ?? title.split(separator: " ").map(String.init)
+    }
 }
 
 enum SearchMatchSource: Sendable {
@@ -113,7 +136,7 @@ struct SearchScorer: Sendable {
 
         // Title scoring — fuzzy and weighted
         if title == token { return (500, .title) }
-        let titleWords = title.split(separator: " ").map(String.init)
+        let titleWords = payload.titleWords
         if titleWords.contains(token) { return (200, .title) }
         if titleWords.contains(where: { $0.hasPrefix(token) }) { return (150, .title) }
         if title.contains(token) { return (100, .title) }
