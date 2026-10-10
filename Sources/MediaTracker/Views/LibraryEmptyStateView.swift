@@ -6,21 +6,35 @@ struct LibraryEmptyStateView: View {
     var description: String = ""
     var actionLabel: String? = nil
     var action: (() -> Void)? = nil
+    var secondaryActionLabel: String? = nil
+    var secondaryAction: (() -> Void)? = nil
 
-    init(category: NavigationCategory, onExplore: (() -> Void)? = nil) {
+    init(category: NavigationCategory, onResetFilters: (() -> Void)? = nil, onExplore: (() -> Void)? = nil) {
         self.title = Self.title(for: category)
         self.icon = Self.icon(for: category)
         self.description = Self.description(for: category)
         self.actionLabel = onExplore != nil ? "Explore Discovery Hub" : nil
         self.action = onExplore
+        self.secondaryActionLabel = onResetFilters != nil ? "Reset Active Filters" : nil
+        self.secondaryAction = onResetFilters
     }
 
-    init(title: String, icon: String = "tray", description: String = "", actionLabel: String? = nil, action: (() -> Void)? = nil) {
+    init(
+        title: String,
+        icon: String = "tray",
+        description: String = "",
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil,
+        secondaryActionLabel: String? = nil,
+        secondaryAction: (() -> Void)? = nil
+    ) {
         self.title = title
         self.icon = icon
         self.description = description
         self.actionLabel = actionLabel
         self.action = action
+        self.secondaryActionLabel = secondaryActionLabel
+        self.secondaryAction = secondaryAction
     }
 
     @Environment(\.colorScheme) var colorScheme
@@ -58,24 +72,48 @@ struct LibraryEmptyStateView: View {
                 }
             }
 
-            if let actionLabel, let action {
-                Button(action: action) {
-                    Text(actionLabel)
-                        .font(AppTheme.Font.bodyBold)
-                        .foregroundStyle(AppTheme.Colors.accent)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.accent.opacity(0.15))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
-                        )
+            if action != nil || secondaryAction != nil {
+                HStack(spacing: AppTheme.Spacing.small) {
+                    if let secondaryActionLabel, let secondaryAction {
+                        Button(action: secondaryAction) {
+                            Text(secondaryActionLabel)
+                                .font(AppTheme.Font.bodyBold)
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                                )
+                        }
+                        .buttonStyle(.interactive)
+                        .hoverScaled(.subtle)
+                    }
+
+                    if let actionLabel, let action {
+                        Button(action: action) {
+                            Text(actionLabel)
+                                .font(AppTheme.Font.bodyBold)
+                                .foregroundStyle(AppTheme.Colors.accent)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(AppTheme.Colors.accent.opacity(0.15))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 0.5)
+                                )
+                        }
+                        .buttonStyle(.interactive)
+                        .hoverScaled(.subtle)
+                    }
                 }
-                .buttonStyle(.interactive)
-                .hoverScaled(.subtle)
             }
         }
         .padding(AppTheme.Spacing.section)

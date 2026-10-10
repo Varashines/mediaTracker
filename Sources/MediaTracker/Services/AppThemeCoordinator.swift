@@ -38,6 +38,7 @@ class AppThemeCoordinator {
         .init(name: "Chill",      accent: "#67A06B", darkBG: "#1A1E1B", lightBG: "#F2F7F2", darkSurface: "#212621", lightSurface: "#E6EDE4", cardFillOpacity: 0.05),
         .init(name: "Epic",       accent: "#8C66A8", darkBG: "#1B1A21", lightBG: "#F3F1F8", darkSurface: "#222130", lightSurface: "#E9E5F2", cardFillOpacity: 0.05),
         .init(name: "Emotional",  accent: "#D06A93", darkBG: "#1F1A1D", lightBG: "#F8F1F4", darkSurface: "#262024", lightSurface: "#EDE2E7", cardFillOpacity: 0.05),
+        .init(name: "Sunset",     accent: "#E07A48", darkBG: "#1F1B19", lightBG: "#F8F4F1", darkSurface: "#27221F", lightSurface: "#EEE7E1", cardFillOpacity: 0.05),
     ]
 
     private var activePreset: ThemePreset {
