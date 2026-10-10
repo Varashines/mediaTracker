@@ -680,11 +680,16 @@ extension BackgroundDataService {
     }
 
 
-    func extractAndSavePosterColor(for item: MediaItem) async {
+    func extractAndSavePosterColor(for item: MediaItem, deferIfHeavy: Bool = false) async {
         let effectivePoster = item.effectivePosterURL
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
               let poster = effectivePoster else { return }
+
+        // If deferIfHeavy is true and thermal/power state is throttled, skip synchronous extraction.
+        if deferIfHeavy && isThermalThrottled {
+            return
+        }
 
         guard let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) else { return }
         let palette = await ColorExtractor.extractThemePalette(from: cached.image)
