@@ -41,11 +41,28 @@ struct LibraryGridSection: View {
                     .scrollIndicators(.hidden)
                     .transition(.opacity)
                 } else {
-                    LibraryEmptyStateView(category: selectedCategory) {
-                        withAnimation(AppTheme.Animation.springSnappy) {
-                            viewModel.filter.selectedCategory = .discover
+                    let hasFilters = !viewModel.filter.selectedNetworks.isEmpty
+                        || !viewModel.filter.selectedLanguages.isEmpty
+                        || !viewModel.filter.selectedGenres.isEmpty
+                        || !viewModel.filter.selectedYears.isEmpty
+                        || !viewModel.filter.selectedStates.isEmpty
+                        || !viewModel.filter.selectedProviders.isEmpty
+                        || !viewModel.filter.searchText.isEmpty
+
+                    LibraryEmptyStateView(
+                        category: selectedCategory,
+                        onResetFilters: hasFilters ? {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                viewModel.filter.resetFilters()
+                                viewModel.filter.searchText = ""
+                            }
+                        } : nil,
+                        onExplore: {
+                            withAnimation(AppTheme.Animation.springSnappy) {
+                                viewModel.filter.selectedCategory = .discover
+                            }
                         }
-                    }
+                    )
                 }
             } else {
                 if viewModel.filter.currentGroupBy == .none {

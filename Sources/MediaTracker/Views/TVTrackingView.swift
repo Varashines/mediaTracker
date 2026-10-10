@@ -306,6 +306,8 @@ private struct SeasonSection: View {
     @State private var selectedRangeStart: Int = 1
     @State private var showTastePopover = false
     @State private var showResetConfirmation = false
+    @State private var showBulkDatePicker = false
+    @State private var bulkWatchDate = Date()
 
     @State private var cachedSortedEpisodes: [TVEpisode] = []
     @State private var cachedEpisodeRanges: [ClosedRange<Int>] = []
@@ -515,6 +517,35 @@ private struct SeasonSection: View {
 
                 Spacer()
 
+                if season.watchedEpisodesCount > 0 {
+                    Button {
+                        bulkWatchDate = season.episodes.liveModels.compactMap({ $0.watchedDate ?? $0.lastWatchedDate }).first ?? Date()
+                        showBulkDatePicker.toggle()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "calendar")
+                            Text("Set Dates")
+                        }
+                        .font(AppTheme.Font.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(accent.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                        .foregroundStyle(accent)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(accent.opacity(colorScheme == .dark ? 0.25 : 0.18), lineWidth: 0.8)
+                        )
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverScaled(.subtle)
+                    .help("Set watch date for all watched episodes in this season")
+                    .popover(isPresented: $showBulkDatePicker) {
+                        bulkDatePickerPopover
+                    }
+                }
+
                 Button {
                     if isAllWatched {
                         showResetConfirmation = true
@@ -595,9 +626,16 @@ private struct SeasonSection: View {
                         filteredEpisodes,
                         id: \.persistentModelID
                     ) { ep in
-                        EpisodeCube(episode: ep, themeColor: themeColor) {
-                            onWatchedToggle()
-                        }
+                        EpisodeCube(
+                            episode: ep,
+                            themeColor: themeColor,
+                            onToggle: {
+                                onWatchedToggle()
+                            },
+                            onMarkUpTo: { targetEp in
+                                markWatchedUpTo(targetEp)
+                            }
+                        )
                     }
                 }
             }
@@ -627,6 +665,30 @@ private struct SeasonSection: View {
             }
         } message: {
             Text("All episodes in this season will be marked unwatched. This doesn't affect your ratings or taste profile.")
+        }
+    }
+
+    private func markWatchedUpTo(_ targetEpisode: TVEpisode) {
+        let liveEpisodes = season.episodes.liveModels.sorted { $0.episodeNumber < $1.episodeNumber }
+        var updatedCount = 0
+        for ep in liveEpisodes where ep.episodeNumber <= targetEpisode.episodeNumber {
+            if !ep.isWatched {
+                ep.markWatched(true)
+                updatedCount += 1
+            }
+        }
+        guard updatedCount > 0 else { return }
+        onWatchedToggle()
+        FeedbackManager.shared.trigger(.markWatched)
+        AppErrorState.shared.showToast("Marked up to Episode \(targetEpisode.episodeNumber) watched", style: .success)
+
+        Task { @MainActor in
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            if let context = season.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            let itemID = season.tvShowDetails?.item?.persistentModelID
+            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
         }
     }
 
@@ -687,6 +749,83 @@ private struct SeasonSection: View {
         .padding(AppTheme.Spacing.small)
     }
 
+    private func applyBulkWatchDate(_ date: Date) {
+        let liveWatched = season.episodes.liveModels.filter(\.isWatched)
+        guard !liveWatched.isEmpty else { return }
+        let mediaID = season.tvShowDetails?.item?.id
+        let context = season.modelContext
+
+        for ep in liveWatched {
+            ep.watchedDate = date
+            ep.lastWatchedDate = date
+            let epID = ep.uniqueID ?? "\(mediaID ?? "tv")_\(ep.seasonNumber)_\(ep.episodeNumber)"
+            if let context, let mediaID {
+                WatchHistoryCoordinator.updateEpisodeWatchDate(
+                    mediaID: mediaID,
+                    episodeID: epID,
+                    watchedAt: date,
+                    runtimeMinutes: ep.runtime,
+                    context: context
+                )
+            }
+        }
+
+        onWatchedToggle()
+        FeedbackManager.shared.trigger(.markWatched)
+        AppErrorState.shared.showToast("Updated watch dates for \(liveWatched.count) episodes", style: .success)
+
+        Task { @MainActor in
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            if let context = season.modelContext {
+                SaveCoordinator.shared.requestSave(context)
+            }
+            let itemID = season.tvShowDetails?.item?.persistentModelID
+            MediaStateService.shared.postMediaStateChanged(itemID: itemID)
+        }
+    }
+
+    @ViewBuilder
+    private var bulkDatePickerPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Set Season Watch Date")
+                .font(AppTheme.Font.bodyBold)
+                .foregroundStyle(.primary)
+
+            Text("Applies to all \(season.watchedEpisodesCount) watched episodes")
+                .font(AppTheme.Font.caption2)
+                .foregroundStyle(.secondary)
+
+            DatePicker(
+                "Watch Date",
+                selection: $bulkWatchDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+
+            HStack {
+                Button("Today") {
+                    bulkWatchDate = Date()
+                    applyBulkWatchDate(bulkWatchDate)
+                    showBulkDatePicker = false
+                }
+                .buttonStyle(.plain)
+                .font(AppTheme.Font.caption2)
+
+                Spacer()
+
+                Button("Save") {
+                    applyBulkWatchDate(bulkWatchDate)
+                    showBulkDatePicker = false
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(14)
+        .frame(width: 260)
+    }
+
     private func tasteIconButton(_ value: TasteValue, icon: String, color: Color) -> some View {
         let isSelected = effectiveSeasonTaste == value
         return Button {
@@ -712,6 +851,7 @@ private struct EpisodeCube: View {
     @Bindable var episode: TVEpisode
     var themeColor: Color
     var onToggle: () -> Void
+    var onMarkUpTo: ((TVEpisode) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     @State private var showingOverview = false
@@ -720,10 +860,11 @@ private struct EpisodeCube: View {
     @State private var customWatchDate: Date = Date()
     private let cachedDateString: String
 
-    init(episode: TVEpisode, themeColor: Color, onToggle: @escaping () -> Void) {
+    init(episode: TVEpisode, themeColor: Color, onToggle: @escaping () -> Void, onMarkUpTo: ((TVEpisode) -> Void)? = nil) {
         _episode = Bindable(wrappedValue: episode)
         self.themeColor = themeColor
         self.onToggle = onToggle
+        self.onMarkUpTo = onMarkUpTo
         if let date = episode.airDateAsDate {
             let d = date.formatted(.dateTime.day())
             let m = date.formatted(.dateTime.month(.abbreviated))
@@ -883,6 +1024,14 @@ private struct EpisodeCube: View {
                     toggleWatched()
                 } label: {
                     Label(episode.isWatched ? "Mark Unwatched" : "Mark Watched", systemImage: episode.isWatched ? "circle" : "checkmark.circle")
+                }
+
+                if !episode.isWatched, let onMarkUpTo {
+                    Button {
+                        onMarkUpTo(episode)
+                    } label: {
+                        Label("Mark Watched Up To Episode \(episode.episodeNumber)", systemImage: "checkmark.circle.badge.questionmark")
+                    }
                 }
 
                 if episode.isWatched {
