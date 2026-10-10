@@ -23,6 +23,7 @@ enum DatabaseMigrations {
         await prunePersistentHistoryIfNeeded(container: container)
         await pruneSeasonCastToTop12IfNeeded(container: container)
         await pruneCastMembersToTop15IfNeeded(container: container)
+        await pruneStaleSearchCacheIfNeeded(container: container)
         await vacuumDatabaseIfNeeded(container: container)
     }
 
@@ -1045,6 +1046,43 @@ enum DatabaseMigrations {
             }
         } catch {
             AppLogger.error("Database vacuum failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Prunes search cache entries older than 7 days directly via SQLite.
+    static func pruneStaleSearchCacheIfNeeded(container: ModelContainer) async {
+        do {
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            let storeURL: URL = isPreview
+                ? try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.devDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+                : try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    .appendingPathComponent(StoreLocation.productionDirectoryName)
+                    .appendingPathComponent(StoreLocation.storeFilename)
+
+            guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
+
+            var db: OpaquePointer?
+            guard sqlite3_open_v2(storeURL.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
+                if let db { sqlite3_close(db) }
+                return
+            }
+            defer { sqlite3_close(db) }
+
+            // 7 days cutoff in CoreData epoch
+            let cutoffCoreData = (Date().timeIntervalSince1970 - TimeInterval.days7) - 978307200.0
+            let pruneSQL = "DELETE FROM ZSEARCHCACHEENTITY WHERE ZTIMESTAMP < ?;"
+            var pruneStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, pruneSQL, -1, &pruneStmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(pruneStmt, 1, cutoffCoreData)
+                sqlite3_step(pruneStmt)
+                sqlite3_finalize(pruneStmt)
+            }
+            sqlite3_wal_checkpoint_v2(db, nil, SQLITE_CHECKPOINT_PASSIVE, nil, nil)
+            AppLogger.info("🧹 Cleaned stale search cache older than 7 days", logger: AppLogger.background)
+        } catch {
+            AppLogger.error("Search cache pruning failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 }
