@@ -223,11 +223,11 @@ struct ReleaseCalendarView: View {
                     .background {
                         if isSelected {
                             Capsule()
-                                .fill(Color.primary.opacity(0.08))
+                                .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.20 : 0.15))
                                 .matchedGeometryEffect(id: "selection_bg", in: calendarNamespace)
                         } else {
                             Capsule()
-                                .fill(Color.primary.opacity(0.03))
+                                .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
                         }
                     }
                     .contentShape(Capsule())
@@ -575,15 +575,15 @@ struct ReleaseCalendarView: View {
                             .background {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                                        .fill(Color.primary.opacity(0.06))
+                                        .fill(accent.opacity(colorScheme == .dark ? 0.20 : 0.14))
                                         .matchedGeometryEffect(id: "week_selection_bg", in: calendarNamespace)
                                         .overlay {
                                             RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                                                .stroke(accent.opacity(0.3), lineWidth: 0.8)
+                                                .stroke(accent.opacity(0.4), lineWidth: 0.8)
                                         }
                                 } else {
                                     RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous)
-                                        .fill(Color.primary.opacity(0.03))
+                                        .fill(AppTheme.Colors.surfaceSubtle(for: colorScheme))
                                 }
                             }
                         }
@@ -603,18 +603,13 @@ struct ReleaseCalendarView: View {
         
         let cellColor: Color = {
             if day.items.isEmpty {
-                return Color.secondary.opacity(0.1)
+                return AppTheme.Colors.surfaceGhost(for: colorScheme)
             }
             
-            if colorScheme == .dark {
-                let l = 0.8 - (day.intensity * 0.5)
-                let c = (oklch.c * 0.5) + (day.intensity * (oklch.c * 0.5))
-                return Color.fromOKLCH(l: l, c: c, h: oklch.h)
-            } else {
-                let l = 0.95 - (day.intensity * 0.55)
-                let c = (oklch.c * 0.6) + (day.intensity * (oklch.c * 0.4))
-                return Color.fromOKLCH(l: l, c: c, h: oklch.h)
-            }
+            let baseOpacity = colorScheme == .dark ? 0.20 : 0.16
+            let maxExtra = colorScheme == .dark ? 0.65 : 0.70
+            let opacity = baseOpacity + (day.intensity * maxExtra)
+            return AppTheme.Colors.accent.opacity(opacity)
         }()
         
         let vibrantAccent = AppTheme.Colors.accent
@@ -705,19 +700,14 @@ struct ReleaseCalendarView: View {
     }
     
     private static func legendColors(for colorScheme: ColorScheme) -> [Color] {
-        let o = AppTheme.Colors.accent.oklch
+        let accent = AppTheme.Colors.accent
+        let ghost = AppTheme.Colors.surfaceGhost(for: colorScheme)
+        let baseOpacity = colorScheme == .dark ? 0.20 : 0.16
+        let maxExtra = colorScheme == .dark ? 0.65 : 0.70
         return (0..<5).map { i in
-            if i == 0 { return Color.secondary.opacity(0.1) }
+            if i == 0 { return ghost }
             let intensity = Double(i - 1) / 3.0
-            if colorScheme == .dark {
-                let l = 0.8 - (intensity * 0.5)
-                let c = (o.c * 0.5) + (intensity * (o.c * 0.5))
-                return Color.fromOKLCH(l: l, c: c, h: o.h)
-            } else {
-                let l = 0.95 - (intensity * 0.55)
-                let c = (o.c * 0.6) + (intensity * (o.c * 0.4))
-                return Color.fromOKLCH(l: l, c: c, h: o.h)
-            }
+            return accent.opacity(baseOpacity + (intensity * maxExtra))
         }
     }
 
