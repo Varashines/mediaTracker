@@ -156,7 +156,7 @@ struct MediaThumbnailView: View, Equatable {
         self.capturedIsUpcoming = metadata.isUpcoming
         self.capturedGridBadgeText = metadata.badgeText
         self.capturedNextAiringDate = metadata.nextAiringDate
-        self.capturedDisplayYear = metadata.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
+        self.capturedDisplayYear = metadata.displayYear
     }
 
     init(result: MediaSearchResult, isLocal: Bool = false, action: @escaping () -> Void) {

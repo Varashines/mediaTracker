@@ -41,13 +41,15 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
     let networkLogoPath: String?
     let watchProvider: String?
     let watchProviderLogoPath: String?
+    /// Pre-computed 4-digit release year string to avoid repetitive Calendar.current allocations on every cell render.
+    let displayYear: String?
     /// Pre-computed once in the initializer. Used as a stable identity for SwiftUI's ForEach
     /// so cells aren't recreated when other (unrelated) fields change. Avoids the cost of
     /// re-interpolating on every body re-evaluation.
     let versionHash: String
 
     var formattedMetadata: String {
-        let year = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } } ?? ""
+        let year = displayYear ?? ""
         if let firstGenre = genres.first {
             return "\(year) • \(firstGenre)"
         }
@@ -96,6 +98,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.networkLogoPath = item.cachedNetworkLogoPath?.commaSeparatedValues.first ?? item.cachedNetworkLogoPath
         self.watchProvider = item.cachedWatchProviders.first
         self.watchProviderLogoPath = item.cachedWatchProviderLogoPaths?.first
+        self.displayYear = item.releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
         self.versionHash = Self.makeHash(id: item.persistentModelID, progress: item.storedProgress)
     }
 
@@ -128,6 +131,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.networkLogoPath = nil
         self.watchProvider = nil
         self.watchProviderLogoPath = nil
+        self.displayYear = nil
         self.versionHash = Self.makeHash(id: id, progress: nil)
     }
 
@@ -146,7 +150,8 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         posterURL: String? = nil,
         backdropURL: String? = nil,
         logoURL: String? = nil,
-        runtimeMinutes: Int? = nil
+        runtimeMinutes: Int? = nil,
+        releaseDate: Date? = nil
     ) {
         self.id = id
         self.itemID = ""
@@ -155,7 +160,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.backdropURL = backdropURL
         self.logoURL = logoURL
         self.runtimeMinutes = runtimeMinutes
-        self.releaseDate = nil
+        self.releaseDate = releaseDate
         self.type = type
         self.state = state
         self.themeColorHex = themeColorHex
@@ -176,6 +181,7 @@ struct MediaThumbnailMetadata: Sendable, Identifiable, Equatable {
         self.networkLogoPath = nil
         self.watchProvider = nil
         self.watchProviderLogoPath = nil
+        self.displayYear = releaseDate.flatMap { Calendar.current.dateComponents([.year], from: $0).year.map { String($0) } }
         self.versionHash = Self.makeHash(id: id, progress: progress)
     }
 }

@@ -528,7 +528,13 @@ extension BackgroundDataService {
                 let existingEpisodesDesc = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })
                 let existingEpisodes = (try? modelContext.fetch(existingEpisodesDesc)) ?? []
                 var episodeByID: [String: TVEpisode] = [:]
-                for e in existingEpisodes { if let uid = e.uniqueID { episodeByID[uid] = e } }
+                var episodesBySeason: [Int: [String: TVEpisode]] = [:]
+                for e in existingEpisodes {
+                    if let uid = e.uniqueID {
+                        episodeByID[uid] = e
+                        episodesBySeason[e.seasonNumber, default: [:]][uid] = e
+                    }
+                }
 
                 for seasonData in fetchedSeasons {
                     let sNum = seasonData.seasonNumber
@@ -578,9 +584,10 @@ extension BackgroundDataService {
                     // merely because TVMaze has not published them yet.
                     if seasonData.shouldPruneStaleEpisodes {
                         let validIDs = Set(seasonData.episodes.map { "\(tmdbID)_\(sNum)_\($0.episodeNumber)" })
-                        let prefix = "\(tmdbID)_\(sNum)_"
-                        for (uid, ep) in episodeByID where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
-                            if ep.modelContext != nil { modelContext.delete(ep) }
+                        if let seasonEpisodes = episodesBySeason[sNum] {
+                            for (uid, ep) in seasonEpisodes where !validIDs.contains(uid) {
+                                if ep.modelContext != nil { modelContext.delete(ep) }
+                            }
                         }
                     }
 

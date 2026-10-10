@@ -283,16 +283,36 @@ final class MediaItem: Identifiable {
         // swept in here, which is how a bulk mark left hundreds of specials marked
         // watched across the library.
         let liveSeasons = details.seasons.liveModels.filter { $0.seasonNumber > 0 }
+        let now = Date()
+        var mutatedEpisodes: [TVEpisode] = []
+
         for season in liveSeasons {
             let liveEpisodes = season.episodes.liveModels
-            for episode in liveEpisodes {
-                episode.markWatched(true)
+            for episode in liveEpisodes where !episode.isWatched {
+                episode.markWatched(true, recordHistory: false)
+                mutatedEpisodes.append(episode)
             }
         }
+
+        let mediaID = self.id
+        let mutations = mutatedEpisodes.map { ep in
+            let epID = ep.uniqueID ?? "\(mediaID)_\(ep.seasonNumber)_\(ep.episodeNumber)"
+            return (episodeID: epID, watchedAt: now, runtimeMinutes: ep.runtime, isWatched: true)
+        }
+
         details.recalculateCachedProperties(triggerSync: true)
         nonisolated(unsafe) let ctx = modelContext
         Task { @MainActor in
-            if let ctx { SaveCoordinator.shared.requestSave(ctx) }
+            if let ctx {
+                if !mutations.isEmpty {
+                    WatchHistoryCoordinator.batchRecordEpisodeMutations(
+                        mediaID: mediaID,
+                        mutations: mutations,
+                        context: ctx
+                    )
+                }
+                SaveCoordinator.shared.requestSave(ctx)
+            }
         }
     }
 

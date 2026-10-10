@@ -111,8 +111,10 @@ struct TVTrackingView: View {
                         $0.seasonNumber == selectedNumber
                     })
                 {
+                    let isSingle = sortedSeasons.filter { $0.seasonNumber > 0 }.count <= 1
                     SeasonSection(
                         season: selectedSeason, themeColor: themeColor,
+                        isSingleSeason: isSingle,
                         isRefreshing: isRefreshing,
                         onWatchedToggle: onWatchedToggle,
                         onSeasonSelected: onSeasonSelected
@@ -299,6 +301,7 @@ private struct SeasonTab: View {
 private struct SeasonSection: View {
     @Bindable var season: TVSeason
     var themeColor: Color
+    var isSingleSeason: Bool = false
     var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
@@ -322,11 +325,6 @@ private struct SeasonSection: View {
 
     private var isAllWatched: Bool {
         season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
-    }
-
-    /// Whether this is a single-season show (no per-season taste/cast scope).
-    private var isSingleSeason: Bool {
-        (season.tvShowDetails?.seasons.liveModels.filter { $0.seasonNumber > 0 }.count ?? 0) <= 1
     }
 
     /// Whether the season supports per-season taste (not specials, not a
@@ -670,19 +668,33 @@ private struct SeasonSection: View {
 
     private func markWatchedUpTo(_ targetEpisode: TVEpisode) {
         let liveEpisodes = season.episodes.liveModels.sorted { $0.episodeNumber < $1.episodeNumber }
-        var updatedCount = 0
+        let now = Date()
+        var updatedEpisodes: [TVEpisode] = []
         for ep in liveEpisodes where ep.episodeNumber <= targetEpisode.episodeNumber {
             if !ep.isWatched {
-                ep.markWatched(true)
-                updatedCount += 1
+                ep.markWatched(true, recordHistory: false)
+                updatedEpisodes.append(ep)
             }
         }
-        guard updatedCount > 0 else { return }
+        guard !updatedEpisodes.isEmpty else { return }
         onWatchedToggle()
         FeedbackManager.shared.trigger(.markWatched)
         AppErrorState.shared.showToast("Marked up to Episode \(targetEpisode.episodeNumber) watched", style: .success)
 
+        let mediaID = season.tvShowDetails?.item?.id
+        let mutations = updatedEpisodes.map { ep in
+            let epID = ep.uniqueID ?? "\(mediaID ?? "tv")_\(ep.seasonNumber)_\(ep.episodeNumber)"
+            return (episodeID: epID, watchedAt: now, runtimeMinutes: ep.runtime, isWatched: true)
+        }
+
         Task { @MainActor in
+            if let context = season.modelContext, let mediaID {
+                WatchHistoryCoordinator.batchRecordEpisodeMutations(
+                    mediaID: mediaID,
+                    mutations: mutations,
+                    context: context
+                )
+            }
             season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
@@ -694,24 +706,38 @@ private struct SeasonSection: View {
 
     private func toggleSeasonWatchedStatus() {
         let targetStatus = !isAllWatched
+        let now = Date()
         // Defensive: skip deleted/detached episodes during concurrent merges
         let liveEpisodes = season.episodes.liveModels
-        // No outer withAnimation: each visible EpisodeCube already animates its own
-        // isWatched change; wrapping the whole bulk mutation would relayout the grid.
-        for episode in liveEpisodes {
-            episode.markWatched(targetStatus)
+        var changedEpisodes: [TVEpisode] = []
+        for episode in liveEpisodes where episode.isWatched != targetStatus {
+            episode.markWatched(targetStatus, recordHistory: false)
+            changedEpisodes.append(episode)
         }
         onWatchedToggle()
 
         FeedbackManager.shared.trigger(targetStatus ? .markWatched : .stateChange)
         AppErrorState.shared.showToast(
             targetStatus
-                ? "Marked \(liveEpisodes.count) episodes watched"
-                : "Reset \(liveEpisodes.count) episodes",
+                ? "Marked \(changedEpisodes.count) episodes watched"
+                : "Reset \(changedEpisodes.count) episodes",
             style: targetStatus ? .success : .info
         )
 
+        let mediaID = season.tvShowDetails?.item?.id
+        let mutations = changedEpisodes.map { ep in
+            let epID = ep.uniqueID ?? "\(mediaID ?? "tv")_\(ep.seasonNumber)_\(ep.episodeNumber)"
+            return (episodeID: epID, watchedAt: now, runtimeMinutes: ep.runtime, isWatched: targetStatus)
+        }
+
         Task { @MainActor in
+            if let context = season.modelContext, let mediaID {
+                WatchHistoryCoordinator.batchRecordEpisodeMutations(
+                    mediaID: mediaID,
+                    mutations: mutations,
+                    context: context
+                )
+            }
             season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
@@ -755,19 +781,21 @@ private struct SeasonSection: View {
         let mediaID = season.tvShowDetails?.item?.id
         let context = season.modelContext
 
+        var episodePayloads: [(episodeID: String, runtimeMinutes: Int?)] = []
         for ep in liveWatched {
             ep.watchedDate = date
             ep.lastWatchedDate = date
             let epID = ep.uniqueID ?? "\(mediaID ?? "tv")_\(ep.seasonNumber)_\(ep.episodeNumber)"
-            if let context, let mediaID {
-                WatchHistoryCoordinator.updateEpisodeWatchDate(
-                    mediaID: mediaID,
-                    episodeID: epID,
-                    watchedAt: date,
-                    runtimeMinutes: ep.runtime,
-                    context: context
-                )
-            }
+            episodePayloads.append((episodeID: epID, runtimeMinutes: ep.runtime))
+        }
+
+        if let context, let mediaID {
+            WatchHistoryCoordinator.updateEpisodeWatchDates(
+                mediaID: mediaID,
+                episodes: episodePayloads,
+                watchedAt: date,
+                context: context
+            )
         }
 
         onWatchedToggle()

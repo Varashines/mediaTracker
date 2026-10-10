@@ -146,6 +146,7 @@ struct ReleaseCalendarView: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(maxWidth: .infinity)
+                    .adaptiveBackground()
                 }
             }
         }
