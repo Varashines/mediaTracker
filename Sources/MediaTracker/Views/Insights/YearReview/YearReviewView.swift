@@ -399,7 +399,7 @@ private struct MonthActivityCard: View {
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                             .fill(
                                 ReviewDayCell.fillColor(
-                                    minutes: review.activityByDay[calendar.startOfDay(for: date)]?.minutes ?? 0,
+                                    minutes: review.activityByDay[date]?.minutes ?? 0,
                                     colorScheme: colorScheme,
                                     accent: AppTheme.Colors.accent
                                 )
@@ -849,6 +849,12 @@ private struct MonthDetailPanel: View {
     }
 
     var body: some View {
+        // Hoist titles and stats to local constants once per body pass to avoid
+        // running 11 ICU collation sorts (monthTitles) and 3 monthStats calls per frame.
+        let titles = self.titles
+        let stats = self.stats
+        let titleCount = titles.count
+
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
             // Header
             HStack(alignment: .firstTextBaseline) {
@@ -862,7 +868,7 @@ private struct MonthDetailPanel: View {
                         .foregroundStyle(.primary)
                 }
                 Spacer()
-                Text("\(titles.count) title\(titles.count == 1 ? "" : "s")")
+                Text("\(titleCount) title\(titleCount == 1 ? "" : "s")")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -883,7 +889,7 @@ private struct MonthDetailPanel: View {
                 emptyMonth
             } else {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.small) {
-                    Text("TITLES WATCHED (\(titles.count))")
+                    Text("TITLES WATCHED (\(titleCount))")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .kerning(1.0)
                         .foregroundStyle(.secondary)
@@ -901,17 +907,17 @@ private struct MonthDetailPanel: View {
                         // Single row; a "+N" pill expands to horizontal scroll.
                         GeometryReader { geo in
                             let capacity = max(1, Int((geo.size.width + 6) / 40))
-                            let shown = min(titles.count, capacity)
+                            let shown = min(titleCount, capacity)
                             HStack(alignment: .top, spacing: 6) {
                                 ForEach(titles.prefix(shown)) { title in
                                     PosterTile(title: title, onTap: { onSelectTitle?(title.id) }, width: 28)
                                 }
-                                if titles.count > shown {
+                                if titleCount > shown {
                                     Button {
                                         withAnimation(AppTheme.Animation.springSnappy) { scrolled = true }
                                     } label: {
                                         VStack(spacing: 4) {
-                                            Text("+\(titles.count - shown)")
+                                            Text("+\(titleCount - shown)")
                                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                             Text("more")
                                                 .font(.system(size: 8, weight: .bold, design: .rounded))

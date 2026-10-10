@@ -358,7 +358,11 @@ class BackgroundTaskManager {
         var titleMap: [String: String] = [:]
 
         // Find all items in the library that are missing metadata
-        var descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { !$0.isSoftDeleted })
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { !$0.isSoftDeleted },
+            sortBy: [SortDescriptor(\.id)]
+        )
+        // Only fetch lean thumbnail properties and avoid faulting unprojected relationships
         descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.cachedGenres, \.lastUpdated]
         descriptor.fetchLimit = 500
         var offset = 0

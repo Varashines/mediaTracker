@@ -116,18 +116,23 @@ class MediaViewModel {
         }
     }
 
+    private var pickOfTheDayTask: Task<Void, Never>?
+
     func fetchPickOfTheDayIfNeeded(actor: MediaFilterActor) {
-        guard display.pickOfTheDay.isEmpty else { return }
-        Task { [weak self] in
+        guard display.pickOfTheDay.isEmpty, pickOfTheDayTask == nil else { return }
+        pickOfTheDayTask = Task { [weak self] in
             let picks = await actor.fetchPickOfTheDay()
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self?.display.pickOfTheDay = picks
+                self?.pickOfTheDayTask = nil
             }
         }
     }
 
     func purgeSleepCache() {
+        pickOfTheDayTask?.cancel()
+        pickOfTheDayTask = nil
         display.purgeAll()
         discovery.purgeAll()
         ImageCache.shared.cancelPrewarming()
