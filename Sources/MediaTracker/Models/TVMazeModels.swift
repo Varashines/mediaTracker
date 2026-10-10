@@ -17,6 +17,8 @@ struct TVMazeSearchResult: Codable {
 struct TVMazeSearchShow: Codable {
     let id: Int
     let name: String
+    let premiered: String?
+    let language: String?
 }
 struct TVMazeSchedule: Codable { let time: String?, days: [String]? }
 struct TVMazeNetwork: Codable { let name: String?, country: TVMazeCountry? }
