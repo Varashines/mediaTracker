@@ -230,7 +230,7 @@ actor MediaFilterActor {
         } else {
             descriptor = FetchDescriptor(predicate: basePredicate)
         }
-        descriptor.propertiesToFetch = MediaItem.thumbnailProperties
+        descriptor.propertiesToFetch = MediaItem.thumbnailPropertiesWithCast + [\.overview]
         applySortOrder(to: &descriptor, category: category, sortOrder: sortOrder, badge: badge)
 
         // Optimization: Only use SQLite pagination when no Swift-level refinement is needed.
@@ -839,9 +839,9 @@ actor MediaFilterActor {
             let colDescriptor = FetchDescriptor<MediaCollection>(predicate: #Predicate { $0.id == cid })
             if let collection = try? modelContext.fetch(colDescriptor).first {
                 if collection.isSmart && !collection.smartRules.isEmpty {
-                    // Smart rules require Swift-level evaluation — fetch minimal data and count
+                    // Smart rules require Swift-level evaluation — fetch thumbnail properties and count
                     var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
-                    desc.propertiesToFetch = [\.id]
+                    desc.propertiesToFetch = MediaItem.thumbnailProperties
                     desc.fetchLimit = LibraryScanLimits.smartCollectionCountCap
                     let items = try modelContext.fetch(desc)
                     let refined = try refineResults(items, network: [], language: [], genre: [], year: [], state: [], badge: nil, provider: [], searchText: "", smartRules: collection.smartRules, smartMatchAny: collection.smartMatchAny)
@@ -854,13 +854,25 @@ actor MediaFilterActor {
             }
             return 0
         }
-        if category == .onThisWeek {
+        if category == .onThisWeek || category == .releaseRadar || category == .quickBites {
             var desc = FetchDescriptor<MediaItem>(predicate: basePredicate)
-            desc.propertiesToFetch = [\.releaseDate]
+            desc.propertiesToFetch = MediaItem.thumbnailProperties
             desc.fetchLimit = LibraryScanLimits.metadataScanCap
             let items = (try? modelContext.fetch(desc)) ?? []
-            let now = Date()
-            return items.filter { MediaCategoryMatcher.matches($0, category: .onThisWeek, now: now) }.count
+            let refined = (try? refineResults(
+                items,
+                network: [],
+                language: [],
+                genre: [],
+                year: [],
+                state: [],
+                badge: nil,
+                provider: [],
+                searchText: "",
+                smartRules: [],
+                smartMatchAny: false
+            )) ?? []
+            return refined.count
         }
         return try modelContext.fetchCount(FetchDescriptor<MediaItem>(predicate: basePredicate))
     }
