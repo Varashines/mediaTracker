@@ -396,18 +396,16 @@ struct MediaThumbnailView: View, Equatable {
             }
         }
 
-        ZStack {
-            posterContent
-
-            // 3. Search Mode (Modal status remains visible)
-            if mode == .search {
-                ThumbnailSearchOverlay(
-                    isAdded: isAdded,
-                    isLocalInSearch: isLocalInSearch,
-                    isHovered: isHovered
-                )
+        posterContent
+            .overlay {
+                if mode == .search {
+                    ThumbnailSearchOverlay(
+                        isAdded: isAdded,
+                        isLocalInSearch: isLocalInSearch,
+                        isHovered: isHovered
+                    )
+                }
             }
-        }
         .frame(width: width, height: height)
         .cardHoverChrome(radius: AppTheme.Radius.medium, isHovered: isHovered, suppressEffects: effectiveFastScrolling)
         .opacity(isAppeared ? 1 : 0)

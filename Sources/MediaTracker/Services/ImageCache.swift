@@ -321,14 +321,19 @@ class ImageCache: NSObject, NSCacheDelegate {
                         if let target = targetSize {
                             let maxDimension = max(target.width, target.height) * scale
                             let options: [CFString: Any] = [
-                                kCGImageSourceShouldCache: false,
+                                kCGImageSourceShouldCache: true,
+                                kCGImageSourceShouldCacheImmediately: true,
                                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                                 kCGImageSourceCreateThumbnailWithTransform: true,
                                 kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension)
                             ]
                             return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
                         } else {
-                            return CGImageSourceCreateImageAtIndex(source, 0, nil)
+                            let options: [CFString: Any] = [
+                                kCGImageSourceShouldCache: true,
+                                kCGImageSourceShouldCacheImmediately: true
+                            ]
+                            return CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary)
                         }
                     }
                     return nil
