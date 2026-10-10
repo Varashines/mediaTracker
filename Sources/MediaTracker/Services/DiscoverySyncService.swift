@@ -130,7 +130,10 @@ actor DiscoverySyncService {
         var offset = 0
         
         while true {
-            var descriptor = FetchDescriptor<MediaItem>()
+            var descriptor = FetchDescriptor<MediaItem>(
+                predicate: #Predicate<MediaItem> { !$0.isSoftDeleted }
+            )
+            descriptor.sortBy = [SortDescriptor(\.id)]
             descriptor.propertiesToFetch = [\.cachedNetwork, \.cachedNetworkLogoPath, \.cachedGenres, \.cachedLanguage, \.cachedWatchProviders, \.cachedWatchProviderLogoPaths, \.storedSmartBadgeLabel, \.typeValue]
             descriptor.fetchLimit = batchSize
             descriptor.fetchOffset = offset

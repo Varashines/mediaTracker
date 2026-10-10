@@ -37,16 +37,17 @@ enum WatchActivityResolver {
             return Int(item.id.split(separator: "_").last ?? "")
         })
         if !showIDs.isEmpty {
+            // Documented pattern: Set<Int?> prevents CoreData optional IN crash
+            let showIDOptions = Set(showIDs.map { $0 as Int? })
             var episodeDescriptor = FetchDescriptor<TVEpisode>(
                 predicate: #Predicate<TVEpisode> { episode in
-                    episode.isWatched
+                    episode.isWatched && showIDOptions.contains(episode.showID)
                 }
             )
             episodeDescriptor.propertiesToFetch = [\.showID, \.isWatched, \.watchedDate, \.lastWatchedDate]
             if let episodes = try? context.fetch(episodeDescriptor) {
                 for episode in episodes {
                     guard let showID = episode.showID,
-                          showIDs.contains(showID),
                           let date = episode.watchedDate ?? episode.lastWatchedDate else { continue }
                     let mediaID = "tv_\(showID)"
                     dates[mediaID] = max(dates[mediaID] ?? .distantPast, date)
