@@ -125,27 +125,35 @@ actor TasteActor {
         var lookups = SeasonLookups()
         guard !ratedShowIDs.isEmpty else { return lookups }
 
-        var seasonCastDesc = FetchDescriptor<SeasonCastMember>(predicate: #Predicate { $0.episodeCount > 0 })
-        seasonCastDesc.propertiesToFetch = [
-            \.showID, \.seasonNumber, \.name, \.tmdbPersonID, \.episodeCount
-        ]
-        if let allSeasonCast = try? modelContext.fetch(seasonCastDesc) {
-            for sc in allSeasonCast where ratedShowIDs.contains(sc.showID) && sc.qualifiesForTaste && sc.seasonNumber > 0 {
-                lookups.castByShow[sc.showID, default: []].append(sc)
-            }
-        }
-
-        // Fetch seasons for rated shows only: overrides AND watched status
+        // 1. Fetch seasons for rated shows first: overrides, watched status, and episode counts.
+        // Caching episode counts enables qualifying cast members without relationship faults on sc.season.
+        var seasonEpisodeCounts: [Int: [Int: Int]] = [:]
         var seasonDesc = FetchDescriptor<TVSeason>(predicate: #Predicate { $0.showID != nil })
         seasonDesc.propertiesToFetch = [\.showID, \.seasonNumber, \.tasteOverrideRaw, \.watchedEpisodesCount, \.totalEpisodesCount, \.episodeCount]
         if let allSeasons = try? modelContext.fetch(seasonDesc) {
             for s in allSeasons {
                 guard let sid = s.showID, ratedShowIDs.contains(sid) else { continue }
+                let epCount = max(s.totalEpisodesCount, s.episodeCount)
+                seasonEpisodeCounts[sid, default: [:]][s.seasonNumber] = epCount
                 if let ov = s.tasteOverrideRaw {
                     lookups.overrideByShowSeason[sid, default: [:]][s.seasonNumber] = ov
                 }
                 if s.isFullyWatched {
                     lookups.watchedByShowSeason[sid, default: []].insert(s.seasonNumber)
+                }
+            }
+        }
+
+        // 2. Fetch per-season cast members. Avoid relationship faults by passing the cached episode count.
+        var seasonCastDesc = FetchDescriptor<SeasonCastMember>(predicate: #Predicate { $0.episodeCount > 0 })
+        seasonCastDesc.propertiesToFetch = [
+            \.showID, \.seasonNumber, \.name, \.tmdbPersonID, \.episodeCount
+        ]
+        if let allSeasonCast = try? modelContext.fetch(seasonCastDesc) {
+            for sc in allSeasonCast where ratedShowIDs.contains(sc.showID) && sc.seasonNumber > 0 {
+                let seasonTotal = seasonEpisodeCounts[sc.showID]?[sc.seasonNumber] ?? 0
+                if sc.qualifiesForTaste(seasonEpisodes: seasonTotal) {
+                    lookups.castByShow[sc.showID, default: []].append(sc)
                 }
             }
         }

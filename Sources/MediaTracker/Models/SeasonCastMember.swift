@@ -28,13 +28,29 @@ final class SeasonCastMember {
         self.uniqueID = "\(showID)_\(seasonNumber)_\(tmdbPersonID)"
     }
 
+    /// Whether an episode appearance count clears the "counts a season" floor for a given season episode count.
+    /// Floor = min(2, 10% of total episodes). Seasons with <10 episodes keep
+    /// even one-episode cameos; longer seasons require >2 appearances.
+    static func qualifiesForTaste(episodeCount: Int, totalEpisodes: Int) -> Bool {
+        let total = max(totalEpisodes, 1)
+        let floor = min(2.0, 0.10 * Double(total))
+        return Double(episodeCount) > floor
+    }
+
+    /// Parameterized check using an externally provided season episode count (avoids relationship faults).
+    func qualifiesForTaste(seasonEpisodes: Int) -> Bool {
+        Self.qualifiesForTaste(episodeCount: episodeCount, totalEpisodes: seasonEpisodes)
+    }
+
     /// Whether this actor's presence in this season clears the "counts a season" floor.
     /// Floor = min(2, 10% of the season's episodes). Seasons with <10 episodes keep
     /// even one-episode cameos; longer seasons require >2 appearances.
     var qualifiesForTaste: Bool {
-        let seasonTotal = max(season?.totalEpisodesCount ?? 0, season?.episodeCount ?? 0)
-        let total = max(seasonTotal, 1)
-        let floor = min(2.0, 0.10 * Double(total))
-        return Double(episodeCount) > floor
+        guard let season = self.season else {
+            // If the season relationship is faulted or detached, fall back to checking if episodeCount > 0.
+            return episodeCount > 0
+        }
+        let seasonTotal = max(season.totalEpisodesCount, season.episodeCount)
+        return qualifiesForTaste(seasonEpisodes: seasonTotal)
     }
 }
