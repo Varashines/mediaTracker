@@ -122,6 +122,10 @@ class ImageCache: NSObject, NSCacheDelegate {
     
     func clearMemoryCache() {
         cancelPrewarming()
+        for task in activeTasks.values {
+            task.cancel()
+        }
+        activeTasks.removeAll()
         cacheKeysByURL.removeAll()
         trackedURLOrder.removeAll()
         lastRequestedAt.removeAll()
@@ -356,9 +360,8 @@ class ImageCache: NSObject, NSCacheDelegate {
         }
         
         activeTasks[cacheKey] = task
-        let result = await task.value
-        activeTasks[cacheKey] = nil
-        return result
+        defer { activeTasks[cacheKey] = nil }
+        return await task.value
     }
     
     nonisolated static func renderSVGToCGImage(data: Data, targetSize: CGSize?) -> CGImage? {

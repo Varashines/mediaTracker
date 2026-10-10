@@ -111,8 +111,10 @@ struct TVTrackingView: View {
                         $0.seasonNumber == selectedNumber
                     })
                 {
+                    let isSingle = sortedSeasons.filter { $0.seasonNumber > 0 }.count <= 1
                     SeasonSection(
                         season: selectedSeason, themeColor: themeColor,
+                        isSingleSeason: isSingle,
                         isRefreshing: isRefreshing,
                         onWatchedToggle: onWatchedToggle,
                         onSeasonSelected: onSeasonSelected
@@ -299,6 +301,7 @@ private struct SeasonTab: View {
 private struct SeasonSection: View {
     @Bindable var season: TVSeason
     var themeColor: Color
+    var isSingleSeason: Bool = false
     var isRefreshing: Bool = false
     var onWatchedToggle: () -> Void
     var onSeasonSelected: ((TVSeason) -> Void)? = nil
@@ -322,11 +325,6 @@ private struct SeasonSection: View {
 
     private var isAllWatched: Bool {
         season.totalEpisodesCount > 0 && season.watchedEpisodesCount == season.totalEpisodesCount
-    }
-
-    /// Whether this is a single-season show (no per-season taste/cast scope).
-    private var isSingleSeason: Bool {
-        (season.tvShowDetails?.seasons.liveModels.filter { $0.seasonNumber > 0 }.count ?? 0) <= 1
     }
 
     /// Whether the season supports per-season taste (not specials, not a
