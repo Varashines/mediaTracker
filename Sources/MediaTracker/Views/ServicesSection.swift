@@ -18,6 +18,30 @@ struct ServicesSection: View {
     @AppStorage(UserDefaultsKeys.syncTMDBFavorites.rawValue) private var syncTMDBFavorites = false
     @State private var isSyncingFavorites = false
 
+    @AppStorage(UserDefaultsKeys.cloudSyncEnabled.rawValue) private var cloudSyncEnabled = false
+    @AppStorage(UserDefaultsKeys.cloudSyncURL.rawValue) private var cloudSyncURL = ""
+    @AppStorage(UserDefaultsKeys.cloudSyncAnonKey.rawValue) private var cloudSyncAnonKey = ""
+    @AppStorage(UserDefaultsKeys.cloudSyncKey.rawValue) private var cloudSyncKey = ""
+    @AppStorage(UserDefaultsKeys.cloudSyncLastTimestamp.rawValue) private var cloudSyncLastTimestamp: Double = 0
+    @State private var isSyncingCloud = false
+    @State private var hasCopiedSyncKey = false
+    @State private var showCloudAnonKey = false
+
+    private var currentSyncKey: String {
+        if cloudSyncKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return CloudSyncService.getOrGenerateSyncKey()
+        }
+        return cloudSyncKey
+    }
+
+    private var lastSyncLabel: String {
+        guard cloudSyncLastTimestamp > 0 else { return "Never synced" }
+        let date = Date(timeIntervalSince1970: cloudSyncLastTimestamp)
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return "Last synced " + formatter.localizedString(for: date, relativeTo: Date())
+    }
+
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
     @State private var showMMKey = false
@@ -94,6 +118,125 @@ struct ServicesSection: View {
                                 }
                             }
                             .disabled(isSyncingFavorites || tmdbApiKey.isEmpty)
+                        }
+                    }
+                }
+            }
+
+            SettingsCard(color: .blue) {
+                VStack(spacing: 0) {
+                    SettingsToggleRow(
+                        title: "Cross-Device Cloud Sync",
+                        subtitle: "Sync watch states & episode progress across macOS and Android",
+                        showDivider: cloudSyncEnabled,
+                        isOn: $cloudSyncEnabled
+                    )
+
+                    if cloudSyncEnabled {
+                        SettingsRow(
+                            title: "Supabase Project URL",
+                            subtitle: "Your personal Supabase project endpoint (e.g. https://xyz.supabase.co)",
+                            showDivider: true
+                        ) {
+                            TextField("https://xyz.supabase.co", text: $cloudSyncURL)
+                                .textFieldStyle(.plain)
+                                .font(.system(.body, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 260)
+                        }
+
+                        SettingsRow(
+                            title: "Supabase Anon Key",
+                            subtitle: "Publishable/Anon key from your Supabase dashboard",
+                            showDivider: true
+                        ) {
+                            HStack(spacing: AppTheme.Spacing.small) {
+                                Group {
+                                    if showCloudAnonKey {
+                                        TextField("sb_publishable_...", text: $cloudSyncAnonKey)
+                                            .textFieldStyle(.plain)
+                                    } else {
+                                        SecureField("sb_publishable_...", text: $cloudSyncAnonKey)
+                                            .textFieldStyle(.plain)
+                                    }
+                                }
+                                .font(.system(.body, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 220)
+
+                                Button {
+                                    showCloudAnonKey.toggle()
+                                } label: {
+                                    Image(systemName: showCloudAnonKey ? "eye.slash" : "eye")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        SettingsRow(
+                            title: "Secret Sync Key",
+                            subtitle: "Enter this key in your Android companion app to pair devices",
+                            showDivider: true
+                        ) {
+                            HStack(spacing: AppTheme.Spacing.small) {
+                                Text(currentSyncKey)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .frame(maxWidth: 160, alignment: .trailing)
+
+                                Button {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(currentSyncKey, forType: .string)
+                                    hasCopiedSyncKey = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        hasCopiedSyncKey = false
+                                    }
+                                } label: {
+                                    Image(systemName: hasCopiedSyncKey ? "checkmark" : "doc.on.doc")
+                                        .font(.caption)
+                                        .foregroundStyle(hasCopiedSyncKey ? .green : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Copy Sync Key to Clipboard")
+                            }
+                        }
+
+                        SettingsRow(
+                            title: "Sync With Cloud",
+                            subtitle: lastSyncLabel,
+                            showDivider: false
+                        ) {
+                            SettingsButton(title: isSyncingCloud ? "Syncing..." : "Sync Now") {
+                                guard !isSyncingCloud else { return }
+                                isSyncingCloud = true
+                                Task {
+                                    let service = CloudSyncService(modelContainer: modelContext.container)
+                                    let res = await service.performSync()
+                                    await MainActor.run {
+                                        isSyncingCloud = false
+                                        if let err = res.errorDescription {
+                                            AppErrorState.shared.showToast("Cloud sync failed: \(err)", style: .warning)
+                                        } else {
+                                            let total = res.mediaPushed + res.mediaPulled + res.episodesPushed + res.episodesPulled
+                                            AppErrorState.shared.showToast(
+                                                "Cloud sync complete (\(total) changes synced)",
+                                                style: .success
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            .disabled(isSyncingCloud)
                         }
                     }
                 }

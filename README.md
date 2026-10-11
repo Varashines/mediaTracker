@@ -150,12 +150,88 @@ bash install.sh
 1. Launch the application and open **Settings > Connect**.
 2. Input a free developer token from **The Movie Database** (generate one at [themoviedb.org](https://www.themoviedb.org)).
 3. *(Optional)* Input an **OMDb API Key** to augment your listings with Rotten Tomatoes scores.
-4. *(Optional)* Input a **MooreMetrics API Key** to see reccomendations in detailed view and across the filtered views in Discover Hub
+4. *(Optional)* Input a **MooreMetrics API Key** to see recommendations in detailed view and across the filtered views in Discover Hub.
+
+---
+
+## ☁️ Optional: Cross-Device Cloud Sync (Self-Hosted / Supabase)
+
+MediaTracker is **offline-first by default**, with all tracking data stored locally on your Mac. If you wish to synchronize your watch states and episode progress with companion apps (e.g. mobile/Android), you can optionally connect your own free **Supabase** backend:
+
+### Setting Up Your Own Cloud Sync (Free)
+
+1. Create a free account at [supabase.com](https://supabase.com) and create a project (e.g., `media-tracker-sync`).
+2. Go to the **SQL Editor** in your Supabase dashboard and execute the following schema:
+
+```sql
+-- 1. Media Title Tracking State
+create table if not exists public.user_media (
+    user_id text not null,                -- Secret Sync Key
+    media_id text not null,               -- e.g. "movie_550" or "tv_1399"
+    type text not null,                   -- "Movie" or "TV"
+    state text not null,                  -- "Wishlist", "Watching", "Completed", "Paused", "Dropped"
+    taste text not null default 'None',   -- "Loved", "Liked", "Disliked", "Hated", "None"
+    custom_poster_url text,
+    is_soft_deleted boolean default false,
+    last_interaction_date timestamptz,
+    last_state_change_date timestamptz,
+    updated_at timestamptz default now(),
+    primary key (user_id, media_id)
+);
+
+-- 2. TV Episode Watch Progress
+create table if not exists public.user_episodes (
+    user_id text not null,
+    episode_id text not null,             -- e.g. "tv_1399_s1_e1"
+    show_id text not null,
+    season_number int not null,
+    episode_number int not null,
+    is_watched boolean not null default false,
+    watched_date timestamptz,
+    updated_at timestamptz default now(),
+    primary key (user_id, episode_id)
+);
+
+-- 3. Watch Event Ledger / History
+create table if not exists public.user_history (
+    id uuid primary key default gen_random_uuid(),
+    user_id text not null,
+    media_id text not null,
+    cycle_number int not null default 0,
+    action text not null,                 -- "watched", "completed"
+    occurred_at timestamptz not null default now(),
+    created_at timestamptz default now()
+);
+
+-- 4. Enable Row Level Security (RLS)
+alter table public.user_media enable row level security;
+alter table public.user_episodes enable row level security;
+alter table public.user_history enable row level security;
+
+create policy "Secret key access for user_media" on public.user_media
+    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
+    with check (length(user_id) >= 12);
+
+create policy "Secret key access for user_episodes" on public.user_episodes
+    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
+    with check (length(user_id) >= 12);
+
+create policy "Secret key access for user_history" on public.user_history
+    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
+    with check (length(user_id) >= 12);
+```
+
+3. In MediaTracker, open **Settings > Connect > Cross-Device Cloud Sync**:
+   * Turn **On** the Cloud Sync toggle.
+   * Enter your **Supabase Project URL** (e.g. `https://xyzcompany.supabase.co`).
+   * Enter your **Supabase Anon / Public Key** (found in Project Settings > API).
+   * Copy the automatically generated **Secret Sync Key** (e.g. `mt_sync_...`) and paste it into your companion app to pair the devices.
 
 ---
 
 ## 🔒 Privacy First
 
-* **100% Data Ownership:** MediaTracker operates entirely offline. There are no tracking analytics, third-party user accounts, cloud aggregators, or telemetry reporting. Your viewing logs, habits, and metadata stay on your machine.
+* **100% Data Ownership:** MediaTracker operates entirely offline by default. There are no tracking analytics, third-party user accounts, cloud aggregators, or telemetry reporting. Your viewing logs, habits, and metadata stay on your machine.
+* **No Baked-in Credentials:** The published application does not bundle any private endpoints or database keys. If Cloud Sync is enabled, all traffic goes exclusively to your own personal Supabase project.
 
 ---
