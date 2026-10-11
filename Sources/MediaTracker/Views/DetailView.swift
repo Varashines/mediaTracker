@@ -582,7 +582,7 @@ struct DetailView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
-                    } else if viewModel.recommendations.isEmpty {
+                    } else if (recProvider == .tmdb ? viewModel.tmdbRecommendations.isEmpty : viewModel.recommendations.isEmpty) {
                         Button {
                             viewModel.fetchRecommendations()
                         } label: {
@@ -600,6 +600,26 @@ struct DetailView: View {
                         }
                         .buttonStyle(.plain)
                         .contentShape(Capsule())
+                    } else if recProvider == .tmdb {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppTheme.Spacing.large) {
+                                ForEach(viewModel.tmdbRecommendations) { recItem in
+                                    let typePrefix = recItem.type == .movie ? "movie" : "tv"
+                                    let uniqueID = "\(typePrefix)_\(recItem.id)"
+                                    let isPresent: Bool = {
+                                        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == uniqueID && $0.isSoftDeleted == false })
+                                        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+                                    }()
+
+                                    TrendingPosterCard(item: recItem, isInLibrary: isPresent)
+                                        .equatable()
+                                        .onTapGesture {
+                                            handleRecommendationSelection(recItem, uniqueID: uniqueID, isPresent: isPresent)
+                                        }
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
                     } else {
                         RecommendationSectionView(
                             recommendations: viewModel.recommendations,
@@ -706,6 +726,39 @@ struct DetailView: View {
     }
 
     // MARK: - Actions
+
+    private func handleRecommendationSelection(_ recItem: MediaSearchResult, uniqueID: String, isPresent: Bool) {
+        if isPresent {
+            // Title is already in library: navigate to search/detail
+            onSearchActor?(recItem.title)
+        } else {
+            // Title not in library: add to library
+            let container = modelContext.container
+            Task {
+                let service = BackgroundDataService(modelContainer: container)
+                let (id, isExisting) = await service.createNewMediaItem(
+                    uniqueID: uniqueID,
+                    tmdbID: Int(recItem.id) ?? 0,
+                    type: recItem.type,
+                    title: recItem.title,
+                    overview: recItem.overview,
+                    posterURL: recItem.posterURL,
+                    releaseDateString: recItem.releaseDate
+                )
+                if isExisting {
+                    AppErrorState.shared.showToast("Already in Library", style: .info)
+                } else {
+                    AppErrorState.shared.showToast("Added to Library", style: .success)
+                    FeedbackManager.shared.trigger(.addToLibrary)
+                }
+                if id != nil {
+                    await MainActor.run {
+                        MediaStateService.shared.postMediaStateChanged(itemID: id)
+                    }
+                }
+            }
+        }
+    }
 
     private func openTrailer() {
         guard let key = viewModel.trailerKey,
