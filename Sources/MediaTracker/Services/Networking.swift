@@ -136,22 +136,28 @@ actor APIClient {
         UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue)?.isEmpty == false
     }
     
-    private nonisolated func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
-        let key = tmdbApiKey
+    private nonisolated func isJWTToken(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count > 40 && trimmed.hasPrefix("ey")
+    }
+
+    private nonisolated func tmdbRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+        let key = tmdbApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         
         let region = Locale.current.region?.identifier ?? "US"
-        
-        // Phase 5 Improvement: Robust locale construction for TMDB
         let languageCode = Locale.current.language.languageCode?.identifier ?? "en"
         let language = "\(languageCode)-\(region)"
         
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
         var items = [
-            URLQueryItem(name: "api_key", value: key),
             URLQueryItem(name: "language", value: language),
             URLQueryItem(name: "region", value: region)
         ]
+        let isBearer = isJWTToken(key)
+        if !isBearer {
+            items.insert(URLQueryItem(name: "api_key", value: key), at: 0)
+        }
         items.append(contentsOf: queryItems)
         
         let percentEncodedItems = items.map { item -> URLQueryItem in
@@ -164,7 +170,18 @@ actor APIClient {
         components?.percentEncodedQueryItems = percentEncodedItems
         
         guard let url = components?.url else { throw URLError(.badURL) }
-        return url
+        var request = URLRequest(url: url)
+        if isBearer {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    private nonisolated func tmdbURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+        return try tmdbRequest(path: path, queryItems: queryItems).url ?? (try {
+            guard let url = URL(string: "https://api.themoviedb.org/3\(path)") else { throw URLError(.badURL) }
+            return url
+        }())
     }
 
     // MARK: - Disk Cache Helpers
@@ -195,6 +212,11 @@ actor APIClient {
         try? FileManager.default.removeItem(at: fileURL)
     }
 
+    private func dataFromTMDB(path: String, queryItems: [URLQueryItem] = []) async throws -> (Data, URLResponse) {
+        let request = try tmdbRequest(path: path, queryItems: queryItems)
+        return try await session.data(for: request)
+    }
+
     // MARK: - Generic Search
     private func parseQueryAndYear(from text: String) -> (query: String, year: String?) {
         let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -218,8 +240,7 @@ actor APIClient {
                 queryItems.append(URLQueryItem(name: yearKey, value: year))
             }
             
-            let url = try self.tmdbURL(path: path, queryItems: queryItems)
-            let (data, response) = try await self.session.data(from: url)
+            let (data, response) = try await self.dataFromTMDB(path: path, queryItems: queryItems)
             try self.validateResponse(response)
             let decoded = try self.decoder.decode(TMDBGenericResponse<T>.self, from: data)
             return decoded.results
@@ -301,8 +322,7 @@ actor APIClient {
             defer { self.inFlightMovieDetails.removeValue(forKey: tmdbID) }
             let result = try await self.executeWithRetry {
                 let appendParts = force ? "credits,release_dates,external_ids,videos,watch/providers" : "credits,external_ids,videos,watch/providers"
-                let url = try self.tmdbURL(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
-                let (data, response) = try await self.session.data(from: url)
+                let (data, response) = try await self.dataFromTMDB(path: "/movie/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: appendParts)])
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
                 let details = try self.decoder.decode(TMDBMovieDetailsResponse.self, from: data)
@@ -401,8 +421,7 @@ actor APIClient {
         let task = Task<TVDetailsResult, Error> {
             defer { self.inFlightTVDetails.removeValue(forKey: tmdbID) }
             let result = try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits,aggregate_credits,videos,watch/providers")])
-                let (data, response) = try await self.session.data(from: url)
+                let (data, response) = try await self.dataFromTMDB(path: "/tv/\(tmdbID)", queryItems: [URLQueryItem(name: "append_to_response", value: "external_ids,credits,aggregate_credits,videos,watch/providers")])
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
                 let d = try self.decoder.decode(TMDBTVDetailsResponse.self, from: data)
@@ -560,8 +579,7 @@ actor APIClient {
             defer { self.inFlightSeasonDetails.removeValue(forKey: coalescingKey) }
             do {
                 return try await self.executeWithRetry {
-                    let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
-                    let (data, response) = try await self.session.data(from: url)
+                    let (data, response) = try await self.dataFromTMDB(path: "/tv/\(tmdbID)/season/\(seasonNumber)")
                     try self.validateResponse(response)
                     self.saveToCache(data: data, forKey: cacheKey)
                     let decoded = try self.decoder.decode(TMDBSeasonResponse.self, from: data)
@@ -598,8 +616,7 @@ actor APIClient {
             defer { self.inFlightSeasonAggregateCredits.removeValue(forKey: coalescingKey) }
             do {
                 return try await self.executeWithRetry {
-                    let url = try self.tmdbURL(path: "/tv/\(tmdbID)/season/\(seasonNumber)/aggregate_credits")
-                    let (data, response) = try await self.session.data(from: url)
+                    let (data, response) = try await self.dataFromTMDB(path: "/tv/\(tmdbID)/season/\(seasonNumber)/aggregate_credits")
                     try self.validateResponse(response)
                     self.saveToCache(data: data, forKey: cacheKey)
                     let decoded = try self.decoder.decode(TMDBAggregateCreditsResponse.self, from: data)
@@ -633,11 +650,10 @@ actor APIClient {
     /// (sorted by popularity). Used by the Cast & Crew search picker.
     func searchPeople(query: String) async throws -> [TMDBPersonSearchEntry] {
         return try await executeWithRetry {
-            let url = try self.tmdbURL(path: "/search/person", queryItems: [
+            let (data, response) = try await self.dataFromTMDB(path: "/search/person", queryItems: [
                 URLQueryItem(name: "query", value: query),
                 URLQueryItem(name: "include_adult", value: "false")
             ])
-            let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let decoded = try self.decoder.decode(TMDBGenericResponse<TMDBPersonSearchEntry>.self, from: data)
             let eligible: Set<String> = ["Acting", "Directing"]
@@ -649,8 +665,7 @@ actor APIClient {
 
     /// Fetches a person's full filmography (combined cast + crew credits).
     func fetchPersonCredits(personID: Int) async throws -> [MediaSearchResult] {
-        let url = try tmdbURL(path: "/person/\(personID)/combined_credits")
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await dataFromTMDB(path: "/person/\(personID)/combined_credits")
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBCombinedCreditsResponse.self, from: data)
 
@@ -1036,8 +1051,7 @@ actor APIClient {
         if let cached = trendingMoviesCache, Date().timeIntervalSince(cached.timestamp) < trendingCacheTTL {
             return cached.data
         }
-        let url = try tmdbURL(path: "/trending/movie/day")
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await dataFromTMDB(path: "/trending/movie/day")
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<TMDBMovie>.self, from: data)
         let results = decoded.results.map { $0.toSearchResult() }
@@ -1049,8 +1063,7 @@ actor APIClient {
         if let cached = trendingTVCache, Date().timeIntervalSince(cached.timestamp) < trendingCacheTTL {
             return cached.data
         }
-        let url = try tmdbURL(path: "/trending/tv/day")
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await dataFromTMDB(path: "/trending/tv/day")
         try validateResponse(response)
         let decoded = try decoder.decode(TMDBGenericResponse<TMDBTV>.self, from: data)
         let results = decoded.results.map { $0.toSearchResult() }
@@ -1104,12 +1117,20 @@ actor APIClient {
 
     /// Validates a TMDB API key with a lightweight /configuration request.
     func validateTMDBKey(key: String) async -> Bool {
-        guard !key.isEmpty else { return false }
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
         var components = URLComponents(string: "https://api.themoviedb.org/3/configuration")
-        components?.queryItems = [URLQueryItem(name: "api_key", value: key)]
+        let isBearer = isJWTToken(trimmed)
+        if !isBearer {
+            components?.queryItems = [URLQueryItem(name: "api_key", value: trimmed)]
+        }
         guard let url = components?.url else { return false }
+        var request = URLRequest(url: url)
+        if isBearer {
+            request.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
+        }
         do {
-            let (_, response) = try await session.data(from: url)
+            let (_, response) = try await session.data(for: request)
             try validateResponse(response)
             return true
         } catch {
@@ -1130,6 +1151,125 @@ actor APIClient {
             return decoded?.isSuccess == true
         } catch {
             return false
+        }
+    }
+
+    // MARK: - TMDB Account & Favorites
+
+    /// Fetches the current TMDB user account ID using the configured token.
+    func fetchTMDBAccountID() async throws -> Int {
+        if let cachedID = UserDefaults.standard.object(forKey: UserDefaultsKeys.tmdbAccountID.rawValue) as? Int, cachedID > 0 {
+            return cachedID
+        }
+        let (data, response) = try await dataFromTMDB(path: "/account")
+        try validateResponse(response)
+        struct AccountResponse: Codable {
+            let id: Int
+        }
+        let account = try decoder.decode(AccountResponse.self, from: data)
+        UserDefaults.standard.set(account.id, forKey: UserDefaultsKeys.tmdbAccountID.rawValue)
+        return account.id
+    }
+
+    /// Fetches all favorite items (movies or tv) from TMDB for the user's account across all pages.
+    func fetchTMDBFavorites(mediaType: MediaType) async throws -> [MediaSearchResult] {
+        let accountID = try await fetchTMDBAccountID()
+        let path = mediaType == .movie ? "/account/\(accountID)/favorite/movies" : "/account/\(accountID)/favorite/tv"
+        
+        var results: [MediaSearchResult] = []
+        var currentPage = 1
+        var totalPages = 1
+
+        struct PaginatedFavorites<T: Codable & TMDBMedia>: Codable {
+            let page: Int
+            let total_pages: Int
+            let results: [T]
+        }
+
+        repeat {
+            let queryItems = [URLQueryItem(name: "page", value: "\(currentPage)")]
+            let (data, response) = try await dataFromTMDB(path: path, queryItems: queryItems)
+            try validateResponse(response)
+
+            if mediaType == .movie {
+                let decoded = try decoder.decode(PaginatedFavorites<TMDBMovie>.self, from: data)
+                results.append(contentsOf: decoded.results.map { $0.toSearchResult() })
+                totalPages = decoded.total_pages
+            } else {
+                let decoded = try decoder.decode(PaginatedFavorites<TMDBTV>.self, from: data)
+                results.append(contentsOf: decoded.results.map { $0.toSearchResult() })
+                totalPages = decoded.total_pages
+            }
+            currentPage += 1
+        } while currentPage <= totalPages && currentPage <= 10
+
+        return results
+    }
+
+    /// Sets or removes an item as favorite on TMDB.
+    func setTMDBFavorite(mediaType: MediaType, tmdbID: Int, favorite: Bool) async throws -> Bool {
+        let accountID = try await fetchTMDBAccountID()
+        let path = "/account/\(accountID)/favorite"
+        var request = try tmdbRequest(path: path)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "media_type": mediaType == .movie ? "movie" : "tv",
+            "media_id": tmdbID,
+            "favorite": favorite
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        try validateResponse(response)
+        struct FavoriteResponse: Codable {
+            let success: Bool?
+            let status_code: Int?
+        }
+        let res = try? decoder.decode(FavoriteResponse.self, from: data)
+        return res?.success == true || res?.status_code == 1 || res?.status_code == 12 || res?.status_code == 13
+    }
+
+    // MARK: - TMDB Recommendations
+
+    /// Fetches recommendations from TMDB for a specific movie or TV show.
+    func fetchTMDBItemRecommendations(mediaType: MediaType, tmdbID: Int) async throws -> [MooreMetricsRecommendation] {
+        let path = mediaType == .movie ? "/movie/\(tmdbID)/recommendations" : "/tv/\(tmdbID)/recommendations"
+        let (data, response) = try await dataFromTMDB(path: path)
+        try validateResponse(response)
+
+        struct TMDBRecItem: Codable {
+            let id: Int
+            let title: String?
+            let name: String?
+            let vote_average: Double?
+            let overview: String?
+            let genre_ids: [Int]?
+        }
+
+        struct TMDBRecResponse: Codable {
+            let results: [TMDBRecItem]
+        }
+
+        let decoded = try decoder.decode(TMDBRecResponse.self, from: data)
+        return decoded.results.prefix(15).map { item in
+            let title = item.title ?? item.name ?? "Unknown"
+            let score = min(max((item.vote_average ?? 6.0) / 10.0, 0.1), 1.0)
+            let genres = item.genre_ids?.compactMap { id in
+                mediaType == .movie ? TMDBGenreMap.movieGenres[id] : TMDBGenreMap.tvGenres[id]
+            } ?? []
+            let reason = genres.isEmpty
+                ? (item.overview.map { String($0.prefix(100)) } ?? "Popular TMDB Recommendation")
+                : "Genres: \(genres.joined(separator: ", "))"
+
+            return MooreMetricsRecommendation(
+                id: "\(item.id)",
+                name: title,
+                score: score,
+                characteristics: [:],
+                reason: reason
+            )
         }
     }
 }

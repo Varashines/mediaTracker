@@ -110,8 +110,11 @@ final class MediaItem: Identifiable {
     @MainActor
     func commitChange(dirty: CacheDirtyFlags = .all) {
         let context = modelContext
+        let storeContainer = context?.container
         let pid = persistentModelID
         Task { @MainActor [weak self, weak context] in
+            guard let storeContainer else { return }
+            defer { withExtendedLifetime(storeContainer) {} }
             if let self, self.modelContext != nil {
                 self.syncCachedProperties(dirty: dirty)
             }

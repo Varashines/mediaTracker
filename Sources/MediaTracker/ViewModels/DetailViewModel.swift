@@ -401,28 +401,26 @@ class DetailViewModel {
         }
     }
 
-    func fetchRecommendations() {
+    func fetchRecommendations(isAutomatic: Bool = false) {
         recsTask?.cancel()
-        guard MooreMetricsService.shared.isConfigured else { return }
         guard !item.title.isEmpty else { return }
         guard recommendations.isEmpty else { return }
 
-        let title = item.title
-        let domain = MooreMetricsService.recommendedDomain(for: item)
-        let cacheKey = "\(domain)_\(title)"
+        let provider = RecommendationService.currentProvider
+        if provider == .mooremetrics {
+            guard MooreMetricsService.shared.isConfigured else { return }
+        } else {
+            guard APIClient.shared.isTMDBConfigured else { return }
+        }
 
         isLoadingRecommendations = true
 
         recsTask = Task { [weak self] in
-            let results = await RecommendationService.fetchRecommendations(
-                titles: [title],
-                domain: domain,
-                cachePrefix: "mm_rec_cache_detail_",
-                cacheKey: cacheKey
-            )
+            guard let self else { return }
+            let results = await RecommendationService.fetchItemRecommendations(item: self.item)
             guard !Task.isCancelled else { return }
 
-            if results.isEmpty {
+            if results.isEmpty && !isAutomatic {
                 AppErrorState.shared.showToast("No recommendations found", style: .info)
             }
 

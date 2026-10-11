@@ -989,21 +989,8 @@ private struct EpisodeCube: View {
                                 }
 
                                 if !episode.overview.isEmpty {
-                                    Button {
-                                        showingOverview.toggle()
-                                    } label: {
-                                        Image(systemName: "info.circle.fill")
-                                            .font(AppTheme.Font.caption2)
-                                            .foregroundStyle(
-                                                accent.opacity(showingOverview ? 1.0 : 0.3)
-                                            )
-                                            .padding(.trailing, 4)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .popover(isPresented: $showingOverview) {
-                                        popoverContent
-                                    }
+                                    Color.clear
+                                        .frame(width: 20, height: 20)
                                 }
                             }
                         }
@@ -1073,6 +1060,26 @@ private struct EpisodeCube: View {
             }
             .popover(isPresented: $showingDatePicker) {
                 datePickerPopover
+            }
+
+            if !episode.overview.isEmpty {
+                Button {
+                    showingOverview.toggle()
+                } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(AppTheme.Font.caption2)
+                        .foregroundStyle(
+                            accent.opacity(showingOverview ? 1.0 : 0.3)
+                        )
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .padding(.bottom, 16)
+                .popover(isPresented: $showingOverview) {
+                    popoverContent
+                }
             }
         }
         .animation(AppTheme.Animation.springSnappy, value: episode.isWatched)

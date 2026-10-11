@@ -133,7 +133,10 @@ actor MediaFilterActor {
         let now = Date()
         let searchTokens = SearchScorer.tokenize(searchText)
         let processedSearch = searchTokens.joined(separator: " ")
-        let searchToken = searchTokens.first ?? ""
+        // Only push single-token queries to SQLite. For multi-token searches (e.g. "star wars"),
+        // pushing searchTokens.first narrows SQLite results to only items containing the first word,
+        // which prevents Swift-level full-query matching and OR fallback from seeing matches.
+        let searchToken = searchTokens.count == 1 ? (searchTokens.first ?? "") : ""
         // Pre-compute filter values for Swift-level refinement
         let stateValues = state.map(\.rawValue)
 

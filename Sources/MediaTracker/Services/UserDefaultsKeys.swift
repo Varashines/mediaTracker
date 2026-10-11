@@ -62,4 +62,9 @@ enum UserDefaultsKeys: String {
     // Spotlight
     case spotlightSearchQuery = "spotlight_search_query"
     case spotlightOpenID = "spotlight_open_id"
+    
+    // Recommendations & TMDB Sync
+    case recommendationSource = "recommendation_source"
+    case syncTMDBFavorites = "sync_tmdb_favorites"
+    case tmdbAccountID = "tmdb_account_id"
 }

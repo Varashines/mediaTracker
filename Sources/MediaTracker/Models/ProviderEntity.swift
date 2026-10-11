@@ -3,14 +3,14 @@ import SwiftData
 
 @Model
 final class ProviderEntity {
-    @Attribute(.unique) var providerID: Int
-    var name: String
+    @Attribute(.unique) var name: String
+    var providerID: Int
     var logoPath: String?
     var count: Int
     
-    init(providerID: Int, name: String, logoPath: String?, count: Int = 0) {
-        self.providerID = providerID
+    init(name: String, providerID: Int = 0, logoPath: String? = nil, count: Int = 0) {
         self.name = name
+        self.providerID = providerID
         self.logoPath = logoPath
         self.count = count
     }
