@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UserNotifications
 
 struct ServicesSection: View {
@@ -13,12 +14,17 @@ struct ServicesSection: View {
     @AppStorage(UserDefaultsKeys.weeklyDigestWeekday.rawValue) private var weeklyDigestWeekday = 1
     @AppStorage(UserDefaultsKeys.weeklyDigestTime.rawValue) private var weeklyDigestTime: Double = 19 * 3600
 
+    @AppStorage(UserDefaultsKeys.recommendationSource.rawValue) private var recommendationSource = "tmdb"
+    @AppStorage(UserDefaultsKeys.syncTMDBFavorites.rawValue) private var syncTMDBFavorites = false
+    @State private var isSyncingFavorites = false
+
     @State private var showTMDBKey = false
     @State private var showOMDBKey = false
     @State private var showMMKey = false
     @State private var tmdbValidation: KeyValidationState = .idle
     @State private var omdbValidation: KeyValidationState = .idle
     @Environment(\.colorScheme) var scheme
+    @Environment(\.modelContext) private var modelContext
 
     enum KeyValidationState: Equatable {
         case idle
@@ -38,6 +44,58 @@ struct ServicesSection: View {
                         await APIClient.shared.validateOMDBKey(key: omdbApiKey)
                     }
                     apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: $mmApiKey, showKey: $showMMKey, link: "https://www.mooremetrics.com", validation: nil)
+                }
+            }
+
+            SettingsCard(color: .purple) {
+                VStack(spacing: 0) {
+                    SettingsLabeledRow(
+                        title: "Recommendation Engine",
+                        subtitle: recommendationSource == "tmdb"
+                            ? "TMDB recommendations load automatically"
+                            : "MooreMetrics custom preference & trait matching",
+                        showDivider: true
+                    ) {
+                        Picker("", selection: $recommendationSource) {
+                            Text("TMDB (Automatic)").tag("tmdb")
+                            Text("MooreMetrics").tag("mooremetrics")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 260)
+                    }
+
+                    SettingsToggleRow(
+                        title: "Sync Favorites with TMDB",
+                        subtitle: "Two-way sync between your Loved titles and TMDB account favorites",
+                        showDivider: syncTMDBFavorites,
+                        isOn: $syncTMDBFavorites
+                    )
+
+                    if syncTMDBFavorites {
+                        SettingsRow(
+                            title: "Sync Now",
+                            subtitle: "Push Loved items and pull remote TMDB favorites",
+                            showDivider: false
+                        ) {
+                            SettingsButton(title: isSyncingFavorites ? "Syncing..." : "Sync Favorites") {
+                                guard !isSyncingFavorites else { return }
+                                isSyncingFavorites = true
+                                Task {
+                                    let service = BackgroundDataService(modelContainer: modelContext.container)
+                                    let (pushed, pulled) = await service.syncFavoritesWithTMDB()
+                                    await MainActor.run {
+                                        isSyncingFavorites = false
+                                        AppErrorState.shared.showToast(
+                                            "Favorites synced (\(pushed) pushed, \(pulled) pulled)",
+                                            style: .success
+                                        )
+                                    }
+                                }
+                            }
+                            .disabled(isSyncingFavorites || tmdbApiKey.isEmpty)
+                        }
+                    }
                 }
             }
 

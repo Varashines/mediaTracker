@@ -264,6 +264,7 @@ actor LibraryStatsActor {
         cachedFullStats = nil
         cachedContainers = nil
         lastCalculation = nil
+        deletePersistentStats()
     }
 
     @MainActor

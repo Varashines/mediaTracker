@@ -457,11 +457,23 @@ extension BackgroundDataService {
 
                 var didWriteSeasonCast = false
 
+                let maxConcurrentSeasonTasks = 6
+                var activeTaskCount = 0
+
                 fetchedSeasons = await withTaskGroup(of: FetchedSeasonData?.self) { group in
+                    var collected: [FetchedSeasonData] = []
                     for seasonData in seasonsToSync {
                         let sNum = seasonData.season_number
                         let needsCastFetch = force || !(seasonHasCast[sNum] ?? false)
 
+                        if activeTaskCount >= maxConcurrentSeasonTasks {
+                            if let finished = await group.next() {
+                                if let finished { collected.append(finished) }
+                            }
+                            activeTaskCount -= 1
+                        }
+
+                        activeTaskCount += 1
                         group.addTask {
                             // Skip aggregate credits when the season already has cast
                             // rows and this is not a force refresh (healer covers gaps).
@@ -524,11 +536,10 @@ extension BackgroundDataService {
                             )
                         }
                     }
-                    var results: [FetchedSeasonData] = []
                     for await result in group {
-                        if let result { results.append(result) }
+                        if let result { collected.append(result) }
                     }
-                    return results.sorted { $0.seasonNumber < $1.seasonNumber }
+                    return collected.sorted { $0.seasonNumber < $1.seasonNumber }
                 }
 
                 let existingEpisodesDesc = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.showID == tmdbID })

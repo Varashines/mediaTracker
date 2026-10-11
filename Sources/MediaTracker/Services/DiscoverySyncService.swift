@@ -291,7 +291,7 @@ actor DiscoverySyncService {
                 existing.count = data.count
                 if existing.logoPath == nil, let path = data.logoPath { existing.logoPath = path }
             } else {
-                modelContext.insert(ProviderEntity(providerID: name.hashValue, name: name, logoPath: data.logoPath, count: data.count))
+                modelContext.insert(ProviderEntity(name: name, providerID: 0, logoPath: data.logoPath, count: data.count))
             }
         }
         for entity in existingProviders where providerData[entity.name] == nil {
@@ -413,7 +413,7 @@ actor DiscoverySyncService {
                 updateExisting: { existing in
                     if existing.logoPath == nil, let path = logoPath { existing.logoPath = path }
                 },
-                makeNew: { name in ProviderEntity(providerID: name.hashValue, name: name, logoPath: logoPath, count: 1) }
+                makeNew: { name in ProviderEntity(name: name, providerID: 0, logoPath: logoPath, count: 1) }
             )
         }
 

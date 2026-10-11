@@ -31,6 +31,8 @@ class FilterState {
         return categoryGroupBys[selectedCategory] ?? .none
     }
 
+    var onChange: (() -> Void)?
+
     func resetFilters() {
         selectedNetworks.removeAll()
         selectedLanguages.removeAll()
@@ -38,5 +40,6 @@ class FilterState {
         selectedYears.removeAll()
         selectedStates.removeAll()
         selectedProviders.removeAll()
+        onChange?()
     }
 }

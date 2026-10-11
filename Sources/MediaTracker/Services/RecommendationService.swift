@@ -1,9 +1,65 @@
 import Foundation
 
+enum RecommendationProvider: String, CaseIterable, Identifiable {
+    case tmdb = "tmdb"
+    case mooremetrics = "mooremetrics"
+
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .tmdb: return "TMDB"
+        case .mooremetrics: return "MooreMetrics"
+        }
+    }
+}
+
 enum RecommendationService {
-    private static let detailPrefix = "mm_rec_cache_detail_"
-    private static let gridPrefix = "mm_rec_cache_"
+    private static let detailPrefix = "rec_cache_detail_"
+    private static let gridPrefix = "rec_cache_"
     private static let thirtyDays: TimeInterval = 30 * 24 * 3600
+
+    static var currentProvider: RecommendationProvider {
+        let raw = UserDefaults.standard.string(forKey: UserDefaultsKeys.recommendationSource.rawValue) ?? "tmdb"
+        return RecommendationProvider(rawValue: raw) ?? .tmdb
+    }
+
+    @MainActor
+    static func fetchItemRecommendations(
+        item: MediaItem
+    ) async -> [MooreMetricsRecommendation] {
+        let provider = currentProvider
+        let mediaType = item.type ?? .movie
+        let cacheKey = "rec_\(provider.rawValue)_\(mediaType.rawValue)_\(item.id)"
+        if let cached = loadCached(key: cacheKey), !cached.isEmpty {
+            return cached
+        }
+
+        if provider == .tmdb {
+            guard APIClient.shared.isTMDBConfigured else { return [] }
+            let tmdbIDInt = Int(item.id.split(separator: "_").last ?? "") ?? Int(item.id) ?? 0
+            guard tmdbIDInt > 0 else { return [] }
+            do {
+                let recs = try await APIClient.shared.fetchTMDBItemRecommendations(
+                    mediaType: mediaType,
+                    tmdbID: tmdbIDInt
+                )
+                if !recs.isEmpty {
+                    saveCached(key: cacheKey, recommendations: recs)
+                }
+                return recs
+            } catch {
+                return []
+            }
+        } else {
+            let domain = MooreMetricsService.recommendedDomain(for: item)
+            return await fetchRecommendations(
+                titles: [item.title],
+                domain: domain,
+                cachePrefix: "mm_rec_cache_detail_",
+                cacheKey: "\(domain)_\(item.title)"
+            )
+        }
+    }
 
     static func fetchRecommendations(
         titles: [String],

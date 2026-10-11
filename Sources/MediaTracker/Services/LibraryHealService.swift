@@ -21,8 +21,11 @@ extension BackgroundDataService {
         // 1.5. Purge stale search cache entries (older than 7 days)
         await purgeStaleSearchCache()
 
-        var descriptor = FetchDescriptor<MediaItem>()
-        descriptor.sortBy = [SortDescriptor(\.id)]
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate<MediaItem> { $0.isSoftDeleted == false }
+        )
+        // Sort by persistent dateAdded (or fallback) so mutating item.id does not shift pagination offsets
+        descriptor.sortBy = [SortDescriptor(\.dateAdded, order: .forward)]
         descriptor.propertiesToFetch = MediaItem.thumbnailProperties
         descriptor.fetchLimit = 100
         

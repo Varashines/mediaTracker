@@ -516,7 +516,10 @@ struct LibraryDetailView: View {
         else { return }
 
         viewModel.pagination.isLoadingMore = true
-        let nextOffset = viewModel.display.displayedItems.count
+        let upcomingHoisted = (viewModel.filter.selectedCategory == .upcoming && viewModel.collection.selectedCollectionID == nil)
+            ? viewModel.display.featuredUpcomingItems.count
+            : 0
+        let nextOffset = viewModel.display.displayedItems.count + upcomingHoisted
         let snapshot = FilterSnapshot(from: viewModel)
 
         loadMoreTask?.cancel()
@@ -741,7 +744,9 @@ private struct GlobalKeyboardShortcuts: View {
                     } else if viewModel.filter.selectedCategory.isSmartCategory {
                         sidebarSelection = .category(.smartHub)
                     }
-                }.keyboardShortcut(.leftArrow, modifiers: .command)
+                }
+                .keyboardShortcut(.leftArrow, modifiers: .command)
+                .disabled(!viewModel.navigationPath.isEmpty)
             }
             Button("") {
                 guard isSearchActive else { return }
