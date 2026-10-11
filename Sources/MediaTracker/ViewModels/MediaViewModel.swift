@@ -51,6 +51,9 @@ class MediaViewModel {
     private var recommendationsTaskGeneration = 0
 
     init() {
+        filter.onChange = { [weak self] in
+            self?.filterSubject.send()
+        }
         filterSubject
             .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
             .sink { [weak self] _ in

@@ -81,6 +81,22 @@ struct TasteToggle: View {
                 isRemoving ? "Rating removed" : val.rawValue,
                 style: .success
             )
+
+            // Sync with TMDB if enabled
+            if UserDefaults.standard.bool(forKey: UserDefaultsKeys.syncTMDBFavorites.rawValue) && (val == .love || isRemoving) {
+                let tmdbIDInt = Int(item.id.split(separator: "_").last ?? "") ?? Int(item.id) ?? 0
+                if tmdbIDInt > 0 {
+                    let mediaType = item.type ?? .movie
+                    let shouldFavorite = !isRemoving && newTaste == .love
+                    Task.detached(priority: .utility) {
+                        _ = try? await APIClient.shared.setTMDBFavorite(
+                            mediaType: mediaType,
+                            tmdbID: tmdbIDInt,
+                            favorite: shouldFavorite
+                        )
+                    }
+                }
+            }
         }
     }
 }

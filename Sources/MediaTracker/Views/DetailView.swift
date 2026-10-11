@@ -336,6 +336,9 @@ struct DetailView: View {
             viewModel.refreshData()
             refreshRealSeasonCount()
             refreshSeasonCastCache()
+            if RecommendationService.currentProvider == .tmdb {
+                viewModel.fetchRecommendations(isAutomatic: true)
+            }
         }
         .onChange(of: viewModel.item.tvShowDetails?.seasons.count) { _, _ in
             refreshRealSeasonCount()
@@ -559,10 +562,12 @@ struct DetailView: View {
             }
 
             // 3. RECOMMENDATIONS (Modular Card)
-            if MooreMetricsService.shared.isConfigured {
+            let recProvider = RecommendationService.currentProvider
+            let isRecAvailable = recProvider == .tmdb ? APIClient.shared.isTMDBConfigured : MooreMetricsService.shared.isConfigured
+            if isRecAvailable {
                     let detailTraits = viewModel.debugSelectedTraits
                     let detailTitle: String = {
-                        if !detailTraits.isEmpty {
+                        if recProvider == .mooremetrics && !detailTraits.isEmpty {
                             return "You Might Also Like  ·  Top traits: \(detailTraits.joined(separator: ", "))"
                         }
                         return "You Might Also Like"

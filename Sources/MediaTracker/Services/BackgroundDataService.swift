@@ -414,4 +414,74 @@ actor BackgroundDataService {
         }
     }
 
+    // MARK: - TMDB Favorites Two-Way Sync
+
+    /// Syncs favorites with TMDB:
+    /// 1. Pushes local items marked as Love (.love) to TMDB favorites.
+    /// 2. Pulls remote TMDB favorites into the local library: if already present, updates taste to Love; if missing, imports them as Love.
+    func syncFavoritesWithTMDB() async -> (pushed: Int, pulled: Int) {
+        guard APIClient.shared.isTMDBConfigured else { return (0, 0) }
+
+        var pushedCount = 0
+        var pulledCount = 0
+
+        // Step 1: Push local Love items to TMDB
+        let lovePredicate = #Predicate<MediaItem> { $0.tasteValue == "Love" && $0.isSoftDeleted == false }
+        let loveDescriptor = FetchDescriptor<MediaItem>(predicate: lovePredicate)
+        if let localLoved = try? modelContext.fetch(loveDescriptor) {
+            for item in localLoved {
+                let tmdbIDInt = Int(item.id.split(separator: "_").last ?? "") ?? Int(item.id) ?? 0
+                guard tmdbIDInt > 0 else { continue }
+                let mediaType = item.type ?? .movie
+                if (try? await APIClient.shared.setTMDBFavorite(mediaType: mediaType, tmdbID: tmdbIDInt, favorite: true)) == true {
+                    pushedCount += 1
+                }
+            }
+        }
+
+        // Step 2: Pull remote favorites (Movies and TV)
+        let remoteMovies = (try? await APIClient.shared.fetchTMDBFavorites(mediaType: .movie)) ?? []
+        let remoteTV = (try? await APIClient.shared.fetchTMDBFavorites(mediaType: .tvShow)) ?? []
+        let remoteAll = remoteMovies + remoteTV
+
+        for remote in remoteAll {
+            let uniqueID = "\(remote.type == .movie ? "movie" : "tv")_\(remote.id)"
+            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
+            if let existing = try? modelContext.fetch(descriptor).first {
+                if existing.tasteValue != TasteValue.love.rawValue {
+                    existing.tasteValue = TasteValue.love.rawValue
+                    existing.lastInteractionDate = Date()
+                    existing.syncCachedProperties(dirty: [])
+                    pulledCount += 1
+                }
+            } else {
+                guard let tmdbID = Int(remote.id) else { continue }
+                let (pid, _) = await createNewMediaItem(
+                    uniqueID: uniqueID,
+                    tmdbID: tmdbID,
+                    type: remote.type,
+                    title: remote.title,
+                    overview: remote.overview,
+                    posterURL: remote.posterURL,
+                    releaseDateString: remote.releaseDate
+                )
+                if let pid, let newItem = modelContext.model(for: pid) as? MediaItem {
+                    newItem.tasteValue = TasteValue.love.rawValue
+                    newItem.lastInteractionDate = Date()
+                    newItem.syncCachedProperties(dirty: [])
+                    pulledCount += 1
+                }
+            }
+        }
+
+        if pushedCount > 0 || pulledCount > 0 {
+            try? modelContext.save()
+            await MainActor.run {
+                MediaStateService.shared.postTasteChanged()
+            }
+        }
+
+        return (pushedCount, pulledCount)
+    }
+
 }
