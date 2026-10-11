@@ -1234,42 +1234,17 @@ actor APIClient {
     // MARK: - TMDB Recommendations
 
     /// Fetches recommendations from TMDB for a specific movie or TV show.
-    func fetchTMDBItemRecommendations(mediaType: MediaType, tmdbID: Int) async throws -> [MooreMetricsRecommendation] {
+    func fetchTMDBItemRecommendations(mediaType: MediaType, tmdbID: Int) async throws -> [MediaSearchResult] {
         let path = mediaType == .movie ? "/movie/\(tmdbID)/recommendations" : "/tv/\(tmdbID)/recommendations"
         let (data, response) = try await dataFromTMDB(path: path)
         try validateResponse(response)
 
-        struct TMDBRecItem: Codable {
-            let id: Int
-            let title: String?
-            let name: String?
-            let vote_average: Double?
-            let overview: String?
-            let genre_ids: [Int]?
-        }
-
-        struct TMDBRecResponse: Codable {
-            let results: [TMDBRecItem]
-        }
-
-        let decoded = try decoder.decode(TMDBRecResponse.self, from: data)
-        return decoded.results.prefix(15).map { item in
-            let title = item.title ?? item.name ?? "Unknown"
-            let score = min(max((item.vote_average ?? 6.0) / 10.0, 0.1), 1.0)
-            let genres = item.genre_ids?.compactMap { id in
-                mediaType == .movie ? TMDBGenreMap.movieGenres[id] : TMDBGenreMap.tvGenres[id]
-            } ?? []
-            let reason = genres.isEmpty
-                ? (item.overview.map { String($0.prefix(100)) } ?? "Popular TMDB Recommendation")
-                : "Genres: \(genres.joined(separator: ", "))"
-
-            return MooreMetricsRecommendation(
-                id: "\(item.id)",
-                name: title,
-                score: score,
-                characteristics: [:],
-                reason: reason
-            )
+        if mediaType == .movie {
+            let decoded = try decoder.decode(TMDBGenericResponse<TMDBMovie>.self, from: data)
+            return decoded.results.prefix(15).map { $0.toSearchResult() }
+        } else {
+            let decoded = try decoder.decode(TMDBGenericResponse<TMDBTV>.self, from: data)
+            return decoded.results.prefix(15).map { $0.toSearchResult() }
         }
     }
 }

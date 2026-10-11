@@ -24,41 +24,61 @@ enum RecommendationService {
     }
 
     @MainActor
-    static func fetchItemRecommendations(
+    static func fetchTMDBRecommendations(
         item: MediaItem
-    ) async -> [MooreMetricsRecommendation] {
-        let provider = currentProvider
+    ) async -> [MediaSearchResult] {
         let mediaType = item.type ?? .movie
-        let cacheKey = "rec_\(provider.rawValue)_\(mediaType.rawValue)_\(item.id)"
-        if let cached = loadCached(key: cacheKey), !cached.isEmpty {
+        let cacheKey = "rec_tmdb_results_\(mediaType.rawValue)_\(item.id)"
+        if let cached = loadCachedMediaResults(key: cacheKey), !cached.isEmpty {
             return cached
         }
 
-        if provider == .tmdb {
-            guard APIClient.shared.isTMDBConfigured else { return [] }
-            let tmdbIDInt = Int(item.id.split(separator: "_").last ?? "") ?? Int(item.id) ?? 0
-            guard tmdbIDInt > 0 else { return [] }
-            do {
-                let recs = try await APIClient.shared.fetchTMDBItemRecommendations(
-                    mediaType: mediaType,
-                    tmdbID: tmdbIDInt
-                )
-                if !recs.isEmpty {
-                    saveCached(key: cacheKey, recommendations: recs)
-                }
-                return recs
-            } catch {
-                return []
-            }
-        } else {
-            let domain = MooreMetricsService.recommendedDomain(for: item)
-            return await fetchRecommendations(
-                titles: [item.title],
-                domain: domain,
-                cachePrefix: "mm_rec_cache_detail_",
-                cacheKey: "\(domain)_\(item.title)"
+        guard APIClient.shared.isTMDBConfigured else { return [] }
+        let tmdbIDInt = Int(item.id.split(separator: "_").last ?? "") ?? Int(item.id) ?? 0
+        guard tmdbIDInt > 0 else { return [] }
+        do {
+            let recs = try await APIClient.shared.fetchTMDBItemRecommendations(
+                mediaType: mediaType,
+                tmdbID: tmdbIDInt
             )
+            if !recs.isEmpty {
+                saveCachedMediaResults(key: cacheKey, items: recs)
+            }
+            return recs
+        } catch {
+            return []
         }
+    }
+
+    @MainActor
+    static func fetchItemRecommendations(
+        item: MediaItem
+    ) async -> [MooreMetricsRecommendation] {
+        let domain = MooreMetricsService.recommendedDomain(for: item)
+        return await fetchRecommendations(
+            titles: [item.title],
+            domain: domain,
+            cachePrefix: "mm_rec_cache_detail_",
+            cacheKey: "\(domain)_\(item.title)"
+        )
+    }
+
+    private static func saveCachedMediaResults(key: String, items: [MediaSearchResult]) {
+        if let data = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(data, forKey: key)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: key + "_ts")
+        }
+    }
+
+    private static func loadCachedMediaResults(key: String) -> [MediaSearchResult]? {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cached = try? JSONDecoder().decode([MediaSearchResult].self, from: data),
+              !cached.isEmpty,
+              let timestamp = UserDefaults.standard.object(forKey: key + "_ts") as? TimeInterval,
+              Date().timeIntervalSince1970 - timestamp < thirtyDays else {
+            return nil
+        }
+        return cached
     }
 
     static func fetchRecommendations(

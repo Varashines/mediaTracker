@@ -13,6 +13,7 @@ class DetailViewModel {
     var mutedThemeColor: Color?
     
     var recommendations: [MooreMetricsRecommendation] = []
+    var tmdbRecommendations: [MediaSearchResult] = []
     var isLoadingRecommendations = false
     var trailerKey: String?
     var watchProviders: [WatchProviderResult] = []
@@ -404,29 +405,40 @@ class DetailViewModel {
     func fetchRecommendations(isAutomatic: Bool = false) {
         recsTask?.cancel()
         guard !item.title.isEmpty else { return }
-        guard recommendations.isEmpty else { return }
 
         let provider = RecommendationService.currentProvider
         if provider == .mooremetrics {
             guard MooreMetricsService.shared.isConfigured else { return }
+            guard recommendations.isEmpty else { return }
         } else {
             guard APIClient.shared.isTMDBConfigured else { return }
+            guard tmdbRecommendations.isEmpty else { return }
         }
 
         isLoadingRecommendations = true
 
         recsTask = Task { [weak self] in
             guard let self else { return }
-            let results = await RecommendationService.fetchItemRecommendations(item: self.item)
-            guard !Task.isCancelled else { return }
-
-            if results.isEmpty && !isAutomatic {
-                AppErrorState.shared.showToast("No recommendations found", style: .info)
-            }
-
-            await MainActor.run { [weak self] in
-                self?.recommendations = results
-                self?.isLoadingRecommendations = false
+            if provider == .tmdb {
+                let results = await RecommendationService.fetchTMDBRecommendations(item: self.item)
+                guard !Task.isCancelled else { return }
+                if results.isEmpty && !isAutomatic {
+                    AppErrorState.shared.showToast("No recommendations found", style: .info)
+                }
+                await MainActor.run { [weak self] in
+                    self?.tmdbRecommendations = results
+                    self?.isLoadingRecommendations = false
+                }
+            } else {
+                let results = await RecommendationService.fetchItemRecommendations(item: self.item)
+                guard !Task.isCancelled else { return }
+                if results.isEmpty && !isAutomatic {
+                    AppErrorState.shared.showToast("No recommendations found", style: .info)
+                }
+                await MainActor.run { [weak self] in
+                    self?.recommendations = results
+                    self?.isLoadingRecommendations = false
+                }
             }
         }
     }
