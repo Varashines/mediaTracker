@@ -67,4 +67,11 @@ enum UserDefaultsKeys: String {
     case recommendationSource = "recommendation_source"
     case syncTMDBFavorites = "sync_tmdb_favorites"
     case tmdbAccountID = "tmdb_account_id"
+
+    // Cloud Sync (Supabase)
+    case cloudSyncEnabled = "cloud_sync_enabled"
+    case cloudSyncURL = "cloud_sync_url"
+    case cloudSyncAnonKey = "cloud_sync_anon_key"
+    case cloudSyncKey = "cloud_sync_key"
+    case cloudSyncLastTimestamp = "cloud_sync_last_timestamp"
 }
