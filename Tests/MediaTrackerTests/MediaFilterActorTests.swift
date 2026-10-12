@@ -646,7 +646,6 @@ final class MediaFilterActorTests: MTTestCase {
 
         let calendar = Calendar.current
         let currentYear = calendar.component(.year, from: Date())
-        let todayMD = calendar.dateComponents([.month, .day], from: Date())
         let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date()))!
 
         // Items on Monday, Tuesday, Thursday of the week in a previous year
