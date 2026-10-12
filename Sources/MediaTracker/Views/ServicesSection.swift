@@ -26,6 +26,9 @@ struct ServicesSection: View {
     @State private var isSyncingCloud = false
     @State private var hasCopiedSyncKey = false
     @State private var showCloudAnonKey = false
+    @State private var isCheckingImpact = false
+    @State private var showImpactDialog = false
+    @State private var pendingImpact: CloudSyncService.SyncImpact? = nil
 
     private var currentSyncKey: String {
         if cloudSyncKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -216,29 +219,82 @@ struct ServicesSection: View {
                             subtitle: lastSyncLabel,
                             showDivider: false
                         ) {
-                            SettingsButton(title: isSyncingCloud ? "Syncing..." : "Sync Now") {
-                                guard !isSyncingCloud else { return }
-                                isSyncingCloud = true
+                            SettingsButton(title: isSyncingCloud ? "Syncing..." : (isCheckingImpact ? "Analyzing..." : "Sync Now")) {
+                                guard !isSyncingCloud && !isCheckingImpact else { return }
+                                isCheckingImpact = true
                                 Task {
                                     let service = CloudSyncService(modelContainer: modelContext.container)
-                                    let res = await service.performSync()
+                                    let impact = await service.calculateSyncImpact()
                                     await MainActor.run {
-                                        isSyncingCloud = false
-                                        if let err = res.errorDescription {
-                                            AppErrorState.shared.showToast("Cloud sync failed: \(err)", style: .warning)
+                                        isCheckingImpact = false
+                                        if let err = impact.errorDescription {
+                                            AppErrorState.shared.showToast("Could not check cloud: \(err)", style: .warning)
+                                        } else if !impact.hasChanges {
+                                            AppErrorState.shared.showToast("Everything is already in sync!", style: .success)
                                         } else {
-                                            let total = res.mediaPushed + res.mediaPulled + res.episodesPushed + res.episodesPulled
-                                            AppErrorState.shared.showToast(
-                                                "Cloud sync complete (\(total) changes synced)",
-                                                style: .success
-                                            )
+                                            pendingImpact = impact
+                                            showImpactDialog = true
                                         }
                                     }
                                 }
                             }
-                            .disabled(isSyncingCloud)
+                            .disabled(isSyncingCloud || isCheckingImpact)
                         }
                     }
+                }
+            }
+            .sheet(isPresented: $showImpactDialog) {
+                if let impact = pendingImpact {
+                    SyncImpactSheet(
+                        impact: impact,
+                        onConfirmSelectiveSync: { importIDs, updateIDs, uploadIDs, syncEps in
+                            showImpactDialog = false
+                            isSyncingCloud = true
+                            Task {
+                                let service = CloudSyncService(modelContainer: modelContext.container)
+                                let res = await service.performSelectiveSync(
+                                    approvedImportIDs: importIDs,
+                                    approvedUpdateIDs: updateIDs,
+                                    approvedUploadIDs: uploadIDs,
+                                    syncEpisodes: syncEps
+                                )
+                                await MainActor.run {
+                                    isSyncingCloud = false
+                                    if let err = res.errorDescription {
+                                        AppErrorState.shared.showToast("Cloud sync failed: \(err)", style: .warning)
+                                    } else {
+                                        let total = res.mediaPushed + res.mediaPulled + res.episodesPushed + res.episodesPulled
+                                        AppErrorState.shared.showToast(
+                                            "Sync complete (\(total) changes)",
+                                            style: .success
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onConfirmBackup: {
+                            showImpactDialog = false
+                            isSyncingCloud = true
+                            Task {
+                                let service = CloudSyncService(modelContainer: modelContext.container)
+                                let res = await service.backupToCloud()
+                                await MainActor.run {
+                                    isSyncingCloud = false
+                                    if let err = res.errorDescription {
+                                        AppErrorState.shared.showToast("Backup failed: \(err)", style: .warning)
+                                    } else {
+                                        AppErrorState.shared.showToast(
+                                            "Mac successfully backed up to Cloud (\(res.mediaPushed) titles, \(res.episodesPushed) episodes)",
+                                            style: .success
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onDismiss: {
+                            showImpactDialog = false
+                        }
+                    )
                 }
             }
 

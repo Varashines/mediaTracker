@@ -208,17 +208,23 @@ alter table public.user_media enable row level security;
 alter table public.user_episodes enable row level security;
 alter table public.user_history enable row level security;
 
+-- Both clauses bind to the sync key. The keyless case must fall through to NULL
+-- (no rows), never to "trust the user_id in the request body":
+--   coalesce(<header>, user_id)  ->  user_id = user_id  ->  TRUE for every row
+-- `with check` is the only clause consulted for INSERT, so it has to carry the same
+-- test as `using`; `length(user_id) >= 12` was satisfied by any string and bound
+-- nothing. The (select ...) wrapper caches the header per query instead of per row.
 create policy "Secret key access for user_media" on public.user_media
-    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
-    with check (length(user_id) >= 12);
+    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
+    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
 
 create policy "Secret key access for user_episodes" on public.user_episodes
-    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
-    with check (length(user_id) >= 12);
+    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
+    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
 
 create policy "Secret key access for user_history" on public.user_history
-    for all using (user_id = coalesce(current_setting('request.headers', true)::json->>'x-sync-key', user_id))
-    with check (length(user_id) >= 12);
+    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
+    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
 ```
 
 3. In MediaTracker, open **Settings > Connect > Cross-Device Cloud Sync**:
