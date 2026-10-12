@@ -173,15 +173,15 @@ final class MediaFilterActorTests: MTTestCase {
         caughtUpShow.lastInteractionDate = now
         context.insert(caughtUpShow)
 
-        // 4. Movie released 4 days ago (> 3 days cutoff) — should not be in Continue Watching
+        // 4. Movie released 6 days ago (> 5 days cutoff) — should not be in Continue Watching
         let olderMovie = MediaItem(id: "m2", title: "Older Movie", overview: "", type: .movie)
         olderMovie.stateValue = MediaState.wishlistRaw
-        olderMovie.releaseDate = now.addingTimeInterval(-4 * .secondsInDay)
-        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.releaseDate = now.addingTimeInterval(-6 * .secondsInDay)
+        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-6 * .secondsInDay)
         olderMovie.storedProgress = 0
         olderMovie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
         olderMovie.storedSmartBadgeIsSparkle = true
-        olderMovie.lastInteractionDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.lastInteractionDate = now.addingTimeInterval(-6 * .secondsInDay)
         context.insert(olderMovie)
 
         try context.save()
@@ -204,7 +204,7 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertTrue(titles.contains("Premiered Show"), "Newly premiered TV show must appear in Continue Watching")
         XCTAssertTrue(titles.contains("Premiered Movie"), "Newly premiered movie must appear in Continue Watching")
         XCTAssertFalse(titles.contains("Caught Up Show"), "Genuinely caught up show should not appear in Continue Watching")
-        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 3 days ago should not appear in Continue Watching")
+        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 5 days ago should not appear in Continue Watching")
     }
 
     @MainActor
