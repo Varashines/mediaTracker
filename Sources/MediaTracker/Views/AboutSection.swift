@@ -7,8 +7,8 @@ struct AboutSection: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    /// Codename for this release line (v9 = "Arc").
-    private var codename: String { "Arc" }
+    /// Codename for this release line (v10 = "Bokeh").
+    private var codename: String { "Bokeh" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xLarge) {
