@@ -151,6 +151,7 @@ struct TMDBTVDetailsResponse: Codable {
     let overview: String?
     let original_language: String?
     let networks: [TMDBNetwork]?
+    let production_companies: [TMDBProductionCompany]?
     let created_by: [TMDBPerson]?
     let seasons: [TMDBSeasonBrief]?
     let first_air_date: String?
@@ -163,7 +164,7 @@ struct TMDBTVDetailsResponse: Codable {
 
     enum CodingKeys: String, CodingKey {
         case number_of_seasons, number_of_episodes, status, vote_average, genres, backdrop_path, poster_path
-        case overview, original_language, networks, created_by, seasons, first_air_date, next_episode_to_air, external_ids, credits, aggregate_credits, videos
+        case overview, original_language, networks, production_companies, created_by, seasons, first_air_date, next_episode_to_air, external_ids, credits, aggregate_credits, videos
         case watch_providers = "watch/providers"
     }
 }

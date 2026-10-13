@@ -494,6 +494,7 @@ actor APIClient {
             overview: d.overview,
             network: network,
             networkLogoPath: d.networks?.first?.logo_path,
+            productionCompanies: d.production_companies?.map { $0.name } ?? [],
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
             numberOfSeasons: d.number_of_seasons,

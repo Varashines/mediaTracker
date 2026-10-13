@@ -26,6 +26,10 @@ final class TVShowDetails {
     var genres: [String] = []
     var showType: String?
     var network: String?
+    /// TMDB production companies, used alongside the network to pick a streaming drop
+    /// rule (a Marvel/Lucasfilm title on "Disney+" still drops at 9 PM ET). Mirrors the
+    /// Android `MediaItemEntity.studios`.
+    var productionCompanies: [String] = []
     var networkLogoPath: String?
     var originalLanguage: String?
     var creators: [String] = []

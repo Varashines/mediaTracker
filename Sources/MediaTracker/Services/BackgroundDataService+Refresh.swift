@@ -235,6 +235,9 @@ extension BackgroundDataService {
             
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber
+            // Stored before the TVMaze schedule parse below, which needs the studio hint
+            // to pick the right drop rule for the next episode.
+            tvDetails.productionCompanies = details.productionCompanies
             if let tmdbNextDate = details.nextEpisodeDate {
                 tvDetails.nextEpisodeDate = DateUtils.parseDate(tmdbNextDate)
             }
@@ -302,7 +305,7 @@ extension BackgroundDataService {
                     tvDetails.showType = showType
                     
                     if let schedule = episode {
-                        tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
+                        tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, for: tvDetails)
                         
                         if let sNum = schedule.season { tvDetails.nextSeasonNumber = sNum }
                         if let eNum = schedule.number { tvDetails.nextEpisodeNumber = eNum }

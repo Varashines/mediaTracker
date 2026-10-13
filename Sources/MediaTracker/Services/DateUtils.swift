@@ -12,7 +12,9 @@ struct StreamingServiceRule: Codable {
         // before their official listed release date.
         StreamingServiceRule(patterns: ["apple"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: -1),
         // Disney+ Flagships (Marvel/Star Wars): Drops at 6:00 PM PT / 9:00 PM ET.
-        StreamingServiceRule(patterns: ["star wars", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
+        // "lucasfilm" is included because a Star Wars show's TMDB production company is
+        // "Lucasfilm Ltd." while its network is a generic "Disney+".
+        StreamingServiceRule(patterns: ["star wars", "lucasfilm", "marvel"], releaseTime: "21:00", timeZoneIdentifier: "America/New_York", dayOffset: 0),
         // Disney+ Standard: Drops at Midnight PT / 3:00 AM ET.
         StreamingServiceRule(patterns: ["disney"], releaseTime: "00:00", timeZoneIdentifier: "America/Los_Angeles", dayOffset: 0),
         // Netflix: Midnight PT.
@@ -107,8 +109,27 @@ struct DateUtils {
         return "\(hours)h \(minutes % 60)m"
     }
 
+    /// Combined network + studio hint for streaming-rule matching.
+    ///
+    /// A Marvel or Lucasfilm show sits on a generic "Disney+" network, so matching on
+    /// the network alone picks the Disney+ midnight-PT rule. Its production company
+    /// carries the "marvel"/"lucasfilm" signal, so including the studio lets the
+    /// flagship 9 PM ET rule win. That rule is **live-action only**: animated Marvel /
+    /// Star Wars (X-Men '97, What If…?) still drop at midnight PT, so the studio is
+    /// withheld when the title is animated. Mirrors the Android `AirTimeResolver.serviceHint`.
+    static func serviceHint(network: String?, studios: [String]?, genres: [String]?) -> String {
+        let isAnimation = genres?.contains { $0.localizedCaseInsensitiveContains("animation") } ?? false
+        var parts: [String] = []
+        if let network, !network.isEmpty { parts.append(network) }
+        if !isAnimation {
+            parts.append(contentsOf: (studios ?? []).filter { !$0.isEmpty })
+        }
+        return parts.joined(separator: " ")
+    }
+
     static func parseEpisodeDate(_ dateString: String?, time: String? = nil, airstamp: String? = nil, timezone: String? = nil, serviceName: String? = nil, for show: TVShowDetails? = nil) -> Date? {
-        let service = (serviceName ?? show?.network ?? "").lowercased()
+        let network = serviceName ?? show?.network
+        let service = serviceHint(network: network, studios: show?.productionCompanies, genres: show?.genres).lowercased()
 
         // Treat empty strings as nil: an empty TVMaze schedule time would
         // otherwise defeat the "20:00" default fallbacks below (non-nil "" wins

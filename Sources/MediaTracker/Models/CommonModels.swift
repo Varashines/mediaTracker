@@ -94,6 +94,10 @@ struct TVDetailsResult {
     let overview: String?
     let network: String?
     let networkLogoPath: String?
+    /// TMDB production companies. A Marvel/Lucasfilm show sits on a generic "Disney+"
+    /// network, so the studio is what lets the flagship 9 PM ET drop rule win over the
+    /// standard Disney+ midnight-PT one.
+    let productionCompanies: [String]
     let originalLanguage: String?
     let seasons: [TMDBSeasonBrief]
     let numberOfSeasons: Int?
