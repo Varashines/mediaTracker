@@ -612,9 +612,36 @@ struct LibraryDetailView: View {
         default:
             return {
                 ImageCache.shared.clearMemoryCache()
+                let ids = displayedItemIDs
+                let container = modelContext.container
                 viewModel.filterSubject.send()
+                guard !ids.isEmpty else { return }
+                // Re-fetch TMDB metadata for everything on screen, forcing past the
+                // API cache so corrected release dates, statuses, and artwork land.
+                // Without this the toolbar refresh only re-ran the query and a
+                // Wishlist title's changed release date never propagated.
+                Task {
+                    let service = BackgroundDataService(modelContainer: container)
+                    await service.refreshMetadata(for: ids, metadataOnly: false, force: true)
+                }
             }
         }
+    }
+
+    /// String media IDs currently on screen, deduped across the visible collections.
+    private var displayedItemIDs: [String] {
+        var seen = Set<String>()
+        var ids: [String] = []
+        func add(_ list: [MediaThumbnailMetadata]) {
+            for meta in list where seen.insert(meta.itemID).inserted {
+                ids.append(meta.itemID)
+            }
+        }
+        add(viewModel.display.displayedItems)
+        add(viewModel.display.groupedItems.flatMap { $0.1 })
+        add(viewModel.display.recentlyAddedItems)
+        add(viewModel.display.homeContinueWatchingItems)
+        return ids
     }
 
     private var isSystemSmartCategory: Bool {
