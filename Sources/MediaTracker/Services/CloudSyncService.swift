@@ -75,15 +75,25 @@ actor CloudSyncService {
         var episodesToUploadShows: [ImpactEpisodeShow] = []
         var totalEpisodesToImport: Int = 0
         var totalEpisodesToUpload: Int = 0
+        var collectionsToImport: [ImpactCollection] = []
+        var collectionsToUpload: [ImpactCollection] = []
         var errorDescription: String? = nil
 
         var totalChanges: Int {
-            titlesToImport.count + titlesToUpdate.count + titlesToUpload.count + totalEpisodesToImport + totalEpisodesToUpload
+            titlesToImport.count + titlesToUpdate.count + titlesToUpload.count +
+                totalEpisodesToImport + totalEpisodesToUpload +
+                collectionsToImport.count + collectionsToUpload.count
         }
 
         var hasChanges: BooleanLiteralType {
             totalChanges > 0
         }
+    }
+
+    struct ImpactCollection: Identifiable, Sendable, Equatable {
+        var id: String
+        var name: String
+        var itemCount: Int
     }
 
     struct SyncSummary: Sendable {
@@ -258,6 +268,44 @@ actor CloudSyncService {
                     episodeCount: count
                 )
             }.sorted { $0.episodeCount > $1.episodeCount }
+
+            // 3. Collections (rows + membership), so the sheet actually mentions them.
+            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey)
+            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
+            let remoteCollectionByID = Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
+            let remoteItemCounts = Dictionary(grouping: remoteCollectionItems.filter { !$0.is_deleted }, by: \.collection_id)
+                .mapValues { $0.count }
+            let localCollections = (try? modelContext.fetch(FetchDescriptor<MediaCollection>())) ?? []
+            let localCollectionIDs = Set(localCollections.map { $0.id.uuidString })
+
+            for local in localCollections {
+                let impactItem = ImpactCollection(id: local.id.uuidString, name: local.name, itemCount: local.items.count)
+                guard let remote = remoteCollectionByID[local.id.uuidString] else {
+                    impact.collectionsToUpload.append(impactItem)
+                    continue
+                }
+                let differs = local.name != remote.name
+                    || local.systemImage != remote.system_image
+                    || (local.notes ?? "") != (remote.notes ?? "")
+                    || local.isPinned != remote.is_pinned
+                    || local.completedItemIDs != remote.completed_item_ids
+                    || (local.smartRulesData.flatMap { String(data: $0, encoding: .utf8) }) != remote.smart_rules
+                let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
+                if differs, (local.updatedAt ?? .distantPast) > remoteTime {
+                    impact.collectionsToUpload.append(impactItem)
+                }
+            }
+            for remote in remoteCollections where !remote.is_deleted {
+                if !localCollectionIDs.contains(remote.collection_id) {
+                    impact.collectionsToImport.append(
+                        ImpactCollection(
+                            id: remote.collection_id,
+                            name: remote.name,
+                            itemCount: remoteItemCounts[remote.collection_id] ?? 0
+                        )
+                    )
+                }
+            }
         } catch {
             impact.errorDescription = error.localizedDescription
         }
@@ -287,6 +335,11 @@ actor CloudSyncService {
 
             // Force push all watched episodes (since: 0 pushes all watched)
             summary.episodesPushed = try await pushEpisodes(syncKey: syncKey, since: 0)
+
+            // Collections too — an empty remote map makes every local collection "missing"
+            // and so gets pushed, and the same for its membership rows.
+            summary.collectionsPushed = try await pushCollections(syncKey: syncKey, remoteById: [:])
+            summary.collectionItemsPushed = try await pushCollectionItems(syncKey: syncKey, remote: [])
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
             try? modelContext.save()
@@ -359,6 +412,19 @@ actor CloudSyncService {
                 summary.episodesPushed = try await pushEpisodes(syncKey: syncKey, since: lastSyncTimestamp)
                 summary.episodesPulled = try await pullEpisodes(syncKey: syncKey)
             }
+
+            // 4. Collections (rows + membership). The sheet has no per-collection approval —
+            //    they're few and low-risk, so reconcile wholesale (newest wins). Without this
+            //    the normal "Sync Now" flow never pushed collections at all.
+            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey)
+            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
+            summary.collectionsPushed = try await pushCollections(
+                syncKey: syncKey,
+                remoteById: Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
+            )
+            summary.collectionsPulled = try await applyRemoteCollections(remoteCollections)
+            summary.collectionItemsPushed = try await pushCollectionItems(syncKey: syncKey, remote: remoteCollectionItems)
+            summary.collectionItemsPulled = try await applyRemoteCollectionItems(remoteCollectionItems)
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
             try? modelContext.save()

@@ -22,6 +22,7 @@ struct SyncImpactSheet: View {
         case imports = "Incoming (Cloud)"
         case uploads = "Local (Upload)"
         case episodes = "Episodes"
+        case collections = "Collections"
     }
 
     init(
@@ -88,6 +89,8 @@ struct SyncImpactSheet: View {
                     .tag(ImpactTab.uploads)
                 Text("\(ImpactTab.episodes.rawValue) (\(impact.totalEpisodesToUpload + impact.totalEpisodesToImport))")
                     .tag(ImpactTab.episodes)
+                Text("\(ImpactTab.collections.rawValue) (\(impact.collectionsToUpload.count + impact.collectionsToImport.count))")
+                    .tag(ImpactTab.collections)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, AppTheme.Spacing.large)
@@ -105,6 +108,8 @@ struct SyncImpactSheet: View {
                         uploadsView
                     case .episodes:
                         episodesView
+                    case .collections:
+                        collectionsView
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.large)
@@ -367,6 +372,58 @@ struct SyncImpactSheet: View {
     }
 
     // MARK: - Helper Views
+
+    private var collectionsView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Collections sync both ways — a collection and its titles created on one device appear on the other. Smart collections carry their rules, not members.")
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(.secondary)
+
+            if impact.collectionsToUpload.isEmpty && impact.collectionsToImport.isEmpty {
+                Text("No collection changes.")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            } else {
+                if !impact.collectionsToUpload.isEmpty {
+                    collectionGroup(title: "Local → Cloud", items: impact.collectionsToUpload, systemImage: "arrow.up.circle")
+                }
+                if !impact.collectionsToImport.isEmpty {
+                    collectionGroup(title: "Cloud → Local", items: impact.collectionsToImport, systemImage: "arrow.down.circle")
+                }
+            }
+        }
+    }
+
+    private func collectionGroup(
+        title: String,
+        items: [CloudSyncService.ImpactCollection],
+        systemImage: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage).foregroundStyle(AppTheme.Colors.accent)
+                Text("\(title) (\(items.count))")
+                    .font(AppTheme.Font.caption)
+                    .fontWeight(.semibold)
+            }
+            ForEach(items) { collection in
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.stack").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(collection.name).font(AppTheme.Font.body).fontWeight(.medium)
+                        Text("\(collection.itemCount) \(collection.itemCount == 1 ? "title" : "titles")")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(8)
+                .background(AppTheme.Colors.surface(for: colorScheme))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
 
     private func posterThumb(url: String?) -> some View {
         CachedImage(url: url.flatMap(URL.init), targetSize: CGSize(width: 32, height: 48)) {
