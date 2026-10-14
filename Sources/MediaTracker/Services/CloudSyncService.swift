@@ -1047,7 +1047,9 @@ actor CloudSyncService {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown response"
             AppLogger.error("Supabase \(endpoint) returned HTTP \(http.statusCode): \(errorBody)", logger: AppLogger.sync)
-            throw APIError.requestFailed(http.statusCode)
+            // Carry the body: PostgREST names the offending column/constraint, which is the
+            // difference between a useful toast and a bare "400".
+            throw APIError.requestFailedWithBody(http.statusCode, errorBody)
         }
     }
 

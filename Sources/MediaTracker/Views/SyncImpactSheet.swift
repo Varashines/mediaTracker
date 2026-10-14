@@ -18,9 +18,10 @@ struct SyncImpactSheet: View {
     @State private var activeTab: ImpactTab = .conflictsAndUpdates
 
     enum ImpactTab: String, CaseIterable {
-        case conflictsAndUpdates = "Conflicts & Updates"
-        case imports = "Incoming (Cloud)"
-        case uploads = "Local (Upload)"
+        // Short labels: five segments with the old long names overflowed the sheet width.
+        case conflictsAndUpdates = "Conflicts"
+        case imports = "Incoming"
+        case uploads = "Upload"
         case episodes = "Episodes"
         case collections = "Collections"
     }

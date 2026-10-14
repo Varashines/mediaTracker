@@ -4,13 +4,18 @@ enum APIError: Error, LocalizedError {
     case missingApiKey(String)
     case invalidResponse
     case requestFailed(Int)
+    /// Same as `requestFailed` but carries the server's response body, so PostgREST
+    /// errors (which name the offending column/constraint) aren't reduced to "400".
+    case requestFailedWithBody(Int, String)
     case rateLimited
-    
+
     var errorDescription: String? {
         switch self {
         case .missingApiKey(let service): return "\(service) API Key is missing. Please check Settings."
         case .invalidResponse: return "Received an invalid response from the server."
         case .requestFailed(let code): return "Request failed with status code: \(code)"
+        case .requestFailedWithBody(let code, let body):
+            return "Request failed (\(code)): \(body)"
         case .rateLimited: return "Rate limit exceeded. Retrying..."
         }
     }
