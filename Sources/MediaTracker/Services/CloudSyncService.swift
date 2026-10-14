@@ -816,6 +816,29 @@ actor CloudSyncService {
         var completed_item_ids: [String]
         var is_deleted: Bool
         var updated_at: String?
+
+        enum CodingKeys: String, CodingKey {
+            case user_id, collection_id, name, system_image, notes, is_pinned, is_smart, smart_rules, completed_item_ids, is_deleted, updated_at
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            // Every key is encoded explicitly, including nulls. The synthesized encoder uses
+            // encodeIfPresent for optionals, so a batch mixing rows with and without `notes`
+            // sent inconsistent objects and PostgREST rejected it with PGRST102
+            // ("All object keys must match"). RemoteMediaItem/RemoteEpisode do the same.
+            try container.encode(user_id, forKey: .user_id)
+            try container.encode(collection_id, forKey: .collection_id)
+            try container.encode(name, forKey: .name)
+            try container.encode(system_image, forKey: .system_image)
+            try container.encode(notes, forKey: .notes)
+            try container.encode(is_pinned, forKey: .is_pinned)
+            try container.encode(is_smart, forKey: .is_smart)
+            try container.encode(smart_rules, forKey: .smart_rules)
+            try container.encode(completed_item_ids, forKey: .completed_item_ids)
+            try container.encode(is_deleted, forKey: .is_deleted)
+            try container.encode(updated_at, forKey: .updated_at)
+        }
     }
 
     private struct RemoteCollectionItem: Codable {
@@ -824,6 +847,19 @@ actor CloudSyncService {
         var media_id: String
         var is_deleted: Bool
         var updated_at: String?
+
+        enum CodingKeys: String, CodingKey {
+            case user_id, collection_id, media_id, is_deleted, updated_at
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(user_id, forKey: .user_id)
+            try container.encode(collection_id, forKey: .collection_id)
+            try container.encode(media_id, forKey: .media_id)
+            try container.encode(is_deleted, forKey: .is_deleted)
+            try container.encode(updated_at, forKey: .updated_at)
+        }
     }
 
     private func fetchRemoteCollections(syncKey: String) async throws -> [RemoteCollection] {
