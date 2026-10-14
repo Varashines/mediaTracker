@@ -196,6 +196,8 @@ struct BulkCollectionManagerView: View {
             }
         }
 
+        collection.touch()
+
         // Summary feedback — Save previously closed silently.
         let addedCount = idsToAdd.count
         let removedCount = removedIDs.count

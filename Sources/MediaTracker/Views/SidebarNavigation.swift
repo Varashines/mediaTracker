@@ -76,6 +76,7 @@ struct SidebarNavigation: View {
                     }
                     Button("Unpin from Sidebar") {
                         collection.isPinned = false
+                        collection.touch()
                         if collection.modelContext != nil {
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
@@ -110,6 +111,7 @@ struct SidebarNavigation: View {
                 let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty, let target = renameTarget, target.modelContext != nil {
                     target.name = trimmed
+                    target.touch()
                     SaveCoordinator.shared.requestSave(modelContext)
                 }
                 renameTarget = nil

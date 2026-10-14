@@ -197,6 +197,7 @@ struct CreateCollectionSheet: View {
             } else {
                 editing.smartRulesData = nil
             }
+            editing.touch()
         } else {
             let newCollection = MediaCollection(name: trimmedName, systemImage: icon, isSmart: isSmart)
             if isSmart { newCollection.smartRuleSet = SmartRuleSet(matchAny: matchAny, rules: smartRules) }

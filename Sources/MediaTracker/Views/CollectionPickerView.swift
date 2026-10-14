@@ -135,6 +135,7 @@ struct CollectionToggleRow: View {
         } else {
             item.collections.append(collection)
         }
+        collection.touch()
 
         if let context = item.modelContext {
             SaveCoordinator.shared.forceSave(context)
