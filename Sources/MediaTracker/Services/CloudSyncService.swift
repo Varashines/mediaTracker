@@ -126,23 +126,41 @@ actor CloudSyncService {
 
             for remote in remoteItems {
                 if let local = localMap[remote.media_id] {
-                    // A differing state/taste *or* a differing soft-delete is a conflict.
+                    // A differing state/taste *or* a differing soft-delete is a difference.
                     let differs = local.stateValue != remote.state
                         || local.tasteValue != remote.taste
                         || local.isSoftDeleted != remote.is_soft_deleted
                     if differs {
-                        impact.titlesToUpdate.append(
-                            ImpactTitleItem(
-                                id: local.id,
-                                title: local.title,
-                                type: local.typeValue,
-                                state: local.stateValue,
-                                taste: local.tasteValue,
-                                posterURL: local.customPosterURL ?? local.posterURL,
-                                conflictCloudState: remote.state,
-                                conflictCloudTaste: remote.taste
+                        // Same rule the sync itself uses: newest edit wins. A "like"/"loved"
+                        // change only shows as a cloud update when the cloud copy is actually
+                        // newer; otherwise it's this device's upload — not a conflict. The old
+                        // version flagged every taste difference as a conflict regardless.
+                        let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
+                        if remoteTime > local.syncEditTime {
+                            impact.titlesToUpdate.append(
+                                ImpactTitleItem(
+                                    id: local.id,
+                                    title: local.title,
+                                    type: local.typeValue,
+                                    state: local.stateValue,
+                                    taste: local.tasteValue,
+                                    posterURL: local.customPosterURL ?? local.posterURL,
+                                    conflictCloudState: remote.state,
+                                    conflictCloudTaste: remote.taste
+                                )
                             )
-                        )
+                        } else {
+                            impact.titlesToUpload.append(
+                                ImpactTitleItem(
+                                    id: local.id,
+                                    title: local.title,
+                                    type: local.typeValue,
+                                    state: local.stateValue,
+                                    taste: local.tasteValue,
+                                    posterURL: local.customPosterURL ?? local.posterURL
+                                )
+                            )
+                        }
                     }
                 } else {
                     impact.titlesToImport.append(
@@ -170,19 +188,19 @@ actor CloudSyncService {
                             posterURL: local.customPosterURL ?? local.posterURL
                         )
                     )
-                } else if local.syncEditTime.timeIntervalSince1970 > lastSyncTimestamp {
-                    if !impact.titlesToUpdate.contains(where: { $0.id == local.id }) {
-                        impact.titlesToUpload.append(
-                            ImpactTitleItem(
-                                id: local.id,
-                                title: local.title,
-                                type: local.typeValue,
-                                state: local.stateValue,
-                                taste: local.tasteValue,
-                                posterURL: local.customPosterURL ?? local.posterURL
-                            )
+                } else if local.syncEditTime.timeIntervalSince1970 > lastSyncTimestamp,
+                          !impact.titlesToUpdate.contains(where: { $0.id == local.id }),
+                          !impact.titlesToUpload.contains(where: { $0.id == local.id }) {
+                    impact.titlesToUpload.append(
+                        ImpactTitleItem(
+                            id: local.id,
+                            title: local.title,
+                            type: local.typeValue,
+                            state: local.stateValue,
+                            taste: local.tasteValue,
+                            posterURL: local.customPosterURL ?? local.posterURL
                         )
-                    }
+                    )
                 }
             }
 
@@ -760,6 +778,43 @@ actor CloudSyncService {
             pushedCount += slice.count
         }
         return pushedCount
+    }
+
+    /// Posts a tombstone for a collection so its deletion propagates to other devices.
+    ///
+    /// macOS removes collection rows outright, so there is no local row left to push a
+    /// tombstone for — the delete path must call this *before* deleting. Takes primitives
+    /// rather than the `@Model` so it can be called from a detached `Task`.
+    func markCollectionDeleted(
+        id: UUID,
+        name: String,
+        systemImage: String,
+        notes: String?,
+        isPinned: Bool,
+        isSmart: Bool,
+        smartRules: String?,
+        completedItemIDs: [String]
+    ) async {
+        let syncKey = Self.getOrGenerateSyncKey()
+        guard !Self.supabaseURL.isEmpty, !Self.supabaseAnonKey.isEmpty, !syncKey.isEmpty else { return }
+        let payload = RemoteCollection(
+            user_id: syncKey,
+            collection_id: id.uuidString,
+            name: name,
+            system_image: systemImage,
+            notes: notes,
+            is_pinned: isPinned,
+            is_smart: isSmart,
+            smart_rules: smartRules,
+            completed_item_ids: completedItemIDs,
+            is_deleted: true,
+            updated_at: iso8601Formatter.string(from: Date())
+        )
+        do {
+            try await postRemote(endpoint: "user_collections", syncKey: syncKey, body: [payload])
+        } catch {
+            AppLogger.error("markCollectionDeleted failed: \(error.localizedDescription)", logger: AppLogger.sync)
+        }
     }
 
     private func applyRemoteCollections(_ remote: [RemoteCollection], force: Bool = false) async throws -> Int {
