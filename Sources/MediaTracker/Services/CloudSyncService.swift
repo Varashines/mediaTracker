@@ -564,6 +564,16 @@ actor CloudSyncService {
                     existing.lastStateChangeDate = d
                 }
                 existing.syncCachedProperties(dirty: .progress)
+                if remote.state == MediaState.completedRaw {
+                    // Same reason as episodes: log the watch so it appears in the history /
+                    // "watched this year" (which is WatchEvent-driven).
+                    WatchHistoryCoordinator.recordImportedMovie(
+                        mediaID: remote.media_id,
+                        watchedAt: existing.lastStateChangeDate ?? Date(),
+                        runtimeMinutes: existing.cachedRuntime,
+                        context: modelContext
+                    )
+                }
                 pulledCount += 1
             } else {
                 // Media title doesn't exist locally yet -> create stub and schedule metadata refresh
@@ -700,6 +710,18 @@ actor CloudSyncService {
                 if let dateStr = remote.watched_date {
                     ep.watchedDate = parseISO8601(dateStr)
                     ep.lastWatchedDate = ep.watchedDate
+                }
+                if remote.is_watched {
+                    // "Watched this year" reads WatchEvents, which only local mutations and
+                    // imports created. A watch that arrived via sync marked the episode but
+                    // never logged a WatchEvent, so its time never showed up.
+                    WatchHistoryCoordinator.recordImportedEpisode(
+                        mediaID: remote.show_id,
+                        episodeID: remote.episode_id,
+                        watchedAt: ep.watchedDate ?? ep.lastWatchedDate ?? Date(),
+                        runtimeMinutes: ep.runtime,
+                        context: modelContext
+                    )
                 }
                 pulledCount += 1
             }
