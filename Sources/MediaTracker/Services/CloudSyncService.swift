@@ -197,6 +197,10 @@ actor CloudSyncService {
 
             for local in localItems {
                 if remoteMap[local.id] == nil {
+                    // The fetch is watermarked, so a remote row that is simply untouched is
+                    // absent too — absent means "unchanged", not "not in the cloud". Only list
+                    // it as an upload when this device actually edited it since the last sync.
+                    guard changedSince(local.syncEditTime, watermark) else { continue }
                     impact.titlesToUpload.append(
                         ImpactTitleItem(
                             id: local.id,
@@ -252,7 +256,9 @@ actor CloudSyncService {
                         importCountsByShow[showID, default: 0] += 1
                         impact.totalEpisodesToImport += 1
                     }
-                } else if lEp.isWatched {
+                } else if lEp.isWatched, changedSince(lEp.watchedDate ?? lEp.lastWatchedDate, watermark) {
+                    // Absent from a watermarked fetch means "unchanged" — without the gate,
+                    // every watched episode in the library reads as an upload.
                     uploadCountsByShow[showID, default: 0] += 1
                     impact.totalEpisodesToUpload += 1
                 }
