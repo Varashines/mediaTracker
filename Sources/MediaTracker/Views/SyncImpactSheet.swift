@@ -24,6 +24,7 @@ struct SyncImpactSheet: View {
         case uploads = "Upload"
         case episodes = "Episodes"
         case collections = "Collections"
+        case history = "History"
     }
 
     init(
@@ -92,6 +93,8 @@ struct SyncImpactSheet: View {
                     .tag(ImpactTab.episodes)
                 Text("\(ImpactTab.collections.rawValue) (\(impact.collectionsToUpload.count + impact.collectionsToImport.count))")
                     .tag(ImpactTab.collections)
+                Text("\(ImpactTab.history.rawValue) (\(impact.cyclesToUpload + impact.eventsToUpload))")
+                    .tag(ImpactTab.history)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, AppTheme.Spacing.large)
@@ -111,6 +114,8 @@ struct SyncImpactSheet: View {
                         episodesView
                     case .collections:
                         collectionsView
+                    case .history:
+                        historyView
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.large)
@@ -424,6 +429,38 @@ struct SyncImpactSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
+    }
+
+    private var historyView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Watch history is the per-viewing log (cycles + events) behind rewatching, streaks and the year in review. Rows merge by id, and the only change a synced row can carry is a void.")
+                .font(AppTheme.Font.caption)
+                .foregroundStyle(.secondary)
+
+            if impact.cyclesToUpload == 0 && impact.eventsToUpload == 0 {
+                Text("Cloud history is already up to date.")
+                    .font(AppTheme.Font.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            } else {
+                historyStat(
+                    title: "Local → Cloud",
+                    detail: "\(impact.cyclesToUpload) cycles · \(impact.eventsToUpload) events"
+                )
+            }
+        }
+    }
+
+    private func historyStat(title: String, detail: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath").foregroundStyle(AppTheme.Colors.accent)
+            Text(title).font(AppTheme.Font.caption).fontWeight(.semibold)
+            Spacer()
+            Text(detail).font(AppTheme.Font.caption).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(AppTheme.Colors.surface(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func posterThumb(url: String?) -> some View {

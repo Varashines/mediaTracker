@@ -77,12 +77,16 @@ actor CloudSyncService {
         var totalEpisodesToUpload: Int = 0
         var collectionsToImport: [ImpactCollection] = []
         var collectionsToUpload: [ImpactCollection] = []
+        /// Watch history: local cycles/events the cloud doesn't have yet.
+        var cyclesToUpload: Int = 0
+        var eventsToUpload: Int = 0
         var errorDescription: String? = nil
 
         var totalChanges: Int {
             titlesToImport.count + titlesToUpdate.count + titlesToUpload.count +
                 totalEpisodesToImport + totalEpisodesToUpload +
-                collectionsToImport.count + collectionsToUpload.count
+                collectionsToImport.count + collectionsToUpload.count +
+                cyclesToUpload + eventsToUpload
         }
 
         var hasChanges: BooleanLiteralType {
@@ -105,6 +109,10 @@ actor CloudSyncService {
         var collectionsPulled: Int = 0
         var collectionItemsPushed: Int = 0
         var collectionItemsPulled: Int = 0
+        var cyclesPushed: Int = 0
+        var cyclesPulled: Int = 0
+        var eventsPushed: Int = 0
+        var eventsPulled: Int = 0
         var errorDescription: String? = nil
     }
 
@@ -306,6 +314,24 @@ actor CloudSyncService {
                     )
                 }
             }
+
+            // 4. Watch history: only ids are needed to count what the cloud is missing.
+            let remoteCycleIDRows: [RemoteID] = try await fetchAllPages(
+                endpoint: "user_watch_cycles",
+                query: "user_id=eq.\(syncKey)&select=cycle_id",
+                syncKey: syncKey
+            )
+            let remoteEventIDRows: [RemoteID] = try await fetchAllPages(
+                endpoint: "user_watch_events",
+                query: "user_id=eq.\(syncKey)&select=event_id",
+                syncKey: syncKey
+            )
+            let remoteCycleIDs = Set(remoteCycleIDRows.compactMap { $0.cycle_id })
+            let remoteEventIDs = Set(remoteEventIDRows.compactMap { $0.event_id })
+            let localCycles = (try? modelContext.fetch(FetchDescriptor<WatchCycle>())) ?? []
+            let localEvents = (try? modelContext.fetch(FetchDescriptor<WatchEvent>())) ?? []
+            impact.cyclesToUpload = localCycles.filter { !remoteCycleIDs.contains($0.id.uuidString) }.count
+            impact.eventsToUpload = localEvents.filter { !remoteEventIDs.contains($0.id.uuidString) }.count
         } catch {
             impact.errorDescription = error.localizedDescription
         }
@@ -340,6 +366,10 @@ actor CloudSyncService {
             // and so gets pushed, and the same for its membership rows.
             summary.collectionsPushed = try await pushCollections(syncKey: syncKey, remoteById: [:])
             summary.collectionItemsPushed = try await pushCollectionItems(syncKey: syncKey, remote: [])
+
+            // ...and the whole watch history (empty remote maps => everything is pushed).
+            summary.cyclesPushed = try await pushWatchCycles(syncKey: syncKey, remoteById: [:])
+            summary.eventsPushed = try await pushWatchEvents(syncKey: syncKey, remoteById: [:])
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
             try? modelContext.save()
@@ -425,6 +455,21 @@ actor CloudSyncService {
             summary.collectionsPulled = try await applyRemoteCollections(remoteCollections)
             summary.collectionItemsPushed = try await pushCollectionItems(syncKey: syncKey, remote: remoteCollectionItems)
             summary.collectionItemsPulled = try await applyRemoteCollectionItems(remoteCollectionItems)
+
+            // 5. Watch history: the cycles that group a viewing plus the events that are the
+            //    actual timeline, so rewatches and "when did I watch this" survive the trip.
+            let remoteCycles = try await fetchRemoteWatchCycles(syncKey: syncKey)
+            let remoteEvents = try await fetchRemoteWatchEvents(syncKey: syncKey)
+            summary.cyclesPushed = try await pushWatchCycles(
+                syncKey: syncKey,
+                remoteById: Dictionary(remoteCycles.map { ($0.cycle_id, $0) }, uniquingKeysWith: { first, _ in first })
+            )
+            summary.cyclesPulled = try await applyRemoteWatchCycles(remoteCycles)
+            summary.eventsPushed = try await pushWatchEvents(
+                syncKey: syncKey,
+                remoteById: Dictionary(remoteEvents.map { ($0.event_id, $0) }, uniquingKeysWith: { first, _ in first })
+            )
+            summary.eventsPulled = try await applyRemoteWatchEvents(remoteEvents)
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
             try? modelContext.save()
@@ -1063,6 +1108,271 @@ actor CloudSyncService {
             }
         }
         return pulledCount
+    }
+
+    // MARK: - Watch History (cycles + events)
+
+    /// Id-only projection, so the impact preview can count what the cloud is missing without
+    /// downloading every row.
+    private struct RemoteID: Codable {
+        var cycle_id: String?
+        var event_id: String?
+    }
+
+    private struct RemoteWatchCycle: Codable {
+        var user_id: String
+        var cycle_id: String
+        var media_id: String
+        var kind: String
+        var started_at: String
+        var completed_at: String?
+        var state: String
+        var is_rewatch: Bool
+        var is_complete: Bool
+        var scope_episode_ids: [String]
+        var is_backfilled: Bool
+        var updated_at: String?
+
+        enum CodingKeys: String, CodingKey {
+            case user_id, cycle_id, media_id, kind, started_at, completed_at, state
+            case is_rewatch, is_complete, scope_episode_ids, is_backfilled, updated_at
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            // Every key explicit, including nulls: the synthesized encoder omits nil
+            // optionals, and PostgREST rejects a batch with differing keys (PGRST102).
+            try container.encode(user_id, forKey: .user_id)
+            try container.encode(cycle_id, forKey: .cycle_id)
+            try container.encode(media_id, forKey: .media_id)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(started_at, forKey: .started_at)
+            try container.encode(completed_at, forKey: .completed_at)
+            try container.encode(state, forKey: .state)
+            try container.encode(is_rewatch, forKey: .is_rewatch)
+            try container.encode(is_complete, forKey: .is_complete)
+            try container.encode(scope_episode_ids, forKey: .scope_episode_ids)
+            try container.encode(is_backfilled, forKey: .is_backfilled)
+            try container.encode(updated_at, forKey: .updated_at)
+        }
+    }
+
+    private struct RemoteWatchEvent: Codable {
+        var user_id: String
+        var event_id: String
+        var cycle_id: String
+        var media_id: String
+        var episode_id: String?
+        var watched_at: String
+        var source: String
+        var timezone_identifier: String?
+        var runtime_minutes: Int?
+        var voided_at: String?
+        var deduplication_key: String
+        var is_backfilled: Bool
+        var updated_at: String?
+
+        enum CodingKeys: String, CodingKey {
+            case user_id, event_id, cycle_id, media_id, episode_id, watched_at, source
+            case timezone_identifier, runtime_minutes, voided_at, deduplication_key
+            case is_backfilled, updated_at
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(user_id, forKey: .user_id)
+            try container.encode(event_id, forKey: .event_id)
+            try container.encode(cycle_id, forKey: .cycle_id)
+            try container.encode(media_id, forKey: .media_id)
+            try container.encode(episode_id, forKey: .episode_id)
+            try container.encode(watched_at, forKey: .watched_at)
+            try container.encode(source, forKey: .source)
+            try container.encode(timezone_identifier, forKey: .timezone_identifier)
+            try container.encode(runtime_minutes, forKey: .runtime_minutes)
+            try container.encode(voided_at, forKey: .voided_at)
+            try container.encode(deduplication_key, forKey: .deduplication_key)
+            try container.encode(is_backfilled, forKey: .is_backfilled)
+            try container.encode(updated_at, forKey: .updated_at)
+        }
+    }
+
+    private func fetchRemoteWatchCycles(syncKey: String) async throws -> [RemoteWatchCycle] {
+        try await fetchAllPages(endpoint: "user_watch_cycles", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    }
+
+    private func fetchRemoteWatchEvents(syncKey: String) async throws -> [RemoteWatchEvent] {
+        try await fetchAllPages(endpoint: "user_watch_events", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    }
+
+    /// A cycle's "last meaningful change". `WatchCycle` has no modified timestamp of its own,
+    /// but it only ever moves forward (started → completed), so `completedAt ?? startedAt`
+    /// tracks it well enough to order pushes.
+    private func cycleChangeTime(startedAt: Date, completedAt: Date?) -> Date {
+        completedAt ?? startedAt
+    }
+
+    private func pushWatchCycles(syncKey: String, remoteById: [String: RemoteWatchCycle]) async throws -> Int {
+        let local = try modelContext.fetch(FetchDescriptor<WatchCycle>())
+        let dirty = local.filter { cycle in
+            guard let remote = remoteById[cycle.id.uuidString] else { return true }
+            let remoteTime = cycleChangeTime(
+                startedAt: parseISO8601(remote.started_at) ?? .distantPast,
+                completedAt: parseISO8601(remote.completed_at)
+            )
+            return cycleChangeTime(startedAt: cycle.startedAt, completedAt: cycle.completedAt) > remoteTime
+        }
+        guard !dirty.isEmpty else { return 0 }
+
+        let chunkSize = 100
+        var pushedCount = 0
+        for chunk in stride(from: 0, to: dirty.count, by: chunkSize) {
+            let slice = Array(dirty[chunk..<min(chunk + chunkSize, dirty.count)])
+            let payloads = slice.map { cycle in
+                RemoteWatchCycle(
+                    user_id: syncKey,
+                    cycle_id: cycle.id.uuidString,
+                    media_id: cycle.mediaID,
+                    kind: cycle.kindRaw,
+                    started_at: iso8601Formatter.string(from: cycle.startedAt),
+                    completed_at: cycle.completedAt.map { iso8601Formatter.string(from: $0) },
+                    state: cycle.stateRaw,
+                    is_rewatch: cycle.isRewatch,
+                    is_complete: cycle.isComplete,
+                    scope_episode_ids: cycle.scopeEpisodeIDs,
+                    is_backfilled: cycle.isBackfilled,
+                    updated_at: iso8601Formatter.string(from: Date())
+                )
+            }
+            try await postRemote(endpoint: "user_watch_cycles", syncKey: syncKey, body: payloads)
+            pushedCount += slice.count
+        }
+        return pushedCount
+    }
+
+    private func pushWatchEvents(syncKey: String, remoteById: [String: RemoteWatchEvent]) async throws -> Int {
+        let local = try modelContext.fetch(FetchDescriptor<WatchEvent>())
+        let dirty = local.filter { event in
+            guard let remote = remoteById[event.id.uuidString] else { return true }
+            // Events are immutable facts; the only forward change is a void.
+            return event.voidedAt != nil && remote.voided_at == nil
+        }
+        guard !dirty.isEmpty else { return 0 }
+
+        let chunkSize = 100
+        var pushedCount = 0
+        for chunk in stride(from: 0, to: dirty.count, by: chunkSize) {
+            let slice = Array(dirty[chunk..<min(chunk + chunkSize, dirty.count)])
+            let payloads = slice.map { event in
+                RemoteWatchEvent(
+                    user_id: syncKey,
+                    event_id: event.id.uuidString,
+                    cycle_id: event.cycleID.uuidString,
+                    media_id: event.mediaID,
+                    episode_id: event.episodeID,
+                    watched_at: iso8601Formatter.string(from: event.watchedAt),
+                    source: event.sourceRaw,
+                    timezone_identifier: event.timezoneIdentifier,
+                    runtime_minutes: event.runtimeMinutes,
+                    voided_at: event.voidedAt.map { iso8601Formatter.string(from: $0) },
+                    deduplication_key: event.deduplicationKey,
+                    is_backfilled: event.isBackfilled,
+                    updated_at: iso8601Formatter.string(from: Date())
+                )
+            }
+            try await postRemote(endpoint: "user_watch_events", syncKey: syncKey, body: payloads)
+            pushedCount += slice.count
+        }
+        return pushedCount
+    }
+
+    private func applyRemoteWatchCycles(_ remote: [RemoteWatchCycle]) async throws -> Int {
+        guard !remote.isEmpty else { return 0 }
+        var pulledCount = 0
+        for item in remote {
+            guard let uuid = UUID(uuidString: item.cycle_id) else { continue }
+            let descriptor = FetchDescriptor<WatchCycle>(predicate: #Predicate { $0.id == uuid })
+            let remoteCompleted = parseISO8601(item.completed_at)
+            if let existing = try? modelContext.fetch(descriptor).first {
+                // Only completion moves; started/isRewatch/scope are fixed at creation.
+                let remoteTime = cycleChangeTime(
+                    startedAt: parseISO8601(item.started_at) ?? .distantPast,
+                    completedAt: remoteCompleted
+                )
+                guard remoteTime > cycleChangeTime(startedAt: existing.startedAt, completedAt: existing.completedAt) else { continue }
+                existing.stateRaw = item.state
+                existing.completedAt = remoteCompleted
+                existing.isComplete = item.is_complete
+                pulledCount += 1
+            } else {
+                let created = WatchCycle(
+                    id: uuid,
+                    mediaID: item.media_id,
+                    kind: WatchCycleKind(rawValue: item.kind) ?? .movie,
+                    startedAt: parseISO8601(item.started_at) ?? Date(),
+                    completedAt: remoteCompleted,
+                    state: WatchCycleState(rawValue: item.state) ?? .active,
+                    isBackfilled: true,
+                    isRewatch: item.is_rewatch,
+                    isComplete: item.is_complete,
+                    scopeEpisodeIDs: item.scope_episode_ids
+                )
+                modelContext.insert(created)
+                pulledCount += 1
+            }
+        }
+        return pulledCount
+    }
+
+    private func applyRemoteWatchEvents(_ remote: [RemoteWatchEvent]) async throws -> Int {
+        guard !remote.isEmpty else { return 0 }
+        var pulledCount = 0
+        for item in remote {
+            guard let uuid = UUID(uuidString: item.event_id) else { continue }
+            let descriptor = FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.id == uuid })
+            let remoteVoided = parseISO8601(item.voided_at)
+
+            if let existing = try? modelContext.fetch(descriptor).first {
+                if existing.voidedAt == nil, remoteVoided != nil {
+                    existing.voidedAt = remoteVoided
+                    pulledCount += 1
+                }
+                continue
+            }
+            let watchedAt = parseISO8601(item.watched_at) ?? Date()
+            // The media/episode pull synthesises an event when a watch arrives without history
+            // (so the story reads continuously), and its dedup key differs from the origin
+            // device's — without this check the same watch would be logged twice.
+            if hasEquivalentEvent(mediaID: item.media_id, episodeID: item.episode_id, watchedAt: watchedAt) { continue }
+
+            let created = WatchEvent(
+                id: uuid,
+                cycleID: UUID(uuidString: item.cycle_id) ?? UUID(),
+                mediaID: item.media_id,
+                episodeID: item.episode_id,
+                watchedAt: watchedAt,
+                source: WatchEventSource(rawValue: item.source) ?? .imported,
+                timezoneIdentifier: item.timezone_identifier,
+                runtimeMinutes: item.runtime_minutes,
+                voidedAt: remoteVoided,
+                deduplicationKey: item.deduplication_key,
+                isBackfilled: true
+            )
+            modelContext.insert(created)
+            pulledCount += 1
+        }
+        return pulledCount
+    }
+
+    /// True when a local event already covers the same watch on the same day.
+    private func hasEquivalentEvent(mediaID: String, episodeID: String?, watchedAt: Date) -> Bool {
+        let descriptor = FetchDescriptor<WatchEvent>(
+            predicate: #Predicate { $0.mediaID == mediaID && $0.voidedAt == nil }
+        )
+        guard let candidates = try? modelContext.fetch(descriptor) else { return false }
+        let calendar = Calendar.current
+        return candidates.contains { candidate in
+            candidate.episodeID == episodeID && calendar.isDate(candidate.watchedAt, inSameDayAs: watchedAt)
+        }
     }
 
     // MARK: - PostgREST Networking Helpers
