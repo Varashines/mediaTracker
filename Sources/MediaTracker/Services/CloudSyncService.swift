@@ -131,10 +131,11 @@ actor CloudSyncService {
 
         var impact = SyncImpact()
         let lastSyncTimestamp = UserDefaults.standard.double(forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
+        let watermark = UserDefaults.standard.string(forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
 
         do {
             // 1. Fetch remote media (paginated: a single GET truncates at 1000 rows)
-            let remoteItems = try await fetchRemoteMedia(syncKey: syncKey)
+            let remoteItems = try await fetchRemoteMedia(syncKey: syncKey, since: watermark)
             let remoteMap = Dictionary(remoteItems.map { ($0.media_id, $0) }, uniquingKeysWith: { first, _ in first })
 
             var descriptor = FetchDescriptor<MediaItem>()
@@ -223,7 +224,7 @@ actor CloudSyncService {
             }
 
             // 2. Fetch remote episodes (paginated: a single GET truncates at 1000 rows)
-            let remoteEps = try await fetchRemoteEpisodes(syncKey: syncKey)
+            let remoteEps = try await fetchRemoteEpisodes(syncKey: syncKey, since: watermark)
             let remoteEpMap = Dictionary(remoteEps.map { ($0.episode_id, $0.is_watched) }, uniquingKeysWith: { first, _ in first })
 
             var epDescriptor = FetchDescriptor<TVEpisode>()
@@ -278,8 +279,8 @@ actor CloudSyncService {
             }.sorted { $0.episodeCount > $1.episodeCount }
 
             // 3. Collections (rows + membership), so the sheet actually mentions them.
-            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey)
-            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
+            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey, since: watermark)
+            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey, since: watermark)
             let remoteCollectionByID = Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
             let remoteItemCounts = Dictionary(grouping: remoteCollectionItems.filter { !$0.is_deleted }, by: \.collection_id)
                 .mapValues { $0.count }
@@ -401,6 +402,8 @@ actor CloudSyncService {
 
         var summary = SyncSummary()
         let lastSyncTimestamp = UserDefaults.standard.double(forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
+        // Incremental pulls: only ask for rows newer than the last sync's newest stamp.
+        let watermark = UserDefaults.standard.string(forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
         let now = Date().timeIntervalSince1970
 
         do {
@@ -411,7 +414,7 @@ actor CloudSyncService {
             // than a change to review — and a title that already exists remotely is never in
             // the "changed since last sync" upload set, so it would otherwise stay NULL there
             // forever. Backfill it silently so the other device can order "Recently Added".
-            let remoteDateAdded = try await fetchRemoteDateAdded(syncKey: syncKey)
+            let remoteDateAdded = try await fetchRemoteDateAdded(syncKey: syncKey, since: watermark)
             let itemsToUpload = localItems.filter { item in
                 approvedUploadIDs.contains(item.id) ||
                     (item.dateAdded != nil && remoteDateAdded[item.id] == nil)
@@ -443,20 +446,20 @@ actor CloudSyncService {
             // 2. Pull approved remote titles
             let allowedPullIDs = approvedImportIDs.union(approvedUpdateIDs)
             if !allowedPullIDs.isEmpty {
-                summary.mediaPulled = try await pullMediaItems(syncKey: syncKey, filterIDs: allowedPullIDs)
+                summary.mediaPulled = try await pullMediaItems(syncKey: syncKey, filterIDs: allowedPullIDs, since: watermark)
             }
 
             // 3. Episodes sync
             if syncEpisodes {
                 summary.episodesPushed = try await pushEpisodes(syncKey: syncKey, since: lastSyncTimestamp)
-                summary.episodesPulled = try await pullEpisodes(syncKey: syncKey)
+                summary.episodesPulled = try await pullEpisodes(syncKey: syncKey, since: watermark)
             }
 
             // 4. Collections (rows + membership). The sheet has no per-collection approval —
             //    they're few and low-risk, so reconcile wholesale (newest wins). Without this
             //    the normal "Sync Now" flow never pushed collections at all.
-            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey)
-            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
+            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey, since: watermark)
+            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey, since: watermark)
             summary.collectionsPushed = try await pushCollections(
                 syncKey: syncKey,
                 remoteById: Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -467,8 +470,8 @@ actor CloudSyncService {
 
             // 5. Watch history: the cycles that group a viewing plus the events that are the
             //    actual timeline, so rewatches and "when did I watch this" survive the trip.
-            let remoteCycles = try await fetchRemoteWatchCycles(syncKey: syncKey)
-            let remoteEvents = try await fetchRemoteWatchEvents(syncKey: syncKey)
+            let remoteCycles = try await fetchRemoteWatchCycles(syncKey: syncKey, since: watermark)
+            let remoteEvents = try await fetchRemoteWatchEvents(syncKey: syncKey, since: watermark)
             summary.cyclesPushed = try await pushWatchCycles(
                 syncKey: syncKey,
                 remoteById: Dictionary(remoteCycles.map { ($0.cycle_id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -481,6 +484,10 @@ actor CloudSyncService {
             summary.eventsPulled = try await applyRemoteWatchEvents(remoteEvents)
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
+            // Advance the incremental pull watermark so the next sync only asks for changes.
+            if let advanced = newWatermark {
+                UserDefaults.standard.set(advanced, forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+            }
             try? modelContext.save()
         } catch {
             summary.errorDescription = error.localizedDescription
@@ -741,8 +748,8 @@ actor CloudSyncService {
 
     /// Fetch + apply for the user-approved selective sync, which explicitly opts into the
     /// cloud copy (hence `force`).
-    private func pullMediaItems(syncKey: String, filterIDs: Set<String>? = nil) async throws -> Int {
-        let remote = try await fetchRemoteMedia(syncKey: syncKey)
+    private func pullMediaItems(syncKey: String, filterIDs: Set<String>? = nil, since: String? = nil) async throws -> Int {
+        let remote = try await fetchRemoteMedia(syncKey: syncKey, since: since)
         return try await applyRemoteMedia(remote, filterIDs: filterIDs, force: true)
     }
 
@@ -865,8 +872,8 @@ actor CloudSyncService {
     }
 
     /// Fetch + apply (used by the selective sync, which opts into the cloud copy).
-    private func pullEpisodes(syncKey: String) async throws -> Int {
-        let remote = try await fetchRemoteEpisodes(syncKey: syncKey)
+    private func pullEpisodes(syncKey: String, since: String? = nil) async throws -> Int {
+        let remote = try await fetchRemoteEpisodes(syncKey: syncKey, since: since)
         return try await applyRemoteEpisodes(remote, force: true)
     }
 
@@ -930,12 +937,26 @@ actor CloudSyncService {
         }
     }
 
-    private func fetchRemoteCollections(syncKey: String) async throws -> [RemoteCollection] {
-        try await fetchAllPages(endpoint: "user_collections", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteCollections(syncKey: String, since: String? = nil) async throws -> [RemoteCollection] {
+        let rows: [RemoteCollection] = try await fetchAllPages(
+            endpoint: "user_collections",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 
-    private func fetchRemoteCollectionItems(syncKey: String) async throws -> [RemoteCollectionItem] {
-        try await fetchAllPages(endpoint: "user_collection_items", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteCollectionItems(syncKey: String, since: String? = nil) async throws -> [RemoteCollectionItem] {
+        let rows: [RemoteCollectionItem] = try await fetchAllPages(
+            endpoint: "user_collection_items",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 
     private func pushCollections(syncKey: String, remoteById: [String: RemoteCollection]) async throws -> Int {
@@ -1219,12 +1240,26 @@ actor CloudSyncService {
         }
     }
 
-    private func fetchRemoteWatchCycles(syncKey: String) async throws -> [RemoteWatchCycle] {
-        try await fetchAllPages(endpoint: "user_watch_cycles", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteWatchCycles(syncKey: String, since: String? = nil) async throws -> [RemoteWatchCycle] {
+        let rows: [RemoteWatchCycle] = try await fetchAllPages(
+            endpoint: "user_watch_cycles",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 
-    private func fetchRemoteWatchEvents(syncKey: String) async throws -> [RemoteWatchEvent] {
-        try await fetchAllPages(endpoint: "user_watch_events", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteWatchEvents(syncKey: String, since: String? = nil) async throws -> [RemoteWatchEvent] {
+        let rows: [RemoteWatchEvent] = try await fetchAllPages(
+            endpoint: "user_watch_events",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 
     /// A cycle's "last meaningful change". `WatchCycle` has no modified timestamp of its own,
@@ -1437,16 +1472,46 @@ actor CloudSyncService {
     ///
     /// PostgREST caps an unpaginated response at 1000 rows, so a single GET silently
     /// truncated a library past that size — rows beyond the first page never synced.
+    /// Newest server `updated_at` seen during this service's pulls, used to advance the
+    /// incremental watermark. Server time, not the device clock.
+    private var observedMaxUpdatedAt: String?
+
+    private func noteWatermark(_ stamp: String?) {
+        guard let stamp, !stamp.isEmpty else { return }
+        if observedMaxUpdatedAt.map({ stamp > $0 }) ?? true { observedMaxUpdatedAt = stamp }
+    }
+
+    /// The watermark to persist: the newest stamp seen, backed off slightly so a read racing an
+    /// in-flight commit can't skip that row on the next pull.
+    var newWatermark: String? {
+        guard let newest = observedMaxUpdatedAt else { return nil }
+        guard let date = parseISO8601(newest) else { return newest }
+        return iso8601Formatter.string(from: date.addingTimeInterval(-5))
+    }
+
     private func fetchAllPages<T: Decodable>(
         endpoint: String,
         query: String,
-        syncKey: String
+        syncKey: String,
+        since: String? = nil
     ) async throws -> [T] {
+        // Incremental watermark: every table carries a server-set updated_at, so an unchanged
+        // table comes back empty instead of re-downloading the whole library.
+        var fullQuery = query
+        if let since, !since.isEmpty {
+            // `+` in the offset (…+00:00) is legal in a query string but decodes as a space,
+            // which silently breaks the filter — so encode it.
+            var allowed = CharacterSet.urlQueryAllowed
+            allowed.remove(charactersIn: "+")
+            if let encoded = "gt.\(since)".addingPercentEncoding(withAllowedCharacters: allowed) {
+                fullQuery += "&updated_at=\(encoded)"
+            }
+        }
         var out: [T] = []
         var offset = 0
         let pageSize = 1000
         while true {
-            guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)?\(query)") else { break }
+            guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)?\(fullQuery)") else { break }
             let (data, response) = try await sendRequest(
                 url: url,
                 syncKey: syncKey,
@@ -1470,23 +1535,40 @@ actor CloudSyncService {
         var date_added: String?
     }
 
-    private func fetchRemoteDateAdded(syncKey: String) async throws -> [String: String] {
+    private func fetchRemoteDateAdded(syncKey: String, since: String? = nil) async throws -> [String: String] {
         let rows: [RemoteMediaDateAdded] = try await fetchAllPages(
             endpoint: "user_media",
             query: "user_id=eq.\(syncKey)&select=media_id,date_added",
-            syncKey: syncKey
+            syncKey: syncKey,
+            since: since
         )
+        // Deliberately no watermark from this projection: it selects `date_added`, which is an
+        // arbitrary past instant, not the row's server write time.
         return Dictionary(uniqueKeysWithValues: rows.compactMap { row in
             row.date_added.map { (row.media_id, $0) }
         })
     }
 
-    private func fetchRemoteMedia(syncKey: String) async throws -> [RemoteMediaItem] {
-        try await fetchAllPages(endpoint: "user_media", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteMedia(syncKey: String, since: String? = nil) async throws -> [RemoteMediaItem] {
+        let rows: [RemoteMediaItem] = try await fetchAllPages(
+            endpoint: "user_media",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 
-    private func fetchRemoteEpisodes(syncKey: String) async throws -> [RemoteEpisode] {
-        try await fetchAllPages(endpoint: "user_episodes", query: "user_id=eq.\(syncKey)&select=*", syncKey: syncKey)
+    private func fetchRemoteEpisodes(syncKey: String, since: String? = nil) async throws -> [RemoteEpisode] {
+        let rows: [RemoteEpisode] = try await fetchAllPages(
+            endpoint: "user_episodes",
+            query: "user_id=eq.\(syncKey)&select=*",
+            syncKey: syncKey,
+            since: since
+        )
+        noteWatermark(rows.compactMap { $0.updated_at }.max())
+        return rows
     }
 }
 

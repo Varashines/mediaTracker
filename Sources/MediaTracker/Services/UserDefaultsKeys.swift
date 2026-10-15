@@ -74,4 +74,6 @@ enum UserDefaultsKeys: String {
     case cloudSyncAnonKey = "cloud_sync_anon_key"
     case cloudSyncKey = "cloud_sync_key"
     case cloudSyncLastTimestamp = "cloud_sync_last_timestamp"
+    /// Incremental pull watermark: the newest server `updated_at` the last sync saw.
+    case cloudSyncWatermark = "cloud_sync_watermark"
 }
