@@ -1139,11 +1139,15 @@ actor CloudSyncService {
     }
 }
 
-/// The instant a local row was last edited, used to resolve sync conflicts
-/// (last-writer-wins). Mirrors Android's `lastStateChangeDate` comparison.
+/// The instant a local row was last *edited by the user*, used to resolve sync conflicts
+/// (last-writer-wins). Mirrors Android's `lastInteractionDate` comparison.
+///
+/// `lastUpdated` is deliberately excluded: it's the metadata/cache-refresh stamp, so a
+/// background refresh would otherwise make the row look freshly edited and win every
+/// conflict against a genuine change made on the other device.
 private extension MediaItem {
     var syncEditTime: Date {
-        lastUpdated ?? lastStateChangeDate ?? lastInteractionDate ?? .distantPast
+        lastInteractionDate ?? lastStateChangeDate ?? .distantPast
     }
 }
 
