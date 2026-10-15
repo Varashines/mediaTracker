@@ -285,20 +285,23 @@ actor CloudSyncService {
             }.sorted { $0.episodeCount > $1.episodeCount }
 
             // 3. Collections (rows + membership), so the sheet actually mentions them.
-            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey, since: watermark)
+            // Unwatermarked, like the membership fetch below: this loop asks "is this
+            // collection in the cloud?", and a watermarked response omits unchanged rows —
+            // which reads as "missing" and listed every collection as an upload.
+            let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey)
             // Unwatermarked (it is only ~25 rows): the membership push tests "does the cloud
             // have this row?", and a watermarked response omits unchanged rows — which reads
             // the same as missing and re-pushed every membership on every sync.
             let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
-            let remoteCollectionByID = Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
+            let remoteCollectionByID = lowercaseKeyed(Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first }))
             let remoteItemCounts = Dictionary(grouping: remoteCollectionItems.filter { !$0.is_deleted }, by: \.collection_id)
                 .mapValues { $0.count }
             let localCollections = (try? modelContext.fetch(FetchDescriptor<MediaCollection>())) ?? []
-            let localCollectionIDs = Set(localCollections.map { $0.id.uuidString })
+            let localCollectionIDs = Set(localCollections.map { $0.id.uuidString.lowercased() })
 
             for local in localCollections {
                 let impactItem = ImpactCollection(id: local.id.uuidString, name: local.name, itemCount: local.items.count)
-                guard let remote = remoteCollectionByID[local.id.uuidString] else {
+                guard let remote = remoteCollectionByID[local.id.uuidString.lowercased()] else {
                     impact.collectionsToUpload.append(impactItem)
                     continue
                 }
@@ -314,7 +317,7 @@ actor CloudSyncService {
                 }
             }
             for remote in remoteCollections where !remote.is_deleted {
-                if !localCollectionIDs.contains(remote.collection_id) {
+                if !localCollectionIDs.contains(remote.collection_id.lowercased()) {
                     impact.collectionsToImport.append(
                         ImpactCollection(
                             id: remote.collection_id,
@@ -336,12 +339,12 @@ actor CloudSyncService {
                 query: "user_id=eq.\(syncKey)&select=event_id",
                 syncKey: syncKey
             )
-            let remoteCycleIDs = Set(remoteCycleIDRows.compactMap { $0.cycle_id })
-            let remoteEventIDs = Set(remoteEventIDRows.compactMap { $0.event_id })
+            let remoteCycleIDs = Set(remoteCycleIDRows.compactMap { $0.cycle_id?.lowercased() })
+            let remoteEventIDs = Set(remoteEventIDRows.compactMap { $0.event_id?.lowercased() })
             let localCycles = (try? modelContext.fetch(FetchDescriptor<WatchCycle>())) ?? []
             let localEvents = (try? modelContext.fetch(FetchDescriptor<WatchEvent>())) ?? []
-            impact.cyclesToUpload = localCycles.filter { !remoteCycleIDs.contains($0.id.uuidString) }.count
-            impact.eventsToUpload = localEvents.filter { !remoteEventIDs.contains($0.id.uuidString) }.count
+            impact.cyclesToUpload = localCycles.filter { !remoteCycleIDs.contains($0.id.uuidString.lowercased()) }.count
+            impact.eventsToUpload = localEvents.filter { !remoteEventIDs.contains($0.id.uuidString.lowercased()) }.count
         } catch {
             impact.errorDescription = error.localizedDescription
         }
@@ -975,9 +978,10 @@ actor CloudSyncService {
     }
 
     private func pushCollections(syncKey: String, remoteById: [String: RemoteCollection]) async throws -> Int {
+        let remoteByID = lowercaseKeyed(remoteById)
         let local = try modelContext.fetch(FetchDescriptor<MediaCollection>())
         let dirty = local.filter { collection in
-            guard let remote = remoteById[collection.id.uuidString] else { return true }
+            guard let remote = remoteByID[collection.id.uuidString.lowercased()] else { return true }
             let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
             return (collection.updatedAt ?? .distantPast) > remoteTime
         }
@@ -990,7 +994,7 @@ actor CloudSyncService {
             let payloads = slice.map { collection in
                 RemoteCollection(
                     user_id: syncKey,
-                    collection_id: collection.id.uuidString,
+                    collection_id: remoteByID[collection.id.uuidString.lowercased()]?.collection_id ?? collection.id.uuidString,
                     name: collection.name,
                     system_image: collection.systemImage,
                     notes: collection.notes,
@@ -1104,21 +1108,32 @@ actor CloudSyncService {
 
         let now = iso8601Formatter.string(from: Date())
         let remoteByKey = Dictionary(
-            remote.map { ("\($0.collection_id)|\($0.media_id)", $0) },
+            remote.map { ("\($0.collection_id.lowercased())|\($0.media_id)", $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
         var payloads: [RemoteCollectionItem] = []
         for (collectionID, mediaIDs) in desired {
-            for mediaID in mediaIDs where remoteByKey["\(collectionID)|\(mediaID)"]?.is_deleted != false {
-                payloads.append(RemoteCollectionItem(user_id: syncKey, collection_id: collectionID, media_id: mediaID, is_deleted: false, updated_at: now))
+            for mediaID in mediaIDs {
+                let existing = remoteByKey["\(collectionID.lowercased())|\(mediaID)"]
+                guard existing?.is_deleted != false else { continue }
+                payloads.append(RemoteCollectionItem(
+                    user_id: syncKey,
+                    collection_id: existing?.collection_id ?? collectionID,
+                    media_id: mediaID,
+                    is_deleted: false,
+                    updated_at: now
+                ))
             }
         }
         // Tombstone rows that are still in the cloud but no longer local — but only while the
         // collection itself still exists (a whole-collection delete is handled above).
         for row in remote where !row.is_deleted {
-            guard desired.keys.contains(row.collection_id) else { continue }
-            if desired[row.collection_id]?.contains(row.media_id) != true {
+            // Resolve the local key case-insensitively — the cloud may store the id in a
+            // different case, and looking it up raw would read as "not local" and tombstone a
+            // membership that is in fact still here.
+            guard let localKey = desired.keys.first(where: { $0.lowercased() == row.collection_id.lowercased() }) else { continue }
+            if desired[localKey]?.contains(row.media_id) != true {
                 payloads.append(RemoteCollectionItem(user_id: syncKey, collection_id: row.collection_id, media_id: row.media_id, is_deleted: true, updated_at: now))
             }
         }
@@ -1277,6 +1292,13 @@ actor CloudSyncService {
         return rows
     }
 
+    /// Cloud ids are UUID strings whose letter case depends on which client pushed the row —
+    /// Swift's `uuidString` is uppercase, Kotlin's `UUID.toString()` lowercase — so every id
+    /// comparison across the sync boundary has to be case-insensitive.
+    private func lowercaseKeyed<Value>(_ remote: [String: Value]) -> [String: Value] {
+        Dictionary(remote.map { ($0.key.lowercased(), $0.value) }, uniquingKeysWith: { first, _ in first })
+    }
+
     /// True when [stamp] is newer than the incremental watermark — or when there is no
     /// watermark, i.e. the last sync was a full pull, where "absent remotely" really does mean
     /// "missing from the cloud".
@@ -1294,11 +1316,12 @@ actor CloudSyncService {
     }
 
     private func pushWatchCycles(syncKey: String, remoteById: [String: RemoteWatchCycle], watermark: String? = nil) async throws -> Int {
+        let remoteByID = lowercaseKeyed(remoteById)
         let local = try modelContext.fetch(FetchDescriptor<WatchCycle>())
         let dirty = local.filter { cycle in
             // A watermarked fetch omits unchanged rows, so "absent" means "unchanged", not
             // "never pushed" — only send one this device actually moved since the last sync.
-            guard let remote = remoteById[cycle.id.uuidString] else {
+            guard let remote = remoteByID[cycle.id.uuidString.lowercased()] else {
                 return changedSince(cycle.startedAt, watermark) || changedSince(cycle.completedAt, watermark)
             }
             let remoteTime = cycleChangeTime(
@@ -1316,7 +1339,7 @@ actor CloudSyncService {
             let payloads = slice.map { cycle in
                 RemoteWatchCycle(
                     user_id: syncKey,
-                    cycle_id: cycle.id.uuidString,
+                    cycle_id: remoteByID[cycle.id.uuidString.lowercased()]?.cycle_id ?? cycle.id.uuidString,
                     media_id: cycle.mediaID,
                     kind: cycle.kindRaw,
                     started_at: iso8601Formatter.string(from: cycle.startedAt),
@@ -1336,10 +1359,11 @@ actor CloudSyncService {
     }
 
     private func pushWatchEvents(syncKey: String, remoteById: [String: RemoteWatchEvent], watermark: String? = nil) async throws -> Int {
+        let remoteByID = lowercaseKeyed(remoteById)
         let local = try modelContext.fetch(FetchDescriptor<WatchEvent>())
         let dirty = local.filter { event in
             // Same watermark subtlety as cycles.
-            guard let remote = remoteById[event.id.uuidString] else {
+            guard let remote = remoteByID[event.id.uuidString.lowercased()] else {
                 return changedSince(event.watchedAt, watermark) || changedSince(event.voidedAt, watermark)
             }
             // Events are immutable facts; the only forward change is a void.
@@ -1354,7 +1378,7 @@ actor CloudSyncService {
             let payloads = slice.map { event in
                 RemoteWatchEvent(
                     user_id: syncKey,
-                    event_id: event.id.uuidString,
+                    event_id: remoteByID[event.id.uuidString.lowercased()]?.event_id ?? event.id.uuidString,
                     cycle_id: event.cycleID.uuidString,
                     media_id: event.mediaID,
                     episode_id: event.episodeID,
