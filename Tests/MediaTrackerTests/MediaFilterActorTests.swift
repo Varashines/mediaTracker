@@ -145,7 +145,7 @@ final class MediaFilterActorTests: MTTestCase {
         let movie = MediaItem(id: "movie_1430077", title: "Hokum", overview: "", type: .movie)
         movie.stateValue = MediaState.activeRaw
         movie.lastInteractionDate = Date()
-        movie.lastStateChangeDate = Date()
+        movie.lastStateChangeDate = Date().addingTimeInterval(-.days30 * 2)
         context.insert(movie)
 
         let show = MediaItem(id: "tv_9", title: "Show", overview: "", type: .tvShow)
