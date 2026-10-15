@@ -414,7 +414,11 @@ actor CloudSyncService {
             // than a change to review — and a title that already exists remotely is never in
             // the "changed since last sync" upload set, so it would otherwise stay NULL there
             // forever. Backfill it silently so the other device can order "Recently Added".
-            let remoteDateAdded = try await fetchRemoteDateAdded(syncKey: syncKey, since: watermark)
+            // Deliberately *not* watermarked: this is an existence test ("does the cloud hold a
+            // date_added for this id?"). A watermarked response omits unchanged rows, and
+            // "omitted" is indistinguishable from "missing" — which re-pushed the whole
+            // library as needing a backfill.
+            let remoteDateAdded = try await fetchRemoteDateAdded(syncKey: syncKey)
             let itemsToUpload = localItems.filter { item in
                 approvedUploadIDs.contains(item.id) ||
                     (item.dateAdded != nil && remoteDateAdded[item.id] == nil)
