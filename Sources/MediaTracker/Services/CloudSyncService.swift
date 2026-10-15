@@ -407,7 +407,15 @@ actor CloudSyncService {
             // 1. Push approved local titles
             let descriptor = FetchDescriptor<MediaItem>()
             let localItems = try modelContext.fetch(descriptor)
-            let itemsToUpload = localItems.filter { approvedUploadIDs.contains($0.id) }
+            // `date_added` is immutable, so a cloud row without one is a gap to fill rather
+            // than a change to review — and a title that already exists remotely is never in
+            // the "changed since last sync" upload set, so it would otherwise stay NULL there
+            // forever. Backfill it silently so the other device can order "Recently Added".
+            let remoteDateAdded = try await fetchRemoteDateAdded(syncKey: syncKey)
+            let itemsToUpload = localItems.filter { item in
+                approvedUploadIDs.contains(item.id) ||
+                    (item.dateAdded != nil && remoteDateAdded[item.id] == nil)
+            }
             if !itemsToUpload.isEmpty {
                 let chunkSize = 100
                 for chunk in stride(from: 0, to: itemsToUpload.count, by: chunkSize) {
@@ -1453,6 +1461,24 @@ actor CloudSyncService {
             if page.count < pageSize { break }
         }
         return out
+    }
+
+    /// `media_id` → `date_added` for every cloud row, so a sync can tell which local titles
+    /// still need their added date backfilled.
+    private struct RemoteMediaDateAdded: Codable {
+        var media_id: String
+        var date_added: String?
+    }
+
+    private func fetchRemoteDateAdded(syncKey: String) async throws -> [String: String] {
+        let rows: [RemoteMediaDateAdded] = try await fetchAllPages(
+            endpoint: "user_media",
+            query: "user_id=eq.\(syncKey)&select=media_id,date_added",
+            syncKey: syncKey
+        )
+        return Dictionary(uniqueKeysWithValues: rows.compactMap { row in
+            row.date_added.map { (row.media_id, $0) }
+        })
     }
 
     private func fetchRemoteMedia(syncKey: String) async throws -> [RemoteMediaItem] {
