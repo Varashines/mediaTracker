@@ -423,6 +423,7 @@ actor CloudSyncService {
                             is_soft_deleted: item.isSoftDeleted,
                             last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
                             last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
+                            date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
                             updated_at: iso8601Formatter.string(from: Date())
                         )
                     }
@@ -556,10 +557,13 @@ actor CloudSyncService {
         var is_soft_deleted: Bool
         var last_interaction_date: String?
         var last_state_change_date: String?
+        /// When the title joined the library. Unlike last_interaction_date it never moves, so
+        /// the other device can order "Recently Added" by it (and adopt it for old rows).
+        var date_added: String?
         var updated_at: String?
 
         enum CodingKeys: String, CodingKey {
-            case user_id, media_id, type, state, taste, custom_poster_url, is_soft_deleted, last_interaction_date, last_state_change_date, updated_at
+            case user_id, media_id, type, state, taste, custom_poster_url, is_soft_deleted, last_interaction_date, last_state_change_date, date_added, updated_at
         }
 
         func encode(to encoder: Encoder) throws {
@@ -573,6 +577,7 @@ actor CloudSyncService {
             try container.encode(is_soft_deleted, forKey: .is_soft_deleted)
             try container.encode(last_interaction_date, forKey: .last_interaction_date)
             try container.encode(last_state_change_date, forKey: .last_state_change_date)
+            try container.encode(date_added, forKey: .date_added)
             try container.encode(updated_at, forKey: .updated_at)
         }
     }
@@ -623,6 +628,7 @@ actor CloudSyncService {
                     is_soft_deleted: item.isSoftDeleted,
                     last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
                     last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
+                    date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
                     updated_at: iso8601Formatter.string(from: Date())
                 )
             }
@@ -674,6 +680,11 @@ actor CloudSyncService {
                 if let stateStr = remote.last_state_change_date, let d = parseISO8601(stateStr) {
                     existing.lastStateChangeDate = d
                 }
+                // Adopt the cloud's added date only when we have none: a Mac that has held the
+                // title longer shouldn't have its dateAdded replaced by a later device's.
+                if existing.dateAdded == nil, let addedStr = remote.date_added, let d = parseISO8601(addedStr) {
+                    existing.dateAdded = d
+                }
                 existing.syncCachedProperties(dirty: .progress)
                 if remote.state == MediaState.completedRaw {
                     // Same reason as episodes: log the watch so it appears in the history /
@@ -706,6 +717,10 @@ actor CloudSyncService {
                         fresh.stateValue = remote.state
                         fresh.tasteValue = remote.taste
                         fresh.isSoftDeleted = remote.is_soft_deleted
+                        // A title imported from the cloud was added *there* first.
+                        if let addedStr = remote.date_added, let d = parseISO8601(addedStr) {
+                            fresh.dateAdded = d
+                        }
                         fresh.syncCachedProperties(dirty: .all)
                     }
                     pulledCount += 1
