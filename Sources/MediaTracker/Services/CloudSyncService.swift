@@ -280,7 +280,10 @@ actor CloudSyncService {
 
             // 3. Collections (rows + membership), so the sheet actually mentions them.
             let remoteCollections = try await fetchRemoteCollections(syncKey: syncKey, since: watermark)
-            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey, since: watermark)
+            // Unwatermarked (it is only ~25 rows): the membership push tests "does the cloud
+            // have this row?", and a watermarked response omits unchanged rows — which reads
+            // the same as missing and re-pushed every membership on every sync.
+            let remoteCollectionItems = try await fetchRemoteCollectionItems(syncKey: syncKey)
             let remoteCollectionByID = Dictionary(remoteCollections.map { ($0.collection_id, $0) }, uniquingKeysWith: { first, _ in first })
             let remoteItemCounts = Dictionary(grouping: remoteCollectionItems.filter { !$0.is_deleted }, by: \.collection_id)
                 .mapValues { $0.count }
@@ -478,12 +481,14 @@ actor CloudSyncService {
             let remoteEvents = try await fetchRemoteWatchEvents(syncKey: syncKey, since: watermark)
             summary.cyclesPushed = try await pushWatchCycles(
                 syncKey: syncKey,
-                remoteById: Dictionary(remoteCycles.map { ($0.cycle_id, $0) }, uniquingKeysWith: { first, _ in first })
+                remoteById: Dictionary(remoteCycles.map { ($0.cycle_id, $0) }, uniquingKeysWith: { first, _ in first }),
+                watermark: watermark
             )
             summary.cyclesPulled = try await applyRemoteWatchCycles(remoteCycles)
             summary.eventsPushed = try await pushWatchEvents(
                 syncKey: syncKey,
-                remoteById: Dictionary(remoteEvents.map { ($0.event_id, $0) }, uniquingKeysWith: { first, _ in first })
+                remoteById: Dictionary(remoteEvents.map { ($0.event_id, $0) }, uniquingKeysWith: { first, _ in first }),
+                watermark: watermark
             )
             summary.eventsPulled = try await applyRemoteWatchEvents(remoteEvents)
 
@@ -1266,6 +1271,15 @@ actor CloudSyncService {
         return rows
     }
 
+    /// True when [stamp] is newer than the incremental watermark — or when there is no
+    /// watermark, i.e. the last sync was a full pull, where "absent remotely" really does mean
+    /// "missing from the cloud".
+    private func changedSince(_ stamp: Date?, _ watermark: String?) -> Bool {
+        guard let stamp else { return false }
+        guard let watermark, let since = parseISO8601(watermark) else { return true }
+        return stamp > since
+    }
+
     /// A cycle's "last meaningful change". `WatchCycle` has no modified timestamp of its own,
     /// but it only ever moves forward (started → completed), so `completedAt ?? startedAt`
     /// tracks it well enough to order pushes.
@@ -1273,10 +1287,14 @@ actor CloudSyncService {
         completedAt ?? startedAt
     }
 
-    private func pushWatchCycles(syncKey: String, remoteById: [String: RemoteWatchCycle]) async throws -> Int {
+    private func pushWatchCycles(syncKey: String, remoteById: [String: RemoteWatchCycle], watermark: String? = nil) async throws -> Int {
         let local = try modelContext.fetch(FetchDescriptor<WatchCycle>())
         let dirty = local.filter { cycle in
-            guard let remote = remoteById[cycle.id.uuidString] else { return true }
+            // A watermarked fetch omits unchanged rows, so "absent" means "unchanged", not
+            // "never pushed" — only send one this device actually moved since the last sync.
+            guard let remote = remoteById[cycle.id.uuidString] else {
+                return changedSince(cycle.startedAt, watermark) || changedSince(cycle.completedAt, watermark)
+            }
             let remoteTime = cycleChangeTime(
                 startedAt: parseISO8601(remote.started_at) ?? .distantPast,
                 completedAt: parseISO8601(remote.completed_at)
@@ -1311,10 +1329,13 @@ actor CloudSyncService {
         return pushedCount
     }
 
-    private func pushWatchEvents(syncKey: String, remoteById: [String: RemoteWatchEvent]) async throws -> Int {
+    private func pushWatchEvents(syncKey: String, remoteById: [String: RemoteWatchEvent], watermark: String? = nil) async throws -> Int {
         let local = try modelContext.fetch(FetchDescriptor<WatchEvent>())
         let dirty = local.filter { event in
-            guard let remote = remoteById[event.id.uuidString] else { return true }
+            // Same watermark subtlety as cycles.
+            guard let remote = remoteById[event.id.uuidString] else {
+                return changedSince(event.watchedAt, watermark) || changedSince(event.voidedAt, watermark)
+            }
             // Events are immutable facts; the only forward change is a void.
             return event.voidedAt != nil && remote.voided_at == nil
         }
