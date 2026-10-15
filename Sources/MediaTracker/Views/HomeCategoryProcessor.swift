@@ -79,7 +79,14 @@ extension MediaFilterActor {
         let latestWatchDates = WatchActivityResolver.latestWatchDates(for: homeResults, context: modelContext)
         let activeItems = homeResults
             .compactMap { item -> (MediaItem, Int, Date)? in
+                // A movie has no episode progress, so the resolver only knows about one from a
+                // WatchEvent — and nothing records an event when a title is merely marked In
+                // Progress. Fall back to the movie's own `lastStateChangeDate`, the same field
+                // WatchActivityResolver already uses for completed movies. Kept here rather
+                // than in the resolver because WatchedThisWeek shares it and must go on
+                // requiring an actual watch.
                 let latestWatchDate = latestWatchDates[item.id]
+                    ?? (item.type == .movie ? item.lastStateChangeDate : nil)
                 guard isHomeEligible(item, now: now, latestWatchDate: latestWatchDate) else { return nil }
                 return (item, homeSortPriority(item), latestWatchDate ?? .distantPast)
             }

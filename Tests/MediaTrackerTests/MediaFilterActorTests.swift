@@ -131,6 +131,45 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertEqual(result.homeContinueWatching.map(\.title), ["Actually Watched"])
     }
 
+    /// A movie marked In Progress has no episode progress and no WatchEvent (nothing logs one),
+    /// so it is judged by its own state date. A show in the same shape keeps requiring an
+    /// actual watch — it has episode progress to speak for it.
+    @MainActor
+    func testHomeContinueWatchingIncludesActiveMovieWithoutWatchEvent() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, WatchEvent.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let movie = MediaItem(id: "movie_1430077", title: "Hokum", overview: "", type: .movie)
+        movie.stateValue = MediaState.activeRaw
+        movie.lastInteractionDate = Date()
+        movie.lastStateChangeDate = Date()
+        context.insert(movie)
+
+        let show = MediaItem(id: "tv_9", title: "Show", overview: "", type: .tvShow)
+        show.stateValue = MediaState.activeRaw
+        show.lastInteractionDate = Date()
+        show.lastStateChangeDate = Date()
+        context.insert(show)
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .home,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
+            badge: nil
+        )
+
+        XCTAssertEqual(result.homeContinueWatching.map(\.title), ["Hokum"])
+    }
+
     @MainActor
     func testHomeContinueWatchingPremieredItems() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
