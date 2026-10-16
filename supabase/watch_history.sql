@@ -51,13 +51,17 @@ create index if not exists user_watch_events_user_watched_idx on user_watch_even
 create index if not exists user_watch_events_user_updated_idx on user_watch_events (user_id, updated_at);
 
 -- Reuse the server-side updated_at trigger from the collections schema.
+-- `search_path` pinned empty to satisfy the security linter (see collections.sql).
 create or replace function set_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
-  new.updated_at = now();
+  new.updated_at = pg_catalog.now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists user_watch_cycles_set_updated_at on user_watch_cycles;
 create trigger user_watch_cycles_set_updated_at
@@ -73,14 +77,17 @@ create trigger user_watch_events_set_updated_at
 alter table user_watch_cycles enable row level security;
 alter table user_watch_events enable row level security;
 
+-- Wrap the header lookup in a scalar subquery so the planner hoists it into an InitPlan and
+-- evaluates it once per query. Bare inside the filter it is a STABLE call the executor may
+-- re-run for every row, which is what the "Auth RLS Initialization Plan" advisor flags.
 drop policy if exists user_watch_cycles_sync_key on user_watch_cycles;
 create policy user_watch_cycles_sync_key on user_watch_cycles
   for all
-  using (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key')
-  with check (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key');
+  using (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'))
+  with check (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'));
 
 drop policy if exists user_watch_events_sync_key on user_watch_events;
 create policy user_watch_events_sync_key on user_watch_events
   for all
-  using (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key')
-  with check (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key');
+  using (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'))
+  with check (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'));

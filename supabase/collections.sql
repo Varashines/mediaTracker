@@ -44,13 +44,20 @@ create index if not exists user_collection_items_user_updated_idx
   on user_collection_items (user_id, updated_at);
 
 -- Keep updated_at authoritative on the server so client clock skew can't decide conflicts.
+-- `search_path` is pinned empty because Supabase's linter flags a mutable one on any
+-- function: without it, resolution of an unqualified name inside the body can be steered
+-- by whoever runs it. The body touches nothing outside pg_catalog, which is always
+-- searched, so pinning costs nothing.
 create or replace function set_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
-  new.updated_at = now();
+  new.updated_at = pg_catalog.now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists user_collections_set_updated_at on user_collections;
 create trigger user_collections_set_updated_at
@@ -70,14 +77,17 @@ create trigger user_collection_items_set_updated_at
 alter table user_collections      enable row level security;
 alter table user_collection_items enable row level security;
 
+-- Wrap the header lookup in a scalar subquery so the planner hoists it into an InitPlan and
+-- evaluates it once per query. Bare inside the filter it is a STABLE call the executor may
+-- re-run for every row, which is what the "Auth RLS Initialization Plan" advisor flags.
 drop policy if exists user_collections_sync_key on user_collections;
 create policy user_collections_sync_key on user_collections
   for all
-  using (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key')
-  with check (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key');
+  using (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'))
+  with check (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'));
 
 drop policy if exists user_collection_items_sync_key on user_collection_items;
 create policy user_collection_items_sync_key on user_collection_items
   for all
-  using (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key')
-  with check (user_id = nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key');
+  using (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'))
+  with check (user_id = (select nullif(current_setting('request.headers', true), '')::json ->> 'x-sync-key'));
