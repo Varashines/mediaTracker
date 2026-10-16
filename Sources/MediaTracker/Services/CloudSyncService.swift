@@ -146,8 +146,10 @@ actor CloudSyncService {
             for remote in remoteItems {
                 if let local = localMap[remote.media_id] {
                     // A differing state/taste *or* a differing soft-delete is a difference.
+                    // Taste is compared canonically: a legacy "Loved" on this Mac and a
+                    // canonical "Love" in the cloud are the same rating, not a conflict.
                     let differs = local.stateValue != remote.state
-                        || local.tasteValue != remote.taste
+                        || TasteValue.canonicalRaw(local.tasteValue) != TasteValue.canonicalRaw(remote.taste)
                         || local.isSoftDeleted != remote.is_soft_deleted
                     if differs {
                         // Same rule the sync itself uses: newest edit wins. A "like"/"loved"
@@ -689,7 +691,7 @@ actor CloudSyncService {
             let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == mediaID })
             if let existing = try? modelContext.fetch(descriptor).first {
                 let differs = existing.stateValue != remote.state
-                    || existing.tasteValue != remote.taste
+                    || TasteValue.canonicalRaw(existing.tasteValue) != TasteValue.canonicalRaw(remote.taste)
                     || existing.isSoftDeleted != remote.is_soft_deleted
                 guard differs else { continue }
                 if !force {
@@ -697,7 +699,9 @@ actor CloudSyncService {
                     guard remoteTime > existing.syncEditTime else { continue }
                 }
                 existing.stateValue = remote.state
-                existing.tasteValue = remote.taste
+                // Store the canonical spelling so a legacy value pulled from the cloud heals
+                // locally and the next push carries the fix back.
+                existing.tasteValue = TasteValue.canonicalRaw(remote.taste)
                 existing.isSoftDeleted = remote.is_soft_deleted
                 if let custom = remote.custom_poster_url { existing.customPosterURL = custom }
                 if let interStr = remote.last_interaction_date, let d = parseISO8601(interStr) {

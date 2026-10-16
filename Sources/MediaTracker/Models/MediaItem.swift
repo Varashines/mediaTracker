@@ -142,7 +142,9 @@ final class MediaItem: Identifiable {
     }
 
     var taste: TasteValue? {
-        get { TasteValue(rawValue: tasteValue) }
+        // Falls back to the tolerant parse so rows carrying a legacy spelling (see
+        // `TasteValue.init(stored:)`) still read as a taste instead of nil.
+        get { TasteValue(rawValue: tasteValue) ?? TasteValue(stored: tasteValue) }
         set {
             let old = tasteValue
             tasteValue = newValue?.rawValue ?? "None"
