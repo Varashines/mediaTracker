@@ -328,23 +328,16 @@ actor CloudSyncService {
                 }
             }
 
-            // 4. Watch history: only ids are needed to count what the cloud is missing.
-            let remoteCycleIDRows: [RemoteID] = try await fetchAllPages(
-                endpoint: "user_watch_cycles",
-                query: "user_id=eq.\(syncKey)&select=cycle_id",
-                syncKey: syncKey
-            )
-            let remoteEventIDRows: [RemoteID] = try await fetchAllPages(
-                endpoint: "user_watch_events",
-                query: "user_id=eq.\(syncKey)&select=event_id",
-                syncKey: syncKey
-            )
-            let remoteCycleIDs = Set(remoteCycleIDRows.compactMap { $0.cycle_id?.lowercased() })
-            let remoteEventIDs = Set(remoteEventIDRows.compactMap { $0.event_id?.lowercased() })
+            // 4. Watch history: the preview only needs *how many* local rows the cloud is
+            //    missing, and PostgREST will report that total without shipping a row. Listing
+            //    every id meant 12 pages (~600 KB) of `user_watch_events` on each impact check
+            //    to compute a number that is almost always zero. Counts are ~2 bytes each.
+            let remoteCycleCount = try await fetchRemoteCount(endpoint: "user_watch_cycles", syncKey: syncKey)
+            let remoteEventCount = try await fetchRemoteCount(endpoint: "user_watch_events", syncKey: syncKey)
             let localCycles = (try? modelContext.fetch(FetchDescriptor<WatchCycle>())) ?? []
             let localEvents = (try? modelContext.fetch(FetchDescriptor<WatchEvent>())) ?? []
-            impact.cyclesToUpload = localCycles.filter { !remoteCycleIDs.contains($0.id.uuidString.lowercased()) }.count
-            impact.eventsToUpload = localEvents.filter { !remoteEventIDs.contains($0.id.uuidString.lowercased()) }.count
+            impact.cyclesToUpload = max(0, localCycles.count - remoteCycleCount)
+            impact.eventsToUpload = max(0, localEvents.count - remoteEventCount)
         } catch {
             impact.errorDescription = error.localizedDescription
         }
@@ -1186,13 +1179,6 @@ actor CloudSyncService {
 
     // MARK: - Watch History (cycles + events)
 
-    /// Id-only projection, so the impact preview can count what the cloud is missing without
-    /// downloading every row.
-    private struct RemoteID: Codable {
-        var cycle_id: String?
-        var event_id: String?
-    }
-
     private struct RemoteWatchCycle: Codable {
         var user_id: String
         var cycle_id: String
@@ -1498,8 +1484,10 @@ actor CloudSyncService {
         request.setValue("Bearer \(Self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(syncKey, forHTTPHeaderField: "x-sync-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Upsert mode: merge duplicates on primary key conflict
-        request.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        // Upsert mode: merge duplicates on primary key conflict. `return=minimal` keeps
+        // PostgREST from echoing every upserted row back — a full backup would otherwise
+        // download the whole library (events alone are ~5 MB) as a response body.
+        request.setValue("resolution=merge-duplicates, return=minimal", forHTTPHeaderField: "Prefer")
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -1553,6 +1541,10 @@ actor CloudSyncService {
         // Incremental watermark: every table carries a server-set updated_at, so an unchanged
         // table comes back empty instead of re-downloading the whole library.
         var fullQuery = query
+        // Stable paging. PostgREST pages by offset over whatever order the planner happens to
+        // return, so a multi-page GET (episodes, watch events) could duplicate or skip rows
+        // without an explicit sort. updated_at is indexed on every sync table.
+        fullQuery += "&order=updated_at.asc"
         if let since, !since.isEmpty {
             // `+` in the offset (…+00:00) is legal in a query string but decodes as a space,
             // which silently breaks the filter — so encode it.
@@ -1581,6 +1573,31 @@ actor CloudSyncService {
             if page.count < pageSize { break }
         }
         return out
+    }
+
+    /// Total row count for a table without transferring any rows.
+    ///
+    /// `count=exact` makes PostgREST answer with `Content-Range: */<n>`; combined with
+    /// `limit=0` the body is empty, so the whole call costs a couple of bytes instead of a
+    /// full-table download. Used by the impact preview where only the total matters.
+    private func fetchRemoteCount(endpoint: String, syncKey: String) async throws -> Int {
+        guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)?user_id=eq.\(syncKey)&select=user_id&limit=0") else {
+            return 0
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(Self.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(Self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(syncKey, forHTTPHeaderField: "x-sync-key")
+        request.setValue("count=exact", forHTTPHeaderField: "Prefer")
+        request.setValue("0-0", forHTTPHeaderField: "Range")
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              let range = http.value(forHTTPHeaderField: "Content-Range"),
+              let total = range.split(separator: "/").last.flatMap({ Int($0) }) else {
+            return 0
+        }
+        return total
     }
 
     /// `media_id` → `date_added` for every cloud row, so a sync can tell which local titles
