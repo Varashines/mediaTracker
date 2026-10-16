@@ -156,7 +156,10 @@ actor CloudSyncService {
                         // change only shows as a cloud update when the cloud copy is actually
                         // newer; otherwise it's this device's upload — not a conflict. The old
                         // version flagged every taste difference as a conflict regardless.
-                        let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
+                        let remoteTime = SyncTimestamps.remoteEditTime(
+                            lastInteraction: parseISO8601(remote.last_interaction_date),
+                            updatedAt: parseISO8601(remote.updated_at)
+                        )
                         if remoteTime > local.syncEditTime {
                             impact.titlesToUpdate.append(
                                 ImpactTitleItem(
@@ -629,7 +632,10 @@ actor CloudSyncService {
                 // remote edit — the old unconditional push silently clobbered edits made on
                 // another device.
                 guard let remote = remoteById[item.id] else { return true }
-                let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
+                let remoteTime = SyncTimestamps.remoteEditTime(
+                    lastInteraction: parseISO8601(remote.last_interaction_date),
+                    updatedAt: parseISO8601(remote.updated_at)
+                )
                 return item.syncEditTime > remoteTime
             }
             // Watermark push. backupToCloud passes since: 0 to force-push everything.
@@ -695,7 +701,10 @@ actor CloudSyncService {
                     || existing.isSoftDeleted != remote.is_soft_deleted
                 guard differs else { continue }
                 if !force {
-                    let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
+                    let remoteTime = SyncTimestamps.remoteEditTime(
+                        lastInteraction: parseISO8601(remote.last_interaction_date),
+                        updatedAt: parseISO8601(remote.updated_at)
+                    )
                     guard remoteTime > existing.syncEditTime else { continue }
                 }
                 existing.stateValue = remote.state
@@ -1648,15 +1657,37 @@ actor CloudSyncService {
     }
 }
 
+/// Timestamp rules shared by every conflict decision in the sync.
+enum SyncTimestamps {
+    /// An edit cannot postdate the write that carried it, so a future stamp is a bad clock rather
+    /// than a real edit. Android used to format timestamps from local wall-clock time and label
+    /// them UTC, which stamped this Mac's counterpart rows hours ahead: they looked permanently
+    /// newer, a later edit here could never win, and the bogus value was re-pushed every sync.
+    /// The server clamps on write as well; this bounds whatever is already stored locally.
+    static func clampToNow(_ date: Date, now: Date = Date()) -> Date {
+        min(date, now)
+    }
+
+    /// The cloud row's edit time: its user-edit stamp, falling back to the server write time for
+    /// rows written before clients sent one.
+    ///
+    /// Not `updated_at` alone — that's the row's *write* time, so a metadata backfill or a
+    /// soft-delete would outrank a genuine edit made on this device. Android has compared edit
+    /// times on both sides all along; this is the Mac catching up.
+    static func remoteEditTime(lastInteraction: Date?, updatedAt: Date?, now: Date = Date()) -> Date {
+        clampToNow(lastInteraction ?? updatedAt ?? .distantPast, now: now)
+    }
+}
+
 /// The instant a local row was last *edited by the user*, used to resolve sync conflicts
 /// (last-writer-wins). Mirrors Android's `lastInteractionDate` comparison.
 ///
 /// `lastUpdated` is deliberately excluded: it's the metadata/cache-refresh stamp, so a
 /// background refresh would otherwise make the row look freshly edited and win every
 /// conflict against a genuine change made on the other device.
-private extension MediaItem {
+extension MediaItem {
     var syncEditTime: Date {
-        lastInteractionDate ?? lastStateChangeDate ?? .distantPast
+        SyncTimestamps.clampToNow(lastInteractionDate ?? lastStateChangeDate ?? .distantPast)
     }
 }
 
