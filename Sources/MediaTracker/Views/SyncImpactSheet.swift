@@ -146,7 +146,7 @@ struct SyncImpactSheet: View {
 
     private var subtitle: String {
         if let error = impact.errorDescription { return error }
-        guard impact.hasChanges else { return "This Mac and the cloud already match." }
+        guard impact.hasChanges else { return "No title changes to review — episodes and history still sync." }
         return "\(impact.totalChanges) changes to review between this Mac and Supabase."
     }
 

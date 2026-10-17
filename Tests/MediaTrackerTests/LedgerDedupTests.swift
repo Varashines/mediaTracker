@@ -82,4 +82,48 @@ final class LedgerDedupTests: XCTestCase {
             "and the shifted stamp describes the same viewing"
         )
     }
+
+    // MARK: - Episode date corrections
+
+    func testEditTimesDifferToleratesWirePrecision() {
+        let t = Date(timeIntervalSince1970: 1_761_000_000)
+        XCTAssertFalse(SyncTimestamps.editTimesDiffer(t, t))
+        XCTAssertFalse(SyncTimestamps.editTimesDiffer(t, t.addingTimeInterval(0.3)))   // ms vs µs
+        XCTAssertFalse(SyncTimestamps.editTimesDiffer(t, t.addingTimeInterval(1)))
+        XCTAssertTrue(SyncTimestamps.editTimesDiffer(t, t.addingTimeInterval(2)))
+        XCTAssertFalse(SyncTimestamps.editTimesDiffer(nil, nil))
+        XCTAssertTrue(SyncTimestamps.editTimesDiffer(nil, t))
+        XCTAssertTrue(SyncTimestamps.editTimesDiffer(t, nil))
+    }
+
+    /// Editing a watch date was only ever visible on the device that did it: the projection was
+    /// updated but the ledger — which the year review reads — kept the old time.
+    func testACorrectedWatchDateIsAChangeWorthApplying() {
+        let local = Date(timeIntervalSince1970: 1_761_000_000)
+        let corrected = local.addingTimeInterval(3600)
+        XCTAssertTrue(SyncTimestamps.episodeNeedsUpdate(
+            isWatched: true, remoteIsWatched: true,
+            watchedDate: local, remoteWatchedDate: corrected
+        ))
+    }
+
+    func testAnUnchangedEpisodeIsNotWorthApplying() {
+        let d = Date(timeIntervalSince1970: 1_761_000_000)
+        XCTAssertFalse(SyncTimestamps.episodeNeedsUpdate(
+            isWatched: true, remoteIsWatched: true,
+            watchedDate: d, remoteWatchedDate: d.addingTimeInterval(0.12)
+        ))
+    }
+
+    func testAFlagChangeIsAlwaysWorthApplying() {
+        XCTAssertTrue(SyncTimestamps.episodeNeedsUpdate(
+            isWatched: false, remoteIsWatched: true, watchedDate: nil, remoteWatchedDate: nil
+        ))
+        XCTAssertTrue(SyncTimestamps.episodeNeedsUpdate(
+            isWatched: true, remoteIsWatched: false, watchedDate: Date(), remoteWatchedDate: nil
+        ))
+        XCTAssertFalse(SyncTimestamps.episodeNeedsUpdate(
+            isWatched: false, remoteIsWatched: false, watchedDate: nil, remoteWatchedDate: nil
+        ))
+    }
 }

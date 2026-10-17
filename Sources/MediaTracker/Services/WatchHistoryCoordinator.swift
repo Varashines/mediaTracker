@@ -227,6 +227,8 @@ enum WatchHistoryCoordinator {
         context: ModelContext,
         source: WatchEventSource = .automatic
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let cycle: WatchCycle
         if let owning = openCycle(forMediaID: mediaID, episodeID: episodeID, context: context),
            owning.state == .active {
@@ -280,6 +282,8 @@ enum WatchHistoryCoordinator {
         context: ModelContext,
         source: WatchEventSource = .automatic
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         guard !mutations.isEmpty else { return }
 
         // Fetch or create the primary active cycle once
@@ -351,6 +355,8 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let activeRaw = WatchCycleState.active.rawValue
         let activeDescriptor = FetchDescriptor<WatchCycle>(
             predicate: #Predicate { cycle in
@@ -410,6 +416,8 @@ enum WatchHistoryCoordinator {
         watchedAt: Date,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         guard !episodes.isEmpty else { return }
         let epIDs = Set(episodes.map(\.episodeID))
         let events = (try? context.fetch(
@@ -450,6 +458,8 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let activeRaw = WatchCycleState.active.rawValue
         let activeDescriptor = FetchDescriptor<WatchCycle>(
             predicate: #Predicate { cycle in
@@ -490,6 +500,8 @@ enum WatchHistoryCoordinator {
     }
 
     nonisolated static func deleteHistory(for mediaID: String, context: ModelContext) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let events = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.mediaID == mediaID })
         )) ?? []

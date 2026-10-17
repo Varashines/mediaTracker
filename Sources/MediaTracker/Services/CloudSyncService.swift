@@ -13,6 +13,11 @@ actor CloudSyncService {
         UserDefaults.standard.string(forKey: UserDefaultsKeys.cloudSyncAnonKey.rawValue)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    /// Swappable for tests (the same pattern as `ImageCache.configureForTesting`): the service
+    /// otherwise talks to the real Supabase project, so scenario tests stub the transport and
+    /// drive the whole fetch → reconcile → apply → push path offline.
+    nonisolated(unsafe) static var session: URLSession = .shared
+
     private let iso8601Formatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -866,15 +871,23 @@ actor CloudSyncService {
             let epID = remote.episode_id
             let descriptor = FetchDescriptor<TVEpisode>(predicate: #Predicate { $0.uniqueID == epID })
             if let ep = try? modelContext.fetch(descriptor).first {
-                guard ep.isWatched != remote.is_watched else { continue }
+                let correctedDate = parseISO8601(remote.watched_date)
+                let dateChanged = ep.isWatched && remote.is_watched
+                    && SyncTimestamps.editTimesDiffer(ep.watchedDate, correctedDate)
+                guard SyncTimestamps.episodeNeedsUpdate(
+                    isWatched: ep.isWatched,
+                    remoteIsWatched: remote.is_watched,
+                    watchedDate: ep.watchedDate,
+                    remoteWatchedDate: correctedDate
+                ) else { continue }
                 if !force {
                     let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
                     guard remoteTime > ep.syncEditTime else { continue }
                 }
                 ep.isWatched = remote.is_watched
-                if let dateStr = remote.watched_date {
-                    ep.watchedDate = parseISO8601(dateStr)
-                    ep.lastWatchedDate = ep.watchedDate
+                if let correctedDate {
+                    ep.watchedDate = correctedDate
+                    ep.lastWatchedDate = correctedDate
                 }
                 if remote.is_watched {
                     // "Watched this year" reads WatchEvents, which only local mutations and
@@ -887,6 +900,18 @@ actor CloudSyncService {
                         runtimeMinutes: ep.runtime,
                         context: modelContext
                     )
+                    // A corrected date has to move the ledger too: `recordImportedEpisode`
+                    // deliberately leaves an existing event alone, so without this the year review
+                    // — which reads events, not the episode projection — would keep the old time.
+                    if dateChanged, let correctedDate {
+                        WatchHistoryCoordinator.updateEpisodeWatchDate(
+                            mediaID: remote.show_id,
+                            episodeID: remote.episode_id,
+                            watchedAt: correctedDate,
+                            runtimeMinutes: ep.runtime,
+                            context: modelContext
+                        )
+                    }
                 }
                 pulledCount += 1
             }
@@ -1446,6 +1471,7 @@ actor CloudSyncService {
             if let existing = try? modelContext.fetch(descriptor).first {
                 if existing.voidedAt == nil, remoteVoided != nil {
                     existing.voidedAt = remoteVoided
+                    MediaStateService.notifyLedgerChanged()
                     pulledCount += 1
                 }
                 continue
@@ -1515,7 +1541,7 @@ actor CloudSyncService {
         request.setValue("resolution=merge-duplicates, return=minimal", forHTTPHeaderField: "Prefer")
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown response"
             AppLogger.error("Supabase \(endpoint) returned HTTP \(http.statusCode): \(errorBody)", logger: AppLogger.sync)
@@ -1533,7 +1559,7 @@ actor CloudSyncService {
         request.setValue(syncKey, forHTTPHeaderField: "x-sync-key")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let range { request.setValue(range, forHTTPHeaderField: "Range") }
-        return try await URLSession.shared.data(for: request)
+        return try await Self.session.data(for: request)
     }
 
     /// GETs every page of a PostgREST endpoint.
@@ -1616,7 +1642,7 @@ actor CloudSyncService {
         request.setValue(syncKey, forHTTPHeaderField: "x-sync-key")
         request.setValue("count=exact", forHTTPHeaderField: "Prefer")
         request.setValue("0-0", forHTTPHeaderField: "Range")
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await Self.session.data(for: request)
         guard let http = response as? HTTPURLResponse,
               let range = http.value(forHTTPHeaderField: "Content-Range"),
               let total = range.split(separator: "/").last.flatMap({ Int($0) }) else {
@@ -1695,6 +1721,38 @@ enum SyncTimestamps {
         return utc.isDate(a, inSameDayAs: b)
     }
 
+    /// Whether two stamps differ by more than a second.
+    ///
+    /// Wire stamps carry millisecond-to-microsecond precision depending on which writer produced
+    /// them, so equality has to tolerate the rounding rather than compare numbers exactly. A nil
+    /// against a real date counts as a difference.
+    static let editTimeTolerance: TimeInterval = 1
+
+    static func editTimesDiffer(_ a: Date?, _ b: Date?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return false
+        case let (lhs?, rhs?): return abs(lhs.timeIntervalSince(rhs)) > editTimeTolerance
+        default: return true
+        }
+    }
+
+    /// Whether a pulled episode row differs from the local one in a way worth applying.
+    ///
+    /// A corrected watch *date* counts, not just the watched flag. The date drives "watched this
+    /// year", streaks and the year review, and it used to be editable only on the device that made
+    /// the change: everywhere else the projection was updated but the ledger kept the old time, so
+    /// the correction never showed up.
+    static func episodeNeedsUpdate(
+        isWatched: Bool,
+        remoteIsWatched: Bool,
+        watchedDate: Date?,
+        remoteWatchedDate: Date?
+    ) -> Bool {
+        guard isWatched == remoteIsWatched else { return true }
+        guard isWatched else { return false }
+        return editTimesDiffer(watchedDate, remoteWatchedDate)
+    }
+
     /// The cloud row's edit time: its user-edit stamp, falling back to the server write time for
     /// rows written before clients sent one.
     ///
@@ -1702,7 +1760,18 @@ enum SyncTimestamps {
     /// soft-delete would outrank a genuine edit made on this device. Android has compared edit
     /// times on both sides all along; this is the Mac catching up.
     static func remoteEditTime(lastInteraction: Date?, updatedAt: Date?, now: Date = Date()) -> Date {
-        clampToNow(lastInteraction ?? updatedAt ?? .distantPast, now: now)
+        // An edit cannot postdate the write that carried it, so when the two disagree the write
+        // time is the better evidence. A device with a fast clock used to stamp its rows hours
+        // ahead, which made them permanently newer; bounding to `now` only bounds it, while the
+        // write time restores the real ordering (and keeps per-row granularity when several rows
+        // share one batch push).
+        let candidate: Date
+        if let lastInteraction, let updatedAt {
+            candidate = min(lastInteraction, updatedAt)
+        } else {
+            candidate = lastInteraction ?? updatedAt ?? .distantPast
+        }
+        return clampToNow(candidate, now: now)
     }
 }
 
