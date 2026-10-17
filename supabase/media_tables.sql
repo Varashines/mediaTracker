@@ -120,7 +120,12 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  new.updated_at = pg_catalog.now();
+  -- Keep the stamp the source wrote (see collections.sql): the row's "updated" value should be
+  -- the same on every device, bounded only so a fast clock can't skew the pull watermark.
+  new.updated_at = case
+    when new.updated_at is null or new.updated_at > pg_catalog.now() then pg_catalog.now()
+    else new.updated_at
+  end;
   new.last_interaction_date = case
     when new.last_interaction_date is null then null
     when new.last_interaction_date > pg_catalog.now() then pg_catalog.now()
@@ -142,7 +147,12 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  new.updated_at = pg_catalog.now();
+  -- Keep the stamp the source wrote (see collections.sql): the row's "updated" value should be
+  -- the same on every device, bounded only so a fast clock can't skew the pull watermark.
+  new.updated_at = case
+    when new.updated_at is null or new.updated_at > pg_catalog.now() then pg_catalog.now()
+    else new.updated_at
+  end;
   new.watched_date = case
     when new.watched_date is null then null
     when new.watched_date > pg_catalog.now() then pg_catalog.now()

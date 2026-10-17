@@ -54,7 +54,14 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  new.updated_at = pg_catalog.now();
+  -- Keep the stamp the source wrote, so every device sees the same "updated" value for a row
+  -- rather than each one being re-stamped when it happens to be pushed. Only bound it: a clock
+  -- running fast must not push the incremental-pull watermark into the future, or rows written
+  -- afterwards would be skipped by both apps until real time caught up.
+  new.updated_at = case
+    when new.updated_at is null or new.updated_at > pg_catalog.now() then pg_catalog.now()
+    else new.updated_at
+  end;
   return new;
 end;
 $$;
