@@ -1450,7 +1450,10 @@ actor CloudSyncService {
                 }
                 continue
             }
-            let watchedAt = parseISO8601(item.watched_at) ?? Date()
+            // Bounded like every other edit stamp: an event cannot be watched after it was
+            // written, and the old Android formatter stamped local time as UTC (hours ahead,
+            // occasionally past midnight).
+            let watchedAt = SyncTimestamps.clampToNow(parseISO8601(item.watched_at) ?? Date())
             // The media/episode pull synthesises an event when a watch arrives without history
             // (so the story reads continuously), and its dedup key differs from the origin
             // device's — without this check the same watch would be logged twice.
@@ -1476,14 +1479,23 @@ actor CloudSyncService {
     }
 
     /// True when a local event already covers the same watch on the same day.
+    /// True when the ledger already holds this viewing.
+    ///
+    /// Episode ids are compared *canonically* (see `EpisodeIdentifier`): the legacy
+    /// `{show}_{s}_{e}` and `tv_{show}_s{s}_e{e}` spellings were compared literally, so the same
+    /// watch recorded here and pulled back from Android counted as two. The instants are compared
+    /// as instants rather than by local calendar day, because a stamp written from local
+    /// wall-clock time can cross midnight — which is how one watch came to show on two days in
+    /// Year in Review.
     private func hasEquivalentEvent(mediaID: String, episodeID: String?, watchedAt: Date) -> Bool {
         let descriptor = FetchDescriptor<WatchEvent>(
             predicate: #Predicate { $0.mediaID == mediaID && $0.voidedAt == nil }
         )
         guard let candidates = try? modelContext.fetch(descriptor) else { return false }
-        let calendar = Calendar.current
+        let target = EpisodeIdentifier.canonical(episodeID)
         return candidates.contains { candidate in
-            candidate.episodeID == episodeID && calendar.isDate(candidate.watchedAt, inSameDayAs: watchedAt)
+            EpisodeIdentifier.canonical(candidate.episodeID) == target
+                && SyncTimestamps.isSameWatch(candidate.watchedAt, watchedAt)
         }
     }
 
@@ -1666,6 +1678,21 @@ enum SyncTimestamps {
     /// The server clamps on write as well; this bounds whatever is already stored locally.
     static func clampToNow(_ date: Date, now: Date = Date()) -> Date {
         min(date, now)
+    }
+
+    /// Whether two timestamps describe the same viewing.
+    ///
+    /// A single watch logged from two devices can differ by a clock offset — up to a device's
+    /// timezone — which may push one copy across midnight, so a local calendar-day comparison
+    /// splits them. Same UTC day or within `sameWatchWindow` counts as one watch; a deliberate
+    /// rewatch is a day or more apart and stays distinct.
+    static let sameWatchWindow: TimeInterval = 12 * 3600
+
+    static func isSameWatch(_ a: Date, _ b: Date) -> Bool {
+        if abs(a.timeIntervalSince(b)) <= sameWatchWindow { return true }
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        return utc.isDate(a, inSameDayAs: b)
     }
 
     /// The cloud row's edit time: its user-edit stamp, falling back to the server write time for
