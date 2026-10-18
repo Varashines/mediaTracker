@@ -144,7 +144,7 @@ actor CloudSyncService {
             let remoteMap = Dictionary(remoteItems.map { ($0.media_id, $0) }, uniquingKeysWith: { first, _ in first })
 
             var descriptor = FetchDescriptor<MediaItem>()
-            descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.stateValue, \.tasteValue, \.posterURL, \.customPosterURL, \.isSoftDeleted, \.lastUpdated, \.lastStateChangeDate, \.lastInteractionDate]
+            descriptor.propertiesToFetch = [\.id, \.title, \.typeValue, \.stateValue, \.tasteValue, \.posterURL, \.customPosterURL, \.isSoftDeleted, \.lastUpdated, \.lastStateChangeDate, \.lastInteractionDate, \.themeColorHex, \.themeMutedColorHex, \.themeSecondaryColorHex]
             let localItems = (try? modelContext.fetch(descriptor)) ?? []
             let localMap = Dictionary(localItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
@@ -454,6 +454,9 @@ actor CloudSyncService {
                             last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
                             last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
                             date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
+                            theme_color_hex: item.themeColorHex,
+                            theme_muted_color_hex: item.themeMutedColorHex,
+                            theme_secondary_color_hex: item.themeSecondaryColorHex,
                             updated_at: iso8601Formatter.string(from: Date())
                         )
                     }
@@ -596,10 +599,15 @@ actor CloudSyncService {
         /// When the title joined the library. Unlike last_interaction_date it never moves, so
         /// the other device can order "Recently Added" by it (and adopt it for old rows).
         var date_added: String?
+        /// The extracted poster palette. Derived, so it takes no part in any conflict — it rides
+        /// along with the row.
+        var theme_color_hex: String?
+        var theme_muted_color_hex: String?
+        var theme_secondary_color_hex: String?
         var updated_at: String?
 
         enum CodingKeys: String, CodingKey {
-            case user_id, media_id, type, state, taste, custom_poster_url, is_soft_deleted, last_interaction_date, last_state_change_date, date_added, updated_at
+            case user_id, media_id, type, state, taste, custom_poster_url, is_soft_deleted, last_interaction_date, last_state_change_date, date_added, theme_color_hex, theme_muted_color_hex, theme_secondary_color_hex, updated_at
         }
 
         func encode(to encoder: Encoder) throws {
@@ -614,6 +622,12 @@ actor CloudSyncService {
             try container.encode(last_interaction_date, forKey: .last_interaction_date)
             try container.encode(last_state_change_date, forKey: .last_state_change_date)
             try container.encode(date_added, forKey: .date_added)
+            // `encodeIfPresent`, unlike the rest of this struct: an explicit null would clear the
+            // colour in the cloud for any row whose colour this device has not extracted. Absent
+            // means "nothing to say", which is the truth here.
+            try container.encodeIfPresent(theme_color_hex, forKey: .theme_color_hex)
+            try container.encodeIfPresent(theme_muted_color_hex, forKey: .theme_muted_color_hex)
+            try container.encodeIfPresent(theme_secondary_color_hex, forKey: .theme_secondary_color_hex)
             try container.encode(updated_at, forKey: .updated_at)
         }
     }
@@ -626,7 +640,8 @@ actor CloudSyncService {
         var descriptor = FetchDescriptor<MediaItem>()
         descriptor.propertiesToFetch = [
             \.id, \.typeValue, \.stateValue, \.tasteValue, \.customPosterURL,
-            \.isSoftDeleted, \.lastInteractionDate, \.lastStateChangeDate, \.lastUpdated
+            \.isSoftDeleted, \.lastInteractionDate, \.lastStateChangeDate, \.lastUpdated,
+            \.dateAdded, \.themeColorHex, \.themeMutedColorHex, \.themeSecondaryColorHex
         ]
 
         let localItems = try modelContext.fetch(descriptor)
@@ -668,6 +683,9 @@ actor CloudSyncService {
                     last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
                     last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
                     date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
+                    theme_color_hex: item.themeColorHex,
+                    theme_muted_color_hex: item.themeMutedColorHex,
+                    theme_secondary_color_hex: item.themeSecondaryColorHex,
                     updated_at: iso8601Formatter.string(from: Date())
                 )
             }
