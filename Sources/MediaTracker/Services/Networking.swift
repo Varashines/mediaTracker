@@ -373,7 +373,8 @@ actor APIClient {
         let trailerKey = Self.extractTrailerKey(from: details.videos)
 
         return MovieDetailsResult(
-            runtime: details.runtime, 
+            runtime: details.runtime,
+            title: details.title, 
             genres: details.genres.map { $0.name }, 
             voteAverage: details.vote_average, 
             rottenTomatoesScore: nil,
@@ -491,6 +492,7 @@ actor APIClient {
 
         return TVDetailsResult(
             status: d.status ?? "Ended",
+            name: d.name,
             voteAverage: d.vote_average,
             imdbID: imdbID,
             genres: d.genres?.compactMap { $0.name } ?? [],

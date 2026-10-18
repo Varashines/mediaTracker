@@ -760,6 +760,11 @@ actor CloudSyncService {
                 }
                 pulledCount += 1
             } else {
+                // Deleted on another device before this Mac ever had it. Creating a row would pull
+                // the metadata of something that can never be shown; if it is restored it arrives
+                // again as an ordinary row with a fresh `updated_at`, and is created then.
+                guard !remote.is_soft_deleted else { continue }
+
                 // Media title doesn't exist locally yet -> create stub and schedule metadata refresh
                 let mediaType: MediaType = remote.type == "TV" ? .tvShow : .movie
                 let tmdbID = Int(remote.media_id.split(separator: "_").last ?? "") ?? 0
@@ -769,7 +774,7 @@ actor CloudSyncService {
                             uniqueID: remote.media_id,
                             tmdbID: tmdbID,
                             type: mediaType,
-                            title: "Importing...",
+                            title: MediaItem.importPlaceholder,
                             overview: "",
                             posterURL: nil,
                             releaseDateString: nil

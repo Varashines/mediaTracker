@@ -53,6 +53,14 @@ final class MediaItem: Identifiable {
     var lastUpdated: Date?
     var isSoftDeleted: Bool = false
     var softDeletedAt: Date?
+
+    /// The name a title created from a cloud row starts with.
+    ///
+    /// A cloud row carries an id and a tracking state, not a name, so an import has nothing to call
+    /// the title until the metadata refresh comes back — and until now nothing wrote that name back
+    /// either, so an imported title stayed "Importing..." for good. See
+    /// `BackgroundDataService.applyFetchedTitle`.
+    static let importPlaceholder = "Importing..."
     
     // Cached values for filtering/grid
     var cachedGenres: [String] = []

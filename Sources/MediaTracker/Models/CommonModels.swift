@@ -67,6 +67,9 @@ func extractWatchProviders(from response: TMDBWatchProvidersResponse?, regionOve
 
 struct MovieDetailsResult {
     let runtime: Int?
+    /// Carried so a title created by a cloud import — which has no name of its own — can be renamed
+    /// from the metadata refresh.
+    let title: String?
     let genres: [String]
     let voteAverage: Double?
     let rottenTomatoesScore: Int?
@@ -86,6 +89,8 @@ struct MovieDetailsResult {
 
 struct TVDetailsResult {
     let status: String
+    /// Carried so a title created by a cloud import can be renamed from the metadata refresh.
+    let name: String?
     let voteAverage: Double?
     let imdbID: String?
     let genres: [String]

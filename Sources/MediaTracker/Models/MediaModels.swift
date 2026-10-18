@@ -52,6 +52,10 @@ struct TMDBProductionCompany: Codable {
 struct TMDBMovieDetailsResponse: Codable {
     let runtime: Int?, genres: [TMDBGenre], vote_average: Double?, release_date: String?, backdrop_path: String?, poster_path: String?
     let overview: String?
+    /// The name. It was in every response all along and simply was not decoded, which is why a
+    /// title imported from the cloud could never be renamed from TMDB — see
+    /// `BackgroundDataService.applyFetchedTitle`.
+    let title: String?
     let original_language: String?
     let status: String?
     let credits: TMDBCreditsResponse?
@@ -62,7 +66,7 @@ struct TMDBMovieDetailsResponse: Codable {
     let watch_providers: TMDBWatchProvidersResponse?
 
     enum CodingKeys: String, CodingKey {
-        case runtime, genres, vote_average, release_date, backdrop_path, poster_path
+        case runtime, genres, vote_average, release_date, backdrop_path, poster_path, title
         case overview, original_language, status, credits, release_dates, production_companies, external_ids, videos
         case watch_providers = "watch/providers"
     }
@@ -149,6 +153,8 @@ struct TMDBTVDetailsResponse: Codable {
     let backdrop_path: String?
     let poster_path: String?
     let overview: String?
+    /// The name, for the same reason as `TMDBMovieDetailsResponse.title`.
+    let name: String?
     let original_language: String?
     let networks: [TMDBNetwork]?
     let production_companies: [TMDBProductionCompany]?
@@ -164,7 +170,7 @@ struct TMDBTVDetailsResponse: Codable {
 
     enum CodingKeys: String, CodingKey {
         case number_of_seasons, number_of_episodes, status, vote_average, genres, backdrop_path, poster_path
-        case overview, original_language, networks, production_companies, created_by, seasons, first_air_date, next_episode_to_air, external_ids, credits, aggregate_credits, videos
+        case overview, name, original_language, networks, production_companies, created_by, seasons, first_air_date, next_episode_to_air, external_ids, credits, aggregate_credits, videos
         case watch_providers = "watch/providers"
     }
 }

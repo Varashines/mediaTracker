@@ -96,12 +96,29 @@ enum RuntimeFallback {
 }
 
 extension BackgroundDataService {
+    /// The name from TMDB, applied only when the local one is missing or is still the import
+    /// placeholder.
+    ///
+    /// A title's name is supplied at creation and nowhere else, and the cloud import has none to
+    /// give — so an imported title was created as "Importing..." and stayed that way. It is also the
+    /// string the TVMaze lookup matches on, which means an imported show could never resolve its
+    /// episodes either. Only the placeholder is replaced, so a name that is already real is left
+    /// alone.
+    private func applyFetchedTitle(to item: MediaItem, from fetched: String?) {
+        guard let fetched,
+              !fetched.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let current = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || current == MediaItem.importPlaceholder else { return }
+        item.title = fetched
+    }
+
     func refreshMovie(id: String, tmdbID: Int, force: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return false }
         
         do {
             let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: force)
+            applyFetchedTitle(to: item, from: details.title)
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
             if let newOverview = details.overview {
                 item.overview = newOverview
@@ -219,6 +236,7 @@ extension BackgroundDataService {
 
         do {
             let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: force)
+            applyFetchedTitle(to: item, from: details.name)
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
             tvDetails.item = item
             item.tvShowDetails = tvDetails
