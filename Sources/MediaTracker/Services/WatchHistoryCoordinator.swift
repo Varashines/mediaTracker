@@ -253,11 +253,23 @@ enum WatchHistoryCoordinator {
         if cycle.isRewatch, !scope.isEmpty, !scope.contains(episodeID) { return }
 
         let cycleID = cycle.id
-        var eventDescriptor = FetchDescriptor<WatchEvent>(
-            predicate: #Predicate { $0.cycleID == cycleID && $0.episodeID == episodeID && $0.voidedAt == nil }
-        )
-        eventDescriptor.fetchLimit = 1
-        let activeEvent = (try? context.fetch(eventDescriptor))?.first
+        // Canonical, not literal. The event recorded here and the one pulled back from Android
+        // spell the same episode differently — the legacy `{show}_{season}_{episode}` against
+        // `tv_{show}_s{season}_e{episode}` — so a literal comparison sees two episodes where there
+        // is one, and the same viewing lands in the ledger twice.
+        //
+        // The episodeID term has to leave the predicate because SwiftData cannot call a function
+        // inside `#Predicate`, so the cycle's events are fetched and compared here instead. That is
+        // one fetch of one cycle's live events, on a toggle.
+        let canonicalEpisodeID = EpisodeIdentifier.canonical(episodeID)
+        let cycleEvents = (try? context.fetch(
+            FetchDescriptor<WatchEvent>(
+                predicate: #Predicate { $0.cycleID == cycleID && $0.voidedAt == nil }
+            )
+        )) ?? []
+        let activeEvent = cycleEvents.first {
+            EpisodeIdentifier.canonical($0.episodeID) == canonicalEpisodeID
+        }
         let deduplicationKey = "\(cycle.id.uuidString):\(episodeID):watch"
 
         if isWatched {
@@ -310,7 +322,9 @@ enum WatchHistoryCoordinator {
         }
 
         let cycleID = cycle.id
-        let mutEpisodeIDs = Set(mutations.map(\.episodeID))
+        // Canonical here too, for the reason given in `recordEpisodeMutation`: the same episode can
+        // arrive from a phone spelled the other way, and a literal Set lookup would not see it.
+        let mutEpisodeIDs = Set(mutations.map { EpisodeIdentifier.canonical($0.episodeID) ?? $0.episodeID })
         let existingEvents = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { event in
                 event.cycleID == cycleID && event.voidedAt == nil
@@ -319,15 +333,18 @@ enum WatchHistoryCoordinator {
 
         var activeEventsByEpisodeID: [String: WatchEvent] = [:]
         for event in existingEvents {
-            if let epID = event.episodeID, mutEpisodeIDs.contains(epID) {
-                activeEventsByEpisodeID[epID] = event
+            guard let epID = event.episodeID else { continue }
+            let key = EpisodeIdentifier.canonical(epID) ?? epID
+            if mutEpisodeIDs.contains(key) {
+                activeEventsByEpisodeID[key] = event
             }
         }
 
         for mut in mutations {
             if cycle.isRewatch, !scope.isEmpty, !scope.contains(mut.episodeID) { continue }
 
-            let activeEvent = activeEventsByEpisodeID[mut.episodeID]
+            let episodeKey = EpisodeIdentifier.canonical(mut.episodeID) ?? mut.episodeID
+            let activeEvent = activeEventsByEpisodeID[episodeKey]
             if mut.isWatched {
                 guard activeEvent == nil else { continue }
                 let deduplicationKey = "\(cycle.id.uuidString):\(mut.episodeID):watch"
@@ -341,10 +358,10 @@ enum WatchHistoryCoordinator {
                     deduplicationKey: deduplicationKey
                 )
                 context.insert(newEvent)
-                activeEventsByEpisodeID[mut.episodeID] = newEvent
+                activeEventsByEpisodeID[episodeKey] = newEvent
             } else {
                 activeEvent?.voidedAt = Date()
-                activeEventsByEpisodeID.removeValue(forKey: mut.episodeID)
+                activeEventsByEpisodeID.removeValue(forKey: episodeKey)
             }
         }
     }
