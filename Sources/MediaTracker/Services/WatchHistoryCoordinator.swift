@@ -252,23 +252,27 @@ enum WatchHistoryCoordinator {
         }
         if cycle.isRewatch, !scope.isEmpty, !scope.contains(episodeID) { return }
 
-        let cycleID = cycle.id
-        // Canonical, not literal. The event recorded here and the one pulled back from Android
-        // spell the same episode differently — the legacy `{show}_{season}_{episode}` against
-        // `tv_{show}_s{season}_e{episode}` — so a literal comparison sees two episodes where there
-        // is one, and the same viewing lands in the ledger twice.
+        // Canonical, not literal, and across the title's cycles rather than only this one.
         //
-        // The episodeID term has to leave the predicate because SwiftData cannot call a function
-        // inside `#Predicate`, so the cycle's events are fetched and compared here instead. That is
-        // one fetch of one cycle's live events, on a toggle.
+        // Two spellings of one episode exist — the legacy `{show}_{season}_{episode}` and
+        // `tv_{show}_s{season}_e{episode}` — so a literal comparison sees two episodes where there
+        // is one. And one watch can be recorded in two *different* cycles: the backfill opened its
+        // own, the automatic writer opened another, and a lookup scoped to a single cycle cannot
+        // see the other. Phineas and Ferb carried 261 of those.
+        //
+        // The same-watch rule bounds it, because a rewatch is a later cycle by design: only an
+        // event for the same episode at the same time counts as already recorded. SwiftData cannot
+        // call a function inside `#Predicate`, so the title's live events are fetched and compared
+        // here instead.
         let canonicalEpisodeID = EpisodeIdentifier.canonical(episodeID)
-        let cycleEvents = (try? context.fetch(
+        let liveEvents = (try? context.fetch(
             FetchDescriptor<WatchEvent>(
-                predicate: #Predicate { $0.cycleID == cycleID && $0.voidedAt == nil }
+                predicate: #Predicate { $0.mediaID == mediaID && $0.voidedAt == nil }
             )
         )) ?? []
-        let activeEvent = cycleEvents.first {
+        let activeEvent = liveEvents.first {
             EpisodeIdentifier.canonical($0.episodeID) == canonicalEpisodeID
+                && SyncTimestamps.isSameWatch($0.watchedAt, watchedAt)
         }
         let deduplicationKey = "\(cycle.id.uuidString):\(episodeID):watch"
 
@@ -321,13 +325,14 @@ enum WatchHistoryCoordinator {
             }
         }
 
-        let cycleID = cycle.id
-        // Canonical here too, for the reason given in `recordEpisodeMutation`: the same episode can
-        // arrive from a phone spelled the other way, and a literal Set lookup would not see it.
+        // The same rule as `recordEpisodeMutation`, for the same two reasons: canonical spelling,
+        // and the title's cycles rather than only this one — a bulk pass and the backfill can
+        // record one episode in two cycles. The same-watch test is applied per mutation, so a
+        // rewatch in a later cycle still records.
         let mutEpisodeIDs = Set(mutations.map { EpisodeIdentifier.canonical($0.episodeID) ?? $0.episodeID })
         let existingEvents = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { event in
-                event.cycleID == cycleID && event.voidedAt == nil
+                event.mediaID == mediaID && event.voidedAt == nil
             })
         )) ?? []
 
@@ -335,7 +340,11 @@ enum WatchHistoryCoordinator {
         for event in existingEvents {
             guard let epID = event.episodeID else { continue }
             let key = EpisodeIdentifier.canonical(epID) ?? epID
-            if mutEpisodeIDs.contains(key) {
+            guard mutEpisodeIDs.contains(key) else { continue }
+            guard let mut = mutations.first(where: {
+                (EpisodeIdentifier.canonical($0.episodeID) ?? $0.episodeID) == key
+            }) else { continue }
+            if SyncTimestamps.isSameWatch(event.watchedAt, mut.watchedAt) {
                 activeEventsByEpisodeID[key] = event
             }
         }
