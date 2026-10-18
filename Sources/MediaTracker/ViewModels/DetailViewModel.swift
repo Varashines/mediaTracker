@@ -37,6 +37,27 @@ class DetailViewModel {
         trailerKey = item.cachedTrailerKey
         updateThemeColor()
     }
+
+    /// Fills in the poster's theme colour when it is missing, or when the poster has changed.
+    ///
+    /// Without this the screen still *looked* themed — `updateThemeColor` falls back to the
+    /// network's colour — so nothing was ever stored and nothing could sync. Extracting on open is
+    /// what the detail was always implying it did.
+    ///
+    /// Deliberately *not* started from `init`: a task spawned there outlives the view that owns it,
+    /// and in the test suite that means outliving the container it was handed. The view calls this
+    /// from `.task`, which is structured and cancelled on disappear.
+    func extractThemeColorIfNeeded() async {
+        guard let context = item.modelContext else { return }
+        let poster = item.effectivePosterURL
+        guard item.themeColorHex == nil || item.themeColorSourceURL != poster else { return }
+
+        let rawID = item.id
+        let service = BackgroundDataService(modelContainer: context.container)
+        await service.extractPosterColor(id: rawID)
+        guard item.modelContext != nil else { return }
+        refreshLocalItem()
+    }
     
     var needsUpdate: Bool {
         guard let lastUpdated = item.lastUpdated else { return true }

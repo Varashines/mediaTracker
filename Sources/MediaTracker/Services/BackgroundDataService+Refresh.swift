@@ -720,7 +720,7 @@ extension BackgroundDataService {
     }
 
 
-    func extractAndSavePosterColor(for item: MediaItem, deferIfHeavy: Bool = false) async {
+    func extractAndSavePosterColor(for item: MediaItem, deferIfHeavy: Bool = false, save: Bool = false) async {
         let effectivePoster = item.effectivePosterURL
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
@@ -731,11 +731,76 @@ extension BackgroundDataService {
             return
         }
 
-        guard let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) else { return }
-        let palette = await ColorExtractor.extractThemePalette(from: cached.image)
+        // The cache first, then a direct fetch.
+        //
+        // The cache-only version is why this silently did nothing: a poster that has never been
+        // drawn at this size is not in the cache, and the function returned without a word. The
+        // colour migration always had this fallback, which is why it coloured 738 items while this
+        // path coloured none of the ones added since.
+        var image: CGImage?
+        if let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) {
+            image = cached.image
+        } else if let url = URL(string: poster),
+                  let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
+                  let decoded = NSImage(data: data) {
+            image = decoded.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        guard let image else { return }
+
+        let palette = await ColorExtractor.extractThemePalette(from: image)
         item.themeColorHex = palette.primary.toHex()
         item.themeSecondaryColorHex = palette.secondary.toHex()
         item.themeMutedColorHex = palette.muted.toHex()
         item.themeColorSourceURL = poster
+
+        // Opt-in, and off by default. This runs *inside* a metadata refresh, and a save mid-flow
+        // invalidates the objects the rest of that refresh is still holding — the crash was a
+        // `CastMember` read trapping three lines after this returned, because the context it came
+        // from had been reset underneath it. The detail's own path passes `save: true`, where it is
+        // the last thing that happens rather than a step in the middle.
+        if save { try? modelContext.save() }
+    }
+
+    /// Extracts one item's poster colour, by id, in this service's own context.
+    ///
+    /// The detail opens on the main context and cannot hand that item to a background one, so it
+    /// asks for the work by id — the same shape `refreshSingleItem` already uses. The extraction
+    /// itself is unchanged: the detail simply had no way to ask for it, so a title whose detail had
+    /// been opened still had no stored colour.
+    func extractPosterColor(id: String) async {
+        guard let item = (try? modelContext.fetch(
+            FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
+        ))?.first else { return }
+        // Terminal here: nothing else in this call touches the context afterwards.
+        await extractAndSavePosterColor(for: item, save: true)
+    }
+
+    /// Fills in poster colours for titles that have none.
+    ///
+    /// Deliberately separate from the metadata refresh: this needs no TMDB call, only the poster
+    /// image and the palette, so it is cheap enough to run over a small batch on every pass. It is
+    /// what lets a title added after the colour backfill catch up on its own rather than waiting
+    /// for its detail to be opened — and it is not a migration, so it keeps running as titles
+    /// arrive instead of running once and leaving a gap behind it.
+    @discardableResult
+    func backfillPosterColors(limit: Int = 10) async -> Int {
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { $0.themeColorHex == nil },
+            sortBy: [SortDescriptor(\MediaItem.lastInteractionDate, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { return 0 }
+
+        var written = 0
+        for item in items {
+            await extractAndSavePosterColor(for: item)
+            if item.themeColorHex != nil { written += 1 }
+        }
+
+        // One save at the end. This pass owns the context for its whole life, so this is terminal
+        // rather than a step in the middle of something else — which is what made the mid-refresh
+        // save crash.
+        if written > 0 { try? modelContext.save() }
+        return written
     }
 }

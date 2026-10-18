@@ -140,6 +140,15 @@ class BackgroundTaskManager {
                     MediaStateService.shared.postMediaStateChanged()
                 }
             }
+
+            // Poster colours for titles that have none — a handful per drip, cheap, and no TMDB
+            // call. Runs whether or not anything was stale, so a title added since the last pass
+            // picks up its colour without being opened first.
+            let colorService = BackgroundDataService(modelContainer: container)
+            let colored = await colorService.backfillPosterColors(limit: 10)
+            if colored > 0 {
+                AppLogger.info("🎨 Backfilled \(colored) poster colours.", logger: AppLogger.background)
+            }
         } catch {
             AppLogger.error("💧 Drip Sync failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
@@ -155,6 +164,19 @@ class BackgroundTaskManager {
                 await self.refreshStaleBadges()
                 await DatabaseMigrations.runAllIfNeeded(container: container)
                 await self.refreshStalePremiereBadges()
+
+                // Drain the poster-colour queue once, at launch.
+                //
+                // Bounded by what is actually missing, so after the first run this costs a single
+                // empty fetch. It finishes the titles the one-off backfill never reached — the
+                // queue is only ever the ones with no colour at all — and it is not a migration, so
+                // it converges rather than running once and leaving a new gap behind it. Anything
+                // added while the app is running is picked up by the drip instead.
+                let colorService = BackgroundDataService(modelContainer: container)
+                let colored = await colorService.backfillPosterColors(limit: 250)
+                if colored > 0 {
+                    AppLogger.info("🎨 Backfilled \(colored) poster colours at launch.", logger: AppLogger.background)
+                }
             }
         }
 
