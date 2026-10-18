@@ -734,7 +734,19 @@ actor CloudSyncService {
                 // Store the canonical spelling so a legacy value pulled from the cloud heals
                 // locally and the next push carries the fix back.
                 existing.tasteValue = TasteValue.canonicalRaw(remote.taste)
-                existing.isSoftDeleted = remote.is_soft_deleted
+                // The flag alone is not enough. `purgeSoftDeleted` reads `softDeletedAt` to decide
+                // whether the undo window has passed, and treats a missing one as "never" — so a
+                // title deleted on another device would hide correctly and then sit invisible for
+                // good, its events and images kept forever. `softDelete()`/`restore()` keep the two
+                // in step for local deletes; the pull has to do the same, but without stamping `now`
+                // over the remote timestamps the lines below adopt.
+                if remote.is_soft_deleted {
+                    existing.isSoftDeleted = true
+                    if existing.softDeletedAt == nil { existing.softDeletedAt = Date() }
+                } else {
+                    existing.isSoftDeleted = false
+                    existing.softDeletedAt = nil
+                }
                 if let custom = remote.custom_poster_url { existing.customPosterURL = custom }
                 if let interStr = remote.last_interaction_date, let d = parseISO8601(interStr) {
                     existing.lastInteractionDate = d
