@@ -439,30 +439,7 @@ actor CloudSyncService {
                     (item.dateAdded != nil && remoteDateAdded[item.id] == nil)
             }
             if !itemsToUpload.isEmpty {
-                let chunkSize = 100
-                for chunk in stride(from: 0, to: itemsToUpload.count, by: chunkSize) {
-                    let slice = Array(itemsToUpload[chunk..<min(chunk + chunkSize, itemsToUpload.count)])
-                    let payloads = slice.map { item in
-                        RemoteMediaItem(
-                            user_id: syncKey,
-                            media_id: item.id,
-                            type: item.typeValue,
-                            state: item.stateValue,
-                            taste: item.tasteValue,
-                            custom_poster_url: item.customPosterURL,
-                            is_soft_deleted: item.isSoftDeleted,
-                            last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
-                            last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
-                            date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
-                            theme_color_hex: item.themeColorHex,
-                            theme_muted_color_hex: item.themeMutedColorHex,
-                            theme_secondary_color_hex: item.themeSecondaryColorHex,
-                            updated_at: iso8601Formatter.string(from: Date())
-                        )
-                    }
-                    try await postRemote(endpoint: "user_media", syncKey: syncKey, body: payloads)
-                    summary.mediaPushed += slice.count
-                }
+                summary.mediaPushed += try await postMediaRows(itemsToUpload, syncKey: syncKey)
             }
 
             // 2. Pull approved remote titles
@@ -676,18 +653,28 @@ actor CloudSyncService {
 
         // Two shapes, so two runs.
         //
-        // A row with a palette sends the three colour keys; a row without sends none — see
-        // `RemoteMediaItem.encode`. PostgREST needs every object in one request to have the same
-        // keys, so the two cannot travel together. Splitting here is what keeps a title added a
-        // minute ago (no palette yet) from failing the push of the other ninety-nine.
-        let withPalette = dirtyItems.filter { item in
+        let pushedCount = try await postMediaRows(dirtyItems, syncKey: syncKey)
+
+        return pushedCount
+    }
+
+    /// Posts media rows in batches that PostgREST will accept.
+    ///
+    /// Two shapes, so two runs. A row with a palette sends the three colour keys; a row without
+    /// sends none — see `RemoteMediaItem.encode`. PostgREST needs every object in one request to
+    /// carry the same keys, and refuses the request in full when they differ (PGRST102), so the two
+    /// cannot travel together. Splitting here is what keeps a title added a minute ago, whose colour
+    /// has not been extracted yet, from failing the push of the other ninety-nine.
+    ///
+    /// Both push paths go through this, because the one that does not is the one that keeps failing.
+    private func postMediaRows(_ items: [MediaItem], syncKey: String) async throws -> Int {
+        let withPalette = items.filter { item in
             item.themeColorHex != nil || item.themeMutedColorHex != nil || item.themeSecondaryColorHex != nil
         }
-        let withoutPalette = dirtyItems.filter { item in
+        let withoutPalette = items.filter { item in
             item.themeColorHex == nil && item.themeMutedColorHex == nil && item.themeSecondaryColorHex == nil
         }
 
-        // Batch in groups of 100
         let chunkSize = 100
         var pushedCount = 0
 
@@ -713,7 +700,7 @@ actor CloudSyncService {
                     )
                 }
 
-                try await postRemote(endpoint: "user_media", syncKey: syncKey, body: payloads)
+                try await postResilient(endpoint: "user_media", syncKey: syncKey, rows: payloads)
                 pushedCount += slice.count
             }
         }
@@ -914,7 +901,7 @@ actor CloudSyncService {
                 )
             }
 
-            try await postRemote(endpoint: "user_episodes", syncKey: syncKey, body: payloads)
+            try await postResilient(endpoint: "user_episodes", syncKey: syncKey, rows: payloads)
             pushedCount += payloads.count
         }
 
@@ -1096,7 +1083,7 @@ actor CloudSyncService {
                     updated_at: iso8601Formatter.string(from: Date())
                 )
             }
-            try await postRemote(endpoint: "user_collections", syncKey: syncKey, body: payloads)
+            try await postResilient(endpoint: "user_collections", syncKey: syncKey, rows: payloads)
             pushedCount += slice.count
         }
         return pushedCount
@@ -1233,7 +1220,7 @@ actor CloudSyncService {
         var pushedCount = 0
         for chunk in stride(from: 0, to: payloads.count, by: chunkSize) {
             let slice = Array(payloads[chunk..<min(chunk + chunkSize, payloads.count)])
-            try await postRemote(endpoint: "user_collection_items", syncKey: syncKey, body: slice)
+            try await postResilient(endpoint: "user_collection_items", syncKey: syncKey, rows: slice)
             pushedCount += slice.count
         }
         return pushedCount
@@ -1435,7 +1422,7 @@ actor CloudSyncService {
                     updated_at: iso8601Formatter.string(from: Date())
                 )
             }
-            try await postRemote(endpoint: "user_watch_cycles", syncKey: syncKey, body: payloads)
+            try await postResilient(endpoint: "user_watch_cycles", syncKey: syncKey, rows: payloads)
             pushedCount += slice.count
         }
         return pushedCount
@@ -1475,7 +1462,7 @@ actor CloudSyncService {
                     updated_at: iso8601Formatter.string(from: Date())
                 )
             }
-            try await postRemote(endpoint: "user_watch_events", syncKey: syncKey, body: payloads)
+            try await postResilient(endpoint: "user_watch_events", syncKey: syncKey, rows: payloads)
             pushedCount += slice.count
         }
         return pushedCount
@@ -1586,8 +1573,35 @@ actor CloudSyncService {
 
     // MARK: - PostgREST Networking Helpers
 
-    private func postRemote<T: Encodable>(endpoint: String, syncKey: String, body: T) async throws {
-        guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)") else { return }
+    /// Posts rows, halving the batch when PostgREST refuses it for inconsistent keys.
+    ///
+    /// PostgREST requires every object in one request to carry the same keys, and rejects the whole
+    /// request with PGRST102 when they disagree — which one row with an optional field encoded
+    /// differently is enough to do. Rather than trust that every payload builder is uniform, a
+    /// rejected batch is split until the odd rows travel alone: a single object cannot disagree with
+    /// itself, so this always terminates, and a sync that would have failed outright degrades to a
+    /// few more requests.
+    ///
+    /// The split is logged with the endpoint, because the interesting part is *which* table was
+    /// lying about its shape — the retry only makes the symptom disappear.
+    private func postResilient<T: Encodable>(endpoint: String, syncKey: String, rows: [T]) async throws {
+        guard !rows.isEmpty else { return }
+        do {
+            try await postRemote(endpoint: endpoint, syncKey: syncKey, body: rows)
+        } catch APIError.requestFailedWithBody(let code, let body) {
+            let isKeyMismatch = code == 400 && body.contains("PGRST102")
+            guard isKeyMismatch, rows.count > 1 else { throw APIError.requestFailedWithBody(code, body) }
+            AppLogger.error(
+                "PGRST102 on \(endpoint) for a batch of \(rows.count); splitting to find the odd rows",
+                logger: AppLogger.sync
+            )
+            let mid = rows.count / 2
+            try await postResilient(endpoint: endpoint, syncKey: syncKey, rows: Array(rows[0..<mid]))
+            try await postResilient(endpoint: endpoint, syncKey: syncKey, rows: Array(rows[mid...]))
+        }
+    }
+
+    private func postRemote<T: Encodable>(endpoint: String, syncKey: String, body: T) async throws {        guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(Self.supabaseAnonKey, forHTTPHeaderField: "apikey")
@@ -1605,8 +1619,9 @@ actor CloudSyncService {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown response"
             AppLogger.error("Supabase \(endpoint) returned HTTP \(http.statusCode): \(errorBody)", logger: AppLogger.sync)
             // Carry the body: PostgREST names the offending column/constraint, which is the
-            // difference between a useful toast and a bare "400".
-            throw APIError.requestFailedWithBody(http.statusCode, errorBody)
+            // difference between a useful toast and a bare "400". The endpoint goes in front of it
+            // because the body does not say which table it came from, and six of them are pushed.
+            throw APIError.requestFailedWithBody(http.statusCode, "\(endpoint): \(errorBody)")
         }
     }
 
