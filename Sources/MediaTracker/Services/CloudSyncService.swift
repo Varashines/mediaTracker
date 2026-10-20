@@ -622,12 +622,21 @@ actor CloudSyncService {
             try container.encode(last_interaction_date, forKey: .last_interaction_date)
             try container.encode(last_state_change_date, forKey: .last_state_change_date)
             try container.encode(date_added, forKey: .date_added)
-            // `encodeIfPresent`, unlike the rest of this struct: an explicit null would clear the
-            // colour in the cloud for any row whose colour this device has not extracted. Absent
-            // means "nothing to say", which is the truth here.
-            try container.encodeIfPresent(theme_color_hex, forKey: .theme_color_hex)
-            try container.encodeIfPresent(theme_muted_color_hex, forKey: .theme_muted_color_hex)
-            try container.encodeIfPresent(theme_secondary_color_hex, forKey: .theme_secondary_color_hex)
+            // All or nothing, and nothing rather than an explicit null.
+            //
+            // `encodeIfPresent` per field made rows disagree about their key set: a batch with one
+            // title whose palette had been extracted and one whose had not sent two different object
+            // shapes, and PostgREST rejects that with PGRST102 ("All object keys must match") — the
+            // whole push failed with a 400, not just the unnamed rows. So a row carries all three
+            // keys or none, and `pushMediaItems` posts the two shapes as separate batches.
+            //
+            // An explicit null still means "clear it", which is why rows without a palette send no
+            // key at all: this device has nothing to say about the colour, not a value of empty.
+            if theme_color_hex != nil || theme_muted_color_hex != nil || theme_secondary_color_hex != nil {
+                try container.encode(theme_color_hex, forKey: .theme_color_hex)
+                try container.encode(theme_muted_color_hex, forKey: .theme_muted_color_hex)
+                try container.encode(theme_secondary_color_hex, forKey: .theme_secondary_color_hex)
+            }
             try container.encode(updated_at, forKey: .updated_at)
         }
     }
@@ -665,33 +674,48 @@ actor CloudSyncService {
 
         guard !dirtyItems.isEmpty else { return 0 }
 
+        // Two shapes, so two runs.
+        //
+        // A row with a palette sends the three colour keys; a row without sends none — see
+        // `RemoteMediaItem.encode`. PostgREST needs every object in one request to have the same
+        // keys, so the two cannot travel together. Splitting here is what keeps a title added a
+        // minute ago (no palette yet) from failing the push of the other ninety-nine.
+        let withPalette = dirtyItems.filter { item in
+            item.themeColorHex != nil || item.themeMutedColorHex != nil || item.themeSecondaryColorHex != nil
+        }
+        let withoutPalette = dirtyItems.filter { item in
+            item.themeColorHex == nil && item.themeMutedColorHex == nil && item.themeSecondaryColorHex == nil
+        }
+
         // Batch in groups of 100
         let chunkSize = 100
         var pushedCount = 0
 
-        for chunk in stride(from: 0, to: dirtyItems.count, by: chunkSize) {
-            let slice = Array(dirtyItems[chunk..<min(chunk + chunkSize, dirtyItems.count)])
-            let payloads: [RemoteMediaItem] = slice.map { item in
-                RemoteMediaItem(
-                    user_id: syncKey,
-                    media_id: item.id,
-                    type: item.typeValue,
-                    state: item.stateValue,
-                    taste: item.tasteValue,
-                    custom_poster_url: item.customPosterURL,
-                    is_soft_deleted: item.isSoftDeleted,
-                    last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
-                    last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
-                    date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
-                    theme_color_hex: item.themeColorHex,
-                    theme_muted_color_hex: item.themeMutedColorHex,
-                    theme_secondary_color_hex: item.themeSecondaryColorHex,
-                    updated_at: iso8601Formatter.string(from: Date())
-                )
-            }
+        for group in [withPalette, withoutPalette] where !group.isEmpty {
+            for chunk in stride(from: 0, to: group.count, by: chunkSize) {
+                let slice = Array(group[chunk..<min(chunk + chunkSize, group.count)])
+                let payloads: [RemoteMediaItem] = slice.map { item in
+                    RemoteMediaItem(
+                        user_id: syncKey,
+                        media_id: item.id,
+                        type: item.typeValue,
+                        state: item.stateValue,
+                        taste: item.tasteValue,
+                        custom_poster_url: item.customPosterURL,
+                        is_soft_deleted: item.isSoftDeleted,
+                        last_interaction_date: item.lastInteractionDate.map { iso8601Formatter.string(from: $0) },
+                        last_state_change_date: item.lastStateChangeDate.map { iso8601Formatter.string(from: $0) },
+                        date_added: item.dateAdded.map { iso8601Formatter.string(from: $0) },
+                        theme_color_hex: item.themeColorHex,
+                        theme_muted_color_hex: item.themeMutedColorHex,
+                        theme_secondary_color_hex: item.themeSecondaryColorHex,
+                        updated_at: iso8601Formatter.string(from: Date())
+                    )
+                }
 
-            try await postRemote(endpoint: "user_media", syncKey: syncKey, body: payloads)
-            pushedCount += slice.count
+                try await postRemote(endpoint: "user_media", syncKey: syncKey, body: payloads)
+                pushedCount += slice.count
+            }
         }
 
         return pushedCount
