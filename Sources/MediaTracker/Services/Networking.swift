@@ -746,12 +746,14 @@ actor APIClient {
 
     func fetchMoviePosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let resp = try await fetchImagesResponse(path: "/movie/\(tmdbID)/images", cacheKey: "movie_images_\(tmdbID).json", force: force)
-        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
+        return Self.processPosterURLs(resp.posters, originalLanguage: nil)
     }
 
     func fetchTVPosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let resp = try await fetchImagesResponse(path: "/tv/\(tmdbID)/images", cacheKey: "tv_images_\(tmdbID).json", force: force)
-        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
+        // No language filter. The poster list is a choice, not a translation: a Thai show has no
+        // `th` artwork on TMDB and filtering to it left the picker with nothing at all.
+        return Self.processPosterURLs(resp.posters, originalLanguage: nil)
     }
 
     /// Shared pipeline for all `/images` fetches: disk cache → in-flight
