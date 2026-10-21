@@ -14,6 +14,22 @@ enum WatchHistoryCoordinator {
         guard item.modelContext != nil else { return }
 
         if newState == .rewatching, oldState != .rewatching {
+            // Starting a rewatch clears the whole current projection — every episode unmarked.
+            // That is a destructive thing to do on a user's behalf, so it only happens when the
+            // user asked for it. The `.automatic` path used to reach here from a state the app
+            // set itself, which wiped a season on its own and then re-added the announced episodes
+            // from TMDB, so the show flipped from "7 of 8" to "nothing of 10" on open.
+            guard source == .manual else {
+                AppLogger.warning(
+                    "Ignoring automatic rewatch start for \(item.id); projection left intact",
+                    logger: AppLogger.sync
+                )
+                return
+            }
+            AppLogger.info(
+                "Starting rewatch for \(item.id) on request\n\(Thread.callStackSymbols.prefix(12).joined(separator: "\n"))",
+                logger: AppLogger.sync
+            )
             startRewatch(
                 item: item,
                 context: context,
