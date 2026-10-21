@@ -49,6 +49,7 @@ enum UserDefaultsKeys: String {
     case watchHistoryBackfillV1 = "watch_history_backfill_v1"
     case watchHistoryRepairV1 = "watch_history_repair_v1"
     case watchHistoryDedupV1 = "watch_history_dedup_v1"
+    case tasteCanonicalizationV1 = "taste_canonicalization_v1"
     
     // Taste weights
     case tasteWeightGenre = "taste_weight_genre"
@@ -74,4 +75,6 @@ enum UserDefaultsKeys: String {
     case cloudSyncAnonKey = "cloud_sync_anon_key"
     case cloudSyncKey = "cloud_sync_key"
     case cloudSyncLastTimestamp = "cloud_sync_last_timestamp"
+    /// Incremental pull watermark: the newest server `updated_at` the last sync saw.
+    case cloudSyncWatermark = "cloud_sync_watermark"
 }

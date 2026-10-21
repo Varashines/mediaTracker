@@ -237,6 +237,73 @@ final class DateUtilsTests: MTTestCase {
         XCTAssertEqual(comps.minute, 0)
     }
 
+    // MARK: - Studio-based Disney+ flagship rule (ported from Android)
+
+    func testServiceHintCombinesNetworkAndStudios() {
+        XCTAssertEqual(
+            DateUtils.serviceHint(network: "Disney+", studios: ["Marvel Studios"], genres: ["Sci-Fi & Fantasy"]),
+            "Disney+ Marvel Studios"
+        )
+        XCTAssertEqual(DateUtils.serviceHint(network: nil, studios: nil, genres: nil), "")
+    }
+
+    func testServiceHintWithholdsStudiosForAnimation() {
+        XCTAssertEqual(
+            DateUtils.serviceHint(network: "Disney+", studios: ["Marvel Studios"], genres: ["Animation", "Sci-Fi & Fantasy"]),
+            "Disney+"
+        )
+    }
+
+    func testMarvelStudioOnDisneyPlusUsesFlagshipDropTime() {
+        // A Marvel show's network is a generic "Disney+"; the studio is what selects the
+        // 9 PM ET flagship rule instead of the Disney+ 3 AM ET standard.
+        let show = TVShowDetails(tmdbID: 3)
+        show.network = "Disney+"
+        show.productionCompanies = ["Marvel Studios"]
+
+        let date = DateUtils.parseEpisodeDate("2026-04-20", for: show)
+        XCTAssertNotNil(date)
+
+        let tzET = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzET
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.hour, 21, "Marvel Studios must select the 9 PM ET flagship rule")
+        XCTAssertEqual(comps.minute, 0)
+    }
+
+    func testLucasfilmOnDisneyPlusUsesFlagshipDropTime() {
+        let show = TVShowDetails(tmdbID: 4)
+        show.network = "Disney+"
+        show.productionCompanies = ["Lucasfilm Ltd."]
+
+        let date = DateUtils.parseEpisodeDate("2026-04-20", for: show)
+        XCTAssertNotNil(date)
+
+        let tzET = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzET
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.hour, 21, "Lucasfilm must select the 9 PM ET flagship rule")
+    }
+
+    func testAnimatedMarvelOnDisneyPlusStaysStandardMidnightPT() {
+        // X-Men '97 / What If…? are animated, so they keep the Disney+ standard drop.
+        let show = TVShowDetails(tmdbID: 5)
+        show.network = "Disney+"
+        show.productionCompanies = ["Marvel Studios"]
+        show.genres = ["Animation", "Sci-Fi & Fantasy"]
+
+        let date = DateUtils.parseEpisodeDate("2026-04-20", for: show)
+        XCTAssertNotNil(date)
+
+        let tzET = TimeZone(identifier: "America/New_York")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tzET
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date!)
+        XCTAssertEqual(comps.hour, 3, "Animated Marvel keeps the Disney+ standard midnight-PT drop")
+    }
+
     func testParseEpisodeDateYouTube() {
         // YouTube shows (e.g. Thai dramas): TVMaze airstamp at noon UTC IS the actual release time.
         // The airstamp should be used directly instead of a streaming rule.

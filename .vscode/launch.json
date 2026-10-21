@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mediaTracker}",
+            "name": "Debug MediaTracker",
+            "target": "MediaTracker",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MediaTracker"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mediaTracker}",
+            "name": "Release MediaTracker",
+            "target": "MediaTracker",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MediaTracker"
+        }
+    ]
+}

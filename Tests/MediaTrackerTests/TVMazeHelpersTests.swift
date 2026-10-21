@@ -105,17 +105,21 @@ final class TVMazeHelpersTests: MTTestCase {
             (73773, "My Boss", "2024-01-04", "Chinese")
         ])
 
-        // When looking for 2024 Chinese show -> matches 73773
-        let chineseMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: 2024, language: "zh", in: results)
+        // The 2024 Chinese show, asked for by its own date and language -> matches 73773
+        let chineseMatch = APIClient.bestTVMazeMatch(
+            for: "My Boss", releaseDate: APIClient.utcDay("2024-01-04"), language: "zh", in: results
+        )
         XCTAssertEqual(chineseMatch?.show.id, 73773)
 
-        // When looking for upcoming Thai show (no release year yet, language "th") -> must reject 73773
-        let thaiMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: nil, language: "th", in: results)
-        XCTAssertNil(thaiMatch, "Older Chinese series must not be matched to an unreleased Thai series")
+        // A Thai show with no date yet -> nothing to verify against, so no match at all
+        let thaiMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseDate: nil, language: "th", in: results)
+        XCTAssertNil(thaiMatch, "An unverifiable candidate must resolve nil, not the nearest year")
 
-        // When looking for a 2026 show -> must reject 2024 show (+2 years difference)
-        let futureMatch = APIClient.bestTVMazeMatch(for: "My Boss", releaseYear: 2026, language: "zh", in: results)
-        XCTAssertNil(futureMatch, "A show 2+ years apart must not match")
+        // Two years apart is far outside the week, even with the same language
+        let futureMatch = APIClient.bestTVMazeMatch(
+            for: "My Boss", releaseDate: APIClient.utcDay("2026-11-28"), language: "zh", in: results
+        )
+        XCTAssertNil(futureMatch, "A premiere outside the week must not match")
     }
 
     private static func testMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {

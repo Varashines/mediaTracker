@@ -12,6 +12,25 @@ import Observation
 @ModelActor
 private actor DripSyncSelectionActor {
     func staleOrIncompleteItemIDs(before staleThreshold: Date, limit: Int) throws -> [String] {
+        // Priority 0: titles still carrying the import placeholder.
+        //
+        // A title imported from the cloud starts life as "Importing...", because a cloud row carries
+        // no name — the refresh writes the fetched one back, but only for titles it actually visits.
+        // An imported title is brand new, so it is neither missing `lastUpdated` nor stale, and the
+        // drip would never return to it: it would stay misnamed for the thirty days it takes to
+        // become stale. These are picked up regardless of age, because a title called "Importing..."
+        // is wrong however recently it arrived.
+        //
+        // The literal has to match `MediaItem.importPlaceholder`; a predicate cannot reference it.
+        let placeholderPredicate = #Predicate<MediaItem> { item in
+            !item.isSoftDeleted && item.title == "Importing..."
+        }
+        var placeholderDesc = FetchDescriptor<MediaItem>(predicate: placeholderPredicate)
+        placeholderDesc.propertiesToFetch = [\.id]
+        placeholderDesc.fetchLimit = limit
+        let placeholders = try modelContext.fetch(placeholderDesc).map(\.id)
+        if !placeholders.isEmpty { return placeholders }
+
         // Priority 1: Incomplete items missing lastUpdated (across all states)
         let incompletePredicate = #Predicate<MediaItem> { item in
             !item.isSoftDeleted && item.lastUpdated == nil
@@ -140,6 +159,15 @@ class BackgroundTaskManager {
                     MediaStateService.shared.postMediaStateChanged()
                 }
             }
+
+            // Poster colours for titles that have none — a handful per drip, cheap, and no TMDB
+            // call. Runs whether or not anything was stale, so a title added since the last pass
+            // picks up its colour without being opened first.
+            let colorService = BackgroundDataService(modelContainer: container)
+            let colored = await colorService.backfillPosterColors(limit: 10)
+            if colored > 0 {
+                AppLogger.info("🎨 Backfilled \(colored) poster colours.", logger: AppLogger.background)
+            }
         } catch {
             AppLogger.error("💧 Drip Sync failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
@@ -155,6 +183,19 @@ class BackgroundTaskManager {
                 await self.refreshStaleBadges()
                 await DatabaseMigrations.runAllIfNeeded(container: container)
                 await self.refreshStalePremiereBadges()
+
+                // Drain the poster-colour queue once, at launch.
+                //
+                // Bounded by what is actually missing, so after the first run this costs a single
+                // empty fetch. It finishes the titles the one-off backfill never reached — the
+                // queue is only ever the ones with no colour at all — and it is not a migration, so
+                // it converges rather than running once and leaving a new gap behind it. Anything
+                // added while the app is running is picked up by the drip instead.
+                let colorService = BackgroundDataService(modelContainer: container)
+                let colored = await colorService.backfillPosterColors(limit: 250)
+                if colored > 0 {
+                    AppLogger.info("🎨 Backfilled \(colored) poster colours at launch.", logger: AppLogger.background)
+                }
             }
         }
 

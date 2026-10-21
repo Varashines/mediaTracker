@@ -96,12 +96,29 @@ enum RuntimeFallback {
 }
 
 extension BackgroundDataService {
+    /// The name from TMDB, applied only when the local one is missing or is still the import
+    /// placeholder.
+    ///
+    /// A title's name is supplied at creation and nowhere else, and the cloud import has none to
+    /// give — so an imported title was created as "Importing..." and stayed that way. It is also the
+    /// string the TVMaze lookup matches on, which means an imported show could never resolve its
+    /// episodes either. Only the placeholder is replaced, so a name that is already real is left
+    /// alone.
+    private func applyFetchedTitle(to item: MediaItem, from fetched: String?) {
+        guard let fetched,
+              !fetched.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let current = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || current == MediaItem.importPlaceholder else { return }
+        item.title = fetched
+    }
+
     func refreshMovie(id: String, tmdbID: Int, force: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
         guard let item = try? modelContext.fetch(descriptor).first else { return false }
         
         do {
             let details = try await APIClient.shared.fetchMovieDetails(tmdbID: tmdbID, force: force)
+            applyFetchedTitle(to: item, from: details.title)
             item.releaseDate = DateUtils.parseDate(details.releaseDate)
             if let newOverview = details.overview {
                 item.overview = newOverview
@@ -219,6 +236,7 @@ extension BackgroundDataService {
 
         do {
             let details = try await APIClient.shared.fetchTVDetails(tmdbID: tmdbID, force: force)
+            applyFetchedTitle(to: item, from: details.name)
             let tvDetails = item.tvShowDetails ?? TVShowDetails(tmdbID: tmdbID)
             tvDetails.item = item
             item.tvShowDetails = tvDetails
@@ -235,6 +253,9 @@ extension BackgroundDataService {
             
             tvDetails.nextEpisodeNumber = details.nextEpisodeNumber
             tvDetails.nextSeasonNumber = details.nextSeasonNumber
+            // Stored before the TVMaze schedule parse below, which needs the studio hint
+            // to pick the right drop rule for the next episode.
+            tvDetails.productionCompanies = details.productionCompanies
             if let tmdbNextDate = details.nextEpisodeDate {
                 tvDetails.nextEpisodeDate = DateUtils.parseDate(tmdbNextDate)
             }
@@ -270,10 +291,9 @@ extension BackgroundDataService {
                     resolved = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID, force: force)
                 }
                 if resolved == nil {
-                    let releaseYear = item.releaseDate.map { Calendar.current.component(.year, from: $0) }
                     resolved = try? await APIClient.shared.lookupTVMazeIDByName(
                         title: item.title,
-                        releaseYear: releaseYear,
+                        releaseDate: item.releaseDate,
                         language: details.originalLanguage,
                         force: force
                     )
@@ -302,7 +322,7 @@ extension BackgroundDataService {
                     tvDetails.showType = showType
                     
                     if let schedule = episode {
-                        tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service)
+                        tvDetails.nextEpisodeDate = DateUtils.parseEpisodeDate(schedule.airdate, time: schedule.airtime, airstamp: schedule.airstamp, timezone: timezone, serviceName: service, for: tvDetails)
                         
                         if let sNum = schedule.season { tvDetails.nextSeasonNumber = sNum }
                         if let eNum = schedule.number { tvDetails.nextEpisodeNumber = eNum }
@@ -384,10 +404,27 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
-            tvDetails.numberOfSeasons = details.numberOfSeasons
-            tvDetails.numberOfEpisodes = details.numberOfEpisodes
             tvDetails.network = details.network
             tvDetails.networkLogoPath = details.networkLogoPath
+
+            // Thai shows: the count comes from TVMaze.
+            //
+            // TMDB's `number_of_episodes` for a Thai series is regularly short — it lists the
+            // episodes it has titles for, and those are often a subset of what has aired (and are
+            // usually named "Episode 7" until someone types the real title in). TVMaze schedules
+            // these shows episode by episode, so its list is the one that matches what aired.
+            //
+            // Only the count is taken from it. Seasons and runtimes stay TMDB's, because TVMaze
+            // numbers specials as season 0 and the app's season rows are TMDB's.
+            let isThai = (details.originalLanguage ?? item.cachedLanguage) == "th"
+            let mazeAiredEpisodes = mazeEpisodes.filter { ($0.season ?? 0) > 0 }
+            let mazeSeasonCount = Set(mazeAiredEpisodes.compactMap { $0.season }).count
+            tvDetails.numberOfSeasons = (isThai && mazeSeasonCount > 0)
+                ? mazeSeasonCount
+                : details.numberOfSeasons
+            tvDetails.numberOfEpisodes = (isThai && !mazeAiredEpisodes.isEmpty)
+                ? mazeAiredEpisodes.count
+                : details.numberOfEpisodes
 
             // Merge TMDB + TVMaze genres for richer coverage
             var mergedGenres = Set(details.genres)
@@ -500,10 +537,20 @@ extension BackgroundDataService {
                                     tmdbEpisodes = []
                                     fetchedTMDBEpisodes = false
                                 }
-                                episodes = RuntimeFallback.reconcile(
-                                    tmdbEpisodes: tmdbEpisodes,
-                                    tvmazeSeason: mazeRawBySeason[sNum] ?? []
-                                )
+                                // Thai shows take TVMaze's list as the list.
+                                //
+                                // `RuntimeFallback.reconcile` is a union, which keeps TMDB's
+                                // announced-but-unaired episodes — right for a Western show whose
+                                // schedule TMDB tracks first, wrong for a Thai one, where TMDB is
+                                // routinely ahead by two episodes and the season header then reads
+                                // "10 EPISODES" for a show that has aired eight. TMDB still supplies
+                                // the runtimes below.
+                                episodes = isThai
+                                    ? mazeSeasonEps
+                                    : RuntimeFallback.reconcile(
+                                        tmdbEpisodes: tmdbEpisodes,
+                                        tvmazeSeason: mazeRawBySeason[sNum] ?? []
+                                    )
                             } else {
                                 do {
                                     tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
@@ -523,10 +570,22 @@ extension BackgroundDataService {
                                 tmdbEpisodes: tmdbEpisodes,
                                 tvmazeSeason: tvmazeRawForSeason
                             )
+                            // The count for a Thai show is TVMaze's, unless TVMaze has nothing for
+                            // the season — then TMDB's is the only answer there is.
+                            let tvMazeCount = mazeEpisodesBySeason[sNum]?.count ?? 0
+                            let authoritativeCount = (isThai && tvMazeCount > 0)
+                                ? tvMazeCount
+                                : episodes.count
+                            if isThai && tvMazeCount == 0 {
+                                AppLogger.warning(
+                                    "TVMaze has no episodes for \(tmdbID) season \(sNum); using TMDB's \(episodes.count)",
+                                    logger: AppLogger.background
+                                )
+                            }
                             return FetchedSeasonData(
                                 seasonNumber: sNum,
                                 name: seasonData.name,
-                                episodeCount: episodes.count,
+                                episodeCount: authoritativeCount,
                                 airDate: seasonData.air_date,
                                 episodes: episodes,
                                 tmdbRuntimes: tmdbRuntimes,
@@ -603,6 +662,10 @@ extension BackgroundDataService {
                         let validIDs = Set(seasonData.episodes.map { "\(tmdbID)_\(sNum)_\($0.episodeNumber)" })
                         if let seasonEpisodes = episodesBySeason[sNum] {
                             for (uid, ep) in seasonEpisodes where !validIDs.contains(uid) {
+                                // Never discard a viewing. A row the new list no longer carries
+                                // may still be the only record that someone watched it — the
+                                // list is a schedule, and schedules get renumbered.
+                                if ep.isWatched { continue }
                                 if ep.modelContext != nil { modelContext.delete(ep) }
                             }
                         }
@@ -620,7 +683,10 @@ extension BackgroundDataService {
                 let fetchedSeasonNumbers = Set(fetchedSeasons.map(\.seasonNumber))
                 for existingSeason in existingSeasons {
                     if !fetchedSeasonNumbers.contains(existingSeason.seasonNumber) {
-                        // Delete all episodes attached to this orphaned season first
+                        // Delete all episodes attached to this orphaned season first — unless one
+                        // of them was watched, in which case the season stays: history is not
+                        // something a refresh gets to delete.
+                        if existingSeason.episodes.liveModels.contains(where: { $0.isWatched }) { continue }
                         for ep in existingSeason.episodes.liveModels {
                             if ep.modelContext != nil { modelContext.delete(ep) }
                         }
@@ -717,7 +783,7 @@ extension BackgroundDataService {
     }
 
 
-    func extractAndSavePosterColor(for item: MediaItem, deferIfHeavy: Bool = false) async {
+    func extractAndSavePosterColor(for item: MediaItem, deferIfHeavy: Bool = false, save: Bool = false) async {
         let effectivePoster = item.effectivePosterURL
         let shouldExtract = item.themeColorHex == nil || item.themeColorSourceURL != effectivePoster
         guard shouldExtract,
@@ -728,11 +794,76 @@ extension BackgroundDataService {
             return
         }
 
-        guard let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) else { return }
-        let palette = await ColorExtractor.extractThemePalette(from: cached.image)
+        // The cache first, then a direct fetch.
+        //
+        // The cache-only version is why this silently did nothing: a poster that has never been
+        // drawn at this size is not in the cache, and the function returned without a word. The
+        // colour migration always had this fallback, which is why it coloured 738 items while this
+        // path coloured none of the ones added since.
+        var image: CGImage?
+        if let cached = await ImageCache.shared.get(forKey: poster, targetSize: .thumbSmall) {
+            image = cached.image
+        } else if let url = URL(string: poster),
+                  let (data, _) = try? await ImageCache.shared.imageSession.data(from: url),
+                  let decoded = NSImage(data: data) {
+            image = decoded.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        guard let image else { return }
+
+        let palette = await ColorExtractor.extractThemePalette(from: image)
         item.themeColorHex = palette.primary.toHex()
         item.themeSecondaryColorHex = palette.secondary.toHex()
         item.themeMutedColorHex = palette.muted.toHex()
         item.themeColorSourceURL = poster
+
+        // Opt-in, and off by default. This runs *inside* a metadata refresh, and a save mid-flow
+        // invalidates the objects the rest of that refresh is still holding — the crash was a
+        // `CastMember` read trapping three lines after this returned, because the context it came
+        // from had been reset underneath it. The detail's own path passes `save: true`, where it is
+        // the last thing that happens rather than a step in the middle.
+        if save { try? modelContext.save() }
+    }
+
+    /// Extracts one item's poster colour, by id, in this service's own context.
+    ///
+    /// The detail opens on the main context and cannot hand that item to a background one, so it
+    /// asks for the work by id — the same shape `refreshSingleItem` already uses. The extraction
+    /// itself is unchanged: the detail simply had no way to ask for it, so a title whose detail had
+    /// been opened still had no stored colour.
+    func extractPosterColor(id: String) async {
+        guard let item = (try? modelContext.fetch(
+            FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == id })
+        ))?.first else { return }
+        // Terminal here: nothing else in this call touches the context afterwards.
+        await extractAndSavePosterColor(for: item, save: true)
+    }
+
+    /// Fills in poster colours for titles that have none.
+    ///
+    /// Deliberately separate from the metadata refresh: this needs no TMDB call, only the poster
+    /// image and the palette, so it is cheap enough to run over a small batch on every pass. It is
+    /// what lets a title added after the colour backfill catch up on its own rather than waiting
+    /// for its detail to be opened — and it is not a migration, so it keeps running as titles
+    /// arrive instead of running once and leaving a gap behind it.
+    @discardableResult
+    func backfillPosterColors(limit: Int = 10) async -> Int {
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { $0.themeColorHex == nil },
+            sortBy: [SortDescriptor(\MediaItem.lastInteractionDate, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        guard let items = try? modelContext.fetch(descriptor), !items.isEmpty else { return 0 }
+
+        var written = 0
+        for item in items {
+            await extractAndSavePosterColor(for: item)
+            if item.themeColorHex != nil { written += 1 }
+        }
+
+        // One save at the end. This pass owns the context for its whole life, so this is terminal
+        // rather than a step in the middle of something else — which is what made the mid-refresh
+        // save crash.
+        if written > 0 { try? modelContext.save() }
+        return written
     }
 }

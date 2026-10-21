@@ -288,9 +288,13 @@ final class NetworkingTests: MTTestCase {
 
     // MARK: - TVMaze name lookup (exact match + URL encoding)
 
-    private static func tvMazeSearchJSON(_ entries: [(id: Int, name: String)]) -> String {
+    private static func tvMazeSearchJSON(
+        _ entries: [(id: Int, name: String)],
+        language: String = "English",
+        premiered: String = "2024-01-01"
+    ) -> String {
         let shows = entries.map {
-            #"{"score": 1.0, "show": {"id": \#($0.id), "name": "\#($0.name)"}}"#
+            #"{"score": 1.0, "show": {"id": \#($0.id), "name": "\#($0.name)", "language": "\#(language)", "premiered": "\#(premiered)"}}"#
         }
         return "[\(shows.joined(separator: ","))]"
     }
@@ -310,7 +314,12 @@ final class NetworkingTests: MTTestCase {
         }
 
         let client = APIClient(testing: mockSession)
-        let id = try await client.lookupTVMazeIDByName(title: "Merry Berry Love", force: true)
+        let id = try await client.lookupTVMazeIDByName(
+            title: "Merry Berry Love",
+            releaseDate: APIClient.utcDay("2024-01-01"),
+            language: "en",
+            force: true
+        )
         XCTAssertEqual(id, 93925, "Exact match must win regardless of fuzzy ranking")
     }
 
@@ -325,14 +334,19 @@ final class NetworkingTests: MTTestCase {
         }
 
         let client = APIClient(testing: mockSession)
-        let id = try await client.lookupTVMazeIDByName(title: "Merry Berry Love", force: true)
+        let id = try await client.lookupTVMazeIDByName(
+            title: "Merry Berry Love",
+            releaseDate: APIClient.utcDay("2024-01-01"),
+            language: "en",
+            force: true
+        )
         XCTAssertNil(id, "No exact match must resolve nil (fall back to TMDB details only)")
     }
 
     func testTVMazeNameLookupEncodesAmpersand() async throws {
         // Juliet & Juliet regression: .urlQueryAllowed left "&" raw, so TVMaze
         // received q=Juliet (truncated at the ampersand).
-        let json = Self.tvMazeSearchJSON([(90630, "Juliet & Juliet")])
+        let json = Self.tvMazeSearchJSON([(90630, "Juliet & Juliet")], language: "Thai", premiered: "2026-09-05")
         // Capture the outgoing query and assert AFTER the request — XCTest's
         // generic XCTAssertEqual is MainActor-isolated and traps when called
         // from MockURLProtocol's non-main network queue.
@@ -346,7 +360,12 @@ final class NetworkingTests: MTTestCase {
         }
 
         let client = APIClient(testing: mockSession)
-        let id = try await client.lookupTVMazeIDByName(title: "Juliet & Juliet", force: true)
+        let id = try await client.lookupTVMazeIDByName(
+            title: "Juliet & Juliet",
+            releaseDate: APIClient.utcDay("2026-09-05"),
+            language: "th",
+            force: true
+        )
         XCTAssertEqual(id, 90630)
 
         let query = capturedQuery

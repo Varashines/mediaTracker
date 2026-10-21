@@ -101,7 +101,7 @@ extension BackgroundDataService {
                     skippedCount += 1
                 case .merge:
                     if existing.tasteValue == TasteValue.none.rawValue, let newTaste = itemData.taste {
-                        existing.tasteValue = newTaste
+                        existing.tasteValue = TasteValue.canonicalRaw(newTaste)
                     }
                     if itemData.dateAdded < (existing.dateAdded ?? .distantFuture) {
                         existing.dateAdded = itemData.dateAdded
@@ -123,7 +123,7 @@ extension BackgroundDataService {
                         existing.lastStateChangeDate = backupStateDate
                     }
                     existing.dateAdded = itemData.dateAdded
-                    existing.tasteValue = itemData.taste ?? TasteValue.none.rawValue
+                    existing.tasteValue = TasteValue.canonicalRaw(itemData.taste)
                     existing.lastInteractionDate = itemData.lastInteractionDate ?? existing.lastInteractionDate
                     itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
                     if !hasDetails { itemsNeedingBackfill.append(existing.id) }
@@ -157,7 +157,7 @@ extension BackgroundDataService {
                     item.lastStateChangeDate = backupStateDate
                 }
                 item.dateAdded = itemData.dateAdded
-                item.tasteValue = itemData.taste ?? TasteValue.none.rawValue
+                item.tasteValue = TasteValue.canonicalRaw(itemData.taste)
                 item.lastInteractionDate = itemData.lastInteractionDate
                 itemData.applyMetadata(to: item, preserveLastUpdated: false)
                 itemsNeedingBackfill.append(uniqueID)

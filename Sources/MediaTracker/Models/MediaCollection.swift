@@ -9,21 +9,29 @@ final class MediaCollection: Identifiable {
     var completedItemIDs: [String] = []
     var notes: String? = ""
     var isPinned: Bool = false
-    
+
+    /// Last local edit. Drives collection sync conflict resolution (newest wins); nil on
+    /// rows created before this field existed.
+    var updatedAt: Date?
+
     var smartRulesData: Data?
-    
+
     var isSmart: Bool { smartRulesData != nil }
-    
+
     @Relationship(inverse: \MediaItem.collections)
     var items: [MediaItem]
-    
+
     init(id: UUID = UUID(), name: String, systemImage: String, isSmart: Bool = false) {
         self.id = id
         self.name = name
         self.systemImage = systemImage
         self.items = []
+        self.updatedAt = Date()
         if isSmart { smartRulesData = Data() }
     }
+
+    /// Stamp the collection as edited so the next sync pushes it.
+    func touch() { updatedAt = Date() }
     
     var smartRules: [SmartRule] {
         get { smartRuleSet.rules }

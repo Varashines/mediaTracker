@@ -110,6 +110,20 @@ final class MediaStateService {
         recommendationsRefreshedCount += 1
     }
 
+    /// The ledger changed: a watch, a void, an edited watch date, or a correction pulled from the
+    /// cloud. The year review and the derived stats snapshot history and were only invalidated on
+    /// *media state* changes, so a ledger-only edit left a stale review on screen — surviving even
+    /// a revisit, since the cache is in-memory. Shares the existing debounce, so a batch of marks
+    /// coalesces into one invalidation.
+    func postHistoryChanged() {
+        debouncedDerivedCacheInvalidation()
+    }
+
+    /// Fire-and-forget from any context, including the nonisolated history coordinator.
+    nonisolated static func notifyLedgerChanged() {
+        Task { @MainActor in shared.postHistoryChanged() }
+    }
+
     /// Coalesce derived-cache invalidation so rapid state changes clear each
     /// affected aggregate once rather than triggering repeated library scans.
     private func debouncedDerivedCacheInvalidation() {
