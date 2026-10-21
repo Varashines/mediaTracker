@@ -291,10 +291,9 @@ extension BackgroundDataService {
                     resolved = try? await APIClient.shared.lookupTVMazeID(tvdbID: tvdbID, force: force)
                 }
                 if resolved == nil {
-                    let releaseYear = item.releaseDate.map { Calendar.current.component(.year, from: $0) }
                     resolved = try? await APIClient.shared.lookupTVMazeIDByName(
                         title: item.title,
-                        releaseYear: releaseYear,
+                        releaseDate: item.releaseDate,
                         language: details.originalLanguage,
                         force: force
                     )
@@ -405,10 +404,27 @@ extension BackgroundDataService {
             tvDetails.status = details.status
             tvDetails.originalLanguage = details.originalLanguage
             tvDetails.voteAverage = details.voteAverage
-            tvDetails.numberOfSeasons = details.numberOfSeasons
-            tvDetails.numberOfEpisodes = details.numberOfEpisodes
             tvDetails.network = details.network
             tvDetails.networkLogoPath = details.networkLogoPath
+
+            // Thai shows: the count comes from TVMaze.
+            //
+            // TMDB's `number_of_episodes` for a Thai series is regularly short — it lists the
+            // episodes it has titles for, and those are often a subset of what has aired (and are
+            // usually named "Episode 7" until someone types the real title in). TVMaze schedules
+            // these shows episode by episode, so its list is the one that matches what aired.
+            //
+            // Only the count is taken from it. Seasons and runtimes stay TMDB's, because TVMaze
+            // numbers specials as season 0 and the app's season rows are TMDB's.
+            let isThai = (details.originalLanguage ?? item.cachedLanguage) == "th"
+            let mazeAiredEpisodes = mazeEpisodes.filter { ($0.season ?? 0) > 0 }
+            let mazeSeasonCount = Set(mazeAiredEpisodes.compactMap { $0.season }).count
+            tvDetails.numberOfSeasons = (isThai && mazeSeasonCount > 0)
+                ? mazeSeasonCount
+                : details.numberOfSeasons
+            tvDetails.numberOfEpisodes = (isThai && !mazeAiredEpisodes.isEmpty)
+                ? mazeAiredEpisodes.count
+                : details.numberOfEpisodes
 
             // Merge TMDB + TVMaze genres for richer coverage
             var mergedGenres = Set(details.genres)

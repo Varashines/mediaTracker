@@ -891,17 +891,22 @@ actor APIClient {
         }
     }
 
-    /// Resolves a TVMaze show ID by title match with multi-factor verification
-    /// (release year proximity and language alignment) to prevent collisions between
-    /// identically titled shows from different countries or air periods.
-    func lookupTVMazeIDByName(title: String, releaseYear: Int? = nil, language: String? = nil, force: Bool = false) async throws -> Int? {
-        let yearKey = releaseYear.map { "_\($0)" } ?? ""
+    /// Resolves a TVMaze show ID by title, and only when the match can be verified.
+    ///
+    /// A title search returns every show with a similar name, and Thai GLs collide constantly:
+    /// “Us”, “Runaway”, “My Boss” are all the name of an older English or Chinese series. So a
+    /// candidate is accepted only when **all three** hold — the title matches exactly once
+    /// normalised, the language is the same, and the premiere is within a week of the release date
+    /// this app knows. When they do not, the answer is no match at all: no TVMaze id, no airstamp,
+    /// no timezone. An empty id is a show with less data; a wrong id is a show with another show's
+    /// data, which is worse.
+    func lookupTVMazeIDByName(title: String, releaseDate: Date? = nil, language: String? = nil, force: Bool = false) async throws -> Int? {
+        let dayKey = releaseDate.map { String(Int($0.timeIntervalSince1970 / 86_400)) } ?? ""
         let langKey = language.map { "_\($0)" } ?? ""
-        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))\(yearKey)\(langKey)"
+        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))_\(dayKey)\(langKey)"
         if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
-           let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData),
-           let exact = Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results) {
-            return exact.show.id
+           let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData) {
+            return Self.bestTVMazeMatch(for: title, releaseDate: releaseDate, language: language, in: results)?.show.id
         }
 
         return try await executeWithRetry {
@@ -912,81 +917,70 @@ actor APIClient {
             try self.validateResponse(response)
             let results = try self.decoder.decode([TVMazeSearchResult].self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results)?.show.id
+            return Self.bestTVMazeMatch(for: title, releaseDate: releaseDate, language: language, in: results)?.show.id
         }
     }
 
-    /// Multi-factor verification: Finds the candidate that matches the title,
-    /// verifies release year proximity (within +/- 1 year), and verifies language.
+    /// Name, language and premiere must all agree. Anything unverifiable is a refusal.
     nonisolated static func bestTVMazeMatch(
         for title: String,
-        releaseYear: Int? = nil,
+        releaseDate: Date? = nil,
         language: String? = nil,
         in results: [TVMazeSearchResult]
     ) -> TVMazeSearchResult? {
         let target = normalizedShowTitle(title)
-        let titleMatches = results.filter { normalizedShowTitle($0.show.name) == target }
-        guard !titleMatches.isEmpty else { return nil }
+        let wantedLanguage = language?.trimmingCharacters(in: .whitespaces).lowercased()
 
-        // If there is only one exact title match and we have no year or language info to verify against, return it
-        if titleMatches.count == 1 && releaseYear == nil && language == nil {
-            return titleMatches.first
-        }
+        return results.first { candidate in
+            guard normalizedShowTitle(candidate.show.name) == target else { return false }
 
-        // Score each candidate based on release year and language
-        var scored: [(candidate: TVMazeSearchResult, score: Int)] = []
+            guard let wantLang = wantedLanguage, !wantLang.isEmpty,
+                  let haveLang = candidate.show.language?.lowercased(),
+                  matchesLanguage(tmdbCode: wantLang, tvmazeLanguage: haveLang) else { return false }
 
-        for candidate in titleMatches {
-            var score = 10 // Base score for exact title match
-
-            // 1. Release year evaluation
-            let candidateYear: Int? = {
-                guard let premiered = candidate.show.premiered,
-                      let firstPart = premiered.split(separator: "-").first,
-                      let y = Int(firstPart) else { return nil }
-                return y
-            }()
-
-            if let targetYear = releaseYear {
-                if let candidateYear {
-                    let diff = abs(targetYear - candidateYear)
-                    if diff == 0 {
-                        score += 30 // Exact year match
-                    } else if diff == 1 {
-                        score += 20 // 1-year tolerance
-                    } else {
-                        // Big year mismatch (e.g. 2024 vs 2026) -> penalize heavily
-                        score -= 50
-                    }
-                } else {
-                    // Candidate has no premiered date yet, small neutral penalty
-                    score -= 5
-                }
-            } else if candidateYear != nil {
-                // Incoming show has no known year (e.g. unreleased/in-production),
-                // while candidate has already premiered in the past -> penalize
-                score -= 15
+            guard let wantDay = releaseDate,
+                  let premiered = candidate.show.premiered,
+                  let haveDay = Self.utcDay(premiered) else {
+                return false
             }
-
-            // 2. Language evaluation
-            if let targetLang = language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-                if let candidateLang = candidate.show.language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-                    if matchesLanguage(tmdbCode: targetLang, tvmazeLanguage: candidateLang) {
-                        score += 20
-                    } else {
-                        score -= 40 // Clear language mismatch (e.g. Thai vs Chinese)
-                    }
-                }
-            }
-
-            scored.append((candidate, score))
+            return Self.daysApart(wantDay, haveDay) <= 7
         }
-
-        // Only accept candidates with positive score (must meet verification threshold)
-        return scored.filter { $0.score > 0 }.max(by: { $0.score < $1.score })?.candidate
     }
 
-    /// Maps TMDB ISO 639-1 language codes to TVMaze full language names
+    /// A `yyyy-MM-dd` date in UTC, or nil when the string is not one.
+    nonisolated static func utcDay(_ isoDay: String) -> Date? {
+        let parts = String(isoDay.prefix(10)).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    /// Whole days between two instants, ignoring the time of day.
+    nonisolated static func daysApart(_ a: Date, _ b: Date) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: a),
+            to: calendar.startOfDay(for: b)
+        ).day ?? Int.max
+        return abs(days)
+    }
+
+}
+
+extension APIClient {
+    /// Exact name only — no year, no language.
+    ///
+    /// Kept separate from `bestTVMazeMatch` because a caller that already has the show's own name
+    /// (a link from another device, a manual choice) is not guessing: it is confirming.
+    nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
+        let target = normalizedShowTitle(title)
+        return results.first { normalizedShowTitle($0.show.name) == target }
+    }
+
+    /// TMDB language codes (`th`) against TVMaze's names (`Thai`).
     nonisolated private static func matchesLanguage(tmdbCode: String, tvmazeLanguage: String) -> Bool {
         let code = tmdbCode.prefix(2).lowercased()
         let lang = tvmazeLanguage.lowercased()
@@ -1007,10 +1001,6 @@ actor APIClient {
         default:
             return lang.contains(code)
         }
-    }
-
-    nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
-        bestTVMazeMatch(for: title, in: results)
     }
 
     nonisolated private static func normalizedShowTitle(_ title: String) -> String {
@@ -1039,10 +1029,15 @@ actor APIClient {
     }
 
     func fetchTVMazeEpisodes(tvMazeID: Int, force: Bool = false) async throws -> [TVMazeEpisode] {
-        // Check 24h disk cache
+        // Check 24h disk cache. An *empty* answer is not cached: TVMaze adds episodes to a Thai
+        // show week by week (and sometimes only after it has aired), so a "no episodes yet" from
+        // yesterday must not be served for a day. One extra request per refresh for a show with
+        // nothing scheduled is a fair price for the next episode appearing.
         let cacheKey = "tvmaze_episodes_\(tvMazeID)"
-        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay) {
-            return try decoder.decode([TVMazeEpisode].self, from: cachedData)
+        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
+           let cached = try? decoder.decode([TVMazeEpisode].self, from: cachedData),
+           !cached.isEmpty {
+            return cached
         }
 
         return try await executeWithRetry {
@@ -1050,7 +1045,9 @@ actor APIClient {
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let result = try self.decoder.decode([TVMazeEpisode].self, from: data)
-            saveToCache(data: data, forKey: cacheKey)
+            if !result.isEmpty {
+                saveToCache(data: data, forKey: cacheKey)
+            }
             return result
         }
     }
