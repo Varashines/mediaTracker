@@ -872,10 +872,18 @@ actor CloudSyncService {
                 let epID = ep.uniqueID ?? ep.showID.map { "tv_\($0)_s\(ep.seasonNumber)_e\(ep.episodeNumber)" } ?? ""
                 guard let remote = remoteById[epID] else { return ep.isWatched }
                 if ep.isWatched == remote.is_watched { return false }
+                // An un-watch has no date of its own: clearing the projection clears watchedDate
+                // and lastWatchedDate, so `syncEditTime` falls back to the distant past and every
+                // rewatch looked older than the cloud row. That is why starting a rewatch on this
+                // Mac never reached the other device. A cleared state is a deliberate act, so it
+                // wins without a timestamp to argue with.
+                if !ep.isWatched { return true }
                 let remoteTime = parseISO8601(remote.updated_at) ?? .distantPast
                 return ep.syncEditTime > remoteTime
             }
-            if since == 0 { return ep.isWatched }
+            // A full backup sends everything, including the rows whose state is "unwatched" —
+            // which is a state, not an absence.
+            if since == 0 { return true }
             return ep.syncEditTime.timeIntervalSince1970 > since
         }
 
