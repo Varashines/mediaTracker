@@ -146,7 +146,11 @@ actor APIClient {
         return trimmed.count > 40 && trimmed.hasPrefix("ey")
     }
 
-    private nonisolated func tmdbRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+    private nonisolated func tmdbRequest(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        includeLanguageAndRegion: Bool = true
+    ) throws -> URLRequest {
         let key = tmdbApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         
@@ -155,10 +159,15 @@ actor APIClient {
         let language = "\(languageCode)-\(region)"
         
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
-        var items = [
-            URLQueryItem(name: "language", value: language),
-            URLQueryItem(name: "region", value: region)
-        ]
+        // `/images` treats `language` as an image filter, so sending the UI locale there returned
+        // an empty poster list for every title — 15 posters without it, 0 with it. Only the calls
+        // that want localized text pass it.
+        var items = includeLanguageAndRegion
+            ? [
+                URLQueryItem(name: "language", value: language),
+                URLQueryItem(name: "region", value: region)
+            ]
+            : []
         let isBearer = isJWTToken(key)
         if !isBearer {
             items.insert(URLQueryItem(name: "api_key", value: key), at: 0)
@@ -769,7 +778,8 @@ actor APIClient {
 
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
-           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData),
+           decoded.posters?.isEmpty != true || decoded.logos?.isEmpty != true {
             AppLogger.warning(
                 "images \(cacheKey): cache hit, posters \(decoded.posters?.count ?? -1)",
                 logger: AppLogger.network
@@ -786,15 +796,20 @@ actor APIClient {
             return try await self.executeWithRetry {
                 // Same reason as the providers call: the URL alone carries no Authorization, so a
                 // read token produced 401s here and the poster picker saw zero options.
-                let request = try self.tmdbRequest(path: path)
+                let request = try self.tmdbRequest(path: path, includeLanguageAndRegion: false)
                 let (data, response) = try await self.session.data(for: request)
                 try self.validateResponse(response)
                 AppLogger.warning(
                     "images \(cacheKey): network \(data.count) bytes, status \((response as? HTTPURLResponse)?.statusCode ?? -1)",
                     logger: AppLogger.network
                 )
-                self.saveToCache(data: data, forKey: cacheKey)
-                return try self.decoder.decode(TMDBImagesResponse.self, from: data)
+                let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+                // Never remember an empty answer: the locale-filter bug cached 52-byte bodies and
+                // the picker served them for thirty days.
+                if decoded.posters?.isEmpty != true || decoded.logos?.isEmpty != true {
+                    self.saveToCache(data: data, forKey: cacheKey)
+                }
+                return decoded
             }
         }
         inFlightImageFetches[cacheKey] = task
