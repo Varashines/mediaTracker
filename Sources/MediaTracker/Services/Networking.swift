@@ -780,10 +780,6 @@ actor APIClient {
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData),
            decoded.posters?.isEmpty != true || decoded.logos?.isEmpty != true {
-            AppLogger.warning(
-                "images \(cacheKey): cache hit, posters \(decoded.posters?.count ?? -1)",
-                logger: AppLogger.network
-            )
             return decoded
         }
 
@@ -799,10 +795,6 @@ actor APIClient {
                 let request = try self.tmdbRequest(path: path, includeLanguageAndRegion: false)
                 let (data, response) = try await self.session.data(for: request)
                 try self.validateResponse(response)
-                AppLogger.warning(
-                    "images \(cacheKey): network \(data.count) bytes, status \((response as? HTTPURLResponse)?.statusCode ?? -1)",
-                    logger: AppLogger.network
-                )
                 let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
                 // Never remember an empty answer: the locale-filter bug cached 52-byte bodies and
                 // the picker served them for thirty days.

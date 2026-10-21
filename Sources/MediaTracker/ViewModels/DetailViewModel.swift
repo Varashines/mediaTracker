@@ -264,24 +264,8 @@ class DetailViewModel {
 
     /// Fetch alternative poster options from TMDB lazily.
     func fetchPosterOptions() {
-        // Logged as warnings so they survive a release build's log level.
-        if item.modelContext == nil {
-            AppLogger.warning("posterOptions \(item.id): no modelContext", logger: AppLogger.ui)
-            return
-        }
-        if hasLoadedPosterOptions {
-            AppLogger.warning("posterOptions \(item.id): already loaded with \(posterOptions.count)", logger: AppLogger.ui)
-            return
-        }
-        if isLoadingPosterOptions {
-            AppLogger.warning("posterOptions \(item.id): already loading", logger: AppLogger.ui)
-            return
-        }
-        guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else {
-            AppLogger.warning("posterOptions \(item.id): could not parse a TMDB id", logger: AppLogger.ui)
-            return
-        }
-        AppLogger.warning("posterOptions \(item.id): fetching for tmdb \(tmdbID), type \(item.type?.rawValue ?? "nil")", logger: AppLogger.ui)
+        guard item.modelContext != nil, !hasLoadedPosterOptions, !isLoadingPosterOptions else { return }
+        guard let tmdbString = item.id.split(separator: "_").last, let tmdbID = Int(tmdbString) else { return }
 
         let type = item.type
         let originalLanguage = item.cachedLanguage
@@ -305,7 +289,6 @@ class DetailViewModel {
                     options.insert(current, at: 0)
                 }
                 guard !Task.isCancelled else { return }
-                AppLogger.warning("posterOptions \(item.id): fetched \(options.count) options", logger: AppLogger.ui)
                 await MainActor.run {
                     self.hasLoadedPosterOptions = true
                     self.posterOptions = options
