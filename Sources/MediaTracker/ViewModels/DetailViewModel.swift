@@ -515,8 +515,10 @@ class DetailViewModel {
                 // per-episode runtimes when present; TVMaze improves generic
                 // published-episode metadata. Their union preserves announced
                 // episodes that TVMaze has not listed yet.
+                let isThai = (tv.originalLanguage ?? self.item.cachedLanguage) == "th"
                 var episodes: [TVEpisodeResult] = []
                 var canPruneStaleEpisodes = false
+                var authoritativeCount: Int = 0
                 do {
                     async let tmdbTask = APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
                     async let tvmazeSeasonTask: [TVMazeEpisode] = {
@@ -527,23 +529,43 @@ class DetailViewModel {
                     }()
                     let tmdbEpisodes = try? await tmdbTask
                     let tvmazeSeason = await tvmazeSeasonTask
-                    if let tmdbEpisodes {
-                        episodes = RuntimeFallback.reconcile(
-                            tmdbEpisodes: tmdbEpisodes,
-                            tvmazeSeason: tvmazeSeason
+                    let mazeSeasonEps: [TVEpisodeResult] = tvmazeSeason.compactMap { ep in
+                        guard let n = ep.number else { return nil }
+                        return TVEpisodeResult(
+                            episodeNumber: n,
+                            name: ep.name,
+                            overview: ep.strippedSummary,
+                            airDate: ep.airdate,
+                            runtime: ep.runtime
                         )
+                    }
+
+                    if let tmdbEpisodes {
+                        episodes = (isThai && !mazeSeasonEps.isEmpty)
+                            ? mazeSeasonEps
+                            : RuntimeFallback.reconcile(
+                                tmdbEpisodes: tmdbEpisodes,
+                                tvmazeSeason: tvmazeSeason
+                            )
                         canPruneStaleEpisodes = !tvmazeSeason.isEmpty
                     } else {
                         guard !tvmazeSeason.isEmpty else {
                             throw URLError(.badServerResponse)
                         }
-                        episodes = RuntimeFallback.reconcile(
-                            tmdbEpisodes: [],
-                            tvmazeSeason: tvmazeSeason
-                        )
+                        episodes = (isThai && !mazeSeasonEps.isEmpty)
+                            ? mazeSeasonEps
+                            : RuntimeFallback.reconcile(
+                                tmdbEpisodes: [],
+                                tvmazeSeason: tvmazeSeason
+                            )
                     }
+
+                    authoritativeCount = (isThai && !mazeSeasonEps.isEmpty)
+                        ? mazeSeasonEps.count
+                        : episodes.count
                 } catch {
                     episodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: seasonNumber, force: force)
+                    authoritativeCount = episodes.count
                 }
                 
                 await MainActor.run {
@@ -593,17 +615,16 @@ class DetailViewModel {
                         }
                     }
 
-                    // The reconciled union is the only source of truth for both
-                    // the displayed season count and stored episode rows.
-                    currentSeason.episodeCount = episodes.count
+                    currentSeason.episodeCount = authoritativeCount
                     self.item.tvShowDetails?.recalculateCachedProperties(triggerSync: true, force: true)
                     self.item.syncCachedProperties(dirty: [.progress, .badge])
-                    if needsFullLoad && canPruneStaleEpisodes {
-                        // Prune only rows absent from both successfully fetched
-                        // sources, never rows merely missing from TVMaze.
+                    if (needsFullLoad || isThai) && canPruneStaleEpisodes {
+                        // Prune only rows absent from the authoritative source list,
+                        // never prune watched rows.
                         let validIDs = Set(episodes.map { "\(tmdbID)_\(seasonNum)_\($0.episodeNumber)" })
                         let prefix = "\(tmdbID)_\(seasonNum)_"
                         for (uid, ep) in existingMap where uid.hasPrefix(prefix) && !validIDs.contains(uid) {
+                            if ep.isWatched { continue }
                             if ep.modelContext != nil { self.item.modelContext?.delete(ep) }
                         }
                     }
