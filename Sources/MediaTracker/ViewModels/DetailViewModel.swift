@@ -164,6 +164,7 @@ class DetailViewModel {
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         updateThemeColor()
+        fetchPosterOptions()
         if item.effectiveLogoURL == nil {
             fetchTitleLogoIfNeeded()
         }

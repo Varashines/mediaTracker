@@ -776,9 +776,7 @@ actor APIClient {
         let task = Task<TMDBImagesResponse, Error> {
             defer { self.inFlightImageFetches.removeValue(forKey: cacheKey) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: path, queryItems: [
-                    URLQueryItem(name: "include_image_language", value: "en,null")
-                ])
+                let url = try self.tmdbURL(path: path)
                 let (data, response) = try await self.session.data(from: url)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
