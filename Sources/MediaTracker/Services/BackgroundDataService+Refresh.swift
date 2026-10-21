@@ -537,10 +537,20 @@ extension BackgroundDataService {
                                     tmdbEpisodes = []
                                     fetchedTMDBEpisodes = false
                                 }
-                                episodes = RuntimeFallback.reconcile(
-                                    tmdbEpisodes: tmdbEpisodes,
-                                    tvmazeSeason: mazeRawBySeason[sNum] ?? []
-                                )
+                                // Thai shows take TVMaze's list as the list.
+                                //
+                                // `RuntimeFallback.reconcile` is a union, which keeps TMDB's
+                                // announced-but-unaired episodes — right for a Western show whose
+                                // schedule TMDB tracks first, wrong for a Thai one, where TMDB is
+                                // routinely ahead by two episodes and the season header then reads
+                                // "10 EPISODES" for a show that has aired eight. TMDB still supplies
+                                // the runtimes below.
+                                episodes = isThai
+                                    ? mazeSeasonEps
+                                    : RuntimeFallback.reconcile(
+                                        tmdbEpisodes: tmdbEpisodes,
+                                        tvmazeSeason: mazeRawBySeason[sNum] ?? []
+                                    )
                             } else {
                                 do {
                                     tmdbEpisodes = try await APIClient.shared.fetchSeasonDetails(tmdbID: tmdbID, seasonNumber: sNum, force: force)
@@ -640,6 +650,10 @@ extension BackgroundDataService {
                         let validIDs = Set(seasonData.episodes.map { "\(tmdbID)_\(sNum)_\($0.episodeNumber)" })
                         if let seasonEpisodes = episodesBySeason[sNum] {
                             for (uid, ep) in seasonEpisodes where !validIDs.contains(uid) {
+                                // Never discard a viewing. A row the new list no longer carries
+                                // may still be the only record that someone watched it — the
+                                // list is a schedule, and schedules get renumbered.
+                                if ep.isWatched { continue }
                                 if ep.modelContext != nil { modelContext.delete(ep) }
                             }
                         }
@@ -657,7 +671,10 @@ extension BackgroundDataService {
                 let fetchedSeasonNumbers = Set(fetchedSeasons.map(\.seasonNumber))
                 for existingSeason in existingSeasons {
                     if !fetchedSeasonNumbers.contains(existingSeason.seasonNumber) {
-                        // Delete all episodes attached to this orphaned season first
+                        // Delete all episodes attached to this orphaned season first — unless one
+                        // of them was watched, in which case the season stays: history is not
+                        // something a refresh gets to delete.
+                        if existingSeason.episodes.liveModels.contains(where: { $0.isWatched }) { continue }
                         for ep in existingSeason.episodes.liveModels {
                             if ep.modelContext != nil { modelContext.delete(ep) }
                         }
