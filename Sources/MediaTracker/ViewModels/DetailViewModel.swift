@@ -164,7 +164,9 @@ class DetailViewModel {
         guard item.modelContext != nil, !SleepManager.shared.isAsleep else { return }
 
         updateThemeColor()
-        fetchPosterOptions()
+        // Poster options are fetched when the picker opens, not on every appear: the eager call
+        // ran a network request per title and, when it failed, left the view with a single option
+        // — which is exactly what "no posters, just the default" looked like.
         if item.effectiveLogoURL == nil {
             fetchTitleLogoIfNeeded()
         }
