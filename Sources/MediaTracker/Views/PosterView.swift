@@ -74,7 +74,9 @@ struct PosterView: View {
                         .padding(14)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if hasLoadedPosterOptions && posterOptions.count > 1 {
+                    // TEMPORARY: always visible, so the picker can be opened before options
+                    // have loaded. Restore the gate once the load path is confirmed.
+                    if true {
                         Button {
                             showPicker = true
                         } label: {
