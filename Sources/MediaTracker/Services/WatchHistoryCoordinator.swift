@@ -14,6 +14,22 @@ enum WatchHistoryCoordinator {
         guard item.modelContext != nil else { return }
 
         if newState == .rewatching, oldState != .rewatching {
+            // Starting a rewatch clears the whole current projection — every episode unmarked.
+            // That is a destructive thing to do on a user's behalf, so it only happens when the
+            // user asked for it. The `.automatic` path used to reach here from a state the app
+            // set itself, which wiped a season on its own and then re-added the announced episodes
+            // from TMDB, so the show flipped from "7 of 8" to "nothing of 10" on open.
+            guard source == .manual else {
+                AppLogger.warning(
+                    "Ignoring automatic rewatch start for \(item.id); projection left intact",
+                    logger: AppLogger.sync
+                )
+                return
+            }
+            AppLogger.info(
+                "Starting rewatch for \(item.id) on request\n\(Thread.callStackSymbols.prefix(12).joined(separator: "\n"))",
+                logger: AppLogger.sync
+            )
             startRewatch(
                 item: item,
                 context: context,
@@ -227,6 +243,8 @@ enum WatchHistoryCoordinator {
         context: ModelContext,
         source: WatchEventSource = .automatic
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let cycle: WatchCycle
         if let owning = openCycle(forMediaID: mediaID, episodeID: episodeID, context: context),
            owning.state == .active {
@@ -250,13 +268,29 @@ enum WatchHistoryCoordinator {
         }
         if cycle.isRewatch, !scope.isEmpty, !scope.contains(episodeID) { return }
 
-        let cycleID = cycle.id
-        var eventDescriptor = FetchDescriptor<WatchEvent>(
-            predicate: #Predicate { $0.cycleID == cycleID && $0.episodeID == episodeID && $0.voidedAt == nil }
-        )
-        eventDescriptor.fetchLimit = 1
-        let activeEvent = (try? context.fetch(eventDescriptor))?.first
-        let deduplicationKey = "\(cycle.id.uuidString):\(episodeID):watch"
+        // Canonical, not literal, and across the title's cycles rather than only this one.
+        //
+        // Two spellings of one episode exist — the legacy `{show}_{season}_{episode}` and
+        // `tv_{show}_s{season}_e{episode}` — so a literal comparison sees two episodes where there
+        // is one. And one watch can be recorded in two *different* cycles: the backfill opened its
+        // own, the automatic writer opened another, and a lookup scoped to a single cycle cannot
+        // see the other. Phineas and Ferb carried 261 of those.
+        //
+        // The same-watch rule bounds it, because a rewatch is a later cycle by design: only an
+        // event for the same episode at the same time counts as already recorded. SwiftData cannot
+        // call a function inside `#Predicate`, so the title's live events are fetched and compared
+        // here instead.
+        let canonicalEpisodeID = EpisodeIdentifier.canonical(episodeID)
+        let liveEvents = (try? context.fetch(
+            FetchDescriptor<WatchEvent>(
+                predicate: #Predicate { $0.mediaID == mediaID && $0.voidedAt == nil }
+            )
+        )) ?? []
+        let activeEvent = liveEvents.first {
+            EpisodeIdentifier.canonical($0.episodeID) == canonicalEpisodeID
+                && SyncTimestamps.isSameWatch($0.watchedAt, watchedAt)
+        }
+        let deduplicationKey = "\(cycle.id.uuidString.lowercased()):\(episodeID):watch"
 
         if isWatched {
             guard activeEvent == nil else { return }
@@ -280,6 +314,8 @@ enum WatchHistoryCoordinator {
         context: ModelContext,
         source: WatchEventSource = .automatic
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         guard !mutations.isEmpty else { return }
 
         // Fetch or create the primary active cycle once
@@ -305,28 +341,38 @@ enum WatchHistoryCoordinator {
             }
         }
 
-        let cycleID = cycle.id
-        let mutEpisodeIDs = Set(mutations.map(\.episodeID))
+        // The same rule as `recordEpisodeMutation`, for the same two reasons: canonical spelling,
+        // and the title's cycles rather than only this one — a bulk pass and the backfill can
+        // record one episode in two cycles. The same-watch test is applied per mutation, so a
+        // rewatch in a later cycle still records.
+        let mutEpisodeIDs = Set(mutations.map { EpisodeIdentifier.canonical($0.episodeID) ?? $0.episodeID })
         let existingEvents = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { event in
-                event.cycleID == cycleID && event.voidedAt == nil
+                event.mediaID == mediaID && event.voidedAt == nil
             })
         )) ?? []
 
         var activeEventsByEpisodeID: [String: WatchEvent] = [:]
         for event in existingEvents {
-            if let epID = event.episodeID, mutEpisodeIDs.contains(epID) {
-                activeEventsByEpisodeID[epID] = event
+            guard let epID = event.episodeID else { continue }
+            let key = EpisodeIdentifier.canonical(epID) ?? epID
+            guard mutEpisodeIDs.contains(key) else { continue }
+            guard let mut = mutations.first(where: {
+                (EpisodeIdentifier.canonical($0.episodeID) ?? $0.episodeID) == key
+            }) else { continue }
+            if SyncTimestamps.isSameWatch(event.watchedAt, mut.watchedAt) {
+                activeEventsByEpisodeID[key] = event
             }
         }
 
         for mut in mutations {
             if cycle.isRewatch, !scope.isEmpty, !scope.contains(mut.episodeID) { continue }
 
-            let activeEvent = activeEventsByEpisodeID[mut.episodeID]
+            let episodeKey = EpisodeIdentifier.canonical(mut.episodeID) ?? mut.episodeID
+            let activeEvent = activeEventsByEpisodeID[episodeKey]
             if mut.isWatched {
                 guard activeEvent == nil else { continue }
-                let deduplicationKey = "\(cycle.id.uuidString):\(mut.episodeID):watch"
+                let deduplicationKey = "\(cycle.id.uuidString.lowercased()):\(mut.episodeID):watch"
                 let newEvent = WatchEvent(
                     cycleID: cycle.id,
                     mediaID: mediaID,
@@ -337,10 +383,10 @@ enum WatchHistoryCoordinator {
                     deduplicationKey: deduplicationKey
                 )
                 context.insert(newEvent)
-                activeEventsByEpisodeID[mut.episodeID] = newEvent
+                activeEventsByEpisodeID[episodeKey] = newEvent
             } else {
                 activeEvent?.voidedAt = Date()
-                activeEventsByEpisodeID.removeValue(forKey: mut.episodeID)
+                activeEventsByEpisodeID.removeValue(forKey: episodeKey)
             }
         }
     }
@@ -351,6 +397,8 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let activeRaw = WatchCycleState.active.rawValue
         let activeDescriptor = FetchDescriptor<WatchCycle>(
             predicate: #Predicate { cycle in
@@ -384,7 +432,7 @@ enum WatchHistoryCoordinator {
                 watchedAt: watchedAt,
                 source: .imported,
                 runtimeMinutes: runtimeMinutes,
-                deduplicationKey: "\(cycle.id.uuidString):movie:import"
+                deduplicationKey: "\(cycle.id.uuidString.lowercased()):movie:import"
             ))
         }
     }
@@ -410,6 +458,8 @@ enum WatchHistoryCoordinator {
         watchedAt: Date,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         guard !episodes.isEmpty else { return }
         let epIDs = Set(episodes.map(\.episodeID))
         let events = (try? context.fetch(
@@ -450,6 +500,8 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let activeRaw = WatchCycleState.active.rawValue
         let activeDescriptor = FetchDescriptor<WatchCycle>(
             predicate: #Predicate { cycle in
@@ -485,11 +537,13 @@ enum WatchHistoryCoordinator {
             watchedAt: watchedAt,
             source: .imported,
             runtimeMinutes: runtimeMinutes,
-            deduplicationKey: "\(cycle.id.uuidString):\(episodeID):import"
+            deduplicationKey: "\(cycle.id.uuidString.lowercased()):\(episodeID):import"
         ))
     }
 
     nonisolated static func deleteHistory(for mediaID: String, context: ModelContext) {
+        // A ledger change: the year review and derived stats cache history.
+        MediaStateService.notifyLedgerChanged()
         let events = (try? context.fetch(
             FetchDescriptor<WatchEvent>(predicate: #Predicate { $0.mediaID == mediaID })
         )) ?? []
@@ -693,7 +747,7 @@ enum WatchHistoryCoordinator {
 
         if item.type == .movie {
             if existing.contains(where: { $0.episodeID == nil && $0.isActive }) { return }
-            let key = "\(cycle.id.uuidString):movie"
+            let key = "\(cycle.id.uuidString.lowercased()):movie"
             guard keys.insert(key).inserted else { return }
             context.insert(WatchEvent(
                 cycleID: cycle.id,
@@ -719,7 +773,7 @@ enum WatchHistoryCoordinator {
                 let episodeID = episode.uniqueID ?? "\(item.id)_\(season.seasonNumber)_\(episode.episodeNumber)"
                 guard scope.isEmpty || scope.contains(episodeID) else { continue }
                 guard !alreadyLogged.contains(episodeID) else { continue }
-                let key = "\(cycle.id.uuidString):\(episodeID)"
+                let key = "\(cycle.id.uuidString.lowercased()):\(episodeID)"
                 guard keys.insert(key).inserted else { continue }
                 context.insert(WatchEvent(
                     cycleID: cycle.id,

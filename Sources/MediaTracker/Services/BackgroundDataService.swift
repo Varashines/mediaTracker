@@ -393,7 +393,10 @@ actor BackgroundDataService {
         }
         
         tv.recalculateCachedProperties(triggerSync: true, force: true)
-        refreshedItem.lastInteractionDate = Date()
+        // A cache/metadata refresh is not a user interaction. Stamping lastInteractionDate
+        // here made a refreshed title look freshly edited, so sync conflict resolution
+        // (which keys on lastInteractionDate) discarded the other device's change.
+        refreshedItem.lastUpdated = Date()
         refreshedItem.syncCachedProperties(dirty: .all)
         
         // Invalidate badge scan cache since episodes changed

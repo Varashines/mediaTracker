@@ -520,6 +520,7 @@ struct MediaThumbnailView: View, Equatable {
                             } else {
                                 collection.completedItemIDs.append(itemIDString)
                             }
+                            collection.touch()
                             SaveCoordinator.shared.requestSave(modelContext)
                         }
                         MediaStateService.shared.postMediaStateChanged(itemID: itemID)
@@ -780,6 +781,7 @@ private struct AddToCollectionMenu: View {
                         } else {
                             item.collections.append(collection)
                         }
+                        collection.touch()
                         SaveCoordinator.shared.requestSave(modelContext)
                     } label: {
                         Label(collection.name,

@@ -95,6 +95,7 @@ struct NoteOverlayView: View {
     
     private func saveNote(_ text: String) {
         targetCollection?.notes = text
+        targetCollection?.touch()
         SaveCoordinator.shared.requestSave(modelContext)
     }
 }

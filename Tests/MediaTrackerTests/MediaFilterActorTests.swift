@@ -131,6 +131,45 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertEqual(result.homeContinueWatching.map(\.title), ["Actually Watched"])
     }
 
+    /// A movie marked In Progress has no episode progress and no WatchEvent (nothing logs one),
+    /// so it is judged by its own state date. A show in the same shape keeps requiring an
+    /// actual watch — it has episode progress to speak for it.
+    @MainActor
+    func testHomeContinueWatchingIncludesActiveMovieWithoutWatchEvent() async throws {
+        let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self, WatchEvent.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+        let actor = MediaFilterActor(modelContainer: container)
+
+        let movie = MediaItem(id: "movie_1430077", title: "Hokum", overview: "", type: .movie)
+        movie.stateValue = MediaState.activeRaw
+        movie.lastInteractionDate = Date()
+        movie.lastStateChangeDate = Date().addingTimeInterval(-.days30 * 2)
+        context.insert(movie)
+
+        let show = MediaItem(id: "tv_9", title: "Show", overview: "", type: .tvShow)
+        show.stateValue = MediaState.activeRaw
+        show.lastInteractionDate = Date()
+        show.lastStateChangeDate = Date()
+        context.insert(show)
+        try context.save()
+
+        let result = try await actor.filterAndSort(
+            category: .home,
+            searchText: "",
+            sortOrder: .alphabetical,
+            network: [],
+            language: [],
+            genre: [],
+            year: [],
+            state: [],
+            badge: nil
+        )
+
+        XCTAssertEqual(result.homeContinueWatching.map(\.title), ["Hokum"])
+    }
+
     @MainActor
     func testHomeContinueWatchingPremieredItems() async throws {
         let schema = Schema([MediaItem.self, MovieDetails.self, TVShowDetails.self, TVSeason.self, SeasonCastMember.self, TVEpisode.self, CastMember.self, MediaCollection.self])
@@ -173,15 +212,15 @@ final class MediaFilterActorTests: MTTestCase {
         caughtUpShow.lastInteractionDate = now
         context.insert(caughtUpShow)
 
-        // 4. Movie released 4 days ago (> 3 days cutoff) — should not be in Continue Watching
+        // 4. Movie released 6 days ago (> 5 days cutoff) — should not be in Continue Watching
         let olderMovie = MediaItem(id: "m2", title: "Older Movie", overview: "", type: .movie)
         olderMovie.stateValue = MediaState.wishlistRaw
-        olderMovie.releaseDate = now.addingTimeInterval(-4 * .secondsInDay)
-        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.releaseDate = now.addingTimeInterval(-6 * .secondsInDay)
+        olderMovie.cachedNextAiringDate = now.addingTimeInterval(-6 * .secondsInDay)
         olderMovie.storedProgress = 0
         olderMovie.storedSmartBadgeLabel = SmartBadge.premiere.rawValue
         olderMovie.storedSmartBadgeIsSparkle = true
-        olderMovie.lastInteractionDate = now.addingTimeInterval(-4 * .secondsInDay)
+        olderMovie.lastInteractionDate = now.addingTimeInterval(-6 * .secondsInDay)
         context.insert(olderMovie)
 
         try context.save()
@@ -204,7 +243,7 @@ final class MediaFilterActorTests: MTTestCase {
         XCTAssertTrue(titles.contains("Premiered Show"), "Newly premiered TV show must appear in Continue Watching")
         XCTAssertTrue(titles.contains("Premiered Movie"), "Newly premiered movie must appear in Continue Watching")
         XCTAssertFalse(titles.contains("Caught Up Show"), "Genuinely caught up show should not appear in Continue Watching")
-        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 3 days ago should not appear in Continue Watching")
+        XCTAssertFalse(titles.contains("Older Movie"), "Movie released > 5 days ago should not appear in Continue Watching")
     }
 
     @MainActor
@@ -646,7 +685,6 @@ final class MediaFilterActorTests: MTTestCase {
 
         let calendar = Calendar.current
         let currentYear = calendar.component(.year, from: Date())
-        let todayMD = calendar.dateComponents([.month, .day], from: Date())
         let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date()))!
 
         // Items on Monday, Tuesday, Thursday of the week in a previous year

@@ -79,7 +79,14 @@ extension MediaFilterActor {
         let latestWatchDates = WatchActivityResolver.latestWatchDates(for: homeResults, context: modelContext)
         let activeItems = homeResults
             .compactMap { item -> (MediaItem, Int, Date)? in
+                // A movie has no episode progress, so the resolver only knows about one from a
+                // WatchEvent — and nothing records an event when a title is merely marked In
+                // Progress. Android's port reads the movie's own `lastInteractionDate` here
+                // (HomeEligibility.showState), which is the field a synced state change
+                // carries, so mirror that. Kept at the call site rather than in the resolver:
+                // WatchedThisWeek shares it and must go on requiring an actual watch.
                 let latestWatchDate = latestWatchDates[item.id]
+                    ?? (item.type == .movie ? item.lastInteractionDate : nil)
                 guard isHomeEligible(item, now: now, latestWatchDate: latestWatchDate) else { return nil }
                 return (item, homeSortPriority(item), latestWatchDate ?? .distantPast)
             }
@@ -207,7 +214,7 @@ extension MediaFilterActor {
             let airDate = item.cachedNextAiringDate ?? item.releaseDate ?? .distantFuture
             if airDate > now { return false }
             let daysSinceAir = now.timeIntervalSince(airDate) / .secondsInDay
-            if daysSinceAir > 3 { return false }
+            if daysSinceAir > 5 { return false }
         }
 
         let isCaughtUp = (item.remainingEpisodesCount ?? 0) == 0 && (item.storedProgress ?? 0) > 0
@@ -222,7 +229,7 @@ extension MediaFilterActor {
                     ? (item.releaseDate ?? .distantPast)
                     : (item.cachedNextAiringDate ?? item.releaseDate ?? .distantPast)
                 let daysSinceRelease = now.timeIntervalSince(releaseDate) / .secondsInDay
-                if daysSinceRelease < 0 || daysSinceRelease > 3 { return false }
+                if daysSinceRelease < 0 || daysSinceRelease > 5 { return false }
             }
             return true
         }

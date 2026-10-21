@@ -528,6 +528,30 @@ private struct SmartCollectionCard: View {
         .alert("Delete Collection?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 guard let collection else { return }
+                // Tombstone in the cloud *before* removing the row: a plain hard delete left
+                // the remote row live, so the next sync re-created the collection. Capture
+                // primitives (the @Model isn't Sendable) for the detached Task.
+                let id = collection.id
+                let name = collection.name
+                let systemImage = collection.systemImage
+                let notes = collection.notes
+                let isPinned = collection.isPinned
+                let isSmart = collection.isSmart
+                let smartRules = collection.smartRulesData.flatMap { String(data: $0, encoding: .utf8) }
+                let completedItemIDs = collection.completedItemIDs
+                let container = modelContext.container
+                Task {
+                    await CloudSyncService(modelContainer: container).markCollectionDeleted(
+                        id: id,
+                        name: name,
+                        systemImage: systemImage,
+                        notes: notes,
+                        isPinned: isPinned,
+                        isSmart: isSmart,
+                        smartRules: smartRules,
+                        completedItemIDs: completedItemIDs
+                    )
+                }
                 modelContext.delete(collection)
                 SaveCoordinator.shared.requestSave(modelContext)
                 MediaStateService.shared.postMediaStateChanged()

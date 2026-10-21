@@ -67,6 +67,9 @@ func extractWatchProviders(from response: TMDBWatchProvidersResponse?, regionOve
 
 struct MovieDetailsResult {
     let runtime: Int?
+    /// Carried so a title created by a cloud import — which has no name of its own — can be renamed
+    /// from the metadata refresh.
+    let title: String?
     let genres: [String]
     let voteAverage: Double?
     let rottenTomatoesScore: Int?
@@ -86,6 +89,8 @@ struct MovieDetailsResult {
 
 struct TVDetailsResult {
     let status: String
+    /// Carried so a title created by a cloud import can be renamed from the metadata refresh.
+    let name: String?
     let voteAverage: Double?
     let imdbID: String?
     let genres: [String]
@@ -94,6 +99,10 @@ struct TVDetailsResult {
     let overview: String?
     let network: String?
     let networkLogoPath: String?
+    /// TMDB production companies. A Marvel/Lucasfilm show sits on a generic "Disney+"
+    /// network, so the studio is what lets the flagship 9 PM ET drop rule win over the
+    /// standard Disney+ midnight-PT one.
+    let productionCompanies: [String]
     let originalLanguage: String?
     let seasons: [TMDBSeasonBrief]
     let numberOfSeasons: Int?

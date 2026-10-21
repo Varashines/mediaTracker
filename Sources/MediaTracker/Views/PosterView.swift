@@ -120,6 +120,7 @@ struct PosterView: View {
                         .padding(12)
                 }
             }
+            .contentShape(Rectangle())
             .compositingGroupIfNeeded()
             .onHover { hovering in
                 // Options load lazily, and the button stays hidden until they are

@@ -875,6 +875,10 @@ actor MediaFilterActor {
                 badge: nil,
                 provider: [],
                 searchText: "",
+                // Must be passed: refineResults defaults `category` to nil, which skipped the
+                // category-specific date filters (the `sameWeek` check for .onThisWeek), so the
+                // hub card's count was "items with any release date" while the list was correct.
+                category: category,
                 smartRules: [],
                 smartMatchAny: false
             )) ?? []

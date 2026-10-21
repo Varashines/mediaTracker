@@ -230,7 +230,7 @@ struct ServicesSection: View {
                                         if let err = impact.errorDescription {
                                             AppErrorState.shared.showToast("Could not check cloud: \(err)", style: .warning)
                                         } else if !impact.hasChanges {
-                                            AppErrorState.shared.showToast("Everything is already in sync!", style: .success)
+                                            AppErrorState.shared.showToast("No title conflicts or uploads", style: .success)
                                         } else {
                                             pendingImpact = impact
                                             showImpactDialog = true

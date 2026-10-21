@@ -363,6 +363,11 @@ struct DetailView: View {
                 viewModel.updateThemeColor()
             }
         }
+        // Structured, and cancelled with the view: the extraction outlives neither the view nor the
+        // container it was handed. Started from `init` it did both, which is a crash in the suite.
+        .task {
+            await viewModel.extractThemeColorIfNeeded()
+        }
         .onChange(of: colorScheme) { _, newScheme in
             viewModel.refreshSchemeColors(for: newScheme)
         }

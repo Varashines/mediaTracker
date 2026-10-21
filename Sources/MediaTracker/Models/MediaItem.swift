@@ -53,6 +53,14 @@ final class MediaItem: Identifiable {
     var lastUpdated: Date?
     var isSoftDeleted: Bool = false
     var softDeletedAt: Date?
+
+    /// The name a title created from a cloud row starts with.
+    ///
+    /// A cloud row carries an id and a tracking state, not a name, so an import has nothing to call
+    /// the title until the metadata refresh comes back — and until now nothing wrote that name back
+    /// either, so an imported title stayed "Importing..." for good. See
+    /// `BackgroundDataService.applyFetchedTitle`.
+    static let importPlaceholder = "Importing..."
     
     // Cached values for filtering/grid
     var cachedGenres: [String] = []
@@ -142,7 +150,9 @@ final class MediaItem: Identifiable {
     }
 
     var taste: TasteValue? {
-        get { TasteValue(rawValue: tasteValue) }
+        // Falls back to the tolerant parse so rows carrying a legacy spelling (see
+        // `TasteValue.init(stored:)`) still read as a taste instead of nil.
+        get { TasteValue(rawValue: tasteValue) ?? TasteValue(stored: tasteValue) }
         set {
             let old = tasteValue
             tasteValue = newValue?.rawValue ?? "None"

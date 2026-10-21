@@ -16,6 +16,7 @@ enum DatabaseMigrations {
         await reconcileSplitEpisodeWatchDatesIfNeeded(container: container)
         await runGenreDeconstructionIfNeeded(container: container)
         await runSearchableLanguageIfNeeded(container: container)
+        await runTasteCanonicalizationIfNeeded(container: container)
         await runWatchHistoryBackfillIfNeeded(container: container)
         await runWatchHistoryRepairIfNeeded(container: container)
         await runWatchHistoryDedupIfNeeded(container: container)
@@ -429,6 +430,35 @@ enum DatabaseMigrations {
         try? await BackgroundOperationGate.shared.performHeal(label: "searchableLanguage", container: container) {
             let service = BackgroundDataService(modelContainer: container)
             try await service.performSearchableLanguageMigration()
+        }
+        UserDefaults.standard.set(true, forKey: flag)
+    }
+
+    /// Rewrites legacy taste spellings to the canonical vocabulary.
+    ///
+    /// Android used to store and push "Loved"/"Liked"/"Disliked" while `TasteValue` only knows
+    /// "Love"/"Like"/"Dislike". Those rows read as `nil` through the enum and — worse — were
+    /// invisible to the Loved filters, the badge gates and the affinity maths, which all compare
+    /// raw strings inside `#Predicate` where no normalising call is possible. Healing the stored
+    /// values keeps every one of those comparisons correct; the sync now canonicalises on both
+    /// the pull and the push so the fix propagates to the cloud on the next sync.
+    static func runTasteCanonicalizationIfNeeded(container: ModelContainer) async {
+        let flag = UserDefaultsKeys.tasteCanonicalizationV1.rawValue
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+
+        try? await BackgroundOperationGate.shared.performHeal(label: "tasteCanonicalization", container: container) {
+            let context = ModelContext(container)
+            let legacy = ["Loved", "Liked", "Disliked"]
+            let descriptor = FetchDescriptor<MediaItem>(
+                predicate: #Predicate<MediaItem> { item in legacy.contains(item.tasteValue) }
+            )
+            let items = (try? context.fetch(descriptor)) ?? []
+            guard !items.isEmpty else { return }
+            for item in items {
+                item.tasteValue = TasteValue.canonicalRaw(item.tasteValue)
+            }
+            try? context.save()
+            AppLogger.data.info("Canonicalised \(items.count, privacy: .public) legacy taste value(s)")
         }
         UserDefaults.standard.set(true, forKey: flag)
     }

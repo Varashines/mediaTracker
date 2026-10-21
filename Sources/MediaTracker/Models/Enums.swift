@@ -221,6 +221,29 @@ enum TasteValue: String, Codable, CaseIterable, Sendable {
     case love = "Love"
     case dislike = "Dislike"
 
+    /// Parses any spelling ever written to the library or the cloud.
+    ///
+    /// Android stored and pushed the participle forms ("Loved"/"Liked"/"Disliked") while this
+    /// enum only knows the three here, so a title liked on the phone reached the Mac as an
+    /// unparseable string — `taste` returned nil and every taste-driven feature (badge gating,
+    /// the Loved filters, affinity, insights) read it as unrated. Android now writes the
+    /// canonical form and normalises on push; this keeps already-synced rows readable.
+    init(stored raw: String?) {
+        switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "love", "loved": self = .love
+        case "like", "liked": self = .like
+        case "dislike", "disliked": self = .dislike
+        default: self = .none
+        }
+    }
+
+    /// The canonical value to store for any incoming spelling — used when applying a pull.
+    static func canonicalRaw(_ raw: String?) -> String {
+        TasteValue(stored: raw).rawValue
+    }
+
+    var isLikedOrLoved: Bool { self == .love || self == .like }
+
     var iconName: String {
         switch self {
         case .none: return "circle"

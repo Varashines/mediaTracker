@@ -4,13 +4,18 @@ enum APIError: Error, LocalizedError {
     case missingApiKey(String)
     case invalidResponse
     case requestFailed(Int)
+    /// Same as `requestFailed` but carries the server's response body, so PostgREST
+    /// errors (which name the offending column/constraint) aren't reduced to "400".
+    case requestFailedWithBody(Int, String)
     case rateLimited
-    
+
     var errorDescription: String? {
         switch self {
         case .missingApiKey(let service): return "\(service) API Key is missing. Please check Settings."
         case .invalidResponse: return "Received an invalid response from the server."
         case .requestFailed(let code): return "Request failed with status code: \(code)"
+        case .requestFailedWithBody(let code, let body):
+            return "Request failed (\(code)): \(body)"
         case .rateLimited: return "Rate limit exceeded. Retrying..."
         }
     }
@@ -141,7 +146,11 @@ actor APIClient {
         return trimmed.count > 40 && trimmed.hasPrefix("ey")
     }
 
-    private nonisolated func tmdbRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+    private nonisolated func tmdbRequest(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        includeLanguageAndRegion: Bool = true
+    ) throws -> URLRequest {
         let key = tmdbApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw APIError.missingApiKey("TMDB") }
         
@@ -150,10 +159,15 @@ actor APIClient {
         let language = "\(languageCode)-\(region)"
         
         var components = URLComponents(string: "https://api.themoviedb.org/3\(path)")
-        var items = [
-            URLQueryItem(name: "language", value: language),
-            URLQueryItem(name: "region", value: region)
-        ]
+        // `/images` treats `language` as an image filter, so sending the UI locale there returned
+        // an empty poster list for every title — 15 posters without it, 0 with it. Only the calls
+        // that want localized text pass it.
+        var items = includeLanguageAndRegion
+            ? [
+                URLQueryItem(name: "language", value: language),
+                URLQueryItem(name: "region", value: region)
+            ]
+            : []
         let isBearer = isJWTToken(key)
         if !isBearer {
             items.insert(URLQueryItem(name: "api_key", value: key), at: 0)
@@ -368,7 +382,8 @@ actor APIClient {
         let trailerKey = Self.extractTrailerKey(from: details.videos)
 
         return MovieDetailsResult(
-            runtime: details.runtime, 
+            runtime: details.runtime,
+            title: details.title, 
             genres: details.genres.map { $0.name }, 
             voteAverage: details.vote_average, 
             rottenTomatoesScore: nil,
@@ -486,6 +501,7 @@ actor APIClient {
 
         return TVDetailsResult(
             status: d.status ?? "Ended",
+            name: d.name,
             voteAverage: d.vote_average,
             imdbID: imdbID,
             genres: d.genres?.compactMap { $0.name } ?? [],
@@ -494,6 +510,7 @@ actor APIClient {
             overview: d.overview,
             network: network,
             networkLogoPath: d.networks?.first?.logo_path,
+            productionCompanies: d.production_companies?.map { $0.name } ?? [],
             originalLanguage: d.original_language,
             seasons: d.seasons ?? [],
             numberOfSeasons: d.number_of_seasons,
@@ -545,8 +562,10 @@ actor APIClient {
         // Fallback 2: dedicated watch providers endpoint
         let path = type == .movie ? "/movie/\(tmdbID)/watch/providers" : "/tv/\(tmdbID)/watch/providers"
         do {
-            let url = try tmdbURL(path: path)
-            let (data, response) = try await session.data(from: url)
+            // `tmdbRequest`, not `tmdbURL`: the URL alone loses the Authorization header that a
+            // v4 read token needs, and TMDB answers 401 to every such call.
+            let request = try tmdbRequest(path: path)
+            let (data, response) = try await session.data(for: request)
             try validateResponse(response)
             let decoded = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
             let providers = extractWatchProviders(from: decoded)
@@ -738,12 +757,14 @@ actor APIClient {
 
     func fetchMoviePosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let resp = try await fetchImagesResponse(path: "/movie/\(tmdbID)/images", cacheKey: "movie_images_\(tmdbID).json", force: force)
-        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
+        return Self.processPosterURLs(resp.posters, originalLanguage: nil)
     }
 
     func fetchTVPosters(tmdbID: Int, originalLanguage: String? = nil, force: Bool = false) async throws -> [String] {
         let resp = try await fetchImagesResponse(path: "/tv/\(tmdbID)/images", cacheKey: "tv_images_\(tmdbID).json", force: force)
-        return Self.processPosterURLs(resp.posters, originalLanguage: originalLanguage)
+        // No language filter. The poster list is a choice, not a translation: a Thai show has no
+        // `th` artwork on TMDB and filtering to it left the picker with nothing at all.
+        return Self.processPosterURLs(resp.posters, originalLanguage: nil)
     }
 
     /// Shared pipeline for all `/images` fetches: disk cache → in-flight
@@ -757,7 +778,8 @@ actor APIClient {
 
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
-           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+           let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData),
+           decoded.posters?.isEmpty != true || decoded.logos?.isEmpty != true {
             return decoded
         }
 
@@ -768,13 +790,18 @@ actor APIClient {
         let task = Task<TMDBImagesResponse, Error> {
             defer { self.inFlightImageFetches.removeValue(forKey: cacheKey) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: path, queryItems: [
-                    URLQueryItem(name: "include_image_language", value: "en,null")
-                ])
-                let (data, response) = try await self.session.data(from: url)
+                // Same reason as the providers call: the URL alone carries no Authorization, so a
+                // read token produced 401s here and the poster picker saw zero options.
+                let request = try self.tmdbRequest(path: path, includeLanguageAndRegion: false)
+                let (data, response) = try await self.session.data(for: request)
                 try self.validateResponse(response)
-                self.saveToCache(data: data, forKey: cacheKey)
-                return try self.decoder.decode(TMDBImagesResponse.self, from: data)
+                let decoded = try self.decoder.decode(TMDBImagesResponse.self, from: data)
+                // Never remember an empty answer: the locale-filter bug cached 52-byte bodies and
+                // the picker served them for thirty days.
+                if decoded.posters?.isEmpty != true || decoded.logos?.isEmpty != true {
+                    self.saveToCache(data: data, forKey: cacheKey)
+                }
+                return decoded
             }
         }
         inFlightImageFetches[cacheKey] = task
@@ -883,17 +910,22 @@ actor APIClient {
         }
     }
 
-    /// Resolves a TVMaze show ID by title match with multi-factor verification
-    /// (release year proximity and language alignment) to prevent collisions between
-    /// identically titled shows from different countries or air periods.
-    func lookupTVMazeIDByName(title: String, releaseYear: Int? = nil, language: String? = nil, force: Bool = false) async throws -> Int? {
-        let yearKey = releaseYear.map { "_\($0)" } ?? ""
+    /// Resolves a TVMaze show ID by title, and only when the match can be verified.
+    ///
+    /// A title search returns every show with a similar name, and Thai GLs collide constantly:
+    /// “Us”, “Runaway”, “My Boss” are all the name of an older English or Chinese series. So a
+    /// candidate is accepted only when **all three** hold — the title matches exactly once
+    /// normalised, the language is the same, and the premiere is within a week of the release date
+    /// this app knows. When they do not, the answer is no match at all: no TVMaze id, no airstamp,
+    /// no timezone. An empty id is a show with less data; a wrong id is a show with another show's
+    /// data, which is worse.
+    func lookupTVMazeIDByName(title: String, releaseDate: Date? = nil, language: String? = nil, force: Bool = false) async throws -> Int? {
+        let dayKey = releaseDate.map { String(Int($0.timeIntervalSince1970 / 86_400)) } ?? ""
         let langKey = language.map { "_\($0)" } ?? ""
-        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))\(yearKey)\(langKey)"
+        let cacheKey = "tvmaze_name_\(title.lowercased().replacingOccurrences(of: " ", with: "_"))_\(dayKey)\(langKey)"
         if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
-           let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData),
-           let exact = Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results) {
-            return exact.show.id
+           let results = try? decoder.decode([TVMazeSearchResult].self, from: cachedData) {
+            return Self.bestTVMazeMatch(for: title, releaseDate: releaseDate, language: language, in: results)?.show.id
         }
 
         return try await executeWithRetry {
@@ -904,81 +936,70 @@ actor APIClient {
             try self.validateResponse(response)
             let results = try self.decoder.decode([TVMazeSearchResult].self, from: data)
             saveToCache(data: data, forKey: cacheKey)
-            return Self.bestTVMazeMatch(for: title, releaseYear: releaseYear, language: language, in: results)?.show.id
+            return Self.bestTVMazeMatch(for: title, releaseDate: releaseDate, language: language, in: results)?.show.id
         }
     }
 
-    /// Multi-factor verification: Finds the candidate that matches the title,
-    /// verifies release year proximity (within +/- 1 year), and verifies language.
+    /// Name, language and premiere must all agree. Anything unverifiable is a refusal.
     nonisolated static func bestTVMazeMatch(
         for title: String,
-        releaseYear: Int? = nil,
+        releaseDate: Date? = nil,
         language: String? = nil,
         in results: [TVMazeSearchResult]
     ) -> TVMazeSearchResult? {
         let target = normalizedShowTitle(title)
-        let titleMatches = results.filter { normalizedShowTitle($0.show.name) == target }
-        guard !titleMatches.isEmpty else { return nil }
+        let wantedLanguage = language?.trimmingCharacters(in: .whitespaces).lowercased()
 
-        // If there is only one exact title match and we have no year or language info to verify against, return it
-        if titleMatches.count == 1 && releaseYear == nil && language == nil {
-            return titleMatches.first
-        }
+        return results.first { candidate in
+            guard normalizedShowTitle(candidate.show.name) == target else { return false }
 
-        // Score each candidate based on release year and language
-        var scored: [(candidate: TVMazeSearchResult, score: Int)] = []
+            guard let wantLang = wantedLanguage, !wantLang.isEmpty,
+                  let haveLang = candidate.show.language?.lowercased(),
+                  matchesLanguage(tmdbCode: wantLang, tvmazeLanguage: haveLang) else { return false }
 
-        for candidate in titleMatches {
-            var score = 10 // Base score for exact title match
-
-            // 1. Release year evaluation
-            let candidateYear: Int? = {
-                guard let premiered = candidate.show.premiered,
-                      let firstPart = premiered.split(separator: "-").first,
-                      let y = Int(firstPart) else { return nil }
-                return y
-            }()
-
-            if let targetYear = releaseYear {
-                if let candidateYear {
-                    let diff = abs(targetYear - candidateYear)
-                    if diff == 0 {
-                        score += 30 // Exact year match
-                    } else if diff == 1 {
-                        score += 20 // 1-year tolerance
-                    } else {
-                        // Big year mismatch (e.g. 2024 vs 2026) -> penalize heavily
-                        score -= 50
-                    }
-                } else {
-                    // Candidate has no premiered date yet, small neutral penalty
-                    score -= 5
-                }
-            } else if candidateYear != nil {
-                // Incoming show has no known year (e.g. unreleased/in-production),
-                // while candidate has already premiered in the past -> penalize
-                score -= 15
+            guard let wantDay = releaseDate,
+                  let premiered = candidate.show.premiered,
+                  let haveDay = Self.utcDay(premiered) else {
+                return false
             }
-
-            // 2. Language evaluation
-            if let targetLang = language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-                if let candidateLang = candidate.show.language?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-                    if matchesLanguage(tmdbCode: targetLang, tvmazeLanguage: candidateLang) {
-                        score += 20
-                    } else {
-                        score -= 40 // Clear language mismatch (e.g. Thai vs Chinese)
-                    }
-                }
-            }
-
-            scored.append((candidate, score))
+            return Self.daysApart(wantDay, haveDay) <= 7
         }
-
-        // Only accept candidates with positive score (must meet verification threshold)
-        return scored.filter { $0.score > 0 }.max(by: { $0.score < $1.score })?.candidate
     }
 
-    /// Maps TMDB ISO 639-1 language codes to TVMaze full language names
+    /// A `yyyy-MM-dd` date in UTC, or nil when the string is not one.
+    nonisolated static func utcDay(_ isoDay: String) -> Date? {
+        let parts = String(isoDay.prefix(10)).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    /// Whole days between two instants, ignoring the time of day.
+    nonisolated static func daysApart(_ a: Date, _ b: Date) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: a),
+            to: calendar.startOfDay(for: b)
+        ).day ?? Int.max
+        return abs(days)
+    }
+
+}
+
+extension APIClient {
+    /// Exact name only — no year, no language.
+    ///
+    /// Kept separate from `bestTVMazeMatch` because a caller that already has the show's own name
+    /// (a link from another device, a manual choice) is not guessing: it is confirming.
+    nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
+        let target = normalizedShowTitle(title)
+        return results.first { normalizedShowTitle($0.show.name) == target }
+    }
+
+    /// TMDB language codes (`th`) against TVMaze's names (`Thai`).
     nonisolated private static func matchesLanguage(tmdbCode: String, tvmazeLanguage: String) -> Bool {
         let code = tmdbCode.prefix(2).lowercased()
         let lang = tvmazeLanguage.lowercased()
@@ -999,10 +1020,6 @@ actor APIClient {
         default:
             return lang.contains(code)
         }
-    }
-
-    nonisolated static func exactTVMazeMatch(for title: String, in results: [TVMazeSearchResult]) -> TVMazeSearchResult? {
-        bestTVMazeMatch(for: title, in: results)
     }
 
     nonisolated private static func normalizedShowTitle(_ title: String) -> String {
@@ -1031,10 +1048,15 @@ actor APIClient {
     }
 
     func fetchTVMazeEpisodes(tvMazeID: Int, force: Bool = false) async throws -> [TVMazeEpisode] {
-        // Check 24h disk cache
+        // Check 24h disk cache. An *empty* answer is not cached: TVMaze adds episodes to a Thai
+        // show week by week (and sometimes only after it has aired), so a "no episodes yet" from
+        // yesterday must not be served for a day. One extra request per refresh for a show with
+        // nothing scheduled is a fair price for the next episode appearing.
         let cacheKey = "tvmaze_episodes_\(tvMazeID)"
-        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay) {
-            return try decoder.decode([TVMazeEpisode].self, from: cachedData)
+        if !force, let cachedData = await getCachedData(forKey: cacheKey, ttl: .secondsInDay),
+           let cached = try? decoder.decode([TVMazeEpisode].self, from: cachedData),
+           !cached.isEmpty {
+            return cached
         }
 
         return try await executeWithRetry {
@@ -1042,7 +1064,9 @@ actor APIClient {
             let (data, response) = try await self.session.data(from: url)
             try self.validateResponse(response)
             let result = try self.decoder.decode([TVMazeEpisode].self, from: data)
-            saveToCache(data: data, forKey: cacheKey)
+            if !result.isEmpty {
+                saveToCache(data: data, forKey: cacheKey)
+            }
             return result
         }
     }

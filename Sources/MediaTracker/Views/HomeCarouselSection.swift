@@ -20,6 +20,8 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
     /// When set, each card is wrapped in an interactive `Button`.
     let onSelect: ((Item) -> Void)?
     let emptyContent: (() -> EmptyContent)?
+    /// Optional trailing header accessory (e.g. filter pills).
+    let trailingAccessory: (() -> AnyView)?
     let card: (Item) -> Card
 
     @State private var scroll = CarouselScrollState()
@@ -32,6 +34,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         items: [Item],
         showsScrollProgress: Bool = true,
         spacing: CGFloat = AppTheme.Spacing.large,
+        trailingAccessory: (() -> AnyView)? = nil,
         onSelect: ((Item) -> Void)? = nil,
         @ViewBuilder emptyContent: @escaping () -> EmptyContent,
         card: @escaping (Item) -> Card
@@ -43,6 +46,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         self.items = items
         self.showsScrollProgress = showsScrollProgress
         self.spacing = spacing
+        self.trailingAccessory = trailingAccessory
         self.onSelect = onSelect
         self.emptyContent = emptyContent
         self.card = card
@@ -56,6 +60,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         items: [Item],
         showsScrollProgress: Bool = true,
         spacing: CGFloat = AppTheme.Spacing.large,
+        trailingAccessory: (() -> AnyView)? = nil,
         onSelect: ((Item) -> Void)? = nil,
         card: @escaping (Item) -> Card
     ) where EmptyContent == EmptyView {
@@ -66,6 +71,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
         self.items = items
         self.showsScrollProgress = showsScrollProgress
         self.spacing = spacing
+        self.trailingAccessory = trailingAccessory
         self.onSelect = onSelect
         self.emptyContent = nil
         self.card = card
@@ -77,6 +83,7 @@ struct HomeCarouselSection<Item: Identifiable, Card: Equatable & View, EmptyCont
                 title: title,
                 icon: icon,
                 iconColor: iconColor,
+                trailingAccessory: trailingAccessory,
                 state: showsScrollProgress ? scroll : nil
             )
 
@@ -109,6 +116,7 @@ private struct CarouselProgressHeader: View {
     let title: String
     let icon: String
     let iconColor: Color
+    let trailingAccessory: (() -> AnyView)?
     /// Non-nil when the progress indicator should show.
     let state: CarouselScrollState?
 
@@ -117,7 +125,8 @@ private struct CarouselProgressHeader: View {
             title: title,
             icon: icon,
             iconColor: iconColor,
-            scrollProgress: state?.progress
+            scrollProgress: state?.progress,
+            trailingAccessory: trailingAccessory
         )
     }
 }
