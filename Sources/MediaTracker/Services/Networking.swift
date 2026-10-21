@@ -553,8 +553,10 @@ actor APIClient {
         // Fallback 2: dedicated watch providers endpoint
         let path = type == .movie ? "/movie/\(tmdbID)/watch/providers" : "/tv/\(tmdbID)/watch/providers"
         do {
-            let url = try tmdbURL(path: path)
-            let (data, response) = try await session.data(from: url)
+            // `tmdbRequest`, not `tmdbURL`: the URL alone loses the Authorization header that a
+            // v4 read token needs, and TMDB answers 401 to every such call.
+            let request = try tmdbRequest(path: path)
+            let (data, response) = try await session.data(for: request)
             try validateResponse(response)
             let decoded = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
             let providers = extractWatchProviders(from: decoded)
@@ -778,8 +780,10 @@ actor APIClient {
         let task = Task<TMDBImagesResponse, Error> {
             defer { self.inFlightImageFetches.removeValue(forKey: cacheKey) }
             return try await self.executeWithRetry {
-                let url = try self.tmdbURL(path: path)
-                let (data, response) = try await self.session.data(from: url)
+                // Same reason as the providers call: the URL alone carries no Authorization, so a
+                // read token produced 401s here and the poster picker saw zero options.
+                let request = try self.tmdbRequest(path: path)
+                let (data, response) = try await self.session.data(for: request)
                 try self.validateResponse(response)
                 self.saveToCache(data: data, forKey: cacheKey)
                 return try self.decoder.decode(TMDBImagesResponse.self, from: data)
