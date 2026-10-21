@@ -290,7 +290,7 @@ enum WatchHistoryCoordinator {
             EpisodeIdentifier.canonical($0.episodeID) == canonicalEpisodeID
                 && SyncTimestamps.isSameWatch($0.watchedAt, watchedAt)
         }
-        let deduplicationKey = "\(cycle.id.uuidString):\(episodeID):watch"
+        let deduplicationKey = "\(cycle.id.uuidString.lowercased()):\(episodeID):watch"
 
         if isWatched {
             guard activeEvent == nil else { return }
@@ -372,7 +372,7 @@ enum WatchHistoryCoordinator {
             let activeEvent = activeEventsByEpisodeID[episodeKey]
             if mut.isWatched {
                 guard activeEvent == nil else { continue }
-                let deduplicationKey = "\(cycle.id.uuidString):\(mut.episodeID):watch"
+                let deduplicationKey = "\(cycle.id.uuidString.lowercased()):\(mut.episodeID):watch"
                 let newEvent = WatchEvent(
                     cycleID: cycle.id,
                     mediaID: mediaID,
@@ -432,7 +432,7 @@ enum WatchHistoryCoordinator {
                 watchedAt: watchedAt,
                 source: .imported,
                 runtimeMinutes: runtimeMinutes,
-                deduplicationKey: "\(cycle.id.uuidString):movie:import"
+                deduplicationKey: "\(cycle.id.uuidString.lowercased()):movie:import"
             ))
         }
     }
@@ -537,7 +537,7 @@ enum WatchHistoryCoordinator {
             watchedAt: watchedAt,
             source: .imported,
             runtimeMinutes: runtimeMinutes,
-            deduplicationKey: "\(cycle.id.uuidString):\(episodeID):import"
+            deduplicationKey: "\(cycle.id.uuidString.lowercased()):\(episodeID):import"
         ))
     }
 
@@ -747,7 +747,7 @@ enum WatchHistoryCoordinator {
 
         if item.type == .movie {
             if existing.contains(where: { $0.episodeID == nil && $0.isActive }) { return }
-            let key = "\(cycle.id.uuidString):movie"
+            let key = "\(cycle.id.uuidString.lowercased()):movie"
             guard keys.insert(key).inserted else { return }
             context.insert(WatchEvent(
                 cycleID: cycle.id,
@@ -773,7 +773,7 @@ enum WatchHistoryCoordinator {
                 let episodeID = episode.uniqueID ?? "\(item.id)_\(season.seasonNumber)_\(episode.episodeNumber)"
                 guard scope.isEmpty || scope.contains(episodeID) else { continue }
                 guard !alreadyLogged.contains(episodeID) else { continue }
-                let key = "\(cycle.id.uuidString):\(episodeID)"
+                let key = "\(cycle.id.uuidString.lowercased()):\(episodeID)"
                 guard keys.insert(key).inserted else { continue }
                 context.insert(WatchEvent(
                     cycleID: cycle.id,
