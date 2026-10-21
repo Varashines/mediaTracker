@@ -281,7 +281,7 @@ class DetailViewModel {
             AppLogger.warning("posterOptions \(item.id): could not parse a TMDB id", logger: AppLogger.ui)
             return
         }
-        AppLogger.warning("posterOptions \(item.id): fetching for tmdb \(tmdbID), type \(item.type.rawValue)", logger: AppLogger.ui)
+        AppLogger.warning("posterOptions \(item.id): fetching for tmdb \(tmdbID), type \(item.type?.rawValue ?? "nil")", logger: AppLogger.ui)
 
         let type = item.type
         let originalLanguage = item.cachedLanguage
