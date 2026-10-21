@@ -770,6 +770,10 @@ actor APIClient {
         if !force,
            let cachedData = await getCachedData(forKey: cacheKey, ttl: ttl),
            let decoded = try? decoder.decode(TMDBImagesResponse.self, from: cachedData) {
+            AppLogger.warning(
+                "images \(cacheKey): cache hit, posters \(decoded.posters?.count ?? -1)",
+                logger: AppLogger.network
+            )
             return decoded
         }
 
@@ -785,6 +789,10 @@ actor APIClient {
                 let request = try self.tmdbRequest(path: path)
                 let (data, response) = try await self.session.data(for: request)
                 try self.validateResponse(response)
+                AppLogger.warning(
+                    "images \(cacheKey): network \(data.count) bytes, status \((response as? HTTPURLResponse)?.statusCode ?? -1)",
+                    logger: AppLogger.network
+                )
                 self.saveToCache(data: data, forKey: cacheKey)
                 return try self.decoder.decode(TMDBImagesResponse.self, from: data)
             }
