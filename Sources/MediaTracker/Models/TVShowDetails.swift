@@ -85,8 +85,18 @@ final class TVShowDetails {
             let sortedEpisodes = seasonEpisodes.sorted { $0.episodeNumber < $1.episodeNumber }
             
             var seasonWatched = 0
-            // Sync season counts and compute progress in a single pass
-            season.totalEpisodesCount = max(season.episodeCount, seasonEpisodes.count)
+            // Sync season counts and compute progress in a single pass.
+            //
+            // `max` defends against a stored count that is *lower* than the rows — normally the
+            // right rule, because rows are the truth. For a Thai show the rows are not the truth:
+            // TMDB announces episodes TVMaze has not scheduled yet, and the union leaves them in
+            // the list while the count that aired is TVMaze's. So there the stored count wins.
+            let isThai = item?.cachedLanguage == "th"
+            season.totalEpisodesCount = if isThai && season.episodeCount > 0 {
+                season.episodeCount
+            } else {
+                max(season.episodeCount, seasonEpisodes.count)
+            }
 
             // Standard progress calculations usually exclude Specials (Season 0)
             if season.seasonNumber > 0 {

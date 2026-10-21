@@ -570,10 +570,22 @@ extension BackgroundDataService {
                                 tmdbEpisodes: tmdbEpisodes,
                                 tvmazeSeason: tvmazeRawForSeason
                             )
+                            // The count for a Thai show is TVMaze's, unless TVMaze has nothing for
+                            // the season — then TMDB's is the only answer there is.
+                            let tvMazeCount = mazeEpisodesBySeason[sNum]?.count ?? 0
+                            let authoritativeCount = (isThai && tvMazeCount > 0)
+                                ? tvMazeCount
+                                : episodes.count
+                            if isThai && tvMazeCount == 0 {
+                                AppLogger.warning(
+                                    "TVMaze has no episodes for \(tmdbID) season \(sNum); using TMDB's \(episodes.count)",
+                                    logger: AppLogger.background
+                                )
+                            }
                             return FetchedSeasonData(
                                 seasonNumber: sNum,
                                 name: seasonData.name,
-                                episodeCount: episodes.count,
+                                episodeCount: authoritativeCount,
                                 airDate: seasonData.air_date,
                                 episodes: episodes,
                                 tmdbRuntimes: tmdbRuntimes,
