@@ -61,9 +61,10 @@ enum Secrets {
             return UserDefaults.standard.string(forKey: key.rawValue) ?? ""
         }
         if let cached = cached(key) { return cached }
-        let stored = readFromKeychain(key) ?? ""
-        store(stored, for: key)
-        return stored
+        let (stored, status) = readFromKeychain(key)
+        markReadable(status != errSecInteractionNotAllowed && status != errSecAuthFailed, for: key)
+        store(stored ?? "", for: key)
+        return stored ?? ""
     }
 
     static func has(_ key: SecretKey) -> Bool {
@@ -111,9 +112,9 @@ enum Secrets {
                 defaults.removeObject(forKey: key.rawValue)
                 continue
             }
-            if (readFromKeychain(key) ?? "").isEmpty {
+            if (readFromKeychain(key).0 ?? "").isEmpty {
                 writeToKeychain(trimmed, for: key)
-                guard readFromKeychain(key) == trimmed else {
+                guard readFromKeychain(key).0 == trimmed else {
                     AppLogger.error("Keychain migration for \(key.rawValue) did not read back; leaving the defaults copy in place")
                     continue
                 }
@@ -145,6 +146,10 @@ enum Secrets {
 
     private static let lock = NSLock()
     private nonisolated(unsafe) static var cache: [String: String] = [:]
+    /// Keys whose last read was refused rather than absent. An empty cached value is otherwise
+    /// ambiguous, and the two cases must never be treated alike: "absent" means a credential can be
+    /// created, "refused" means one exists that we were not allowed to see.
+    private nonisolated(unsafe) static var refused: Set<String> = []
 
     private static func cached(_ key: SecretKey) -> String? {
         lock.lock()
@@ -158,12 +163,105 @@ enum Secrets {
         lock.unlock()
     }
 
+    private static func markReadable(_ readable: Bool, for key: SecretKey) {
+        lock.lock()
+        if readable { refused.remove(key.rawValue) } else { refused.insert(key.rawValue) }
+        lock.unlock()
+    }
+
+    private static func wasRefused(_ key: SecretKey) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return refused.contains(key.rawValue)
+    }
+
     /// Test seam, matching `ImageCache.configureForTesting`. Empties the cache so the next read goes
     /// back to the store — used when a test changes the defaults a fixture was seeded with.
     static func invalidateCache() {
         lock.lock()
         cache.removeAll()
+        refused.removeAll()
         lock.unlock()
+    }
+
+    // MARK: - Signing identity
+
+    private static let identityDefaultsKey = "keychain_owning_requirement"
+
+    /// This binary's designated requirement, as text.
+    ///
+    /// It changes when the app is re-signed by a different identity — an ad-hoc rebuild, or a switch
+    /// between certificates — and it is what a Keychain ACL records when the app creates an item.
+    static func currentSigningRequirement() -> String? {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess,
+              let requirement else { return nil }
+        var text: CFString?
+        guard SecRequirementCopyString(requirement, [], &text) == errSecSuccess,
+              let text else { return nil }
+        return text as String
+    }
+
+    /// Re-writes items that were created under a different signing identity.
+    ///
+    /// A Keychain item's ACL names the designated requirement of the app that created it. If this
+    /// binary has a different one — the item predates the stable certificate, or was written by an
+    /// ad-hoc build — every read asks for approval, and "Allow" only answers that one read. Reading
+    /// succeeds, so the ACL can be fixed by deleting and re-adding the item: the new item is created
+    /// by *this* binary, so "approved once" then means "approved from now on".
+    ///
+    /// The values come from the cache, so this adds no reads and therefore no prompts. It is called
+    /// after the settings screen has read what it needs, which is the moment the user has already
+    /// granted access.
+    static func adoptIfSigningIdentityChanged() {
+        guard isApp, let current = currentSigningRequirement() else { return }
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: identityDefaultsKey) != current else { return }
+
+        var rewritten = 0
+        var deferred = false
+        for key in SecretKey.allCases {
+            // A refused read is a credential we cannot see. Deleting it would destroy it, so it is
+            // left alone and the adoption is retried next time rather than marked done.
+            if wasRefused(key) {
+                deferred = true
+                continue
+            }
+            guard let value = cached(key) else { continue }
+            deleteFromKeychain(key)
+            writeToKeychain(value, for: key)
+            rewritten += 1
+        }
+        if deferred {
+            AppLogger.info("Some keychain items were unreadable; re-adoption will retry")
+        } else {
+            defaults.set(current, forKey: identityDefaultsKey)
+        }
+        if rewritten > 0 {
+            AppLogger.info("Re-adopted \(rewritten) keychain item(s) under the current signing identity")
+        }
+    }
+
+    /// Whether an item exists, answered from attributes only.
+    ///
+    /// Attributes do not require the data the ACL protects, so this never prompts. That matters:
+    /// callers use it to distinguish "no key yet" from "a key is there but could not be read", and
+    /// the second case must never be treated as the first.
+    static func hasItem(_ key: SecretKey) -> Bool {
+        guard isApp else { return !value(for: key).isEmpty }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key.rawValue,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var out: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess
     }
 
     // MARK: - Keychain
@@ -176,7 +274,11 @@ enum Secrets {
         ]
     }
 
-    private static func readFromKeychain(_ key: SecretKey) -> String? {
+    /// Returns the value (nil when absent) and how the lookup ended.
+    ///
+    /// The status matters: "no item" and "the user refused the prompt" both produce nil, but only
+    /// the first may be answered by creating a credential.
+    private static func readFromKeychain(_ key: SecretKey) -> (String?, OSStatus) {
         var query = baseQuery(key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -187,9 +289,9 @@ enum Secrets {
             if status != errSecItemNotFound {
                 AppLogger.error("Keychain read for \(key.rawValue) failed: \(status)")
             }
-            return nil
+            return (nil, status)
         }
-        return String(data: data, encoding: .utf8)
+        return (String(data: data, encoding: .utf8), status)
     }
 
     /// Update-then-add rather than delete-then-add: a delete would briefly leave the credential

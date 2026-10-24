@@ -45,6 +45,12 @@ actor CloudSyncService {
         if !existing.isEmpty {
             return existing
         }
+        // A key that exists but could not be read (the user dismissed the Keychain prompt, say) must
+        // not be replaced: generating a fresh one would silently desynchronise this Mac from the
+        // phone, and the old key would only reappear if that item ever became readable again.
+        if Secrets.hasItem(.cloudSyncKey) {
+            return ""
+        }
         let fresh = "mt_sync_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16).lowercased()
         Secrets.set(fresh, for: .cloudSyncKey)
         return fresh

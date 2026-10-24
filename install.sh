@@ -175,13 +175,31 @@ EOF
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-MediaTracker Local Signing}"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGNING_IDENTITY"; then
     echo "🔐 Signing with \"$SIGNING_IDENTITY\" (stable identity — Keychain stays quiet)..."
-    codesign --force --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
+    if ! codesign --force --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"; then
+        # `--force` strips the existing signature before it writes the new one, so a failure here
+        # leaves an unsigned (or ad-hoc) bundle. Installing that would be worse than not building:
+        # the Keychain items are ACL-bound to the certificate, and the app would then ask for
+        # approval on every read with no obvious cause.
+        echo "❌ codesign failed. Not installing $APP_NAME."
+        echo "   Usually a locked keychain or a declined keychain prompt. Unlock the login keychain"
+        echo "   (Keychain Access) and run ./install.sh again."
+        exit 1
+    fi
+    # Check what was actually written, not what was requested.
+    ACTUAL_SIGNER=$(codesign -dv --verbose=2 "$APP_BUNDLE" 2>&1 | sed -n 's/^Authority=//p' | head -1)
+    if [ "$ACTUAL_SIGNER" != "$SIGNING_IDENTITY" ]; then
+        echo "❌ $APP_NAME.app is not signed by \"$SIGNING_IDENTITY\" (got: ${ACTUAL_SIGNER:-unsigned})."
+        echo "   Refusing to install a bundle whose signature the Keychain does not recognise."
+        exit 1
+    fi
+    echo "   ✅ Signed by $ACTUAL_SIGNER"
 else
     echo "🔐 Signing ad-hoc..."
     echo "   ⚠️  No \"$SIGNING_IDENTITY\" identity found. macOS will ask for Keychain access each time"
     echo "       the app is rebuilt. Run ./Dev/setup-signing.sh once to stop that."
-    codesign --force --sign - "$APP_BUNDLE"
+    codesign --force --sign - "$APP_BUNDLE" || { echo "❌ codesign failed. Not installing $APP_NAME."; exit 1; }
 fi
+
 
 echo "🚚 Installing to $INSTALL_DIR..."
 rm -rf "$INSTALLED_APP"

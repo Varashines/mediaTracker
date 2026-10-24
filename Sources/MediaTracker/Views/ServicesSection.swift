@@ -396,6 +396,11 @@ struct ServicesSection: View {
                 }
             }
         }
+        // Opening this tab is where the credentials are first read, so it is also the right place
+        // to re-home them if the app has been re-signed since they were written. The reads above
+        // have already asked for approval if the ACL was stale; this rewrites the items so that
+        // approval becomes permanent instead of recurring on the next launch.
+        .task { Secrets.adoptIfSigningIdentityChanged() }
     }
 
     private func apiKeyRow(_ name: String, subtitle: String, binding: Binding<String>, showKey: Binding<Bool>, link: String, validation: Binding<KeyValidationState>?, testAction: (() async -> Bool)? = nil) -> some View {
