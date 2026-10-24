@@ -176,7 +176,9 @@ struct MediaTrackerApp: App {
     }()
 
     init() {
-        KeychainStore.restoreToUserDefaults()
+        // Credentials used to live in UserDefaults. Move them into the Keychain once, and delete
+        // the plaintext copies. No-op on every launch after that.
+        Secrets.migrateFromDefaultsIfNeeded()
         // SaveCoordinator is the sole save path — disable SwiftData's implicit
         // main-context autosave so it can't double-persist or race our debounced saves.
         sharedModelContainer.mainContext.autosaveEnabled = false

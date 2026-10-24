@@ -42,6 +42,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-${{ matrix.arch }}-
 
+      # Same identity as local development, so a DMG built here does not make the Keychain prompt
+      # on the next update. See release.yml for the full explanation.
+      - name: Import signing identity
+        env:
+          CERT_P12_BASE64: ${{ secrets.CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_P12_BASE64" ]; then
+            echo "::warning::CERT_P12_BASE64 is not configured; signing ad-hoc (Keychain will prompt on updates)."
+            echo "SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 1800 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security import "$RUNNER_TEMP/id.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/id.p12"
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+
+          IDENTITY="MediaTracker Local Signing"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "$IDENTITY"; then
+            echo "::error::Signing identity '$IDENTITY' is missing after import. Check CERT_P12_BASE64 and CERT_PASSWORD."
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
       - name: Build App Bundle
         run: |
           chmod +x install.sh
@@ -97,7 +129,9 @@ jobs:
           </plist>
           EOF
 
-          codesign --force --deep --sign - "$APP_BUNDLE"
+          # A bundle must carry a signature to launch; prefer the imported identity so updates do
+          # not invalidate the Keychain ACL, and fall back to ad-hoc when none was configured.
+          codesign --force --sign "${SIGN_IDENTITY:--}" "$APP_BUNDLE"
 
       - name: Install create-dmg utility
         run: brew install create-dmg

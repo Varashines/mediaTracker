@@ -3,9 +3,12 @@ import SwiftData
 import UserNotifications
 
 struct ServicesSection: View {
-    @AppStorage("tmdb_api_key") private var tmdbApiKey = ""
-    @AppStorage("omdb_api_key") private var omdbApiKey = ""
-    @AppStorage(UserDefaultsKeys.mmAPIKey.rawValue) private var mmApiKey = ""
+    // Credentials are held as view state and written through `Secrets`, which puts them in the
+    // Keychain. `@AppStorage` cannot be used for them: it would write the plaintext back into the
+    // defaults plist that the migration just cleaned out.
+    @State private var tmdbApiKey = Secrets.value(for: .tmdb)
+    @State private var omdbApiKey = Secrets.value(for: .omdb)
+    @State private var mmApiKey = Secrets.value(for: .mooreMetrics)
     @AppStorage("notifications_enabled") private var notificationsEnabled = true
     @AppStorage("notifications_movies") private var movieNotificationsEnabled = true
     @AppStorage("notifications_tv") private var tvNotificationsEnabled = true
@@ -20,8 +23,8 @@ struct ServicesSection: View {
 
     @AppStorage(UserDefaultsKeys.cloudSyncEnabled.rawValue) private var cloudSyncEnabled = false
     @AppStorage(UserDefaultsKeys.cloudSyncURL.rawValue) private var cloudSyncURL = ""
-    @AppStorage(UserDefaultsKeys.cloudSyncAnonKey.rawValue) private var cloudSyncAnonKey = ""
-    @AppStorage(UserDefaultsKeys.cloudSyncKey.rawValue) private var cloudSyncKey = ""
+    @State private var cloudSyncAnonKey = Secrets.value(for: .cloudSyncAnonKey)
+    @State private var cloudSyncKey = Secrets.value(for: .cloudSyncKey)
     @AppStorage(UserDefaultsKeys.cloudSyncLastTimestamp.rawValue) private var cloudSyncLastTimestamp: Double = 0
     @State private var isSyncingCloud = false
     @State private var hasCopiedSyncKey = false
@@ -35,6 +38,28 @@ struct ServicesSection: View {
             return CloudSyncService.getOrGenerateSyncKey()
         }
         return cloudSyncKey
+    }
+
+    // Each field writes through to the Keychain as it is edited. A `Binding` rather than
+    // `.onChange` so there is exactly one write path and the value can never be visible in the
+    // field but missing from the store.
+    private var tmdbKeyBinding: Binding<String> {
+        Binding(get: { tmdbApiKey }, set: { tmdbApiKey = $0; Secrets.set($0, for: .tmdb) })
+    }
+
+    private var omdbKeyBinding: Binding<String> {
+        Binding(get: { omdbApiKey }, set: { omdbApiKey = $0; Secrets.set($0, for: .omdb) })
+    }
+
+    private var mmKeyBinding: Binding<String> {
+        Binding(get: { mmApiKey }, set: { mmApiKey = $0; Secrets.set($0, for: .mooreMetrics) })
+    }
+
+    private var cloudAnonKeyBinding: Binding<String> {
+        Binding(
+            get: { cloudSyncAnonKey },
+            set: { cloudSyncAnonKey = $0; Secrets.set($0, for: .cloudSyncAnonKey) }
+        )
     }
 
     private var lastSyncLabel: String {
@@ -64,13 +89,13 @@ struct ServicesSection: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.large) {
             SettingsCard(color: .green) {
                 VStack(spacing: 0) {
-                    apiKeyRow("TMDB", subtitle: "Movie & TV metadata", binding: $tmdbApiKey, showKey: $showTMDBKey, link: "https://www.themoviedb.org/settings/api", validation: $tmdbValidation) {
+                    apiKeyRow("TMDB", subtitle: "Movie & TV metadata", binding: tmdbKeyBinding, showKey: $showTMDBKey, link: "https://www.themoviedb.org/settings/api", validation: $tmdbValidation) {
                         await APIClient.shared.validateTMDBKey(key: tmdbApiKey)
                     }
-                    apiKeyRow("OMDb", subtitle: "Rotten Tomatoes scores", binding: $omdbApiKey, showKey: $showOMDBKey, link: "https://www.omdbapi.com/apikey.aspx", validation: $omdbValidation) {
+                    apiKeyRow("OMDb", subtitle: "Rotten Tomatoes scores", binding: omdbKeyBinding, showKey: $showOMDBKey, link: "https://www.omdbapi.com/apikey.aspx", validation: $omdbValidation) {
                         await APIClient.shared.validateOMDBKey(key: omdbApiKey)
                     }
-                    apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: $mmApiKey, showKey: $showMMKey, link: "https://www.mooremetrics.com", validation: nil)
+                    apiKeyRow("MooreMetrics", subtitle: "Show recommendations", binding: mmKeyBinding, showKey: $showMMKey, link: "https://www.mooremetrics.com", validation: nil)
                 }
             }
 
@@ -159,10 +184,10 @@ struct ServicesSection: View {
                             HStack(spacing: AppTheme.Spacing.small) {
                                 Group {
                                     if showCloudAnonKey {
-                                        TextField("sb_publishable_...", text: $cloudSyncAnonKey)
+                                        TextField("sb_publishable_...", text: cloudAnonKeyBinding)
                                             .textFieldStyle(.plain)
                                     } else {
-                                        SecureField("sb_publishable_...", text: $cloudSyncAnonKey)
+                                        SecureField("sb_publishable_...", text: cloudAnonKeyBinding)
                                             .textFieldStyle(.plain)
                                     }
                                 }

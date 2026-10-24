@@ -10,7 +10,8 @@ actor CloudSyncService {
     }
 
     static var supabaseAnonKey: String {
-        UserDefaults.standard.string(forKey: UserDefaultsKeys.cloudSyncAnonKey.rawValue)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        Secrets.value(for: .cloudSyncAnonKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Swappable for tests (the same pattern as `ImageCache.configureForTesting`): the service
@@ -39,12 +40,13 @@ actor CloudSyncService {
 
     /// Returns the active secret sync key, or generates a fresh high-entropy key if none exists.
     static func getOrGenerateSyncKey() -> String {
-        if let existing = UserDefaults.standard.string(forKey: UserDefaultsKeys.cloudSyncKey.rawValue),
-           !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let existing = Secrets.value(for: .cloudSyncKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !existing.isEmpty {
             return existing
         }
         let fresh = "mt_sync_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16).lowercased()
-        UserDefaults.standard.set(fresh, forKey: UserDefaultsKeys.cloudSyncKey.rawValue)
+        Secrets.set(fresh, for: .cloudSyncKey)
         return fresh
     }
 

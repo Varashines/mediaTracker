@@ -164,8 +164,24 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-echo "🔐 Ad-hoc signing $APP_NAME..."
-codesign --force --sign - "$APP_BUNDLE"
+# Sign with a stable identity when one exists.
+#
+# Ad-hoc signing (`--sign -`) derives the app's designated requirement from the binary's cdhash, so
+# every rebuild is a different app as far as the Keychain is concerned — and the credentials this
+# app now stores there would prompt for approval on every launch after a build. Any certificate,
+# including a self-signed one, makes the requirement `identifier + certificate`, which survives
+# rebuilds. Run Dev/setup-signing.sh once to create one; without it, the app still works and the
+# sign-in prompt returns, which is why this says which happened.
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-MediaTracker Local Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGNING_IDENTITY"; then
+    echo "🔐 Signing with \"$SIGNING_IDENTITY\" (stable identity — Keychain stays quiet)..."
+    codesign --force --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
+else
+    echo "🔐 Signing ad-hoc..."
+    echo "   ⚠️  No \"$SIGNING_IDENTITY\" identity found. macOS will ask for Keychain access each time"
+    echo "       the app is rebuilt. Run ./Dev/setup-signing.sh once to stop that."
+    codesign --force --sign - "$APP_BUNDLE"
+fi
 
 echo "🚚 Installing to $INSTALL_DIR..."
 rm -rf "$INSTALLED_APP"

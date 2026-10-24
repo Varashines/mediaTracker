@@ -194,7 +194,9 @@ struct GeneralSection: View {
         // Fallback keys written via @AppStorage raw strings
         defaults.removeObject(forKey: "notifications_time")
 
-        defaults.removeObject(forKey: "mm_api_key")
+        // Credentials live in the Keychain now; resetting preferences has to drop those too, or
+        // "reset" leaves the app still holding a sync key and API keys.
+        Secrets.clearAll()
         defaults.removeObject(forKey: "mm_debug_mode")
 
         if launchAtLogin {
