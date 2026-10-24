@@ -68,7 +68,12 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
 
           IDENTITY="MediaTracker Local Signing"
-          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "$IDENTITY"; then
+          # Deliberately not `find-identity -p codesigning`: that filters by policy, and a
+          # self-signed certificate on a fresh runner is not trusted (trust settings are not part
+          # of a .p12). Trust is not required to *sign* — codesign accepts an untrusted identity —
+          # so this checks the certificate reached the keychain, and the packaging step verifies
+          # the signature it actually produced.
+          if ! security find-certificate -a -c "$IDENTITY" "$KEYCHAIN" >/dev/null 2>&1; then
             echo "::error::Signing identity '$IDENTITY' is missing after import. Check CERT_P12_BASE64 and CERT_PASSWORD."
             exit 1
           fi
@@ -132,6 +137,15 @@ jobs:
           # A bundle must carry a signature to launch; prefer the imported identity so updates do
           # not invalidate the Keychain ACL, and fall back to ad-hoc when none was configured.
           codesign --force --sign "${SIGN_IDENTITY:--}" "$APP_BUNDLE"
+
+          # Never let a configured identity quietly degrade to ad-hoc: that is the failure that
+          # makes the Keychain prompt on every update, and it would only surface on a user's Mac.
+          if [ "$SIGN_IDENTITY" != "-" ]; then
+            if ! codesign -dv --verbose=2 "$APP_BUNDLE" 2>&1 | grep -q "Authority=$SIGN_IDENTITY"; then
+              echo "::error::$APP_BUNDLE was not signed by $SIGN_IDENTITY"
+              exit 1
+            fi
+          fi
 
       - name: Install create-dmg utility
         run: brew install create-dmg
