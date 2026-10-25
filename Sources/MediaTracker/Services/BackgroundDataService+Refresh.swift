@@ -727,7 +727,7 @@ extension BackgroundDataService {
         _ = mergeSeasonCast(cast, into: season, tmdbID: tmdbID)
 
         if save {
-            try? modelContext.save()
+            modelContext.saveReportingFailure()
         }
         await MainActor.run { TasteActor.clearCache() }
         ScopedStatsActor.invalidateCache()
@@ -821,7 +821,7 @@ extension BackgroundDataService {
         // `CastMember` read trapping three lines after this returned, because the context it came
         // from had been reset underneath it. The detail's own path passes `save: true`, where it is
         // the last thing that happens rather than a step in the middle.
-        if save { try? modelContext.save() }
+        if save { modelContext.saveReportingFailure() }
     }
 
     /// Extracts one item's poster colour, by id, in this service's own context.
@@ -863,7 +863,7 @@ extension BackgroundDataService {
         // One save at the end. This pass owns the context for its whole life, so this is terminal
         // rather than a step in the middle of something else — which is what made the mid-refresh
         // save crash.
-        if written > 0 { try? modelContext.save() }
+        if written > 0 { modelContext.saveReportingFailure() }
         return written
     }
 }

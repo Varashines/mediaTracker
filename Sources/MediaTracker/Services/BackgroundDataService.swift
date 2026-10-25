@@ -18,7 +18,7 @@ actor BackgroundDataService {
 
     /// Single explicit save for batch callers that deferred per-item saves.
     func saveContext() {
-        try? modelContext.save()
+        modelContext.saveReportingFailure()
     }
 
     func createNewMediaItem(uniqueID: String, tmdbID: Int, type: MediaType, title: String, overview: String, posterURL: String?, releaseDateString: String?) async -> (id: PersistentIdentifier?, isExisting: Bool) {
@@ -44,7 +44,7 @@ actor BackgroundDataService {
         }
         
         item.syncCachedProperties(dirty: .all)
-        try? modelContext.save()
+        modelContext.saveReportingFailure()
         return (item.persistentModelID, false)
     }
 
@@ -478,7 +478,7 @@ actor BackgroundDataService {
         }
 
         if pushedCount > 0 || pulledCount > 0 {
-            try? modelContext.save()
+            modelContext.saveReportingFailure()
             await MainActor.run {
                 MediaStateService.shared.postTasteChanged()
             }

@@ -280,7 +280,7 @@ class BackgroundTaskManager {
                 }
                 // Intentional background batch save — purge is off the UI frame
                 // and must be durable before DiscoverySyncService runs.
-                try? context.save()
+                context.saveReportingFailure()
 
                 let sync = DiscoverySyncService(modelContainer: container)
                 for entry in syncItems {
@@ -379,7 +379,7 @@ class BackgroundTaskManager {
         }
         if backfilled > 0 {
             // Intentional background batch save — season-cast counter backfill.
-            try? context.save()
+            context.saveReportingFailure()
         }
         AppLogger.info("🎬 Refreshed season cast for \(fetched) seasons (\(backfilled) counters backfilled)", logger: AppLogger.background)
     }
@@ -508,7 +508,7 @@ class BackgroundTaskManager {
         }
         await BadgeEngine.flushBadgeChanges(container: container)
         // Intentional background batch save — premiere heal loop.
-        try? context.save()
+        context.saveReportingFailure()
         await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
     }
 

@@ -75,7 +75,7 @@ class NetworkThemeManager {
             }
             // Background utility context (setup Task) — batch save is intentional here;
             // SaveCoordinator is MainActor and this path is already off the UI frame.
-            try? context.save()
+            context.saveReportingFailure()
             
             // Once migrated, clear legacy
             UserDefaults.standard.removeObject(forKey: "cached_network_themes")

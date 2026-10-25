@@ -396,7 +396,7 @@ actor CloudSyncService {
             summary.eventsPushed = try await pushWatchEvents(syncKey: syncKey, remoteById: [:])
 
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
-            try? modelContext.save()
+            modelContext.saveReportingFailure()
         } catch {
             summary.errorDescription = error.localizedDescription
             AppLogger.error("backupToCloud failed: \(error.localizedDescription)", logger: AppLogger.sync)
@@ -571,7 +571,7 @@ actor CloudSyncService {
 
             // Update timestamp on successful sync
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
-            try? modelContext.save()
+            modelContext.saveReportingFailure()
         } catch {
             summary.errorDescription = error.localizedDescription
             AppLogger.error("CloudSyncService failed: \(error.localizedDescription)", logger: AppLogger.sync)

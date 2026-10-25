@@ -405,7 +405,7 @@ extension BackgroundDataService {
             for entry in staleEntries {
                 modelContext.delete(entry)
             }
-            try? modelContext.save()
+            modelContext.saveReportingFailure()
             AppLogger.info("🧹 Purged \(staleEntries.count) stale search cache entries", logger: AppLogger.background)
         }
     }

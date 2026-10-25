@@ -147,7 +147,7 @@ actor CalendarFilterActor {
             }
             // Intentional batch save every 50 healed dates — heal runs off the
             // UI frame; debouncing would delay crash-safety during long heals.
-            try? context.save()
+            context.saveReportingFailure()
         }
     }
 

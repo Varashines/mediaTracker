@@ -261,7 +261,13 @@ struct MediaTrackerApp: App {
         .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .background || newValue == .inactive {
-                if newValue == .background { ImageCache.shared.clearMemoryCache() }
+                if newValue == .background {
+                    ImageCache.shared.clearMemoryCache()
+                    // Persist anything still inside SaveCoordinator's debounce window.
+                    // Autosave is off, so backgrounding is the last chance before the
+                    // process can be suspended or killed.
+                    SaveCoordinator.shared.flushAll()
+                }
                 lockService.lock()
             } else if newValue == .active {
                 Task {
@@ -269,6 +275,12 @@ struct MediaTrackerApp: App {
                     await BackgroundTaskManager.shared.refreshStalePremiereBadges()
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            // ⌘Q: the debounce window would otherwise swallow whatever the user did in
+            // the last 350 ms. willTerminate is synchronous, so the save completes before
+            // the process exits.
+            SaveCoordinator.shared.flushAll()
         }
         .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
             guard let id = activity.userInfo?["id"] as? String else { return }

@@ -230,6 +230,6 @@ struct StudioAliasManagerView: View {
             }
             ctx.insert(StudioAliasEntity(target: target, sources: sources, preferredLogoSource: preferredLogoSource))
         }
-        try? ctx.save()
+        ctx.saveReportingFailure()
     }
 }

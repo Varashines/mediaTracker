@@ -383,7 +383,7 @@ extension BackgroundDataService {
 
         if importedCount > 0 {
             // Intentional batch save — collection restore is a bulk write off the UI frame.
-            try? context.save()
+            context.saveReportingFailure()
             await MainActor.run {
                 AppLogger.info("📦 Restored \(importedCount) collections from backup.", logger: AppLogger.data)
             }
