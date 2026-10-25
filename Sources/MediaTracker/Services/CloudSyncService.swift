@@ -492,12 +492,23 @@ actor CloudSyncService {
             )
             summary.eventsPulled = try await applyRemoteWatchEvents(remoteEvents)
 
+            // Persist the pulled rows FIRST. The watermark is the only record of how
+            // far the next pull should look; advancing it past rows that were never
+            // saved loses those rows permanently, with no retry. This used to write
+            // both UserDefaults keys and then `try?` the save, so a failed save
+            // silently skipped whatever had just been pulled.
+            do {
+                try modelContext.save()
+            } catch {
+                summary.errorDescription = "Could not save synced changes: \(error.localizedDescription)"
+                AppLogger.error("Cloud sync save failed; watermark not advanced: \(error.localizedDescription)", logger: AppLogger.sync)
+                return summary
+            }
             UserDefaults.standard.set(now, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
             // Advance the incremental pull watermark so the next sync only asks for changes.
             if let advanced = newWatermark {
                 UserDefaults.standard.set(advanced, forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
             }
-            try? modelContext.save()
         } catch {
             summary.errorDescription = error.localizedDescription
             AppLogger.error("performSelectiveSync failed: \(error.localizedDescription)", logger: AppLogger.sync)

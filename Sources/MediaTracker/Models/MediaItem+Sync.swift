@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 extension MediaItem {
-    func syncCachedProperties(now: Date = Date(), dirty: CacheDirtyFlags = .all) {
+    func syncCachedProperties(now: Date = Date(), dirty: CacheDirtyFlags = .all, userEditedWatchState: Bool = false) {
         let currentState = state ?? .wishlist
         let fullSync = dirty.contains(.all)
 
@@ -19,7 +19,7 @@ extension MediaItem {
             if type == .movie {
                 syncMovieProperties(skipNetwork: skipNetwork)
             } else if type == .tvShow {
-                syncTVProperties(now: now, currentState: currentState, skipNetwork: skipNetwork, forceRecalculate: fullSync || dirty.contains(.progress))
+                syncTVProperties(now: now, currentState: currentState, skipNetwork: skipNetwork, forceRecalculate: fullSync || dirty.contains(.progress), userEditedWatchState: userEditedWatchState)
             }
             if let context = modelContext {
                 FacetIndexMaintenance.synchronize(item: self, in: context)
@@ -117,7 +117,7 @@ extension MediaItem {
         }
     }
 
-    func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false) {
+    func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false, userEditedWatchState: Bool = false) {
         guard let tv = tvShowDetails else { return }
         
         // Reattach any orphaned seasons (same showID, but tvShowDetails == nil) so
@@ -166,11 +166,21 @@ extension MediaItem {
             // Re-watching is intentionally not excluded: finishing every episode of a
             // rewatch completes the title and closes the cycle, so the next
             // Re-watching selection starts a fresh one.
+            //
+            // `.completed` may only move on a *user edit* of an episode's watched
+            // state. A background recount — import, episode backfill, cloud sync,
+            // heal — must never demote a title the user marked completed. Two
+            // ordinary situations used to do exactly that:
+            //   • a show set to Completed before its episodes were fetched recounts
+            //     as 0/N and was rewritten to Wishlist;
+            //   • a Completed show that gains a season recounts as N/(N+1) and was
+            //     rewritten to Active.
+            let canLeaveCompleted = currentState != .completed || userEditedWatchState
             if progress >= 1.0 && currentState != .completed && currentState != .onHold && currentState != .dropped {
                 self.applyAutomaticState(.completed, now: now)
-            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) {
+            } else if progress > 0 && progress < 1.0 && (currentState == .wishlist || currentState == .completed) && canLeaveCompleted {
                 self.applyAutomaticState(.active, now: now)
-            } else if progress == 0 && (currentState == .active || currentState == .completed) {
+            } else if progress == 0 && (currentState == .active || currentState == .completed) && canLeaveCompleted {
                 self.applyAutomaticState(.wishlist, now: now)
             }
 

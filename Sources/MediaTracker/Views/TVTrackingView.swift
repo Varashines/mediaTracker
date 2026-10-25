@@ -695,7 +695,7 @@ private struct SeasonSection: View {
                     context: context
                 )
             }
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -738,7 +738,7 @@ private struct SeasonSection: View {
                     context: context
                 )
             }
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -803,7 +803,7 @@ private struct SeasonSection: View {
         AppErrorState.shared.showToast("Updated watch dates for \(liveWatched.count) episodes", style: .success)
 
         Task { @MainActor in
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -909,7 +909,7 @@ private struct EpisodeCube: View {
 
         Task { @MainActor in
             onToggle()
-            episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = episode.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }

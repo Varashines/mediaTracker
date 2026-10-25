@@ -261,6 +261,11 @@ final class MediaItem: Identifiable {
 
         nonisolated(unsafe) let item = self
         nonisolated(unsafe) let context = modelContext
+        // Hold the container for the task's lifetime, exactly as the `state` setter
+        // does above. A ModelContext does not keep its ModelContainer alive, and
+        // `modelContext != nil` stays true after the container is gone, so a deferred
+        // save would otherwise trap inside SwiftData.
+        let storeContainer = context?.container
         if let context {
             WatchHistoryCoordinator.handleStateChange(
                 item: item,
@@ -273,6 +278,8 @@ final class MediaItem: Identifiable {
         }
         let pid = persistentModelID
         Task { @MainActor in
+            guard let storeContainer else { return }
+            defer { withExtendedLifetime(storeContainer) {} }
             guard item.modelContext != nil, let context else { return }
             SaveCoordinator.shared.requestSave(context)
             MediaStateService.shared.postMediaStateChanged(itemID: pid)
@@ -315,7 +322,11 @@ final class MediaItem: Identifiable {
 
         details.recalculateCachedProperties(triggerSync: true)
         nonisolated(unsafe) let ctx = modelContext
+        // Same container pin as `applyAutomaticState` / `commitChange`.
+        let storeContainer = ctx?.container
         Task { @MainActor in
+            guard let storeContainer else { return }
+            defer { withExtendedLifetime(storeContainer) {} }
             if let ctx {
                 if !mutations.isEmpty {
                     WatchHistoryCoordinator.batchRecordEpisodeMutations(
