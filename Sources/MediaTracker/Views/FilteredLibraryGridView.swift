@@ -282,6 +282,9 @@ struct FilteredLibraryGridView: View {
             Button("") { dismiss() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
                 .opacity(0)
+                // Shortcut vehicle only — hide from VoiceOver and the hit-test path.
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
         }
     }
 

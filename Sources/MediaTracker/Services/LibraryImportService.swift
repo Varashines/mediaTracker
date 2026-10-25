@@ -115,6 +115,18 @@ extension BackgroundDataService {
                     }
                     itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
                     if !hasDetails { itemsNeedingBackfill.append(existing.id) }
+                    // Restore watch state BEFORE the recount, so progress is computed
+                    // from the backup rather than from an empty episode list.
+                    restoreImportedEpisodeProgress(
+                        for: existing,
+                        itemData: itemData,
+                        tmdbIDPart: tmdbIDPart,
+                        uniqueID: uniqueID,
+                        watchedDates: watchedDates,
+                        context: context,
+                        existingSeasonsByUniqueID: &existingSeasonsByUniqueID,
+                        existingEpisodesByUniqueID: &existingEpisodesByUniqueID
+                    )
                     existing.syncCachedProperties(dirty: .all)
                     mergedCount += 1
                 case .overwrite:
@@ -127,6 +139,17 @@ extension BackgroundDataService {
                     existing.lastInteractionDate = itemData.lastInteractionDate ?? existing.lastInteractionDate
                     itemData.applyMetadata(to: existing, preserveLastUpdated: hasDetails)
                     if !hasDetails { itemsNeedingBackfill.append(existing.id) }
+                    // Same ordering as `.merge`: restore, then recount.
+                    restoreImportedEpisodeProgress(
+                        for: existing,
+                        itemData: itemData,
+                        tmdbIDPart: tmdbIDPart,
+                        uniqueID: uniqueID,
+                        watchedDates: watchedDates,
+                        context: context,
+                        existingSeasonsByUniqueID: &existingSeasonsByUniqueID,
+                        existingEpisodesByUniqueID: &existingEpisodesByUniqueID
+                    )
                     existing.syncCachedProperties(dirty: .all)
                     if mediaType == .movie,
                        itemData.state == MediaState.completedRaw {
@@ -178,66 +201,16 @@ extension BackgroundDataService {
                 itemData.applySeasonTasteOverrides(to: item, in: context)
 
                 // Restore Episode Progress
-                if item.type == .tvShow, let watchedIDs = itemData.watchedEpisodeIDs, let tmdbID = Int(tmdbIDPart) {
-                    var seasonEpisodes: [Int: Set<Int>] = [:]
-                    for epID in watchedIDs {
-                        let parts = epID.split(separator: "_")
-                        if parts.count == 3,
-                           let sNum = Int(parts[1]),
-                           let eNum = Int(parts[2]) {
-                            seasonEpisodes[sNum, default: []].insert(eNum)
-                        }
-                    }
-
-                    for (sNum, watchedNumbers) in seasonEpisodes {
-                        let seasonUniqueID = "\(tmdbID)_\(sNum)"
-                        let season = existingSeasonsByUniqueID[seasonUniqueID] ?? {
-                            let newSeason = TVSeason(seasonNumber: sNum, name: "Season \(sNum)", episodeCount: 0, airDate: nil)
-                            newSeason.uniqueID = seasonUniqueID
-                            newSeason.showID = tmdbID
-                            newSeason.tvShowDetails = nil
-                            context.insert(newSeason)
-                            existingSeasonsByUniqueID[seasonUniqueID] = newSeason
-                            return newSeason
-                        }()
-
-                        for eNum in watchedNumbers {
-                            let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
-                            if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
-                                let watchedAt = watchedDates[epUniqueID]
-                                existing.applyImportedWatchState(watchedAt: watchedAt)
-                                let eventDate = watchedAt ?? existing.watchedDate ?? existing.lastWatchedDate ?? item.dateAdded ?? Date()
-                                WatchHistoryCoordinator.recordImportedEpisode(
-                                    mediaID: uniqueID,
-                                    episodeID: epUniqueID,
-                                    watchedAt: eventDate,
-                                    runtimeMinutes: existing.runtime,
-                                    context: context
-                                )
-                                continue
-                            }
-                            let episode = TVEpisode(
-                                episodeNumber: eNum, seasonNumber: sNum,
-                                name: "Episode \(eNum)", overview: "",
-                                airDate: nil, runtime: nil,
-                                isWatched: true, showID: tmdbID
-                            )
-                            episode.uniqueID = epUniqueID
-                            episode.season = season
-                            let watchedAt = watchedDates[epUniqueID] ?? item.dateAdded ?? Date()
-                            episode.applyImportedWatchState(watchedAt: watchedAt)
-                            context.insert(episode)
-                            existingEpisodesByUniqueID[epUniqueID] = episode
-                            WatchHistoryCoordinator.recordImportedEpisode(
-                                mediaID: uniqueID,
-                                episodeID: epUniqueID,
-                                watchedAt: watchedAt,
-                                runtimeMinutes: episode.runtime,
-                                context: context
-                            )
-                        }
-                    }
-                }
+                restoreImportedEpisodeProgress(
+                    for: item,
+                    itemData: itemData,
+                    tmdbIDPart: tmdbIDPart,
+                    uniqueID: uniqueID,
+                    watchedDates: watchedDates,
+                    context: context,
+                    existingSeasonsByUniqueID: &existingSeasonsByUniqueID,
+                    existingEpisodesByUniqueID: &existingEpisodesByUniqueID
+                )
             }
             
             processedCount += 1
@@ -288,6 +261,92 @@ extension BackgroundDataService {
         return (importedCount, mergedCount, skippedCount, itemsNeedingBackfill)
     }
 
+    /// Restores per-episode watch state from a backup onto `item`.
+    ///
+    /// Both branches of the import need this. The existing-item branch used to skip
+    /// it entirely and then call `syncCachedProperties`, which recomputed the show as
+    /// 0% watched — and auto-advance then rewrote a backed-up "Completed" title to
+    /// Wishlist. Re-importing a backup over an existing library silently destroyed it.
+    private func restoreImportedEpisodeProgress(
+        for item: MediaItem,
+        itemData: MediaItemData,
+        tmdbIDPart: Substring,
+        uniqueID: String,
+        watchedDates: [String: Date],
+        context: ModelContext,
+        existingSeasonsByUniqueID: inout [String: TVSeason],
+        existingEpisodesByUniqueID: inout [String: TVEpisode]
+    ) {
+        guard item.type == .tvShow,
+              let watchedIDs = itemData.watchedEpisodeIDs,
+              let tmdbID = Int(tmdbIDPart)
+        else { return }
+
+        var seasonEpisodes: [Int: Set<Int>] = [:]
+        for epID in watchedIDs {
+            let parts = epID.split(separator: "_")
+            if parts.count == 3,
+               let sNum = Int(parts[1]),
+               let eNum = Int(parts[2]) {
+                seasonEpisodes[sNum, default: []].insert(eNum)
+            }
+        }
+
+        for (sNum, watchedNumbers) in seasonEpisodes {
+            let seasonUniqueID = "\(tmdbID)_\(sNum)"
+            let season = existingSeasonsByUniqueID[seasonUniqueID] ?? {
+                let newSeason = TVSeason(seasonNumber: sNum, name: "Season \(sNum)", episodeCount: 0, airDate: nil)
+                newSeason.uniqueID = seasonUniqueID
+                newSeason.showID = tmdbID
+                newSeason.tvShowDetails = nil
+                context.insert(newSeason)
+                existingSeasonsByUniqueID[seasonUniqueID] = newSeason
+                return newSeason
+            }()
+
+            for eNum in watchedNumbers {
+                let epUniqueID = "\(tmdbID)_\(sNum)_\(eNum)"
+                if let existing = existingEpisodesByUniqueID[epUniqueID], existing.modelContext != nil {
+                    let wasWatched = existing.isWatched
+                    let watchedAt = watchedDates[epUniqueID]
+                    existing.applyImportedWatchState(watchedAt: watchedAt)
+                    // Mint a ledger event only for the transition. Re-importing the
+                    // same backup over an existing library must not duplicate watch
+                    // history — that would inflate year-in-review and stats.
+                    guard !wasWatched else { continue }
+                    let eventDate = watchedAt ?? existing.watchedDate ?? existing.lastWatchedDate ?? item.dateAdded ?? Date()
+                    WatchHistoryCoordinator.recordImportedEpisode(
+                        mediaID: uniqueID,
+                        episodeID: epUniqueID,
+                        watchedAt: eventDate,
+                        runtimeMinutes: existing.runtime,
+                        context: context
+                    )
+                    continue
+                }
+                let episode = TVEpisode(
+                    episodeNumber: eNum, seasonNumber: sNum,
+                    name: "Episode \(eNum)", overview: "",
+                    airDate: nil, runtime: nil,
+                    isWatched: true, showID: tmdbID
+                )
+                episode.uniqueID = epUniqueID
+                episode.season = season
+                let watchedAt = watchedDates[epUniqueID] ?? item.dateAdded ?? Date()
+                episode.applyImportedWatchState(watchedAt: watchedAt)
+                context.insert(episode)
+                existingEpisodesByUniqueID[epUniqueID] = episode
+                WatchHistoryCoordinator.recordImportedEpisode(
+                    mediaID: uniqueID,
+                    episodeID: epUniqueID,
+                    watchedAt: watchedAt,
+                    runtimeMinutes: episode.runtime,
+                    context: context
+                )
+            }
+        }
+    }
+
     func importCollections(backup: LibraryBackup) async {
         guard let collectionData = backup.collections, !collectionData.isEmpty else { return }
 
@@ -324,7 +383,7 @@ extension BackgroundDataService {
 
         if importedCount > 0 {
             // Intentional batch save — collection restore is a bulk write off the UI frame.
-            try? context.save()
+            context.saveReportingFailure()
             await MainActor.run {
                 AppLogger.info("📦 Restored \(importedCount) collections from backup.", logger: AppLogger.data)
             }

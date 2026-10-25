@@ -9,7 +9,7 @@ import SwiftData
 /// conflicts decided on the user-edit time, the incremental watermark, the taste spelling the
 /// other app writes, one watch logged twice, and corrections that have to travel to the ledger
 /// as well as the projection.
-final class CloudSyncScenarioTests: XCTestCase {
+final class CloudSyncScenarioTests: MTTestCase {
 
     // MARK: - Stub transport
 
@@ -157,7 +157,18 @@ final class CloudSyncScenarioTests: XCTestCase {
     override func tearDownWithError() throws {
         MockURLProtocol.requestHandler = nil
         CloudSyncService.session = .shared
-        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        // Remove everything setUp wrote. Leaving the endpoint and keys behind makes
+        // later suites believe cloud sync is configured, and leaving the timestamps
+        // behind changes the conflict decisions of the next sync that runs.
+        for key in [
+            UserDefaultsKeys.cloudSyncURL.rawValue,
+            UserDefaultsKeys.cloudSyncAnonKey.rawValue,
+            UserDefaultsKeys.cloudSyncKey.rawValue,
+            UserDefaultsKeys.cloudSyncWatermark.rawValue,
+            UserDefaultsKeys.cloudSyncLastTimestamp.rawValue
+        ] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         try super.tearDownWithError()
     }
 
@@ -167,8 +178,17 @@ final class CloudSyncScenarioTests: XCTestCase {
         iso.string(from: Date().addingTimeInterval(offset))
     }
 
+    /// Declares the sync state the impact calculation reads.
+    ///
+    /// It needs **both** halves: the pull watermark, and `cloudSyncLastTimestamp` — the latter
+    /// decides whether a locally-edited row is offered as an upload
+    /// (`CloudSyncService.swift:244`). These tests used to set only the watermark and let the
+    /// timestamp come from whatever an earlier run had persisted, so they passed or failed
+    /// depending on machine state rather than on the behaviour under test.
     private func setWatermark(_ offset: TimeInterval) {
-        UserDefaults.standard.set(stamp(offset), forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        let instant = Date().addingTimeInterval(offset)
+        UserDefaults.standard.set(iso.string(from: instant), forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        UserDefaults.standard.set(instant.timeIntervalSince1970, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
     }
 
     /// A media row as PostgREST returns it.
@@ -461,5 +481,34 @@ final class CloudSyncScenarioTests: XCTestCase {
         XCTAssertEqual(event?.watchedAt.timeIntervalSince1970 ?? 0,
                        corrected.timeIntervalSince1970, accuracy: 1.0,
                        "and so does the ledger, which the year review reads")
+    }
+
+    /// The sync key is the tenant secret. It used to be sent as `user_id=eq.<key>` in every
+    /// request URL, which put it into proxy logs, PostgREST access logs and the on-disk
+    /// `URLCache`. PostgREST scopes rows by the `x-sync-key` header through RLS, and the
+    /// client re-checks the tenant after decoding.
+    @MainActor
+    func testSyncKeyNeverTravelsInRequestURLs() async throws {
+        localMedia(id: "movie_1", state: .active, lastInteraction: Date())
+        try save()
+        stub.tables["user_media"] = [cloudMedia(
+            "movie_1", taste: "Love", lastInteraction: stamp(-60), updatedAt: stamp(-60)
+        )]
+        setWatermark(-7200)
+
+        _ = await impact()
+        _ = await sync()
+
+        XCTAssertFalse(stub.recorded.isEmpty, "the run must have made requests")
+        for request in stub.recorded {
+            XCTAssertFalse(
+                request.query.contains("mt_sync_scenarios"),
+                "sync key leaked into a URL: \(request.table)?\(request.query)"
+            )
+            XCTAssertFalse(
+                request.query.contains("user_id=eq."),
+                "the tenant filter belongs in the header, not the URL: \(request.query)"
+            )
+        }
     }
 }

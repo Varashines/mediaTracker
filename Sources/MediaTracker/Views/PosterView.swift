@@ -92,6 +92,7 @@ struct PosterView: View {
                                 .shadow(color: .black.opacity(showPicker ? 0.25 : 0.15), radius: showPicker ? 4 : 3, x: 0, y: showPicker ? 3 : 2)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Choose image")
                         .contentShape(Rectangle())
                         .help("Change poster")
                         .opacity((isHovering || showPicker) ? 1 : 0)

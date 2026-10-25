@@ -333,6 +333,8 @@ struct SmartCollectionsHubView: View {
 private struct HoverIconButton: View {
     let systemImage: String
     let color: Color
+    /// Announced by VoiceOver; the glyph alone is meaningless out of context.
+    let label: String
     var hoverColor: Color? = nil
     let action: () -> Void
 
@@ -359,6 +361,7 @@ private struct HoverIconButton: View {
         .buttonStyle(.plain)
         .onHover { isButtonHovered = $0 }
         .animation(AppTheme.Animation.springSnappy, value: isButtonHovered)
+        .accessibilityLabel(label)
     }
 }
 
@@ -399,13 +402,13 @@ private struct SmartCollectionCard: View {
                 if isHovered {
                     HStack(spacing: 6) {
                         if collection != nil {
-                            HoverIconButton(systemImage: "pencil", color: accentColor) {
+                            HoverIconButton(systemImage: "pencil", color: accentColor, label: "Edit collection") {
                                 showingEditSheet = true
                                 FeedbackManager.shared.trigger(.click)
                             }
                         }
                         
-                        HoverIconButton(systemImage: (collection?.isPinned ?? isPinned) ? "pin.fill" : "pin", color: accentColor) {
+                        HoverIconButton(systemImage: (collection?.isPinned ?? isPinned) ? "pin.fill" : "pin", color: accentColor, label: (collection?.isPinned ?? isPinned) ? "Unpin collection" : "Pin collection") {
                             if let collection = collection {
                                 withAnimation(AppTheme.Animation.springSnappy) {
                                     collection.isPinned.toggle()
@@ -419,7 +422,7 @@ private struct SmartCollectionCard: View {
                         }
                         
                         if collection != nil {
-                            HoverIconButton(systemImage: "trash", color: .red) {
+                            HoverIconButton(systemImage: "trash", color: .red, label: "Delete collection") {
                                 showingDeleteConfirmation = true
                             }
                         }

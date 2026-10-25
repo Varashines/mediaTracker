@@ -695,7 +695,7 @@ private struct SeasonSection: View {
                     context: context
                 )
             }
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -738,7 +738,7 @@ private struct SeasonSection: View {
                     context: context
                 )
             }
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -803,7 +803,7 @@ private struct SeasonSection: View {
         AppErrorState.shared.showToast("Updated watch dates for \(liveWatched.count) episodes", style: .success)
 
         Task { @MainActor in
-            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            season.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = season.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -870,6 +870,8 @@ private struct SeasonSection: View {
         }
         .buttonStyle(.plain)
         .help(value.rawValue)
+        .accessibilityLabel("Rate this season \(value.rawValue.lowercased())")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -909,7 +911,7 @@ private struct EpisodeCube: View {
 
         Task { @MainActor in
             onToggle()
-            episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true)
+            episode.season?.tvShowDetails?.recalculateCachedProperties(triggerSync: true, userEditedWatchState: true)
             if let context = episode.modelContext {
                 SaveCoordinator.shared.requestSave(context)
             }
@@ -1075,6 +1077,7 @@ private struct EpisodeCube: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("About this episode")
                 .padding(.trailing, 12)
                 .padding(.bottom, 16)
                 .popover(isPresented: $showingOverview) {
@@ -1145,6 +1148,8 @@ private struct EpisodeCube: View {
                         }
                         .buttonStyle(.plain)
                         .help("Change watch date")
+                        .accessibilityLabel("Change watch date")
+                        .contentShape(Rectangle())
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)

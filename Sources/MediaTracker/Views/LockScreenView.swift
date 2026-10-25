@@ -27,13 +27,13 @@ struct LockScreenView: View {
                     .font(AppTheme.Font.title3)
                     .foregroundStyle(.primary)
 
-                if AppLockService.biometricsAvailable {
+                if AppLockService.ownerAuthenticationAvailable {
                     Button {
                         attemptUnlock()
                     } label: {
                         HStack(spacing: AppTheme.Spacing.mini) {
-                            Image(systemName: "touchid")
-                            Text("Unlock with Touch ID")
+                            Image(systemName: AppLockService.biometricsAvailable ? "touchid" : "lock.open")
+                            Text(AppLockService.biometricsAvailable ? "Unlock with Touch ID" : "Unlock")
                         }
                         .font(AppTheme.Font.bodyBold)
                         .padding(.horizontal, AppTheme.Spacing.medium)
@@ -41,8 +41,9 @@ struct LockScreenView: View {
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Unlock MediaTracker")
                 } else {
-                    Text("Touch ID unavailable — open Settings to disable the lock.")
+                    Text("No authentication method is available — open Settings to disable the lock.")
                         .font(AppTheme.Font.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

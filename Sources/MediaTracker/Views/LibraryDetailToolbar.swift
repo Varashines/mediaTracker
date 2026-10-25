@@ -33,6 +33,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                     }
                     .tint(.primary)
                     .help("Back to Smart Hub")
+                    .accessibilityLabel("Back to Smart Hub")
                 }
             }
         }
@@ -144,6 +145,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
                 )
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Filters")
             .contentShape(Capsule())
             .tint(.primary)
             .help("View options")
@@ -207,6 +209,7 @@ struct LibraryDetailToolbarContent: ToolbarContent {
             .tint(.primary)
             .disabled(isSmartCollectionState)
             .help(isSmartCollectionState ? "Cannot manage items in smart collections" : "Manage Items")
+            .accessibilityLabel("Manage items")
         }
     }
 

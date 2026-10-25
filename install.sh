@@ -1,7 +1,25 @@
 #!/bin/bash
 
-# Point to Xcode-beta for SwiftData macro support
-export DEVELOPER_DIR="/Applications/Xcode-beta.app/Contents/Developer"
+# A full Xcode is required: the SwiftData macro plugin that expands `@Model` ships only
+# with Xcode, so Command Line Tools alone cannot compile this project.
+#
+# Prefer whatever Xcode is installed (Xcode-beta first, since the project was developed
+# against it), and only override DEVELOPER_DIR when one of them actually exists. The old
+# unconditional `export DEVELOPER_DIR=/Applications/Xcode-beta.app/...` broke the
+# documented install path on every machine that had a different Xcode.
+if [ -z "${DEVELOPER_DIR:-}" ]; then
+    for candidate in /Applications/Xcode-beta.app /Applications/Xcode.app; do
+        if [ -d "$candidate/Contents/Developer" ]; then
+            export DEVELOPER_DIR="$candidate/Contents/Developer"
+            break
+        fi
+    done
+fi
+if ! xcrun --find swift >/dev/null 2>&1; then
+    echo "❌ No usable Xcode toolchain found." >&2
+    echo "   Install Xcode (not just Command Line Tools) and run ./install.sh again." >&2
+    exit 1
+fi
 
 # Configuration
 APP_NAME="MediaTracker"
@@ -164,8 +182,42 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-echo "🔐 Ad-hoc signing $APP_NAME..."
-codesign --force --sign - "$APP_BUNDLE"
+# Sign with a stable identity when one exists.
+#
+# Ad-hoc signing (`--sign -`) derives the app's designated requirement from the binary's cdhash, so
+# every rebuild is a different app as far as the Keychain is concerned — and the credentials this
+# app now stores there would prompt for approval on every launch after a build. Any certificate,
+# including a self-signed one, makes the requirement `identifier + certificate`, which survives
+# rebuilds. Run Dev/setup-signing.sh once to create one; without it, the app still works and the
+# sign-in prompt returns, which is why this says which happened.
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-MediaTracker Local Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGNING_IDENTITY"; then
+    echo "🔐 Signing with \"$SIGNING_IDENTITY\" (stable identity — Keychain stays quiet)..."
+    if ! codesign --force --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"; then
+        # `--force` strips the existing signature before it writes the new one, so a failure here
+        # leaves an unsigned (or ad-hoc) bundle. Installing that would be worse than not building:
+        # the Keychain items are ACL-bound to the certificate, and the app would then ask for
+        # approval on every read with no obvious cause.
+        echo "❌ codesign failed. Not installing $APP_NAME."
+        echo "   Usually a locked keychain or a declined keychain prompt. Unlock the login keychain"
+        echo "   (Keychain Access) and run ./install.sh again."
+        exit 1
+    fi
+    # Check what was actually written, not what was requested.
+    ACTUAL_SIGNER=$(codesign -dv --verbose=2 "$APP_BUNDLE" 2>&1 | sed -n 's/^Authority=//p' | head -1)
+    if [ "$ACTUAL_SIGNER" != "$SIGNING_IDENTITY" ]; then
+        echo "❌ $APP_NAME.app is not signed by \"$SIGNING_IDENTITY\" (got: ${ACTUAL_SIGNER:-unsigned})."
+        echo "   Refusing to install a bundle whose signature the Keychain does not recognise."
+        exit 1
+    fi
+    echo "   ✅ Signed by $ACTUAL_SIGNER"
+else
+    echo "🔐 Signing ad-hoc..."
+    echo "   ⚠️  No \"$SIGNING_IDENTITY\" identity found. macOS will ask for Keychain access each time"
+    echo "       the app is rebuilt. Run ./Dev/setup-signing.sh once to stop that."
+    codesign --force --sign - "$APP_BUNDLE" || { echo "❌ codesign failed. Not installing $APP_NAME."; exit 1; }
+fi
+
 
 echo "🚚 Installing to $INSTALL_DIR..."
 rm -rf "$INSTALLED_APP"

@@ -412,7 +412,7 @@ class SearchViewModel {
                 // Intentional background-context save — SearchCacheEntity is not
                 // on the main UI context; SaveCoordinator keys by ObjectIdentifier
                 // and runs on MainActor, which would hop contexts incorrectly.
-                try? context.save()
+                context.saveReportingFailure()
             }
         }
     }

@@ -167,6 +167,17 @@ final class TVEpisode {
         return result
     }
 
+    /// Whether the episode exists yet from the user's point of view: no known air date, or
+    /// one that has already passed.
+    ///
+    /// The bulk "mark all" and `Completed` paths used to mark every row, including episodes
+    /// that had not aired. That wrote watch history for things nobody could have watched and
+    /// removed them from the release calendar and notifications.
+    func isAvailable(asOf now: Date = Date()) -> Bool {
+        guard let airDate = airDateValue ?? airDateAsDate else { return true }
+        return airDate <= now
+    }
+
     func updateAirDateValue() {
         isUpdatingAirDateValue = true
         defer { isUpdatingAirDateValue = false }

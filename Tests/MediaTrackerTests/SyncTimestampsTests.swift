@@ -7,7 +7,7 @@ import XCTest
 /// row it edited arrived up to hours in the future. A future stamp is permanently newer, so a
 /// later edit made here could never win the conflict and the phone's value was re-pushed on every
 /// sync — with the pull watermark (derived from the same stamps) dragged along with it.
-final class SyncTimestampsTests: XCTestCase {
+final class SyncTimestampsTests: MTTestCase {
 
     // MARK: - Clamp
 

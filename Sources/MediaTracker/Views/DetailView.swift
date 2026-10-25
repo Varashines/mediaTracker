@@ -382,7 +382,11 @@ struct DetailView: View {
                 }
             )
             if !showDeleteConfirmation && !showSharePreview && !showSynopsisReader {
-                keyboardShortcutButtons.opacity(0)
+                keyboardShortcutButtons
+                    .opacity(0)
+                    // Invisible shortcut vehicles must not appear to VoiceOver or take clicks.
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -681,6 +685,7 @@ struct DetailView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Share")
                 .contentShape(Circle())
                 .keyboardShortcut("s", modifiers: .command)
                 .help("Share collectible card (⌘S)")
