@@ -23,6 +23,87 @@ enum StoreLocation {
         Bundle.main.bundleIdentifier == devBundleIdentifier
     }
 
+    // MARK: - Corruption-recovery backups
+
+    /// Suffix appended to the store path for SQLite's write-ahead log and shared
+    /// memory file. CoreData/SwiftData name these `default.store-wal` and
+    /// `default.store-shm` — *not* `default.store.wal`, which is what
+    /// `appendingPathExtension("wal")` produces. Every sidecar copy that used the
+    /// extension form silently pointed at a file that never existed.
+    static let storeSidecarSuffixes = ["-wal", "-shm"]
+
+    /// The `-wal`/`-shm` files that belong to `storeURL`.
+    static func sidecarURLs(for storeURL: URL) -> [URL] {
+        storeSidecarSuffixes.map { URL(fileURLWithPath: storeURL.path + $0) }
+    }
+
+    /// Whether a backup recorded by `recordedVersion` may be offered to a release
+    /// running `currentVersion`.
+    ///
+    /// Compares major versions only, and accepts both the dotted form read from
+    /// `CFBundleShortVersionString` ("10.1.0") and the underscore form ("10_1_0")
+    /// that older builds derived from the backup's file name. That legacy form is
+    /// what broke the restore: `"10_1_0".split(separator: ".")` yields `["10_1_0"]`,
+    /// which can never equal `"10"`, so no backup was ever considered compatible.
+    static func isCompatibleBackupVersion(_ recordedVersion: String, currentVersion: String) -> Bool {
+        guard let recorded = majorVersionComponent(of: recordedVersion),
+              let current = majorVersionComponent(of: currentVersion),
+              recorded != "unknown", current != "unknown"
+        else { return false }
+        return recorded == current
+    }
+
+    static func majorVersionComponent(of version: String) -> String? {
+        let normalized = version
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: ".")
+        guard let major = normalized.split(separator: ".").first, !major.isEmpty else { return nil }
+        return String(major)
+    }
+
+    /// Restores `backupURL` over `storeURL`, preserving whatever is currently there.
+    ///
+    /// Returns `true` only when the store file was actually replaced, so the caller can
+    /// decide whether the one-shot restore flag has been earned. A store that cannot be
+    /// preserved first is left alone rather than overwritten: a failed restore must not
+    /// become a second data loss.
+    @discardableResult
+    static func restoreBackup(at backupURL: URL, over storeURL: URL) -> Bool {
+        let fm = FileManager.default
+        let preservedURL = storeURL.deletingLastPathComponent()
+            .appendingPathComponent("default_current_saved.store")
+
+        try? fm.removeItem(at: preservedURL)
+        if fm.fileExists(atPath: storeURL.path) {
+            do {
+                try fm.copyItem(at: storeURL, to: preservedURL)
+            } catch {
+                AppLogger.data.error("♻️ Refusing to restore: could not preserve the current store (\(error.localizedDescription, privacy: .public))")
+                return false
+            }
+        }
+
+        // Remove the live store *and* its sidecars. A stale -wal left beside a
+        // restored store would replay transactions that belong to the old one.
+        try? fm.removeItem(at: storeURL)
+        for sidecar in sidecarURLs(for: storeURL) { try? fm.removeItem(at: sidecar) }
+
+        do {
+            try fm.copyItem(at: backupURL, to: storeURL)
+        } catch {
+            AppLogger.data.error("♻️ Backup restore failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+
+        // Sidecars are optional: a backup may have been taken without them.
+        for (source, destination) in zip(sidecarURLs(for: backupURL), sidecarURLs(for: storeURL))
+        where fm.fileExists(atPath: source.path) {
+            try? fm.copyItem(at: source, to: destination)
+        }
+
+        return fm.fileExists(atPath: storeURL.path)
+    }
+
     static func makeConfiguration(schema: Schema) throws -> ModelConfiguration {
         let applicationSupportDirectory = try FileManager.default.url(
             for: .applicationSupportDirectory,

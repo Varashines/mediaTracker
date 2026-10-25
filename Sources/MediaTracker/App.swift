@@ -49,30 +49,24 @@ struct MediaTrackerApp: App {
             var compatibleBackup: URL?
             for backup in candidates {
                 let versionURL = backup.deletingPathExtension().appendingPathExtension("version")
-                let backupVersion = (try? String(contentsOf: versionURL, encoding: .utf8)).flatMap {
-                    // Backups from same major version are compatible
-                    let backupMajor = $0.split(separator: ".").first ?? ""
-                    let currentMajor = currentVersion.split(separator: ".").first ?? ""
-                    return backupMajor == currentMajor ? $0 : nil
-                }
-                if backupVersion != nil {
+                guard let recordedVersion = try? String(contentsOf: versionURL, encoding: .utf8) else { continue }
+                if StoreLocation.isCompatibleBackupVersion(recordedVersion, currentVersion: currentVersion) {
                     compatibleBackup = backup
                     break
                 }
             }
             if let backupURL = compatibleBackup {
                 AppLogger.info("Found compatible backup: \(backupURL.lastPathComponent). Restoring...")
-                let savedCurrent = storeDir.appendingPathComponent("default_current_saved.store")
-                try? FileManager.default.removeItem(at: savedCurrent)
-                try? FileManager.default.copyItem(at: storeURL, to: savedCurrent)
-                try? FileManager.default.removeItem(at: storeURL)
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
-                try? FileManager.default.copyItem(at: backupURL, to: storeURL)
-                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+                // Latch only once a restore actually happened. The flag used to be set
+                // unconditionally — including on the launch that *creates* the first
+                // backup, when none exists yet — which permanently disabled the retry.
+                if StoreLocation.restoreBackup(at: backupURL, over: storeURL) {
+                    UserDefaults.standard.set(true, forKey: didRestoreKey)
+                    AppLogger.info("✅ Restored library from \(backupURL.lastPathComponent)")
+                } else {
+                    AppLogger.error("❌ Backup found but could not be restored: \(backupURL.lastPathComponent)")
+                }
             }
-            UserDefaults.standard.set(true, forKey: didRestoreKey)
         }
 
         do {
@@ -91,7 +85,11 @@ struct MediaTrackerApp: App {
             AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(firstError)")
 
             let storeURL = modelConfiguration.url
-            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)?.replacingOccurrences(of: ".", with: "_") ?? "unknown"
+            let rawVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+            // The file name uses underscores so the discovery filter can recognise it; the
+            // sidecar records the plain dotted version so the compatibility check compares
+            // like with like ("10.1.0" against "10.1.0").
+            let appVersion = rawVersion.replacingOccurrences(of: ".", with: "_")
             let timestamp = Int(Date().timeIntervalSince1970)
             let backupName = "default_corrupted_v\(appVersion)_\(timestamp).store"
             let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
@@ -103,7 +101,7 @@ struct MediaTrackerApp: App {
             var backupSucceeded = true
             do {
                 try "Migration error: \(firstError)".write(to: logURL, atomically: true, encoding: .utf8)
-                try appVersion.write(to: versionURL, atomically: true, encoding: .utf8)
+                try rawVersion.write(to: versionURL, atomically: true, encoding: .utf8)
                 try FileManager.default.copyItem(at: storeURL, to: backupURL)
             } catch {
                 backupSucceeded = false
@@ -111,18 +109,21 @@ struct MediaTrackerApp: App {
                 AppLogger.error("📦 Failed to back up corrupted store: \(error)")
             }
             if backupSucceeded {
-                let wal = storeURL.appendingPathExtension("wal")
-                let shm = storeURL.appendingPathExtension("shm")
-                try? FileManager.default.copyItem(at: wal, to: backupURL.appendingPathExtension("wal"))
-                try? FileManager.default.copyItem(at: shm, to: backupURL.appendingPathExtension("shm"))
+                for (source, destination) in zip(
+                    StoreLocation.sidecarURLs(for: storeURL),
+                    StoreLocation.sidecarURLs(for: backupURL)
+                ) where FileManager.default.fileExists(atPath: source.path) {
+                    try? FileManager.default.copyItem(at: source, to: destination)
+                }
                 AppLogger.error("📦 Corrupted store backed up to: \(backupURL.path)")
             }
 
             // 2. Only delete if backup succeeded; otherwise bail to fatalError with context.
             if backupSucceeded {
                 try? FileManager.default.removeItem(at: storeURL)
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+                for sidecar in StoreLocation.sidecarURLs(for: storeURL) {
+                    try? FileManager.default.removeItem(at: sidecar)
+                }
             } else {
                 try? "store recovery aborted: backup failed; refusing to delete original store".write(
                     to: logURL, atomically: true, encoding: .utf8
@@ -143,8 +144,12 @@ struct MediaTrackerApp: App {
                     )
                     AppLogger.info("Backup validated. Restoring from backup...")
                     try FileManager.default.copyItem(at: backupURL, to: storeURL)
-                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
-                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+                    for (source, destination) in zip(
+                        StoreLocation.sidecarURLs(for: backupURL),
+                        StoreLocation.sidecarURLs(for: storeURL)
+                    ) where FileManager.default.fileExists(atPath: source.path) {
+                        try? FileManager.default.copyItem(at: source, to: destination)
+                    }
                     let container = try ModelContainer(
                         for: schema,
                         configurations: [modelConfiguration]
