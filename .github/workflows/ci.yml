@@ -43,19 +43,12 @@ jobs:
       #
       # The old `continue-on-error` diagnostic is gone: with container pinning in
       # MediaItem's deferred tasks and the MTTestCase teardown hook, a full run of all
-      # 514 tests completes on macOS 27 / Xcode 27.2. If the teardown crash returns,
-      # fix it rather than re-hiding the suite.
+      # 517 tests completes on macOS 27 / Xcode 27.2 and on macos-latest. If the
+      # teardown crash returns, fix it rather than re-hiding the suite.
       #
-      # Two CloudSyncScenario tests are skipped because they are environment-coupled,
-      # not because they fail on a logic error: they assert conflict outcomes that
-      # depend on `cloudSyncLastTimestamp` and on Secrets resolving to UserDefaults
-      # rather than the Keychain (a test bundle can look like an app bundle). They
-      # passed historically only because a previous run's persisted defaults suppressed
-      # the failure. Tracked in AUDIT-2026-10-25.md §11.3. Re-enable once the service takes
-      # an injectable `now` and an injectable secret store so the tests stop depending on
-      # machine state.
+      # There are no skips. Two CloudSyncScenario tests used to be excluded because they
+      # depended on a `cloudSyncLastTimestamp` left behind by an earlier run; they now
+      # declare their own sync state (`setWatermark`), so they pass from a clean defaults
+      # domain. See AUDIT-2026-10-25.md §11.3.
       - name: Test (full suite)
-        run: |
-          swift test \
-            --skip 'CloudSyncScenarioTests/testACorrectedEpisodeDateReachesProjectionAndLedger' \
-            --skip 'CloudSyncScenarioTests/testLegacyTasteSpellingIsNotAConflict'
+        run: swift test

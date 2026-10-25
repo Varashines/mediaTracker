@@ -178,8 +178,17 @@ final class CloudSyncScenarioTests: MTTestCase {
         iso.string(from: Date().addingTimeInterval(offset))
     }
 
+    /// Declares the sync state the impact calculation reads.
+    ///
+    /// It needs **both** halves: the pull watermark, and `cloudSyncLastTimestamp` — the latter
+    /// decides whether a locally-edited row is offered as an upload
+    /// (`CloudSyncService.swift:244`). These tests used to set only the watermark and let the
+    /// timestamp come from whatever an earlier run had persisted, so they passed or failed
+    /// depending on machine state rather than on the behaviour under test.
     private func setWatermark(_ offset: TimeInterval) {
-        UserDefaults.standard.set(stamp(offset), forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        let instant = Date().addingTimeInterval(offset)
+        UserDefaults.standard.set(iso.string(from: instant), forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        UserDefaults.standard.set(instant.timeIntervalSince1970, forKey: UserDefaultsKeys.cloudSyncLastTimestamp.rawValue)
     }
 
     /// A media row as PostgREST returns it.
