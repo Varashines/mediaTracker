@@ -424,8 +424,20 @@ extension MediaItem {
 }
 
 extension MediaItem {
+    /// The custom poster the user actually chose, or nil.
+    ///
+    /// `customPosterURL` carries three states because sync needs them apart: `nil` = this device
+    /// has no opinion (the row's poster key is omitted from a push), `""` = the user reset the
+    /// poster to the network artwork and that reset has to reach other devices, and a URL = the
+    /// chosen artwork. Everything that *displays* a poster wants the last two collapsed, which is
+    /// what this does — so `""` never reaches an image loader.
+    var effectiveCustomPosterURL: String? {
+        guard let customPosterURL, !customPosterURL.isEmpty else { return nil }
+        return customPosterURL
+    }
+
     var effectivePosterURL: String? {
-        customPosterURL ?? posterURL
+        effectiveCustomPosterURL ?? posterURL
     }
 
     var effectiveLogoURL: String? {
